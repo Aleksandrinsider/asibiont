@@ -4119,7 +4119,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "ЗАПРЕЩЕНО: маркеры (•, -, *, 1.), CAPS-ЗАГОЛОВКИ, markdown (**жирный**, # заголовок), "
         "пустые строки подряд, шаблоны типа ЦЕЛЕВАЯ АУДИТОРИЯ: или СТРАТЕГИЯ:.\n"
         "Вместо списков — перечисляй через запятую или в предложениях. Вместо заголовков — новый абзац.\n"
-        "Максимум 5-6 абзацев. Не обрывай мысль — ОБЯЗАТЕЛЬНО доведи до конца, включая конкретные следующие шаги.\n"
+        "Максимум 2-3 абзаца, до 600 символов. Пиши КРАТКО — только суть и результат. Лей воду = провал.\n"
         "НЕ пиши 'Привет!', не здоровайся. Пиши как опытный специалист — живо, с позицией, без формальностей.\n\n"
 
         "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
@@ -4453,7 +4453,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools_now,
                     tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=1000 if _tool_call_count > 0 else 800,
+                    max_tokens=1000 if _tool_call_count > 0 else 600,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
                 timeout=API_TIMEOUT_LONG + 15,
