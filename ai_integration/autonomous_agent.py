@@ -4103,6 +4103,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "ДЕЙСТВИЯ: используй инструменты. НЕ ограничивайся исследованием — "
             "после исследования ОБЯЗАТЕЛЬНО создай задачу через add_task с конкретным шагом. "
             "Исследование без задачи = ПРОВАЛ. "
+            "Если есть реальный прогресс — обнови через update_goal_progress.\n"
             "Каждый цикл: 1) исследуй/найди данные 2) создай задачу или выполни конкретное действие.\n\n"
             f"ТВОЯ РОЛЬ:\n{_persona}"
         )
@@ -4344,7 +4345,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info('[DIRECTOR] Autopilot task → focused toolset for %s', agent.get('name'))
             _autopilot_tools = {
                 'add_task', 'list_tasks', 'complete_task', 'edit_task',
-                'list_goals', 'create_goal',
+                'list_goals', 'create_goal', 'update_goal_progress',
                 'research_topic', 'web_search', 'quick_topic_search',
                 'send_email', 'send_outreach_email', 'find_relevant_contacts_for_task',
                 'save_email_contact', 'list_email_contacts',
@@ -4356,7 +4357,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _all_names = {t['function']['name'] for t in _gat_ap()}
                 _exclude_for_agent = _all_names - _autopilot_tools
             except Exception:
-                _exclude_for_agent = {'update_goal_progress', 'delete_task'}
+                _exclude_for_agent = {'delete_task'}
         else:
             # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
@@ -4429,6 +4430,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "Продвинь цель на один шаг. Прочитай что УЖЕ СДЕЛАНО — не повторяй.\n"
             "Алгоритм: исследуй → создай задачу (add_task) с конкретным следующим шагом.\n"
             "Одного исследования БЕЗ создания задачи НЕДОСТАТОЧНО.\n"
+            "Если есть реальный прогресс — ОБЯЗАТЕЛЬНО обнови через update_goal_progress(goal_title=..., metric_current=N).\n"
             "Отчёт: 2-3 предложения, до 400 символов."
         )
 
