@@ -609,6 +609,25 @@ class AnchorEngine:
             logger.debug(f"[ANCHOR] Dedup error (non-critical): {_e_dedup}")
             session.rollback()
 
+        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>8 мин) как failed
+        try:
+            _stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=8)
+            from models import AgentActivityLog as _AAL_stuck
+            _stuck_logs = session.query(_AAL_stuck).filter(
+                _AAL_stuck.user_id == user.id,
+                _AAL_stuck.status == 'in_progress',
+                _AAL_stuck.created_at < _stuck_cutoff,
+            ).all()
+            if _stuck_logs:
+                for _sl in _stuck_logs:
+                    _sl.status = 'failed'
+                    _sl.result = 'timeout/process_restart'
+                session.commit()
+                logger.info(f"[ANCHOR] User {user_id}: 🧹 cleaned {len(_stuck_logs)} stuck in_progress activity logs")
+        except Exception as _stuck_err:
+            logger.debug(f"[ANCHOR] Stuck log cleanup error: {_stuck_err}")
+            session.rollback()
+
         # 1. SCAN — обнаружить новые якоря
         new_anchors = await self._scan_anchors(user, session)
         if new_anchors:
