@@ -4319,9 +4319,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Автопилот целей → агент получает ВСЕ инструменты (не ограничиваем)
         _is_autopilot_task = 'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '') or 'autopilot' in (task or '').lower() or 'Активные цели:' in (task or '')
         if _is_autopilot_task:
-            logger.info('[DIRECTOR] Autopilot task → all tools unlocked for %s (with guardrails)', agent.get('name'))
-            # Все инструменты доступны, КРОМЕ опасных (агент не должен менять прогресс/удалять)
-            _exclude_for_agent = {'update_goal_progress', 'delete_task', 'start_email_campaign'}
+            logger.info('[DIRECTOR] Autopilot task → full tools for %s (integrations, email, research allowed)', agent.get('name'))
+            # Блокируем только деструктивные операции — всё остальное (email, поиск, кампании) разрешено
+            _exclude_for_agent = {'update_goal_progress', 'delete_task'}
         else:
             # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
@@ -4391,13 +4391,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _is_autopilot_task:
         system_prompt += (
             "\n\n⚡ АВТОПИЛОТ ЦЕЛЕЙ — ПОРЯДОК ДЕЙСТВИЙ (НАРУШЕНИЕ НЕДОПУСТИМО):\n"
-            "1. ПЕРВЫЙ ШАГ: немедленно вызови инструмент — add_task (создать задачу), "
-            "research_topic (исследование), web_search (поиск) или delegate_task.\n"
+            "1. ПЕРВЫЙ ШАГ: немедленно вызови инструмент из полного арсенала:\n"
+            "   - research_topic / web_search — найти площадки, людей, информацию по цели\n"
+            "   - send_outreach_email / negotiate_by_email — написать целевым контактам\n"
+            "   - start_email_campaign — запустить кампанию поиска/привлечения\n"
+            "   - find_relevant_contacts_for_task — найти контакты для задачи\n"
+            "   - run_agent_action — запустить скрипт-интеграцию\n"
+            "   - add_task — ТОЛЬКО если действие нельзя сделать прямо сейчас\n"
             "2. Получи результат инструмента.\n"
-            "3. ВТОРОЙ ШАГ: напиши краткий отчёт о том, что сделал(а).\n"
-            "КРИТИЧНО: если ты напишешь текст БЕЗ предварительного вызова инструмента — "
-            "это ошибка. Даже если кажется что нечего делать — вызови research_topic "
-            "чтобы найти новую информацию по цели."
+            "3. ВТОРОЙ ШАГ: по результату — либо вызови ещё инструмент, либо напиши отчёт.\n"
+            "КРИТИЧНО: текстовый ответ без вызова инструмента = провал задачи."
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
