@@ -6416,6 +6416,208 @@ class AnchorEngine:
         finally:
             session.close()
 
+    # ═══════════════════════════════════════════════════════════════════
+    # AGENT CHAT HOOKS — агенты участвуют в обычном чате пользователя
+    # ═══════════════════════════════════════════════════════════════════
+
+    async def trigger_chat_hook(self, user_id: int, user_message: str, ai_response: str):
+        """После ответа главного AI проверяет, хочет ли агент добавить своё наблюдение.
+
+        Логика:
+        1. Выбирается один наиболее релевантный подписанный агент.
+        2. Агент с python_code (реальными интеграциями) получает приоритет.
+        3. Cooldown 15 минут на агента — чтобы не спамить.
+        4. Агент запускается асинхронно (не блокирует основной ответ).
+        """
+        try:
+            from models import Session as _Db, User as _User, UserAgent as _UA
+            from models import AgentSubscription as _AS, AgentActivityLog as _AAL
+
+            session = _Db()
+            try:
+                user = session.query(_User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    return
+                sub_ids = {r.agent_id for r in session.query(_AS).filter_by(user_id=user.id).all()}
+                if not sub_ids:
+                    return
+                agents = session.query(_UA).filter(
+                    _UA.id.in_(sub_ids),
+                    _UA.status != 'disabled',
+                ).all()
+                if not agents:
+                    return
+
+                now_utc = datetime.now(timezone.utc)
+                msg_lower = (user_message or '').lower()
+                resp_lower = (ai_response or '').lower()
+
+                best_agent = None
+                best_score = -1
+
+                for agent in agents:
+                    # Cooldown: агент участвует в чате не чаще 1 раза в 15 минут
+                    _last = session.query(_AAL).filter(
+                        _AAL.user_id == user.id,
+                        _AAL.activity_type == 'agent_chat_hook',
+                        _AAL.ref_id == agent.id,
+                        _AAL.created_at >= now_utc - timedelta(minutes=15),
+                    ).first()
+                    if _last:
+                        continue
+
+                    spec = (
+                        (agent.specialization or '') + ' '
+                        + (agent.job_title or '') + ' '
+                        + (agent.description or '')
+                    ).lower()
+                    spec_words = [w for w in spec.split() if len(w) > 3]
+                    score = sum(1 for w in spec_words if w in msg_lower or w in resp_lower)
+
+                    # Агенты с реальными интеграциями (python_code) получают бонус
+                    if (agent.python_code or '').strip():
+                        score += 2
+
+                    if score > best_score:
+                        best_score = score
+                        best_agent = agent
+
+                if not best_agent or best_score < 1:
+                    return
+
+                best_agent_id = best_agent.id
+
+            finally:
+                session.close()
+
+            # Запускаем асинхронно — не блокируем основной ответ
+            asyncio.create_task(
+                self._run_chat_hook_agent(user_id, best_agent_id, user_message, ai_response)
+            )
+
+        except Exception as _e:
+            logger.debug('[CHAT_HOOK] trigger error: %s', _e)
+
+    async def _run_chat_hook_agent(
+        self,
+        user_id: int,
+        agent_id: int,
+        user_message: str,
+        ai_response: str,
+    ):
+        """Выполняет агента как наблюдателя чата.  Отправляет сообщение только если есть новая ценность."""
+        try:
+            from models import Session as _Db, User as _User, UserAgent as _UA
+            from models import AgentActivityLog as _AAL, Interaction as _Int
+            from ai_integration.autonomous_agent import _exec_agent_for_director
+            import asyncio as _aio
+
+            # Небольшая задержка — агент «думает» после ответа AI
+            await _aio.sleep(3)
+
+            session = _Db()
+            try:
+                user = session.query(_User).filter_by(telegram_id=user_id).first()
+                agent = session.query(_UA).filter_by(id=agent_id).first()
+                if not user or not agent:
+                    return
+
+                # Повторная проверка cooldown (гонка)
+                now_utc = datetime.now(timezone.utc)
+                _dup = session.query(_AAL).filter(
+                    _AAL.user_id == user.id,
+                    _AAL.activity_type == 'agent_chat_hook',
+                    _AAL.ref_id == agent.id,
+                    _AAL.created_at >= now_utc - timedelta(minutes=15),
+                ).first()
+                if _dup:
+                    return
+
+                agent_data = {
+                    'id': agent.id,
+                    'name': agent.name,
+                    'job_title': agent.job_title or '',
+                    'specialization': agent.specialization or '',
+                    'description': agent.description or '',
+                    'personality': agent.personality or '',
+                    'python_code': agent.python_code or '',
+                    'user_api_keys': agent.user_api_keys or '',
+                    'tools_allowed': agent.tools_allowed or '',
+                    'avatar_url': agent.avatar_url or '',
+                }
+
+                task = (
+                    "[НАБЛЮДЕНИЕ ЗА ЧАТОМ]\n"
+                    f"Пользователь написал: {user_message[:300]}\n"
+                    f"AI ответил: {ai_response[:400]}\n\n"
+                    f"Ты — {agent.name}"
+                    + (f", специализация: {agent.specialization or agent.job_title}" if (agent.specialization or agent.job_title) else "")
+                    + ".\n"
+                    "Если у тебя есть КОНКРЕТНЫЕ данные из твоих интеграций (контакты, метрики, "
+                    "наблюдения), которые ДОБАВЛЯЮТ НОВУЮ ЦЕННОСТЬ к этому разговору и не повторяют "
+                    "то, что AI уже сказал — напиши кратко (до 300 символов).\n"
+                    "Используй инструменты если нужно (run_agent_action, list_tasks, list_goals…).\n"
+                    "Если добавить нечего — ответь ровно одним словом: SKIP"
+                )
+
+                _raw = await _exec_agent_for_director(agent_data, task, user.telegram_id)
+                result = (_raw[0] if isinstance(_raw, (tuple, list)) else _raw or '').strip()
+
+                # Фильтруем шум
+                _noise = {'skip', 'нет', 'no', 'нет данных', 'нет информации', 'нечего добавить'}
+                if (
+                    not result
+                    or result.lower().rstrip('.!') in _noise
+                    or result.lower().startswith('skip')
+                    or len(result) < 15
+                ):
+                    return
+
+                # Логируем
+                session.add(_AAL(
+                    user_id=user.id,
+                    activity_type='agent_chat_hook',
+                    title=f'{agent.name} — чат',
+                    content=result[:400],
+                    target='chat',
+                    status='completed',
+                    ref_id=agent.id,
+                ))
+
+                # Отправляем в Telegram
+                if self.bot:
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=f"{agent.name}:\n\n{result}",
+                    )
+                    _content = json.dumps({
+                        '__agent': {
+                            'name': agent.name,
+                            'id': agent.id,
+                            'avatar_url': _safe_avatar(agent.avatar_url, agent.id),
+                        },
+                        'text': result,
+                    }, ensure_ascii=False)
+                    session.add(_Int(
+                        user_id=user.id,
+                        message_type='proactive',
+                        content=_content,
+                    ))
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh_ch
+                        _smh_ch(user.telegram_id, 'assistant', result, session=session)
+                    except Exception:
+                        pass
+
+                session.commit()
+                logger.info('[CHAT_HOOK] %s contributed to chat for user %d', agent.name, user_id)
+
+            finally:
+                session.close()
+
+        except Exception as _e:
+            logger.debug('[CHAT_HOOK] agent %d error: %s', agent_id, _e)
+
     async def mark_ignored_deliveries(self):
         """Периодическая задача: помечает доставки старше 1ч без ответа как ignored"""
         session = Session()

@@ -1060,6 +1060,16 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                 session.close()
         except Exception as e:
             logger.error(f"Failed to save AI response for {user_id}: {e}")
+
+        # AGENT CHAT HOOKS: подписанные агенты могут добавить свои наблюдения (non-blocking)
+        if response_text and text:
+            try:
+                from anchor_engine import get_anchor_engine
+                _ae_hook = get_anchor_engine()
+                if _ae_hook:
+                    asyncio.create_task(_ae_hook.trigger_chat_hook(user_id, text, response_text))
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
         import traceback
