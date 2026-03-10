@@ -11586,7 +11586,6 @@ async def api_arena_agent_avatar_handler(request):
             from models import UserAgent
             agent = db_s.query(UserAgent).filter_by(id=numeric_id).first()
             avatar_data = agent.avatar_url if agent else None
-            agent_name = agent.name if agent else ''
         finally:
             db_s.close()
 
@@ -11603,32 +11602,7 @@ async def api_arena_agent_avatar_handler(request):
                     content_type=ct,
                     headers={'Cache-Control': 'public, max-age=3600'}
                 )
-
-        # Fallback: генерируем SVG-аватар с инициалами по имени агента
-        _AVATAR_COLORS = [
-            ('#068487', '#04a8b3'), ('#1a3a5c', '#2d6a9f'), ('#5c1a1a', '#a03030'),
-            ('#4a1a6b', '#7a30b0'), ('#1a5c3a', '#30a06a'), ('#5c3a1a', '#a07030'),
-        ]
-        _words = (agent_name or 'AI').strip().split()
-        _initials = ''.join(w[0] for w in _words[:2]).upper() or 'AI'
-        _color_idx = (numeric_id or 0) % len(_AVATAR_COLORS)
-        _c1, _c2 = _AVATAR_COLORS[_color_idx]
-        svg = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
-            f'<defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">'
-            f'<stop offset="0%" style="stop-color:{_c1}"/>'
-            f'<stop offset="100%" style="stop-color:{_c2}"/>'
-            f'</linearGradient></defs>'
-            f'<circle cx="32" cy="32" r="32" fill="url(#g)"/>'
-            f'<text x="32" y="38" text-anchor="middle" font-family="sans-serif" '
-            f'font-size="22" font-weight="700" fill="white">{_initials}</text>'
-            f'</svg>'
-        )
-        return web.Response(
-            body=svg.encode('utf-8'),
-            content_type='image/svg+xml',
-            headers={'Cache-Control': 'public, max-age=3600'}
-        )
+        return web.Response(status=404)
     except Exception as e:
         logger.error(f'[ARENA] agent_avatar error: {e}')
         return web.Response(status=500)
