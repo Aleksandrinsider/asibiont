@@ -4901,6 +4901,43 @@ def find_partners(user_id=None, session=None):
 
     return response
 
+def save_user_rule(rule: str, user_id: int = None, session=None) -> str:
+    """Сохраняет поведенческое правило/предпочтение пользователя в долгосрочную память."""
+    if not rule or not rule.strip():
+        return "Правило не может быть пустым."
+    rule = rule.strip()[:400]
+    import json as _json_sr
+    close_session = False
+    if session is None:
+        from models import Session as _Sess
+        session = _Sess()
+        close_session = True
+    try:
+        from models import User as _User
+        from ai_integration.memory import decrypt_data as _dec, encrypt_data as _enc
+        _u = session.query(_User).filter_by(telegram_id=user_id).first()
+        if not _u:
+            return "Пользователь не найден."
+        _mem = _json_sr.loads(_dec(_u.memory)) if _u.memory else {}
+        _rules = _mem.get('rules', [])
+        # Дедупликация по первым 80 символам
+        _short = rule[:80].lower()
+        if any(r[:80].lower() == _short for r in _rules):
+            return "Это правило уже сохранено."
+        _rules.append(rule)
+        _mem['rules'] = _rules
+        _u.memory = _enc(_json_sr.dumps(_mem, ensure_ascii=False))
+        session.commit()
+        logger.info(f"[SAVE_RULE] uid={user_id}: {rule[:80]}")
+        return f"Запомнил: «{rule[:120]}»"
+    except Exception as e:
+        logger.warning(f"[SAVE_RULE] Failed: {e}")
+        return "Не удалось сохранить правило."
+    finally:
+        if close_session:
+            session.close()
+
+
 def find_relevant_contacts_for_task(task_description: str, user_id: int = None, limit: int = 5, session=None) -> str:
     """
     Find contacts relevant for a specific task (bilingual).

@@ -934,38 +934,6 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         finally:
             session.close()
 
-        # АВТОСОХРАНЕНИЕ ПРАВИЛ ПОЛЬЗОВАТЕЛЯ — детектируем инструкции вида "не делай X / всегда делай Y"
-        _rule_detection_patterns = (
-            'не используй', 'не пиши', 'не отправляй', 'не ищи', 'не ищите',
-            'не пишите', 'не используйте', 'только внешние', 'только из внешних',
-            'не трогай', 'не беспокой', 'запрещено', 'нельзя', 'больше не делай',
-        )
-        _text_lower = text.lower()
-        if any(pat in _text_lower for pat in _rule_detection_patterns) and len(text) > 15:
-            async def _save_user_rule_bg(uid: int, rule_text: str):
-                """Фоновое сохранение правила пользователя в user.memory['rules']."""
-                import json as _json_r
-                try:
-                    _s = Session()
-                    _u = _s.query(User).filter_by(telegram_id=uid).first()
-                    if not _u:
-                        _s.close(); return
-                    from ai_integration.memory import decrypt_data as _dec_r, encrypt_data as _enc_r
-                    _mem = _json_r.loads(_dec_r(_u.memory)) if _u.memory else {}
-                    _rules = _mem.get('rules', [])
-                    # Проверяем на близкий дубликат (первые 60 символов)
-                    _rule_short = rule_text[:60].lower()
-                    if not any(r[:60].lower() == _rule_short for r in _rules):
-                        _rules.append(rule_text[:300])
-                        _mem['rules'] = _rules
-                        _u.memory = _enc_r(_json_r.dumps(_mem, ensure_ascii=False))
-                        _s.commit()
-                        logger.info(f"[RULE_SAVE] Saved user rule for uid={uid}: {rule_text[:80]}")
-                    _s.close()
-                except Exception as _e_r:
-                    logger.debug(f"[RULE_SAVE] Failed: {_e_r}")
-            asyncio.create_task(_save_user_rule_bg(user_id, text.strip()))
-
         # FEEDBACK LOOP: отмечаем что пользователь ответил на якорное сообщение
         try:
             from anchor_engine import get_anchor_engine
