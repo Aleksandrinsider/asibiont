@@ -5521,7 +5521,9 @@ class AnchorEngine:
                 from models import EmailCampaign
                 campaign = session.query(EmailCampaign).filter_by(id=campaign_id).first()
                 if not campaign or campaign.status != 'active':
-                    logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: campaign not found or not active, skip")
+                    logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: campaign not found or not active — marking delivered to prevent re-queue")
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
                     return
 
                 from ai_integration.handlers import _auto_find_leads
