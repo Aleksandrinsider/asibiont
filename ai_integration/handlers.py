@@ -9291,37 +9291,60 @@ _NICHE_PLATFORM_CACHE: dict = {}
 _NICHE_PLATFORM_CACHE_TTL = 86400  # 24 часа
 
 
-async def _get_ai_niche_platforms(target_audience: str, kw_enc: str, core_en: str,
+async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
+                                  kw_enc: str, core_en: str,
                                   has_cyrillic: bool, api) -> list:
-    """AI генерирует список платформ/директорий для ЛЮБОЙ профессиональной аудитории.
-    Кэшируется на 24 часа — экономит API-вызовы для повторных запусков одной кампании."""
+    """AI генерирует список платформ/директорий для ЛЮБОЙ аудитории с учётом языка.
+    Правило: если аудитория русскоязычная — возвращает .ru платформы,
+    если EN — международные. Кэш 24ч — не тратим API на повторные вызовы кампании."""
     import hashlib as _hl_np
     import time as _time_np
     import json as _json_np
-    cache_key = _hl_np.md5(target_audience[:150].encode('utf-8', errors='ignore')).hexdigest()
+    _lang_key = 'ru' if has_cyrillic else 'en'
+    cache_key = _hl_np.md5(
+        f"{_lang_key}:{target_audience[:150]}".encode('utf-8', errors='ignore')
+    ).hexdigest()
     cached = _NICHE_PLATFORM_CACHE.get(cache_key)
     if cached and (_time_np.time() - cached[1]) < _NICHE_PLATFORM_CACHE_TTL:
         return cached[0]
     try:
-        _lang_hint = 'Russian and English' if has_cyrillic else 'English'
+        _kw_first = (target_audience[:80].split()[0] if target_audience.split() else 'specialist')
+        if has_cyrillic:
+            _lang_instruction = (
+                "Аудитория русскоязычная. ОБЯЗАТЕЛЬНО используй российские платформы "
+                "(.ru домены): профессиональные директории, форумы, порталы, сообщества РФ. "
+                "Не используй LinkedIn, Facebook, reddit — они не работают в РФ. "
+                "Примеры по нишам: психологи → b17.ru, psycabi.net; "
+                "маркетологи → cossa.ru, sostav.ru; юристы → pravoved.ru, 9111.ru; "
+                "HR → hh.ru, career.habr.com; фрилансеры → kwork.ru, fl.ru; "
+                "предприниматели → spark.ru, vc.ru; врачи → prodoctorov.ru, docdoc.ru."
+            )
+        else:
+            _lang_instruction = (
+                "Audience is English-speaking. Use international platforms: "
+                "professional directories, forums, communities. "
+                "Examples by niche: therapists → psychologytoday.com, therapists.com; "
+                "coaches → coachfederation.org, noomii.com; lawyers → avvo.com, martindale.com; "
+                "designers → behance.net, dribbble.com; marketers → marketingprofs.com."
+            )
         _prompt = (
-            f"Target audience: {target_audience[:300]}\n\n"
-            f"List 6-8 specific websites, directories, or communities where professionals "
-            f"of this type have public profiles or posts with contact email addresses.\n"
-            f"Language preference: {_lang_hint}\n\n"
-            f"For each site generate a direct search/listing URL using the keyword: {target_audience[:50].split()[0]}\n"
-            f"Replace spaces with + in URLs. Use the format: https://site.com/search?q=KEYWORD\n\n"
-            f"Focus on:\n"
-            f"1. Professional directories (e.g. b17.ru for therapists, hh.ru for HR, etc.)\n"
-            f"2. Community forums where they post with contacts\n"
-            f"3. Portfolio/profile sites\n"
-            f"4. Professional association listings\n\n"
-            f"Return ONLY valid JSON array: [\"{{'url': 'https://...', 'desc': 'short description'}}\", ...]"
+            f"Target audience: {target_audience[:300]}\n"
+            f"Campaign goal: {goal[:150]}\n"
+            f"Offer/product: {offer[:150]}\n\n"
+            f"{_lang_instruction}\n\n"
+            f"Generate 8 direct search/listing URLs for finding people of this audience type "
+            f"who may have public email addresses on their profiles or posts.\n"
+            f"Use keyword '{_kw_first}' in URLs where applicable (URL-encoded: spaces→+).\n"
+            f"Return ONLY valid JSON array: "
+            f'[{{"url": "https://...", "desc": "why relevant"}}]'
         )
         raw = await api.deepseek_analyze(
             prompt=_prompt,
-            system_prompt="Return ONLY valid JSON array of objects with 'url' and 'desc' fields. No markdown.",
-            max_tokens=400,
+            system_prompt=(
+                "You are a lead generation expert. "
+                "Return ONLY valid JSON array of objects with 'url' and 'desc'. No markdown."
+            ),
+            max_tokens=500,
         )
         urls = []
         if raw:
@@ -9347,7 +9370,7 @@ async def _get_ai_niche_platforms(target_audience: str, kw_enc: str, core_en: st
             except Exception:
                 pass
         _NICHE_PLATFORM_CACHE[cache_key] = (urls, _time_np.time())
-        logger.info(f"[AUTO_LEADS] AI-niche platforms ({len(urls)}): {urls[:5]}")
+        logger.info(f"[AUTO_LEADS] AI-niche platforms [{_lang_key}] ({len(urls)}): {urls[:5]}")
         return urls
     except Exception as _e:
         logger.warning(f"[AUTO_LEADS] AI niche platforms failed: {_e}")
@@ -9451,17 +9474,12 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     _core_en = core_kw.replace(' ', '+')
     _platform_urls = []
 
-    # Русскоязычные платформы
-    if _has_cyrillic:
-        _platform_urls.extend([
-            f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
-            f'https://habr.com/ru/search/?q={_kw_enc}&target_type=posts',
-            f'https://vc.ru/search?q={_kw_enc}',
-            f'https://tproger.ru/?s={_kw_enc}',
-            f'https://spark.ru/search?q={_kw_enc}',
-            f'https://rb.ru/search/?q={_kw_enc}',
-        ])
-    # Tech-платформы (только для tech-аудитории)
+    # ──────────────────────────────────────────────────────────────────────
+    # PASS 1 платформы: AI генерирует нишевые URL с учётом языка аудитории
+    # Tech-base фиксирована; всё остальное — AI с учётом RU/EN аудитории
+    # ──────────────────────────────────────────────────────────────────────
+
+    # Tech-платформы только для tech-аудитории (фиксированные, надёжные)
     if _is_tech_audience:
         _platform_urls.extend([
             f'https://dev.to/search?q={_core_en}',
@@ -9469,103 +9487,32 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             f'https://github.com/search?q={_core_en}+in%3Areadme+email&type=repositories',
             f'https://medium.com/search?q={_core_en}',
         ])
+        if _has_cyrillic:
+            _platform_urls.extend([
+                f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
+                f'https://tproger.ru/?s={_kw_enc}',
+            ])
 
-    # Нишевые платформы по типу аудитории
-    # Для каждой ниши — специфические платформы где эта аудитория реально присутствует
-    _niche_matched = True
-    if any(w in _all_text for w in ['маркетолог', 'smm', 'маркетинг', 'marketing', 'реклам', 'pr ',
-                                     'таргетолог', 'контекстная', 'seo', 'copywriter', 'копирайт']):
-        _platform_urls.extend([
-            f'https://cossa.ru/search/?q={_kw_enc}',
-            f'https://sostav.ru/search.html?text={_kw_enc}',
-            f'https://medium.com/search?q={_core_en}+marketing',
-            f'https://vc.ru/marketing?q={_kw_enc}',
-        ])
-    elif any(w in _all_text for w in ['дизайн', 'design', 'ux', 'ui', 'graphic', 'иллюстра', 'figma',
-                                       'верстка', 'motion', 'visual']):
-        _platform_urls.extend([
-            f'https://www.behance.net/search/projects?search={_core_en}',
-            f'https://dribbble.com/search/{_core_en}',
-            f'https://readymag.com/search/?q={_core_en}',
-        ])
-    elif any(w in _all_text for w in ['hr ', 'рекрут', 'кадров', 'подбор', 'headhunt', 'talent',
-                                       'people management', 'c&b', 'hrbp']):
-        _platform_urls.extend([
-            f'https://career.habr.com/search?q={_kw_enc}',
-            f'https://hh.ru/search/resume?text={_kw_enc}',
-        ])
-    elif any(w in _all_text for w in ['фрилан', 'freelan', 'удалён', 'remote work', 'фриланс']):
-        _platform_urls.extend([
-            f'https://kwork.ru/catalog?c=&q={_kw_enc}',
-            f'https://freelance.ru/search/?q={_kw_enc}',
-            f'https://fl.ru/freelancers/?q={_kw_enc}',
-        ])
-    elif any(w in _all_text for w in ['блог', 'контент', 'автор', 'writer', 'journalist', 'журналист',
-                                       'редактор', 'медиа', 'публицист', 'колумнист']):
-        _platform_urls.extend([
-            f'https://teletype.in/search?q={_kw_enc}',
-            f'https://medium.com/search?q={_core_en}',
-            f'https://substack.com/search/{_core_en}',
-        ])
-    elif any(w in _all_text for w in ['стартап', 'startup', 'основатель', 'founder', 'ceo',
-                                       'предприниматель', 'entrepreneur', 'бизнес', 'инвест']):
-        _platform_urls.extend([
-            f'https://spark.ru/search?q={_kw_enc}',
-            f'https://rb.ru/search/?q={_kw_enc}',
-            f'https://vc.ru/search?q={_kw_enc}',
-        ])
-    elif any(w in _all_text for w in ['терапевт', 'психолог', 'психотерапевт', 'коуч', 'консультант',
-                                       'медицин', 'врач', 'therapist', 'psychologist', 'coach',
-                                       'counselor', 'health', 'здоровь', 'психиатр', 'нутрициолог',
-                                       'диетолог', 'остеопат', 'массажист', 'реабилитолог']):
-        _platform_urls.extend([
-            f'https://b17.ru/search/?q={_kw_enc}',
-            f'https://psycabi.net/psixologi?q={_kw_enc}',
-            f'https://zigmund.online/therapists/?q={_kw_enc}',
-            f'https://www.medbooking.com/specialists?q={_kw_enc}',
-            f'https://prodoctorov.ru/search/?q={_kw_enc}',
-        ])
-    elif any(w in _all_text for w in ['юрист', 'адвокат', 'юридическ', 'lawyer', 'legal', 'attorney',
-                                       'нотариус', 'право', 'арбитраж', 'правовед']):
-        _platform_urls.extend([
-            f'https://www.9111.ru/questions/search/?text={_kw_enc}',
-            f'https://pravoved.ru/question/search/?q={_kw_enc}',
-            f'https://vc.ru/legal?q={_kw_enc}',
-        ])
-    elif any(w in _all_text for w in ['образован', 'обучени', 'курс', 'тренер', 'преподавател',
-                                       'teacher', 'tutor', 'education', 'trainer', 'ментор', 'mentor',
-                                       'репетитор', 'онлайн-школ', 'e-learning']):
-        _platform_urls.extend([
-            f'https://teachbase.ru/search?q={_kw_enc}',
-            f'https://stepik.org/search?query={_core_en}',
-            f'https://udemy.com/courses/search/?q={_core_en}',
-            f'https://medium.com/search?q={_core_en}+education',
-        ])
-    elif any(w in _all_text for w in ['финанс', 'бухгалтер', 'финансист', 'аудитор', 'finance',
-                                       'accountant', 'бюджет', 'инвест', 'трейдер', 'broker']):
-        _platform_urls.extend([
-            f'https://smart-lab.ru/blog/search/{_kw_enc}/',
-            f'https://vc.ru/finance?q={_kw_enc}',
-            f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
-        ])
-    elif any(w in _all_text for w in ['недвижимост', 'риелтор', 'realtor', 'real estate',
-                                       'агент по', 'застройщик', 'аренда', 'ипотека']):
-        _platform_urls.extend([
-            f'https://www.cian.ru/specialists/?q={_kw_enc}',
-            f'https://www.avito.ru/professiy?q={_kw_enc}',
-        ])
-    else:
-        # Универсальный fallback — AI генерирует платформы для неизвестной ниши
-        _niche_matched = False
-        _ai_platforms = await _get_ai_niche_platforms(
-            target_audience, _kw_enc, _core_en, _has_cyrillic, api
-        )
-        _platform_urls.extend(_ai_platforms)
-        # Базовые универсальные платформы как страховка
-        _platform_urls.extend([
-            f'https://about.me/search?q={_core_en}',
-            f'https://medium.com/search?q={_core_en}',
-        ])
+    # AI генерирует нишевые платформы — знает язык, страну, профессию
+    _ai_platforms = await _get_ai_niche_platforms(
+        target_audience, goal, offer, _kw_enc, _core_en, _has_cyrillic, api
+    )
+    _platform_urls.extend(_ai_platforms)
+
+    # Страховочный минимум если AI вернул 0 URL
+    if not _ai_platforms:
+        if _has_cyrillic:
+            _platform_urls.extend([
+                f'https://vc.ru/search?q={_kw_enc}',
+                f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
+                f'https://spark.ru/search?q={_kw_enc}',
+            ])
+        else:
+            _platform_urls.extend([
+                f'https://about.me/search?q={_core_en}',
+                f'https://medium.com/search?q={_core_en}',
+                f'https://substack.com/search/{_core_en}',
+            ])
     _niche_contact_urls = []
 
     async def _fetch_platform(url: str) -> tuple:
