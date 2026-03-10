@@ -9341,8 +9341,37 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             f'https://hackernoon.com/search?query={_core_en}',
         ])
 
-    # Нишевые контактные страницы — определяются динамически AI на основе аудитории
+    # Нишевые платформы по типу аудитории (определяются динамически)
     _niche_contact_urls = []
+    if any(w in _all_text for w in ['маркетолог', 'smm', 'маркетинг', 'marketing', 'реклам', 'pr ']):
+        _platform_urls.extend([
+            f'https://cossa.ru/search/?q={_kw_enc}',
+            f'https://sostav.ru/search.html?text={_kw_enc}',
+        ])
+    elif any(w in _all_text for w in ['дизайн', 'design', 'ux', 'ui', 'graphic', 'иллюстра', 'figma']):
+        _platform_urls.extend([
+            f'https://www.behance.net/search/projects?search={_core_en}',
+            f'https://dribbble.com/search/{_core_en}',
+        ])
+    elif any(w in _all_text for w in ['hr ', 'рекрут', 'кадров', 'подбор', 'headhunt', 'talent']):
+        _platform_urls.extend([
+            f'https://career.habr.com/search?q={_kw_enc}',
+        ])
+    elif any(w in _all_text for w in ['фрилан', 'freelan', 'удалён', 'remote work']):
+        _platform_urls.extend([
+            f'https://kwork.ru/catalog?c=&q={_kw_enc}',
+            f'https://freelance.ru/search/?q={_kw_enc}',
+        ])
+    elif any(w in _all_text for w in ['блог', 'контент', 'автор', 'writer', 'journalist', 'журналист', 'редактор']):
+        _platform_urls.extend([
+            f'https://teletype.in/search?q={_kw_enc}',
+            f'https://zen.yandex.ru/search?query={_kw_enc}',
+        ])
+    elif any(w in _all_text for w in ['стартап', 'startup', 'основатель', 'founder', 'ceo', 'предприниматель']):
+        _platform_urls.extend([
+            f'https://spark.ru/search?q={_kw_enc}',
+            f'https://rb.ru/search/?q={_kw_enc}',
+        ])
 
     async def _fetch_platform(url: str) -> tuple:
         """Скачать страницу платформы, вернуть (url, html)."""
@@ -9401,9 +9430,85 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                 f"{_direct_emails} emails extracted, {len(all_results)} profile links, "
                 f"GitHub leads: {len(github_leads)}, total raw: {len(all_emails_raw)}")
 
-    # Если и прямой парсинг и GitHub дали 0 — выходим
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 1b: DDG поиск с AI-генерированными запросами
+    # Главный путь для ЛЮБОЙ аудитории — DDG находит реальные личные страницы
+    # ══════════════════════════════════════════════════════════════════════
+    import json as _json_q
+    _ddg_hits = 0
+    try:
+        _q_lang = 'Russian' if _has_cyrillic else 'English'
+        _queries_prompt = (
+            f"Generate 6 web search queries to find personal email addresses of people matching:\n"
+            f"Target audience: {target_audience[:200]}\n"
+            f"Goal: {goal[:150]}\n"
+            f"Language preference: {_q_lang}\n"
+            f"Rules:\n"
+            f"- Each query must target pages where people show their email (personal sites, portfolios, contact pages)\n"
+            f"- Include: site:about.me, личный блог, portfolio, 'email' or 'написать мне', профессиональные профили\n"
+            f"- Mix direct audience-type searches with platform-specific ones\n"
+            f"- If Russian-speaking audience, use both Russian and English queries\n"
+            f"Return ONLY valid JSON array of 6 query strings: [\"q1\", \"q2\", ...]"
+        )
+        _ai_q_raw = await api.deepseek_analyze(
+            prompt=_queries_prompt,
+            system_prompt="Return ONLY a valid JSON array of strings, no markdown or explanation.",
+            max_tokens=300,
+        )
+        _ddg_queries = []
+        if _ai_q_raw:
+            _qt = _ai_q_raw.strip()
+            if '```' in _qt:
+                for _seg in _qt.split('```'):
+                    _seg = _seg.strip()
+                    if _seg.startswith('json'):
+                        _seg = _seg[4:].strip()
+                    if _seg.startswith('['):
+                        _qt = _seg
+                        break
+            try:
+                _pq = _json_q.loads(_qt)
+                if isinstance(_pq, list):
+                    _ddg_queries = [str(q).strip() for q in _pq if q][:6]
+            except Exception:
+                pass
+        # Fallback-запросы если AI не вернул список
+        if not _ddg_queries:
+            _ddg_queries = [f"{core_kw} email contact", f"{core_kw} личный сайт"]
+            if _has_cyrillic:
+                _ddg_queries.append(f"{core_kw} написать мне")
+
+        logger.info(f"[AUTO_LEADS] PASS 1b DDG queries ({len(_ddg_queries)}): {_ddg_queries}")
+        _ddg_raw = await api.web_multi_search(_ddg_queries, num_per_query=8)
+        _ddg_hits = len(_ddg_raw)
+
+        for _r in _ddg_raw:
+            # Сразу извлекаем email из сниппетов DDG
+            _snip = (_r.get('snippet') or '') + ' ' + (_r.get('title') or '')
+            all_emails_raw.update(_extract_emails_from_text(_snip))
+            # URL → PASS 2 (скачать страницу и поискать email там)
+            _r_url = _r.get('link', '')
+            if _r_url:
+                try:
+                    _r_domain = _r_url.split('/')[2]
+                    _r_base = '.'.join(_r_domain.split('.')[-2:])
+                    if _r_base not in _unfetchable_domains:
+                        all_results.append({
+                            'title': _r.get('title', ''),
+                            'snippet': _r.get('snippet', ''),
+                            'url': _r_url,
+                        })
+                except Exception:
+                    pass
+
+        logger.info(f"[AUTO_LEADS] PASS 1b DDG: {_ddg_hits} results → "
+                    f"{len(all_results)} URLs in pool, {len(all_emails_raw)} emails total")
+    except Exception as _ddg_err:
+        logger.warning(f"[AUTO_LEADS] PASS 1b DDG failed: {_ddg_err}")
+
+    # Если после ВСЕХ пассов (платформы + GitHub + DDG) ничего — выходим
     if not all_results and not github_leads and not all_emails_raw:
-        logger.warning(f"[AUTO_LEADS] ZERO results from all sources for campaign #{campaign.id}")
+        logger.warning(f"[AUTO_LEADS] ZERO results after all passes for campaign #{campaign.id}")
         return 0, ""
 
     # ══════════════════════════════════════════════════════════════════════
