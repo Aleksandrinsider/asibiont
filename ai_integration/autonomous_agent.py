@@ -4386,6 +4386,20 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     except Exception:
         pass
 
+    # Для autopilot-задач: вставляем явную инструкцию ВЫЗВАТЬ ИНСТРУМЕНТ в system_prompt
+    # Это критично чтобы модель не генерировала текст-предложения вместо реальных действий
+    if _is_autopilot_task:
+        system_prompt += (
+            "\n\n⚡ АВТОПИЛОТ ЦЕЛЕЙ — ПОРЯДОК ДЕЙСТВИЙ (НАРУШЕНИЕ НЕДОПУСТИМО):\n"
+            "1. ПЕРВЫЙ ШАГ: немедленно вызови инструмент — add_task (создать задачу), "
+            "research_topic (исследование), web_search (поиск) или delegate_task.\n"
+            "2. Получи результат инструмента.\n"
+            "3. ВТОРОЙ ШАГ: напиши краткий отчёт о том, что сделал(а).\n"
+            "КРИТИЧНО: если ты напишешь текст БЕЗ предварительного вызова инструмента — "
+            "это ошибка. Даже если кажется что нечего делать — вызови research_topic "
+            "чтобы найти новую информацию по цели."
+        )
+
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
     # (execution_history, счётчики, лимиты у каждого агента свои)
     _agent_inst = HybridAutonomousAgent()
@@ -4395,7 +4409,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     ]
     # Если tools_allowed пустой → агент универсальный: работает со всеми инструментами платформы
     # (аналогично поведению при прямом @mention агента в process_request)
-    # _exclude_for_agent уже None при пустом _allowed_tools → exclusions нет → все tools доступны
+    # _exclude_for_agent уже None при пустом _allowed_Tools → exclusions нет → все tools доступны
     _use_tools = True
 
     # Очередь субделегирований: агент может попросить другого агента через паттерн DELEGATE[имя]: задача
