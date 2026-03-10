@@ -1723,8 +1723,15 @@ class AnchorEngine:
             except Exception:
                 pass
 
-            # Отправляем результат следующего агента пользователю
-            if _next_result and _next_result.strip() and self.bot:
+            # Отправляем результат следующего агента пользователю (с noise-фильтром)
+            _chain_clean = (_next_result or '').strip()
+            _NOISE_PREFIXES_CHAIN = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена')
+            _chain_is_noise = (
+                len(_chain_clean) < 20
+                or _chain_clean.lower().rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена')
+                or any(_chain_clean.lower().startswith(p) for p in _NOISE_PREFIXES_CHAIN)
+            )
+            if _next_result and _chain_clean and self.bot and not _chain_is_noise:
                 try:
                     await self.bot.send_message(
                         chat_id=user.telegram_id,

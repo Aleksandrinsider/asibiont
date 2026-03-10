@@ -4451,7 +4451,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools_now,
                     tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=800 if _tool_call_count > 0 else 400,
+                    max_tokens=400,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
                 timeout=API_TIMEOUT_LONG + 15,
@@ -4540,10 +4540,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                               "content": '{"status":"skipped"}'})
         # Инструкция синтезировать ответ на основе данных инструмента
         _messages.append({"role": "user", "content": (
-            "Данные от инструмента получены. Теперь дай ПОЛНЫЙ содержательный ответ "
-            "на основе этих данных. НЕ пиши 'ищу данные' или 'уточняю' — ДАЙТЕ ГОТОВЫЙ РЕЗУЛЬТАТ. "
-            "ФОРМАТ: сплошной текст абзацами, БЕЗ списков, БЕЗ заголовков CAPS, БЕЗ маркеров (•, -, *). "
-            "ОБЯЗАТЕЛЬНО заверши мысль — не обрывай на середине."
+            "Данные от инструмента получены. Дай ГОТОВЫЙ результат. "
+            "ЖЁСТКИЙ ЛИМИТ: максимум 2-3 предложения, до 400 символов. Длинный ответ = ПРОВАЛ. "
+            "НЕ пиши 'ищу данные' или 'уточняю'. "
+            "Сплошной текст, БЕЗ списков, БЕЗ заголовков CAPS, БЕЗ маркеров (•, -, *). "
+            "Заверши мысль — не обрывай. Пиши кратко как в мессенджере."
         )})
     # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
     if _early_text is not None:
@@ -4573,6 +4574,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             ).strip() or _done_fb
         else:
             _final_text = _done_fb
+
+    # ── Шаг сжатия: если ответ > 500 символов — пересказываем кратко ──
+    if _final_text and len(_final_text) > 500 and _final_text != _done_fb:
+        try:
+            _condensed = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Перескажи этот текст МАКСИМУМ в 2-3 предложения, до 350 символов. "
+                    f"Сохрани суть и ключевые факты. Без списков, без заголовков. "
+                    f"Пиши живо, как в мессенджере:\n\n{_final_text}"
+                ),
+            }], max_tokens=200)
+            if _condensed and len(_condensed.strip()) > 20:
+                _final_text = _condensed.strip()
+        except Exception:
+            pass
 
     # Детектируем BLOCKED-маркер в финальном ответе агента
     if _final_text and _final_text.lower().startswith('blocked:'):
