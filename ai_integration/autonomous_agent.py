@@ -3756,10 +3756,68 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _team_lines = []
                     for _tm in _teammates:
                         _role = _tm.job_title or _tm.specialization or ''
-                        _team_lines.append(f"  • {_tm.name}{' — ' + _role if _role else ''}")
+                        # Инferируем возможности коллеги из его конфигурации
+                        _caps: list[str] = []
+                        # 1. Явные разрешённые инструменты
+                        try:
+                            _tm_tools_raw = _tm.tools_allowed or '[]'
+                            _tm_tools = json.loads(_tm_tools_raw) if isinstance(_tm_tools_raw, str) else (_tm_tools_raw or [])
+                        except Exception:
+                            _tm_tools = []
+                        # Метки для инструментов
+                        _TOOL_CAP = {
+                            'send_email': 'пишет email', 'send_outreach_email': 'email-аутрич',
+                            'reply_to_outreach_email': 'отвечает на email',
+                            'start_email_campaign': 'email-кампании', 'negotiate_by_email': 'email-переговоры',
+                            'list_email_contacts': 'читает контакты', 'save_email_contact': 'сохраняет контакты',
+                            'find_relevant_contacts_for_task': 'ищет контакты',
+                            'research_topic': 'исследования', 'web_search': 'веб-поиск',
+                            'create_post': 'создаёт посты', 'publish_to_telegram': 'публикует в TG',
+                            'generate_image': 'генерирует картинки',
+                            'add_task': 'управляет задачами', 'delegate_task': 'делегирует',
+                            'run_agent_action': 'внешние API',
+                        }
+                        if _tm_tools:
+                            _caps += [_TOOL_CAP[t] for t in _tm_tools if t in _TOOL_CAP]
+                        # 2. Инferируем из специализации/роли если инструментов нет
+                        if not _caps:
+                            _tm_spec = ((_tm.specialization or '') + ' ' + (_tm.job_title or '') + ' ' + (_tm.description or '')).lower()
+                            if any(w in _tm_spec for w in ('email', 'почт', 'рассылк', 'outreach', 'smtp', 'imap')):
+                                _caps.append('email')
+                            if any(w in _tm_spec for w in ('контент', 'пост', 'smm', 'marketing', 'маркет', 'pr', 'пиар')):
+                                _caps.append('контент/посты')
+                            if any(w in _tm_spec for w in ('аналит', 'исслед', 'research', 'поиск')):
+                                _caps.append('исследования')
+                            if any(w in _tm_spec for w in ('dev', 'код', 'разраб', 'python', 'script')):
+                                _caps.append('скрипты/интеграции')
+                        # 3. Инferируем из api_keys (наличие ключей = доступ к сервису)
+                        _tm_keys = (_tm.user_api_keys or '').lower()
+                        if any(w in _tm_keys for w in ('gmail', 'imap', 'smtp', 'mail')):
+                            if 'email' not in ' '.join(_caps):
+                                _caps.append('email (ключи)')
+                        if any(w in _tm_keys for w in ('openai', 'anthropic', 'deepseek')):
+                            _caps.append('AI')
+                        # 4. Наличие python_code = интеграции/скрипты
+                        if (_tm.python_code or '').strip():
+                            _pc_lower = _tm.python_code.lower()
+                            if any(w in _pc_lower for w in ('imap', 'imaplib', 'email.mime', 'smtplib')):
+                                if 'читает email' not in _caps:
+                                    _caps.append('читает входящие email')
+                            if any(w in _pc_lower for w in ('requests', 'aiohttp', 'httpx')):
+                                if 'скрипты/интеграции' not in _caps:
+                                    _caps.append('внешние интеграции')
+                        # Формируем строку
+                        _cap_str = ', '.join(_caps[:4]) if _caps else ''
+                        _line = f"  • {_tm.name}"
+                        if _role:
+                            _line += f" — {_role}"
+                        if _cap_str:
+                            _line += f" [умеет: {_cap_str}]"
+                        _team_lines.append(_line)
                     system_prompt += (
-                        "\n\nКОМАНДА КОЛЛЕГ (можешь делегировать через delegate_task):\n"
+                        "\n\nКОМАНДА КОЛЛЕГ — делегируй им через delegate_task(title=..., delegated_to_username='ИмяКоллеги'):\n"
                         + "\n".join(_team_lines)
+                        + "\nВыбирай коллегу по его возможностям: не делай сам то, что умеет коллега."
                     )
         finally:
             _s_team.close()
@@ -3875,6 +3933,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'research_topic', 'web_search', 'quick_topic_search',
                 'create_post', 'publish_to_telegram', 'delegate_task',
                 'generate_image', 'get_system_status',
+                # Email — агенты должны уметь слать/читать письма в автопилоте
+                'send_email', 'send_outreach_email', 'reply_to_outreach_email',
+                'start_email_campaign', 'list_email_contacts', 'save_email_contact',
+                'find_relevant_contacts_for_task', 'add_email_leads',
             }
             try:
                 from .tools import get_available_tools as _gat_ap
@@ -3951,11 +4013,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _is_autopilot_task:
         system_prompt += (
             "\n\n⚡ АВТОПИЛОТ ЦЕЛЕЙ:\n"
-            "Продвинь цель на один шаг. Прочитай что УЖЕ СДЕЛАНО — не повторяй.\n"
-            "Алгоритм: исследуй → создай задачу (add_task) с конкретным следующим шагом.\n"
-            "Одного исследования БЕЗ создания задачи НЕДОСТАТОЧНО.\n"
+            "Продвинь цель на один КОНКРЕТНЫЙ шаг — СДЕЛАЙ сам инструментами, не создавай задачи для пользователя.\n"
+            "Алгоритм: исследуй (research_topic/web_search) → ДЕЙСТВУЙ сам (send_email, create_post, find_relevant_contacts_for_task).\n"
+            "НЕ пиши 'создал задачу' — ДЕЛАЙ сам или ДЕЛЕГИРУЙ коллеге который умеет нужное.\n"
+            "ДЕЛЕГИРОВАНИЕ: если коллега специализируется на нужном действии — передай ему через delegate_task.\n"
+            "Пример: исследовал контакты → делегируй email-рассылку коллеге с [умеет: email].\n"
             "Если есть реальный прогресс — ОБЯЗАТЕЛЬНО обнови через update_goal_progress(goal_title=..., metric_current=N).\n"
-            "Отчёт: 2-3 предложения, до 400 символов."
+            "Отчёт: 2-3 предложения, до 400 символов. НЕ выдумывай действия — только то что вызвал инструментами."
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
