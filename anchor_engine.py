@@ -1163,32 +1163,42 @@ class AnchorEngine:
                 agent_name = chosen.name
 
                 # ── Адаптация задачи под роль агента: универсальный подход ──
-                # Если у агента есть python_code — у него есть конкретная интеграция.
-                # Задача строится из его описания/специализации + активных целей.
-                # Никаких хардкоженых категорий — работает для любых интеграций пользователя.
+                # Используем _parse_agent_integrations — она определяет реальные интеграции
+                # из user_api_keys (имена ключей) + python_code (импорты) + tools_allowed.
+                # Работает для любых 30+ интеграций без хардкода в anchor_engine.
                 if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
-                    _has_integration = bool((getattr(chosen, 'python_code', '') or '').strip())
-                    if _has_integration:
+                    try:
+                        from ai_integration.autonomous_agent import _parse_agent_integrations as _pai
+                        _detected = _pai(
+                            getattr(chosen, 'user_api_keys', '') or '',
+                            getattr(chosen, 'python_code', '') or '',
+                            getattr(chosen, 'tools_allowed', '') or '',
+                            getattr(chosen, 'search_scope', '') or '',
+                        )
+                    except Exception:
+                        _detected = []
+                    if _detected:
                         _goals_snippet = (
                             '\n'.join(f"• {g['title']}" for g in goals_info[:4])
                             if goals_info else task_text[:300]
                         )
-                        # Описание роли агента — чем конкретнее, тем лучше LLM поймёт что делать
                         _role_desc = ' / '.join(filter(None, [
                             (getattr(chosen, 'job_title', '') or '').strip(),
                             (getattr(chosen, 'specialization', '') or '').strip(),
-                            (getattr(chosen, 'description', '') or '').strip()[:200],
+                            (getattr(chosen, 'description', '') or '').strip()[:150],
                         ]))
+                        _intg_str = ', '.join(_detected[:6])
                         task_text = (
                             f"[ЗАДАЧА ПО ЦЕЛЯМ — В РАМКАХ ТВОЕЙ РОЛИ]\n"
-                            f"Ты: {_role_desc or chosen.name}\n\n"
+                            f"Ты: {_role_desc or chosen.name}\n"
+                            f"Твои активные интеграции: {_intg_str}\n\n"
                             f"Активные цели команды:\n{_goals_snippet}\n\n"
-                            f"Используй свою интеграцию (run_agent_action) чтобы внести вклад в эти цели "
-                            f"тем способом, который соответствует твоей специализации. "
-                            f"Сделай одно конкретное действие: получи данные, проверь статус, найди "
-                            f"контакты/упоминания/события — в зависимости от твоих инструментов. "
-                            f"Отчитайся кратко что сделал и что нашёл. "
-                            f"НЕ выходи за рамки своей роли: не создавай то, что не входит в твою специализацию."
+                            f"Используй run_agent_action чтобы через свои интеграции ({_intg_str}) "
+                            f"внести конкретный вклад в эти цели. "
+                            f"Сделай одно действие: получи данные, проверь статус, найди контакты или события — "
+                            f"то, что умеешь именно ты. "
+                            f"Отчитайся кратко: что сделал и что нашёл. "
+                            f"НЕ выходи за рамки своей роли и своих интеграций."
                         )
 
                 # Log dispatch (для ASI не записываем ref_id)
