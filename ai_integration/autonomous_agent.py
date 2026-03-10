@@ -2495,7 +2495,7 @@ class HybridAutonomousAgent:
                                         _ag = _args.get('agent_name', '') or ''
                                         _vis = f"Запускаю агента {_ag}" if _ag else "Запускаю агента..."
                                     if _vis:
-                                        await _cb(_vis, persist=True)
+                                        await _cb(_vis, persist=False)
                                 except TypeError:
                                     try:
                                         if _vis:
