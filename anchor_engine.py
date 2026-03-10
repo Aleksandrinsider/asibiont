@@ -1266,7 +1266,26 @@ class AnchorEngine:
                             user.id, chosen.name, anchor.anchor_type, len(result or ''),
                         )
 
-                        # Результат сохранён в AgentActivityLog.result — context_builder читает напрямую
+                        # Отправляем результат агента пользователю в Telegram
+                        if result and result.strip() and self.bot:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=result.strip(),
+                                )
+                                _s.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='proactive',
+                                    content=result.strip(),
+                                ))
+                                _s.commit()
+                                try:
+                                    from ai_integration.conversation_history import save_message_to_history as _smh_ev
+                                    _smh_ev(user.telegram_id, 'assistant', result.strip(), session=_s)
+                                except Exception:
+                                    pass
+                            except Exception as _e_ev_send:
+                                logger.warning("[ANCHOR-DISPATCH] result send failed: %s", _e_ev_send)
 
                         # ── ASI-продолжение: анализ результата → следующий агент ──
                         if result and len(result) > 30:
@@ -1456,12 +1475,65 @@ class AnchorEngine:
                 'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
             }
             _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
+
+            # Уведомляем пользователя о передаче задачи между агентами
+            if self.bot:
+                try:
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=(
+                            f"🔄 {prev_agent.name} передаёт задачу → {_next_ag.name}\n\n"
+                            f"📋 {_next_task[:200]}"
+                        ),
+                    )
+                except Exception:
+                    pass
+
             _next_raw = await _exec_agent_for_director(
                 _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
 
-            # Результат цепочки сохранён в AgentActivityLog.result — context_builder читает напрямую
+            # Сохраняем результат в лог
+            try:
+                _chain_log = (
+                    session.query(_AAL3)
+                    .filter(
+                        _AAL3.user_id == user.id,
+                        _AAL3.activity_type == 'agent_chain_continue',
+                        _AAL3.ref_id == _next_ag.id,
+                        _AAL3.status == 'in_progress',
+                    )
+                    .order_by(_AAL3.id.desc())
+                    .first()
+                )
+                if _chain_log:
+                    _chain_log.result = (_next_result or '')[:400]
+                    _chain_log.status = 'completed'
+                    session.commit()
+            except Exception:
+                pass
+
+            # Отправляем результат следующего агента пользователю
+            if _next_result and _next_result.strip() and self.bot:
+                try:
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=_next_result.strip(),
+                    )
+                    session.add(Interaction(
+                        user_id=user.id,
+                        message_type='proactive',
+                        content=_next_result.strip(),
+                    ))
+                    session.commit()
+                    try:
+                        from ai_integration.conversation_history import save_message_to_history as _smh_c
+                        _smh_c(user.telegram_id, 'assistant', _next_result.strip(), session=session)
+                    except Exception:
+                        pass
+                except Exception as _e_chain_send:
+                    logger.warning("[ANCHOR-CHAIN] result send failed: %s", _e_chain_send)
 
             logger.info(
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s) → %d chars",
