@@ -1576,7 +1576,7 @@ async def delegate_task(
             from sqlalchemy import or_ as _or_d
             _agent_filter = [_UA_chk.status.in_(['active', 'paused', 'published'])]
             if _subscribed_ids:
-                _agent_filter.append(_or_(_UA_chk.id.in_(_subscribed_ids), _UA_chk.author_id == delegator.id))
+                _agent_filter.append(_or_d(_UA_chk.id.in_(_subscribed_ids), _UA_chk.author_id == delegator.id))
             else:
                 _agent_filter.append(_UA_chk.author_id == delegator.id)
             _all_agents = (
