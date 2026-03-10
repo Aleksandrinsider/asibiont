@@ -1531,14 +1531,13 @@ class AnchorEngine:
             if self.bot:
                 try:
                     _handoff_name = _next_ag.name if _next_ag.name != prev_agent.name else prev_agent.name
-                    _handoff_text = (
-                        f"{prev_agent.name} — {_handoff_name}:\n«{_next_task.strip()[:300]}»"
-                    )
+                    # Текст начинается с имени получателя — как живое обращение
+                    _handoff_text = f"{_handoff_name}, {_next_task.strip()[:300]}"
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
-                        text=_handoff_text,
+                        text=f"{prev_agent.name}\n{_handoff_text}",
                     )
-                    # Сохраняем хэндофф в веб-чат с аватаром отправляющего агента
+                    # В веб-чате: заголовок = prev_agent (отправитель), текст = обращение к получателю
                     session.add(Interaction(
                         user_id=user.id,
                         message_type='proactive',
