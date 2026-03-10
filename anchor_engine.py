@@ -1328,14 +1328,16 @@ class AnchorEngine:
 
             _s = _Db()
             try:
+                from models import AgentSubscription as _AS_evd
+                _sub_ids_evd = {r.agent_id for r in _s.query(_AS_evd).filter_by(user_id=user.id).all()}
                 agents = (
                     _s.query(_UA)
                     .filter(
-                        _UA.author_id == user.id,
-                        _UA.status.in_(['active', 'paused']),
+                        _UA.id.in_(_sub_ids_evd),
+                        _UA.status != 'disabled',
                     )
                     .limit(10).all()
-                )
+                ) if _sub_ids_evd else []
                 if not agents:
                     return
 
@@ -2963,6 +2965,18 @@ class AnchorEngine:
             Goal.status == 'active',
         ).all()
         if not active_goals:
+            return []
+
+        # ── ЖЁСТКИЙ GUARD: не создавать якорь если dispatch был меньше 55 минут назад ──
+        # Этот guard не зависит от cooldown_hours (которые могут быть переопределены старым кодом).
+        # Проверяем напрямую через AgentActivityLog.
+        from models import AgentActivityLog as _AAL_guard
+        _last_dispatch = session.query(_AAL_guard).filter(
+            _AAL_guard.user_id == user.id,
+            _AAL_guard.activity_type == 'goal_autopilot_dispatch',
+            _AAL_guard.created_at >= now_utc - timedelta(minutes=55),
+        ).first()
+        if _last_dispatch:
             return []
 
         # Собираем задачи к целям — не только count, а полный список
