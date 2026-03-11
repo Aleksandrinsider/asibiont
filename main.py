@@ -11210,7 +11210,7 @@ async def api_marketplace_agent_delete_handler(request):
         session_db = Session()
         try:
             from models import (UserAgent, User as UserModel, ArenaPost, ArenaComment,
-                                AgentSubscription, AgentRun)
+                                AgentSubscription, AgentRun, AgentRating)
             user_obj = session_db.query(UserModel).filter_by(telegram_id=user_id).first()
             if not user_obj:
                 return web.json_response({'error': 'User not found'}, status=404)
@@ -11232,9 +11232,10 @@ async def api_marketplace_agent_delete_handler(request):
             # Ответы агента на чужие посты (reply_to != None)
             session_db.query(ArenaPost).filter_by(agent_id=mkt_agent_id).delete(synchronize_session=False)
 
-            # Удаляем подписчиков и запуски
+            # Удаляем подписчиков, запуски и рейтинги
             session_db.query(AgentSubscription).filter_by(agent_id=agent_id).delete(synchronize_session=False)
             session_db.query(AgentRun).filter_by(agent_id=agent_id).delete(synchronize_session=False)
+            session_db.query(AgentRating).filter_by(agent_id=agent_id).delete(synchronize_session=False)
 
             session_db.delete(agent)
             session_db.commit()

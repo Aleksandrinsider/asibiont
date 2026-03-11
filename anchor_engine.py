@@ -5351,6 +5351,34 @@ class AnchorEngine:
 
             anchor_data = json.loads(anchor.data) if anchor.data else {}
 
+            def _detect_recipient_lang(email='', name='', company='', context='',
+                                        campaign_goal='', campaign_offer=''):
+                """Определяет язык письма: сначала по признакам получателя,
+                фолбэк — язык кампании (goal/offer)."""
+                def _has_cyr(s):
+                    return any('\u0400' <= c <= '\u04ff' for c in (s or ''))
+
+                # Сильные сигналы получателя
+                ru_domains = any((email or '').lower().endswith(d)
+                                 for d in ('.ru', '.by', '.ua', '.kz', '.рф'))
+                cyr_in_name = _has_cyr(f"{name} {company}")
+                # Русские платформы в контексте исследования
+                _ctx_lower = (context or '').lower()
+                ru_platforms = any(p in _ctx_lower for p in [
+                    'habr', 'vc.ru', 'хабр', 'pikabu', 'dtf.ru', 'mail.ru',
+                    'rambler', 'yandex.ru', 'vk.com', 't.me', 'ok.ru',
+                ])
+                if ru_domains or cyr_in_name or ru_platforms:
+                    return 'Russian'
+
+                # Фолбэк: язык кампании (goal + offer)
+                campaign_text = f"{campaign_goal} {campaign_offer}"
+                cyr_count = sum(1 for c in campaign_text if '\u0400' <= c <= '\u04ff')
+                if cyr_count > 8:
+                    return 'Russian'
+
+                return 'English'
+
             if anchor.anchor_type == 'email_outreach_send':
                 # ═══ ПРЯМАЯ ОТПРАВКА: AI пишет тексты → мы отправляем напрямую ═══
                 campaign_id = anchor_data.get('campaign_id')
@@ -5393,9 +5421,11 @@ class AnchorEngine:
                     company = d_obj.recipient_company or ''
                     context = d_obj.recipient_context or ''
 
-                    # Определяем язык
-                    _has_cyr = any('\u0400' <= c <= '\u04ff' for c in f"{name} {company} {context} {email}")
-                    lang_hint = "Russian" if _has_cyr or any(email.endswith(d) for d in ['.ru', '.by', '.ua', '.kz']) else "English"
+                    # Определяем язык получателя (домен, имя, платформы) → фолбэк на язык кампании
+                    lang_hint = _detect_recipient_lang(
+                        email=email, name=name, company=company, context=context,
+                        campaign_goal=campaign_goal, campaign_offer=offer,
+                    )
 
                     compose_prompt = (
                         f"Write a cold outreach email for this specific person.\n\n"
@@ -5536,8 +5566,13 @@ class AnchorEngine:
                 days_since = anchor_data.get('days_since_sent', 0)
                 outreach_id = anchor_data.get('outreach_id')
 
-                _has_cyr = any('\u0400' <= c <= '\u04ff' for c in f"{recipient_name} {company_info} {original_subject} {original_body}")
-                lang_hint = "Russian" if _has_cyr else "English"
+                # Определяем язык из данных получателя → фолбэк на язык кампании
+                lang_hint = _detect_recipient_lang(
+                    email=recipient_email, name=recipient_name, company=company_info,
+                    context=f"{original_subject} {original_body}",
+                    campaign_goal=anchor_data.get('campaign_goal', ''),
+                    campaign_offer=anchor_data.get('offer', ''),
+                )
 
                 compose_prompt = (
                     f"Write a follow-up email (#{follow_up_number}) for an unanswered cold outreach.\n\n"

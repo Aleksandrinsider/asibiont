@@ -238,7 +238,7 @@ def _pseudo_embedding(text: str) -> list[float]:
     
     # Остальные 324 dims: weighted bigram hashing (лучше trigram MD5)
     bigram_offset = 60
-    bigram_dims = EMBEDDING_DIM - bigram_offset
+    bigram_dims = EMBEDDING_DIM - bigram_offset  # 324 бина
     
     # Bigrams из слов (а не из символов) — семантически значимее
     word_bigrams = [f"{words[j]}_{words[j+1]}" for j in range(len(words) - 1)] if len(words) > 1 else []
@@ -248,7 +248,7 @@ def _pseudo_embedding(text: str) -> list[float]:
     # TF-IDF подобное взвешивание: частые bigrams менее информативны
     bigram_counts = Counter(word_bigrams)
     for bg, count in bigram_counts.items():
-        h = int(hashlib.md5(bg.encode()).hexdigest()[:8], 16) % bigram_dims
+        h = int(hashlib.md5(bg.encode()).hexdigest()[:10], 16) % bigram_dims
         # TF: log(1 + count), не линейное чтобы частые не доминировали
         weight = math.log1p(count) * 0.3
         vec[bigram_offset + h] = min(vec[bigram_offset + h] + weight, 1.0)
@@ -358,11 +358,13 @@ def _build_memory_context_sync(user_id, current_message, max_chars=800):
     memories = _search_memory_sync(user_id, current_message, top_k=5)
     if not memories:
         return ""
+    # Порог зависит от типа embedding: настоящие OpenAI-векторы точнее pseudo
+    _threshold = 0.65 if _openai_available else 0.45
     parts = []
     total = 0
     for m in memories:
         txt = m.get("text", "")
-        if txt and m.get("score", 0) > 0.4:
+        if txt and m.get("score", 0) > _threshold:
             entry = f"— {txt}"
             if total + len(entry) > max_chars:
                 break

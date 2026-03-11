@@ -178,11 +178,8 @@ class SelfLearner:
         # Обновление глобальных паттернов
         self._update_global_patterns(intent, tools_used, issues)
         
-        # Периодическое сохранение в БД
-        self._unsaved_turns[user_id] += 1
-        if self._unsaved_turns[user_id] >= self._SAVE_EVERY_N_TURNS:
-            self._save_to_db(user_id)
-            self._unsaved_turns[user_id] = 0
+        # Сохраняем в БД каждый turn — railway может перезапустить между сообщениями
+        self._save_to_db(user_id)
         
         logger.info(f"[LEARN] Recorded turn for user {user_id}: "
                      f"turns={metrics['total_turns']}, "

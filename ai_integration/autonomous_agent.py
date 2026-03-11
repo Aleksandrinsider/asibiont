@@ -550,6 +550,7 @@ class HybridAutonomousAgent:
             '[ЭМОЦИОНАЛЬНЫЙ ТРЕНД',
             '[ПРОАКТИВНОЕ ДЕЙСТВИЕ',
             '[ПРЕДПОЧТЕНИЯ ПОЛЬЗОВАТЕЛЯ',
+            '[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]',
             '[MULTI-AGENT',
             '[ГЛУБОКИЙ АНАЛИЗ R1]',
         ]
@@ -1420,7 +1421,7 @@ class HybridAutonomousAgent:
                         timeout=8
                     )
                     if memory_context:
-                        base_prompt += memory_context
+                        base_prompt += f"[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]\n{memory_context}\n"
                 except asyncio.TimeoutError:
                     logger.warning("[VECTOR] Memory search timeout (>8s), skipping")
                 except Exception as e:
