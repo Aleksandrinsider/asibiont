@@ -38,27 +38,31 @@ async def generate_marketing_content(product_name, target_audience, platform, go
         from .api_client import get_api_client
         api = get_api_client()
 
+        import asyncio as _aio_mg
+        # Параллельные DDG-запросы — экономим ~5-10 сек vs последовательных
+        _q1 = api.duckduckgo_search(f'{product_name} альтернативы конкуренты отзывы', num=3, cache_ttl=7200)
+        _q2 = api.duckduckgo_search(f'{target_audience} проблемы жалобы сложности', num=3, cache_ttl=7200)
+        _q3 = api.duckduckgo_search(f'{target_audience} тренды {datetime.now().strftime("%Y")}', num=3, cache_ttl=7200)
+        try:
+            competitors, pains, trends = await _aio_mg.wait_for(
+                _aio_mg.gather(_q1, _q2, _q3, return_exceptions=True),
+                timeout=10.0,
+            )
+        except _aio_mg.TimeoutError:
+            competitors = pains = trends = None
+        for _r in (competitors, pains, trends):
+            if isinstance(_r, Exception):
+                _r = None
         # 1. Конкуренты/альтернативы
-        competitors = await api.duckduckgo_search(
-            f'{product_name} альтернативы конкуренты отзывы', num=3, cache_ttl=7200
-        )
-        if competitors:
+        if competitors and not isinstance(competitors, Exception):
             lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in competitors[:3]]
             competitor_ctx = "\n\nКОНКУРЕНТЫ И РЫНОК (реальные данные из сети):\n" + "\n".join(lines)
-
         # 2. Боли аудитории
-        pains = await api.duckduckgo_search(
-            f'{target_audience} проблемы жалобы сложности', num=3, cache_ttl=7200
-        )
-        if pains:
+        if pains and not isinstance(pains, Exception):
             lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in pains[:3]]
             pain_ctx = "\n\nБОЛИ АУДИТОРИИ (реальные данные из сети):\n" + "\n".join(lines)
-
         # 3. Актуальные тренды
-        trends = await api.duckduckgo_search(
-            f'{target_audience} тренды {datetime.now().strftime("%Y")}', num=3, cache_ttl=7200
-        )
-        if trends:
+        if trends and not isinstance(trends, Exception):
             lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in trends[:3]]
             trend_ctx = "\n\nАКТУАЛЬНЫЕ ТРЕНДЫ:\n" + "\n".join(lines)
 

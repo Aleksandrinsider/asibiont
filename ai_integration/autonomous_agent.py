@@ -277,6 +277,19 @@ def _get_ai_semaphore() -> asyncio.Semaphore:
     return _AI_SEMAPHORE
 
 
+# === Shared aiohttp session для DeepSeek API ===
+# Переиспользование TCP/TLS-соединений экономит ~200-500мс на каждом вызове
+_SHARED_AI_SESSION: aiohttp.ClientSession | None = None
+
+async def _get_shared_ai_session() -> aiohttp.ClientSession:
+    global _SHARED_AI_SESSION
+    if _SHARED_AI_SESSION is None or _SHARED_AI_SESSION.closed:
+        _SHARED_AI_SESSION = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=120, connect=10)
+        )
+    return _SHARED_AI_SESSION
+
+
 # ===== ЧИСТЫЙ ГИБРИДНЫЙ ПОДХОД =====
 # AI с tools решает ВСЁ самостоятельно.
 # Никаких keyword guards — DeepSeek сам определяет когда вызывать инструменты.
@@ -353,30 +366,28 @@ class HybridAutonomousAgent:
         logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
 
         async with _get_ai_semaphore():
-         _max_retries = 1 if (api_timeout and api_timeout < 30) else 2
+         _max_retries = 1 if (api_timeout and api_timeout < 40) else 2
          for _attempt in range(_max_retries):
           try:
-            async with aiohttp.ClientSession() as session:
-                    async with session.post(url, headers=headers, json=data,
-                                            timeout=aiohttp.ClientTimeout(total=api_timeout or 120)) as resp:
-                        if resp.status == 200:
-                            result = await resp.json()
-                            # Логируем результат
-                            if use_tools:
-                                msg = result.get('choices', [{}])[0].get('message', {})
-                                tcs = msg.get('tool_calls', [])
-                                if tcs:
-                                    logger.info(f"[AI] Called {len(tcs)} tools: "
-                                                f"{[tc['function']['name'] for tc in tcs]}")
-                                else:
-                                    logger.info(f"[AI] No tools called, text response")
-                            return result
-                        error = await resp.text()
-                        # Retry only on server errors (5xx); raise immediately on 4xx
-                        if resp.status < 500 or _attempt >= 1:
-                            raise Exception(f"AI call failed: {resp.status} {error}")
-                        logger.warning(f"[AI] Server error {resp.status}, retrying...")
-                        await asyncio.sleep(2)
+            session = await _get_shared_ai_session()
+            async with session.post(url, headers=headers, json=data,
+                                    timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
+                if resp.status == 200:
+                    result = await resp.json()
+                    if use_tools:
+                        msg = result.get('choices', [{}])[0].get('message', {})
+                        tcs = msg.get('tool_calls', [])
+                        if tcs:
+                            logger.info(f"[AI] Called {len(tcs)} tools: "
+                                        f"{[tc['function']['name'] for tc in tcs]}")
+                        else:
+                            logger.info(f"[AI] No tools called, text response")
+                    return result
+                error = await resp.text()
+                if resp.status < 500 or _attempt >= 1:
+                    raise Exception(f"AI call failed: {resp.status} {error}")
+                logger.warning(f"[AI] Server error {resp.status}, retrying...")
+                await asyncio.sleep(2)
           except asyncio.TimeoutError:
             if _attempt >= 1:
                 raise
@@ -432,10 +443,27 @@ class HybridAutonomousAgent:
         """Dynamically select tools based on message content.
         Returns set of tool names to EXCLUDE (all not selected).
 
-        SMART TOOL FILTERING DISABLED — AI sees all tools every call.
-        Re-enable keyword filtering below if token cost becomes a concern.
+        SMART TOOL FILTERING — sends only CORE_TOOLS + relevant groups.
+        Reduces payload from ~122KB (53 tools) to ~30-40KB (~15-20 tools).
         """
-        return set()  # exclude nothing — let AI pick freely
+        msg_lower = (user_message or '').lower()
+        selected = set(self.CORE_TOOLS)
+
+        for group_name, group_info in self.TOOL_GROUPS.items():
+            if any(kw in msg_lower for kw in group_info['keywords']):
+                selected |= group_info['tools']
+
+        # Always include save_user_rule (behavioral rules) + run_agent_action
+        selected.add('save_user_rule')
+        selected.add('run_agent_action')
+        selected.add('run_user_script')
+
+        # Get all available tool names
+        all_tools = get_available_tools(None)
+        all_names = {t['function']['name'] for t in all_tools}
+
+        # Exclude tools NOT in selected set
+        return all_names - selected
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
@@ -495,8 +523,8 @@ class HybridAutonomousAgent:
     # ===== TOKEN BUDGET =====
 
     # Единый бюджет символов (~3 chars/token для русского текста)
-    MAX_PROMPT_CHARS  = 60000  # base prompt ~53K chars — must exceed it to avoid pointless thrashing
-    MAX_HISTORY_CHARS = 5000   # limit history to ~1.5K tokens
+    MAX_PROMPT_CHARS  = 45000  # reduced from 60K: forces trimming of additions to base prompt
+    MAX_HISTORY_CHARS = 3000   # limit history to ~1K tokens
 
     @staticmethod
     def _estimate_tokens(text):
@@ -556,6 +584,9 @@ class HybridAutonomousAgent:
             '[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]',
             '[MULTI-AGENT',
             '[ГЛУБОКИЙ АНАЛИЗ R1]',
+            '[СИТУАЦИЯ]',
+            '[SITUATION]',
+            '[КОГНИТИВНЫЕ',
         ]
         
         for marker in sections_to_trim:
@@ -643,6 +674,7 @@ class HybridAutonomousAgent:
     async def _build_context(self, user_id, mode=None):
         """Собирает весь контекст пользователя за 1 сессию БД.
         Async: погода/новости загружаются через api_client (не блокируют event loop).
+        Кеш 30с: повторные запросы того же user_id не идут в DB.
         
         Args:
             user_id: telegram ID
@@ -651,6 +683,14 @@ class HybridAutonomousAgent:
         
         Returns: dict с полями для промпта + метаданные.
         """
+        import time as _t_ctx
+        _cache_key = (user_id, mode)
+        if not hasattr(self, '_build_context_cache'):
+            self._build_context_cache = {}
+        _cached = self._build_context_cache.get(_cache_key)
+        if _cached and _cached.get('expires', 0) > _t_ctx.time():
+            logger.debug("[CTX] cache hit for user %s (mode=%s)", user_id, mode)
+            return _cached['data']
         session = Session()
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -808,7 +848,7 @@ class HybridAutonomousAgent:
                 return_dynamic_separately=True,
             )
 
-            return {
+            _result = {
                 'base_prompt': base_prompt,
                 'dynamic_context': dynamic_context,
                 'sub_tier': sub_tier,
@@ -819,6 +859,10 @@ class HybridAutonomousAgent:
                 'date_str': date_str,
                 'user_lang': user_lang,
             }
+            self._build_context_cache[_cache_key] = {
+                'data': _result, 'expires': _t_ctx.time() + 30,
+            }
+            return _result
         finally:
             session.close()
 
@@ -1416,9 +1460,11 @@ class HybridAutonomousAgent:
 
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
-            full_history = get_conversation_history(user_id, session=None, limit=16)
+            full_history = get_conversation_history(user_id, session=None, limit=6)
 
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
+            # ВАЖНО: все дополнения идут в dynamic_context, НЕ в base_prompt!
+            # base_prompt (53K) должен остаться СТАБИЛЬНЫМ для DeepSeek prefix cache.
             from .cognitive import CognitiveEngine
             profile_data = ctx.get('profile_data', {})
             cognitive_hints = CognitiveEngine.build_cognitive_hints(
@@ -1436,7 +1482,7 @@ class HybridAutonomousAgent:
                     cognitive_hints += f"\n\n[СИТУАЦИЯ]\n{strategy['why']}\nТон: {strategy['tone']}"
             
             if cognitive_hints:
-                base_prompt += cognitive_hints
+                dynamic_context += cognitive_hints
 
             # ═══ МУЛЬТИАГЕНТНЫЙ АНАЛИЗ ═══
             try:
@@ -1448,12 +1494,12 @@ class HybridAutonomousAgent:
                 try:
                     memory_context = await asyncio.wait_for(
                         build_memory_context(user_id, user_message, max_chars=1200),
-                        timeout=8
+                        timeout=4
                     )
                     if memory_context:
-                        base_prompt += f"[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]\n{memory_context}\n"
+                        dynamic_context += f"\n[СЕМАНТИЧЕСКАЯ ПАМЯТЬ]\n{memory_context}\n"
                 except asyncio.TimeoutError:
-                    logger.warning("[VECTOR] Memory search timeout (>8s), skipping")
+                    logger.warning("[VECTOR] Memory search timeout (>4s), skipping")
                 except Exception as e:
                     logger.warning(f"[VECTOR] Memory search failed: {e}")
                 
@@ -1478,10 +1524,7 @@ class HybridAutonomousAgent:
                     lang=user_lang
                 )
                 if multi_context:
-                    base_prompt += multi_context
-                
-                # ═══ ИНСТРУКЦИИ ПО ИНСТРУМЕНТАМ ═══
-                base_prompt += self._tool_instructions(user_lang)
+                    dynamic_context += multi_context
             except Exception as e:
                 logger.warning(f"[MULTI-AGENT] Context build failed: {e}")
             
@@ -1490,15 +1533,15 @@ class HybridAutonomousAgent:
                 learner = get_learner()
                 user_prefs = learner.get_user_preferences(user_id)
                 if user_prefs:
-                    base_prompt += user_prefs
+                    dynamic_context += user_prefs
                 
                 emotional_trend = learner.get_emotional_trend(user_id)
                 if emotional_trend:
-                    base_prompt += f"\n{emotional_trend}"
+                    dynamic_context += f"\n{emotional_trend}"
                 
                 proactive_hint = learner.suggest_proactive_action(user_id, profile_data)
                 if proactive_hint:
-                    base_prompt += f"\n{proactive_hint}"
+                    dynamic_context += f"\n{proactive_hint}"
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
@@ -1508,7 +1551,7 @@ class HybridAutonomousAgent:
                 topics = CognitiveEngine.extract_conversation_topics(old_msgs)
                 if topics:
                     _lbl = "PREVIOUSLY DISCUSSED" if user_lang == 'en' else "РАНЕЕ ОБСУЖДАЛИ"
-                    base_prompt += f"\n\n[{_lbl}: {', '.join(topics)}]"
+                    dynamic_context += f"\n\n[{_lbl}: {', '.join(topics)}]"
             else:
                 history = full_history
 
@@ -1893,7 +1936,7 @@ class HybridAutonomousAgent:
 
             # ===== Tool calling loop =====
             all_execution_results = []
-            MAX_ITERATIONS = 4
+            MAX_ITERATIONS = 2
             # 5 параллельных инструментов/итерацию: больше работы за один API-вызов → меньше round-trips → меньше токенов
             MAX_TOOLS_PER_ITERATION = 5
             seen_tools = set()  # Для предотвращения дублей
@@ -1948,13 +1991,16 @@ class HybridAutonomousAgent:
                 # (на последней принудительно берём финальный ответ без tools)
                 _is_last_iter = (iteration >= MAX_ITERATIONS - 1)
                 _allow_tools = not _is_last_iter
+                # Text-only call (no tools) uses shorter timeout — just generating text
+                _timeout = API_TIMEOUT_NORMAL if not _allow_tools else None
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,
                     subscription_tier=sub_tier,
                     tool_choice=tc if _allow_tools else None,
                     max_tokens=600,
-                    exclude_tools=tools_to_exclude if _allow_tools else None)
+                    exclude_tools=tools_to_exclude if _allow_tools else None,
+                    api_timeout=_timeout)
 
                 msg = response['choices'][0]['message']
                 content = msg.get('content', '')
@@ -2871,8 +2917,8 @@ def _is_question_message(msg: str) -> bool:
 async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
     """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
     try:
-        async with aiohttp.ClientSession() as _sess:
-            async with _sess.post(
+        _sess = await _get_shared_ai_session()
+        async with _sess.post(
                 "https://api.deepseek.com/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                 json={
@@ -2881,7 +2927,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
                     "max_tokens": max_tokens,
                     "temperature": 0.7,
                 },
-                timeout=aiohttp.ClientTimeout(total=40),
+                timeout=aiohttp.ClientTimeout(total=25),
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
@@ -4132,17 +4178,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _pending_subdelegations: list[dict] = []
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
-    _TOOL_TIMEOUT = 50  # секунд на один инструмент (включая research_topic с веб-поиском)
+    _TOOL_TIMEOUT = 30  # секунд на один инструмент (включая research_topic с веб-поиском)
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
-    # autopilot: research → find_contacts → send → update_progress → final — нужно ≥5 шагов
-    # обычный: 4 шага достаточно для делегированной задачи
-    _max_iters = 5 if _is_autopilot_task else 4
+    # autopilot: research → find_contacts → send → update_progress → final — нужно ≥4 шага
+    # обычный: 2 шага достаточно для делегированной задачи (вызов + финал)
+    _max_iters = 4 if _is_autopilot_task else 2
     for _iter in range(_max_iters):
-        # autopilot: до 4 tool-вызовов (больше работы за одну сессию, меньше cold-start-ов)
-        # обычный: до 3 tool-вызовов
-        _max_tool_calls = 4 if _is_autopilot_task else 3
+        # autopilot: до 3 tool-вызовов
+        # обычный: до 2 tool-вызовов
+        _max_tool_calls = 3 if _is_autopilot_task else 2
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # Для autopilot-задач: первые 2 итерации — required (research → add_task)
         # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool
@@ -4164,7 +4210,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     max_tokens=500,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
-                timeout=API_TIMEOUT_LONG + 15,
+                timeout=API_TIMEOUT_LONG + 5,
             )
         except (asyncio.TimeoutError, Exception) as _ai_err:
             logger.warning("[DIRECTOR-EXEC] agent %s call_ai error: %s", agent.get('name'), _ai_err)
@@ -4294,21 +4340,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         else:
             _final_text = _done_fb
 
-    # ── Шаг сжатия: если ответ > 500 символов — пересказываем кратко ──
-    if _final_text and len(_final_text) > 500 and _final_text != _done_fb:
-        try:
-            _condensed = await _quick_ai_call_raw([{
-                "role": "user",
-                "content": (
-                    f"Перескажи этот текст МАКСИМУМ в 2-3 предложения, до 350 символов. "
-                    f"Сохрани суть и ключевые факты. Без списков, без заголовков. "
-                    f"Пиши живо, как в мессенджере:\n\n{_final_text}"
-                ),
-            }], max_tokens=200)
-            if _condensed and len(_condensed.strip()) > 20:
-                _final_text = _condensed.strip()
-        except Exception:
-            pass
+    # ── Обрезка длинных ответов (без доп. LLM-вызова — экономит ~5с) ──
+    if _final_text and len(_final_text) > 600 and _final_text != _done_fb:
+        # Обрезаем до последнего завершённого предложения в пределах 600 символов
+        _cut = _final_text[:600]
+        _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
+        if _last_dot > 200:
+            _final_text = _cut[:_last_dot + 1]
 
     # Детектируем BLOCKED-маркер в финальном ответе агента
     if _final_text and _final_text.lower().startswith('blocked:'):
@@ -4803,8 +4841,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 
-        # Rework: если агент ответил фоллбэком или промежуточным статусом — пробуем ещё раз
-        # Для вопросов: НЕ rework — "нет данных" это валидный ответ на вопрос
+        # Rework: если агент ответил пустым фоллбэком — быстрый LLM fallback (без перезапуска агента)
         _resp_lower = str(resp).strip().lower()
         _fallback_phrases = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
         _intermediate_markers = ('использую', 'ищу данные', 'уточняю поиск', 'исследую',
@@ -4817,36 +4854,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                             any(m in _resp_lower for m in _intermediate_markers))
         _skip_rework = _is_question_message(task)
         if (_is_fallback or _is_intermediate) and not _skip_rework:
-            _rework_task = (
-                f"ДОРАБОТКА. Предыдущий ответ отклонён как пустой.\n"
-                f"Задача: {task}\n"
-                f"Ты ОБЯЗАН дать содержательный ответ. Варианты:\n"
-                f"1. Используй research_topic чтобы найти информацию по теме\n"
-                f"2. Если задача — создать план, просто напиши его своими словами\n"
-                f"3. Предложи конкретные идеи и шаги из своей экспертизы\n"
-                f"НЕ отвечай 'Задачу выполнил' — дай реальный результат."
-            )
-            resp2 = await _exec_agent_for_director(ag, _rework_task, user_id, dialog_context=extra_context)
-            if isinstance(resp2, tuple):
-                resp2, _rw_tools = resp2
-                _agent_tools_used.extend(_rw_tools)
-            if resp2 and str(resp2).strip().lower() not in _fallback_phrases:
-                resp = resp2
-            else:
-                # Rework тоже провалился — генерируем ответ из контекста без tool calling
-                _fallback_resp = await _quick_ai_call_raw([{
-                    "role": "user",
-                    "content": (
-                        f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
-                        f"Задача: {task}\n"
-                        f"Контекст: {(extra_context or '')[:500]}\n\n"
-                        f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
-                        f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
-                        f"2-3 абзаца, без markdown."
-                    ),
-                }], max_tokens=500)
-                if _fallback_resp and len(_fallback_resp) > 20:
-                    resp = _fallback_resp
+            # Быстрый fallback через _quick_ai_call_raw (без полного перезапуска агента)
+            _fallback_resp = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
+                    f"Задача: {task}\n"
+                    f"Контекст: {(extra_context or '')[:500]}\n\n"
+                    f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
+                    f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
+                    f"2-3 абзаца, без markdown."
+                ),
+            }], max_tokens=400)
+            if _fallback_resp and len(_fallback_resp) > 20:
+                resp = _fallback_resp
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
         resp = _strip_agent_html(str(resp))
@@ -5229,129 +5250,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _my_action = (_review_decision.get('my_action', '') if _review_decision else '')
 
         if _review_action not in ('next_task',):
-            # ПРИНЯТЬ: АСИ принимает работу и действует
-
-            # Полноценный follow-up с ВСЕМИ инструментами — АСИ может отправить email,
-            # опубликовать пост, провести исследование и т.д. по результатам агента
+            # ПРИНЯТЬ: АСИ принимает работу
+            # Быстрый follow-up без tool calling (экономит ~20-30с)
+            _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
             try:
-                _followup_agent = HybridAutonomousAgent()
-                _is_action_mode = (_review_action == 'accept_and_act') or bool(_all_agent_tools)
-                # Динамически определяем связанные инструменты на основе tools_used агента
-                _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
-
-                _followup_system = (
-                    "Ты ASI — директор офиса. Агент выполнил свою часть работы — теперь являешься директором и ДЕЛАЕШЬ СЛЕДУЮЩИЙ ШАГ.\n"
-                    "ЧТО сказал агент уже видел пользователь — НЕ ПОВТОРЯЙ и НЕ ПЕРЕСКАЗЫВАЙ. Пиши что ТЫ делаешь как директор, а не что сделал агент.\n\n"
-                    "У ТЕБЯ ЕСТЬ ВСЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ — можешь вызвать ЛЮБОЙ:\n"
-                    "EMAIL: send_email, send_outreach_email, negotiate_by_email, reply_to_outreach_email, send_follow_up_email\n"
-                    "ПУБЛИКАЦИЯ: publish_to_telegram, publish_to_discord, create_post, edit_post\n"
-                    "КОНТЕНТ: generate_image, set_content_strategy, start_content_campaign\n"
-                    "АНАЛИТИКА: research_topic, get_news_trends\n"
-                    "ЗАДАЧИ: add_task, edit_task, complete_task, schedule_background_task\n"
-                    "ДЕЛЕГИРОВАНИЕ: delegate_task, start_delegation_campaign\n"
-                    "КОНТАКТЫ: find_relevant_contacts_for_task, send_message_to_user\n"
-                    "ПРОФИЛЬ: update_profile, create_goal, update_goal_progress\n\n"
-                    f"ПОСЛЕДНИЕ действия агента: {_agent_did}\n\n"
-                    "ЦЕПОЧКА: агент подготовил → ты делаешь.\n"
-                    "Используй непосредственно доступные тебе данные (контакты, текст, план) чтобы сделать следующий конкретный шаг.\n"
-                    "ЕСЛИ агент запустил email-кампанию → обнови прогресс цели. "
-                    "ЕСЛИ нашёл контакты → напиши им. "
-                    "ЕСЛИ написал текст → опубликуй. "
-                    "ВСЕГДА есть что сделать дальше.\n\n"
-                )
-                if _is_action_mode:
-                    _followup_system += (
-                        f"ПРИОРИТЕТ: ты решил ДЕЙСТВОВАТЬ — {_my_action}\n"
-                        "СНАЧАЛА выполни это действие инструментом, ПОТОМ подведи итог.\n"
-                        "НЕ спрашивай разрешения — ДЕЛАЙ.\n"
-                    )
-                _followup_system += (
-                    "СТИЛЬ ОТВЕТА: пиши как в мессенджере — сплошной текст, 2-4 абзаца.\n"
-                    "ЗАПРЕЩЕНО: нумерованные списки (1. 2. 3.), маркеры (•, -), заголовки, markdown.\n"
-                    "Не задавай вопросов 'хотите ли вы...'. Не повторяй ответ агента дословно.\n"
-                    "Если нужно создать задачу — создай тихо через инструмент, не объявляй список задач в тексте."
-                )
-                _followup_msg = (
-                    f"Запрос пользователя: {user_message[:300]}\n\n"
-                    f"Агент {_agent_name_d} выполнил задачу. Инструменты которые он использовал: {_agent_did or 'нет'}\n"
-                    f"Доступные агенты: {', '.join(a['name'] + ' (' + a.get('specialization','') + ')' for a in _agents[:5])}\n\n"
-                )
-                if _user_full_ctx:
-                    _followup_msg += f"КОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx[:600]}\n\n"
-                if _accept_summary:
-                    _followup_msg += f"Итог: {_accept_summary}\n\n"
-                if _my_action:
-                    _followup_msg += f"ТВОЁ ДЕЙСТВИЕ (выполни сейчас): {_my_action}\n\n"
-                _followup_msg += "ДЕЙСТВУЙ — выполни действие инструментом, потом подведи итог."
-
-                _fu_messages = [
-                    {"role": "system", "content": _followup_system},
-                    {"role": "user", "content": _followup_msg},
-                ]
-
-                # Tool-calling loop для ASI-координатора (макс 2 итерации, 500 max_tokens)
-                # Итер 0: tool_choice="required" — ASI обязан вызвать инструмент
-                # Итер 1: tool_choice=None — финальный текст (без доп. инструментов)
-                _fu_final_text = ''
-                for _fu_iter in range(2):
-                    _fu_resp = await asyncio.wait_for(
-                        _followup_agent.call_ai(
-                            _fu_messages,
-                            use_tools=(_fu_iter == 0),
-                            tool_choice="required" if _fu_iter == 0 else None,
-                            max_tokens=500,
-                            api_timeout=API_TIMEOUT_NORMAL,
-                        ),
-                        timeout=API_TIMEOUT_SCRIPT,
-                    )
-                    if not _fu_resp or not _fu_resp.get('choices'):
-                        break
-                    _fu_msg = _fu_resp['choices'][0]['message']
-                    _fu_content = _fu_msg.get('content') or ''
-                    _fu_tools = _fu_msg.get('tool_calls') or []
-
-                    if not _fu_tools:
-                        _fu_final_text = _fu_content
-                        break
-
-                    _fu_messages.append(_fu_msg)
-                    for _fu_tc in _fu_tools[:3]:
-                        _fu_tname = _fu_tc.get('function', {}).get('name', '')
-                        try:
-                            _fu_targs = json.loads(_fu_tc.get('function', {}).get('arguments', '{}'))
-                        except Exception:
-                            _fu_targs = {}
-                        try:
-                            _fu_tres = await asyncio.wait_for(
-                                _followup_agent.execute_actions(
-                                    [{"tool": _fu_tname, "params": _fu_targs, "reason": f"ASI: {_fu_tname}"}],
-                                    user_id, session=None, user_message=_followup_msg,
-                                ),
-                                timeout=35,
-                            )
-                            _fu_r0 = _fu_tres[0] if _fu_tres else {"success": False}
-                            if _fu_r0.get('success'):
-                                _fu_tc_result = json.dumps(_fu_r0['result'], ensure_ascii=False, default=str)[:1000]
-                            else:
-                                _fu_tc_result = json.dumps({"error": str(_fu_r0.get('error', ''))}, ensure_ascii=False)
-                        except Exception as _fu_te:
-                            _fu_tc_result = json.dumps({"error": str(_fu_te)[:200]}, ensure_ascii=False)
-                        _fu_messages.append({"role": "tool", "tool_call_id": _fu_tc['id'], "content": _fu_tc_result})
-                    for _fu_tc_skip in _fu_tools[3:]:
-                        _fu_messages.append({"role": "tool", "tool_call_id": _fu_tc_skip['id'], "content": '{"status":"skipped"}'})
-
-                # Fallback: если follow-up пустой
-                if not _fu_final_text or len(_fu_final_text.strip()) <= 10:
-                    _fu_final_text = await _quick_ai_call_raw([{
-                        "role": "user",
-                        "content": (
-                            f"Ты ASI — директор офиса. Агент {_agent_name_d} отработал по задаче: {_task[:150]}\n"
-                            f"Используемые инструменты: {', '.join(_all_agent_tools) if _all_agent_tools else 'нет'}\n\n"
-                            f"Напиши 1-2 предложения как директор — что ты сделал/делаешь ДАЛЬШЕ. "
-                            f"НЕ пересказывай что делал агент. Без markdown."
-                        ),
-                    }], max_tokens=150)
-
+                _fu_final_text = await _quick_ai_call_raw([{
+                    "role": "user",
+                    "content": (
+                        f"Ты ASI — директор офиса. Агент {_agent_name_d} отработал по задаче: {_task[:200]}\n"
+                        f"Использованные инструменты: {_agent_did}\n"
+                        f"Результат агента (уже видим пользователю): {_round_history[-1]['result'][:300] if _round_history else ''}\n\n"
+                        f"Напиши 1-2 предложения от лица директора — что ты делаешь ДАЛЬШЕ. "
+                        f"НЕ пересказывай что делал агент. Без markdown, без списков."
+                    ),
+                }], max_tokens=150)
                 if _fu_final_text and len(_fu_final_text.strip()) > 10:
                     try:
                         from .utils import clean_technical_details as _ctd_fu
@@ -5359,10 +5271,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     except Exception:
                         pass
                     if _fu_final_text:
-                        # Не дублируем через _send_visible — сохранено в DB, подтянется через sync
                         _save_interaction_for_director(user_id, _fu_final_text[:500], message_type='ai')
             except Exception as _fu_err:
-                logger.warning("[DIRECTOR] followup coordination error: %s", _fu_err)
+                logger.warning("[DIRECTOR] followup error: %s", _fu_err)
 
             break  # Выходим из цикла — работа принята
 
@@ -5412,8 +5323,18 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
 
         # ── Office Director: ASI координирует агентов прямо в чате ──────────
         # Запускаем когда нет явного @упоминания — ASI сам решает делегировать ли
+        # Оптимизация: вопросы без имени агента → пропускаем директора целиком
+        # (директор всё равно загрузит агентов из DB и вернёт None — экономим 10-15с)
         _director_response = None
-        if not _has_explicit_mention(message or ''):
+        _skip_director = False
+        if _is_question_message(message or ''):
+            # Имена агентов — русские, с заглавной буквы, ≥3 символа
+            _words = re.findall(r'[А-ЯЁ][а-яё]{2,}', message or '')
+            # Если нет слов похожих на имена — вопрос без обращения к агенту
+            if not _words:
+                _skip_director = True
+                logger.debug("[AGENT] question without agent name, skipping director")
+        if not _skip_director and not _has_explicit_mention(message or ''):
             try:
                 _director_response = await _office_director_chat(message, user_id, progress_callback=progress_callback)
             except Exception as _de:
