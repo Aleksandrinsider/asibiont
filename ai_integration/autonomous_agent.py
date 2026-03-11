@@ -4751,6 +4751,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _dm_display = f"📋 {director_message}"
             else:
                 _dm_display = f"📋 {_ag_n}, {director_message}"
+            # Нормализуем: после "Имя, " первая буква должна быть строчной
+            import re as _re_dm
+            _dm_display = _re_dm.sub(
+                r'(📋 [А-ЯЁA-Z][а-яёa-z]+, )([А-ЯЁA-Z])',
+                lambda m: m.group(1) + m.group(2).lower(),
+                _dm_display,
+            )
             await _send_visible(_dm_display)
             _save_interaction_for_director(user_id, _dm_display, message_type='ai')
             await asyncio.sleep(0.3)
@@ -4980,10 +4987,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
             "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
             "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
-            "director_message: имя + повелит. глагол (Кристина, подготовь...).\n"
-            "Выбери ОДНОГО наиболее подходящего агента.\n\n"
-            "ВАЖНО: agent_task — ТОЛЬКО суть задачи БЕЗ имени агента. Пример: 'подготовить отчёт', а НЕ 'Кристина, подготовь отчёт'.\n"
-            "director_message — живое обращение к агенту: 'Кристина, подготовь отчёт'.\n\n"
+            "director_message: живое КОРОТКОЕ обращение — 'Имя, глагол + суть' (10-15 слов, без копипаста agent_task).\n"
+            "director_message — пример: 'Марк, найди 5 площадок где сидят AI-энтузиасты и напиши им'. НЕ: 'Марк, Найти и привлечь тестировщиков'.\n"
+            "ПРАВИЛО: после запятой — глагол в повелительном наклонении строчными: найди, подготовь, напиши, исследуй.\n\n"
             "JSON без ```:\n"
             '{"action":"self"}\n'
             "или\n"
