@@ -494,20 +494,16 @@ class HybridAutonomousAgent:
 
     # ===== TOKEN BUDGET =====
 
-    # Бюджет символов по тарифу (~3 chars/token для русского текста)
-    # LIGHT: экономим — меньше истории, агрессивнее обрезаем дальний контекст
-    # ULTIMATE: щедрее — больше памяти и истории для тяжёлых задач
-    _TIER_PROMPT_CHARS  = {'LIGHT': 20000, 'PRO': 27000, 'BUSINESS': 33000, 'ULTIMATE': 40000}
-    _TIER_HISTORY_CHARS = {'LIGHT': 4500,  'PRO': 7000,  'BUSINESS': 10000, 'ULTIMATE': 14000}
-    MAX_PROMPT_CHARS  = 27000   # fallback (неизвестный тариф)
-    MAX_HISTORY_CHARS = 7000    # fallback
+    # Единый бюджет символов (~3 chars/token для русского текста)
+    MAX_PROMPT_CHARS  = 32000
+    MAX_HISTORY_CHARS = 9000
 
     @staticmethod
     def _estimate_tokens(text):
         """Грубая оценка кол-ва токенов для русского текста (~3 chars/token)."""
         return len(text) // 3 if text else 0
 
-    def _trim_prompt_to_budget(self, base_prompt, history, sub_tier: str = 'PRO'):
+    def _trim_prompt_to_budget(self, base_prompt, history):
         """Обрезает системный промпт и историю до бюджета токенов.
         
         Приоритет сохранения (от высшего к низшему):
@@ -522,8 +518,8 @@ class HybridAutonomousAgent:
         Returns:
             (trimmed_prompt: str, trimmed_history: list)
         """
-        _max_prompt  = self._TIER_PROMPT_CHARS.get(sub_tier, self.MAX_PROMPT_CHARS)
-        _max_history = self._TIER_HISTORY_CHARS.get(sub_tier, self.MAX_HISTORY_CHARS)
+        _max_prompt  = self.MAX_PROMPT_CHARS
+        _max_history = self.MAX_HISTORY_CHARS
 
         prompt_chars = len(base_prompt)
         history_chars = sum(len(m.get('content', '')) for m in history)
@@ -1496,7 +1492,7 @@ class HybridAutonomousAgent:
                 history = full_history
 
             # ═══ TOKEN BUDGET — обрезаем если превышен лимит ═══
-            base_prompt, history = self._trim_prompt_to_budget(base_prompt, history, sub_tier=sub_tier or 'PRO')
+            base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
 
             # Инжектируем личность кастомного агента (если активен)
             self._active_agent_data.pop(user_id, None)  # сбрасываем перед каждым запросом
