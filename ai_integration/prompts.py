@@ -308,15 +308,58 @@ If user says "done/finished/completed" → complete_task()"""
     complexity = "medium"  # Можно определить на основе контекста
     base_prompt = select_prompt_version(subscription_tier, complexity, lang=lang)
 
-    # Заполняем шаблон — ручной replace чтобы избежать KeyError/ValueError
-    # от JSON-примеров вроде {"email": "..."} внутри промпта
+    # ── Собираем dynamic_context — всё изменяемое в одном блоке в конце промпта ──
+    # Это ключ к DeepSeek prefix caching: статичный prefix (50K) не меняется между запросами,
+    # только dynamic_context обновляется — всё что ДО него попадает в кэш.
+    _dyn_parts: list[str] = []
+
+    # Заголовок с временем и юзернеймом
+    if lang == 'en':
+        _dyn_parts.append(
+            f"CONTEXT (PROFILE — PRIMARY SOURCE):\n"
+            f"@{user_username} | Now: {current_time_str}, {current_date_str} | Payment: tokens"
+        )
+    else:
+        _dyn_parts.append(
+            f"КОНТЕКСТ (ПРОФИЛЬ — ГЛАВНЫЙ ИСТОЧНИК):\n"
+            f"@{user_username} | Сейчас: {current_time_str}, {current_date_str} | Оплата: токены"
+        )
+
+    # Живой баланс — ТОЛЬКО если низкий (не засоряем кэш при нормальном балансе)
+    if token_balance_info and ('низкий' in token_balance_info.lower() or 'мало' in token_balance_info.lower()
+                               or 'low' in token_balance_info.lower() or 'less than' in token_balance_info.lower()
+                               or 'getting low' in token_balance_info.lower()):
+        _dyn_parts.append(token_balance_info.strip())
+
+    if profile:
+        _dyn_parts.append(profile.strip())
+    if search_context:
+        _dyn_parts.append(search_context.strip())
+    if memory_section:
+        _dyn_parts.append(memory_section.strip())
+    if rules_section:
+        _dyn_parts.append(rules_section.strip())
+    if weather:
+        _dyn_parts.append(weather.strip())
+    if news:
+        _dyn_parts.append(news.strip())
+    if proactive_context:
+        _dyn_parts.append(str(proactive_context).strip())
+    if task_section:
+        _dyn_parts.append(task_section.strip())
+
+    dynamic_context = '\n'.join(_dyn_parts)
+
+    # Заполняем шаблон — только {dynamic_context} теперь (+ legacy placeholders если остались)
     prompt = base_prompt
+    prompt = prompt.replace('{dynamic_context}', dynamic_context)
+    # Совместимость: на случай если в промпте остались старые placeholder-ы
     for _key, _val in (
-        ('tier_info', tier_info),
+        ('tier_info', ''),
         ('user_username', user_username),
         ('current_time_str', current_time_str),
         ('current_date_str', current_date_str),
-        ('tier_value', tier_value),
+        ('tier_value', 'Токены'),
         ('profile', profile),
         ('search_context', search_context),
         ('memory_section', memory_section),
@@ -327,14 +370,6 @@ If user says "done/finished/completed" → complete_task()"""
     ):
         prompt = prompt.replace('{' + _key + '}', str(_val))
 
-    # Добавляем инструкцию по профилю — ПЕРЕД промптом для 2+ пустых полей (чтобы перебивала всё)
-    if profile_instruction and len(profile_missing) >= 2:
-        prompt = profile_instruction + "\n" + prompt
-    elif profile_instruction:
-        prompt += profile_instruction
-
-    # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — добавляем В САМОЕ НАЧАЛО промпта (высший приоритет) ──
-    if rules_section:
-        prompt = rules_section + "\n\n" + prompt
-
-    return prompt
+    # Инструкция по профилю — добавляем как часть dynamic_context (в конец)
+    if profile_instruction:
+        prompt = prompt + '\n' + profile_instruction
