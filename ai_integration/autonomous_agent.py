@@ -3085,6 +3085,7 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
             'start_delegation_campaign': 'Кампания по делегированию',
             'manage_delegation_campaign': 'Управление кампаниями делегирования',
             # Email и переписка
+            'add_note': 'Заметки',
             'send_email': 'Отправка email',
             'send_outreach_email': 'Outreach-письма',
             'reply_to_outreach_email': 'Ответы на outreach',
