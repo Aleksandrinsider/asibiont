@@ -1384,6 +1384,7 @@ class HybridAutonomousAgent:
         """
         # progress_callback хранится локально (не на self) для thread-safety
         _cb = progress_callback
+        user_lang = 'ru'  # default — переопределяется ниже после загрузки профиля
 
         try:
             # Тариф
@@ -4541,6 +4542,10 @@ def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, re
 # Слова-сигналы что пользователь хочет действие, а не разговор
 
 
+# Кэш контекста директора: { user_id: {'ctx': str, 'history': list, 'expires': float} }
+_DIRECTOR_CTX_CACHE: dict = {}
+_DIRECTOR_CTX_TTL = 60  # секунд
+
 async def _office_director_chat(user_message: str, user_id: int, progress_callback=None) -> str | dict | None:
     """
     ASI — директор офиса с якорной памятью:
@@ -4595,17 +4600,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     ).all()
                 } if _own_all else set()
 
-                # Первый запуск (нет ни одной подписки И их НИКОГДА не было): авто-мигрируем
-                # Проверяем через AgentRun — если были запуски, значит подписки удалены вручную
-                _ever_had_subs = _s.query(_AS).filter(_AS.user_id == user_db_id).count() > 0
-                _ever_used_agents = False
-                if not _ever_had_subs:
-                    try:
-                        from models import AgentRun as _AR_chk
-                        _ever_used_agents = _s.query(_AR_chk).filter(_AR_chk.user_id == user_db_id).limit(1).count() > 0
-                    except Exception:
-                        pass
-                if _own_all and not _existing_subs and not _ever_had_subs and not _ever_used_agents:
+                # Первый запуск (нет ни одной подписки): авто-мигрируем.
+                # Доп. запросы (_ever_had_subs / _ever_used_agents) делаем ТОЛЬКО
+                # когда _existing_subs пустой — иначе лишние round-trip на каждый запрос.
+                if _own_all and not _existing_subs:
                     for _oa in _own_all:
                         _s.add(_AS(user_id=user_db_id, agent_id=_oa.id))
                         try:
@@ -4683,32 +4681,43 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             logger.debug("[DIRECTOR] early filter: question without agent mention, skip")
             return None
 
-    # Строим универсальный контекст пользователя (профиль + цели + команда с интеграциями)
-    _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
-
-    # ── Загружаем последние 5 сообщений истории диалога ─────────────────────
-    _history_lines: list[str] = []
-    if user_db_id:
-        try:
-            from models import Interaction as _Itr
-            _hs = _Db()
+    # Строим универсальный контекст пользователя + историю — кэшируем 60с
+    import time as _time_dir
+    _cache_hit = _DIRECTOR_CTX_CACHE.get(user_db_id)
+    if _cache_hit and _cache_hit['expires'] > _time_dir.time():
+        _user_full_ctx = _cache_hit['ctx']
+        _history_lines = _cache_hit['history']
+    else:
+        _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
+        # История: загружаем в той же логике но отдельно (Session уже закрыт выше)
+        _history_lines = []
+        if user_db_id:
             try:
-                _recent = (
-                    _hs.query(_Itr)
-                    .filter(_Itr.user_id == user_db_id)
-                    .order_by(_Itr.id.desc())
-                    .limit(3)
-                    .all()
-                )
-                for _r in reversed(_recent):
-                    _role = 'Пользователь' if _r.message_type == 'user' else 'ASI'
-                    _txt = (_r.content or '').strip()[:200]
-                    if _txt:
-                        _history_lines.append(f"{_role}: {_txt}")
-            finally:
-                _hs.close()
-        except Exception:
-            pass
+                from models import Interaction as _Itr
+                _hs = _Db()
+                try:
+                    _recent = (
+                        _hs.query(_Itr)
+                        .filter(_Itr.user_id == user_db_id)
+                        .order_by(_Itr.id.desc())
+                        .limit(3)
+                        .all()
+                    )
+                    for _r in reversed(_recent):
+                        _role = 'Пользователь' if _r.message_type == 'user' else 'ASI'
+                        _txt = (_r.content or '').strip()[:200]
+                        if _txt:
+                            _history_lines.append(f"{_role}: {_txt}")
+                finally:
+                    _hs.close()
+            except Exception:
+                pass
+        if user_db_id:
+            _DIRECTOR_CTX_CACHE[user_db_id] = {
+                'ctx': _user_full_ctx,
+                'history': _history_lines,
+                'expires': _time_dir.time() + _DIRECTOR_CTX_TTL,
+            }
     _history_block = ('\n\nПОСЛЕДНИЕ СООБЩЕНИЯ:\n' + '\n'.join(_history_lines)) if _history_lines else ''
 
     # ── Кешируем возможности агентов (один раз, используется в двух местах) ──────
