@@ -751,7 +751,7 @@ class HybridAutonomousAgent:
                         Task.delegated_by == user.id,
                     ),
                     Task.status.in_(['pending', 'in_progress']),
-                    Task.delegation_status != 'rejected',
+                    _or_tasks(Task.delegation_status.is_(None), Task.delegation_status != 'rejected'),
                 ).order_by(Task.due_date.asc().nullslast()).limit(20).all()
                 for t in user_tasks:
                     task_info = {'id': t.id, 'title': t.title, 'status': t.status}

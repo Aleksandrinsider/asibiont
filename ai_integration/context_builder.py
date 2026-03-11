@@ -200,7 +200,7 @@ class ContextBuilder:
                     Task.delegated_by == user.id,
                 ),
                 Task.status.in_(['pending', 'active', 'in_progress']),
-                Task.delegation_status != 'rejected',
+                _or(Task.delegation_status.is_(None), Task.delegation_status != 'rejected'),
             ).order_by(Task.reminder_time.asc()).limit(15).all()
 
             overdue = []
