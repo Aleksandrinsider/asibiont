@@ -3,7 +3,7 @@ from reminder_service import ReminderService
 from auto_post_service import run_service as auto_post_run_service
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME, encrypt_token, decrypt_token
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME, encrypt_token, decrypt_token, FREE_ACCESS_MODE
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session

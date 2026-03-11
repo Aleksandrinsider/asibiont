@@ -530,7 +530,7 @@ class HybridAutonomousAgent:
         
         overflow = total - _max_prompt
         trimmed = 0
-        logger.info(f"[TOKEN_BUDGET] tier={sub_tier} over by ~{overflow // 3} tokens "
+        logger.info(f"[TOKEN_BUDGET] over by ~{overflow // 3} tokens "
                     f"({prompt_chars} prompt + {history_chars} history chars)")
         
         # 1. Обрезаем историю — оставляем последние 4 сообщения
