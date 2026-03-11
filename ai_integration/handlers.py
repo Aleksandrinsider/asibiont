@@ -10763,6 +10763,11 @@ async def reply_to_outreach_email(
         if not outreach:
             return " Не найдено письмо для ответа."
 
+        # Защита от дублей: если уже отвечали — не отправлять повторно
+        if outreach.ai_reply_sent_at:
+            sent_str = outreach.ai_reply_sent_at.strftime('%d.%m %H:%M')
+            return f"ℹ️ Ответ этому контакту уже был отправлен {sent_str}. Повторная отправка пропущена."
+
         campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
         if not campaign:
             return " Кампания не найдена."
