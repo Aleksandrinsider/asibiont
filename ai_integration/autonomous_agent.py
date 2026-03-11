@@ -4071,10 +4071,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info('[DIRECTOR] Autopilot task → focused toolset for %s', agent.get('name'))
             _autopilot_tools = {
                 'add_task', 'list_tasks', 'complete_task', 'edit_task',
-                'list_goals', 'create_goal', 'update_goal_progress',
-                'research_topic', 'web_search', 'quick_topic_search',
+                'list_goals', 'create_goal', 'update_goal_progress', 'update_goal',
+                'research_topic', 'web_search', 'quick_topic_search', 'get_news_trends',
                 'create_post', 'publish_to_telegram', 'delegate_task',
                 'generate_image', 'get_system_status',
+                'find_and_message_relevant_users',
                 # Email — агенты должны уметь слать/читать письма в автопилоте
                 'send_email', 'send_outreach_email', 'reply_to_outreach_email',
                 'start_email_campaign', 'list_email_contacts', 'save_email_contact',
@@ -4302,7 +4303,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )})
         elif _is_autopilot_task:
             _messages.append({"role": "user", "content": (
-                "Подведи итог: что именно сделано, какой результат получен. Сплошной текст, без списков."
+                "Если было реальное действие — вызови update_goal_progress(goal_title=..., metric_current=N). "
+                "Затем подведи итог: что сделано, какой результат. Сплошной текст, без списков."
             )})
         else:
             _messages.append({"role": "user", "content": (
