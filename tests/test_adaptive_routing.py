@@ -113,7 +113,7 @@ async def s1():
 
     async def exe(ag, task, user_id, dialog_context=""):
         agent_calls.append(ag["name"])
-        return f"Р РµР·СѓР»СЊС‚Р°С‚ {ag['name']}: РіРѕС‚РѕРІРѕ. РџР•Р Р•Р”РђР®: РјР°СЂРєРµС‚РѕР»РѕРіСѓ"
+        return f"Р РµР·СѓР»СЊС‚Р°С‚ {ag['name']}: РіРѕС‚РѕРІРѕ. РџР•Р Р•Р”РђР®: РјР°СЂРєРµС‚РѕР»РѕРіСѓ", []
 
     def save(uid, text, message_type='agent_msg'):
         ixs.append(text)
@@ -160,7 +160,7 @@ async def s2():
 
     async def exe(ag, task, user_id, dialog_context=""):
         ac.append(ag["name"])
-        return "РўРѕРї-3: ChatGPT, Claude, Gemini. РџР•Р Р•Р”РђР®: СЃС‚РѕРї."
+        return "РўРѕРї-3: ChatGPT, Claude, Gemini. РџР•Р Р•Р”РђР®: СЃС‚РѕРї.", []
 
     with patch(ag_mod, "_quick_ai_call_raw", quick), \
          patch(ag_mod, "_exec_agent_for_director", exe), \
@@ -190,7 +190,7 @@ async def s3():
 
     async def exe(ag, task, user_id, dialog_context=""):
         ac.append(ag["name"])
-        return "РЅРµ РґРѕР»Р¶РЅРѕ"
+        return "РЅРµ РґРѕР»Р¶РЅРѕ", []
 
     with patch(ag_mod, "_quick_ai_call_raw", quick), \
          patch(ag_mod, "_exec_agent_for_director", exe), \
@@ -228,7 +228,7 @@ async def s4():
 
     async def exe(ag, task, user_id, dialog_context=""):
         ac.append(ag["name"])
-        return f"С€Р°Рі {len(ac)} РІС‹РїРѕР»РЅРµРЅ. РџР•Р Р•Р”РђР®: СЃР»РµРґСѓСЋС‰РµРјСѓ"
+        return f"С€Р°Рі {len(ac)} РІС‹РїРѕР»РЅРµРЅ. РџР•Р Р•Р”РђР®: СЃР»РµРґСѓСЋС‰РµРјСѓ", []
 
     with patch(ag_mod, "_quick_ai_call_raw", quick), \
          patch(ag_mod, "_exec_agent_for_director", exe), \
@@ -289,7 +289,7 @@ async def s6():
                     first_agent_name=A1, first_agent_task="РђРЅР°Р»РёР·РёСЂСѓР№")
 
     async def exe(ag, task, user_id, dialog_context=""):
-        return "Р°РЅР°Р»РёР· РіРѕС‚РѕРІ"
+        return "Р°РЅР°Р»РёР· РіРѕС‚РѕРІ", []
 
     with patch(ag_mod, "_quick_ai_call_raw", quick), \
          patch(ag_mod, "_exec_agent_for_director", exe), \
@@ -332,7 +332,7 @@ async def s7():
         called_n[0] += 1
         if dialog_context:
             ctxs.append(dialog_context)
-        return LONG if called_n[0] == 1 else "РІС‚РѕСЂРѕР№ Р°РіРµРЅС‚"
+        return (LONG if called_n[0] == 1 else "РІС‚РѕСЂРѕР№ Р°РіРµРЅС‚"), []
 
     with patch(ag_mod, "_quick_ai_call_raw", quick), \
          patch(ag_mod, "_exec_agent_for_director", exe), \
@@ -363,7 +363,7 @@ async def s8():
 
     async def exe(ag, task, user_id, dialog_context=""):
         ac.append(ag["name"])
-        return "РЅРµ РґРѕР»Р¶РЅРѕ"
+        return "РЅРµ РґРѕР»Р¶РЅРѕ", []
 
     with patch(ag_mod, "_quick_ai_call_raw", quick), \
          patch(ag_mod, "_exec_agent_for_director", exe), \
