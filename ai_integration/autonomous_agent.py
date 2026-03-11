@@ -1860,14 +1860,15 @@ class HybridAutonomousAgent:
                 user_message, profile_data=profile_data, tasks_data=tasks_data
             )
 
-            # ===== Tool calling loop (max 4 итерации) =====
+            # ===== Tool calling loop =====
             all_execution_results = []
             MAX_ITERATIONS = 4
-            MAX_TOOLS_PER_ITERATION = 3  # Лимит инструментов за одну итерацию
+            # 5 параллельных инструментов/итерацию: больше работы за один API-вызов → меньше round-trips → меньше токенов
+            MAX_TOOLS_PER_ITERATION = 5
             seen_tools = set()  # Для предотвращения дублей
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз
-            multi_limit_tools = {'add_task': 3, 'update_profile': 2, 'create_goal': 2, 'run_agent_action': 5, 'send_email': 1, 'delegate_task': 1}  # лимиты per turn
+            multi_limit_tools = {'add_task': 5, 'update_profile': 2, 'create_goal': 3, 'run_agent_action': 8, 'send_email': 5, 'delegate_task': 5}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
 
@@ -4104,10 +4105,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
-    _max_iters = 4 if _is_autopilot_task else 3  # autopilot: research → add_task → final
+    # autopilot: research → find_contacts → send → update_progress → final — нужно ≥5 шагов
+    # обычный: 4 шага достаточно для делегированной задачи
+    _max_iters = 5 if _is_autopilot_task else 4
     for _iter in range(_max_iters):
-        # После 3 tool calls (autopilot) или 2 (обычный) — отключаем tools
-        _max_tool_calls = 3 if _is_autopilot_task else 2
+        # autopilot: до 4 tool-вызовов (больше работы за одну сессию, меньше cold-start-ов)
+        # обычный: до 3 tool-вызовов
+        _max_tool_calls = 4 if _is_autopilot_task else 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # Для autopilot-задач: первые 2 итерации — required (research → add_task)
         # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool
