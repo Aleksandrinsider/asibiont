@@ -1335,7 +1335,9 @@ class AnchorEngine:
                 _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
                 if result and len(result) > 30 and len(_real_agents) >= 1:
                     await asyncio.sleep(3)  # Координация: пауза между агентами
-                    _chain_max = 1 if anchor.anchor_type == 'goal_autopilot_review' else 3
+                    # Лимит цепочки = кол-во реальных агентов (но не более 3)
+                    # ASI-анализ решает уместность каждого шага
+                    _chain_max = min(len(_real_agents), 3)
                     try:
                         await self._maybe_continue_chain(
                             user, chosen, anchor, task_text, result, _real_agents, session,
