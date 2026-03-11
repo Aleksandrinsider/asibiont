@@ -9514,10 +9514,14 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             
             gh_queries = gh_queries[:6]  # увеличили лимит для RU
             if gh_queries:
-                logger.info(f"[AUTO_LEADS] Tech audience → GitHub search: {gh_queries}")
+                # Rotate GitHub page: page 1 for first 15 emails_sent, page 2 for next 15, etc.
+                # This ensures each email_need_leads run explores a fresh set of users
+                _gh_page = max(1, (campaign.emails_sent or 0) // 15 + 1)
+                logger.info(f"[AUTO_LEADS] Tech audience → GitHub search page={_gh_page}: {gh_queries}")
                 github_leads = await api.github_multi_search(
                     queries=gh_queries,
                     max_users_per_query=20,
+                    page=_gh_page,
                 )
                 for lead in github_leads:
                     em = lead.get('email', '').lower().strip('.')

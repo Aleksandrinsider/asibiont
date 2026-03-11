@@ -221,7 +221,8 @@ class ExternalAPIClient:
         self,
         query: str,
         max_users: int = 30,
-        cache_ttl: int = 3600
+        cache_ttl: int = 3600,
+        page: int = 1,
     ) -> List[dict]:
         """
         Поиск пользователей GitHub по теме и сбор их email из коммитов + профилей.
@@ -239,7 +240,7 @@ class ExternalAPIClient:
             Список [{email, name, company, bio, url, repos}]
         """
         import os
-        cache_params = {'q': query, 'max': max_users, 'engine': 'github_v2'}
+        cache_params = {'q': query, 'max': max_users, 'engine': 'github_v2', 'page': page}
         
         cached = await self.cache.get('github', cache_params)
         if cached is not None:
@@ -266,9 +267,10 @@ class ExternalAPIClient:
             search_url = 'https://api.github.com/search/users'
             params = {
                 'q': query,
-                'per_page': min(effective_max, 100),
+                'per_page': min(effective_max, 30),
                 'sort': 'followers',
                 'order': 'desc',
+                'page': page,
             }
             
             async with session.get(search_url, params=params, headers=headers,
@@ -410,7 +412,8 @@ class ExternalAPIClient:
         self,
         queries: List[str],
         max_users_per_query: int = 20,
-        cache_ttl: int = 3600
+        cache_ttl: int = 3600,
+        page: int = 1,
     ) -> List[dict]:
         """
         Параллельный поиск по нескольким запросам GitHub.
@@ -423,7 +426,7 @@ class ExternalAPIClient:
         seen_emails = set()
         
         for q in queries:
-            results = await self.github_search_emails(q, max_users=max_users_per_query, cache_ttl=cache_ttl)
+            results = await self.github_search_emails(q, max_users=max_users_per_query, cache_ttl=cache_ttl, page=page)
             for lead in results:
                 email = lead['email'].lower()
                 if email not in seen_emails:
