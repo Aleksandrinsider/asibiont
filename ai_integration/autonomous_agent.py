@@ -5192,16 +5192,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             f"- Подготовил изображение/код/план → опубликуй или запусти\n"
             f"Не останавливайся на генерации — ДОВОДИ до действия.\n\n"
             f"РЕШИ:\n"
-            f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (работа НЕ завершена)\n"
-            f"- accept_and_act — принять результат и САМОМУ выполнить следующий шаг используя данные агента\n"
-            f"- accept — просто принять работу и доложить (всё сделано, действий не требуется)\n\n"
+            f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (работа НЕ завершена, нужен ещё шаг)\n"
+            f"- accept_and_act — принять результат и САМОМУ выполнить следующий шаг (опубликовать, отправить, запустить, ...)\n"
+            f"ВАЖНО: чистого 'accept' (просто пересказать агента) НЕ СУЩЕСТВУЕТ. "
+            f"Даже если нечего делать — выбери accept_and_act с конкретным шагом (хотя бы update_goal_progress или add_task).\n\n"
             f"Ответ СТРОГО JSON:\n"
             f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
             f'или\n'
-            f'{{"action": "accept_and_act", "summary": "краткий доклад", '
+            f'{{"action": "accept_and_act", "summary": "кратко что сделано", '
             f'"my_action": "конкретное действие которое ты выполнишь"}}\n'
-            f'или\n'
-            f'{{"action": "accept", "summary": "краткий доклад пользователю"}}\n'
         )
         _review_raw = await _quick_ai_call_raw([{"role": "user", "content": _review_prompt}], max_tokens=400)
 
@@ -5232,8 +5231,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
 
                 _followup_system = (
-                    "Ты ASI — директор офиса. Ты координировал работу агента и теперь ДЕЙСТВУЕШЬ.\n"
-                    "Результат агента УЖЕ ПОКАЗАН пользователю — НЕ повторяй его содержание дословно.\n\n"
+                    "Ты ASI — директор офиса. Агент выполнил свою часть работы — теперь являешься директором и ДЕЛАЕШЬ СЛЕДУЮЩИЙ ШАГ.\n"
+                    "ЧТО сказал агент уже видел пользователь — НЕ ПОВТОРЯЙ и НЕ ПЕРЕСКАЗЫВАЙ. Пиши что ТЫ делаешь как директор, а не что сделал агент.\n\n"
                     "У ТЕБЯ ЕСТЬ ВСЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ — можешь вызвать ЛЮБОЙ:\n"
                     "EMAIL: send_email, send_outreach_email, negotiate_by_email, reply_to_outreach_email, send_follow_up_email\n"
                     "ПУБЛИКАЦИЯ: publish_to_telegram, publish_to_discord, create_post, edit_post\n"
@@ -5243,12 +5242,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     "ДЕЛЕГИРОВАНИЕ: delegate_task, start_delegation_campaign\n"
                     "КОНТАКТЫ: find_relevant_contacts_for_task, send_message_to_user\n"
                     "ПРОФИЛЬ: update_profile, create_goal, update_goal_progress\n\n"
-                    f"Инструменты которые агент использовал: {_agent_did}\n\n"
-                    "ЦЕПОЧКА ПО СПОСОБНОСТЯМ — универсальный принцип:\n"
-                    "Агент ПОДГОТОВИЛ → ТЫ ДЕЙСТВУЕШЬ. Определи какой инструмент логически продолжает работу агента.\n"
-                    "Агент написал текст → отправь/опубликуй. Нашёл контакты → запусти outreach.\n"
-                    "Исследовал → создай контент/задачи. Проверил входящие → ответь.\n"
-                    "Создал изображение → опубликуй. Подготовил план → запусти campaign.\n\n"
+                    f"ПОСЛЕДНИЕ действия агента: {_agent_did}\n\n"
+                    "ЦЕПОЧКА: агент подготовил → ты делаешь.\n"
+                    "Используй непосредственно доступные тебе данные (контакты, текст, план) чтобы сделать следующий конкретный шаг.\n"
+                    "ЕСЛИ агент запустил email-кампанию → обнови прогресс цели. "
+                    "ЕСЛИ нашёл контакты → напиши им. "
+                    "ЕСЛИ написал текст → опубликуй. "
+                    "ВСЕГДА есть что сделать дальше.\n\n"
                 )
                 if _is_action_mode:
                     _followup_system += (
@@ -5264,7 +5264,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 )
                 _followup_msg = (
                     f"Запрос пользователя: {user_message[:300]}\n\n"
-                    f"РАБОТА АГЕНТА {_agent_name_d} ({len(_round_history)} раунд(ов)):\n{_rounds_summary}\n\n"
+                    f"Агент {_agent_name_d} выполнил задачу. Инструменты которые он использовал: {_agent_did or 'нет'}\n"
                     f"Доступные агенты: {', '.join(a['name'] + ' (' + a.get('specialization','') + ')' for a in _agents[:5])}\n\n"
                 )
                 if _user_full_ctx:
@@ -5334,12 +5334,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     _fu_final_text = await _quick_ai_call_raw([{
                         "role": "user",
                         "content": (
-                            f"Агент {_agent_name_d} выполнил задачу: {_task[:200]}\n"
-                            f"Результат: {_agent_result[:300]}\n\n"
-                            f"Напиши краткий итог для пользователя (2-3 предложения): "
-                            f"что сделано, какой следующий шаг. Без markdown."
+                            f"Ты ASI — директор офиса. Агент {_agent_name_d} отработал по задаче: {_task[:150]}\n"
+                            f"Используемые инструменты: {', '.join(_all_agent_tools) if _all_agent_tools else 'нет'}\n\n"
+                            f"Напиши 1-2 предложения как директор — что ты сделал/делаешь ДАЛЬШЕ. "
+                            f"НЕ пересказывай что делал агент. Без markdown."
                         ),
-                    }], max_tokens=200)
+                    }], max_tokens=150)
 
                 if _fu_final_text and len(_fu_final_text.strip()) > 10:
                     try:
