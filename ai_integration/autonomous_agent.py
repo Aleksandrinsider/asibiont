@@ -4076,6 +4076,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'create_post', 'publish_to_telegram', 'delegate_task',
                 'generate_image', 'get_system_status',
                 'find_and_message_relevant_users',
+                'run_agent_action',  # внешние интеграции агентов
                 # Email — агенты должны уметь слать/читать письма в автопилоте
                 'send_email', 'send_outreach_email', 'reply_to_outreach_email',
                 'start_email_campaign', 'list_email_contacts', 'save_email_contact',
@@ -4183,13 +4184,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
-    # autopilot: research → find_contacts → send → update_progress → final — нужно ≥4 шага
+    # autopilot: research → find_contacts → send → update_progress → final — нужно ≥5 шагов
     # обычный: 2 шага достаточно для делегированной задачи (вызов + финал)
-    _max_iters = 4 if _is_autopilot_task else 2
+    _max_iters = 5 if _is_autopilot_task else 2
     for _iter in range(_max_iters):
-        # autopilot: до 3 tool-вызовов
+        # autopilot: до 4 tool-вызовов (больше работы за одну сессию, меньше cold-start-ов)
         # обычный: до 2 tool-вызовов
-        _max_tool_calls = 3 if _is_autopilot_task else 2
+        _max_tool_calls = 4 if _is_autopilot_task else 2
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # Для autopilot-задач: первые 2 итерации — required (research → add_task)
         # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool

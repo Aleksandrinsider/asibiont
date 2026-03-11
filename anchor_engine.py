@@ -1191,27 +1191,19 @@ class AnchorEngine:
                     except Exception:
                         _detected = []
                     if _detected:
-                        _goals_snippet = (
-                            '\n'.join(f"• {g['title']}" for g in goals_info[:4])
-                            if goals_info else task_text[:300]
-                        )
                         _role_desc = ' / '.join(filter(None, [
                             (getattr(chosen, 'job_title', '') or '').strip(),
                             (getattr(chosen, 'specialization', '') or '').strip(),
                             (getattr(chosen, 'description', '') or '').strip()[:150],
                         ]))
                         _intg_str = ', '.join(_detected[:6])
+                        # НЕ перезаписываем task_text — дополняем ролью агента.
+                        # Оригинальный промпт содержит цели, историю, запреты повторов — всё важно.
                         task_text = (
-                            f"[ЗАДАЧА ПО ЦЕЛЯМ — В РАМКАХ ТВОЕЙ РОЛИ]\n"
-                            f"Ты: {_role_desc or chosen.name}\n"
-                            f"Твои активные интеграции: {_intg_str}\n\n"
-                            f"Активные цели команды:\n{_goals_snippet}\n\n"
-                            f"Используй run_agent_action чтобы через свои интеграции ({_intg_str}) "
-                            f"внести конкретный вклад в эти цели. "
-                            f"Сделай одно действие: получи данные, проверь статус, найди контакты или события — "
-                            f"то, что умеешь именно ты. "
-                            f"Отчитайся кратко: что сделал и что нашёл. "
-                            f"НЕ выходи за рамки своей роли и своих интеграций."
+                            f"[РОЛЬ] Ты: {_role_desc or chosen.name}. "
+                            f"Твои интеграции: {_intg_str}. "
+                            f"Если задача подходит под твою специализацию — используй run_agent_action.\n\n"
+                            + task_text
                         )
 
                 # Log dispatch (для ASI не записываем ref_id)
