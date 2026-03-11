@@ -3808,16 +3808,26 @@ class AnchorEngine:
             if not is_paused and not drafts and remaining_daily > 0 and remaining_total > 0:
                 # Считаем сколько контактов уже есть (sent + draft)
                 total_in_pipeline = len(_camp_outreach)
+
+                # Если кампания зависла (> 3ч активна, 0 отправлено и 0 черновиков) — HIGH приоритет
+                _camp_age_h = 0
+                if campaign.created_at:
+                    _ct = campaign.created_at
+                    if _ct.tzinfo is None:
+                        _ct = _ct.replace(tzinfo=timezone.utc)
+                    _camp_age_h = (now_utc - _ct).total_seconds() / 3600
+                _is_stuck = _camp_age_h >= 3 and (campaign.emails_sent or 0) == 0
+
                 # Запускаем поиск только если ещё есть в квоте место
                 if remaining_total > total_in_pipeline or remaining_total >= 999999:
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='email_need_leads',
-                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}',  # дедупликация по дню
+                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}',
                         topic=_t(user,
                             f' Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
                             f' Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
-                        priority=AnchorPriority.MEDIUM,
+                        priority=AnchorPriority.HIGH if _is_stuck else AnchorPriority.MEDIUM,
                         data=json.dumps({
                             'campaign_id': campaign.id,
                             'campaign_name': campaign.name,
@@ -3827,10 +3837,11 @@ class AnchorEngine:
                             'total_in_pipeline': total_in_pipeline,
                             'remaining_daily': remaining_daily,
                             'remaining_total': min(remaining_total, 50),
+                            'is_stuck': _is_stuck,
                         }),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(hours=6),
-                        cooldown_hours=0.5,  # каждые 30 мин проверяем нужны ли лиды (было 1ч)
+                        cooldown_hours=0.5,
                         batch_group='email',
                     ))
 
@@ -5417,7 +5428,23 @@ class AnchorEngine:
                 offer = anchor_data.get('offer', '')
                 tone = anchor_data.get('tone', 'professional')
                 sender_name = anchor_data.get('sender_name', '')
-                remaining = anchor_data.get('remaining_daily', 5)
+
+                # Пересчитываем remaining_daily из живых данных БД (anchor_data может быть устаревшим)
+                import pytz as _pytz_rem
+                _user_tz_rem = _pytz_rem.timezone(user.timezone or 'Europe/Moscow')
+                _today_start_rem = datetime.now(_user_tz_rem).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                ).astimezone(timezone.utc)
+                live_campaign = session.query(EmailCampaign).filter_by(id=campaign_id).first()
+                if live_campaign:
+                    _sent_today_live = session.query(EmailOutreach).filter(
+                        EmailOutreach.campaign_id == campaign_id,
+                        EmailOutreach.sent_at >= _today_start_rem,
+                        EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                    ).count()
+                    remaining = max(0, live_campaign.daily_limit - _sent_today_live)
+                else:
+                    remaining = anchor_data.get('remaining_daily', 5)
 
                 sent_count = 0
                 _owner_email = (getattr(user, 'email', '') or '').strip().lower()
@@ -5687,6 +5714,36 @@ class AnchorEngine:
                 )
                 session.add(log)
                 session.commit()
+
+                # ── Если 0 новых лидов и кампания почти не продвинулась — сообщить пользователю ──
+                if count == 0 and (campaign.emails_sent or 0) < 3:
+                    _total_created_at = campaign.created_at
+                    if _total_created_at:
+                        if _total_created_at.tzinfo is None:
+                            _total_created_at = _total_created_at.replace(tzinfo=timezone.utc)
+                        _age_h = (datetime.now(timezone.utc) - _total_created_at).total_seconds() / 3600
+                    else:
+                        _age_h = 999
+                    if _age_h >= 1.5:  # Кампания существует > 1.5ч и всё ещё без лидов
+                        _camp_goal_short = (campaign.goal or campaign.name or '')[:120]
+                        _notify_text = (
+                            f"📧 Кампания «{campaign.name}» не может найти контакты автоматически\n\n"
+                            f"Цель: {_camp_goal_short}\n\n"
+                            f"Автопоиск не нашёл email-адресов тестировщиков/специалистов на открытых платформах — "
+                            f"большинство людей не публикуют личный email в публичном доступе.\n\n"
+                            f"Что сделать:\n"
+                            f"• Попроси меня найти контакты через веб-поиск: \"найди email QA тестировщиков\"\n"
+                            f"• Добавь контакты вручную: укажи email людей которым хочешь написать\n"
+                            f"• Используй LinkedIn/hh.ru/Telegram-группы чтобы найти нужных людей и взять их email"
+                        )
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=_notify_text,
+                            )
+                            logger.info(f"[ANCHOR] email_need_leads: notified user {user.telegram_id} about stuck campaign #{campaign_id}")
+                        except Exception as _notify_err:
+                            logger.warning(f"[ANCHOR] email_need_leads notify error: {_notify_err}")
                 return
             else:
                 return
