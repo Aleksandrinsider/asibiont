@@ -1076,12 +1076,10 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         error_detail = traceback.format_exc()
         logger.error(f"FULL TRACEBACK: {error_detail}")
         try:
-            # Показываем детали ошибки для отладки
-            short_error = str(e)[:300]
             if lang == 'en':
-                err_text = f" Error: {short_error}\n\nPlease try again."
+                err_text = "Something went wrong on my side. Please write again."
             else:
-                err_text = f" Ошибка: {short_error}\n\nПопробуй написать ещё раз."
+                err_text = "Сбой на моей стороне, не у тебя. Напиши ещё раз."
             await message.bot.send_message(message.chat.id, err_text)
         except Exception:
             pass

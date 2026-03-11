@@ -2141,11 +2141,11 @@ class HybridAutonomousAgent:
                 ]
             else:
                 error_responses = [
-                    "Что-то пошло не так. Перефразируй запрос.",
-                    "Техническая ошибка. Попробуй ещё раз.",
-                    "Упс, сбой. Скажи то же самое другими словами.",
-                    "Технические неполадки. Давай попробуем по-другому.",
-                    "Что-то сломалось. Перефразируй, пожалуйста.",
+                    "Сбой на моей стороне — напиши ещё раз.",
+                    "Что-то упало у меня, не у тебя. Повтори?",
+                    "Потерял ответ. Напиши снова — разберёмся.",
+                    "Технический сбой, сейчас разберусь. Попробуй ещё раз.",
+                    "У меня что-то пошло не так. Повтори запрос?",
                 ]
             return random.choice(error_responses)
 
@@ -5241,7 +5241,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     "EMAIL: send_email, send_outreach_email, negotiate_by_email, reply_to_outreach_email, send_follow_up_email\n"
                     "ПУБЛИКАЦИЯ: publish_to_telegram, publish_to_discord, create_post, edit_post\n"
                     "КОНТЕНТ: generate_image, set_content_strategy, start_content_campaign\n"
-                    "АНАЛИТИКА: research_topic, web_search, quick_topic_search\n"
+                    "АНАЛИТИКА: research_topic, get_news_trends\n"
                     "ЗАДАЧИ: add_task, edit_task, complete_task, schedule_background_task\n"
                     "ДЕЛЕГИРОВАНИЕ: delegate_task, start_delegation_campaign\n"
                     "КОНТАКТЫ: find_relevant_contacts_for_task, send_message_to_user\n"

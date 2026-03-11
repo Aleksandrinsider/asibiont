@@ -528,18 +528,18 @@ DEEP_THINKING_PHRASES = {
 
 ERROR_RESPONSES = {
     'ru': [
-        "Что-то пошло не так. Перефразируй запрос.",
-        "Техническая ошибка. Попробуй ещё раз.",
-        "Упс, сбой. Скажи то же самое другими словами.",
-        "Технические неполадки. Давай попробуем по-другому.",
-        "Что-то сломалось. Перефразируй, пожалуйста.",
+        "Сбой на моей стороне — напиши ещё раз.",
+        "Что-то упало у меня, не у тебя. Повтори?",
+        "Потерял ответ. Напиши снова — разберёмся.",
+        "Технический сбой, сейчас разберусь. Попробуй ещё раз.",
+        "У меня что-то пошло не так. Повтори запрос?",
     ],
     'en': [
-        "Something went wrong. Try rephrasing your request.",
-        "Technical error. Please try again.",
-        "Oops, a glitch. Say it differently.",
-        "Technical difficulties. Let's try another way.",
-        "Something broke. Please rephrase.",
+        "Glitch on my end — please write again.",
+        "Something crashed on my side. Try once more?",
+        "Lost the response. Write again — we'll sort it.",
+        "Technical hiccup, let me recover. Try again?",
+        "Something went wrong on my end. Repeat your request?",
     ],
 }
 
