@@ -5357,6 +5357,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 _director_response = None
             else:
                 # Очищаем технические детали из ответа директора
+                _director_response = _strip_agent_html(_director_response)
                 try:
                     from .utils import clean_technical_details as _ctd_dir
                     _cleaned_dir = _ctd_dir(_director_response)
@@ -5387,8 +5388,9 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
             subscription_tier, progress_callback=progress_callback,
             web_context=web_context, exclude_tools=_fallback_exclude)
 
-        # Очищаем технические детали и названия инструментов из ответа
+        # Очищаем HTML и технические детали из ответа
         if response_text and isinstance(response_text, str):
+            response_text = _strip_agent_html(response_text)
             try:
                 from .utils import clean_technical_details as _ctd_final
                 _cleaned = _ctd_final(response_text)
