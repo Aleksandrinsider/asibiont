@@ -6942,9 +6942,12 @@ async def api_interactions_handler(request):
         # Dedup window: (message_type, content[:200]) → last seen timestamp
         _dedup_recent: dict = {}  # key → timestamp of last occurrence
         _DEDUP_WINDOW_SECS = 300  # 5 minutes — only dedup bursts, not across cycles
+        # Message types that represent autonomous agent activity — never hidden by history clear
+        _PERSISTENT_TYPES = ('proactive', 'agent_msg', 'reminder')
         for i in interactions:
-            if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() <= history_cleared_timestamp:
-                continue
+            if i.message_type not in _PERSISTENT_TYPES:
+                if i.created_at.replace(tzinfo=dt_timezone.utc).timestamp() <= history_cleared_timestamp:
+                    continue
             if i.content is None or i.content.strip() == '':
                 continue
             _ct = i.content.strip()
