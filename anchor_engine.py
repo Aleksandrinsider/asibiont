@@ -1029,47 +1029,12 @@ class AnchorEngine:
             recent_actions = data.get('recent_actions', [])
             if recent_actions:
                 task_text += (
-                    f"\n\n⚠️ УЖЕ СДЕЛАНО (за 24ч) — НЕ ПОВТОРЯЙ, сделай НОВЫЙ шаг:\n"
+                    f"\n\n⚠️ УЖЕ СДЕЛАНО (за 24ч):\n"
                     + '\n'.join(f"  {a}" for a in recent_actions)
+                    + "\n\nПроанализируй паттерн выше: какие ТИПЫ действий повторяются? "
+                    "Выбери инструмент из категории, которая ещё НЕ использовалась или использовалась реже всего. "
+                    "Все доступные инструменты — в схеме API. Решение принимаешь сам."
                 )
-
-            # ── ДИВЕРСИФИКАЦИЯ: трекинг типов действий → принудительная ротация стратегий ──
-            # Суть: «написал email Ивану» и «написал email Марку» — ОДИН ТИП (email-аутрич).
-            # Без этого блока модель смотрит на разные строки и не видит зацикливания на типе.
-            _action_types = data.get('action_type_counts', {})
-            if _action_types:
-                _all_ap_types = [
-                    'email-аутрич', 'поиск людей', 'публикация контента',
-                    'исследование', 'создание задач', 'обновление прогресса',
-                    'делегирование', 'web-поиск', 'анализ данных',
-                    'интеграция', 'другое',
-                ]
-                _overused = sorted(_action_types.items(), key=lambda x: -x[1])
-                _overused_names = [t for t, c in _overused if c >= 3]  # порог 3, не 2
-                _fresh_types = [t for t in _all_ap_types if t not in _action_types and t != 'другое']
-                _rare_types = [t for t in _all_ap_types if _action_types.get(t, 0) <= 1 and t not in _overused_names and t != 'другое']
-                if _overused_names or _fresh_types:
-                    _div_parts = [f"\n\n🔄 ДИВЕРСИФИКАЦИЯ — типы действий за 24ч: {dict(_overused[:5])}"]
-                    if _overused_names:
-                        _div_parts.append(
-                            f"Много раз повторял: {', '.join(_overused_names[:2])} — "
-                            f"постарайся выбрать другой подход (но если это единственный разумный шаг — делай)."
-                        )
-                    if _fresh_types:
-                        _div_parts.append(
-                            f"Ещё НЕ пробовал сегодня: {', '.join(_fresh_types[:4])} — рассмотри эти направления."
-                        )
-                    elif _rare_types:
-                        _div_parts.append(
-                            f"Редко используемые типы: {', '.join(_rare_types[:3])} — предпочти их остальным."
-                        )
-                    _div_parts.append(
-                        "Категории для выбора: аутрич/email · поиск людей · контент · "
-                        "кампании · исследования · делегирование · задачи · прогресс · "
-                        "платформа ASI · интеграции (run_agent_action если подключены).\n"
-                        "Выбирай свободно, комбинируй по смыслу ситуации."
-                    )
-                    task_text += '\n'.join(_div_parts)
 
             # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
             recent_msgs = data.get('recent_messages', [])
@@ -3093,39 +3058,6 @@ class AnchorEngine:
                 + (f" → {(a.result or '')[:200]}" if a.result else '')
             )
 
-        # ── Классификация ТИПОВ действий для diversity-трекинга ──
-        # Проблема: агенты видят «написал email Ивану» и «написал email Марку» как РАЗНЫЕ действия
-        # и продолжают слать email, не понимая что это ОДИН ТИП (email-аутрич).
-        # Решение: явно считаем типы → передаём в контекст → модель видит паттерн зацикливания.
-        def _classify_ap_action_type(title: str, result: str) -> str:
-            text = f"{title} {result}".lower()
-            if any(w in text for w in ['email', 'письм', 'outreach', 'отправил', 'написал', 'рассылк', 'send']):
-                return 'email-аутрич'
-            if any(w in text for w in ['исследовал', 'тренд', 'research', 'нашёл данные', 'изучил']):
-                return 'исследование'
-            if any(w in text for w in ['пост', 'опубликовал', 'telegram', 'discord', 'контент', 'публикац', 'статья']):
-                return 'публикация контента'
-            if any(w in text for w in ['контакт', 'нашёл люд', 'нашел люд', 'people', 'нетворк', 'найдены', 'пользователей']):
-                return 'поиск людей'
-            if any(w in text for w in ['делегир', 'delegation', 'campaign', 'кампани']):
-                return 'делегирование'
-            if any(w in text for w in ['web_search', 'поиск в интернет', 'нашёл в сети', 'google', 'сайт']):
-                return 'web-поиск'
-            if any(w in text for w in ['анализ', 'сравнил', 'таблиц', 'отчёт', 'данные']):
-                return 'анализ данных'
-            if any(w in text for w in ['notion', 'jira', 'slack', 'trello', 'airtable', 'bitrix', 'hubspot', 'run_agent', 'интеграц']):
-                return 'интеграция'
-            if any(w in text for w in ['задач', 'task', 'план', 'шаг', 'декомпоз']):
-                return 'создание задач'
-            if any(w in text for w in ['прогресс', 'метрик', 'update_goal', 'обновил', 'процент']):
-                return 'обновление прогресса'
-            return 'другое'
-
-        action_type_counts: dict = {}
-        for _a in recent_actions:
-            _atype = _classify_ap_action_type(_a.title or '', _a.result or '')
-            action_type_counts[_atype] = action_type_counts.get(_atype, 0) + 1
-
         # Последние proactive/agent_msg сообщения за 2 часа — что реально было сказано
         recent_msgs = session.query(Interaction).filter(
             Interaction.user_id == user.id,
@@ -3227,7 +3159,6 @@ class AnchorEngine:
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
-            'action_type_counts': action_type_counts,
         }
 
         return [Anchor(
