@@ -148,7 +148,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
         "  Платформа: send_message_to_user, list_marketplace, switch_agent\n"
         "  Интеграции: run_agent_action (Gmail, Slack, Notion, GitHub, Ozon, Wildberries, Jira, Bitrix24, AmoCRM, HubSpot, Trello, Airtable, Google Sheets, PostgreSQL, Redis, AWS S3, RSS, Calendly, Twilio, Firebase, CoinGecko, YouTube, OpenAI, Gemini, USDT, HTTP API и 30+)\n\n"
         "Каждый цикл = новое конкретное действие из ЛЮБОГО раздела (не повтор).\n"
-        "Отчёт: 2-3 предложения, до 400 символов — только факт что сделано."
+        "Отчёт: конкретные факты — что сделано и что получено. Объём по результату."
     ),
 }
 
