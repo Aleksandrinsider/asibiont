@@ -8310,8 +8310,7 @@ async def api_reports_handler(request):
                 logger.warning(f"[API_REPORTS] Status sync error: {e}")
 
             # Agent activities (delegations, auto-posts, TG posts, etc.)
-            # goal_autopilot_dispatch — internal service entries, hidden from timeline
-            _ACTIVITIES_HIDDEN_TYPES = {'goal_autopilot_dispatch'}
+            _ACTIVITIES_HIDDEN_TYPES = set()
             agent_activities_data = []
             try:
                 activities = session_db.query(AgentActivityLog).filter(

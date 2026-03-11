@@ -6633,6 +6633,9 @@ except Exception as e:
                 'run_agent_action': t('act-run-action'),
                 'inbox_reply': t('act-inbox-reply'),
                 'task_blocked': t('act-task-blocked'),
+                'goal_autopilot_dispatch': t('act-autopilot'),
+                'agent_event_dispatch': t('act-event-dispatch'),
+                'agent_chain_continue': t('act-chain-continue'),
             };
         }
 
@@ -6717,7 +6720,7 @@ except Exception as e:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set(['goal_autopilot_dispatch']);
+            const _HIDDEN_ACT_TYPES = new Set();
             const sorted = [...activities].filter(a => !_HIDDEN_ACT_TYPES.has(a.activity_type)).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
             if (latest && (!window._activityPollSince || latest > window._activityPollSince)) {
@@ -15142,7 +15145,7 @@ except Exception as e:
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
       'act-email':'Email','act-delegation':'Делегирование','act-agent-task':'Поручение агенту','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Аутрич-кампания','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента','agent-task-label':'Поручено агенту',
       'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
-      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Агент застрял',
+      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Агент застрял','act-autopilot':'Автопилот цели','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
       'dc-title':'Аутрич-кампания','dc-audience':'Аудитория:','dc-sent':'Отпр.','dc-accepted':'Прин.','dc-del-confirm':'Удалить аутрич-кампанию?',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
@@ -15409,7 +15412,7 @@ except Exception as e:
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
       'act-email':'Email','act-delegation':'Delegation','act-agent-task':'Agent task','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-content-campaign':'Content campaign','act-deleg-campaign':'Outreach campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline','act-integration':'Integration','act-run-action':'Agent action','agent-task-label':'Assigned to agent',
       'act-task-added':'Task created','act-task-completed':'Task completed','act-goal-created':'Goal created','act-goal-updated':'Goal updated','act-goal-completed':'Goal achieved','act-goal-deleted':'Goal deleted','act-profile-updated':'Profile',
-      'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked',
+      'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked','act-autopilot':'Goal autopilot','act-event-dispatch':'Agent reaction','act-chain-continue':'Agent chain',
       'cc-title':'Content campaign','cc-goal':'Goal:','cc-topics':'Topics:','cc-freq':'Frequency:','cc-last':'Last post:','cc-posts':'p.','cc-freq-daily':'Daily','cc-freq-weekly':'Weekly','cc-del-confirm':'Delete content campaign?','plat-feed':'Feed',
       'dc-title':'Outreach campaign','dc-audience':'Audience:','dc-sent':'Sent','dc-accepted':'Accepted','dc-del-confirm':'Delete outreach campaign?',
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
