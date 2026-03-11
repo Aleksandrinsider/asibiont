@@ -5127,61 +5127,58 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             t for _rh in _round_history for t in _rh.get('tools_used', [])
         ))
 
-        _review_prompt = (
-            f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты платформы — ВСЕ те же что у агентов:\n"
-            f"send_email, send_outreach_email, negotiate_by_email, publish_to_telegram, publish_to_discord, "
-            f"create_post, research_topic, web_search, generate_image, start_content_campaign, "
-            f"start_delegation_campaign, find_relevant_contacts_for_task, schedule_background_task, "
-            f"add_task, delegate_task и другие.\n\n"
-            f"Пользователь попросил: {user_message[:300]}\n\n"
-            f"ИСТОРИЯ РАБОТЫ С АГЕНТОМ {_agent_name_d}:\n{_rounds_summary}\n\n"
-            f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n"
-            f"Инструменты агента за все раунды: {', '.join(_all_agent_tools) if _all_agent_tools else 'нет'}\n\n"
-            f"ЦЕПОЧКА ПО СПОСОБНОСТЯМ — универсальный принцип:\n"
-            f"Агент ПОДГОТАВЛИВАЕТ (текст, данные, контент, план, контакты) → ТЫ ДЕЙСТВУЕШЬ.\n"
-            f"Примеры:\n"
-            f"- Агент написал текст → отправь (send_email, publish_to_telegram, publish_to_discord)\n"
-            f"- Нашёл контакты → запусти outreach (send_outreach_email, start_delegation_campaign)\n"
-            f"- Исследовал тему → создай контент или задачи\n"
-            f"- Проверил входящие → ответь (negotiate_by_email, reply_to_outreach_email)\n"
-            f"- Подготовил изображение/код/план → опубликуй или запусти\n"
-            f"Не останавливайся на генерации — ДОВОДИ до действия.\n\n"
-            f"РЕШИ:\n"
-            f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (работа НЕ завершена, нужен ещё шаг)\n"
-            f"- accept_and_act — принять результат и САМОМУ выполнить следующий шаг (опубликовать, отправить, запустить, ...)\n"
-            f"ВАЖНО: чистого 'accept' (просто пересказать агента) НЕ СУЩЕСТВУЕТ. "
-            f"Даже если нечего делать — выбери accept_and_act с конкретным шагом (хотя бы update_goal_progress или add_task).\n\n"
-            f"Ответ СТРОГО JSON:\n"
-            f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
-            f'или\n'
-            f'{{"action": "accept_and_act", "summary": "кратко что сделано", '
-            f'"my_action": "конкретное действие которое ты выполнишь"}}\n'
-        )
-        _review_raw = await _quick_ai_call_raw([{"role": "user", "content": _review_prompt}], max_tokens=400)
-
-        # Парсим решение
-        _review_decision = None
-        _rj = re.search(r'(\{[\s\S]*\})', _review_raw or '')
-        if _rj:
-            try:
-                _review_decision = _json.loads(_rj.group(1))
-            except Exception:
-                pass
-
-        _review_action = _review_decision.get('action', '') if _review_decision else ''
-        if _review_action not in ('next_task',):
-            # ПРИНЯТЬ: АСИ принимает работу и действует
+        # Оптимизация: если агент вызвал инструменты или это последний раунд →
+        # пропускаем review-вызов, сразу переходим к accept_and_act.
+        # Review нужен только когда агент дал текст без действий (решаем: next_task или accept).
+        _is_last_round = (_round == _MAX_AGENT_ROUNDS - 1)
+        if _all_agent_tools or _is_last_round:
+            _review_action = 'accept_and_act'
             _accept_summary = ''
             _my_action = ''
-            if _review_decision:
-                _accept_summary = _review_decision.get('summary', '')
-                _my_action = _review_decision.get('my_action', '')
+        else:
+            _review_prompt = (
+                f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты платформы — ВСЕ те же что у агентов:\n"
+                f"send_email, send_outreach_email, negotiate_by_email, publish_to_telegram, publish_to_discord, "
+                f"create_post, research_topic, web_search, generate_image, start_content_campaign, "
+                f"start_delegation_campaign, find_relevant_contacts_for_task, schedule_background_task, "
+                f"add_task, delegate_task и другие.\n\n"
+                f"Пользователь попросил: {user_message[:300]}\n\n"
+                f"ИСТОРИЯ РАБОТЫ С АГЕНТОМ {_agent_name_d}:\n{_rounds_summary}\n\n"
+                f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n"
+                f"Инструменты агента за все раунды: нет\n\n"
+                f"Агент дал только текст. РЕШИ:\n"
+                f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (если нужен ещё шаг)\n"
+                f"- accept_and_act — принять и САМОМУ выполнить следующий шаг\n\n"
+                f"Ответ СТРОГО JSON:\n"
+                f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
+                f'или\n'
+                f'{{"action": "accept_and_act", "summary": "кратко что сделано", '
+                f'"my_action": "конкретное действие"}}\n'
+            )
+            _review_raw = await _quick_ai_call_raw(
+                [{"role": "user", "content": _review_prompt}], max_tokens=250
+            )
+
+            _review_decision = None
+            _rj = re.search(r'(\{[\s\S]*\})', _review_raw or '')
+            if _rj:
+                try:
+                    _review_decision = _json.loads(_rj.group(1))
+                except Exception:
+                    pass
+
+            _review_action = _review_decision.get('action', '') if _review_decision else ''
+            _accept_summary = (_review_decision.get('summary', '') if _review_decision else '')
+            _my_action = (_review_decision.get('my_action', '') if _review_decision else '')
+
+        if _review_action not in ('next_task',):
+            # ПРИНЯТЬ: АСИ принимает работу и действует
 
             # Полноценный follow-up с ВСЕМИ инструментами — АСИ может отправить email,
             # опубликовать пост, провести исследование и т.д. по результатам агента
             try:
                 _followup_agent = HybridAutonomousAgent()
-                _is_action_mode = _review_action == 'accept_and_act'
+                _is_action_mode = (_review_action == 'accept_and_act') or bool(_all_agent_tools)
                 # Динамически определяем связанные инструменты на основе tools_used агента
                 _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
 
@@ -5235,14 +5232,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     {"role": "user", "content": _followup_msg},
                 ]
 
-                # Tool-calling loop для ASI-координатора (макс 3 итерации, 500 max_tokens)
+                # Tool-calling loop для ASI-координатора (макс 2 итерации, 500 max_tokens)
+                # Итер 0: tool_choice="required" — ASI обязан вызвать инструмент
+                # Итер 1: tool_choice=None — финальный текст (без доп. инструментов)
                 _fu_final_text = ''
-                for _fu_iter in range(3):
+                for _fu_iter in range(2):
                     _fu_resp = await asyncio.wait_for(
                         _followup_agent.call_ai(
                             _fu_messages,
-                            use_tools=(_fu_iter < 2),
-                            tool_choice="required" if _fu_iter == 0 else ("auto" if _fu_iter == 1 else None),
+                            use_tools=(_fu_iter == 0),
+                            tool_choice="required" if _fu_iter == 0 else None,
                             max_tokens=500,
                             api_timeout=API_TIMEOUT_NORMAL,
                         ),
