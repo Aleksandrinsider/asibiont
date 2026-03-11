@@ -1393,6 +1393,7 @@ class HybridAutonomousAgent:
                 return "Could not load profile. Please try again." if user_lang == 'en' else "Не удалось загрузить профиль. Попробуй ещё раз."
 
             base_prompt = ctx['base_prompt']
+            dynamic_context = ctx.get('dynamic_context', '')
             sub_tier = ctx['sub_tier']
             user_lang = ctx.get('user_lang', user_lang)
 
