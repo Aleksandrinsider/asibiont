@@ -65,6 +65,9 @@ PUBLIC_SVCS = {"hh", "coingecko", "http_api"}
 TIMEOUT = 20        # секунд на большинство скриптов
 SVC_TIMEOUTS = {    # персональные таймауты для медленных API
     "notion": 25,
+    "amocrm": 15,    # AmoCRM может зависнуть на SSL
+    "hubspot": 15,
+    "bitrix24": 15,
 }
 
 # ──────────────────────────────────────────────
