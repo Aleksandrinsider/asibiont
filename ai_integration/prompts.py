@@ -13,8 +13,12 @@ from .system_prompt import select_prompt_version
 
 logger = logging.getLogger(__name__)
 
-def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None, user_id_param=None, lang='ru'):
-    """Упрощенный промпт - использует отдельные модули"""
+def get_extended_system_prompt(user_now, current_time_str, current_date_str, user_username, mentions_str, user_memory, context=None, intent=None, subscription_tier=None, message_type=None, weather_info=None, news_info=None, profile_data=None, proactive_context=None, current_task_info=None, user_id_param=None, lang='ru', return_dynamic_separately=False):
+    """Упрощенный промпт - использует отдельные модули.
+    Если return_dynamic_separately=True, возвращает (static_prompt, dynamic_context_str).
+    Статичный system prompt кешируется DeepSeek prefix cache (~15K токенов).
+    Динамический контекст инжектируется отдельным system-сообщением.
+    """
 
     # Token system — все функции открыты, ограничение только баланс
     tier_value = 'Токены'  # Унифицированная модель
@@ -350,10 +354,28 @@ If user says "done/finished/completed" → complete_task()"""
 
     dynamic_context = '\n'.join(_dyn_parts)
 
-    # Заполняем шаблон — только {dynamic_context} теперь (+ legacy placeholders если остались)
+    # Инструкция по профилю — добавляем в dynamic_context (в конец)
+    if profile_instruction:
+        dynamic_context = dynamic_context + '\n' + profile_instruction.strip()
+
+    if return_dynamic_separately:
+        # Статичный system prompt: {dynamic_context} убирается (пустая строка)
+        # Dynamic context вернётся отдельно — вызывающий код инжектирует как второй system-message
+        prompt = base_prompt.replace('{dynamic_context}', '')
+        # Убираем legacy placeholders
+        for _key, _val in (
+            ('tier_info', ''), ('user_username', user_username),
+            ('current_time_str', current_time_str), ('current_date_str', current_date_str),
+            ('tier_value', 'Токены'), ('profile', ''), ('search_context', ''),
+            ('memory_section', ''), ('weather', ''), ('news', ''),
+            ('proactive_context', ''), ('task_section', ''),
+        ):
+            prompt = prompt.replace('{' + _key + '}', str(_val))
+        return prompt, dynamic_context
+
+    # Режим совместимости: заполняем шаблон как раньше
     prompt = base_prompt
     prompt = prompt.replace('{dynamic_context}', dynamic_context)
-    # Совместимость: на случай если в промпте остались старые placeholder-ы
     for _key, _val in (
         ('tier_info', ''),
         ('user_username', user_username),
@@ -370,6 +392,4 @@ If user says "done/finished/completed" → complete_task()"""
     ):
         prompt = prompt.replace('{' + _key + '}', str(_val))
 
-    # Инструкция по профилю — добавляем как часть dynamic_context (в конец)
-    if profile_instruction:
-        prompt = prompt + '\n' + profile_instruction
+    return prompt

@@ -770,8 +770,9 @@ class HybridAutonomousAgent:
             # Язык пользователя
             user_lang = getattr(user, 'language', 'ru') or 'ru'
 
-            # Базовый промпт
-            base_prompt = get_extended_system_prompt(
+            # Базовый промпт — статичный prefix (~53K) + dynamic_context отдельно
+            # Это позволяет DeepSeek кеширть весь системный промпт между запросами
+            base_prompt, dynamic_context = get_extended_system_prompt(
                 user_now=user_now,
                 current_time_str=time_str,
                 current_date_str=date_str,
@@ -787,11 +788,13 @@ class HybridAutonomousAgent:
                 proactive_context=proactive_context,
                 current_task_info=current_task_info,
                 user_id_param=user_id,
-                lang=user_lang
+                lang=user_lang,
+                return_dynamic_separately=True,
             )
 
             return {
                 'base_prompt': base_prompt,
+                'dynamic_context': dynamic_context,
                 'sub_tier': sub_tier,
                 'profile_data': profile_data,
                 'tasks': tasks_data,
@@ -1830,6 +1833,9 @@ class HybridAutonomousAgent:
                         logger.warning(f"[AGENT] activity log (exc) error: {_al_e}")
 
             messages = [{"role": "system", "content": base_prompt}]
+            # Динамический контекст — второе system-сообщение позволяет DeepSeek кешировать весь статичный prefix (53K) целиком
+            if dynamic_context:
+                messages.append({"role": "system", "content": dynamic_context})
 
             # ═══ АНТИ-ПОВТОР: для коротких реплик (привет/привет) инжектируем предыдущие ответы ═══
             _msg_lower_ar = (user_message or '').strip().lower().rstrip('!., ')
@@ -2382,6 +2388,7 @@ class HybridAutonomousAgent:
                 return self._system_message_fallback(mode, instruction, lang=_lang)
 
             base_prompt = ctx['base_prompt']
+            dynamic_context = ctx.get('dynamic_context', '')
             sub_tier = ctx['sub_tier']
             user_lang = ctx.get('user_lang', 'ru')
 
@@ -2569,6 +2576,8 @@ class HybridAutonomousAgent:
 
             # Собираем messages — БЕЗ истории диалога (это системное сообщение)
             messages = [{"role": "system", "content": system_prompt}]
+            if dynamic_context:
+                messages.append({"role": "system", "content": dynamic_context})
 
             # Если есть extra_context (ситуация, красные флаги) — добавляем
             if extra_context:
