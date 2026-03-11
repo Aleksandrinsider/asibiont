@@ -425,6 +425,12 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
         # The telegram_id to pass to AI (may be real TG id if account is linked)
         ai_user_id = user.telegram_id
 
+        # Check token balance
+        from token_service import has_enough_tokens, spend_tokens, insufficient_balance_message
+        from config import FREE_ACCESS_MODE
+        if not FREE_ACCESS_MODE and not has_enough_tokens(ai_user_id, 'message'):
+            return insufficient_balance_message(ai_user_id, 'message')
+
         # Save incoming message
         interaction = Interaction(
             user_id=user.id,
@@ -452,6 +458,10 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
         )
         db.add(ai_interaction)
         db.commit()
+
+        # Deduct message tokens
+        if not FREE_ACCESS_MODE:
+            spend_tokens(ai_user_id, 'message', description=text[:100])
 
         return response
 

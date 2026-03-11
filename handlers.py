@@ -229,9 +229,9 @@ Agents debate in real time. Start a topic — they discuss it right in the feed.
 
 All features available immediately. Pay only for usage.
 
-Starter — 1,500₽ → 1,500 tokens
-Optimal — 5,000₽ → 5,500 tokens (+10%)
-Maximum — 50,000₽ → 60,000 tokens (+20%)
+Starter — $15 USDT → 1,500 tokens
+Optimal — $50 USDT → 5,500 tokens (+10%)
+Maximum — $500 USDT → 60,000 tokens (+20%)
 
 Top up: /buy
 Balance: /balance
@@ -464,37 +464,46 @@ async def buy_handler(message: Message):
     lang = get_user_lang(user_id)
     
     if lang == 'en':
-        text = " Token packages (1 token = 1₽):\n\n"
-        for key, pkg in TOKEN_PACKAGES.items():
-            text += f"• {pkg['label']}\n"
+        from crypto_payments import CRYPTO_PACK_PRICES, create_crypto_payment
+        from config import NOWPAYMENTS_API_KEY, WEB_APP_URL as _WAU
+        text = " Token packages (1 token ≈ $0.01 USDT):\n\n"
+        for key, info in CRYPTO_PACK_PRICES.items():
+            text += f"• ${info['price_usd']} USDT — {info['tokens']:,} tokens\n"
         text += "\nChoose a package:"
+        try:
+            if not NOWPAYMENTS_API_KEY:
+                raise ValueError("Crypto payments not configured")
+            payment_text = ""
+            for key, info in CRYPTO_PACK_PRICES.items():
+                url = await create_crypto_payment(key, user_id, NOWPAYMENTS_API_KEY, _WAU)
+                payment_text += f"\n${info['price_usd']} USDT — {info['tokens']:,} tokens:\n{url}\n"
+            await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
+        except Exception as e:
+            logger.error(f"Error creating crypto payment for user {user_id}: {e}")
+            await message.bot.send_message(message.chat.id, text + "\n\n Payment error. Try again later.\nSupport: @aleksandrinsider")
     else:
         text = " Пакеты токенов (1 токен = 1₽):\n\n"
         for key, pkg in TOKEN_PACKAGES.items():
             text += f"• {pkg['label']}\n"
         text += "\nВыберите пакет:"
-    
-    try:
-        urls = {}
-        for key, pkg in TOKEN_PACKAGES.items():
-            url = create_payment(
-                pkg['price'],
-                f"Пополнение {pkg['tokens']} токенов",
-                user_id,
-                f'tokens_{key}',
-                None
-            )
-            urls[key] = url
-        
-        payment_text = ""
-        for key, pkg in TOKEN_PACKAGES.items():
-            payment_text += f"\n{pkg['label']}:\n{urls[key]}\n"
-        
-        await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
-    except Exception as e:
-        logger.error(f"Error creating token payment for user {user_id}: {e}")
-        err_msg = " Payment error. Try again later.\nSupport: @aleksandrinsider" if lang == 'en' else " Не удалось создать платёж — попробуй чуть позже.\nПоддержка: @aleksandrinsider"
-        await message.bot.send_message(message.chat.id, text + "\n\n" + err_msg)
+        try:
+            urls = {}
+            for key, pkg in TOKEN_PACKAGES.items():
+                url = create_payment(
+                    pkg['price'],
+                    f"Пополнение {pkg['tokens']} токенов",
+                    user_id,
+                    f'tokens_{key}',
+                    None
+                )
+                urls[key] = url
+            payment_text = ""
+            for key, pkg in TOKEN_PACKAGES.items():
+                payment_text += f"\n{pkg['label']}:\n{urls[key]}\n"
+            await message.bot.send_message(message.chat.id, text + "\n" + payment_text)
+        except Exception as e:
+            logger.error(f"Error creating token payment for user {user_id}: {e}")
+            await message.bot.send_message(message.chat.id, text + "\n\n Не удалось создать платёж — попробуй чуть позже.\nПоддержка: @aleksandrinsider")
 
 
 @router.message(Command("subscription"))
@@ -577,8 +586,8 @@ async def chat_handler(message: Message):
                 grant_signup_tokens(user_id, session=session)
             session.close()
 
-            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
-                await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
+            if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'voice_message'):
+                await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'voice_message'))
                 return
 
             # Скачиваем голосовое сообщение
@@ -609,7 +618,7 @@ async def chat_handler(message: Message):
                             if text:
                                 logger.info(f"[VOICE] Transcribed text: {text}")
                                 # Обрабатываем транскрибированный текст как обычное сообщение
-                                await process_text_message(user_id, text, message, None)
+                                await process_text_message(user_id, text, message, None, source='voice_message')
                                 return
                             else:
                                 err = "Couldn't recognize voice message. Try sending text." if get_user_lang(user_id) == 'en' else "Не разобрал голосовое — попробуй текстом"
@@ -803,7 +812,7 @@ async def chat_handler(message: Message):
         await process_other_message(user_id, message, None)
 
 
-async def process_text_message(user_id, text, message, state):
+async def process_text_message(user_id, text, message, state, source='message'):
     message_id = message.message_id
 
     # Проверка на пустые сообщения
@@ -1023,7 +1032,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:
-                _spend_result = spend_tokens(user_id, 'message', description=text[:100])
+                _spend_result = spend_tokens(user_id, source, description=text[:100])
                 if isinstance(_spend_result, dict) and not _spend_result.get('success', True):
                     logger.warning(f"[PTM] spend_tokens failed for user {user_id}: {_spend_result}")
         except Exception as e:

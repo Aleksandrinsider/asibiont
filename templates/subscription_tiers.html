@@ -138,7 +138,7 @@
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
                         {% if show_yookassa %}«Напомни завтра в 9 про созвон» — он помнит. «Найди дизайнера» — находит. Все функции открыты с первого токена.{% else %}"Remind me tomorrow at 9 about the call" — it remembers. "Find a designer" — it finds. All features unlocked from token one.{% endif %}
                     </div>
-                    {% if show_yookassa %}<button onclick="selectPack('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Пополнить — 1 500 ₽</button>{% else %}<div style="display: flex; flex-direction: column; gap: 8px;"><button onclick="selectPack('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay 1 500 ₽ (RUB)</button><button onclick="selectPackCrypto('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $15 USDT</button></div>{% endif %}
+                    {% if show_yookassa %}<button onclick="selectPack('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Пополнить — 1 500 ₽</button>{% else %}<button onclick="selectPackCrypto('small')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $15 USDT</button>{% endif %}
                 </div>
 
                 <!-- Оптимальный -->
@@ -151,7 +151,7 @@
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
                         {% if show_yookassa %}+500 токенов сверху. Вы на встрече — он делегирует задачи. Вы спите — постит в канал. Автопилот, который не выключается.{% else %}+500 bonus tokens. On a call — it delegates. Sleeping — it posts. An autopilot that never stops.{% endif %}
                     </div>
-                    {% if show_yookassa %}<button onclick="selectPack('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Пополнить — 5 000 ₽</button>{% else %}<div style="display: flex; flex-direction: column; gap: 8px;"><button onclick="selectPack('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Pay 5 000 ₽ (RUB)</button><button onclick="selectPackCrypto('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Pay $50 USDT</button></div>{% endif %}
+                    {% if show_yookassa %}<button onclick="selectPack('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Пополнить — 5 000 ₽</button>{% else %}<button onclick="selectPackCrypto('medium')" style="width: 100%; padding: 10px 16px; background: #374151; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#2C3441'" onmouseout="this.style.background='#374151'">Pay $50 USDT</button>{% endif %}
                 </div>
 
                 <!-- Максимальный -->
@@ -163,7 +163,7 @@
                     <div style="font-size: 13px; color: #374151; line-height: 1.6; margin-bottom: 20px;">
                         {% if show_yookassa %}+10 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.{% else %}+10,000 bonus tokens. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.{% endif %}
                     </div>
-                    {% if show_yookassa %}<button onclick="selectPack('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Пополнить — 50 000 ₽</button>{% else %}<div style="display: flex; flex-direction: column; gap: 8px;"><button onclick="selectPack('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay 50 000 ₽ (RUB)</button><button onclick="selectPackCrypto('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $500 USDT</button></div>{% endif %}
+                    {% if show_yookassa %}<button onclick="selectPack('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Пополнить — 50 000 ₽</button>{% else %}<button onclick="selectPackCrypto('large')" style="width: 100%; padding: 10px 16px; background: #FFFFFF; color: #59636E; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328'" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0'">Pay $500 USDT</button>{% endif %}
                 </div>
             </div>
 
@@ -220,8 +220,7 @@
         { name: 'Максимальный', sub: 'Максимальная выгода за токен', desc: '+10 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.' }
       ],
       topup: ['Пополнить — 1 500 ₽', 'Пополнить — 5 000 ₽', 'Пополнить — 50 000 ₽'],
-      topupRub: ['Pay 1 500 ₽ (RUB)', 'Pay 5 000 ₽ (RUB)', 'Pay 50 000 ₽ (RUB)'],
-      topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $500 USDT'],
+
       ctaBtn1: 'Попробовать бесплатно — 1 500 токенов', ctaBtn2: 'Установить приложение',
       cta: 'Все функции доступны сразу.',
       fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
@@ -238,9 +237,7 @@
         { name: 'Standard', sub: 'Most popular choice', desc: '+500 bonus tokens. On a call — it delegates. Sleeping — it posts. An autopilot that never stops.' },
         { name: 'Premium', sub: 'Best value per token', desc: '+10,000 bonus tokens. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.' }
       ],
-      topup: ['Top Up — 1,500 ₽', 'Top Up — 5,000 ₽', 'Top Up — 50,000 ₽'],
-      topupRub: ['Pay 1,500 ₽ (RUB)', 'Pay 5,000 ₽ (RUB)', 'Pay 50,000 ₽ (RUB)'],
-      topupCrypto: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $500 USDT'],
+      topup: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $500 USDT'],
       ctaBtn1: 'Try for free — 1,500 tokens', ctaBtn2: 'Install App',
       cta: 'All features available immediately.',
       fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
@@ -279,8 +276,7 @@
       var h2 = card.querySelector('h2'); if (h2) h2.textContent = t.cards[i].name;
       var subdiv = card.querySelector('[style*="font-size: 12px"]'); if (subdiv) subdiv.textContent = t.cards[i].sub;
       var descdiv = card.querySelector('[style*="line-height: 1.6"]'); if (descdiv) descdiv.textContent = t.cards[i].desc;
-      var btn = card.querySelector('button'); if (btn) btn.textContent = SHOW_YOOKASSA ? t.topup[i] : t.topupRub[i];
-      var btns = card.querySelectorAll('button'); if (btns.length > 1) btns[1].textContent = t.topupCrypto[i];
+      var btn = card.querySelector('button'); if (btn) btn.textContent = t.topup[i];
     });
     // Bottom buttons (Home + Support)
     // CTA

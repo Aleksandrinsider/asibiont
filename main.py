@@ -9384,7 +9384,11 @@ async def subscription_tiers_handler(request):
     lang = request.match_info.get('lang', 'ru')
     if lang not in ('ru', 'en'):
         lang = 'ru'
-    flags = await get_payment_flags(request)
+    # RU = только ЮКасса (рубли), EN = только USDT (крипто)
+    flags = {
+        'show_yookassa': lang == 'ru',
+        'show_crypto': lang == 'en' and bool(NOWPAYMENTS_API_KEY),
+    }
     return {'lang': lang, **flags}
 
 
@@ -11948,7 +11952,11 @@ async def faq_handler_en(request):
     return aiohttp_jinja2.render_template('faq.html', request, {'lang': 'en'})
 
 async def subscription_tiers_handler_en(request):
-    flags = await get_payment_flags(request)
+    # EN = только USDT (крипто)
+    flags = {
+        'show_yookassa': False,
+        'show_crypto': bool(NOWPAYMENTS_API_KEY),
+    }
     return aiohttp_jinja2.render_template('subscription_tiers.html', request, {'lang': 'en', **flags})
 
 app.router.add_get('/en', login_handler_en)
