@@ -601,16 +601,32 @@ class HybridAutonomousAgent:
         news_info = None
         try:
             from .api_client import get_api_client
+            import asyncio as _aio_wn
             api = get_api_client()
-            weather_data = await api.get_weather(city, cache_ttl=1800) if city else None
-            if weather_data:
+            # Параллельный запрос погоды и новостей — экономит ~1-3 сек при холодном кеше
+            _w_task = api.get_weather(city, cache_ttl=1800) if city else None
+            _n_task = api.get_news(topic=city, page_size=3, cache_ttl=900) if city else None
+            if _w_task and _n_task:
+                try:
+                    weather_data, news_articles = await _aio_wn.wait_for(
+                        _aio_wn.gather(_w_task, _n_task, return_exceptions=True),
+                        timeout=6.0  # Жёсткий таймаут — не ждём дольше 6 сек
+                    )
+                except _aio_wn.TimeoutError:
+                    weather_data = news_articles = None
+                    logger.info("[CTX_CACHE] weather/news timeout (6s) — skipping")
+            elif _w_task:
+                weather_data = await _aio_wn.wait_for(_w_task, timeout=4.0)
+                news_articles = None
+            else:
+                weather_data = news_articles = None
+            if weather_data and not isinstance(weather_data, Exception):
                 weather_info = (
                     f"{weather_data['city_name']}: {weather_data['temp']:.0f}°C, "
                     f"{weather_data['description']}, влажность {weather_data['humidity']}%, "
                     f"ветер {weather_data['wind_speed']} м/с"
                 )
-            news_articles = await api.get_news(topic=city, page_size=3, cache_ttl=900) if city else None
-            if news_articles:
+            if news_articles and not isinstance(news_articles, Exception):
                 titles = [f"• {a['title']}" for a in news_articles[:3] if a.get('title')]
                 if titles:
                     news_info = f"Новости {city}:\n" + "\n".join(titles)
@@ -1726,7 +1742,12 @@ class HybridAutonomousAgent:
                             return '', f'Тайм-аут выполнения скрипта ({API_TIMEOUT_QUICK} сек)'
                     _code_output, _code_stderr = await _run_agent_code()
                     if _code_output:
-                        base_prompt += (
+                        # Очищаем HTML-теги и RFC822 артефакты из IMAP/email вывода
+                        # Пример бага: "Name" <email@gmail.com> → в HTML выглядит как @gmail.com">
+                        import re as _re_clean
+                        _code_output_clean = _re_clean.sub(r'<[^>]+>', '', _code_output)  # strip HTML tags
+                        _code_output_clean = _re_clean.sub(r'(?<=\S)">', '', _code_output_clean)  # strip "> artifacts
+                        _agent_data_block = (
                             f'\n\n[ДАННЫЕ ОТ АГЕНТА — РЕАЛЬНЫЕ ДАННЫЕ ПРЯМО СЕЙЧАС]\n'
                             f'Твой скрипт выполнился и вернул данные ниже. '
                             f'Это ТВОИ данные — воспринимай их как собственное знание о текущей ситуации, '
@@ -1735,9 +1756,11 @@ class HybridAutonomousAgent:
                             f'Используй встроенные инструменты (add_task, create_goal и др.) на основе этих данных. '
                             f'НЕ говори «нужно настроить подключение» — данные уже получены.\n'
                             f'───────────────\n'
-                            f'{_code_output}\n'
+                            f'{_code_output_clean}\n'
                             f'───────────────'
                         )
+                        # Инжектируем в dynamic_context (не в base_prompt!) чтобы не разрушать prefix cache
+                        dynamic_context = dynamic_context + _agent_data_block
                         logger.info(f"[AGENT] python_code output injected ({len(_code_output)} chars)")
                         try:
                             from models import AgentActivityLog as _AAL, Session as _SessAL, User as _UserAL
@@ -1771,7 +1794,7 @@ class HybridAutonomousAgent:
                             logger.warning(f"[AGENT] activity log (success) error: {_al_e}")
                     else:
                         _err_detail = _code_stderr if _code_stderr else 'скрипт не вернул вывода'
-                        base_prompt += (
+                        dynamic_context = dynamic_context + (
                             f'\n\n[ВНЕШНИЕ ДАННЫЕ НЕДОСТУПНЫ]\n'
                             f'Скрипт агента не смог получить данные: {_err_detail}\n'
                             f'Сообщи пользователю кратко и по-человечески: что именно не получилось '
@@ -1804,7 +1827,7 @@ class HybridAutonomousAgent:
             except Exception as _pce:
                 logger.warning(f"[AGENT] python_code exec error: {_pce}")
                 if '_agent_data' in dir() and _agent_data and _agent_data.get('python_code', '').strip():
-                    base_prompt += (
+                    dynamic_context = dynamic_context + (
                         f'\n\n[ВНЕШНИЕ ДАННЫЕ НЕДОСТУПНЫ]\n'
                         f'Не удалось запустить скрипт агента: {_pce}\n'
                         f'Сообщи пользователю кратко и по-человечески. '

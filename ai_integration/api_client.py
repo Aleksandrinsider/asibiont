@@ -773,7 +773,10 @@ class ExternalAPIClient:
 
             self._track_call('ddg')
             await self.cache.set('ddg', cache_params, results, cache_ttl)
-            logger.info(f"[DDG_NEWS] Found {len(results)} articles for: {topic[:50]}")
+            if results:
+                logger.info(f"[DDG_NEWS] Found {len(results)} articles for: {topic[:50]}")
+            else:
+                logger.info(f"[DDG_NEWS] No results for: {topic[:50]}")
             _clr_err('ddg')
             return results
 
