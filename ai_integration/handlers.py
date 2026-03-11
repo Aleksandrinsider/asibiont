@@ -9507,15 +9507,42 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             gh_queries = []
             _found_techs = [t for t in _tech_markers if t in _all_text and len(t) > 2]
             
-            if core_kw:
+            # Перевод русских терминов в английские для GitHub
+            _ru_to_en = {
+                'тестировщ': 'QA engineer',
+                'разработ': 'developer',
+                'программист': 'programmer',
+                'инженер': 'engineer',
+                'аналитик': 'analyst',
+                'продуктолог': 'product manager',
+                'автоматизац': 'automation',
+                'it специал': 'IT specialist',
+                'ит специал': 'IT specialist',
+                'технолог': 'technology',
+            }
+            _en_techs = []
+            for t in _found_techs:
+                for ru, en in _ru_to_en.items():
+                    if ru in t:
+                        _en_techs.append(en)
+                        break
+                else:
+                    _en_techs.append(t)
+
+            # Используем англ. термины для GitHub-запросов
+            _gh_techs = _en_techs if _en_techs else _found_techs
+            if _gh_techs:
+                gh_queries.append(f"{_gh_techs[0]}")
+                for tech in _gh_techs[:3]:
+                    gh_queries.append(f"{tech} developer")
+            elif core_kw:
                 gh_queries.append(core_kw)
-            for tech in _found_techs[:3]:
-                gh_queries.append(f"{tech} developer")
             if _has_cyrillic:
                 # Для русской аудитории — приоритет на RU-локацию
-                gh_queries.insert(0, f"{core_kw} location:Russia")
-                gh_queries.append(f"{core_kw} location:Moscow")
-                gh_queries.append(f"{core_kw} location:Saint Petersburg")
+                _gh_main = _gh_techs[0] if _gh_techs else core_kw
+                gh_queries.insert(0, f"{_gh_main} location:Russia")
+                gh_queries.append(f"{_gh_main} location:Moscow")
+                gh_queries.append(f"{_gh_main} location:Saint Petersburg")
             
             gh_queries = gh_queries[:6]  # увеличили лимит для RU
             if gh_queries:

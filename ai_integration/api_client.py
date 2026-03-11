@@ -595,6 +595,136 @@ class ExternalAPIClient:
             logger.warning(f"[BING] Search error: {e}")
             return None
 
+    async def duckduckgo_lite_search(
+        self,
+        query: str,
+        num: int = 10,
+        cache_ttl: int = 1800,
+    ) -> Optional[List[dict]]:
+        """Fallback DDG через HTML-версию lite.duckduckgo.com (без JS/API)."""
+        import re as _re_ddgl
+        cache_params = {'q': query, 'num': num, 'engine': 'ddg_lite'}
+        cached = await self.cache.get('ddg', cache_params)
+        if cached is not None:
+            return cached
+        try:
+            s = await self._get_session()
+            _headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                              '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
+            }
+            async with s.post(
+                'https://lite.duckduckgo.com/lite/',
+                data={'q': query, 'kl': 'ru-ru'},
+                headers=_headers,
+                timeout=aiohttp.ClientTimeout(total=12),
+                ssl=False, allow_redirects=True,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                html = await resp.text(errors='replace')
+
+            results = []
+            # DDG Lite: результаты в таблице, ссылки с rel="nofollow"
+            links = _re_ddgl.findall(
+                r'<a[^>]+rel="nofollow"[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>',
+                html, _re_ddgl.DOTALL
+            )
+            snippets = _re_ddgl.findall(
+                r'<td[^>]+class="result-snippet"[^>]*>(.*?)</td>',
+                html, _re_ddgl.DOTALL
+            )
+            for i, (url, title_raw) in enumerate(links[:num]):
+                title = _re_ddgl.sub(r'<[^>]+>', '', title_raw).strip()
+                snip = ''
+                if i < len(snippets):
+                    snip = _re_ddgl.sub(r'<[^>]+>', '', snippets[i]).strip()
+                if url and not url.startswith('https://lite.duckduckgo.com'):
+                    results.append({'title': title, 'snippet': snip, 'link': url})
+
+            if results:
+                await self.cache.set('ddg', cache_params, results, cache_ttl)
+                logger.info(f"[DDG_LITE] Found {len(results)} results for: {query[:60]}")
+            return results or None
+        except Exception as e:
+            logger.warning(f"[DDG_LITE] Search error: {e}")
+            return None
+
+    async def google_html_search(
+        self,
+        query: str,
+        num: int = 10,
+        region: str = "ru",
+        cache_ttl: int = 1800,
+    ) -> Optional[List[dict]]:
+        """Fallback поиск через Google HTML (без API ключа)."""
+        import re as _re_g
+        cache_params = {'q': query, 'num': num, 'engine': 'google_html'}
+        cached = await self.cache.get('ddg', cache_params)
+        if cached is not None:
+            return cached
+        try:
+            s = await self._get_session()
+            _headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                              '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept-Language': f'{region},{region}-{region.upper()};q=0.9,en;q=0.8',
+                'Accept': 'text/html,application/xhtml+xml',
+            }
+            _q_enc = query.replace(' ', '+')
+            _url = f'https://www.google.com/search?q={_q_enc}&num={min(num, 20)}&hl={region}'
+            async with s.get(
+                _url, headers=_headers,
+                timeout=aiohttp.ClientTimeout(total=12),
+                ssl=False, allow_redirects=True,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                html = await resp.text(errors='replace')
+
+            results = []
+            # Google: результаты в <div class="g"> блоках
+            # Ссылка: <a href="/url?q=REAL_URL&..."> или прямая <a href="https://...">
+            # Также пробуем <div class="yuRUbf"> / <div class="tF2Cxc">
+
+            # Способ 1: /url?q= redirect links
+            for m in _re_g.finditer(r'<a[^>]+href="/url\?q=(https?://[^&"]+)[^"]*"[^>]*>(.*?)</a>', html, _re_g.DOTALL):
+                url_raw = m.group(1)
+                title = _re_g.sub(r'<[^>]+>', '', m.group(2)).strip()
+                if not title or 'google.com' in url_raw:
+                    continue
+                # Ищем сниппет рядом (следующий <span> или <div> с текстом)
+                pos = m.end()
+                snip_m = _re_g.search(r'<(?:span|div)[^>]*>((?:(?!<(?:span|div)).){20,300})</(?:span|div)>', html[pos:pos+2000], _re_g.DOTALL)
+                snip = _re_g.sub(r'<[^>]+>', '', snip_m.group(1)).strip() if snip_m else ''
+                results.append({'title': title, 'snippet': snip, 'link': url_raw})
+
+            # Способ 2: прямые ссылки в <div class="g">
+            if not results:
+                blocks = _re_g.findall(r'<div[^>]+class="[^"]*\bg\b[^"]*"[^>]*>(.*?)</div>\s*</div>', html, _re_g.DOTALL)
+                for block in blocks[:num]:
+                    link_m = _re_g.search(r'<a[^>]+href="(https?://(?!www\.google\.com)[^"]+)"[^>]*>(.*?)</a>', block, _re_g.DOTALL)
+                    if not link_m:
+                        continue
+                    url_raw = link_m.group(1)
+                    title = _re_g.sub(r'<[^>]+>', '', link_m.group(2)).strip()
+                    snip_m = _re_g.search(r'<(?:span|em)[^>]*>(.{20,300}?)</(?:span|em)>', block, _re_g.DOTALL)
+                    snip = _re_g.sub(r'<[^>]+>', '', snip_m.group(1)).strip() if snip_m else ''
+                    if url_raw and title:
+                        results.append({'title': title, 'snippet': snip, 'link': url_raw})
+
+            results = results[:num]
+            if results:
+                await self.cache.set('ddg', cache_params, results, cache_ttl)
+                logger.info(f"[GOOGLE] Found {len(results)} results for: {query[:60]}")
+            return results or None
+        except Exception as e:
+            logger.warning(f"[GOOGLE] Search error: {e}")
+            return None
+
     async def web_search(
         self,
         query: str,
@@ -603,11 +733,15 @@ class ExternalAPIClient:
         hl: str = "ru",
         cache_ttl: int = 1800
     ) -> Optional[List[dict]]:
-        """Универсальный поиск: DDG → Bing fallback."""
+        """Универсальный поиск: DDG API → DDG Lite → Bing → Google fallback."""
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
         results = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
         if not results:
+            results = await self.duckduckgo_lite_search(query, num=num, cache_ttl=cache_ttl)
+        if not results:
             results = await self.bing_search(query, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
+        if not results:
+            results = await self.google_html_search(query, num=num, region=hl, cache_ttl=cache_ttl)
         return results
 
     async def web_multi_search(
@@ -618,7 +752,7 @@ class ExternalAPIClient:
         hl: str = "ru",
         cache_ttl: int = 1800
     ) -> List[dict]:
-        """Последовательный поиск DDG → Bing fallback.
+        """Последовательный поиск DDG → DDG Lite → Bing → Google fallback.
         НАМЕРЕННО последовательный — parallel DDG вызывает rate limit 202.
         """
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
@@ -633,13 +767,17 @@ class ExternalAPIClient:
                     await asyncio.sleep(2.0)
 
             results = await self.duckduckgo_search(q, num=num_per_query, region=region, cache_ttl=cache_ttl)
-            # Fallback: DDG пустой → пробуем Bing
+            if not results:
+                results = await self.duckduckgo_lite_search(q, num=num_per_query, cache_ttl=cache_ttl)
             if not results:
                 logger.info(f"[WEB_MULTI] DDG empty for '{q[:50]}' → trying Bing")
                 results = await self.bing_search(q, num=num_per_query, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
+            if not results:
+                logger.info(f"[WEB_MULTI] Bing empty for '{q[:50]}' → trying Google")
+                results = await self.google_html_search(q, num=num_per_query, region=hl, cache_ttl=cache_ttl)
 
             if not results:
-                logger.warning(f"[WEB_MULTI] Both DDG and Bing empty for: '{q[:50]}'")
+                logger.warning(f"[WEB_MULTI] All engines empty for: '{q[:50]}'")
                 continue
             for r in results:
                 url = r.get('link', '')

@@ -5470,15 +5470,17 @@ class AnchorEngine:
                     hour=0, minute=0, second=0, microsecond=0
                 ).astimezone(timezone.utc)
                 live_campaign = session.query(EmailCampaign).filter_by(id=campaign_id).first()
-                if live_campaign:
-                    _sent_today_live = session.query(EmailOutreach).filter(
-                        EmailOutreach.campaign_id == campaign_id,
-                        EmailOutreach.sent_at >= _today_start_rem,
-                        EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-                    ).count()
-                    remaining = max(0, live_campaign.daily_limit - _sent_today_live)
-                else:
-                    remaining = anchor_data.get('remaining_daily', 5)
+                if not live_campaign:
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: campaign {campaign_id} deleted, skip")
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.flush()
+                    return
+                _sent_today_live = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id == campaign_id,
+                    EmailOutreach.sent_at >= _today_start_rem,
+                    EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                ).count()
+                remaining = max(0, live_campaign.daily_limit - _sent_today_live)
 
                 sent_count = 0
                 _owner_email = (getattr(user, 'email', '') or '').strip().lower()
