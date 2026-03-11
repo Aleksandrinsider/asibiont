@@ -4858,6 +4858,315 @@ try:
         print('  ' + v.get('profession','?') + ' — ' + sal_str)
 except Exception as e:
     print('Ошибка SuperJob: ' + str(e))`
+            },
+            aviasales: {
+                name: 'Aviasales (авиабилеты)',
+                fields: [
+                    {k:'AVIASALES_TOKEN', label:'API токен Aviasales', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Получите токен: travelpayouts.com → Разработчикам → API → Данные о ценах. Бесплатно после регистрации.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('AVIASALES_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', 'search')
+ORIGIN = os.environ.get('AGENT_PARAM_ORIGIN', 'MOW')
+DEST = os.environ.get('AGENT_PARAM_DESTINATION', '')
+try:
+    if DEST:
+        url = 'https://api.travelpayouts.com/aviasales/v3/prices_for_dates?origin=' + ORIGIN + '&destination=' + DEST + '&currency=rub&sorting=price&limit=5&token=' + TOKEN
+    else:
+        url = 'https://api.travelpayouts.com/aviasales/v3/get_latest_prices?origin=' + ORIGIN + '&currency=rub&period_type=month&limit=10&sorting=price&token=' + TOKEN
+    with urllib.request.urlopen(url, timeout=15) as r:
+        d = json.loads(r.read().decode())
+    tickets = d.get('data', [])
+    if not tickets:
+        print('Билетов не найдено по маршруту ' + ORIGIN + ' → ' + (DEST or 'все направления'))
+    else:
+        print('Авиабилеты из ' + ORIGIN + (' в ' + DEST if DEST else '') + ':')
+        for t in tickets[:10]:
+            dest = t.get('destination', '?')
+            price = t.get('value', t.get('price', '?'))
+            dep = t.get('departure_at', t.get('depart_date', ''))[:10]
+            airline = t.get('airline', '')
+            transfers = t.get('number_of_changes', t.get('transfers', 0))
+            tr_str = 'прямой' if transfers == 0 else str(transfers) + ' перес.'
+            print('  ' + dest + ' — ' + str(price) + ' руб., ' + dep + ', ' + tr_str + (', ' + airline if airline else ''))
+except Exception as e:
+    print('Ошибка Aviasales: ' + str(e))`
+            },
+            tutu: {
+                name: 'Tutu.ru (ЖД билеты)',
+                fields: [
+                    {k:'TUTU_API_KEY', label:'API ключ Tutu.ru', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Доступ к API по запросу: tutu.ru → Партнёрская программа или API для разработчиков.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('TUTU_API_KEY', '')
+ORIGIN = os.environ.get('AGENT_PARAM_ORIGIN', 'Москва')
+DEST = os.environ.get('AGENT_PARAM_DESTINATION', 'Санкт-Петербург')
+DATE = os.environ.get('AGENT_PARAM_DATE', '')
+try:
+    import urllib.parse
+    params = urllib.parse.urlencode({'from': ORIGIN, 'to': DEST, 'date': DATE})
+    url = 'https://suggest.travelpayouts.com/search?service=tutu_trains&term=' + urllib.parse.quote(DEST)
+    req = urllib.request.Request(url)
+    req.add_header('Accept', 'application/json')
+    with urllib.request.urlopen(req, timeout=15) as r:
+        d = json.loads(r.read().decode())
+    print('ЖД направление: ' + ORIGIN + ' → ' + DEST)
+    if DATE:
+        print('Дата: ' + DATE)
+    results = d if isinstance(d, list) else d.get('data', d.get('results', []))
+    if results:
+        for item in results[:5]:
+            name = item.get('name', item.get('title', str(item)))
+            print('  ' + str(name))
+    else:
+        print('  Рекомендуем проверить на tutu.ru для точного расписания и цен.')
+    print('Совет: точные цены и расписание доступны на tutu.ru/poezda/' + urllib.parse.quote(ORIGIN) + '/' + urllib.parse.quote(DEST))
+except Exception as e:
+    print('Ошибка ЖД: ' + str(e))`
+            },
+            flightradar: {
+                name: 'Flightradar24 (рейсы)',
+                fields: [
+                    {k:'FLIGHTRADAR_EMAIL', label:'Email аккаунта Flightradar24', ph:'you@example.com', t:'email'},
+                    {k:'FLIGHTRADAR_PASSWORD', label:'Пароль', ph:'••••••••', t:'password'}
+                ],
+                hint: 'Бесплатный аккаунт на flightradar24.com. Для базового отслеживания рейсов в реальном времени.',
+                code: `import urllib.request, json, os
+FLIGHT = os.environ.get('AGENT_PARAM_FLIGHT', '')
+try:
+    if not FLIGHT:
+        print('Укажи номер рейса (например SU1234 или AFL1234)')
+    else:
+        flight_clean = FLIGHT.strip().upper().replace(' ', '')
+        url = 'https://api.flightradar24.com/common/v1/search.json?query=' + flight_clean + '&limit=5'
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode())
+        results = d.get('results', [])
+        found = False
+        for item in results:
+            if item.get('type') == 'live':
+                det = item.get('detail', {})
+                print('Рейс ' + flight_clean + ':')
+                print('  Маршрут: ' + str(det.get('schd_from', '?')) + ' → ' + str(det.get('schd_to', '?')))
+                print('  Статус: ' + str(det.get('status', 'в полёте')))
+                lat = det.get('lat', '')
+                lon = det.get('lon', '')
+                alt = det.get('alt', '')
+                if lat and lon:
+                    print('  Координаты: ' + str(lat) + ', ' + str(lon) + (', высота ' + str(alt) + ' ft' if alt else ''))
+                found = True
+                break
+            elif item.get('type') == 'schedule':
+                det = item.get('detail', {})
+                print('Рейс ' + flight_clean + ' (расписание):')
+                print('  ' + str(det.get('route', item.get('label', '?'))))
+                found = True
+                break
+        if not found:
+            print('Рейс ' + flight_clean + ' не найден в текущих данных. Проверь номер рейса.')
+except Exception as e:
+    print('Ошибка Flightradar: ' + str(e))`
+            },
+            google_calendar: {
+                name: 'Google Calendar',
+                fields: [
+                    {k:'GOOGLE_CALENDAR_CREDENTIALS', label:'Google Service Account JSON (содержимое файла)', ph:'{"type":"service_account","project_id":"..."}', t:'text'},
+                    {k:'GOOGLE_CALENDAR_ID', label:'ID календаря', ph:'your-email@gmail.com', t:'text'}
+                ],
+                hint: 'Google Cloud Console → APIs → Calendar API → Service Account → скачать JSON ключ. Далите доступ сервис-аккаунту к вашему календарю.',
+                code: `import urllib.request, json, os, datetime
+CREDS_JSON = os.environ.get('GOOGLE_CALENDAR_CREDENTIALS', '')
+CAL_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'primary')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+try:
+    import base64, hashlib, hmac, time as _time
+    creds = json.loads(CREDS_JSON)
+    # Build JWT for service account
+    iat = int(_time.time())
+    exp = iat + 3600
+    header = base64.urlsafe_b64encode(json.dumps({"alg":"RS256","typ":"JWT"}).encode()).rstrip(b'=').decode()
+    payload = base64.urlsafe_b64encode(json.dumps({"iss":creds["client_email"],"scope":"https://www.googleapis.com/auth/calendar","aud":"https://oauth2.googleapis.com/token","iat":iat,"exp":exp}).encode()).rstrip(b'=').decode()
+    # Sign with private key
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    key = serialization.load_pem_private_key(creds["private_key"].encode(), password=None)
+    sig_input = (header + '.' + payload).encode()
+    sig = base64.urlsafe_b64encode(key.sign(sig_input, padding.PKCS1v15(), hashes.SHA256())).rstrip(b'=').decode()
+    jwt_token = header + '.' + payload + '.' + sig
+    # Exchange JWT for access token
+    token_data = json.dumps({"grant_type":"urn:ietf:params:oauth:grant-type:jwt-bearer","assertion":jwt_token}).encode()
+    req = urllib.request.Request('https://oauth2.googleapis.com/token', data=token_data, headers={'Content-Type':'application/json'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        token_resp = json.loads(r.read().decode())
+    access_token = token_resp['access_token']
+    # List events
+    now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    url = 'https://www.googleapis.com/calendar/v3/calendars/' + CAL_ID + '/events?timeMin=' + now + '&maxResults=10&singleEvents=true&orderBy=startTime'
+    req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + access_token})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        events = json.loads(r.read().decode())
+    items = events.get('items', [])
+    if not items:
+        print('Нет предстоящих событий в календаре.')
+    else:
+        print('Ближайшие события:')
+        for ev in items:
+            start = ev['start'].get('dateTime', ev['start'].get('date', ''))
+            print('  ' + start[:16].replace('T', ' ') + ' — ' + ev.get('summary', '(без названия)'))
+except Exception as e:
+    print('Ошибка Google Calendar: ' + str(e))`
+            },
+            tinkoff: {
+                name: 'Тинькофф Инвестиции',
+                fields: [
+                    {k:'TINKOFF_INVEST_TOKEN', label:'Токен Tinkoff Invest API', ph:'t.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Тинькофф → Инвестиции → Настройки → Токен OpenAPI. Выберите песочницу для тестов или боевой для реальных данных.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('TINKOFF_INVEST_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', 'portfolio')
+try:
+    hdrs = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}
+    if ACTION == 'portfolio':
+        req = urllib.request.Request('https://invest-public-api.tinkoff.ru/rest/tinkoff.public.invest.api.contract.v1.OperationsService/GetPortfolio', data=json.dumps({"accountId":"","currency":"RUB"}).encode(), headers=hdrs)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode())
+        total = d.get('totalAmountPortfolio', {})
+        print('Портфель: ' + str(total.get('units', '?')) + '.' + str(total.get('nano', 0))[:2] + ' ' + total.get('currency', 'RUB'))
+        positions = d.get('positions', [])
+        for p in positions[:10]:
+            name = p.get('name', p.get('figi', '?'))
+            qty = p.get('quantity', {}).get('units', '?')
+            avg = p.get('averagePositionPrice', {})
+            cur_p = p.get('currentPrice', {})
+            print('  ' + str(name) + ': ' + str(qty) + ' шт., цена ' + str(cur_p.get('units', '?')) + ' ' + str(cur_p.get('currency', '')))
+    else:
+        req = urllib.request.Request('https://invest-public-api.tinkoff.ru/rest/tinkoff.public.invest.api.contract.v1.UsersService/GetAccounts', data=b'{}', headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        accounts = d.get('accounts', [])
+        print('Аккаунты Тинькофф (' + str(len(accounts)) + '):')
+        for a in accounts:
+            print('  ' + a.get('name', '?') + ' (ID: ' + a.get('id', '?') + ', тип: ' + a.get('type', '?') + ')')
+except Exception as e:
+    print('Ошибка Тинькофф: ' + str(e))`
+            },
+            cdek: {
+                name: 'СДЭК (доставка)',
+                fields: [
+                    {k:'CDEK_CLIENT_ID', label:'Client ID СДЭК API', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'CDEK_CLIENT_SECRET', label:'Client Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'}
+                ],
+                hint: 'Личный кабинет СДЭК → Интеграция → API ключи. Или lk.cdek.ru/integration.',
+                code: `import urllib.request, json, os
+CLIENT_ID = os.environ.get('CDEK_CLIENT_ID', '')
+CLIENT_SECRET = os.environ.get('CDEK_CLIENT_SECRET', '')
+TRACKING = os.environ.get('AGENT_PARAM_TRACKING', '')
+try:
+    # Auth
+    auth_data = 'grant_type=client_credentials&client_id=' + CLIENT_ID + '&client_secret=' + CLIENT_SECRET
+    req = urllib.request.Request('https://api.cdek.ru/v2/oauth/token', data=auth_data.encode(), headers={'Content-Type': 'application/x-www-form-urlencoded'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        token = json.loads(r.read().decode()).get('access_token', '')
+    hdrs = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}
+    if TRACKING:
+        req = urllib.request.Request('https://api.cdek.ru/v2/orders?cdek_number=' + TRACKING, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode())
+        orders = d.get('entity', d) if isinstance(d, dict) else d
+        if isinstance(orders, list) and orders:
+            orders = orders[0]
+        if isinstance(orders, dict):
+            status = orders.get('statuses', [{}])[-1] if orders.get('statuses') else {}
+            print('Посылка СДЭК ' + TRACKING + ':')
+            print('  Статус: ' + status.get('name', '?'))
+            print('  Дата: ' + status.get('date_time', '?')[:16])
+            print('  Откуда: ' + str(orders.get('from_location', {}).get('city', '?')))
+            print('  Куда: ' + str(orders.get('to_location', {}).get('city', '?')))
+        else:
+            print('Посылка ' + TRACKING + ' не найдена.')
+    else:
+        print('Укажи трек-номер СДЭК для отслеживания.')
+except Exception as e:
+    print('Ошибка СДЭК: ' + str(e))`
+            },
+            whatsapp: {
+                name: 'WhatsApp Business',
+                fields: [
+                    {k:'WHATSAPP_TOKEN', label:'Токен WhatsApp Business API', ph:'EAAxxxxxxx...', t:'text'},
+                    {k:'WHATSAPP_PHONE_ID', label:'Phone Number ID', ph:'1234567890', t:'text'}
+                ],
+                hint: 'Meta for Developers → WhatsApp → Getting Started. Нужен бизнес-аккаунт Facebook/Meta.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('WHATSAPP_TOKEN', '')
+PHONE_ID = os.environ.get('WHATSAPP_PHONE_ID', '')
+ACTION = os.environ.get('AGENT_ACTION', 'send')
+TO = os.environ.get('AGENT_PARAM_TO', '')
+TEXT = os.environ.get('AGENT_PARAM_TEXT', '')
+try:
+    if ACTION == 'send' and TO and TEXT:
+        to_clean = TO.strip().replace('+', '').replace(' ', '').replace('-', '')
+        data = json.dumps({
+            "messaging_product": "whatsapp",
+            "to": to_clean,
+            "type": "text",
+            "text": {"body": TEXT}
+        }).encode()
+        req = urllib.request.Request(
+            'https://graph.facebook.com/v18.0/' + PHONE_ID + '/messages',
+            data=data,
+            headers={'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.loads(r.read().decode())
+        msg_id = resp.get('messages', [{}])[0].get('id', '?')
+        print('WhatsApp: сообщение отправлено на ' + TO + ' (id: ' + msg_id + ')')
+    else:
+        print('WhatsApp Business API подключён. Для отправки укажи номер (to) и текст (text).')
+        print('Формат номера: 79001234567 (без + и пробелов)')
+except Exception as e:
+    print('Ошибка WhatsApp: ' + str(e))`
+            },
+            onec: {
+                name: '1С (через REST API)',
+                fields: [
+                    {k:'ONEC_URL', label:'URL HTTP-сервиса 1С', ph:'http://server:8080/api/hs/exchange', t:'url'},
+                    {k:'ONEC_USER', label:'Логин 1С', ph:'admin', t:'text'},
+                    {k:'ONEC_PASSWORD', label:'Пароль 1С', ph:'••••••••', t:'password'}
+                ],
+                hint: 'В 1С настройте HTTP-сервис (публикацию). URL = адрес вашего сервера 1С + путь к HTTP-сервису.',
+                code: `import urllib.request, json, os, base64
+URL = os.environ.get('ONEC_URL', '')
+USER = os.environ.get('ONEC_USER', '')
+PASS = os.environ.get('ONEC_PASSWORD', '')
+ACTION = os.environ.get('AGENT_ACTION', 'status')
+try:
+    auth = base64.b64encode((USER + ':' + PASS).encode()).decode()
+    hdrs = {'Authorization': 'Basic ' + auth, 'Content-Type': 'application/json', 'Accept': 'application/json'}
+    if ACTION == 'status':
+        req = urllib.request.Request(URL, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode())
+        print('1С подключена:')
+        if isinstance(d, dict):
+            for k, v in list(d.items())[:10]:
+                print('  ' + str(k) + ': ' + str(v)[:100])
+        elif isinstance(d, list):
+            print('  Записей: ' + str(len(d)))
+            for item in d[:5]:
+                print('  ' + str(item)[:150])
+    else:
+        data = json.dumps({"action": ACTION}).encode()
+        req = urllib.request.Request(URL, data=data, headers=hdrs, method='POST')
+        with urllib.request.urlopen(req, timeout=20) as r:
+            d = json.loads(r.read().decode())
+        print('1С ответ: ' + json.dumps(d, ensure_ascii=False)[:500])
+except Exception as e:
+    print('Ошибка 1С: ' + str(e))`
             }
         };
 
