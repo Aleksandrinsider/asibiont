@@ -494,16 +494,20 @@ class HybridAutonomousAgent:
 
     # ===== TOKEN BUDGET =====
 
-    # Максимальный бюджет в символах (~9000 токенов для рус. текста, ratio ~3 chars/token)
-    MAX_PROMPT_CHARS = 27000  # ~9000 tokens (matched to pre-growth prompt size)
-    MAX_HISTORY_CHARS = 8000  # ~2700 tokens для истории
+    # Бюджет символов по тарифу (~3 chars/token для русского текста)
+    # LIGHT: экономим — меньше истории, агрессивнее обрезаем дальний контекст
+    # ULTIMATE: щедрее — больше памяти и истории для тяжёлых задач
+    _TIER_PROMPT_CHARS  = {'LIGHT': 20000, 'PRO': 27000, 'BUSINESS': 33000, 'ULTIMATE': 40000}
+    _TIER_HISTORY_CHARS = {'LIGHT': 4500,  'PRO': 7000,  'BUSINESS': 10000, 'ULTIMATE': 14000}
+    MAX_PROMPT_CHARS  = 27000   # fallback (неизвестный тариф)
+    MAX_HISTORY_CHARS = 7000    # fallback
 
     @staticmethod
     def _estimate_tokens(text):
         """Грубая оценка кол-ва токенов для русского текста (~3 chars/token)."""
         return len(text) // 3 if text else 0
 
-    def _trim_prompt_to_budget(self, base_prompt, history):
+    def _trim_prompt_to_budget(self, base_prompt, history, sub_tier: str = 'PRO'):
         """Обрезает системный промпт и историю до бюджета токенов.
         
         Приоритет сохранения (от высшего к низшему):
@@ -518,20 +522,23 @@ class HybridAutonomousAgent:
         Returns:
             (trimmed_prompt: str, trimmed_history: list)
         """
+        _max_prompt  = self._TIER_PROMPT_CHARS.get(sub_tier, self.MAX_PROMPT_CHARS)
+        _max_history = self._TIER_HISTORY_CHARS.get(sub_tier, self.MAX_HISTORY_CHARS)
+
         prompt_chars = len(base_prompt)
         history_chars = sum(len(m.get('content', '')) for m in history)
         total = prompt_chars + history_chars
         
-        if total <= self.MAX_PROMPT_CHARS:
+        if total <= _max_prompt:
             return base_prompt, history  # Всё влезает
         
-        overflow = total - self.MAX_PROMPT_CHARS
+        overflow = total - _max_prompt
         trimmed = 0
-        logger.info(f"[TOKEN_BUDGET] Over budget by ~{overflow // 3} tokens "
+        logger.info(f"[TOKEN_BUDGET] tier={sub_tier} over by ~{overflow // 3} tokens "
                     f"({prompt_chars} prompt + {history_chars} history chars)")
         
         # 1. Обрезаем историю — оставляем последние 4 сообщения
-        if len(history) > 4 and history_chars > self.MAX_HISTORY_CHARS:
+        if len(history) > 4 and history_chars > _max_history:
             old_len = len(history)
             # Сжимаем старые сообщения: оставляем последние 4
             keep = history[-4:]
@@ -1489,7 +1496,7 @@ class HybridAutonomousAgent:
                 history = full_history
 
             # ═══ TOKEN BUDGET — обрезаем если превышен лимит ═══
-            base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
+            base_prompt, history = self._trim_prompt_to_budget(base_prompt, history, sub_tier=sub_tier or 'PRO')
 
             # Инжектируем личность кастомного агента (если активен)
             self._active_agent_data.pop(user_id, None)  # сбрасываем перед каждым запросом
@@ -3648,6 +3655,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         ))
     )
 
+    # Адаптивный хинт об интеграциях ЭТОГО конкретного агента
+    _intg_hint: list = []
+    try:
+        _intg_hint = _parse_agent_integrations(
+            agent.get('user_api_keys', '') or '',
+            agent.get('python_code', '') or '',
+            agent.get('tools_allowed', '') or '',
+        )
+    except Exception:
+        pass
+    _intg_line = (
+        f"\nТвои подключённые интеграции (run_agent_action): {', '.join(_intg_hint[:8])}"
+        if _intg_hint else
+        ""  # агент без внешних API — не упоминаем run_agent_action
+    )
+
     if _is_autopilot_task:
         # ── Autopilot: thinking-first, не заготовки ──
         system_prompt = (
@@ -3655,31 +3678,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"Пиши от имени {agent['name']}.\n\n"
 
             "КАК ТЫ ДУМАЕШЬ (перед каждым действием — анализ):\n"
-            "— СИТУАЦИЯ: какой реальный статус цели? Сколько сделано, что работает, что застряло?\n"
-            "— ИСТОРИЯ: что делалось в последних 2-3 циклах? Что НЕЛЬЗЯ повторять?\n"
-            "— СЛЕПЫЕ ЗОНЫ: какой канал или аудитория ещё не пробовались? Где упущенная возможность?\n"
-            "— РЫЧАГ: где минимум усилий даст максимум результата прямо сейчас? Email уже был → попробуй нетворкинг или контент.\n"
-            "— ИНВЕРСИЯ: что гарантированно НЕ продвинет цель? Обходи это.\n"
-            "— ДЕЙСТВИЕ: что можно СДЕЛАТЬ инструментом прямо сейчас — не запланировать, а выполнить?\n\n"
+            "— СИТУАЦИЯ: статус цели? Что сделано, что застряло?\n"
+            "— ИСТОРИЯ: 2-3 последних цикла — что НЕЛЬЗЯ повторять?\n"
+            "— СЛЕПЫЕ ЗОНЫ: какой канал / аудитория ещё не пробовались?\n"
+            "— РЫЧАГ: минимум усилий — максимум результата прямо сейчас.\n"
+            "— ИНВЕРСИЯ: что гарантированно НЕ продвинет? Обходи.\n"
+            "— ДЕЙСТВИЕ: что выполнить инструментом прямо сейчас?\n\n"
 
-            "СВЕРХИНТЕЛЛЕКТ:\n"
-            "Динамика: email послан — отклика нет → смени канал, не шли ещё один. 2+ раза одно действие без результата → СТОП, ищи другое.\n"
-            "Рычаги: find_and_message_relevant_users находит людей прямо на платформе — часто быстрее email. "
-            "get_news_trends даёт свежий контент без зависания DDG. research_topic открывает новые аудитории.\n"
-            "Адаптация: тот же подход дважды без результата = смени стратегию. Не упорствуй в том, что не работает.\n\n"
+            "АДАПТАЦИЯ: одно действие без результата → смени канал. "
+            "Email не отвечают → попробуй контент или нетворкинг. "
+            "Тот же подход дважды = смени стратегию.\n\n"
 
-            "ПОЛНЫЙ АРСЕНАЛ — выбирай любое исходя из анализа истории, НЕ по порядку:\n"
-            "  Аутрич/email: send_outreach_email, send_follow_up_email, send_email, negotiate_by_email, reply_to_outreach_email\n"
-            "  Поиск людей: find_and_message_relevant_users, find_relevant_contacts_for_task, save_email_contact, list_email_contacts, find_partners\n"
-            "  Контент: create_post, publish_to_telegram, publish_to_discord, generate_image, generate_marketing_content, set_content_strategy\n"
-            "  Кампании: start_content_campaign, start_delegation_campaign, manage_content_campaign, manage_delegation_campaign\n"
-            "  Исследования: research_topic, get_news_trends, web_search, quick_topic_search, research_and_plan, analyze_group_opportunities, analyze_situation_and_suggest_tasks\n"
-            "  Делегирование: delegate_task, get_delegation_progress, cancel_delegation\n"
-            "  Задачи/план: add_task, list_tasks, reschedule_task, check_time_conflicts\n"
-            "  Прогресс: update_goal_progress, complete_goal, update_goal, list_goals, create_goal\n"
-            "  Платформа ASI: send_message_to_user, list_marketplace, switch_agent, get_incoming_messages, reply_to_user_message\n"
-            "  Интеграции: run_agent_action (Gmail, Slack, Notion, GitHub, Ozon, Wildberries, Jira, Bitrix24, AmoCRM, HubSpot, Trello, Airtable, Google Sheets, PostgreSQL, Redis, AWS S3, RSS, Calendly, Twilio, Firebase, CoinGecko, YouTube, OpenAI, Gemini, USDT, HTTP API и 30+)\n"
-            "Комбинируй: research_topic → create_post → publish_to_telegram. Или: find_partners → negotiate_by_email. Или: analyze_group_opportunities → start_delegation_campaign.\n\n"
+            # Инструменты уже известны модели из JSON-схемы API — не дублируем весь список.
+            # Показываем только что относится к ЭТОМУ агенту.
+            f"ДОСТУПНЫЕ КАТЕГОРИИ ИНСТРУМЕНТОВ: аутрич/email · поиск людей · контент публикации · "
+            f"кампании · исследования/тренды · делегирование · задачи · прогресс цели · платформа ASI"
+            f"{_intg_line}\n\n"
 
             "ЗАПРЕЩЕНО называть инструменты в тексте ответа. Пиши естественно: «написал в Telegram», «нашёл контакты», «опубликовал пост».\n"
             "ЗАПРЕЩЕНО маркеры, CAPS-ЗАГОЛОВКИ, списки. Сплошной текст, 2 абзаца, до 400 символов.\n"

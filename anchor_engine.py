@@ -1062,18 +1062,12 @@ class AnchorEngine:
                             f"Редко используемые типы: {', '.join(_rare_types[:3])} — предпочти их остальным."
                         )
                     _div_parts.append(
-                        "Полный арсенал — AI сам выбирает лучшее:\n"
-                        "  📨 Аутрич/email: send_outreach_email, send_follow_up_email, send_email, negotiate_by_email, reply_to_outreach_email\n"
-                        "  👥 Люди/сеть: find_and_message_relevant_users, find_relevant_contacts_for_task, save_email_contact, find_partners, list_email_contacts\n"
-                        "  📢 Контент: create_post, publish_to_telegram, publish_to_discord, generate_image, generate_marketing_content, set_content_strategy\n"
-                        "  🚀 Кампании: start_content_campaign, start_delegation_campaign, manage_content_campaign, manage_delegation_campaign\n"
-                        "  🔬 Исследования: research_topic, get_news_trends, web_search, quick_topic_search, research_and_plan, analyze_group_opportunities, analyze_situation_and_suggest_tasks\n"
-                        "  👔 Делегирование: delegate_task, get_delegation_progress, cancel_delegation\n"
-                        "  📋 Задачи: add_task, list_tasks, reschedule_task, check_time_conflicts\n"
-                        "  🎯 Прогресс: update_goal_progress, complete_goal, update_goal, list_goals, create_goal\n"
-                        "  🤝 Платформа: send_message_to_user, list_marketplace, switch_agent, get_incoming_messages\n"
-                        "  🔌 Интеграции: run_agent_action → Gmail, Slack, Notion, GitHub, Ozon, Wildberries, Jira, Bitrix24, AmoCRM, HubSpot, Trello, Airtable, Google Sheets, PostgreSQL, Redis, AWS S3, RSS, Calendly, Twilio, Firebase, CoinGecko, YouTube, OpenAI, Gemini, USDT, HTTP API и 30+\n"
-                        "Комбинируй по смыслу: research_topic → start_content_campaign. find_partners → negotiate_by_email. analyze_group_opportunities → delegate_task. Свободно."
+                        # Не дублируем список инструментов — они уже в JSON-схеме API.
+                        # Даём только стратегическую ориентацию.
+                        "Категории для выбора: аутрич/email · поиск людей · контент · "
+                        "кампании · исследования · делегирование · задачи · прогресс · "
+                        "платформа ASI · интеграции (run_agent_action если подключены).\n"
+                        "Выбирай свободно, комбинируй по смыслу ситуации."
                     )
                     task_text += '\n'.join(_div_parts)
 
