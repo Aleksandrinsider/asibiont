@@ -542,6 +542,66 @@ class ExternalAPIClient:
             logger.warning(f"[DDG] Error: {e}")
             return None
 
+    async def bing_search(
+        self,
+        query: str,
+        num: int = 10,
+        region: str = "ru-RU",
+        cache_ttl: int = 1800,
+    ) -> Optional[List[dict]]:
+        """Поиск через Bing HTML (без API ключа, как fallback для DDG)."""
+        import re as _re_bing
+        cache_params = {'q': query, 'num': num, 'region': region, 'engine': 'bing_html'}
+        cached = await self.cache.get('ddg', cache_params)
+        if cached is not None:
+            return cached
+        try:
+            s = await self._get_session()
+            _lang = region.split('-')[0] if '-' in region else 'ru'
+            _headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                              '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept-Language': f'{_lang},{_lang}-{_lang.upper()};q=0.9,en;q=0.8',
+                'Accept': 'text/html,application/xhtml+xml',
+            }
+            _q_enc = query.replace(' ', '+')
+            _count = min(num, 20)
+            _url = f'https://www.bing.com/search?q={_q_enc}&count={_count}&setlang={_lang}'
+            async with s.get(
+                _url, headers=_headers,
+                timeout=aiohttp.ClientTimeout(total=12),
+                ssl=False, allow_redirects=True,
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                html = await resp.text(errors='replace')
+
+            results = []
+            # Extract <li class="b_algo"> blocks
+            _blocks = _re_bing.findall(
+                r'<li[^>]+class="[^"]*b_algo[^"]*"[^>]*>(.*?)</li>',
+                html, _re_bing.DOTALL
+            )
+            for block in _blocks[:num]:
+                # Title + URL from <h2><a href="...">...</a></h2>
+                _link_m = _re_bing.search(r'<a[^>]+href="(https?://[^"]+)"[^>]*>(.*?)</a>', block, _re_bing.DOTALL)
+                _snippet_m = _re_bing.search(r'<p[^>]*>(.*?)</p>', block, _re_bing.DOTALL)
+                if not _link_m:
+                    continue
+                _link = _link_m.group(1)
+                _title = _re_bing.sub(r'<[^>]+>', '', _link_m.group(2)).strip()
+                _snippet = _re_bing.sub(r'<[^>]+>', '', _snippet_m.group(1)).strip() if _snippet_m else ''
+                if _link and not _link.startswith('https://www.bing.com'):
+                    results.append({'title': _title, 'snippet': _snippet, 'link': _link})
+
+            if results:
+                await self.cache.set('ddg', cache_params, results, cache_ttl)
+                logger.info(f"[BING] Found {len(results)} results for: {query[:60]}")
+            return results or None
+        except Exception as e:
+            logger.warning(f"[BING] Search error: {e}")
+            return None
+
     async def web_search(
         self,
         query: str,
@@ -550,13 +610,12 @@ class ExternalAPIClient:
         hl: str = "ru",
         cache_ttl: int = 1800
     ) -> Optional[List[dict]]:
-        """
-        Универсальный поиск через DuckDuckGo.
-        """
+        """Универсальный поиск: DDG → Bing fallback."""
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
-        return await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
-
-
+        results = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
+        if not results:
+            results = await self.bing_search(query, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
+        return results
 
     async def web_multi_search(
         self,
@@ -566,27 +625,28 @@ class ExternalAPIClient:
         hl: str = "ru",
         cache_ttl: int = 1800
     ) -> List[dict]:
-        """
-        Последовательный поиск через DuckDuckGo с задержкой между запросами.
+        """Последовательный поиск DDG → Bing fallback.
         НАМЕРЕННО последовательный — parallel DDG вызывает rate limit 202.
-        Запросы, результаты которых уже в кэше, выполняются мгновенно.
         """
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
         seen_urls: set = set()
         all_results: List[dict] = []
 
         for i, q in enumerate(queries):
-            # Небольшая пауза между запросами (кроме первого) если нет кэша
             if i > 0:
                 cache_params = {'q': q, 'num': num_per_query, 'region': region, 'engine': 'ddg'}
                 cached = await self.cache.get('ddg', cache_params)
                 if cached is None:
-                    await asyncio.sleep(2.0)  # пауза только для некэшированных
+                    await asyncio.sleep(2.0)
 
             results = await self.duckduckgo_search(q, num=num_per_query, region=region, cache_ttl=cache_ttl)
+            # Fallback: DDG пустой → пробуем Bing
+            if not results:
+                logger.info(f"[WEB_MULTI] DDG empty for '{q[:50]}' → trying Bing")
+                results = await self.bing_search(q, num=num_per_query, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
 
             if not results:
-                logger.warning(f"[WEB_MULTI] Query '{q}' returned no results")
+                logger.warning(f"[WEB_MULTI] Both DDG and Bing empty for: '{q[:50]}'")
                 continue
             for r in results:
                 url = r.get('link', '')

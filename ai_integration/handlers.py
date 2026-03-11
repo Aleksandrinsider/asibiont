@@ -9689,15 +9689,42 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             f'https://hackernoon.com/search?query={_core_en}',
             f'https://github.com/search?q={_core_en}+in%3Areadme+email&type=repositories',
             f'https://medium.com/search?q={_core_en}',
-            # GitHub Pages — личные сайты разработчиков, часто содержат email
             f'https://github.com/search?q={_core_en}+email&type=users',
         ])
         if _has_cyrillic:
             _platform_urls.extend([
                 f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
                 f'https://tproger.ru/?s={_kw_enc}',
-                # Карьерные профили с контактами
                 f'https://career.habr.com/resumes?q={_kw_enc}',
+            ])
+    else:
+        # Нетеховая аудитория: фрилансеры, спецы, коучи, маркетологи и т.д.
+        # Эти платформы публикуют профили с контактами без авторизации
+        if _has_cyrillic:
+            _platform_urls.extend([
+                # Фриланс-биржи — профили ОТКРЫТЫ, специалисты хотят быть найденными
+                f'https://www.fl.ru/users/?skills={_kw_enc}',
+                f'https://kwork.ru/search?query={_kw_enc}&type=seller',
+                f'https://freelancehunt.com/freelancers/?search={_kw_enc}',
+                # Специалисты по направлениям
+                f'https://profi.ru/search/?q={_kw_enc}',
+                f'https://www.b17.ru/specialists/?q={_kw_enc}',
+                f'https://youdo.com/tasks/search/?search={_kw_enc}',
+                # Деловая аудитория / предприниматели
+                f'https://spark.ru/startup/search?q={_kw_enc}',
+                f'https://vc.ru/search?q={_kw_enc}',
+                f'https://tenchat.ru/search?q={_kw_enc}',
+            ])
+        else:
+            _platform_urls.extend([
+                f'https://www.upwork.com/search/profiles/?q={_core_en}',
+                f'https://www.freelancer.com/search/users/?q={_core_en}',
+                f'https://about.me/search?q={_core_en}',
+                f'https://clarity.fm/search?query={_core_en}',
+                f'https://bark.com/professionals/{_core_en.replace("+", "-")}/',
+                f'https://www.thumbtack.com/search/?q={_core_en}',
+                f'https://medium.com/search?q={_core_en}',
+                f'https://substack.com/search/{_core_en}',
             ])
 
     # AI генерирует нишевые платформы — знает язык, страну, профессию
