@@ -4664,59 +4664,25 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             pass
     _history_block = ('\n\nПОСЛЕДНИЕ СООБЩЕНИЯ:\n' + '\n'.join(_history_lines)) if _history_lines else ''
 
-    # ── Строим контекст агентов с якорной памятью ─────────────────────────────
-    agents_context_lines = []
-    agent_anchor_map: dict[str, list] = {}  # agent_name → anchors
-
-    for a in _agents:
-        anchors = _get_agent_anchors(user_db_id, a['id']) if user_db_id else []
-        agent_anchor_map[a['name']] = anchors
-
-        # Интеграции агента — что он РЕАЛЬНО умеет делать
-        _intg: list[str] = []
+    # ── Кешируем возможности агентов (один раз, используется в двух местах) ──────
+    _agent_caps_cache: dict[str, list[str]] = {}
+    for _a in _agents:
         try:
-            _intg = _parse_agent_integrations(
-                a.get('user_api_keys') or '',
-                a.get('python_code') or '',
-                a.get('tools_allowed') or '',
-                a.get('search_scope') or '',
+            _ci = _parse_agent_integrations(
+                _a.get('user_api_keys') or '',
+                _a.get('python_code') or '',
+                _a.get('tools_allowed') or '',
+                _a.get('search_scope') or '',
             )
         except Exception:
-            pass
-        # Если нет технических интеграций — выводим возможности из роли/специализации
-        if not _intg:
-            _intg = _infer_capabilities_from_role(
-                a.get('job_title') or '',
-                a.get('specialization') or '',
-                a.get('description') or '',
+            _ci = []
+        if not _ci:
+            _ci = _infer_capabilities_from_role(
+                _a.get('job_title') or '',
+                _a.get('specialization') or '',
+                _a.get('description') or '',
             )
-        _intg_str = f"\n  Может: {', '.join(_intg[:8])}"
-
-        _base = (
-            f"- {a['name']} [{a.get('job_title', '')}] ({a.get('specialization', 'агент')}): "
-            f"{(a.get('description') or '')[:300]}"
-            f"{_intg_str}"
-        )
-
-        if anchors:
-            last = anchors[0]
-            age_h = last['age_min'] // 60
-            age_m = last['age_min'] % 60
-            age_str = f"{age_h}ч {age_m}мин назад" if age_h else f"{age_m}мин назад"
-            cached_result = last['data'].get('result_summary', '')[:150]
-            agents_context_lines.append(
-                _base
-                + f"\n  [Последняя работа {age_str}: {last['topic']}"
-                + (f". Результат: {cached_result}" if cached_result else "")
-                + "]"
-            )
-        else:
-            agents_context_lines.append(
-                _base
-                + f"\n  [Доступен]"
-            )
-
-    agents_block = "\n".join(agents_context_lines)
+        _agent_caps_cache[_a['name']] = _ci
 
     # ── Вспомогательная функция поиска агента по имени ────────────────────────
     def _find_agent(name: str):
@@ -4931,22 +4897,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         # Строим компактный список агентов: имя | должность | специализация | умеет
         _agent_caps_lines = []
         for _ac_a in _agents:
-            _ac_intg = []
-            try:
-                _ac_intg = _parse_agent_integrations(
-                    _ac_a.get('user_api_keys') or '',
-                    _ac_a.get('python_code') or '',
-                    _ac_a.get('tools_allowed') or '',
-                    _ac_a.get('search_scope') or '',
-                )
-            except Exception:
-                pass
-            if not _ac_intg:
-                _ac_intg = _infer_capabilities_from_role(
-                    _ac_a.get('job_title') or '',
-                    _ac_a.get('specialization') or '',
-                    _ac_a.get('description') or '',
-                )
+            _ac_intg = _agent_caps_cache.get(_ac_a['name'], [])
             _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
             _ac_desc = (_ac_a.get('description') or '')[:60]
             _ac_tools = (_ac_a.get('tools_allowed') or '').strip()
@@ -5172,11 +5123,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         )
 
         # Собираем все инструменты которые агент вызвал за все раунды
-        _all_agent_tools = []
-        for _rh in _round_history:
-            _all_agent_tools.extend(_rh.get('tools_used', []))
-        _all_agent_tools = list(dict.fromkeys(_all_agent_tools))  # unique, ordered
-        _agent_tools_str = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
+        _all_agent_tools = list(dict.fromkeys(
+            t for _rh in _round_history for t in _rh.get('tools_used', [])
+        ))
 
         _review_prompt = (
             f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты платформы — ВСЕ те же что у агентов:\n"
@@ -5187,7 +5136,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             f"Пользователь попросил: {user_message[:300]}\n\n"
             f"ИСТОРИЯ РАБОТЫ С АГЕНТОМ {_agent_name_d}:\n{_rounds_summary}\n\n"
             f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n"
-            f"Инструменты агента за все раунды: {_agent_tools_str}\n\n"
+            f"Инструменты агента за все раунды: {', '.join(_all_agent_tools) if _all_agent_tools else 'нет'}\n\n"
             f"ЦЕПОЧКА ПО СПОСОБНОСТЯМ — универсальный принцип:\n"
             f"Агент ПОДГОТАВЛИВАЕТ (текст, данные, контент, план, контакты) → ТЫ ДЕЙСТВУЕШЬ.\n"
             f"Примеры:\n"
