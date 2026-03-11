@@ -1023,6 +1023,45 @@ class AnchorEngine:
                     + '\n'.join(f"  {a}" for a in recent_actions)
                 )
 
+            # ── ДИВЕРСИФИКАЦИЯ: трекинг типов действий → принудительная ротация стратегий ──
+            # Суть: «написал email Ивану» и «написал email Марку» — ОДИН ТИП (email-аутрич).
+            # Без этого блока модель смотрит на разные строки и не видит зацикливания на типе.
+            _action_types = data.get('action_type_counts', {})
+            if _action_types:
+                _all_ap_types = [
+                    'email-аутрич', 'поиск людей', 'публикация контента',
+                    'исследование', 'создание задач', 'обновление прогресса',
+                ]
+                _overused = sorted(_action_types.items(), key=lambda x: -x[1])
+                _overused_names = [t for t, c in _overused if c >= 2]
+                _fresh_types = [t for t in _all_ap_types if t not in _action_types]
+                _rare_types = [t for t in _all_ap_types if _action_types.get(t, 0) <= 1 and t not in _overused_names]
+                if _overused_names or _fresh_types:
+                    _div_parts = [f"\n\n🔄 ДИВЕРСИФИКАЦИЯ — типы действий за 24ч: {dict(_overused[:5])}"]
+                    if _overused_names:
+                        _div_parts.append(
+                            f"Перегружен тип: {', '.join(_overused_names[:2])} — ЗАПРЕЩЕНО делать снова, "
+                            f"даже если кажется логичным."
+                        )
+                    if _fresh_types:
+                        _div_parts.append(
+                            f"Ещё НЕ пробовал сегодня: {', '.join(_fresh_types[:3])} — ОБЯЗАТЕЛЬНО выбери один из них."
+                        )
+                    elif _rare_types:
+                        _div_parts.append(
+                            f"Редко используемые типы: {', '.join(_rare_types[:3])} — предпочти их остальным."
+                        )
+                    _div_parts.append(
+                        "Меню типов и инструментов:\n"
+                        "  email-аутрич → send_outreach_email, email_campaign\n"
+                        "  поиск людей → find_and_message_relevant_users, find_relevant_contacts_for_task\n"
+                        "  публикация контента → create_post, publish_to_telegram, discord_post\n"
+                        "  исследование → research_topic, get_news_trends\n"
+                        "  создание задач → add_task (конкретный план шагов)\n"
+                        "  обновление прогресса → update_goal_progress"
+                    )
+                    task_text += '\n'.join(_div_parts)
+
             # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
             recent_msgs = data.get('recent_messages', [])
             if recent_msgs:
@@ -3045,6 +3084,31 @@ class AnchorEngine:
                 + (f" → {(a.result or '')[:200]}" if a.result else '')
             )
 
+        # ── Классификация ТИПОВ действий для diversity-трекинга ──
+        # Проблема: агенты видят «написал email Ивану» и «написал email Марку» как РАЗНЫЕ действия
+        # и продолжают слать email, не понимая что это ОДИН ТИП (email-аутрич).
+        # Решение: явно считаем типы → передаём в контекст → модель видит паттерн зацикливания.
+        def _classify_ap_action_type(title: str, result: str) -> str:
+            text = f"{title} {result}".lower()
+            if any(w in text for w in ['email', 'письм', 'outreach', 'отправил', 'написал', 'рассылк', 'send']):
+                return 'email-аутрич'
+            if any(w in text for w in ['исследовал', 'тренд', 'research', 'нашёл данные', 'анализ', 'изучил']):
+                return 'исследование'
+            if any(w in text for w in ['пост', 'опубликовал', 'telegram', 'discord', 'контент', 'публикац', 'статья']):
+                return 'публикация контента'
+            if any(w in text for w in ['контакт', 'нашёл люд', 'нашел люд', 'people', 'нетворк', 'найдены', 'пользователей']):
+                return 'поиск людей'
+            if any(w in text for w in ['задач', 'task', 'план', 'шаг', 'декомпоз']):
+                return 'создание задач'
+            if any(w in text for w in ['прогресс', 'метрик', 'update_goal', 'обновил', 'процент']):
+                return 'обновление прогресса'
+            return 'другое'
+
+        action_type_counts: dict = {}
+        for _a in recent_actions:
+            _atype = _classify_ap_action_type(_a.title or '', _a.result or '')
+            action_type_counts[_atype] = action_type_counts.get(_atype, 0) + 1
+
         # Последние proactive/agent_msg сообщения за 2 часа — что реально было сказано
         recent_msgs = session.query(Interaction).filter(
             Interaction.user_id == user.id,
@@ -3146,6 +3210,7 @@ class AnchorEngine:
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
+            'action_type_counts': action_type_counts,
         }
 
         return [Anchor(
