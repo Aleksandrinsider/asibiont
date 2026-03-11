@@ -240,11 +240,11 @@ This task is DONE. Do NOT mention it as active or pending. For current tasks use
             if lang == 'en':
                 task_section = f"""
 ACTIVE TASK: "{current_task_info['title']}" (ID: {current_task_info['id']})
-If user says "done/finished/completed" → complete_task()"""
+If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY past tense verb matching this task's meaning → IMMEDIATELY complete_task(task_id={current_task_info['id']})"""
             else:
                 task_section = f"""
 АКТИВНАЯ ЗАДАЧА: "{current_task_info['title']}" (ID: {current_task_info['id']})
-Если пользователь говорит "сделал/готово/выполнил" → complete_task()"""
+Если пользователь говорит "сделал/готово/выполнил/заказал/купил/оплатил/настроил/позвонил" или ЛЮБОЙ глагол совершённого вида совпадающий по смыслу с этой задачей → СРАЗУ complete_task(task_id={current_task_info['id']})"""
     else:
         task_section = "\n" + ("ACTIVE TASK: none" if lang == 'en' else "АКТИВНАЯ ЗАДАЧА: нет")
 

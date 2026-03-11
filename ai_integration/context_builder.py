@@ -214,20 +214,20 @@ class ContextBuilder:
                         try:
                             dt = t.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
                             if dt < user_now:
-                                overdue.append(t.title)
+                                overdue.append(f"{t.title} [id={t.id}]")
                             elif dt.date() == user_now.date():
-                                today_tasks.append(f"{t.title} ({dt.strftime('%H:%M')})")
+                                today_tasks.append(f"{t.title} ({dt.strftime('%H:%M')}) [id={t.id}]")
                             elif dt.date() == (user_now.date() + timedelta(days=1)):
-                                tomorrow_tasks.append(t.title)
+                                tomorrow_tasks.append(f"{t.title} [id={t.id}]")
                             else:
-                                future_tasks.append(t.title)
+                                future_tasks.append(f"{t.title} [id={t.id}]")
                         except Exception:
-                            future_tasks.append(t.title)
+                            future_tasks.append(f"{t.title} [id={t.id}]")
                     else:
-                        future_tasks.append(t.title)
+                        future_tasks.append(f"{t.title} [id={t.id}]")
 
                 if overdue:
-                    hints.append(f"ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])} — упомяни КРАТКО при случае, но НЕ зацикливайся. Если пользователь обсуждает другое — ОТВЕЧАЙ на его тему, а просроченное можно упомянуть в конце одним предложением.")
+                    hints.append(f"ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])} — если пользователь сообщает что СДЕЛАЛ что-то совпадающее по смыслу — СРАЗУ вызови complete_task! Иначе упомяни КРАТКО при случае, но НЕ зацикливайся.")
                 if today_tasks:
                     hints.append(f"СЕГОДНЯ ({len(today_tasks)}): {', '.join(today_tasks[:3])}")
                 if tomorrow_tasks:
