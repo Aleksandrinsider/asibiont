@@ -1041,29 +1041,29 @@ class AnchorEngine:
                 _all_ap_types = [
                     'email-аутрич', 'поиск людей', 'публикация контента',
                     'исследование', 'создание задач', 'обновление прогресса',
+                    'делегирование', 'web-поиск', 'анализ данных',
+                    'интеграция', 'другое',
                 ]
                 _overused = sorted(_action_types.items(), key=lambda x: -x[1])
-                _overused_names = [t for t, c in _overused if c >= 2]
-                _fresh_types = [t for t in _all_ap_types if t not in _action_types]
-                _rare_types = [t for t in _all_ap_types if _action_types.get(t, 0) <= 1 and t not in _overused_names]
+                _overused_names = [t for t, c in _overused if c >= 3]  # порог 3, не 2
+                _fresh_types = [t for t in _all_ap_types if t not in _action_types and t != 'другое']
+                _rare_types = [t for t in _all_ap_types if _action_types.get(t, 0) <= 1 and t not in _overused_names and t != 'другое']
                 if _overused_names or _fresh_types:
                     _div_parts = [f"\n\n🔄 ДИВЕРСИФИКАЦИЯ — типы действий за 24ч: {dict(_overused[:5])}"]
                     if _overused_names:
                         _div_parts.append(
-                            f"Перегружен тип: {', '.join(_overused_names[:2])} — ЗАПРЕЩЕНО делать снова, "
-                            f"даже если кажется логичным."
+                            f"Много раз повторял: {', '.join(_overused_names[:2])} — "
+                            f"постарайся выбрать другой подход (но если это единственный разумный шаг — делай)."
                         )
                     if _fresh_types:
                         _div_parts.append(
-                            f"Ещё НЕ пробовал сегодня: {', '.join(_fresh_types[:3])} — ОБЯЗАТЕЛЬНО выбери один из них."
+                            f"Ещё НЕ пробовал сегодня: {', '.join(_fresh_types[:4])} — рассмотри эти направления."
                         )
                     elif _rare_types:
                         _div_parts.append(
                             f"Редко используемые типы: {', '.join(_rare_types[:3])} — предпочти их остальным."
                         )
                     _div_parts.append(
-                        # Не дублируем список инструментов — они уже в JSON-схеме API.
-                        # Даём только стратегическую ориентацию.
                         "Категории для выбора: аутрич/email · поиск людей · контент · "
                         "кампании · исследования · делегирование · задачи · прогресс · "
                         "платформа ASI · интеграции (run_agent_action если подключены).\n"
@@ -3101,12 +3101,20 @@ class AnchorEngine:
             text = f"{title} {result}".lower()
             if any(w in text for w in ['email', 'письм', 'outreach', 'отправил', 'написал', 'рассылк', 'send']):
                 return 'email-аутрич'
-            if any(w in text for w in ['исследовал', 'тренд', 'research', 'нашёл данные', 'анализ', 'изучил']):
+            if any(w in text for w in ['исследовал', 'тренд', 'research', 'нашёл данные', 'изучил']):
                 return 'исследование'
             if any(w in text for w in ['пост', 'опубликовал', 'telegram', 'discord', 'контент', 'публикац', 'статья']):
                 return 'публикация контента'
             if any(w in text for w in ['контакт', 'нашёл люд', 'нашел люд', 'people', 'нетворк', 'найдены', 'пользователей']):
                 return 'поиск людей'
+            if any(w in text for w in ['делегир', 'delegation', 'campaign', 'кампани']):
+                return 'делегирование'
+            if any(w in text for w in ['web_search', 'поиск в интернет', 'нашёл в сети', 'google', 'сайт']):
+                return 'web-поиск'
+            if any(w in text for w in ['анализ', 'сравнил', 'таблиц', 'отчёт', 'данные']):
+                return 'анализ данных'
+            if any(w in text for w in ['notion', 'jira', 'slack', 'trello', 'airtable', 'bitrix', 'hubspot', 'run_agent', 'интеграц']):
+                return 'интеграция'
             if any(w in text for w in ['задач', 'task', 'план', 'шаг', 'декомпоз']):
                 return 'создание задач'
             if any(w in text for w in ['прогресс', 'метрик', 'update_goal', 'обновил', 'процент']):
