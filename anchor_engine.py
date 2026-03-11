@@ -781,14 +781,17 @@ class AnchorEngine:
 
         logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
-        # ── 3. ЕДИНАЯ ДОСТАВКА — critical + regular в ОДНОМ сообщении ──
+        # ── 3. ДОСТАВКА — системные якоря (ASI) и агентские ОТДЕЛЬНО ──
+        # Разделение: task_reminder/task_overdue доставляются от ASI,
+        # agent_inbox_reply/agent_task_blocked — от имени агента.
+        # Это предотвращает смешение (напоминание приходит от Кристины вместо ASI).
+        _AGENT_ATTRIBUTED_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update',
+                                    'integration_alert', 'agent_delegation'}
         all_dialog_anchors = critical_anchors.copy()
         if not has_proactive_tokens:
-            # Нет токенов на proactive — блокируем regular, но critical всё равно доставляем
             if regular_anchors:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (insufficient tokens)")
         elif is_night:
-            # Ночью — только CRITICAL/ALWAYS_DELIVER (task_reminder, task_overdue и т.д.)
             if regular_anchors:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (night hours)")
         elif regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok and not active_dialog:
@@ -796,31 +799,38 @@ class AnchorEngine:
         elif regular_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok}, active_dialog={active_dialog})")
 
-        # Critical (ALWAYS_DELIVER) якоря доставляем даже без токенов (проверка в _deliver)
-        if all_dialog_anchors and (has_proactive_tokens or critical_anchors):
-            anchor_types = ', '.join(set(a.anchor_type for a in all_dialog_anchors))
-            logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(all_dialog_anchors)} anchors ({anchor_types})...")
-            # AI semaphore — ограничивает параллельные DeepSeek запросы
-            _t0_dialog = time.monotonic()
+        # Разделяем на системные (от ASI) и агентские (от конкретного агента)
+        system_dialog_anchors = [a for a in all_dialog_anchors if a.anchor_type not in _AGENT_ATTRIBUTED_TYPES]
+        agent_dialog_anchors = [a for a in all_dialog_anchors if a.anchor_type in _AGENT_ATTRIBUTED_TYPES]
+
+        # Доставка системных якорей (от ASI) — task_reminder, task_overdue и т.д.
+        async def _deliver_batch(anchors_batch, label):
+            if not anchors_batch or not (has_proactive_tokens or any(a.anchor_type in ALWAYS_DELIVER_TYPES for a in anchors_batch)):
+                return
+            anchor_types_str = ', '.join(set(a.anchor_type for a in anchors_batch))
+            logger.info(f"[ANCHOR] User {user_id}: 🔥 AI deciding for {len(anchors_batch)} {label} anchors ({anchor_types_str})...")
+            _t0 = time.monotonic()
             async with self._ai_semaphore:
-                message = await self._ai_decide_and_compose(user, all_dialog_anchors, session)
-            _dialog_elapsed = time.monotonic() - _t0_dialog
-            if not message:
-                # Если AI вернул SKIP, но есть ALWAYS_DELIVER якоря — форсируем минимальное сообщение.
-                # НО: если первый вызов занял ≥30с — это таймаут/деградация AI, а не SKIP.
-                # Пропускаем retry чтобы не блокировать автопилот ещё на 60с.
-                always_anchors = [a for a in all_dialog_anchors if a.anchor_type in ALWAYS_DELIVER_TYPES]
-                if always_anchors and _dialog_elapsed < 30:
-                    logger.info(f"[ANCHOR] User {user_id}: AI skipped but ALWAYS_DELIVER anchors present — retrying with forced prompt")
+                msg = await self._ai_decide_and_compose(user, anchors_batch, session)
+            _elapsed = time.monotonic() - _t0
+            if not msg:
+                always = [a for a in anchors_batch if a.anchor_type in ALWAYS_DELIVER_TYPES]
+                if always and _elapsed < 30:
+                    logger.info(f"[ANCHOR] User {user_id}: AI skipped {label} but ALWAYS_DELIVER present — retrying")
                     async with self._ai_semaphore:
-                        message = await self._ai_decide_and_compose(user, always_anchors, session, force_deliver=True)
-                elif always_anchors:
-                    logger.warning(f"[ANCHOR] User {user_id}: AI timeout ({_dialog_elapsed:.1f}s) — skipping ALWAYS_DELIVER retry to unblock autopilot")
-            if message:
-                await self._deliver(user, all_dialog_anchors, message, session)
-                logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(all_dialog_anchors)} anchors in ONE message")
+                        msg = await self._ai_decide_and_compose(user, always, session, force_deliver=True)
+                elif always:
+                    logger.warning(f"[ANCHOR] User {user_id}: AI timeout ({_elapsed:.1f}s) — skipping {label} retry")
+            if msg:
+                await self._deliver(user, anchors_batch, msg, session)
+                logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(anchors_batch)} {label} anchors")
             else:
-                logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
+                logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for {label} anchors")
+
+        await _deliver_batch(system_dialog_anchors, 'system')
+        if agent_dialog_anchors:
+            await asyncio.sleep(2)  # Пауза между системными и агентскими сообщениями
+            await _deliver_batch(agent_dialog_anchors, 'agent')
 
         # ── 3b. GOAL AUTOPILOT — ПЕРВЫМ после dialog, до постов/email ──
         # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
@@ -1255,12 +1265,14 @@ class AnchorEngine:
                                    'задача создана', 'понял задачу')
                 _result_clean = (result or '').strip()
                 _result_lower = _result_clean.lower()
+                # Динамический список всех агентов для фильтрации утечек делегаций
+                _all_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
                 _is_noise_result = (
                     len(_result_clean) < 20
                     or _result_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
                     or any(_result_lower.startswith(p) for p in _NOISE_PREFIXES)
                     # Фильтруем обращения к другим агентам (утечки делегаций)
-                    or any(_result_lower.startswith(n.lower() + ',') for n in ('Кристина', 'Марк', 'ASI'))
+                    or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
                 )
 
                 # ── Dedup: не отправлять если похожее сообщение было недавно ──
@@ -1319,8 +1331,10 @@ class AnchorEngine:
                 # ── Продолжение цепочки: 1 передача для автопилота, 3 для event-якорей ──
                 # Для autopilot: агент A делает исследование → агент B создаёт задачи по нему
                 # Для event-якорей: полная цепочка до 3 передач (task_stale, delegation и т.д.)
+                # Пауза перед chain — чтобы сообщения приходили последовательно, а не разом
                 _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
                 if result and len(result) > 30 and len(_real_agents) >= 1:
+                    await asyncio.sleep(3)  # Координация: пауза между агентами
                     _chain_max = 1 if anchor.anchor_type == 'goal_autopilot_review' else 3
                     try:
                         await self._maybe_continue_chain(
@@ -1780,11 +1794,12 @@ class AnchorEngine:
             _NOISE_PREFIXES_CHAIN = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена',
                                      'веб-поиск временно', 'duckduckgo не', 'сервис недоступ',
                                      'задача создана', 'понял задачу')
+            _chain_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
             _chain_is_noise = (
                 len(_chain_clean) < 20
                 or _chain_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
                 or any(_chain_lower.startswith(p) for p in _NOISE_PREFIXES_CHAIN)
-                or any(_chain_lower.startswith(n.lower() + ',') for n in ('Кристина', 'Марк', 'ASI'))
+                or any(_chain_lower.startswith(n.lower() + ',') for n in _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
                 try:
@@ -6135,8 +6150,8 @@ class AnchorEngine:
             if _current_types & _TASK_T:
                 _rules += [
                     "ПРАВИЛА ДЛЯ ЗАДАЧ:",
-                    "— task_reminder: напоминание по расписанию. Задержка до 30 мин — это шаг сканирования, НЕ просрочка. Пиши напоминание, уточни готовность.",
-                    "— task_overdue: задача просрочена (>30 мин после дедлайна). Только тут уместно говорить о просрочке.",
+                    "— task_reminder: напоминание по расписанию. ЗАПРЕЩЕНО писать 'просрочено/просрочены/опоздание'. Задержка до 30 мин = шаг сканирования. Пиши: 'Пора: [задача]', уточни готовность.",
+                    "— task_overdue: задача просрочена (>30 мин после дедлайна). ТОЛЬКО тут уместно говорить о просрочке.",
                     "— task_deadline_soon: дедлайн ещё не наступил, но приближается.",
                     "",
                 ]
