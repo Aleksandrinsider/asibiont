@@ -1599,7 +1599,7 @@ async def dashboard_handler(request):
                     if not common:
                         for ui in user_interests:
                             for pi in partner_interests:
-                                if ui and pi and (ui in pi or pi in ui):
+                                if ui and pi and len(ui) >= 4 and len(pi) >= 4 and (ui in pi or pi in ui):
                                     common.add(pi)
                     p.common_interests = ', '.join(sorted(common)) if common else None
                 else:
@@ -1612,7 +1612,7 @@ async def dashboard_handler(request):
                     if not common_skills:
                         for us in user_skills:
                             for ps in partner_skills:
-                                if us and ps and (us in ps or ps in us):
+                                if us and ps and len(us) >= 4 and len(ps) >= 4 and (us in ps or ps in us):
                                     common_skills.add(ps)
                     p.common_skills = ', '.join(sorted(common_skills)) if common_skills else None
                 else:
@@ -1625,7 +1625,7 @@ async def dashboard_handler(request):
                     if not common_goals:
                         for ug in user_goals:
                             for pg in partner_goals:
-                                if ug and pg and (ug in pg or pg in ug):
+                                if ug and pg and len(ug) >= 4 and len(pg) >= 4 and (ug in pg or pg in ug):
                                     common_goals.add(pg)
                     p.common_goals = ', '.join(sorted(common_goals)) if common_goals else None
                 else:
@@ -3488,7 +3488,7 @@ async def api_partners_handler(request):
                     if not common:
                         for ui in user_interests:
                             for pi in partner_interests:
-                                if ui and pi and (ui in pi or pi in ui):
+                                if ui and pi and len(ui) >= 4 and len(pi) >= 4 and (ui in pi or pi in ui):
                                     common.add(pi)
                     p.common_interests = ', '.join(sorted(common)) if common else None
                 else:
@@ -3501,7 +3501,7 @@ async def api_partners_handler(request):
                     if not common_skills:
                         for us in user_skills:
                             for ps in partner_skills:
-                                if us and ps and (us in ps or ps in us):
+                                if us and ps and len(us) >= 4 and len(ps) >= 4 and (us in ps or ps in us):
                                     common_skills.add(ps)
                     p.common_skills = ', '.join(sorted(common_skills)) if common_skills else None
                 else:
@@ -3514,7 +3514,7 @@ async def api_partners_handler(request):
                     if not common_goals:
                         for ug in user_goals:
                             for pg in partner_goals:
-                                if ug and pg and (ug in pg or pg in ug):
+                                if ug and pg and len(ug) >= 4 and len(pg) >= 4 and (ug in pg or pg in ug):
                                     common_goals.add(pg)
                     p.common_goals = ', '.join(sorted(common_goals)) if common_goals else None
                 else:
