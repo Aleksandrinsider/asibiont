@@ -335,7 +335,7 @@ class HybridAutonomousAgent:
         data = {
             "model": chosen_model,
             "messages": messages,
-            "max_tokens": kwargs.pop("max_tokens", 1000),
+            "max_tokens": kwargs.pop("max_tokens", 500),
             "temperature": kwargs.pop("temperature", 0.7),
             **kwargs
         }
@@ -495,8 +495,8 @@ class HybridAutonomousAgent:
     # ===== TOKEN BUDGET =====
 
     # Единый бюджет символов (~3 chars/token для русского текста)
-    MAX_PROMPT_CHARS  = 32000
-    MAX_HISTORY_CHARS = 9000
+    MAX_PROMPT_CHARS  = 60000  # base prompt ~53K chars — must exceed it to avoid pointless thrashing
+    MAX_HISTORY_CHARS = 5000   # limit history to ~1.5K tokens
 
     @staticmethod
     def _estimate_tokens(text):
@@ -1481,9 +1481,9 @@ class HybridAutonomousAgent:
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
-            if len(full_history) > 10:
-                old_msgs = full_history[:-8]
-                history = full_history[-8:]
+            if len(full_history) > 8:
+                old_msgs = full_history[:-6]
+                history = full_history[-6:]
                 topics = CognitiveEngine.extract_conversation_topics(old_msgs)
                 if topics:
                     _lbl = "PREVIOUSLY DISCUSSED" if user_lang == 'en' else "РАНЕЕ ОБСУЖДАЛИ"
@@ -2356,7 +2356,7 @@ class HybridAutonomousAgent:
     # ===== ЕДИНЫЙ МОЗГ ДЛЯ СИСТЕМНЫХ СООБЩЕНИЙ =====
 
     async def generate_system_message(self, user_id, mode, instruction,
-                                       extra_context=None, max_tokens=1000,
+                                       extra_context=None, max_tokens=500,
                                        max_iterations=2):
         """Генерация системного сообщения (напоминание, проактивное, поздравление)
         через тот же мозг с tool calling, но без сохранения в историю диалога.
@@ -3189,7 +3189,7 @@ def _build_user_context_sync(user_db_id: int) -> str:
             contacts = (_s.query(_EC)
                         .filter_by(user_id=user_db_id)
                         .order_by(_EC.created_at.desc())
-                        .limit(30).all())
+                        .limit(10).all())
             tasks = (_s.query(_T)
                      .filter(_T.user_id == user_db_id, _T.status.in_(['pending', 'in_progress']))
                      .order_by(_T.due_date.asc().nullslast())
@@ -4126,7 +4126,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools_now,
                     tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=600,
+                    max_tokens=500,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
                 timeout=API_TIMEOUT_LONG + 15,
@@ -4941,7 +4941,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     _ac_a.get('description') or '',
                 )
             _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
-            _ac_desc = (_ac_a.get('description') or '')[:120]
+            _ac_desc = (_ac_a.get('description') or '')[:60]
             _ac_tools = (_ac_a.get('tools_allowed') or '').strip()
             _line = (
                 f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
@@ -4949,7 +4949,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f"\n  Умеет: {_ac_caps}"
             )
             if _ac_tools:
-                _line += f"\n  Инструменты: {_ac_tools[:120]}"
+                _line += f"\n  Инструменты: {_ac_tools[:80]}"
             if _ac_desc:
                 _line += f"\n  О себе: {_ac_desc}"
             _agent_caps_lines.append(_line)
