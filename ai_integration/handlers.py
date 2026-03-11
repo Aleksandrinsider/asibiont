@@ -9352,51 +9352,48 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
         if has_cyrillic:
             _lang_instruction = (
                 "Аудитория русскоязычная. ОБЯЗАТЕЛЬНО используй российские платформы (.ru домены).\n"
-                "Не используй LinkedIn, Facebook, reddit — они не работают в РФ.\n\n"
+                "Не используй LinkedIn, Facebook, reddit — они недоступны или требуют авторизацию.\n\n"
                 "ГЛАВНЫЙ КРИТЕРИЙ: выбирай платформы, где САМИ СПЕЦИАЛИСТЫ публикуют свои "
-                "контакты (email, сайт), потому что хотят быть нанятыми или найденными клиентами. "
-                "Это НЕ биржи вакансий (hh.ru, superjob) — там только HR. "
-                "НУЖНЫ: личные странички, каталоги специалистов, фриланс-биржи.\n\n"
-                "Примеры по нишам:\n"
-                "  фрилансеры/разработчики → fl.ru/users, kwork.ru/seller, freelancehunt.com/freelancers, habr.com/users;\n"
-                "  психологи → b17.ru/specialists, psycabi.net/psy;\n"
-                "  юристы → pravoved.ru/lawyers, 9111.ru/specialists;\n"
-                "  врачи → prodoctorov.ru, docdoc.ru;\n"
-                "  маркетологи/SMM → tenchat.ru, cossa.ru/people;\n"
-                "  дизайнеры → behance.net/search/projects;\n"
-                "  предприниматели/основатели → spark.ru/user, vc.ru/@;\n"
-                "  репетиторы → repetitors.info, profi.ru/repetitor;\n"
-                "  любые услуги → profi.ru/portfolio, youdo.com/user;\n"
-                "  IT-специалисты → career.habr.com/resumes, hexlet.io/users."
+                "контакты (email, сайт), потому что хотят быть нанятыми или найденными клиентами.\n"
+                "Это НЕ биржи вакансий (hh.ru, superjob) — там только HR.\n"
+                "НУЖНЫ: каталоги специалистов, фриланс-биржи, профессиональные соцсети.\n\n"
+                "Примеры платформ по нишам (используй как образец, адаптируй под аудиторию):\n"
+                "  QA/тестировщики → career.habr.com/resumes?q=qa, fl.ru/users/?skills=тестирование, kwork.ru/search?query=qa+тестирование&type=seller;\n"
+                "  разработчики/IT → career.habr.com/resumes, fl.ru/users, habr.com/ru/search/?target_type=users;\n"
+                "  фрилансеры (любые) → fl.ru/users, kwork.ru/seller, freelancehunt.com/freelancers;\n"
+                "  психологи/коучи → b17.ru/specialists, psycabi.net/psy, profi.ru/psiholog;\n"
+                "  маркетологи/SMM → tenchat.ru, cossa.ru/people, vc.ru/@;\n"
+                "  дизайнеры → behance.net/search, tenchat.ru, kwork.ru/search?query=дизайн&type=seller;\n"
+                "  предприниматели → spark.ru/startup/search, vc.ru/search, tenchat.ru;\n"
+                "  любые специалисты → profi.ru/search, youdo.com/user, repetitors.info."
             )
         else:
             _lang_instruction = (
                 "Audience is English-speaking. Use international platforms.\n\n"
                 "KEY CRITERION: choose platforms where SPECIALISTS THEMSELVES publish their "
-                "email/contact because they want to be hired or found by clients. "
-                "NOT job boards (indeed, glassdoor) — those only have HR contacts. "
+                "email/contact because they want to be hired or found by clients.\n"
+                "NOT job boards (indeed, glassdoor) — those only have HR contacts.\n"
                 "NEED: personal profile directories, freelance marketplaces, specialist catalogs.\n\n"
-                "Examples by niche:\n"
-                "  freelancers/developers → upwork.com/freelancers, freelancer.com/users, github.com/search;\n"
-                "  therapists/coaches → psychologytoday.com/us/therapists, therapists.com;\n"
-                "  coaches → coachfederation.org/find-a-coach, noomii.com/coaches;\n"
+                "Examples by niche (adapt to the actual audience):\n"
+                "  QA/testers → upwork.com/search/profiles/?q=qa+tester, github.com/search?q=qa+automation, testlio.com;\n"
+                "  developers → upwork.com/freelancers, freelancer.com/users, github.com/search;\n"
+                "  coaches/therapists → psychologytoday.com/us/therapists, noomii.com/coaches;\n"
                 "  lawyers → avvo.com/find-a-lawyer, martindale.com;\n"
                 "  designers → behance.net/search, dribbble.com/designers;\n"
-                "  marketers → marketingprofs.com/experts, clarity.fm;\n"
-                "  consultants → consultants500.com, expertise.com;\n"
-                "  any professionals → bark.com/professionals, thumbtack.com/pro."
+                "  marketers → clarity.fm/search, marketingprofs.com/experts;\n"
+                "  any professionals → bark.com/professionals, thumbtack.com/pro, about.me/search."
             )
         _prompt = (
             f"Target audience: {target_audience[:300]}\n"
             f"Campaign goal: {goal[:150]}\n"
             f"Offer/product: {offer[:150]}\n\n"
             f"{_lang_instruction}\n\n"
-            f"Generate 8 direct search/listing URLs for finding people of this audience type "
-            f"who have PUBLIC email addresses on their profiles or personal pages.\n"
-            f"PRIORITIZE platforms where specialists list their own contact email to attract clients/employers.\n"
-            f"Use keyword '{_kw_first}' in URLs where applicable (URL-encoded: spaces→+).\n"
+            f"Analyze the audience and generate 10 direct search/listing URLs where people "
+            f"of THIS EXACT audience type have PUBLIC email addresses on their profiles.\n"
+            f"Think about: what platforms do THESE PEOPLE use? Where do they list their contacts?\n"
+            f"Use keyword '{_kw_first}' in search URLs where applicable (URL-encode spaces as +).\n"
             f"Return ONLY valid JSON array: "
-            f'[{{"url": "https://...", "desc": "why relevant (confirm has public emails)"}}]'
+            f'[{{"url": "https://...", "desc": "platform + why these users have public emails"}}]'
         )
         raw = await api.deepseek_analyze(
             prompt=_prompt,
@@ -9489,6 +9486,14 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         'flutter', 'vue', 'angular', 'nextjs', 'developer', 'разработ',
         'программист', 'engineer', 'инженер', 'api', 'backend', 'frontend',
         'fullstack', 'open source', 'github', 'code', 'coding', 'software',
+        # QA / тестировщики — IT-роль, GitHub и Habr Career релевантны
+        'тестировщ', 'tester', 'testing', 'qa ', 'quality assurance',
+        'автоматизац', 'selenium', 'cypress', 'appium', 'pytest',
+        # Аналитики / продуктовые роли
+        'аналитик', 'analyst', 'продуктолог', 'product manager', 'agile', 'scrum',
+        # Общие IT-маркеры
+        'it-', 'it специал', 'ит специал', 'технолог', 'startup', 'стартап',
+        'saas', 'app ', 'приложен', 'платформ', 'сервис для',
     ]
     _is_tech_audience = any(t in _all_text for t in _tech_markers)
 
@@ -9678,56 +9683,10 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     _platform_urls = []
 
     # ──────────────────────────────────────────────────────────────────────
-    # PASS 1 платформы: AI генерирует нишевые URL с учётом языка аудитории
-    # Tech-base фиксирована; всё остальное — AI с учётом RU/EN аудитории
+    # PASS 1 платформы: AI думает сам — какие площадки подходят этой аудитории
     # ──────────────────────────────────────────────────────────────────────
 
-    # Tech-платформы только для tech-аудитории (фиксированные, надёжные)
-    if _is_tech_audience:
-        _platform_urls.extend([
-            f'https://dev.to/search?q={_core_en}',
-            f'https://hackernoon.com/search?query={_core_en}',
-            f'https://github.com/search?q={_core_en}+in%3Areadme+email&type=repositories',
-            f'https://medium.com/search?q={_core_en}',
-            f'https://github.com/search?q={_core_en}+email&type=users',
-        ])
-        if _has_cyrillic:
-            _platform_urls.extend([
-                f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
-                f'https://tproger.ru/?s={_kw_enc}',
-                f'https://career.habr.com/resumes?q={_kw_enc}',
-            ])
-    else:
-        # Нетеховая аудитория: фрилансеры, спецы, коучи, маркетологи и т.д.
-        # Эти платформы публикуют профили с контактами без авторизации
-        if _has_cyrillic:
-            _platform_urls.extend([
-                # Фриланс-биржи — профили ОТКРЫТЫ, специалисты хотят быть найденными
-                f'https://www.fl.ru/users/?skills={_kw_enc}',
-                f'https://kwork.ru/search?query={_kw_enc}&type=seller',
-                f'https://freelancehunt.com/freelancers/?search={_kw_enc}',
-                # Специалисты по направлениям
-                f'https://profi.ru/search/?q={_kw_enc}',
-                f'https://www.b17.ru/specialists/?q={_kw_enc}',
-                f'https://youdo.com/tasks/search/?search={_kw_enc}',
-                # Деловая аудитория / предприниматели
-                f'https://spark.ru/startup/search?q={_kw_enc}',
-                f'https://vc.ru/search?q={_kw_enc}',
-                f'https://tenchat.ru/search?q={_kw_enc}',
-            ])
-        else:
-            _platform_urls.extend([
-                f'https://www.upwork.com/search/profiles/?q={_core_en}',
-                f'https://www.freelancer.com/search/users/?q={_core_en}',
-                f'https://about.me/search?q={_core_en}',
-                f'https://clarity.fm/search?query={_core_en}',
-                f'https://bark.com/professionals/{_core_en.replace("+", "-")}/',
-                f'https://www.thumbtack.com/search/?q={_core_en}',
-                f'https://medium.com/search?q={_core_en}',
-                f'https://substack.com/search/{_core_en}',
-            ])
-
-    # AI генерирует нишевые платформы — знает язык, страну, профессию
+    # AI анализирует аудиторию и выбирает платформы сам
     _ai_platforms = await _get_ai_niche_platforms(
         target_audience, goal, offer, _kw_enc, _core_en, _has_cyrillic, api
     )
@@ -9737,15 +9696,16 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     if not _ai_platforms:
         if _has_cyrillic:
             _platform_urls.extend([
+                f'https://career.habr.com/resumes?q={_kw_enc}',
+                f'https://www.fl.ru/users/?skills={_kw_enc}',
+                f'https://profi.ru/search/?q={_kw_enc}',
                 f'https://vc.ru/search?q={_kw_enc}',
-                f'https://habr.com/ru/search/?q={_kw_enc}&target_type=users',
-                f'https://spark.ru/search?q={_kw_enc}',
             ])
         else:
             _platform_urls.extend([
+                f'https://www.upwork.com/search/profiles/?q={_core_en}',
                 f'https://about.me/search?q={_core_en}',
                 f'https://medium.com/search?q={_core_en}',
-                f'https://substack.com/search/{_core_en}',
             ])
     _niche_contact_urls = []
 
