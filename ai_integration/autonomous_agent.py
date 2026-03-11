@@ -3408,7 +3408,7 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     import json as _json
 
     # Вероятностный фильтр — не на каждое сообщение
-    if _rnd.random() > 0.30:
+    if _rnd.random() > 0.15:  # 15% вероятность (было 30%)
         return
 
     # Проверяем баланс до задержки: если токенов нет — не включаемся
@@ -4636,6 +4636,19 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     if not _agents:
         return None
 
+    # ── Ранний фильтр: вопрос без прямого обращения к агенту → ASI ответит сам ──
+    # Проверяем ДО тяжёлых DB-запросов (_build_user_context_sync, история)
+    if _is_question_message(user_message):
+        _msg_lc_early = user_message.lower().strip()
+        _has_agent_mention_early = any(
+            len(_a.get('name') or '') >= 3
+            and (_a.get('name') or '').lower() in _msg_lc_early
+            for _a in _agents
+        )
+        if not _has_agent_mention_early:
+            logger.debug("[DIRECTOR] early filter: question without agent mention, skip")
+            return None
+
     # Строим универсальный контекст пользователя (профиль + цели + команда с интеграциями)
     _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
 
@@ -4650,7 +4663,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     _hs.query(_Itr)
                     .filter(_Itr.user_id == user_db_id)
                     .order_by(_Itr.id.desc())
-                    .limit(5)
+                    .limit(3)
                     .all()
                 )
                 for _r in reversed(_recent):
@@ -4892,7 +4905,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             return None
 
         # ── Начальное решение ASI ──────────────────────────────────────────────────
-        _ctx_hint = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_full_ctx}" if _user_full_ctx else ''
+        # Урезаем до 400 символов — для решения о делегировании достаточно имени, должности, целей
+        _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:400]}" if _user_full_ctx else ''
 
         # Строим компактный список агентов: имя | должность | специализация | умеет
         _agent_caps_lines = []
