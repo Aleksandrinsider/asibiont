@@ -136,6 +136,9 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     'goal_autopilot_review': (
         "Продвинь цель пользователя на один конкретный шаг вперёд.\n"
         "Анализ → выбор → действие. Не планируй — ДЕЛАЙ.\n\n"
+        "ВАЖНО: твой текстовый ответ увидит пользователь в Telegram. Пиши кратко (2-4 предложения), "
+        "только ФАКТЫ: что конкретно ты сделал и что получилось. Не пиши служебную информацию, "
+        "не сообщай об ошибках сервисов (DuckDuckGo, таймаут и т.п.) — просто используй другой инструмент.\n\n"
         "Прочитай цель + историю → что ещё НЕ пробовалось? → выбери из полного арсенала:\n"
         "  Аутрич/email: send_outreach_email, send_follow_up_email, send_email, negotiate_by_email, reply_to_outreach_email\n"
         "  Поиск людей: find_and_message_relevant_users, find_relevant_contacts_for_task, save_email_contact\n"
@@ -148,7 +151,8 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
         "  Платформа: send_message_to_user, list_marketplace, switch_agent\n"
         "  Интеграции: run_agent_action (Gmail, Slack, Notion, GitHub, Ozon, Wildberries, Jira, Bitrix24, AmoCRM, HubSpot, Trello, Airtable, Google Sheets, PostgreSQL, Redis, AWS S3, RSS, Calendly, Twilio, Firebase, CoinGecko, YouTube, OpenAI, Gemini, USDT, HTTP API и 30+)\n\n"
         "Каждый цикл = новое конкретное действие из ЛЮБОГО раздела (не повтор).\n"
-        "Отчёт: конкретные факты — что сделано и что получено. Объём по результату."
+        "Если один инструмент не сработал — молча попробуй другой, НЕ сообщай пользователю об ошибке.\n"
+        "Отчёт: 2-4 предложения — что сделано и что получено."
     ),
 }
 
@@ -819,13 +823,31 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for all dialog anchors")
 
         # ── 3b. GOAL AUTOPILOT — ПЕРВЫМ после dialog, до постов/email ──
-        # Наивысший приоритет среди silent-задач: агенты работают 24/7 автономно,
-        # не зависят от has_proactive_tokens и is_night.
+        # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
+        # Но проверяем min gap между proactive-сообщениями чтобы не заваливать пользователя.
         if autopilot_anchors:
-            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
-            for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
-                async with self._ai_semaphore:
-                    await self._dispatch_agent_for_anchor(user, _ap, session)
+            _ap_gap_ok = True
+            try:
+                _last_ap_msg = session.query(Interaction.created_at).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'proactive',
+                ).order_by(Interaction.created_at.desc()).first()
+                if _last_ap_msg:
+                    _ap_time = _last_ap_msg[0]
+                    if _ap_time.tzinfo is None:
+                        _ap_time = _ap_time.replace(tzinfo=timezone.utc)
+                    _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
+                    if _ap_gap < MIN_PROACTIVE_GAP_MINUTES:
+                        _ap_gap_ok = False
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last msg {_ap_gap:.0f}m ago, min={MIN_PROACTIVE_GAP_MINUTES}m)")
+            except Exception:
+                pass
+
+            if _ap_gap_ok:
+                logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
+                for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
+                    async with self._ai_semaphore:
+                        await self._dispatch_agent_for_anchor(user, _ap, session)
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         if not is_night and has_proactive_tokens:
@@ -1225,15 +1247,43 @@ class AnchorEngine:
                     agent_data, task_text, user.telegram_id,
                 )
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
+                _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
 
                 # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
-                _NOISE_PREFIXES = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена')
+                _NOISE_PREFIXES = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена',
+                                   'веб-поиск временно', 'duckduckgo не', 'сервис недоступ',
+                                   'задача создана', 'понял задачу')
                 _result_clean = (result or '').strip()
+                _result_lower = _result_clean.lower()
                 _is_noise_result = (
                     len(_result_clean) < 20
-                    or _result_clean.lower().rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена')
-                    or any(_result_clean.lower().startswith(p) for p in _NOISE_PREFIXES)
+                    or _result_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
+                    or any(_result_lower.startswith(p) for p in _NOISE_PREFIXES)
+                    # Фильтруем обращения к другим агентам (утечки делегаций)
+                    or any(_result_lower.startswith(n.lower() + ',') for n in ('Кристина', 'Марк', 'ASI'))
                 )
+
+                # ── Dedup: не отправлять если похожее сообщение было недавно ──
+                if not _is_noise_result and _result_clean:
+                    try:
+                        _recent_proactives = session.query(Interaction.content).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'proactive',
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
+                        ).order_by(Interaction.created_at.desc()).limit(6).all()
+                        _new_prefix = _result_clean[:120].lower()
+                        for (_rp_content,) in _recent_proactives:
+                            try:
+                                _rp_text = json.loads(_rp_content).get('text', '')
+                            except Exception:
+                                _rp_text = _rp_content or ''
+                            if _rp_text and _rp_text[:120].lower() == _new_prefix:
+                                _is_noise_result = True
+                                logger.info("[ANCHOR-AUTOPILOT] dedup: skipping similar message from %s", agent_name)
+                                break
+                    except Exception:
+                        pass
+
                 if result and result.strip() and self.bot and not _is_noise_result:
                     try:
                         await self.bot.send_message(
@@ -1248,6 +1298,8 @@ class AnchorEngine:
                                 'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                             },
                             'text': _strip_html(result.strip()),
+                            '__tools_used': _tools_used,
+                            '__anchor_type': anchor.anchor_type,
                         }, ensure_ascii=False)
                         # Сохраняем в interaction — чтобы следующая итерация видела что уже сделано
                         session.add(Interaction(
@@ -1430,6 +1482,7 @@ class AnchorEngine:
                             agent_data, task_text, user.telegram_id,
                         )
                         result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
+                        _ev_tools_used = list(_raw_result[1]) if isinstance(_raw_result, (tuple, list)) and len(_raw_result) > 1 else []
                         # Обновляем лог: выполнено
                         _s2 = _Db()
                         try:
@@ -1468,6 +1521,8 @@ class AnchorEngine:
                                         'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                                     },
                                     'text': _strip_html(result.strip()),
+                                    '__tools_used': _ev_tools_used,
+                                    '__anchor_type': anchor.anchor_type,
                                 }, ensure_ascii=False)
                                 _s.add(Interaction(
                                     user_id=user.id,
@@ -1686,37 +1741,18 @@ class AnchorEngine:
             }
             _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
 
-            # Уведомляем пользователя о передаче задачи между агентами
-            if self.bot:
-                try:
-                    _handoff_name = _next_ag.name if _next_ag.name != prev_agent.name else prev_agent.name
-                    # Текст начинается с имени получателя — как живое обращение
-                    _handoff_text = f"{_handoff_name}, {_next_task.strip()[:300]}"
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text=f"{prev_agent.name}\n{_handoff_text}",
-                    )
-                    # В веб-чате: заголовок = prev_agent (отправитель), текст = обращение к получателю
-                    session.add(Interaction(
-                        user_id=user.id,
-                        message_type='proactive',
-                        content=json.dumps({
-                            '__agent': {
-                                'name': prev_agent.name,
-                                'id': prev_agent.id,
-                                'avatar_url': _safe_avatar(prev_agent.avatar_url, prev_agent.id),
-                            },
-                            'text': _handoff_text,
-                        }, ensure_ascii=False),
-                    ))
-                    session.commit()
-                except Exception:
-                    pass
+            # Делегация — внутренний процесс, НЕ отправляем пользователю.
+            # Пользователь увидит только итоговый результат работы следующего агента.
+            logger.info(
+                "[ANCHOR-CHAIN] user %d: %s → %s (task: %s)",
+                user.id, prev_agent.name, _next_ag.name, _next_task[:80],
+            )
 
             _next_raw = await _exec_agent_for_director(
                 _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
+            _chain_tools_used = list(_next_raw[1]) if isinstance(_next_raw, (tuple, list)) and len(_next_raw) > 1 else []
 
             # Сохраняем результат в лог
             try:
@@ -1740,11 +1776,15 @@ class AnchorEngine:
 
             # Отправляем результат следующего агента пользователю (с noise-фильтром)
             _chain_clean = (_next_result or '').strip()
-            _NOISE_PREFIXES_CHAIN = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена')
+            _chain_lower = _chain_clean.lower()
+            _NOISE_PREFIXES_CHAIN = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена',
+                                     'веб-поиск временно', 'duckduckgo не', 'сервис недоступ',
+                                     'задача создана', 'понял задачу')
             _chain_is_noise = (
                 len(_chain_clean) < 20
-                or _chain_clean.lower().rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена')
-                or any(_chain_clean.lower().startswith(p) for p in _NOISE_PREFIXES_CHAIN)
+                or _chain_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
+                or any(_chain_lower.startswith(p) for p in _NOISE_PREFIXES_CHAIN)
+                or any(_chain_lower.startswith(n.lower() + ',') for n in ('Кристина', 'Марк', 'ASI'))
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
                 try:
@@ -1759,6 +1799,8 @@ class AnchorEngine:
                             'avatar_url': _safe_avatar(_next_ag.avatar_url, _next_ag.id),
                         },
                         'text': _strip_html(_next_result.strip()),
+                        '__tools_used': _chain_tools_used,
+                        '__anchor_type': 'agent_chain_continue',
                     }, ensure_ascii=False)
                     session.add(Interaction(
                         user_id=user.id,
