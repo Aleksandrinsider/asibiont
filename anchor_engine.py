@@ -3638,10 +3638,10 @@ class AnchorEngine:
         """
         anchors = []
 
-        # Активные + paused кампании (paused тоже нужны для обработки входящих reply)
+        # Активные + paused + personal кампании (personal для обработки reply на одинарные письма)
         campaigns = session.query(EmailCampaign).filter(
             EmailCampaign.user_id == user.id,
-            EmailCampaign.status.in_(['active', 'paused'])
+            EmailCampaign.status.in_(['active', 'paused', 'personal'])
         ).all()
 
         if not campaigns:
@@ -3664,7 +3664,46 @@ class AnchorEngine:
 
         for campaign in campaigns:
             is_paused = campaign.status == 'paused'
+            is_personal = campaign.status == 'personal'
             _camp_outreach = _ec_outreach_by_camp.get(campaign.id, [])
+
+            # Personal campaigns — только проверка ответов (reply), без send/follow-up/leads/report
+            if is_personal:
+                unreplied = [
+                    o for o in _camp_outreach
+                    if o.status == 'replied' and o.reply_text and not o.ai_reply_sent_at
+                ]
+                for email in unreplied:
+                    email.ai_reply_sent_at = now_utc
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    anchors.append(Anchor(
+                        user_id=user.id,
+                        anchor_type='email_reply_received',
+                        source=f'email:{email.id}:reply',
+                        topic=_t(user,
+                            f' Ответ от {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — личное письмо',
+                            f' Reply from {email.recipient_email} ({email.recipient_name or email.recipient_company or "?"}) — personal email'),
+                        priority=AnchorPriority.CRITICAL,
+                        data=json.dumps({
+                            'campaign_id': campaign.id,
+                            'campaign_name': campaign.name,
+                            'outreach_id': email.id,
+                            'recipient_email': email.recipient_email,
+                            'recipient_name': email.recipient_name,
+                            'recipient_company': email.recipient_company,
+                            'original_subject': email.subject,
+                            'original_body': email.body[:500] if email.body else '',
+                            'reply_text': email.reply_text[:1000] if email.reply_text else '',
+                        }),
+                        triggered_at=now_utc,
+                        expires_at=now_utc + timedelta(hours=24),
+                        cooldown_hours=0.5,
+                        batch_group='email',
+                    ))
+                continue  # Personal → skip send/follow-up/leads/report
 
             # --- 1. Есть черновики (draft) — агент должен написать и отправить ---
             # Пропускаем для paused кампаний

@@ -1787,9 +1787,12 @@ class HybridAutonomousAgent:
                     _code_output, _code_stderr = await _run_agent_code()
                     if _code_output:
                         # Очищаем HTML-теги и RFC822 артефакты из IMAP/email вывода
-                        # Пример бага: "Name" <email@gmail.com> → в HTML выглядит как @gmail.com">
+                        # Пример бага: "Name" <email@gmail.com> → regex <[^>]+> удаляет email целиком
                         import re as _re_clean
-                        _code_output_clean = _re_clean.sub(r'<[^>]+>', '', _code_output)  # strip HTML tags
+                        # Сначала сохраняем email-адреса в угловых скобках: <user@host.com> → user@host.com
+                        _code_output_clean = _re_clean.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _code_output)
+                        # Теперь безопасно удаляем HTML-теги (email уже извлечены)
+                        _code_output_clean = _re_clean.sub(r'<[^>]+>', '', _code_output_clean)
                         _code_output_clean = _re_clean.sub(r'(?<=\S)">', '', _code_output_clean)  # strip "> artifacts
                         _agent_data_block = (
                             f'\n\n[ДАННЫЕ ОТ АГЕНТА — РЕАЛЬНЫЕ ДАННЫЕ ПРЯМО СЕЙЧАС]\n'
@@ -4894,10 +4897,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _ts2 = _TDb2()
                 try:
                     _tools_info = ', '.join(_agent_tools_used) if _agent_tools_used else ''
+                    # Убираем внутренние инструкции из title для хронологии дашборда
+                    _clean_title = task
+                    for _strip_prefix in ['ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): ', 'ОТВЕТЬ НА ВОПРОС: ', '[АВТОПИЛОТ] ']:
+                        if _clean_title.startswith(_strip_prefix):
+                            _clean_title = _clean_title[len(_strip_prefix):]
                     _ts2.add(_AAL2(
                         user_id=user_db_id,
                         activity_type='agent_task',
-                        title=task[:200],
+                        title=_clean_title[:200],
                         content=str(resp)[:500],
                         target=f"agent:{ag.get('name', 'Агент')}",
                         status='completed',
