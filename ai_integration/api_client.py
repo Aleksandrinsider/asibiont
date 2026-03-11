@@ -444,7 +444,7 @@ class ExternalAPIClient:
     # Глобальный семафор: не более 1 параллельного DDG-запроса (против rate limit)
     _ddg_semaphore: asyncio.Semaphore = None  # инициализируется лениво
     _ddg_last_request: float = 0.0  # timestamp последнего запроса
-    _DDG_MIN_INTERVAL: float = 2.5  # минимум секунд между запросами
+    _DDG_MIN_INTERVAL: float = 0.0  # без искусственной задержки — retry logic обрабатывает rate limit
 
     def _get_ddg_semaphore(self) -> asyncio.Semaphore:
         if self._ddg_semaphore is None:
@@ -498,13 +498,6 @@ class ExternalAPIClient:
             base_delay = 2.0  # секунды
             for attempt in range(max_retries):
                 async with sem:
-                    # Выдерживаем минимальный интервал между запросами
-                    now = time.time()
-                    elapsed = now - ExternalAPIClient._ddg_last_request
-                    if elapsed < self._DDG_MIN_INTERVAL:
-                        await _aio.sleep(self._DDG_MIN_INTERVAL - elapsed)
-                    ExternalAPIClient._ddg_last_request = time.time()
-
                     try:
                         results = await _aio.wait_for(
                             loop.run_in_executor(None, _sync_search),
