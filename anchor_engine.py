@@ -1427,11 +1427,27 @@ class AnchorEngine:
                     ))
                     session.commit()
                 except Exception as _log_err:
-                    logger.warning("[ANCHOR-AUTOPILOT] activity log creation failed: %s", _log_err)
+                    logger.warning("[ANCHOR-AUTOPILOT] activity log creation failed: %s (type: %s)", _log_err, type(_log_err).__name__)
                     try:
                         session.rollback()
                     except Exception:
                         pass
+                    # Retry with minimal data
+                    try:
+                        session.add(_AAL_ap(
+                            user_id=user.id,
+                            activity_type='goal_autopilot_dispatch',
+                            title=f'{agent_name} — обзор целей',
+                            content='',
+                            target=anchor.source,
+                            status='in_progress',
+                        ))
+                        session.commit()
+                    except Exception:
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
 
                 # ── Биллинг кастомного агента (роялти автору) ──
                 if getattr(chosen, 'id', 0) != 0:
@@ -1457,6 +1473,25 @@ class AnchorEngine:
                 _all_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
                 # Если агент реально вызвал инструменты — результат значимый
                 _has_real_actions = bool(_tools_used)
+                _filter_reason = ''
+
+                # ── Watchdog: если >3ч без autopilot-сообщения → пропустить noise-фильтр ──
+                _force_delivery = False
+                try:
+                    _last_ap = session.query(Interaction.created_at).filter(
+                        Interaction.user_id == user.id,
+                        Interaction.message_type == 'proactive',
+                        Interaction.content.like('%goal_autopilot_review%'),
+                    ).order_by(Interaction.created_at.desc()).first()
+                    if _last_ap:
+                        _ap_age_h = (datetime.now(timezone.utc) - _last_ap[0].replace(tzinfo=timezone.utc)).total_seconds() / 3600
+                        if _ap_age_h > 3:
+                            _force_delivery = True
+                            logger.info("[ANCHOR-AUTOPILOT] watchdog: last autopilot msg %.1fh ago → force delivery", _ap_age_h)
+                    else:
+                        _force_delivery = True  # Ни одного сообщения — первый раз
+                except Exception:
+                    pass
 
                 # Контекстный noise-фильтр: не блокируем по префиксам,
                 # а оцениваем реальную ценность ответа
@@ -1477,6 +1512,14 @@ class AnchorEngine:
                     # Утечки делегаций: ответ начинается с обращения к другому агенту
                     or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
                 )
+                if _is_noise_result:
+                    _filter_reason = 'noise'
+
+                # Watchdog override: если давно не было сообщений и есть непустой результат >50 символов
+                if _is_noise_result and _force_delivery and len(_result_clean) > 50:
+                    _is_noise_result = False
+                    _filter_reason = ''
+                    logger.info("[ANCHOR-AUTOPILOT] watchdog override: forcing delivery for %s (%d chars)", agent_name, len(_result_clean))
 
                 # ── Dedup: не отправлять если похожее сообщение было недавно ──
                 if not _is_noise_result and _result_clean:
@@ -1494,6 +1537,7 @@ class AnchorEngine:
                                 _rp_text = _rp_content or ''
                             if _rp_text and _rp_text[:120].lower() == _new_prefix:
                                 _is_noise_result = True
+                                _filter_reason = 'dedup'
                                 logger.info("[ANCHOR-AUTOPILOT] dedup: skipping similar message from %s", agent_name)
                                 break
                     except Exception:
@@ -1554,22 +1598,35 @@ class AnchorEngine:
 
             # Обновляем статус dispatch-лога (ВСЕГДА — даже если result пустой)
             if agents:
-                log = session.query(_AAL_ap).filter_by(
-                    user_id=user.id,
-                    activity_type='goal_autopilot_dispatch',
-                    target=anchor.source,
-                ).order_by(_AAL_ap.id.desc()).first()
-                if log:
-                    _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
-                    _full_result = _tools_prefix + (result or '')
-                    if result and result.strip() and not _is_noise_result:
-                        log.status = 'completed'
-                    elif result and result.strip():
-                        log.status = 'no_action'
-                    else:
-                        log.status = 'empty_result'
-                    log.result = _full_result[:400] if _full_result.strip() else 'empty'
-                    session.commit()
+                try:
+                    log = session.query(_AAL_ap).filter_by(
+                        user_id=user.id,
+                        activity_type='goal_autopilot_dispatch',
+                        target=anchor.source,
+                    ).order_by(_AAL_ap.id.desc()).first()
+                    if log:
+                        _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
+                        _filter_tag = f"[filtered:{_filter_reason}] " if _filter_reason else ''
+                        _full_result = _filter_tag + _tools_prefix + (result or '')
+                        if result and result.strip() and not _is_noise_result:
+                            log.status = 'completed'
+                        elif _filter_reason == 'dedup':
+                            log.status = 'dedup_filtered'
+                        elif _filter_reason == 'noise':
+                            log.status = 'noise_filtered'
+                        elif result and result.strip():
+                            log.status = 'no_action'
+                        else:
+                            log.status = 'empty_result'
+                        log.result = _full_result[:400] if _full_result.strip() else 'empty'
+                        log.updated_at = datetime.now(timezone.utc)
+                        session.commit()
+                except Exception as _upd_err:
+                    logger.warning("[ANCHOR-AUTOPILOT] AAL status update failed: %s", _upd_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
 
         except Exception as e:
             logger.warning("[ANCHOR-AUTOPILOT] error for user %d: %s", user.id, e)
