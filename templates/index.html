@@ -1201,7 +1201,7 @@ async function resetPassword() {
     }
   } catch(e) { errEl.textContent = 'Ошибка сети'; errEl.style.display = 'block'; }
 }
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js', {scope: '/'}).catch(function(){}); }
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(function(){}); }
 
 // PWA Install button
 var deferredPrompt = null;
