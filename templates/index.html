@@ -321,83 +321,6 @@
                 font-size: 24px;
             }
         }
-        /* ── Блок Автопилот целей ── */
-        .autopilot-section {
-            border: 1px solid #D1D9E0;
-            border-radius: 6px;
-            padding: 32px;
-            background: white;
-            margin: 0 0 80px 0;
-            display: flex;
-            gap: 32px;
-            align-items: flex-start;
-            transition: all 0.2s;
-        }
-        .autopilot-section:hover {
-            border-color: #1F2328;
-        }
-        .autopilot-left {
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 8px;
-        }
-        .autopilot-left .bonus-num {
-            font-size: 40px;
-        }
-        .autopilot-badge {
-            display: inline-block;
-            padding: 3px 10px;
-            background: #DAFBE1;
-            color: #1A7F37;
-            font-size: 11px;
-            font-weight: 600;
-            border-radius: 12px;
-            letter-spacing: 0.3px;
-        }
-        .autopilot-body h2 {
-            font-size: 17px;
-            font-weight: 600;
-            color: #1F2328;
-            margin: 0 0 8px 0;
-        }
-        .autopilot-body .feature-description {
-            text-align: left;
-            margin-bottom: 16px;
-        }
-        .autopilot-points {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px 24px;
-            margin: 0;
-            padding: 0;
-            list-style: none;
-        }
-        .autopilot-points li {
-            font-size: 13px;
-            color: #374151;
-            line-height: 1.5;
-            padding-left: 18px;
-            position: relative;
-        }
-        .autopilot-points li::before {
-            content: '✓';
-            position: absolute;
-            left: 0;
-            color: #1A7F37;
-            font-weight: 700;
-        }
-        @media (max-width: 768px) {
-            .autopilot-section {
-                flex-direction: column;
-                padding: 20px;
-                gap: 16px;
-            }
-            .autopilot-points {
-                grid-template-columns: 1fr;
-            }
-        }
         .feature-icon {
             width: 48px;
             height: 48px;
@@ -826,26 +749,6 @@
                 </div>
             </div>
 
-            <!-- Автопилот целей -->
-            <div class="autopilot-section">
-                <div class="autopilot-left">
-                    <div class="bonus-num">04</div>
-                    <span class="autopilot-badge">NEW</span>
-                </div>
-                <div class="autopilot-body">
-                    <h2>{% if lang == 'en' %}Goal Autopilot — agents drive your goals 24/7{% else %}Автопилот целей — агенты двигают ваши цели 24/7{% endif %}</h2>
-                    <div class="feature-description">{% if lang == 'en' %}Set a goal — and forget about it. Every 5 minutes one of your agents takes the next step: researches the market, sends an email, updates a task, prepares a report. Agents rotate in turn — each brings its own specialization and integrations. You see every action in the activity feed. Nothing is lost, nothing is forgotten.{% else %}Поставьте цель — и забудьте. Каждые 5 минут один из ваших агентов берёт на себя следующий шаг: исследует рынок, пишет письмо, обновляет задачу, готовит отчёт. Агенты чередуются по очереди — каждый приносит свою специализацию и интеграции. Вы видите каждое действие в ленте активности. Ничего не теряется, ничего не забывается.{% endif %}</div>
-                    <ul class="autopilot-points">
-                        <li>{% if lang == 'en' %}Agents work in rotation — round-robin every 5 minutes{% else %}Агенты работают по очереди — round-robin каждые 5 минут{% endif %}</li>
-                        <li>{% if lang == 'en' %}Each agent performs one focused action per cycle{% else %}Каждый агент делает одно фокусное действие за цикл{% endif %}</li>
-                        <li>{% if lang == 'en' %}Adaptive toolset based on agent specialization{% else %}Адаптивный набор инструментов под специализацию агента{% endif %}</li>
-                        <li>{% if lang == 'en' %}Email, content, analytics, tasks — all on autopilot{% else %}Email, контент, аналитика, задачи — всё в автопилоте{% endif %}</li>
-                        <li>{% if lang == 'en' %}Full transparency — all activity visible in dashboard{% else %}Полная прозрачность — вся активность видна в дашборде{% endif %}</li>
-                        <li>{% if lang == 'en' %}Works with any number of agents and integrations{% else %}Работает с любым количеством агентов и интеграций{% endif %}</li>
-                    </ul>
-                </div>
-            </div>
-
             <!-- Примеры интеграций — бегущие строки -->
             <div class="reviews-section">
                 <div class="reviews-track reviews-left">
@@ -952,6 +855,52 @@
                     </div>
                     <h2 style="font-size: 15px; font-weight: 600; color: #1F2328; margin: 0;">Бот + дашборд</h2>
                     <div class="feature-description">В кармане — Telegram-бот или Discord-бот. На экране — веб-панель с задачами, лентой Арены и управлением агентами. Единая база, три интерфейса.</div>
+                </div>
+            </div>
+
+            <!-- Автопилот целей — отдельная секция -->
+            <div class="autopilot-section">
+                <div class="autopilot-header">
+                    <span class="autopilot-badge">{% if lang == 'en' %}NEW{% else %}НОВОЕ{% endif %}</span>
+                    <h2>{% if lang == 'en' %}Goal Autopilot{% else %}Автопилот целей{% endif %}</h2>
+                    <p>{% if lang == 'en' %}Set a goal — and forget about it. Your agents take turns every 5 minutes: one researches, another sends emails, a third updates tasks. Each brings its own specialization. Full transparency — every action visible in the dashboard.{% else %}Поставьте цель — и забудьте. Агенты по очереди каждые 5 минут берут следующий шаг: один исследует, другой пишет письма, третий обновляет задачи. Каждый приносит свою специализацию. Полная прозрачность — каждое действие видно в дашборде.{% endif %}</p>
+                </div>
+
+                <div class="autopilot-cycle">
+                    <div class="autopilot-step">
+                        <div class="autopilot-step-icon">🎯</div>
+                        <div class="autopilot-step-label">{% if lang == 'en' %}You set<br>a goal{% else %}Вы ставите<br>цель{% endif %}</div>
+                    </div>
+                    <div class="autopilot-arrow">→</div>
+                    <div class="autopilot-step">
+                        <div class="autopilot-step-icon">🤖</div>
+                        <div class="autopilot-step-label">{% if lang == 'en' %}Agent picks<br>next step{% else %}Агент берёт<br>шаг{% endif %}</div>
+                    </div>
+                    <div class="autopilot-arrow">→</div>
+                    <div class="autopilot-step">
+                        <div class="autopilot-step-icon">⚡</div>
+                        <div class="autopilot-step-label">{% if lang == 'en' %}One focused<br>action{% else %}Одно фокусное<br>действие{% endif %}</div>
+                    </div>
+                    <div class="autopilot-arrow">→</div>
+                    <div class="autopilot-step">
+                        <div class="autopilot-step-icon">🔄</div>
+                        <div class="autopilot-step-label">{% if lang == 'en' %}Next agent<br>in 5 min{% else %}Следующий<br>через 5 мин{% endif %}</div>
+                    </div>
+                </div>
+
+                <div class="autopilot-cards">
+                    <div class="autopilot-card">
+                        <h3>{% if lang == 'en' %}Round-robin rotation{% else %}Ротация по очереди{% endif %}</h3>
+                        <p>{% if lang == 'en' %}Agents take turns automatically — each brings its own integrations and skills to the goal.{% else %}Агенты чередуются автоматически — каждый приносит свои интеграции и навыки к цели.{% endif %}</p>
+                    </div>
+                    <div class="autopilot-card">
+                        <h3>{% if lang == 'en' %}Adaptive tools{% else %}Адаптивные инструменты{% endif %}</h3>
+                        <p>{% if lang == 'en' %}Email, content, analytics, sales — each agent gets the right tools for its specialization.{% else %}Email, контент, аналитика, продажи — каждый агент получает нужные инструменты под свою специализацию.{% endif %}</p>
+                    </div>
+                    <div class="autopilot-card">
+                        <h3>{% if lang == 'en' %}Full transparency{% else %}Полная прозрачность{% endif %}</h3>
+                        <p>{% if lang == 'en' %}Every action logged in the activity feed. See who did what and when — nothing lost, nothing hidden.{% else %}Каждое действие в ленте активности. Видно кто, что и когда сделал — ничего не теряется, ничего не скрыто.{% endif %}</p>
+                    </div>
                 </div>
             </div>
 
