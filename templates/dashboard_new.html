@@ -3095,7 +3095,11 @@ else:
                     subj_raw = msg.get('Subject') or ''
                     pts = decode_header(subj_raw)
                     subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
-                    frm = msg.get('From', '')
+                    from email.utils import parseaddr as _pa
+                    _fn_raw, _f_email = _pa(msg.get('From', ''))
+                    _fn_pts = decode_header(_fn_raw)
+                    _fn_dec = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in _fn_pts)
+                    frm = (_fn_dec + ' ' + _f_email).strip() if _fn_dec else _f_email
                     date = msg.get('Date', '')
                     import re as _re
                     import html as _html_ent
@@ -3198,7 +3202,11 @@ else:
                     subj_raw = msg.get('Subject') or ''
                     pts = decode_header(subj_raw)
                     subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
-                    frm = msg.get('From', '')
+                    from email.utils import parseaddr as _pa
+                    _fn_raw, _f_email = _pa(msg.get('From', ''))
+                    _fn_pts = decode_header(_fn_raw)
+                    _fn_dec = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in _fn_pts)
+                    frm = (_fn_dec + ' ' + _f_email).strip() if _fn_dec else _f_email
                     date = msg.get('Date', '')
                     import re as _re
                     import html as _html_ent
@@ -3301,7 +3309,11 @@ else:
                     subj_raw = msg.get('Subject') or ''
                     pts = decode_header(subj_raw)
                     subject = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in pts)
-                    frm = msg.get('From', '')
+                    from email.utils import parseaddr as _pa
+                    _fn_raw, _f_email = _pa(msg.get('From', ''))
+                    _fn_pts = decode_header(_fn_raw)
+                    _fn_dec = ''.join(p.decode(e or 'utf-8', errors='replace') if isinstance(p, bytes) else (p or '') for p, e in _fn_pts)
+                    frm = (_fn_dec + ' ' + _f_email).strip() if _fn_dec else _f_email
                     date = msg.get('Date', '')
                     import re as _re
                     import html as _html_ent
@@ -7620,7 +7632,11 @@ except Exception as e:
 
                     const agentHeader = document.createElement('div');
                     agentHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
-                    const _ac = agentActivities.length;
+                    const _acFiltered = agentActivities.filter(a => {
+                        if (a.activity_type === 'goal_autopilot_dispatch' && ['failed', 'empty_result', 'in_progress'].includes(a.status)) return false;
+                        return true;
+                    });
+                    const _ac = _acFiltered.length;
                     const _acLabel = _ac > 0 ? `<span style="font-size: 12px; color: #8C959F;">${_ac} ${_ac===1?t('act-item-1'):(_ac>=2&&_ac<=4?t('act-item-2'):t('act-item-5'))}</span>` : '';
                     agentHeader.innerHTML = `
                         <div style="display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 0;">

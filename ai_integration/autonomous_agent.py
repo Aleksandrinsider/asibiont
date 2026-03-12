@@ -4612,23 +4612,40 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     except Exception:
         pass
 
-    # Для автопилота: если текст шаблонный но инструменты вызывались — обогащаем отчёт
-    if _is_autopilot_task and _tools_used and _final_text == _done_fb:
-        _TOOL_LABELS_FB = {
-            'send_outreach_email': 'отправила email' if _is_fem else 'отправил email',
-            'send_email': 'отправила email' if _is_fem else 'отправил email',
-            'start_email_campaign': 'запустила email-кампанию' if _is_fem else 'запустил email-кампанию',
-            'add_task': 'создала задачу' if _is_fem else 'создал задачу',
-            'research_topic': 'провела исследование' if _is_fem else 'провёл исследование',
-            'web_search': 'выполнила поиск' if _is_fem else 'выполнил поиск',
-            'create_post': 'создала пост' if _is_fem else 'создал пост',
-            'publish_to_telegram': 'опубликовала в Telegram' if _is_fem else 'опубликовал в Telegram',
-            'update_goal_progress': 'обновила прогресс цели' if _is_fem else 'обновил прогресс цели',
-            'find_and_message_relevant_users': 'искала контакты' if _is_fem else 'искал контакты',
-        }
-        _actions = [_TOOL_LABELS_FB.get(t, t) for t in dict.fromkeys(_tools_used)][:3]
-        if _actions:
-            _final_text = ', '.join(_actions).capitalize() + '.'
+    # Для автопилота: если текст шаблонный но инструменты вызывались — принудительно расширяем через LLM
+    if _is_autopilot_task and _tools_used and (_final_text == _done_fb or len((_final_text or '').strip()) < 60):
+        try:
+            _tool_data_fb = []
+            for _m_fb in _messages:
+                if _m_fb.get('role') == 'tool':
+                    _td_fb = (_m_fb.get('content') or '')[:400]
+                    if _td_fb and _td_fb != '{"status":"skipped"}':
+                        _tool_data_fb.append(_td_fb)
+            _tool_data_fb_str = '\n'.join(_tool_data_fb[-3:]) if _tool_data_fb else ''
+            if _tool_data_fb_str:
+                _fb_messages = [
+                    {"role": "system", "content": (
+                        f"Ты — {agent.get('name', 'агент')}. Расскажи пользователю в чат "
+                        "ЧТО КОНКРЕТНО ты сделал и нашёл. Пиши от первого лица, живо, "
+                        "с фактами и цифрами. НЕ пиши 'выполнил поиск' или 'обновил прогресс'."
+                    )},
+                    {"role": "user", "content": (
+                        f"Вот данные из инструментов:\n{_tool_data_fb_str}\n\n"
+                        "Перескажи эти данные для пользователя: что нашлось, какие факты, "
+                        "имена, цифры, и что думаешь делать дальше. Только текст, 2-4 предложения."
+                    )},
+                ]
+                _fb_resp = await asyncio.wait_for(
+                    _agent_inst.call_ai(_fb_messages, use_tools=False, max_tokens=250, api_timeout=25),
+                    timeout=30,
+                )
+                if _fb_resp and _fb_resp.get('choices'):
+                    _fb_text = (_fb_resp['choices'][0]['message'].get('content') or '').strip()
+                    if _fb_text and len(_fb_text) > 40:
+                        _final_text = _fb_text
+                        logger.info("[DIRECTOR-EXEC] autopilot fallback expanded: %d chars", len(_final_text))
+        except Exception as _fb_err:
+            logger.debug("[DIRECTOR-EXEC] autopilot fallback expansion failed: %s", _fb_err)
 
     # Для автопилота без инструментов: если текст содержательный (>100 символов) — пропускаем как аналитику,
     # если короткий/шаблонный — noise-фильтр в _dispatch_agent_for_anchor отсечёт
