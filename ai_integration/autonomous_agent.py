@@ -4074,7 +4074,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info('[DIRECTOR] Autopilot task → focused toolset for %s', agent.get('name'))
             _autopilot_tools = {
                 'add_task', 'complete_task', 'edit_task',
-                'update_goal_progress', 'update_goal',
+                'update_goal_progress', 'update_goal', 'complete_goal',
                 'research_topic', 'web_search', 'quick_topic_search', 'get_news_trends',
                 'create_post', 'publish_to_telegram', 'publish_to_discord', 'delegate_task',
                 'generate_image',
@@ -4084,6 +4084,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'send_email', 'send_outreach_email', 'reply_to_outreach_email',
                 'start_email_campaign', 'list_email_contacts', 'save_email_contact',
                 'find_relevant_contacts_for_task', 'add_email_leads',
+                # Делегирование — кампании поиска исполнителей
+                'start_delegation_campaign', 'manage_delegation_campaign',
+                # Контент — кампании публикаций
+                'start_content_campaign', 'manage_content_campaign',
+                'set_content_strategy',
             }
             try:
                 from .tools import get_available_tools as _gat_ap

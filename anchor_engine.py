@@ -132,22 +132,165 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     'agent_task_blocked': "Агент заблокирован на задаче '{task}'. Проанализируй причину блокировки и предложи решение.",
     # ── Кампании ──
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
-    # goal_autopilot_review: используется как fallback-prompt в _dispatch_agent_for_anchor
-    'goal_autopilot_review': (
+    # goal_autopilot_review: fallback — используется если _build_autopilot_prompt вернёт пустое
+    'goal_autopilot_review': "Продвинь цель пользователя на один конкретный шаг вперёд. Анализ → выбор → ДЕЙСТВИЕ.",
+}
+
+
+# ── Адаптивный промпт автопилота: стратегия подбирается под категорию целей ──
+
+_AUTOPILOT_STRATEGIES: dict[str, str] = {
+    # Привлечение пользователей / маркетинг / продажи / бизнес-рост
+    'outreach': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
+        "  1. web_search / research_topic — найди РЕАЛЬНЫЕ email/LinkedIn/сайты людей и компаний\n"
+        "  2. send_outreach_email — персонализированное письмо НАЙДЕННОМУ контакту\n"
+        "  3. create_post + publish_to_telegram / publish_to_discord — пост с призывом к действию\n"
+        "  4. start_email_campaign + add_email_leads — массовая рассылка\n"
+        "  5. delegate_task — поручи подзадачу другому агенту\n"
+        "  6. start_delegation_campaign — найди исполнителей через рассылку\n"
+        "ЦЕПОЧКА: web_search → save_email_contact → send_outreach_email."
+    ),
+    # Обучение / саморазвитие / навыки
+    'learning': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
+        "  1. research_topic(depth='deep') — найди лучшие материалы, курсы, статьи по теме\n"
+        "  2. add_task — создай конкретную учебную задачу (прочитать главу, пройти урок, решить задачу)\n"
+        "  3. get_news_trends — новости и тренды в области обучения\n"
+        "  4. create_post — оформи конспект или заметку по изученному материалу\n"
+        "  5. update_goal_progress — обнови прогресс после каждого шага\n"
+        "ПОДХОД: разбивай обучение на маленькие ежедневные шаги. Находи конкретные ресурсы."
+    ),
+    # Здоровье / спорт / привычки
+    'health': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
+        "  1. add_task — создай конкретную задачу-привычку (тренировка, питание, сон, медитация)\n"
+        "  2. research_topic — найди научные рекомендации по теме здоровья\n"
+        "  3. update_goal_progress — обнови прогресс (вес, тренировки, дни без вредных привычек)\n"
+        "  4. get_news_trends — тренды в области здоровья и фитнеса\n"
+        "  5. create_post — мотивационная запись о прогрессе\n"
+        "ПОДХОД: маленькие ежедневные шаги, трекинг метрик, напоминания о привычках."
+    ),
+    # Творчество / контент / дизайн
+    'creative': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
+        "  1. research_topic — вдохновение, референсы, тренды в нише\n"
+        "  2. create_post — создай черновик контента (текст, идея, сценарий)\n"
+        "  3. generate_image — сгенерируй визуал для проекта\n"
+        "  4. publish_to_telegram / publish_to_discord — опубликуй готовый контент\n"
+        "  5. add_task — задача на следующий этап (редактура, публикация, продвижение)\n"
+        "  6. start_content_campaign — запусти серию публикаций\n"
+        "ПОДХОД: креативный поиск → создание → публикация → анализ реакции."
+    ),
+    # Финансы / инвестиции / экономия
+    'finance': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
+        "  1. research_topic(depth='deep') — анализ рынка, инвестиций, финансовых инструментов\n"
+        "  2. get_news_trends — финансовые новости и тренды\n"
+        "  3. add_task — конкретный финансовый шаг (оплатить, проверить, перевести)\n"
+        "  4. create_post — записать финансовый план или анализ\n"
+        "  5. update_goal_progress — обнови метрику (накоплено, заработано, сэкономлено)\n"
+        "ПОДХОД: анализ → конкретное действие → отслеживание результата."
+    ),
+    # Проект / разработка / техническая задача
+    'project': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
+        "  1. add_task — декомпозиция: создай подзадачу для следующего этапа проекта\n"
+        "  2. research_topic — технические решения, библиотеки, best practices\n"
+        "  3. delegate_task — поручи задачу специалисту\n"
+        "  4. web_search — найди конкретное решение проблемы\n"
+        "  5. start_delegation_campaign — найди исполнителей для аутсорса\n"
+        "  6. update_goal_progress — обнови прогресс проекта\n"
+        "ПОДХОД: декомпозиция → исследование → действие → делегирование если нужно."
+    ),
+    # Универсальная стратегия (если категория не определена)
+    'general': (
+        "ПРИОРИТЕТ ДЕЙСТВИЙ (выбери подходящий для конкретной цели):\n"
+        "  1. add_task — создай конкретную подзадачу для следующего шага\n"
+        "  2. research_topic — исследуй тему для принятия решения\n"
+        "  3. web_search — найди конкретную информацию, контакты, ресурсы\n"
+        "  4. create_post — оформи результат или план\n"
+        "  5. delegate_task — поручи подзадачу\n"
+        "  6. send_outreach_email — свяжись с нужным человеком\n"
+        "  7. update_goal_progress — обнови прогресс после действия\n"
+        "ПОДХОД: пойми что нужно для ЭТОЙ КОНКРЕТНОЙ цели и выбери наиболее подходящее действие."
+    ),
+}
+
+# Маппинг категорий целей → ключ стратегии
+_GOAL_CATEGORY_MAP: dict[str, str] = {
+    'business': 'outreach', 'career': 'outreach',
+    'marketing': 'outreach', 'sales': 'outreach', 'growth': 'outreach',
+    'learning': 'learning', 'education': 'learning', 'study': 'learning',
+    'skill': 'learning', 'development': 'learning',
+    'health': 'health', 'fitness': 'health', 'sport': 'health',
+    'wellness': 'health', 'habit': 'health',
+    'creative': 'creative', 'content': 'creative', 'design': 'creative',
+    'writing': 'creative', 'art': 'creative', 'music': 'creative',
+    'finance': 'finance', 'money': 'finance', 'investment': 'finance',
+    'savings': 'finance', 'budget': 'finance',
+    'project': 'project', 'product': 'project', 'tech': 'project',
+    # 'work' и 'personal' слишком общие — не маппим, определяем по ключевым словам
+}
+
+# Ключевые слова в названии цели → стратегия (fallback если категория не задана)
+_GOAL_TITLE_KEYWORDS: dict[str, list[str]] = {
+    'outreach': ['привлечь', 'найти пользовател', 'найти клиент', 'найти тестировщик',
+                 'продажи', 'клиенты', 'подписчик', 'аудитори', 'outreach', 'лиды',
+                 'пользовател', 'продвижени', 'маркетинг', 'реклам'],
+    'learning': ['выучить', 'изучить', 'научиться', 'курс', 'обучени', 'навык',
+                 'learn', 'study', 'practice', 'прочитать', 'учебник', 'экзамен', 'сертификат'],
+    'health': ['похудеть', 'тренировк', 'здоровье', 'спорт', 'фитнес', 'привычк',
+               'бросить', 'медитац', 'сон', 'питани', 'вес ', 'бег'],
+    'creative': ['написать', 'создать контент', 'блог', 'видео', 'подкаст', 'дизайн',
+                 'рисова', 'музык', 'сценарий', 'публикац', 'книг', 'роман', 'статью'],
+    'finance': ['заработать', 'накопить', 'инвестиц', 'бюджет', 'доход', 'экономи',
+                'финанс', 'прибыль', 'revenue'],
+    'project': ['разработ', 'проект', 'запуск', 'mvp', 'релиз', 'deploy', 'систем',
+                'приложени', 'бот', 'сайт', 'платформ'],
+}
+
+
+def _detect_goal_strategy(goals_summary: list) -> str:
+    """Определяет оптимальную стратегию автопилота по категориям и названиям целей."""
+    strategy_votes: dict[str, int] = {}
+
+    for g in goals_summary:
+        cat = (g.get('category') or '').lower().strip()
+        title = (g.get('title') or '').lower()
+        desc = (g.get('description') or '').lower()
+        combined = title + ' ' + desc
+
+        # 1. По категории цели
+        if cat in _GOAL_CATEGORY_MAP:
+            s = _GOAL_CATEGORY_MAP[cat]
+            strategy_votes[s] = strategy_votes.get(s, 0) + 2
+
+        # 2. По ключевым словам в названии/описании
+        for strategy, keywords in _GOAL_TITLE_KEYWORDS.items():
+            for kw in keywords:
+                if kw in combined:
+                    strategy_votes[strategy] = strategy_votes.get(strategy, 0) + 1
+                    break
+
+    if not strategy_votes:
+        return 'general'
+
+    return max(strategy_votes, key=strategy_votes.get)
+
+
+def _build_autopilot_prompt(goals_summary: list) -> str:
+    """Строит адаптивный промпт автопилота на основе категорий целей пользователя."""
+    strategy = _detect_goal_strategy(goals_summary)
+    strategy_block = _AUTOPILOT_STRATEGIES.get(strategy, _AUTOPILOT_STRATEGIES['general'])
+
+    return (
         "Продвинь цель пользователя на один конкретный шаг вперёд.\n"
         "Анализ → выбор → РЕАЛЬНОЕ действие. Не планируй — ДЕЛАЙ.\n\n"
         "ВАЖНО: твой текстовый ответ увидит пользователь в Telegram. Пиши кратко (2-4 предложения), "
         "только ФАКТЫ: что конкретно ты сделал и что получилось. Не пиши служебную информацию, "
         "не сообщай об ошибках сервисов (DuckDuckGo, таймаут и т.п.) — просто используй другой инструмент.\n\n"
-        "ПРИОРИТЕТ ДЕЙСТВИЙ (от самого эффективного к менее):\n"
-        "  1. Поиск контактов в интернете: web_search('email маркетологов в Москве') или research_topic — находи РЕАЛЬНЫЕ email/LinkedIn/сайты людей и компаний\n"
-        "  2. Email-аутрич: send_outreach_email с НАЙДЕННЫМ email адресом конкретного человека\n"
-        "  3. Контент: create_post + publish_to_telegram / publish_to_discord — пост с призывом к действию\n"
-        "  4. Делегирование: delegate_task — поручить конкретную подзадачу\n"
-        "  5. Email-кампания: start_email_campaign + add_email_leads с найденными контактами\n"
-        "  6. Исследование: research_topic, get_news_trends — тренды, стратегии, аналитика\n\n"
-        "ЦЕПОЧКА: web_search (найти контакты) → save_email_contact / add_email_leads → send_outreach_email. "
-        "Не отправляй email без предварительного поиска контактов!\n\n"
+        f"{strategy_block}\n\n"
         "НЕ ДЕЛАЙ:\n"
         "  - НЕ вызывай list_tasks/list_goals/get_system_status — данные уже в контексте\n"
         "  - НЕ повторяй инструменты из раздела ЗАБЛОКИРОВАННЫЕ\n"
@@ -155,9 +298,9 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
         "  - НЕ пиши 'Задачу выполнил' без реального инструмента\n\n"
         "Каждый цикл = одно конкретное ДЕЙСТВИЕ + update_goal_progress.\n"
         "Если один инструмент не сработал — молча попробуй другой, НЕ сообщай пользователю об ошибке.\n"
+        "Если ВСЕ подходы по теме исчерпаны — переключись на другой тип действия из списка.\n"
         "Отчёт: 2-4 предложения — что сделано и что получено."
-    ),
-}
+    )
 
 # Группы батчинга
 BATCH_GROUPS = {
@@ -1054,7 +1197,9 @@ class AnchorEngine:
             # Для goal_autopilot_review — используем полноценный prompt из _AGENT_DISPATCH_TRIGGERS,
             # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
             if anchor.anchor_type == 'goal_autopilot_review':
-                task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n" + _AGENT_DISPATCH_TRIGGERS.get(anchor.anchor_type, anchor.topic or '')
+                # Адаптивный промпт — стратегия подбирается под категорию целей пользователя
+                _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
+                task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n" + _build_autopilot_prompt(_goals_for_prompt)
             else:
                 task_text = _AGENT_DISPATCH_TRIGGERS.get(
                     anchor.anchor_type, anchor.topic or '',
@@ -1147,6 +1292,24 @@ class AnchorEngine:
             if _tool_freq:
                 _freq_str = ', '.join(f"{t}: {n}x" for t, n in sorted(_tool_freq.items(), key=lambda x: -x[1])[:8])
                 task_text += f"\n\n📈 Частота инструментов за 48ч: {_freq_str}. Выбери малоиспользуемый."
+
+            # ── Исчерпанные стратегии — принудительная смена подхода ──
+            _exhausted = data.get('exhausted_strategies', [])
+            if _exhausted:
+                _STRATEGY_LABELS = {
+                    'search': 'Поиск (web_search, research_topic, find_contacts)',
+                    'email': 'Email (send_outreach_email, start_email_campaign)',
+                    'content': 'Контент (create_post, publish_to_telegram)',
+                    'delegation': 'Делегирование (delegate_task, start_delegation_campaign)',
+                }
+                _exh_labels = [_STRATEGY_LABELS.get(s, s) for s in _exhausted]
+                task_text += (
+                    f"\n\n🔄 ИСЧЕРПАННЫЕ СТРАТЕГИИ (>50% провалов за 48ч — ПЕРЕКЛЮЧИСЬ на другой тип действия):\n"
+                    + '\n'.join(f"  ❌ {l}" for l in _exh_labels)
+                    + "\n  Используй ДРУГУЮ категорию инструментов. "
+                    "Например: если поиск не работает → создай задачи/контент. "
+                    "Если email не работает → попробуй контент или делегирование."
+                )
 
             # ══ Блок отсутствующих интеграций: агент видит что нужно и сообщает пользователю ══
             import os as _os_intg
@@ -3310,6 +3473,7 @@ class AnchorEngine:
                 'id': g.id,
                 'title': g.title,
                 'description': (g.description or '')[:150],
+                'category': g.category or '',
                 'progress': g.progress_percentage,
                 'metric_target': g.metric_target,
                 'metric_current': g.metric_current,
@@ -3333,6 +3497,23 @@ class AnchorEngine:
             _AAL_email.status == 'sent',
         ).count()
 
+        # ── Определяем исчерпанные стратегии (все инструменты категории провалились) ──
+        _STRATEGY_TOOLS = {
+            'search': {'web_search', 'research_topic', 'quick_topic_search', 'find_relevant_contacts_for_task', 'find_and_message_relevant_users'},
+            'email': {'send_outreach_email', 'send_email', 'start_email_campaign', 'add_email_leads', 'negotiate_by_email'},
+            'content': {'create_post', 'publish_to_telegram', 'publish_to_discord', 'generate_image'},
+            'delegation': {'delegate_task', 'start_delegation_campaign'},
+        }
+        exhausted_strategies = []
+        for strat_name, strat_tools in _STRATEGY_TOOLS.items():
+            used_tools = strat_tools & set(_tool_freq.keys())
+            failed_in_strat = strat_tools & set(_failed_tools.keys())
+            # Стратегия исчерпана если: использовалась 3+ раз И >50% провалов
+            total_uses = sum(_tool_freq.get(t, 0) for t in used_tools)
+            total_fails = sum(_failed_tools.get(t, 0) for t in failed_in_strat)
+            if total_uses >= 3 and total_fails > total_uses * 0.5:
+                exhausted_strategies.append(strat_name)
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -3345,6 +3526,7 @@ class AnchorEngine:
             'total_emails_sent': _total_emails_sent,
             'failed_tools': {k: v for k, v in _failed_tools.items() if v >= 2},
             'tool_frequency': _tool_freq,
+            'exhausted_strategies': exhausted_strategies,
         }
 
         return [Anchor(
