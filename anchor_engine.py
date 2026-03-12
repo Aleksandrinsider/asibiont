@@ -916,28 +916,32 @@ class AnchorEngine:
 
         # ── 3b. GOAL AUTOPILOT — ПЕРВЫМ после dialog, до постов/email ──
         # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
-        # Но проверяем min gap между proactive-сообщениями чтобы не заваливать пользователя.
+        # Gap check только по AUTOPILOT-сообщениям (не всем proactive) —
+        # иначе service_degraded/email/пост блокирует автопилот на 10 мин.
         if autopilot_anchors:
             _ap_gap_ok = True
             try:
-                _last_ap_msg = session.query(Interaction.created_at).filter(
+                # Ищем только autopilot-оригинированные сообщения (содержат __anchor_type: goal_autopilot_review)
+                _last_ap_msg = session.query(Interaction.created_at, Interaction.content).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'proactive',
+                    Interaction.content.like('%goal_autopilot_review%'),
                 ).order_by(Interaction.created_at.desc()).first()
                 if _last_ap_msg:
                     _ap_time = _last_ap_msg[0]
                     if _ap_time.tzinfo is None:
                         _ap_time = _ap_time.replace(tzinfo=timezone.utc)
                     _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
-                    if _ap_gap < MIN_PROACTIVE_GAP_MINUTES:
+                    _min_gap = max(5, MIN_PROACTIVE_GAP_MINUTES - 3)  # автопилот: сокращённый gap (7 мин вместо 10)
+                    if _ap_gap < _min_gap:
                         _ap_gap_ok = False
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last msg {_ap_gap:.0f}m ago, min={MIN_PROACTIVE_GAP_MINUTES}m)")
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last autopilot msg {_ap_gap:.0f}m ago, min={_min_gap}m)")
             except Exception:
                 pass
 
             if _ap_gap_ok:
                 logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
-                for _ap in autopilot_anchors[:1]:  # макс 1 за цикл
+                for _ap in autopilot_anchors[:1]:
                     async with self._ai_semaphore:
                         await self._dispatch_agent_for_anchor(user, _ap, session)
 
@@ -1317,7 +1321,9 @@ class AnchorEngine:
                 # Если агент определил кастомный список — он актуален для диалога, но не для
                 # автономной работы по целям пользователя.
                 _is_autopilot_dispatch = (anchor.anchor_type == 'goal_autopilot_review')
-                _tools_for_dispatch = '' if _is_autopilot_dispatch else (chosen.tools_allowed or '')
+                # Адаптивный toolset: сохраняем tools_allowed агента,
+                # но помечаем автопилот через _autopilot_mode для расширения core tools
+                _tools_for_dispatch = chosen.tools_allowed or ''
                 agent_data = {
                     'id': chosen.id, 'name': chosen.name,
                     'job_title': chosen.job_title or '',

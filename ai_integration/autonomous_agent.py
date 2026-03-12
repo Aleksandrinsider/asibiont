@@ -4122,6 +4122,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Вычисляем exclude_tools = все инструменты минус разрешённые
     _exclude_for_agent: set[str] | None = None
     if _allowed_tools:
+        # Для автопилота: расширяем собственные tools агента core-набором (задачи, цели, прогресс)
+        if _is_autopilot_task:
+            _allowed_tools.update({
+                'add_task', 'complete_task', 'edit_task',
+                'update_goal_progress', 'update_goal', 'complete_goal',
+                'research_topic', 'web_search', 'delegate_task',
+            })
         try:
             from .tools import get_available_tools as _gat2
             _all_names = {t['function']['name'] for t in _gat2()}
@@ -4129,27 +4136,48 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _te2:
             logger.debug('[DIRECTOR] tools exclude calc: %s', _te2)
     elif not _allowed_tools:
-        # Автопилот целей → ограниченный набор ключевых инструментов (saves ~1200 tokens vs all 43)
         if _is_autopilot_task:
-            logger.info('[DIRECTOR] Autopilot task → focused toolset for %s', agent.get('name'))
+            # Адаптивный автопилот: core tools + smart filter по специализации/интеграциям агента
+            logger.info('[DIRECTOR] Autopilot task → adaptive toolset for %s', agent.get('name'))
+            # Core: минимальный набор для любого автопилота
             _autopilot_tools = {
                 'add_task', 'complete_task', 'edit_task',
                 'update_goal_progress', 'update_goal', 'complete_goal',
-                'research_topic', 'web_search', 'quick_topic_search', 'get_news_trends',
-                'create_post', 'publish_to_telegram', 'publish_to_discord', 'delegate_task',
-                'generate_image',
-                'find_and_message_relevant_users',
-                'run_agent_action',  # внешние интеграции агентов
-                # Email — агенты должны уметь слать/читать письма в автопилоте
-                'send_email', 'send_outreach_email', 'reply_to_outreach_email',
-                'start_email_campaign', 'list_email_contacts', 'save_email_contact',
-                'find_relevant_contacts_for_task', 'add_email_leads',
-                # Делегирование — кампании поиска исполнителей
-                'start_delegation_campaign', 'manage_delegation_campaign',
-                # Контент — кампании публикаций
-                'start_content_campaign', 'manage_content_campaign',
-                'set_content_strategy',
+                'research_topic', 'web_search', 'quick_topic_search',
+                'delegate_task', 'run_agent_action',
             }
+            # Smart extend: добавляем инструменты по специализации и интеграциям агента
+            _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
+            _api_keys_lower = (agent.get('user_api_keys') or '').lower()
+            _pc_lower = (agent.get('python_code') or '').lower()
+            # Email — только если агент связан с email
+            if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'crm', 'контакт', 'sales')) or
+                    any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'email', 'mail', 'resend')) or
+                    any(w in _pc_lower for w in ('imap', 'smtplib', 'email.mime'))):
+                _autopilot_tools.update({
+                    'send_email', 'send_outreach_email', 'reply_to_outreach_email',
+                    'start_email_campaign', 'list_email_contacts', 'save_email_contact',
+                    'find_relevant_contacts_for_task', 'add_email_leads',
+                })
+            # Контент/маркетинг
+            if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram', 'pr ', 'пиар', 'копирайт', 'редактор', 'discord')):
+                _autopilot_tools.update({
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    'generate_image', 'start_content_campaign', 'manage_content_campaign',
+                    'set_content_strategy', 'get_news_trends',
+                })
+            # Аналитика/исследования
+            if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
+                _autopilot_tools.update({'get_news_trends', 'find_and_message_relevant_users'})
+            # Продажи/HR/нетворкинг
+            if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b')):
+                _autopilot_tools.update({
+                    'find_and_message_relevant_users', 'find_relevant_contacts_for_task',
+                    'send_outreach_email', 'save_email_contact',
+                    'start_delegation_campaign', 'manage_delegation_campaign',
+                })
+            # Если у агента есть python_code или user_api_keys — run_agent_action уже в core
+            logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
             try:
                 from .tools import get_available_tools as _gat_ap
                 _all_names = {t['function']['name'] for t in _gat_ap()}
