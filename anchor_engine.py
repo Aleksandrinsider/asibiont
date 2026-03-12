@@ -92,6 +92,7 @@ SCAN_INTERVAL_MINUTES = 5
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -175,20 +176,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         f"{channels_hint}\n"
         "ВАЖНО: твой текстовый ответ увидит пользователь в Telegram. Пиши кратко (2-4 предложения), "
         "только ФАКТЫ: что конкретно ты сделал и что получилось. Не пиши служебную информацию, "
-        "не сообщай об ошибках сервисов (DuckDuckGo, таймаут и т.п.) — просто используй другой инструмент.\n\n"
-        "ДОСТУПНЫЕ ИНСТРУМЕНТЫ (выбери 1-2 самых эффективных для ЭТОЙ ситуации):\n"
-        "  • web_search — поиск людей, ресурсов, решений\n"
-        "  • research_topic — глубокий анализ темы\n"
-        "  • find_relevant_contacts_for_task / find_and_message_relevant_users — поиск людей на платформе\n"
-        "  • save_email_contact + send_outreach_email — email-аутрич\n"
-        "  • create_post + publish_to_telegram / publish_to_discord — контент\n"
-        "  • generate_image — визуал для контента\n"
-        "  • add_task — конкретная подзадача для пользователя\n"
-        "  • delegate_task — поручить агенту-специалисту\n"
-        "  • run_agent_action — запуск скрипта/интеграции\n"
-        "  • start_delegation_campaign / start_content_campaign — массовые кампании\n"
-        "  • update_goal_progress — обнови прогресс после действия\n\n"
-        "ЛОГИКА ВЫБОРА (думай сам, не следуй списку по порядку):\n"
+        "не сообщай об ошибках сервисов — просто используй другой инструмент.\n\n"
+        "ЛОГИКА ВЫБОРА (используй инструменты из схемы API):\n"
         "  - Что мешает прогрессу конкретно сейчас?\n"
         "  - Какой инструмент даст максимум результата за 1 вызов?\n"
         "  - Что НЕ делалось раньше? (см. раздел ЗАБЛОКИРОВАННЫЕ)\n"
@@ -199,7 +188,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         "  - НЕ делай research без следующего за ним ДЕЙСТВИЯ\n"
         "  - НЕ пиши 'Задачу выполнил' без реального инструмента\n\n"
         "Каждый цикл = одно конкретное ДЕЙСТВИЕ + update_goal_progress.\n"
-        "Если один инструмент не сработал — молча попробуй другой, НЕ сообщай пользователю об ошибке.\n"
+        "Если один инструмент не сработал — молча попробуй другой.\n"
         "Отчёт: 2-4 предложения — что сделано и что получено."
     )
 
@@ -947,10 +936,9 @@ class AnchorEngine:
                     if _ap_time.tzinfo is None:
                         _ap_time = _ap_time.replace(tzinfo=timezone.utc)
                     _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
-                    _min_gap = max(5, MIN_PROACTIVE_GAP_MINUTES - 3)  # автопилот: сокращённый gap (7 мин вместо 10)
-                    if _ap_gap < _min_gap:
+                    if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
                         _ap_gap_ok = False
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last autopilot msg {_ap_gap:.0f}m ago, min={_min_gap}m)")
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last autopilot msg {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
             except Exception:
                 pass
 
@@ -1165,18 +1153,16 @@ class AnchorEngine:
             if recent_actions:
                 task_text += (
                     f"\n\n⚠️ УЖЕ СДЕЛАНО (за 24ч):\n"
-                    + '\n'.join(f"  {a}" for a in recent_actions)
-                    + "\n\nПроанализируй паттерн выше: какие ТИПЫ действий повторяются? "
-                    "Выбери инструмент из категории, которая ещё НЕ использовалась или использовалась реже всего. "
-                    "Все доступные инструменты — в схеме API. Решение принимаешь сам."
+                    + '\n'.join(f"  {a}" for a in recent_actions[:8])
+                    + "\nНе повторяй эти действия. Выбери другую категорию инструментов."
                 )
 
             # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
             recent_msgs = data.get('recent_messages', [])
             if recent_msgs:
                 task_text += (
-                    f"\n\n🔇 Эти сообщения уже отправлены — ЗАПРЕЩЕНО повторять/пересказывать:\n"
-                    + '\n'.join(f"  {m}" for m in recent_msgs)
+                    f"\n\n🔇 Уже отправлено — не повторяй:\n"
+                    + '\n'.join(f"  {m}" for m in recent_msgs[:4])
                 )
 
             # Добавляем статус email-кампаний
@@ -1197,7 +1183,7 @@ class AnchorEngine:
             # Добавляем известные контакты
             known_contacts = data.get('known_contacts', [])
             if known_contacts:
-                task_text += f"\n\nИзвестные контакты (уже в базе):\n" + '\n'.join(f"  {c}" for c in known_contacts)
+                task_text += f"\n\nИзвестные контакты:\n" + '\n'.join(f"  {c}" for c in known_contacts[:5])
 
             # Задачи уже созданные агентами — не создавай дублей, предлагай новые шаги
             agent_tasks_done = data.get('agent_tasks_history', [])
@@ -1482,9 +1468,11 @@ class AnchorEngine:
                         return
 
                 try:
+                    # Ограничиваем task_text для экономии input-токенов DeepSeek
+                    _task_trimmed = task_text[:3000] if len(task_text) > 3000 else task_text
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(
-                            agent_data, task_text, user.telegram_id,
+                            agent_data, _task_trimmed, user.telegram_id,
                         ),
                         timeout=180,
                     )
