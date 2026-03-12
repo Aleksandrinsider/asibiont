@@ -1515,12 +1515,6 @@ class AnchorEngine:
                 if _is_noise_result:
                     _filter_reason = 'noise'
 
-                # Watchdog override: если давно не было сообщений и есть непустой результат >50 символов
-                if _is_noise_result and _force_delivery and len(_result_clean) > 50:
-                    _is_noise_result = False
-                    _filter_reason = ''
-                    logger.info("[ANCHOR-AUTOPILOT] watchdog override: forcing delivery for %s (%d chars)", agent_name, len(_result_clean))
-
                 # ── Dedup: не отправлять если похожее сообщение было недавно ──
                 if not _is_noise_result and _result_clean:
                     try:
@@ -1542,6 +1536,14 @@ class AnchorEngine:
                                 break
                     except Exception:
                         pass
+
+                # ── Watchdog: если >3ч без AP-сообщения — форсировать доставку ──
+                # Работает ПОСЛЕ noise + dedup фильтров — обходит оба
+                if _is_noise_result and _force_delivery and len(_result_clean) > 50:
+                    _is_noise_result = False
+                    logger.info("[ANCHOR-AUTOPILOT] watchdog override (%s): forcing delivery for %s (%d chars)",
+                                _filter_reason, agent_name, len(_result_clean))
+                    _filter_reason = ''
 
                 if result and result.strip() and self.bot and not _is_noise_result:
                     try:
@@ -3469,11 +3471,39 @@ class AnchorEngine:
                 f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:200]}"
             )
 
-        # Последние proactive/agent_msg сообщения за 2 часа — что реально было сказано
+        # Fallback: если AAL пуст, берём историю из interactions (autopilot proactive сообщения)
+        if not actions_history:
+            _ap_fallback = session.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == 'proactive',
+                Interaction.content.like('%goal_autopilot_review%'),
+                Interaction.created_at >= now_utc - timedelta(hours=24),
+            ).order_by(Interaction.created_at.desc()).limit(10).all()
+            for _fb in _ap_fallback:
+                try:
+                    _j = json.loads(_fb.content or '{}')
+                    _ag = _j.get('__agent', {}).get('name', '?')
+                    _txt = (_j.get('text', '') or '')[:200]
+                    _tl = _j.get('__tools_used', [])
+                    _tl_str = f" [инструменты: {', '.join(_tl)}]" if _tl else ''
+                    actions_history.append(
+                        f"[{_fb.created_at.strftime('%H:%M')}] {_ag}{_tl_str}: {_txt}"
+                    )
+                    # Учитываем частоту для anti-loop
+                    for _tn in _tl:
+                        _tool_freq[_tn] = _tool_freq.get(_tn, 0) + 1
+                        if 'не наш' in _txt.lower() or 'не нашла' in _txt.lower():
+                            _failed_tools[_tn] = _failed_tools.get(_tn, 0) + 1
+                except Exception:
+                    pass
+
+        # Последние proactive/agent_msg сообщения за 12 часов — что реально было сказано
+        # (расширенное окно чтобы агенты видели всю историю, включая ранние попытки)
+        _msg_window_hours = 12 if not actions_history else 2
         recent_msgs = session.query(Interaction).filter(
             Interaction.user_id == user.id,
             Interaction.message_type.in_(['proactive', 'agent_msg']),
-            Interaction.created_at >= now_utc - timedelta(hours=2),
+            Interaction.created_at >= now_utc - timedelta(hours=_msg_window_hours),
         ).order_by(Interaction.created_at.desc()).limit(8).all()
         recent_messages = []
         for m in recent_msgs:
