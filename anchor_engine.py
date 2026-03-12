@@ -1551,19 +1551,23 @@ class AnchorEngine:
 
             # Результат сохранён в AgentActivityLog.result → context_builder читает его напрямую
 
-            # Обновляем статус dispatch-лога
-            if agents and result:
+            # Обновляем статус dispatch-лога (ВСЕГДА — даже если result пустой)
+            if agents:
                 log = session.query(_AAL_ap).filter_by(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
                     target=anchor.source,
                 ).order_by(_AAL_ap.id.desc()).first()
                 if log:
-                    # Prefix tools_used into result for future dedup analysis
                     _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
                     _full_result = _tools_prefix + (result or '')
-                    log.status = 'completed' if not _is_noise_result else 'no_action'
-                    log.result = _full_result[:400]
+                    if result and result.strip() and not _is_noise_result:
+                        log.status = 'completed'
+                    elif result and result.strip():
+                        log.status = 'no_action'
+                    else:
+                        log.status = 'empty_result'
+                    log.result = _full_result[:400] if _full_result.strip() else 'empty'
                     session.commit()
 
         except Exception as e:

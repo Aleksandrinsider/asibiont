@@ -2219,15 +2219,24 @@ class HybridAutonomousAgent:
                 # ответить текстом или вызвать ещё tools
 
             # Safety net: если вышли из цикла без return — генерируем ответ
-            final_resp = await self.call_ai(
-                messages, use_tools=False, temperature=0.7, max_tokens=300,
-                api_timeout=API_TIMEOUT_NORMAL)
-            final_text = final_resp['choices'][0]['message'].get('content') or ''
+            try:
+                final_resp = await self.call_ai(
+                    messages, use_tools=False, temperature=0.7, max_tokens=300,
+                    api_timeout=API_TIMEOUT_NORMAL)
+                final_text = final_resp['choices'][0]['message'].get('content') or ''
+            except Exception as _safety_err:
+                logger.warning(f"[AGENT] Safety-net AI call failed: {_safety_err}")
+                final_text = ''
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)
 
         except Exception as e:
             logger.error(f"[AGENT] Error: {e}\n{traceback.format_exc()}")
+            # Если инструменты уже отработали — формируем ответ из результатов вместо ошибки
+            if all_execution_results and any(r.get('success') for r in all_execution_results):
+                logger.info("[AGENT] Tools succeeded before crash — building response from results")
+                return self._finalize_response(
+                    '', user_message, user_id, all_execution_results)
             if user_lang == 'en':
                 error_responses = [
                     "Something went wrong. Try rephrasing your request.",
