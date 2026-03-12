@@ -174,22 +174,17 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         "Ты — часть КОМАНДЫ специалистов. Каждые 15 минут работает один из вас.\n\n"
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{channels_hint}\n"
-        "ГЛАВНОЕ ПРАВИЛО КОМАНДЫ:\n"
-        "ИЗУЧИ раздел «УЖЕ СДЕЛАНО» — там результаты коллег за 48 часов.\n"
-        "Прочитай КАЖДУЮ запись. Найди контакты, ссылки, площадки, которые нашли коллеги.\n"
-        "ТВОЯ ЗАДАЧА — продвинуть их работу ДАЛЬШЕ, а не начинать с нуля.\n\n"
-        "ЦЕПОЧКА ДЕЙСТВИЙ:\n"
-        "  1. Изучи что сделали коллеги → 2. Найди следующий логичный шаг → "
-        "3. СДЕЛАЙ действие → 4. update_goal_progress\n"
+        "ПРОЦЕСС МЫШЛЕНИЯ (обязательно перед действием):\n"
+        "  1. Прочитай «УЖЕ СДЕЛАНО» — найди что нашли коллеги (контакты, ссылки, площадки)\n"
+        "  2. Оцени свои способности — какое действие ТЫ можешь сделать лучше других?\n"
+        "  3. Выбери ОДНО действие, которое продвинет цель дальше всего\n"
+        "  4. СДЕЛАЙ его → update_goal_progress\n\n"
+        "ПРАВИЛО: не повторяй чужую работу — СТРОЙ на ней.\n"
         "  Поиск БЕЗ действия = провал. Нашёл email → отправь outreach. "
         "Нашёл площадку → создай задачу. Нашёл данные для коллеги → DELEGATE.\n\n"
-        "ФОРМАТ ОТВЕТА — сообщение в Telegram:\n"
-        "Пиши как живой специалист: что нашёл, что СДЕЛАЛ с этим, что будет дальше.\n"
-        "Примеры:\n"
-        "  ✅ 'Марк нашёл QA Hub — я исследовал глубже: 2к участников, модератор Алексей К. "
-        "Создала задачу написать ему. Кристина может отправить письмо.'\n"
-        "  ❌ 'Выполнил поиск.' — бессмысленно\n" 
-        "  ❌ 'Обновил прогресс цели.' — техническое действие, не информация\n\n"
+        "ФОРМАТ: пиши как живой специалист — что нашёл, что СДЕЛАЛ, что дальше.\n"
+        "  Пример хорошего ответа: 'Коллега нашёл QA Hub — я исследовал глубже: "
+        "2к участников, модератор Алексей К. Создала задачу написать ему.'\n\n"
         "НЕ ДЕЛАЙ:\n"
         "  - НЕ повторяй поиск, который уже делал коллега\n"
         "  - НЕ вызывай list_tasks/list_goals — данные уже в контексте\n"
@@ -1101,18 +1096,26 @@ class AnchorEngine:
             # Всегда добавляем синтетического ASI в пул — он участвует в ротации
             # наравне с кастомными агентами. id=0 → особая ветка в dispatch.
             from types import SimpleNamespace as _NS_ap
+            # Динамически формируем personality ASI с именами реальных агентов
+            _agent_names_for_asi = [getattr(a, 'name', '') for a in agents if getattr(a, 'id', 0) != 0]
+            _delegate_examples = ''
+            if _agent_names_for_asi:
+                _delegate_examples = (
+                    'Нашёл данные для коллеги → DELEGATE[Имя]: задача. '
+                    f'Коллеги: {", ".join(_agent_names_for_asi)}. '
+                )
             _asi_synth = _NS_ap(
                 id=0, name='ASI',
                 job_title='Координатор команды',
                 specialization='goal_management',
-                description='Координатор: исследует стратегию, создаёт задачи, делегирует специалистам.',
+                description='Координатор: исследует стратегию, создаёт задачи, делегирует по способностям.',
                 personality=(
                     'Ты — координатор команды ASI Biont. '
                     'Твои инструменты: web_search, research_topic, add_task, delegate_task. '
-                    'Ты исследуешь, находишь возможности и ДЕЛЕГИРУЕШЬ специалистам: '
-                    'нашёл email → DELEGATE[Кристина], нашёл статью → DELEGATE[Марк]. '
+                    'Ты исследуешь, находишь возможности и ДЕЛЕГИРУЕШЬ по способностям коллег. '
+                    + _delegate_examples +
                     'Ты ВСЕГДА делаешь реальное действие — поиск, задача, делегирование. '
-                    'НИКОГДА не пишешь «предлагаю» или «рекомендую» — ты просто делаешь.'
+                    'НИКОГДА не пишешь «предлагаю» или «рекомендую» — ты делаешь.'
                 ),
                 python_code='', user_api_keys='', tools_allowed='', avatar_url='',
             )
@@ -1169,13 +1172,24 @@ class AnchorEngine:
                     "  НЕ повторяй уже сделанные действия. СТРОЙ на них."
                 )
 
-            # Добавляем информацию о команде для делегирования
-            _team = data.get('team_agents', [])
-            if _team:
+            # Добавляем информацию о команде с их способностями
+            _team_profiles = data.get('team_profiles', [])
+            _team_names = data.get('team_agents', [])
+            if _team_profiles:
+                _team_lines = []
+                for tp in _team_profiles:
+                    _caps = ', '.join(tp.get('capabilities', [])) or 'общие задачи'
+                    _team_lines.append(f"  • {tp['name']} ({tp.get('job_title', '')}) — {_caps}")
                 task_text += (
-                    f"\n\nТВОЯ КОМАНДА: {', '.join(_team)}\n"
-                    "Если нашёл данные, которые должен обработать другой агент — "
-                    "напиши DELEGATE[Имя]: описание задачи. Пример: DELEGATE[Кристина]: отправь письмо на найденный email test@example.com"
+                    f"\n\nТВОЯ КОМАНДА (делегируй ПО СПОСОБНОСТЯМ, не всем сразу):\n"
+                    + '\n'.join(_team_lines)
+                    + "\nDELEGATE[Имя]: задача с конкретными данными. "
+                    "Делегируй ТОЛЬКО если у коллеги есть нужная интеграция для этой задачи."
+                )
+            elif _team_names:
+                task_text += (
+                    f"\n\nТВОЯ КОМАНДА: {', '.join(_team_names)}\n"
+                    "DELEGATE[Имя]: описание задачи."
                 )
 
             # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
@@ -1293,17 +1307,14 @@ class AnchorEngine:
                 # Решение: для autopilot принудительно чередуем агентов в порядке их id,
                 # используя последний dispatched-агент из AgentActivityLog как указатель.
                 if anchor.anchor_type == 'goal_autopilot_review':
-                    # Строим список в стабильном порядке: реальные агенты по id, ASI в конце
+                    # ── SMART ROUTING: выбираем агента по способностям + fairness ──
                     _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
                     _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
                     if _rotation_pool:
-                        # ── ROUND-ROBIN: выбираем агента с наименьшим числом dispatches за 48ч ──
-                        # Учитываем ПРОВАЛЫ: агенты с > 2 consecutive fails получают штраф.
-                        # Это предотвращает бесконечное повторение крашащихся агентов.
                         from sqlalchemy import func as _rr_func
                         _rr_counts = {}
-                        _rr_recent_fails = {}  # agent_ref_id → consecutive fails count
+                        _rr_recent_fails = {}
                         try:
                             _rr_counts_raw = session.query(
                                 _AAL_ap.ref_id, _rr_func.count(_AAL_ap.id).label('cnt')
@@ -1312,10 +1323,8 @@ class AnchorEngine:
                                 _AAL_ap.activity_type == 'goal_autopilot_dispatch',
                                 _AAL_ap.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
                             ).group_by(_AAL_ap.ref_id).all()
-                            # ref_id=None → ASI (id=0)
                             _rr_counts = {(r if r is not None else 0): c for r, c in _rr_counts_raw}
 
-                            # Считаем consecutive fails для каждого агента (последние 5 записей)
                             for _ag_rr in _rotation_pool:
                                 _ag_rr_id = getattr(_ag_rr, 'id', 0)
                                 _ref_val = _ag_rr_id if _ag_rr_id != 0 else None
@@ -1333,20 +1342,61 @@ class AnchorEngine:
                                 if _consec >= 3:
                                     _rr_recent_fails[_ag_rr_id] = _consec
                         except Exception as _rr_err:
-                            logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed (table may not exist): %s", _rr_err)
+                            logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed: %s", _rr_err)
                             try:
                                 session.rollback()
                             except Exception:
                                 pass
-                        # Сортируем: сначала агент с наименьшим cnt; ничья → custom агенты перед ASI, среди них по id
-                        # Штраф за consecutive fails: +100 к count (фактически исключает из ротации)
+
+                        # ── Анализ текущих потребностей цели ──
+                        _needs = set()
+                        _task_lower = task_text.lower()
+                        _exhausted_strats = data.get('exhausted_strategies', [])
+                        # Определяем что НУЖНО сейчас по контексту задачи
+                        if any(w in _task_lower for w in ('email', 'письм', 'outreach', 'контакт', 'рассылк')):
+                            _needs.add('email')
+                        if any(w in _task_lower for w in ('поиск', 'исследов', 'найти', 'search', 'analyz')):
+                            _needs.add('search')
+                        if any(w in _task_lower for w in ('rss', 'новост', 'хабр', 'feed', 'мониторинг')):
+                            _needs.add('rss')
+                        if any(w in _task_lower for w in ('github', 'код', 'разработ', 'developer')):
+                            _needs.add('github')
+                        if any(w in _task_lower for w in ('пост', 'контент', 'публик', 'telegram', 'discord')):
+                            _needs.add('content')
+                        if not _needs:
+                            _needs.add('search')  # дефолт: нужен поиск
+
+                        # ── Скоринг: способности агента × потребности goal ──
+                        def _capability_score(a):
+                            aid = getattr(a, 'id', 0)
+                            if aid == 0:
+                                return 0  # ASI = координатор, базовый скор без бонуса
+                            _api = (getattr(a, 'user_api_keys', '') or '').lower()
+                            _pc = (getattr(a, 'python_code', '') or '').lower()
+                            score = 0
+                            if 'email' in _needs:
+                                if any(w in _api for w in ('gmail', 'imap', 'smtp', 'resend', 'mail')):
+                                    score += 3
+                            if 'rss' in _needs:
+                                if any(w in _api for w in ('rss', 'feed', 'habr')) or 'feedparser' in _pc:
+                                    score += 3
+                            if 'github' in _needs:
+                                if 'github' in _api or 'github' in _pc:
+                                    score += 3
+                            if 'content' in _needs:
+                                if any(w in _api for w in ('telegram', 'discord', 'slack')):
+                                    score += 2
+                            if 'search' in _needs and _pc:
+                                score += 1  # агенты с python_code могут делать доп. исследования
+                            return score
+
                         def _rr_key(a):
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
-                            fail_penalty = _rr_recent_fails.get(aid, 0) * 50  # 3+ consecutive fails → penalty
-                            # ASI получает priority=99999 (выбирается последним среди равных)
+                            fail_penalty = _rr_recent_fails.get(aid, 0) * 50
+                            cap_bonus = _capability_score(a) * 10  # capability даёт бонус
                             tie_break = aid if aid != 0 else 99999
-                            return (cnt + fail_penalty, tie_break)
+                            return (cnt + fail_penalty - cap_bonus, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content
                         _rr_debug = (
@@ -3702,17 +3752,33 @@ class AnchorEngine:
             if total_uses >= 3 and total_fails > total_uses * 0.5:
                 exhausted_strategies.append(strat_name)
 
-        # Имена активных агентов для делегирования
+        # Агенты для делегирования — с описанием способностей
         from models import UserAgent as _UA_team
-        _team_names = [a.name for a in session.query(_UA_team).filter(
+        _team_agents_raw = session.query(_UA_team).filter(
             _UA_team.author_id == user.id,
             _UA_team.status.in_(['active', 'paused']),
-        ).all()]
+        ).all()
+        _team_profiles = []
+        for _ta in _team_agents_raw:
+            try:
+                from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_team
+                _ta_caps = _pai_team(
+                    _ta.user_api_keys or '', _ta.python_code or '',
+                    _ta.tools_allowed or '', getattr(_ta, 'search_scope', '') or '',
+                )
+            except Exception:
+                _ta_caps = []
+            _team_profiles.append({
+                'name': _ta.name,
+                'job_title': _ta.job_title or '',
+                'capabilities': _ta_caps[:6],
+            })
 
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
-            'team_agents': _team_names,
+            'team_agents': [tp['name'] for tp in _team_profiles],
+            'team_profiles': _team_profiles,
             'recent_actions': actions_history[:10],
             'recent_messages': recent_messages[:6],
             'email_campaigns': email_summary,
