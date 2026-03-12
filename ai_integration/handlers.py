@@ -7602,6 +7602,36 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         if close_session:
             session.close()
 
+
+async def web_search(query: str, user_id: int = None, session=None):
+    """
+    Прямой поиск в интернете — возвращает результаты с ссылками.
+    Универсальный: ищет любую информацию — людей, контакты, ресурсы, статьи.
+    """
+    from .api_client import get_api_client
+
+    logger.info(f"[WEB_SEARCH] user={user_id}, query='{query}'")
+    api = get_api_client()
+
+    results = await api.web_search(query, num=8)
+    if not results:
+        return f"По запросу «{query}» ничего не найдено. Попробуй переформулировать запрос."
+
+    lines = [f"🔎 Результаты поиска: {query}\n"]
+    for i, r in enumerate(results, 1):
+        title = r.get('title', '')
+        snippet = r.get('snippet', '')
+        link = r.get('link', '')
+        lines.append(f"{i}. **{title}**")
+        if snippet:
+            lines.append(f"   {snippet[:200]}")
+        if link:
+            lines.append(f"   🔗 {link}")
+        lines.append("")
+
+    return '\n'.join(lines)
+
+
 async def quick_topic_search(topic: str, user_id: int = None, session=None):
     """
      БЫСТРЫЙ ПОИСК ПО ТЕМЕ (LIGHT+)
@@ -8623,9 +8653,12 @@ async def find_and_message_relevant_users(
         
         if not top:
             return (
-                f" Не нашёл подходящих пользователей по запросу: «{purpose}».\n"
-                "Пока мало людей с такими интересами. Попробуй расширить поиск или подожди — "
-                "я уведомлю когда появится подходящий человек (contact_alert)."
+                f"На платформе пока нет подходящих пользователей по запросу: «{purpose}».\n"
+                "Рекомендации:\n"
+                "• web_search — найди людей/контакты/email через интернет\n"
+                "• send_outreach_email — напиши найденному контакту\n"
+                "• create_post + publish_to_telegram — опубликуй объявление\n"
+                "• start_email_campaign — массовая рассылка по найденным контактам"
             )
         
         # Антиспам: общий лимит 50 исходящих в день

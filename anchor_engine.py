@@ -143,13 +143,14 @@ _AUTOPILOT_STRATEGIES: dict[str, str] = {
     # Привлечение пользователей / маркетинг / продажи / бизнес-рост
     'outreach': (
         "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
-        "  1. web_search / research_topic — найди РЕАЛЬНЫЕ email/LinkedIn/сайты людей и компаний\n"
-        "  2. send_outreach_email — персонализированное письмо НАЙДЕННОМУ контакту\n"
-        "  3. create_post + publish_to_telegram / publish_to_discord — пост с призывом к действию\n"
-        "  4. start_email_campaign + add_email_leads — массовая рассылка\n"
-        "  5. delegate_task — поручи подзадачу другому агенту\n"
-        "  6. start_delegation_campaign — найди исполнителей через рассылку\n"
-        "ЦЕПОЧКА: web_search → save_email_contact → send_outreach_email."
+        "  1. web_search — ищи КОНКРЕТНЫХ людей: '[роль] email [город/ниша]', '[роль] site:linkedin.com', '[ниша] telegram каналы'. Формулируй запрос под цель!\n"
+        "  2. save_email_contact + send_outreach_email — сохрани найденный контакт и напиши персонализированное письмо\n"
+        "  3. create_post + publish_to_telegram / publish_to_discord — объявление с призывом к действию\n"
+        "  4. start_email_campaign + add_email_leads — массовая рассылка по собранным контактам\n"
+        "  5. start_delegation_campaign — найди исполнителей через рассылку\n"
+        "  6. research_topic — анализ каналов привлечения, где искать целевую аудиторию\n"
+        "ЦЕПОЧКА: web_search → save_email_contact → send_outreach_email.\n"
+        "Варьируй запросы: меняй формулировки, площадки (linkedin, telegram, habr, github), языки."
     ),
     # Обучение / саморазвитие / навыки
     'learning': (

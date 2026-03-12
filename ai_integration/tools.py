@@ -60,7 +60,7 @@ EXCLUDED_TOOLS = {
     'get_partners_list',                 # дубль find_relevant_contacts_for_task
     # 'toggle_autonomous_feature' — разблокирован, AI может управлять автопостингом
     'cancel_delegation',                 # покрывается reject_delegated_task
-    'web_search',                        # дубль research_topic (поиск + анализ)
+    # web_search — РАЗБЛОКИРОВАН: используется автопилотом для прямого поиска
     'get_stock_info',                    # удалён — заменён research_topic
     'and_',                              # SQLAlchemy operator leak
     'or_',                               # SQLAlchemy operator leak
@@ -92,7 +92,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "find_relevant_contacts_for_task",
-            "description": "🎯 Найти контакты для задачи/активности. Вызывай после add_task если задача связана с людьми (спорт, бизнес, обучение).",
+            "description": "🎯 Найти контакты СРЕДИ ПОЛЬЗОВАТЕЛЕЙ ПЛАТФОРМЫ для задачи/активности (спорт, бизнес, обучение). Ищет только внутри ASI Biont. Для внешнего поиска используй web_search.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -421,13 +421,13 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "web_search",
-            "description": "🔎 ПРЯМОЙ поиск в Google — возвращает результаты С КЛИКАБЕЛЬНЫМИ ССЫЛКАМИ. Используй когда пользователю нужны конкретные ресурсы, сайты, чаты, каналы, сервисы, контакты, места — всё, где важны ССЫЛКИ для перехода. Примеры: 'бизнес-чаты в Telegram', 'курсы по маркетингу', 'CRM для малого бизнеса'.",
+            "description": "🔎 ПРЯМОЙ поиск в интернете — находит информацию, людей, контакты, email, сайты, каналы, ресурсы. Возвращает результаты с ссылками. Универсальный: работает для ЛЮБОГО запроса. Примеры: 'QA-инженеры AI Telegram', 'email маркетологов Москва', 'курсы Python 2026', 'CRM для бизнеса'. Для поиска людей формулируй запрос конкретно: роль + город/ниша + площадка.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Поисковый запрос. Примеры: 'лучшие бизнес-чаты Telegram 2026', 'CRM системы для малого бизнеса'"
+                        "description": "Поисковый запрос. Для людей: 'email [роль] [город/ниша]' или '[роль] site:linkedin.com'. Для ресурсов: 'лучшие [тема] 2026'"
                     }
                 },
                 "required": ["query"]
@@ -764,7 +764,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "find_and_message_relevant_users",
-            "description": "🔍🤝 Найти пользователей по интересам/навыкам. С preview_only=true — только показывает кого нашёл (без отправки). Без preview_only — находит и отправляет сообщения.",
+            "description": "🔍🤝 Найти ПОЛЬЗОВАТЕЛЕЙ ПЛАТФОРМЫ по интересам/навыкам и отправить сообщение. Ищет только среди зарегистрированных пользователей ASI Biont. Если нужны внешние контакты — используй web_search + send_outreach_email. preview_only=true — показать без отправки.",
             "parameters": {
                 "type": "object",
                 "properties": {
