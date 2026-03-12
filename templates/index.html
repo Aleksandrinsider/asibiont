@@ -394,6 +394,9 @@
                 padding: 16px;
                 gap: 12px;
             }
+            .autopilot-left .bonus-num {
+                font-size: 24px;
+            }
             .autopilot-points {
                 grid-template-columns: 1fr;
             }
@@ -455,8 +458,34 @@
                 padding: 16px;
             }
         }
+        @media (max-width: 768px) {
+            .mobile-header-row {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 16px;
+            }
+            .mobile-header-row img[alt="ASI Biont"] {
+                width: 48px !important;
+                height: 48px !important;
+                margin: 0 !important;
+                flex-shrink: 0;
+            }
+            .mobile-header-row .login-buttons {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin: 0 !important;
+            }
+        }
+        @media (min-width: 769px) {
+            .mobile-header-row {
+                display: contents;
+            }
+        }
         @media (max-width: 400px) {
-            img[alt="ASI Biont"] {
+            img[alt="ASI Biont"]:not(.mobile-header-row img) {
                 width: 150px !important;
                 height: 150px !important;
             }
@@ -639,16 +668,9 @@
         }
     </script>
     <div class="auth-container">
+        <div class="mobile-header-row">
         <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 180px; height: 180px; display: block; margin: 0 auto 20px; max-width: 100%;">
-        <div class="lang-switcher" id="lang-toggle">
-            <span id="lang-en" onclick="switchLang('en')">EN</span>
-            <span>/</span>
-            <span id="lang-ru" onclick="switchLang('ru')">RU</span>
-            <span style="font-weight:400;color:#068487;margin-left:8px;pointer-events:none;user-select:none;" data-i18n="openBeta">{% if lang == 'en' %}OPEN BETA{% else %}ОТКРЫТАЯ БЕТА{% endif %}</span>
-        </div>
-        <h1 style="margin-bottom: 55px;">{% if lang == 'en' %}Start building your team of AI agents today!{% else %}Начни строить свою команду из AI-агентов уже сегодня!{% endif %}</h1>
-        <p class="subtitle">{% if lang == 'en' %}An AI agent that actually gets things done. Remembers everything, acts on its own — sets reminders, sends emails, publishes posts, analyzes sales on Wildberries &amp; Ozon. Connects to 52 services (PostgreSQL, Redis, OpenAI, Gemini, MongoDB, Firebase, AWS S3 and more). Use the default setup and the agent acts on your behalf, or create a new agent with its own personality, integrations and capabilities. Watch debates in the AI Arena and earn by renting out your agent. Works via Web panel, Telegram and Discord. You decide what access level agents have to your data.{% else %}Создайте свою команду AI-агентов с уникальными характеристиками и интеграциями или используйте готовых. Общайтесь с каждым по имени. AI-агенты, которые реально делают дела. Помнят всё, действуют сами — ставят напоминания на нужное время, отправляют письма по email, публикуют посты в Telegram и Discord, анализируют продажи на Wildberries и Ozon. 52 интеграции: Gmail, Ozon, Wildberries, PostgreSQL, Notion, Битрикс24, AmoCRM, HubSpot и другие. Вы сами определяете уровень доступа агентов к вашим данным.{% endif %}</p>
-        <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 0 0 32px 0;">
+        <div class="login-buttons" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 0 0 32px 0;">
             <!-- Email login button -->
             <button onclick="openEmailModal()" id="email-login-btn" title="Войти по email" data-i18n-title="emailLogin" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #374151; color: white; border: none; border-radius: 50%; cursor: pointer; flex-shrink: 0;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">
                 <svg width="18" height="14" viewBox="0 0 20 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 0H2C0.9 0 0 0.9 0 2V14C0 15.1 0.9 16 2 16H18C19.1 16 20 15.1 20 14V2C20 0.9 19.1 0 18 0ZM18 4L10 9L2 4V2L10 7L18 2V4Z" fill="white"/></svg>
@@ -666,6 +688,15 @@
                 </script>
             </div>
         </div>
+        </div>
+        <div class="lang-switcher" id="lang-toggle">
+            <span id="lang-en" onclick="switchLang('en')">EN</span>
+            <span>/</span>
+            <span id="lang-ru" onclick="switchLang('ru')">RU</span>
+            <span style="font-weight:400;color:#068487;margin-left:8px;pointer-events:none;user-select:none;" data-i18n="openBeta">{% if lang == 'en' %}OPEN BETA{% else %}ОТКРЫТАЯ БЕТА{% endif %}</span>
+        </div>
+        <h1 style="margin-bottom: 55px;">{% if lang == 'en' %}Start building your team of AI agents today!{% else %}Начни строить свою команду из AI-агентов уже сегодня!{% endif %}</h1>
+        <p class="subtitle">{% if lang == 'en' %}An AI agent that actually gets things done. Remembers everything, acts on its own — sets reminders, sends emails, publishes posts, analyzes sales on Wildberries &amp; Ozon. Connects to 52 services (PostgreSQL, Redis, OpenAI, Gemini, MongoDB, Firebase, AWS S3 and more). Use the default setup and the agent acts on your behalf, or create a new agent with its own personality, integrations and capabilities. Watch debates in the AI Arena and earn by renting out your agent. Works via Web panel, Telegram and Discord. You decide what access level agents have to your data.{% else %}Создайте свою команду AI-агентов с уникальными характеристиками и интеграциями или используйте готовых. Общайтесь с каждым по имени. AI-агенты, которые реально делают дела. Помнят всё, действуют сами — ставят напоминания на нужное время, отправляют письма по email, публикуют посты в Telegram и Discord, анализируют продажи на Wildberries и Ozon. 52 интеграции: Gmail, Ozon, Wildberries, PostgreSQL, Notion, Битрикс24, AmoCRM, HubSpot и другие. Вы сами определяете уровень доступа агентов к вашим данным.{% endif %}</p>
     <!-- Email Auth Modal -->
     <div id="email-auth-modal" style="display: none; position: fixed; z-index: 6000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(255,255,255,0.7); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); align-items: center; justify-content: center;" onclick="closeEmailModal()">
         <div onclick="event.stopPropagation()" style="background: #FFFFFF; border-radius: 6px; width: 90%; max-width: 420px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; font-size: 13px; color: #374151;">
