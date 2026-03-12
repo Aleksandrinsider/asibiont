@@ -1312,11 +1312,16 @@ class AnchorEngine:
                 _result_lower = _result_clean.lower()
                 # Динамический список всех агентов для фильтрации утечек делегаций
                 _all_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
+                # Если агент реально вызвал инструменты — результат значимый,
+                # даже если текст шаблонный (email отправлен, задача создана и т.д.)
+                _has_real_actions = bool(_tools_used)
                 _is_noise_result = (
-                    len(_result_clean) < 20
-                    or _result_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
-                    or any(_result_lower.startswith(p) for p in _NOISE_PREFIXES)
-                    # Фильтруем обращения к другим агентам (утечки делегаций)
+                    not _has_real_actions and (
+                        len(_result_clean) < 20
+                        or _result_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
+                        or any(_result_lower.startswith(p) for p in _NOISE_PREFIXES)
+                    )
+                    # Фильтруем обращения к другим агентам (утечки делегаций) — всегда
                     or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
                 )
 
@@ -1850,10 +1855,13 @@ class AnchorEngine:
                                      'веб-поиск временно', 'duckduckgo не', 'сервис недоступ',
                                      'задача создана', 'понял задачу')
             _chain_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
+            _chain_has_actions = bool(_chain_tools_used)
             _chain_is_noise = (
-                len(_chain_clean) < 20
-                or _chain_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
-                or any(_chain_lower.startswith(p) for p in _NOISE_PREFIXES_CHAIN)
+                not _chain_has_actions and (
+                    len(_chain_clean) < 20
+                    or _chain_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
+                    or any(_chain_lower.startswith(p) for p in _NOISE_PREFIXES_CHAIN)
+                )
                 or any(_chain_lower.startswith(n.lower() + ',') for n in _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:

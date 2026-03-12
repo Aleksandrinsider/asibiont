@@ -4442,6 +4442,24 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     except Exception:
         pass
 
+    # Для автопилота: если текст шаблонный но инструменты вызывались — обогащаем отчёт
+    if _is_autopilot_task and _tools_used and _final_text == _done_fb:
+        _TOOL_LABELS_FB = {
+            'send_outreach_email': 'отправила email' if _is_fem else 'отправил email',
+            'send_email': 'отправила email' if _is_fem else 'отправил email',
+            'start_email_campaign': 'запустила email-кампанию' if _is_fem else 'запустил email-кампанию',
+            'add_task': 'создала задачу' if _is_fem else 'создал задачу',
+            'research_topic': 'провела исследование' if _is_fem else 'провёл исследование',
+            'web_search': 'выполнила поиск' if _is_fem else 'выполнил поиск',
+            'create_post': 'создала пост' if _is_fem else 'создал пост',
+            'publish_to_telegram': 'опубликовала в Telegram' if _is_fem else 'опубликовал в Telegram',
+            'update_goal_progress': 'обновила прогресс цели' if _is_fem else 'обновил прогресс цели',
+            'find_and_message_relevant_users': 'искала контакты' if _is_fem else 'искал контакты',
+        }
+        _actions = [_TOOL_LABELS_FB.get(t, t) for t in dict.fromkeys(_tools_used)][:3]
+        if _actions:
+            _final_text = ', '.join(_actions).capitalize() + '.'
+
     # Для автопилота: если ни один инструмент не вызван — результат неэффективен
     if _is_autopilot_task and not _tools_used:
         _final_text = ''  # пустой результат = noise, не отправится пользователю
