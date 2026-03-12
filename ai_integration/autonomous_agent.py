@@ -396,12 +396,13 @@ class HybridAutonomousAgent:
 
     # ===== SMART TOOL FILTERING (reduces API tokens) =====
 
-    # Core tools sent with every call (~15 tools instead of 46)
+    # Core tools sent with every call (~18 tools instead of 50+)
     CORE_TOOLS = {
         'add_task', 'complete_task', 'edit_task', 'delete_task', 'list_tasks',
-        'update_profile', 'research_topic',
+        'update_profile', 'research_topic', 'web_search',
         'create_goal', 'delete_goal', 'list_goals', 'update_goal_progress',
         'find_relevant_contacts_for_task', 'set_contact_alert', 'generate_image',
+        'delegate_task',
         # Campaign management always available — conversation can span multiple turns
         'start_content_campaign', 'manage_content_campaign',
         'start_delegation_campaign',
@@ -410,27 +411,41 @@ class HybridAutonomousAgent:
     # Extended tool groups — activated by keywords in user message
     TOOL_GROUPS = {
         'email': {
-            'keywords': ['email', 'e-mail', 'почт', 'письм', 'отправ', 'письм', 'переписк', 'перегов'],
-            'tools': {'send_email', 'negotiate_by_email', 'list_email_contacts', 'save_email_contact'},
+            'keywords': ['email', 'e-mail', 'почт', 'письм', 'отправ', 'переписк',
+                         'перегов', 'рассылк', 'campaign', 'кампани', 'лиды', 'лидов',
+                         'outreach', 'аутрич', 'холодн'],
+            'tools': {'send_email', 'negotiate_by_email', 'list_email_contacts',
+                      'save_email_contact', 'send_outreach_email', 'reply_to_outreach_email',
+                      'send_follow_up_email', 'start_email_campaign', 'add_email_leads'},
         },
         'delegation': {
-            'keywords': ['делегир', 'delegat', 'поруч', 'назнач'],
+            'keywords': ['делегир', 'delegat', 'поруч', 'назнач', 'аутсорс',
+                         'передай', 'передать', 'исполнител', 'подрядчик', 'фрилансер'],
             'tools': {'delegate_task', 'accept_delegated_task', 'reject_delegated_task',
                       'get_delegation_progress', 'start_delegation_campaign', 'manage_delegation_campaign'},
         },
         'content': {
             'keywords': ['пост', 'post', 'публик', 'publish', 'контент', 'content',
                          'discord', 'telegram', 'канал', 'channel', 'стратег',
-                         'кампани', 'компани', 'запуст', 'продвиж', 'начн', 'написа',
-                         'писать', 'ролик', 'аудитор', 'подписч', 'привлеч'],
+                         'запуст', 'продвиж', 'ролик', 'аудитор', 'подписч',
+                         'smm', 'соцсет', 'блог', 'статью', 'статья'],
             'tools': {'create_post', 'edit_post', 'delete_post', 'get_posts',
                       'publish_to_telegram', 'publish_to_discord',
                       'set_content_strategy', 'start_content_campaign', 'manage_content_campaign'},
         },
         'messaging': {
-            'keywords': ['сообщ', 'message', 'написа', 'отправ', 'напис', 'inbox', 'входящ'],
+            'keywords': ['сообщ', 'message', 'написа', 'напис', 'inbox', 'входящ',
+                         'ответить', 'ответь', 'reply', 'переслать', 'перешли'],
             'tools': {'send_message_to_user', 'reply_to_user_message',
                       'get_incoming_messages', 'find_and_message_relevant_users'},
+        },
+        'search': {
+            'keywords': ['найди', 'найти', 'поиск', 'search', 'ищи', 'искать',
+                         'контакт', 'сотрудник', 'партнёр', 'партнер', 'клиент',
+                         'специалист', 'разработчик', 'тестировщик', 'дизайнер',
+                         'инвестор', 'mentor', 'ментор', 'кандидат'],
+            'tools': {'find_relevant_contacts_for_task', 'find_and_message_relevant_users',
+                      'web_search', 'set_contact_alert'},
         },
         'marketplace': {
             'keywords': ['маркетплейс', 'marketplace', 'агент', 'agent', '@',
@@ -4105,18 +4120,32 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach')) or
                     any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'email', 'mail'))):
                 _inferred_tools.update({'send_email', 'list_email_contacts', 'save_email_contact',
-                                        'start_email_campaign', 'negotiate_by_email', 'check_email',
-                                        'send_outreach_email', 'find_relevant_contacts_for_task'})
-            # Контент/маркетинг/PR → также дать email (PR часто рассылает письма)
-            if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram', 'pr ', 'pr-', 'пиар')):
-                _inferred_tools.update({'create_post', 'publish_to_telegram', 'research_topic', 'web_search',
-                                        'send_email', 'send_outreach_email', 'start_email_campaign',
-                                        'add_email_leads', 'find_relevant_contacts_for_task'})
+                                        'start_email_campaign', 'negotiate_by_email',
+                                        'send_outreach_email', 'reply_to_outreach_email',
+                                        'send_follow_up_email', 'add_email_leads',
+                                        'find_relevant_contacts_for_task'})
+            # Контент/маркетинг/PR
+            if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram', 'pr ', 'pr-', 'пиар', 'копирайт', 'редактор')):
+                _inferred_tools.update({'create_post', 'publish_to_telegram', 'publish_to_discord',
+                                        'research_topic', 'web_search', 'generate_image',
+                                        'set_content_strategy', 'start_content_campaign', 'manage_content_campaign',
+                                        'find_relevant_contacts_for_task'})
+            # Продажи/HR/поиск людей → контакты + сообщения + рассылка
+            if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'поиск', 'найти', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b', 'crm')):
+                _inferred_tools.update({'find_relevant_contacts_for_task', 'find_and_message_relevant_users',
+                                        'web_search', 'send_message_to_user', 'set_contact_alert',
+                                        'send_email', 'send_outreach_email', 'save_email_contact',
+                                        'start_delegation_campaign', 'manage_delegation_campaign'})
+            # Проект-менеджмент / управление задачами
+            if any(w in _spec for w in ('проект', 'project', 'менеджер', 'manager', 'управлен', 'планиров', 'координат', 'scrum', 'agile')):
+                _inferred_tools.update({'delegate_task', 'get_delegation_progress',
+                                        'start_delegation_campaign', 'manage_delegation_campaign',
+                                        'create_goal', 'update_goal_progress'})
             # Аналитик/исследования
-            if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'поиск', 'тренд')):
+            if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _inferred_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
             # Задачи всегда доступны
-            _inferred_tools.update({'add_task', 'delegate_task'})
+            _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
             _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
             if _inferred_tools and not _base_only:
@@ -4140,10 +4169,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'list_goals': 'список целей', 'delegate_task': 'поручить агенту/человеку',
             'research_topic': 'исследование темы', 'web_search': 'веб-поиск',
             'send_email': 'отправить email', 'negotiate_by_email': 'переговоры по email',
+            'send_outreach_email': 'холодное письмо', 'save_email_contact': 'сохранить контакт',
             'create_post': 'создать пост', 'publish_to_telegram': 'пост в TG',
             'publish_to_discord': 'пост в Discord', 'generate_image': 'генерация картинки',
             'start_content_campaign': 'автопостинг', 'find_relevant_contacts_for_task': 'поиск контактов',
+            'find_and_message_relevant_users': 'найти и написать людям',
+            'start_delegation_campaign': 'поиск исполнителей',
             'update_profile': 'обновить профиль', 'run_agent_action': 'внешнее действие',
+            'update_goal_progress': 'обновить прогресс цели',
+            'send_message_to_user': 'сообщение пользователю',
+            'set_contact_alert': 'алерт на контакт',
         }
         if _exclude_for_agent:
             _my_tools = [t['function']['name'] for t in _all_tools_info
