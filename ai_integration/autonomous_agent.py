@@ -4023,8 +4023,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         logger.debug('[DIRECTOR-EXEC] team load for agent: %s', _te_team)
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
+    # Пропускаем для автопилота: экономит 35с + предотвращает OOM от IMAP/RSS subprocess
+    # Агент использует платформенные инструменты (web_search, add_task и т.д.) для автопилота
+    # Если нужны внешние данные — агент вызовет run_agent_action явно через tool-call
     script_context = ""
-    if (agent.get('python_code') or '').strip():
+    if (agent.get('python_code') or '').strip() and not _is_autopilot_task:
         try:
             _wrapped = _wrap_agent_code(agent['python_code'].strip())
             _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os2.environ.get('PATH', '/usr/bin:/bin')}
