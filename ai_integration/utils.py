@@ -346,7 +346,8 @@ def clean_technical_details(text):
         r'restore_task|accept_delegated_task|reject_delegated_task|'
         r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
         r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
-        r'get_incoming_messages|reply_to_user_message|update_user_memory'
+        r'get_incoming_messages|reply_to_user_message|update_user_memory|'
+        r'start_email_campaign|add_email_leads|update_email_campaign'
     )
     text = re.sub(r'\b(?:' + _ALL_TOOL_NAMES + r')\b', '', text, flags=re.IGNORECASE)
     # Удаляем оставшиеся ТЕХНИЧЕСКИЕ вызовы функций (только snake_case с минимум 2 частями)
@@ -359,8 +360,12 @@ def clean_technical_details(text):
     patterns_to_remove = [
         r"вызываю\s+\w+(\(\))?",
         r"вызову\s+\w+(\(\))?",
+        r"вызови\s+(инструмент\s+)?\w+(\(\))?",
+        r"используй\s+(инструмент\s+)?\w+(\(\))?",
         r"сейчас\s+вызову",
         r"буду\s+вызывать",
+        r"нужно\s+вызвать\s+\w+",
+        r"можно\s+вызвать\s+\w+",
         r"Args for.*?(?=\n|$)",
         r"🔧\s*ВЫПОЛНЕННЫЕ ФУНКЦИИ:.*?(?=\n\n|\Z)",
         r"🔧\s*\*\*Выполняю:\*\*.*?(?=\n|$)",

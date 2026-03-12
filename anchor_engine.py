@@ -1533,9 +1533,14 @@ class AnchorEngine:
 
                 if result and result.strip() and self.bot and not _is_noise_result:
                     try:
+                        # Очищаем технические детали ПЕРЕД отправкой пользователю
+                        from ai_integration.utils import clean_technical_details as _ctd
+                        _cleaned_result = _ctd(result.strip())
+                        if not _cleaned_result or len(_cleaned_result.strip()) < 10:
+                            _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=f"{agent_name}:\n\n{result.strip()}",
+                            text=f"{agent_name}:\n\n{_cleaned_result}",
                         )
                         # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                         _agent_content = json.dumps({
@@ -1544,7 +1549,7 @@ class AnchorEngine:
                                 'id': chosen.id,
                                 'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                             },
-                            'text': _strip_html(result.strip()),
+                            'text': _strip_html(_cleaned_result),
                             '__tools_used': _tools_used,
                             '__anchor_type': anchor.anchor_type,
                         }, ensure_ascii=False)

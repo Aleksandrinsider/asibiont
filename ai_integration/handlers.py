@@ -5383,9 +5383,8 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
     # Если контактов мало (< 2) — добавляем хинт об email-кампании для поиска внешних лидов
     all_found_count = len(sorted_contacts) + len(reverse_matches)
     _email_hint = (
-        "\n\n💡 Внутренних контактов мало. Для поиска ВНЕШНИХ лидов (GitHub, DuckDuckGo, профплощадки) "
-        "вызови инструмент `start_email_campaign` — система автоматически найдёт и свяжется с "
-        "потенциальными пользователями/клиентами по заданной теме."
+        "\n\n💡 Внутренних контактов мало — попробуй поискать нужных людей через интернет "
+        "или запустить email-кампанию для автоматического поиска и связи с потенциальными контактами."
     )
 
     if result_lines:
@@ -5397,15 +5396,13 @@ Once profiles are filled, I'll be able to suggest suitable people for collaborat
         if lang == 'en':
             return (
                 "No matching contacts found in the internal network for this task.\n\n"
-                "💡 To find EXTERNAL leads (web search, GitHub, professional platforms) "
-                "use the `start_email_campaign` tool — the system will automatically find and "
-                "reach out to potential users/clients on this topic."
+                "💡 Try searching the web for relevant people or launching an email campaign "
+                "to automatically find and reach out to potential contacts."
             )
         return (
             "Не нашел подходящих контактов в сети для этой задачи.\n\n"
-            "💡 Для поиска ВНЕШНИХ лидов через интернет (GitHub, DuckDuckGo, профплощадки) "
-            "вызови инструмент `start_email_campaign` — система автоматически найдёт и свяжется "
-            "с потенциальными пользователями/клиентами по нужной теме."
+            "💡 Попробуй поискать нужных людей через интернет или запустить email-кампанию "
+            "для автоматического поиска и связи с потенциальными контактами."
         )
 
 async def generate_delegation_notification_async(delegator_username, recipient_username, task_title, task_description, deadline, delegation_details, recipient_telegram_id):
@@ -8654,11 +8651,7 @@ async def find_and_message_relevant_users(
         if not top:
             return (
                 f"На платформе пока нет подходящих пользователей по запросу: «{purpose}».\n"
-                "Рекомендации:\n"
-                "• web_search — найди людей/контакты/email через интернет\n"
-                "• send_outreach_email — напиши найденному контакту\n"
-                "• create_post + publish_to_telegram — опубликуй объявление\n"
-                "• start_email_campaign — массовая рассылка по найденным контактам"
+                "Попробуй поискать людей через интернет, написать им email или опубликовать объявление."
             )
         
         # Антиспам: общий лимит 50 исходящих в день
@@ -10383,13 +10376,13 @@ async def start_email_campaign(
                 if auto_leads_count > 0:
                     base += f"\n Found {auto_leads_count} contacts — first emails will be sent automatically."
                 else:
-                    base += "\n No contacts found automatically. Search for people via web_search, then add_email_leads."
+                    base += "\n No contacts found automatically. Search for people via the web, then add their emails."
             else:
                 base = f" Кампания #{campaign.id} «{name}» создана!"
                 if auto_leads_count > 0:
                     base += f"\n Найдено {auto_leads_count} контактов — первые письма будут отправлены автоматически."
                 else:
-                    base += "\n Автопоиск не нашёл контактов. Найди людей через web_search, затем add_email_leads."
+                    base += "\n Автопоиск не нашёл контактов. Найди людей через интернет, затем добавь их email."
             if auto_leads_msg:
                 base += f"\n{auto_leads_msg}"
             return base
@@ -10398,11 +10391,11 @@ async def start_email_campaign(
             if lang == 'en':
                 return (
                     f" Campaign #{campaign.id} «{name}» created.\n"
-                    f"Now add the contact via add_email_leads and send the first email via send_outreach_email."
+                    f"Now add the contact emails and send the first outreach email."
                 )
             return (
                 f" Кампания #{campaign.id} «{name}» создана.\n"
-                f"Теперь добавь контакт через add_email_leads и отправь первое письмо через send_outreach_email."
+                f"Теперь добавь контакты и отправь первое письмо."
             )
     except Exception as e:
         logger.error(f"[EMAIL_CAMPAIGN] Error creating campaign: {e}", exc_info=True)
@@ -10453,7 +10446,7 @@ async def update_email_campaign(
             ).order_by(EmailCampaign.created_at.desc()).first()
 
         if not campaign:
-            return " Кампания не найдена. Укажи campaign_id или создай новую (start_email_campaign)."
+            return " Кампания не найдена. Укажи ID кампании или создай новую."
 
         changes = []
         if name is not None:
@@ -10560,7 +10553,7 @@ async def send_outreach_email(
             ).order_by(EmailCampaign.created_at.desc()).first()
 
         if not campaign:
-            return " Нет активной email-кампании. Сначала создай кампанию (start_email_campaign)."
+            return " Нет активной email-кампании. Сначала создай кампанию."
 
         # Проверка лимитов (max_emails=0 означает безлимитно)
         if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
