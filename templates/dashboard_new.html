@@ -6654,15 +6654,35 @@ except Exception as e:
             const typeLabel = labels[a.activity_type] || a.activity_type;
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
             const deleteBtn = a.id ? `<button onclick="event.stopPropagation();activityDeleteGroup([${a.id}],'${a.activity_type||''}')" class="delete-btn" title="${t('act-del-one')||'Удалить'}"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>` : '';
-            const hasDetails = !!(a.content && a.content.trim());
+            const hasDetails = !!(_displayContent && _displayContent.trim());
             const chevron = hasDetails ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
             const cleanTitle = _tlStripEmoji(a.title);
+            // Для autopilot dispatch показываем result (результат), а не content (промпт)
+            const _displayContent = (a.activity_type === 'goal_autopilot_dispatch' && a.result) ? a.result : (a.content || '');
+            // Статус-бейдж для autopilot dispatch
+            let _statusBadge = '';
+            if (a.activity_type === 'goal_autopilot_dispatch' && a.status) {
+                const _statusColors = {
+                    'completed': '#1a7f37', 'in_progress': '#bf8700', 'failed': '#cf222e',
+                    'noise_filtered': '#6e7781', 'dedup_filtered': '#6e7781',
+                    'empty_result': '#6e7781', 'no_action': '#6e7781',
+                };
+                const _statusLabels = {
+                    'completed': '✓', 'in_progress': '⏳', 'failed': '✗',
+                    'noise_filtered': '⊘', 'dedup_filtered': '⊘',
+                    'empty_result': '—', 'no_action': '—',
+                };
+                const _sc = _statusColors[a.status] || '#6e7781';
+                const _sl = _statusLabels[a.status] || a.status;
+                _statusBadge = `<span style="font-size:11px;color:${_sc};flex-shrink:0;">${_sl}</span>`;
+            }
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasDetails ? 'cursor:pointer;user-select:none;' : '');
             header.innerHTML = `
                 <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;">
                     <span style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${cleanTitle}</span>
+                    ${_statusBadge}
                     <span style="font-size:12px;color:#6C727F;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>
                 </div>
                 <span style="font-size:12px;color:#9CA3AF;flex-shrink:0;white-space:nowrap;">${timeStr}</span>
@@ -6673,7 +6693,7 @@ except Exception as e:
 
             if (hasDetails) {
                 // Очищаем контент: удаляем HTML-теги, блоки кода, лишние пробелы
-                let rawContent = a.content || '';
+                let rawContent = _displayContent || '';
                 // Удаляем блоки кода (markdown и inline)
                 rawContent = rawContent.replace(/```[\s\S]*?```/g, '[код]').replace(/`[^`\n]+`/g, '[код]');
                 // Удаляем markdown-картинки и ссылки на изображения
@@ -6720,7 +6740,7 @@ except Exception as e:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set(['goal_autopilot_dispatch']);
+            const _HIDDEN_ACT_TYPES = new Set([]);
             const sorted = [...activities].filter(a => !_HIDDEN_ACT_TYPES.has(a.activity_type)).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
             if (latest && (!window._activityPollSince || latest > window._activityPollSince)) {
