@@ -496,6 +496,17 @@ def _migrate_marketplace(session, inspector):
                 logger.debug(f"[MIGRATION] run_interval_minutes add skipped: {e}")
 
 
+def _migrate_activity_log(session, inspector):
+    """Создаёт таблицу agent_activity_log (идемпотентно)."""
+    from models import Base, engine as _engine
+    if not inspector.has_table('agent_activity_log'):
+        try:
+            Base.metadata.tables['agent_activity_log'].create(bind=_engine, checkfirst=True)
+            logger.info("[MIGRATION] Created table agent_activity_log")
+        except Exception as e:
+            logger.warning(f"[MIGRATION] Could not create agent_activity_log: {e}")
+
+
 def _migrate_task_agent_source(session, inspector):
     """Добавляет source + created_by_agent_id к таблице tasks (идемпотентно)."""
     if not inspector.has_table('tasks'):
@@ -643,6 +654,7 @@ def run_migrations():
         _migrate_email_contacts(session, inspector)
         _migrate_marketplace(session, inspector)
         _migrate_arena(session, inspector)
+        _migrate_activity_log(session, inspector)
         _migrate_task_agent_source(session, inspector)
         _migrate_fix_agent_python_code(session)
         _migrate_payment_id_unique(session, inspector)

@@ -2017,18 +2017,32 @@ class HybridAutonomousAgent:
 
                 # Если уже есть результаты инструментов — финальный ответ без tools
                 # (убирает ~40 определений инструментов из запроса → значительно быстрее)
-                # Разрешаем инструменты на всех итерациях кроме последней
-                # (на последней принудительно берём финальный ответ без tools)
                 _is_last_iter = (iteration >= MAX_ITERATIONS - 1)
                 _allow_tools = not _is_last_iter
-                # Text-only call (no tools) uses shorter timeout — just generating text
+
+                # Последняя итерация: инжектируем краткую инструкцию для финального ответа
+                # → меньше max_tokens → быстрее генерация
+                if _is_last_iter and all_execution_results:
+                    if user_lang == 'en':
+                        messages.append({"role": "system", "content": (
+                            "Summarize results briefly (2-3 sentences, max 400 chars). "
+                            "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses."
+                        )})
+                    else:
+                        messages.append({"role": "system", "content": (
+                            "Кратко подытожь (2-3 предложения, до 400 символов). "
+                            "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task."
+                        )})
+
+                # Text-only call (no tools) uses shorter timeout + fewer tokens
                 _timeout = API_TIMEOUT_NORMAL if not _allow_tools else None
+                _max_tok = 300 if _is_last_iter and all_execution_results else 600
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,
                     subscription_tier=sub_tier,
                     tool_choice=tc if _allow_tools else None,
-                    max_tokens=600,
+                    max_tokens=_max_tok,
                     exclude_tools=tools_to_exclude if _allow_tools else None,
                     api_timeout=_timeout)
 
@@ -2204,34 +2218,10 @@ class HybridAutonomousAgent:
                 # Продолжаем цикл — AI увидит результаты и решит
                 # ответить текстом или вызвать ещё tools
 
-            # Если вышли из цикла — финальный вызов без tools
-            if user_lang == 'en':
-                _final_instr = (
-                    "Formulate the final response. IMPORTANT: rephrase tool data IN YOUR OWN WORDS, "
-                    "weave into natural conversational text. Don't copy format, bullets, emoji headers from results. "
-                    "If a tool found nothing useful — don't mention it. "
-                    "If you sent an email — report BRIEFLY who you wrote to and the topic, do NOT paste the email body. "
-                    "PRESERVE ALL URLs from tool results — user needs clickable links. "
-                    "Put links on separate lines at the end: Title — URL. "
-                    "Write ONLY in English."
-                )
-            else:
-                _final_instr = (
-                    "Сформируй финальный ответ: МАКСИМУМ 2-3 предложения, до 400 символов. "
-                    "Перескажи данные из инструментов СВОИМИ СЛОВАМИ, живым разговорным текстом. "
-                    "НЕ копируй формат, bullets, emoji-заголовки из результатов. "
-                    "Если инструмент не нашёл полезного — не упоминай. "
-                    "Если отправлял email — КРАТКО кому и тему, НЕ текст письма. "
-                    "СОХРАНЯЙ URL-ССЫЛКИ — отдельными строками в конце. "
-                    "Если вызывал delegate_task — НЕ ПОВТОРЯЙ ответ агента. "
-                    "ДЛИННЫЙ ответ = ПРОВАЛ. Пиши как друг в мессенджере, не как отчёт."
-                )
-            messages.append({
-                "role": "user",
-                "content": _final_instr
-            })
+            # Safety net: если вышли из цикла без return — генерируем ответ
             final_resp = await self.call_ai(
-                messages, use_tools=False, temperature=0.7, max_tokens=300)
+                messages, use_tools=False, temperature=0.7, max_tokens=300,
+                api_timeout=API_TIMEOUT_NORMAL)
             final_text = final_resp['choices'][0]['message'].get('content') or ''
             return self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)

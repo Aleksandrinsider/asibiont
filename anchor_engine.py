@@ -1266,15 +1266,23 @@ class AnchorEngine:
                         # Более надёжен чем "следующий по очереди": работает после рестартов Railway,
                         # не ломается при failed-логах, не зависит от порядка последних записей.
                         from sqlalchemy import func as _rr_func
-                        _rr_counts_raw = session.query(
-                            _AAL_ap.ref_id, _rr_func.count(_AAL_ap.id).label('cnt')
-                        ).filter(
-                            _AAL_ap.user_id == user.id,
-                            _AAL_ap.activity_type == 'goal_autopilot_dispatch',
-                            _AAL_ap.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
-                        ).group_by(_AAL_ap.ref_id).all()
-                        # ref_id=None → ASI (id=0)
-                        _rr_counts = {(r if r is not None else 0): c for r, c in _rr_counts_raw}
+                        _rr_counts = {}
+                        try:
+                            _rr_counts_raw = session.query(
+                                _AAL_ap.ref_id, _rr_func.count(_AAL_ap.id).label('cnt')
+                            ).filter(
+                                _AAL_ap.user_id == user.id,
+                                _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                                _AAL_ap.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
+                            ).group_by(_AAL_ap.ref_id).all()
+                            # ref_id=None → ASI (id=0)
+                            _rr_counts = {(r if r is not None else 0): c for r, c in _rr_counts_raw}
+                        except Exception as _rr_err:
+                            logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed (table may not exist): %s", _rr_err)
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                         # Сортируем: сначала агент с наименьшим cnt; ничья → custom агенты перед ASI, среди них по id
                         def _rr_key(a):
                             aid = getattr(a, 'id', 0)
