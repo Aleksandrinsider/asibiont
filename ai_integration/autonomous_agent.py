@@ -1802,13 +1802,23 @@ class HybridAutonomousAgent:
                     _code_output, _code_stderr = await _run_agent_code()
                     if _code_output:
                         # Очищаем HTML-теги и RFC822 артефакты из IMAP/email вывода
-                        # Пример бага: "Name" <email@gmail.com> → regex <[^>]+> удаляет email целиком
                         import re as _re_clean
-                        # Сначала сохраняем email-адреса в угловых скобках: <user@host.com> → user@host.com
-                        _code_output_clean = _re_clean.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _code_output)
-                        # Теперь безопасно удаляем HTML-теги (email уже извлечены)
-                        _code_output_clean = _re_clean.sub(r'<[^>]+>', '', _code_output_clean)
-                        _code_output_clean = _re_clean.sub(r'(?<=\S)">', '', _code_output_clean)  # strip "> artifacts
+                        # 1. Полные mailto-ссылки: <a href="mailto:email">text</a> → email
+                        _code_output_clean = _re_clean.sub(
+                            r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>[^<]*</a>', r'\1', _code_output, flags=_re_clean.IGNORECASE | _re_clean.DOTALL)
+                        # 1b. Незакрытые mailto: <a href="mailto:email"> → email
+                        _code_output_clean = _re_clean.sub(
+                            r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>', r'\1', _code_output_clean, flags=_re_clean.IGNORECASE | _re_clean.DOTALL)
+                        # 2. Сохраняем email-адреса в угловых скобках: <user@host.com> → user@host.com
+                        _code_output_clean = _re_clean.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _code_output_clean)
+                        # 3. Удаляем HTML-теги (в т.ч. многострочные)
+                        _code_output_clean = _re_clean.sub(r'<[^>]+>', '', _code_output_clean, flags=_re_clean.DOTALL)
+                        # 4. Удаляем остаточные артефакты: "> или "/>
+                        _code_output_clean = _re_clean.sub(r'["\']?\s*/?\s*>', '', _code_output_clean)
+                        # 5. Удаляем HTML-entities
+                        _code_output_clean = _re_clean.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _code_output_clean)
+                        # 6. Схлопываем множественные пустые строки в одну
+                        _code_output_clean = _re_clean.sub(r'\n{3,}', '\n\n', _code_output_clean)
                         _agent_data_block = (
                             f'\n\n[ДАННЫЕ ОТ АГЕНТА — РЕАЛЬНЫЕ ДАННЫЕ ПРЯМО СЕЙЧАС]\n'
                             f'Твой скрипт выполнился и вернул данные ниже. '
