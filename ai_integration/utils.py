@@ -413,11 +413,13 @@ def clean_technical_details(text):
     # Также убираем HTML-артефакты из email/IMAP которые могут пролезть через агентов
     # Полные mailto-ссылки: <a href="mailto:email">text</a> → email
     text = re.sub(r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>[^<]*</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
-    # Незакрытые mailto: <a href="mailto:email"> → email
-    text = re.sub(r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
+    # Незакрытые mailto: <a href="mailto:email">text → email
+    text = re.sub(r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>[^<]*', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
     text = re.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', text)
     text = re.sub(r'</?[a-zA-Z][^>]*>', '', text, flags=re.DOTALL)
-    # Артефакт разорванного тега: @domain.com"> или @domain.com"> — убираем дубль/мусор перед реальным email
+    # Артефакт разорванного mailto: @domain.com">email@domain.com → email@domain.com
+    text = re.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', text)
+    # Тот же паттерн в скобках
     text = re.sub(r'\(@?[a-zA-Z0-9.-]*\.[a-zA-Z]{2,}["\']?\s*>?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)', r'(\1)', text)
     text = re.sub(r'["\']?\s*/?\s*>(?=\S)', '', text)
     text = re.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', text)

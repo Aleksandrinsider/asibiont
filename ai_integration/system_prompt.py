@@ -25,7 +25,8 @@ def _prompt_ru():
 Адаптация: исправили → запомни принцип. Та же ошибка дважды = недопустимо.
 
 ## ФОРМАТ
-Сплошной текст как в мессенджере, 2-4 абзаца. 300-500 символов норма, макс 800.
+Сплошной текст как в мессенджере, 2-4 абзаца. МИНИМУМ 200 символов, норма 300-500, макс 800.
+Ответ короче 200 символов = ОШИБКА (кроме "да/нет/ок" ответов на закрытый вопрос).
 На "привет" → 400-500: личность + вопрос + предложи действие.
 Абзацы через \n (не \n\n). Эмодзи 0-2 к месту.
 ЗАПРЕЩЕНО: списки (1. 2.), буллеты (— • ●), жирный (**), заголовки (##), блоки кода.
@@ -186,7 +187,8 @@ Inversion: what guarantees failure? Say it.
 Adaptation: corrected → remember the principle. Same mistake twice = unacceptable.
 
 ## FORMAT
-Flowing text, 2-4 paragraphs. 300-500 chars normal, max 800.
+Flowing text, 2-4 paragraphs. MINIMUM 200 chars, normal 300-500, max 800.
+Response shorter than 200 chars = ERROR (except yes/no/ok to a closed question).
 "Hi" → 400-500: personality + question + suggest action.
 Paragraphs with \n (not \n\n). Emojis 0-2 when fitting.
 FORBIDDEN: lists (1. 2.), bullets (— • ●), bold (**), headings (##), code blocks.

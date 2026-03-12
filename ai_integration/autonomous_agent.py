@@ -1806,15 +1806,17 @@ class HybridAutonomousAgent:
                         # 1. Полные mailto-ссылки: <a href="mailto:email">text</a> → email
                         _code_output_clean = _re_clean.sub(
                             r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>[^<]*</a>', r'\1', _code_output, flags=_re_clean.IGNORECASE | _re_clean.DOTALL)
-                        # 1b. Незакрытые mailto: <a href="mailto:email"> → email
+                        # 1b. Незакрытые mailto: <a href="mailto:email">text → email
                         _code_output_clean = _re_clean.sub(
-                            r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>', r'\1', _code_output_clean, flags=_re_clean.IGNORECASE | _re_clean.DOTALL)
+                            r'<a[^>]*href=["\']mailto:([^"\'>\s]+)["\'][^>]*>[^<]*', r'\1', _code_output_clean, flags=_re_clean.IGNORECASE | _re_clean.DOTALL)
                         # 2. Сохраняем email-адреса в угловых скобках: <user@host.com> → user@host.com
                         _code_output_clean = _re_clean.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _code_output_clean)
                         # 3. Удаляем HTML-теги (в т.ч. многострочные)
                         _code_output_clean = _re_clean.sub(r'<[^>]+>', '', _code_output_clean, flags=_re_clean.DOTALL)
-                        # 4. Удаляем остаточные артефакты: "> или "/>
-                        _code_output_clean = _re_clean.sub(r'["\']?\s*/?\s*>', '', _code_output_clean)
+                        # 4. Артефакт разорванного mailto: @domain.com">email → email
+                        _code_output_clean = _re_clean.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', _code_output_clean)
+                        # 4b. Остаточные "> или "/> перед текстом
+                        _code_output_clean = _re_clean.sub(r'["\']?\s*/?\s*>(?=\S)', '', _code_output_clean)
                         # 5. Удаляем HTML-entities
                         _code_output_clean = _re_clean.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _code_output_clean)
                         # 6. Схлопываем множественные пустые строки в одну
@@ -2968,14 +2970,26 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
 def _strip_agent_html(text: str) -> str:
     """Убирает HTML-теги из ответа LLM: <a href='mailto:x'>x</a> → x"""
     if not text or '<' not in text:
-        return text
-    # mailto anchors → просто email
-    text = re.sub(r'<a\s+href=["\']mailto:([^"\']+)["\'][^>]*>.*?</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
-    # обычные ссылки → текст внутри тега
-    text = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
-    # все оставшиеся теги
-    text = re.sub(r'<[^>]+>', '', text)
-    return text
+        _t = text or ''
+    else:
+        _t = text
+        # mailto anchors (закрытые): <a href="mailto:email">text</a> → email
+        _t = re.sub(r'<a\s+href=["\']mailto:([^"\'\s>]+)["\'][^>]*>[^<]*</a>', r'\1', _t, flags=re.IGNORECASE | re.DOTALL)
+        # mailto anchors (незакрытые): <a href="mailto:email">text → email
+        _t = re.sub(r'<a\s+href=["\']mailto:([^"\'\s>]+)["\'][^>]*>[^<]*', r'\1', _t, flags=re.IGNORECASE | re.DOTALL)
+        # обычные ссылки → текст внутри тега
+        _t = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', _t, flags=re.IGNORECASE | re.DOTALL)
+        # email в угловых скобках: <user@host.com> → user@host.com
+        _t = re.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _t)
+        # все оставшиеся теги
+        _t = re.sub(r'<[^>]+>', '', _t)
+    # Артефакт разорванного mailto: @domain.com">email@domain.com → email@domain.com
+    _t = re.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', _t)
+    # Остаточные "> или '/> перед текстом
+    _t = re.sub(r'["\']\s*/?>\s*(?=\S)', '', _t)
+    # HTML entities
+    _t = re.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _t)
+    return _t
 
 
 def _save_interaction_for_director(telegram_id: int, content: str, message_type: str = 'agent_msg'):
@@ -3831,7 +3845,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Инверсия: перед советом спроси себя «что гарантированно провалит эту цель?» Скажи прямо.\n"
         "Адаптация: если пользователь исправил тебя — извлеки принцип и применяй всегда.\n\n"
 
-        "ФОРМАТ ОТВЕТА: сплошной текст как в мессенджере, абзацами.\n"
+        "ФОРМАТ ОТВЕТА: сплошной текст как в мессенджере, абзацами. МИНИМУМ 200 символов.\n"
+        "Ответ короче 200 символов = ОШИБКА (кроме да/нет на закрытый вопрос).\n"
         "ЗАПРЕЩЕНО: маркеры (•, -, *, 1.), CAPS-ЗАГОЛОВКИ, markdown (**жирный**, # заголовок), "
         "шаблоны типа ЦЕЛЕВАЯ АУДИТОРИЯ: или СТРАТЕГИЯ:.\n"
         "Вместо списков — перечисляй через запятую или в предложениях. Вместо заголовков — новый абзац.\n"
@@ -4936,8 +4951,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 
-        # Rework: если агент ответил пустым фоллбэком — быстрый LLM fallback (без перезапуска агента)
+        # Rework: если агент ответил пустым фоллбэком или слишком коротко — быстрый LLM fallback
         _resp_lower = str(resp).strip().lower()
+        _resp_len = len(str(resp).strip())
         _fallback_phrases = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
         _intermediate_markers = ('использую', 'ищу данные', 'уточняю поиск', 'исследую',
                                   'начинаю', 'приступаю', 'анализирую', 'подготовлю',
@@ -4947,21 +4963,26 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _is_fallback = _resp_lower in _fallback_phrases
         _is_intermediate = (len(str(resp).strip()) < 200 and
                             any(m in _resp_lower for m in _intermediate_markers))
+        _is_too_short = _resp_len < 120 and _resp_len > 5
         _skip_rework = _is_question_message(task)
-        if (_is_fallback or _is_intermediate) and not _skip_rework:
-            # Быстрый fallback через _quick_ai_call_raw (без полного перезапуска агента)
+        if (_is_fallback or _is_intermediate or _is_too_short) and not _skip_rework:
+            # Быстрый fallback — агент ответил пусто/коротко/промежуточно
+            _rework_hint = (
+                f"Предыдущий ответ: {str(resp).strip()[:200]}\n\n" if _is_too_short and not _is_fallback else ''
+            )
             _fallback_resp = await _quick_ai_call_raw([{
                 "role": "user",
                 "content": (
                     f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
                     f"Задача: {task}\n"
-                    f"Контекст: {(extra_context or '')[:500]}\n\n"
+                    f"Контекст: {(extra_context or '')[:500]}\n"
+                    f"{_rework_hint}"
                     f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
                     f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
-                    f"2-3 абзаца, без markdown."
+                    f"Минимум 200 символов, 2-3 абзаца, без markdown."
                 ),
             }], max_tokens=400)
-            if _fallback_resp and len(_fallback_resp) > 20:
+            if _fallback_resp and len(_fallback_resp) > 50:
                 resp = _fallback_resp
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).

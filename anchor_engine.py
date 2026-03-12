@@ -61,11 +61,18 @@ def _safe_avatar(url: str | None, agent_id: int | None = None) -> str:
 def _strip_html(text: str) -> str:
     """Убирает HTML-теги из ответа LLM: <a href='mailto:x'>x</a> → x"""
     if not text or '<' not in text:
-        return text
-    text = re.sub(r'<a\s+href=["\']mailto:([^"\']+)["\'][^>]*>.*?</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', text, flags=re.IGNORECASE | re.DOTALL)
-    text = re.sub(r'<[^>]+>', '', text)
-    return text
+        _t = text or ''
+    else:
+        _t = text
+        _t = re.sub(r'<a\s+href=["\']mailto:([^"\'\s>]+)["\'][^>]*>[^<]*</a>', r'\1', _t, flags=re.IGNORECASE | re.DOTALL)
+        _t = re.sub(r'<a\s+href=["\']mailto:([^"\'\s>]+)["\'][^>]*>[^<]*', r'\1', _t, flags=re.IGNORECASE | re.DOTALL)
+        _t = re.sub(r'<a\s+[^>]*>(.*?)</a>', r'\1', _t, flags=re.IGNORECASE | re.DOTALL)
+        _t = re.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _t)
+        _t = re.sub(r'<[^>]+>', '', _t)
+    _t = re.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', _t)
+    _t = re.sub(r'["\']\s*/?>\s*(?=\S)', '', _t)
+    _t = re.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _t)
+    return _t
 
 
 # ═══════════════════════════════════════════════════════
