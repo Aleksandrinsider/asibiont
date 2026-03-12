@@ -4581,14 +4581,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             logger.warning("[SUBDELEGATE] %s error: %s", _target_agent.name, _sub_err)
 
                     if _sub_results:
-                        # Результаты субделегирований сохраняем как задачи в «Поручения агентам»,
-                        # а НЕ в чат пользователю — межагентная работа видна на дашборде
+                        # Результаты в чат — агенты общаются как живые
+                        _final_text += "\n\n" + "\n".join(_sub_results)
+                        # + дублируем в задачи «Поручения агентам» для трекинга
                         for _sd_item, _sr in zip(_pending_subdelegations[:2], _sub_results):
                             try:
                                 _sd_target_name = _sr.split(':')[0].strip()
                                 _sd_result_text = ':'.join(_sr.split(':')[1:]).strip() if ':' in _sr else _sr
                                 _sd_agent_dict = {'id': 0, 'name': _sd_target_name}
-                                # Найдём id агента-получателя
                                 for _tn2, _ta2 in _team_map.items():
                                     if _ta2.name == _sd_target_name:
                                         _sd_agent_dict['id'] = _ta2.id
