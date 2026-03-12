@@ -1279,10 +1279,11 @@ class AnchorEngine:
                     _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
                     if _rotation_pool:
                         # ── ROUND-ROBIN: выбираем агента с наименьшим числом dispatches за 48ч ──
-                        # Более надёжен чем "следующий по очереди": работает после рестартов Railway,
-                        # не ломается при failed-логах, не зависит от порядка последних записей.
+                        # Учитываем ПРОВАЛЫ: агенты с > 2 consecutive fails получают штраф.
+                        # Это предотвращает бесконечное повторение крашащихся агентов.
                         from sqlalchemy import func as _rr_func
                         _rr_counts = {}
+                        _rr_recent_fails = {}  # agent_ref_id → consecutive fails count
                         try:
                             _rr_counts_raw = session.query(
                                 _AAL_ap.ref_id, _rr_func.count(_AAL_ap.id).label('cnt')
@@ -1293,6 +1294,24 @@ class AnchorEngine:
                             ).group_by(_AAL_ap.ref_id).all()
                             # ref_id=None → ASI (id=0)
                             _rr_counts = {(r if r is not None else 0): c for r, c in _rr_counts_raw}
+
+                            # Считаем consecutive fails для каждого агента (последние 5 записей)
+                            for _ag_rr in _rotation_pool:
+                                _ag_rr_id = getattr(_ag_rr, 'id', 0)
+                                _ref_val = _ag_rr_id if _ag_rr_id != 0 else None
+                                _recent = session.query(_AAL_ap.status).filter(
+                                    _AAL_ap.user_id == user.id,
+                                    _AAL_ap.activity_type == 'goal_autopilot_dispatch',
+                                    _AAL_ap.ref_id == _ref_val if _ref_val is not None else _AAL_ap.ref_id.is_(None),
+                                ).order_by(_AAL_ap.created_at.desc()).limit(5).all()
+                                _consec = 0
+                                for (_st,) in _recent:
+                                    if _st == 'failed':
+                                        _consec += 1
+                                    else:
+                                        break
+                                if _consec >= 2:
+                                    _rr_recent_fails[_ag_rr_id] = _consec
                         except Exception as _rr_err:
                             logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed (table may not exist): %s", _rr_err)
                             try:
@@ -1300,17 +1319,19 @@ class AnchorEngine:
                             except Exception:
                                 pass
                         # Сортируем: сначала агент с наименьшим cnt; ничья → custom агенты перед ASI, среди них по id
+                        # Штраф за consecutive fails: +100 к count (фактически исключает из ротации)
                         def _rr_key(a):
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
+                            fail_penalty = _rr_recent_fails.get(aid, 0) * 100  # 2+ consecutive fails → huge penalty
                             # ASI получает priority=99999 (выбирается последним среди равных)
                             tie_break = aid if aid != 0 else 99999
-                            return (cnt, tie_break)
+                            return (cnt + fail_penalty, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content
                         _rr_debug = (
                             f'[RR] pool={[(getattr(a,"id",0), getattr(a,"name","?")) for a in _rotation_pool]} '
-                            f'counts={_rr_counts} chosen={chosen.name}({getattr(chosen,"id",0)})'
+                            f'counts={_rr_counts} fails={_rr_recent_fails} chosen={chosen.name}({getattr(chosen,"id",0)})'
                         )
                     else:
                         chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
