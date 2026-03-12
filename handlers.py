@@ -996,6 +996,15 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         try:
             result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session, progress_callback=progress_callback)
             response_text = result.get('response', '') if isinstance(result, dict) else str(result)
+            # Финальная очистка HTML/email артефактов
+            if response_text:
+                try:
+                    from ai_integration.utils import clean_technical_details as _ctd_final
+                    _cleaned = _ctd_final(response_text)
+                    if _cleaned and _cleaned.strip():
+                        response_text = _cleaned
+                except Exception:
+                    pass
             logger.info(f"[PTM] Step 3a: got response, len={len(response_text)}")
             
             # Удаляем прогресс-сообщение перед финальным ответом

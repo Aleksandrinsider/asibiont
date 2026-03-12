@@ -4055,9 +4055,19 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             loop2 = asyncio.get_running_loop()
             stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
             if stdout2:
+                # Очищаем HTML-артефакты из IMAP/email вывода (mailto, <a>, entities)
+                import re as _re_sc
+                _sc_clean = _re_sc.sub(
+                    r'<a[^>]*href=["\']mailto:([^"\'\s>]+)["\'][^>]*>[^<]*(?:</a>)?', r'\1', stdout2, flags=_re_sc.IGNORECASE | _re_sc.DOTALL)
+                _sc_clean = _re_sc.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _sc_clean)
+                _sc_clean = _re_sc.sub(r'<[^>]+>', '', _sc_clean, flags=_re_sc.DOTALL)
+                _sc_clean = _re_sc.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', _sc_clean)
+                _sc_clean = _re_sc.sub(r'["\']?\s*/?\s*>(?=\S)', '', _sc_clean)
+                _sc_clean = _re_sc.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _sc_clean)
+                _sc_clean = _re_sc.sub(r'\n{3,}', '\n\n', _sc_clean)
                 script_context = (
                     f"\n\n[Данные от скрипта/интеграции — перескажи СВОИМИ СЛОВАМИ в ответе, "
-                    f"не копируй raw-текст дословно, сформулируй как живой человек]:\n{stdout2[:2000]}"
+                    f"не копируй raw-текст дословно, сформулируй как живой человек]:\n{_sc_clean[:2000]}"
                 )
                 system_prompt += script_context
             elif _stderr2 and 'timeout' not in _stderr2:
@@ -4977,6 +4987,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
         resp = _strip_agent_html(str(resp))
+        try:
+            from .utils import clean_technical_details as _ctd_ag
+            _cleaned_ag = _ctd_ag(resp)
+            if _cleaned_ag and _cleaned_ag.strip():
+                resp = _cleaned_ag
+        except Exception:
+            pass
         _ag_id = ag.get('id')
         _av_url = f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''
         _ac = _json.dumps({
