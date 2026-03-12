@@ -3829,7 +3829,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "ЗАПРЕЩЕНО называть инструменты в тексте ответа. Пиши естественно.\n"
             "ОДНО ДЕЙСТВИЕ: выбери самое важное действие прямо сейчас и сделай. "
             "Следующий цикл подхватит остальное через 15 минут.\n"
-            "ОТЧЁТ: что СДЕЛАЛ — 2-3 предложения конкретных фактов.\n"
+            "ОТЧЁТ (МИНИМУМ 100 символов): что конкретно найдено/сделано, какие данные, "
+            "какой результат. 'Выполнил поиск' — НЕ отчёт, нужны подробности.\n"
             "ПРОГРЕСС: после реального действия — update_goal_progress(goal_title=..., metric_current=N).\n\n"
 
             f"ТВОЯ РОЛЬ:\n{_persona}"
@@ -4277,12 +4278,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "1. Прочитай «УЖЕ СДЕЛАНО» и «ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ» — НЕЛЬЗЯ повторять.\n"
             "2. Прочитай «Частота инструментов» — выбери малоиспользуемый.\n"
             "3. ОДНО ДЕЙСТВИЕ за цикл: выбери САМОЕ важное прямо сейчас и сделай. "
-            "Следующий агент подхватит остальное через 5 минут.\n"
+            "Следующий агент подхватит остальное через 15 минут.\n"
             "4. web_search — ОСНОВНОЙ инструмент для поиска контактов в интернете.\n"
             "5. НЕ вызывай list_tasks, list_goals, get_system_status — данные уже в контексте.\n"
             "6. Вызов должен создать РЕАЛЬНЫЙ результат: письмо, пост, задача.\n"
             "7. После действия — update_goal_progress(goal_title=..., metric_current=N).\n"
-            "8. Ответ: 2-3 предложения — что сделано и результат."
+            "8. ОТЧЁТ ОБЯЗАТЕЛЕН (≥100 символов): расскажи ЧТО конкретно сделал, "
+            "КАКИЕ данные нашёл/отправил, и КАКОЙ следующий шаг. "
+            "'Выполнил поиск' или 'Обновил прогресс' — это НЕ отчёт, это ПРОВАЛ."
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
@@ -4420,7 +4423,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if _is_autopilot_task:
             _messages.append({"role": "user", "content": (
                 "Если было реальное действие — вызови update_goal_progress(goal_title=..., metric_current=N). "
-                "Затем подведи итог: что КОНКРЕТНО сделано и какой результат. Сплошной текст, 2-3 предложения."
+                "Затем ОБЯЗАТЕЛЬНО напиши подробный итог (МИНИМУМ 100 символов): "
+                "что КОНКРЕТНО найдено/отправлено/создано, какие данные получены, какой следующий шаг. "
+                "Сплошной текст, 2-3 полных предложения с фактами. "
+                "'Выполнил поиск' или 'обновил прогресс' — НЕ СЧИТАЕТСЯ, нужны подробности."
             )})
         else:
             _messages.append({"role": "user", "content": (
@@ -4459,6 +4465,27 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _final_text = _done_fb
 
     # ── Обрезка длинных ответов (без доп. LLM-вызова — экономит ~5с) ──
+    # Если текст слишком короткий после tool-вызовов (для автопилота) — доп. вызов для итога
+    if _is_autopilot_task and _tools_used and len(_final_text) < 100 and _final_text != _done_fb:
+        try:
+            _messages.append({"role": "assistant", "content": _final_text})
+            _messages.append({"role": "user", "content": (
+                "Слишком короткий отчёт. Расскажи подробнее (100+ символов): "
+                "что конкретно нашёл через поиск, какие данные получил, какой вывод, "
+                "какой следующий шаг для продвижения цели. Только текст, без tool-вызовов."
+            )})
+            _summary_resp = await asyncio.wait_for(
+                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=300, api_timeout=30),
+                timeout=35,
+            )
+            if _summary_resp and _summary_resp.get('choices'):
+                _summary_text = (_summary_resp['choices'][0]['message'].get('content') or '').strip()
+                if _summary_text and len(_summary_text) > len(_final_text):
+                    _final_text = _summary_text
+                    logger.info("[DIRECTOR-EXEC] autopilot summary expanded: %d chars", len(_final_text))
+        except Exception as _sum_err:
+            logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
+
     if _final_text and len(_final_text) > 600 and _final_text != _done_fb:
         # Обрезаем до последнего завершённого предложения в пределах 600 символов
         _cut = _final_text[:600]
