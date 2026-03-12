@@ -33,15 +33,15 @@ async def _generate_text_with_ai(prompt: str) -> str:
     data = {
         "model": DEEPSEEK_MODEL,
         "messages": [
-            {"role": "system", "content": "You are a ghostwriter. Write short, authentic social media posts in first person. Voice: candid, natural, human — the kind of thing someone actually posts, not a press release. Output only the post text, nothing else."},
+            {"role": "system", "content": "Ты — ghostwriter. Пишешь короткие живые посты от первого лица. Голос: искренний, человечный, как заметка в личный блог. Выдавай ТОЛЬКО текст поста, ничего больше. КАТЕГОРИЧЕСКИ запрещено повторять темы, фразы или структуру из предыдущих постов."},
             {"role": "user", "content": prompt}
         ],
-        "temperature": 0.85,
+        "temperature": 0.92,
         "max_tokens": 400
     }
 
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=30)) as response:
+        async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60, sock_read=50)) as response:
             if response.status == 200:
                 result = await response.json()
                 return result['choices'][0]['message']['content'].strip()
@@ -205,11 +205,11 @@ async def generate_progress_post(user_id, session):
             Task.actual_completion_time >= week_ago
         ).count()
 
-        # Last 2 posts to avoid repetition
+        # Last 5 posts — full text for strong anti-repetition
         recent_posts = session.query(Post).filter(
             Post.user_id == user.id
-        ).order_by(Post.created_at.desc()).limit(2).all()
-        recent_snippets = [p.content[:80] for p in recent_posts if p.content]
+        ).order_by(Post.created_at.desc()).limit(5).all()
+        recent_texts = [p.content for p in recent_posts if p.content]
 
         # Profile info
         user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
@@ -225,19 +225,35 @@ async def generate_progress_post(user_id, session):
             "энергично, с лёгким юмором",
             "спокойно и по-деловому",
             "с конкретикой и чуть личным",
+            "ироничный, с самоиронией",
+            "мечтательно, с взглядом в будущее",
+            "философски, про простые вещи",
         ])
 
-        # Build prompt — pre-compute optional lines (no backslash in f-string expressions for Python <3.12)
-        city_part = f", {user_city}" if user_city else ""
-        skills_line = f"\n- Сфера / навыки: {user_skills}" if user_skills else ""
-        interests_line = f"\n- Интересы: {user_interests}" if user_interests else ""
-        goals_line = f"\n- Цели: {user_goals}" if user_goals else ""
+        # Topic rotation — pick a fresh angle that hasn't been covered
+        topic_angles = [
+            "мысли о текущем дне, погоде, настроении",
+            "наблюдение из обычной жизни — что заметил сегодня",
+            "маленькая привычка или ритуал, который помогает",
+            "что-то новое, что попробовал или узнал",
+            "размышление о балансе работы и жизни",
+            "про мотивацию или её отсутствие сегодня",
+            "простая радость или мелочь, которая порадовала",
+            "про общение с людьми — разговор, встреча, переписка",
+            "про усталость, паузу или перезагрузку",
+            "про планы или ожидания на ближайшее время",
+        ]
+        topic_hint = random.choice(topic_angles)
 
-        context = f"""Ты — ghostwriter. Пишешь короткий пост в соцсеть от лица реального человека. Стиль: {tone}. Не пиши "ghostwriter", не пиши от своего имени.
+        # Build prompt
+        city_part = f", {user_city}" if user_city else ""
+
+        context = f"""Пишешь короткий пост в соцсеть от лица реального человека. Стиль: {tone}.
 
 О человеке:
-- Имя: {user_name}{city_part}{skills_line}{interests_line}{goals_line}
+- Имя: {user_name}{city_part}
 - Сейчас: {time_of_day}
+- Направление: {topic_hint}
 """
 
         if completed_today:
@@ -264,18 +280,22 @@ async def generate_progress_post(user_id, session):
         if week_completed_count > 0:
             context += f"\nЗа неделю закрыто задач: {week_completed_count}\n"
 
-        if recent_snippets:
-            context += f"\nПредыдущие посты (НЕ повторяй тему и структуру):\n"
-            for s in recent_snippets:
-                context += f"- «{s}…»\n"
+        if recent_texts:
+            context += f"\n🚫 ПРЕДЫДУЩИЕ ПОСТЫ — ЗАПРЕЩЕНО повторять темы, ключевые слова, структуру и мысли из них:\n"
+            for i, s in enumerate(recent_texts, 1):
+                context += f"---\nПост {i}: {s}\n"
+            context += "---\nНапиши про СОВЕРШЕННО ДРУГУЮ тему. Если предыдущие посты про работу — напиши про жизнь. Если про тренды — напиши про личное. Если про цели — напиши про настроение.\n"
 
         context += f"""
-Напиши пост. Правила:
-— от первого лица, 3-4 предложения, максимум 500 символов
-— живой разговорный текст, без буллетов и нумерации
-— можно 1 эмодзи если уместно, без хештегов, без CTA
-— {"основывайся ТОЛЬКО на реально закрытых задачах выше, не придумывай" if completed_today else "задач сегодня не было — напиши честно: размышление, пауза, планы — но НЕ придумывай несуществующие дела"}
-— не начинай с имени пользователя, не заканчивай вопросом к аудитории
+Напиши пост. СТРОГИЕ правила:
+— от первого лица, 2-4 предложения, максимум 400 символов
+— живой разговорный текст, как запись в личном блоге — не пресс-релиз
+— БЕЗ буллетов, нумерации, хештегов, CTA
+— {"основывайся ТОЛЬКО на реально закрытых задачах выше" if completed_today else "задач не было — напиши что-то личное: настроение, наблюдение, мысль дня"}
+— НЕ пиши про профессиональные навыки и сферу деятельности (это уже было в предыдущих постах)
+— НЕ начинай со слов «Сегодня», «Только что», «Интересно»
+— НЕ заканчивай вопросом к аудитории или моралью
+— направление для темы: {topic_hint}
 
 Только текст поста:"""
 
