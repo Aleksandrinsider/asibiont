@@ -3819,8 +3819,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  • 'Обновил прогресс цели.' — это техническое действие, не информация\n"
             "  • 'Задачу выполнил.' — что за задача? какой результат?\n\n"
 
-            "КОМАНДА: Ты часть команды. Смотри 'УЖЕ СДЕЛАНО' — продолжай работу коллег, не повторяй.\n"
-            "ОДНО ДЕЙСТВИЕ за цикл. Следующий агент подхватит через 15 минут.\n"
+            "КОМАНДА: Ты часть команды агентов. Каждые 15 мин работает один агент.\n"
+            "Смотри 'УЖЕ СДЕЛАНО' — там результаты коллег. ИСПОЛЬЗУЙ эти данные!\n"
+            "Если коллега нашёл контакты — напиши им. Нашёл ссылки — исследуй их. Нашёл проблему — реши.\n"
+            "Если ТЫ нашёл что-то для другого агента — напиши DELEGATE[Имя]: задача.\n"
+            "Пример: DELEGATE[Кристина]: отправь письмо на test@example.com с предложением тестирования\n\n"
             f"Инструменты: используй схему API{_intg_line}\n"
             "ЗАПРЕЩЕНО называть инструменты в тексте ответа. Пиши естественно.\n"
             "После реального действия — update_goal_progress.\n\n"
@@ -4270,12 +4273,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _is_autopilot_task:
         system_prompt += (
             "\n\n⚡ АВТОПИЛОТ:\n"
-            "1. Смотри «УЖЕ СДЕЛАНО» — не повторяй. Смотри «Частота инструментов» — бери другой.\n"
+            "1. Смотри «УЖЕ СДЕЛАНО» — там результаты КОМАНДЫ. Используй найденные данные, не повторяй поиск.\n"
             "2. ОДНО реальное ДЕЙСТВИЕ за цикл (не list_tasks, не get_system_status — данные в контексте).\n"
             "3. После действия — update_goal_progress.\n"
             "4. ГЛАВНОЕ — твой текстовый ответ пользователю. Ему придёт в Telegram. "
-            "Пиши как живой человек: что нашёл, какие факты, что думаешь, что дальше. "
-            "Представь что рассказываешь другу о проделанной работе."
+            "Пиши как живой человек: что нашёл, какие факты, что думаешь, что дальше.\n"
+            "5. Если нашёл задачу для другого агента — DELEGATE[Имя]: задача (будет выполнено автоматически)."
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
@@ -4578,7 +4581,25 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             logger.warning("[SUBDELEGATE] %s error: %s", _target_agent.name, _sub_err)
 
                     if _sub_results:
-                        _final_text += "\n\n" + "\n".join(_sub_results)
+                        # Результаты субделегирований сохраняем как задачи в «Поручения агентам»,
+                        # а НЕ в чат пользователю — межагентная работа видна на дашборде
+                        for _sd_item, _sr in zip(_pending_subdelegations[:2], _sub_results):
+                            try:
+                                _sd_target_name = _sr.split(':')[0].strip()
+                                _sd_result_text = ':'.join(_sr.split(':')[1:]).strip() if ':' in _sr else _sr
+                                _sd_agent_dict = {'id': 0, 'name': _sd_target_name}
+                                # Найдём id агента-получателя
+                                for _tn2, _ta2 in _team_map.items():
+                                    if _ta2.name == _sd_target_name:
+                                        _sd_agent_dict['id'] = _ta2.id
+                                        break
+                                _create_agent_delegation_task(
+                                    _author_id, _sd_agent_dict,
+                                    _sd_item.get('task', '')[:200],
+                                    result_summary=_sd_result_text[:500],
+                                )
+                            except Exception as _sd_task_err:
+                                logger.debug('[SUBDELEGATE] task create error: %s', _sd_task_err)
             finally:
                 _sub_s.close()
         except Exception as _sd_err:

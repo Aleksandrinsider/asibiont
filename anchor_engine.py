@@ -1155,9 +1155,18 @@ class AnchorEngine:
             recent_actions = data.get('recent_actions', [])
             if recent_actions:
                 task_text += (
-                    f"\n\n⚠️ УЖЕ СДЕЛАНО (за 24ч):\n"
+                    "\n\n⚠️ УЖЕ СДЕЛАНО (за 24ч) — это результаты работы КОМАНДЫ, используй эти данные:\n"
                     + '\n'.join(f"  {a}" for a in recent_actions[:8])
-                    + "\nНе повторяй эти действия. Выбери другую категорию инструментов."
+                    + "\nПродолжи работу коллег: используй найденные данные, контакты, ссылки. Не повторяй те же действия."
+                )
+
+            # Добавляем информацию о команде для делегирования
+            _team = data.get('team_agents', [])
+            if _team:
+                task_text += (
+                    f"\n\nТВОЯ КОМАНДА: {', '.join(_team)}\n"
+                    "Если нашёл данные, которые должен обработать другой агент — "
+                    "напиши DELEGATE[Имя]: описание задачи. Пример: DELEGATE[Кристина]: отправь письмо на найденный email test@example.com"
                 )
 
             # Добавляем недавние proactive-сообщения (что уже было сказано/сделано)
@@ -1491,6 +1500,14 @@ class AnchorEngine:
                         logger.info("[ANCHOR-AUTOPILOT] user %d: skip — agent billing failed: %s", user.id, _bill.get('error', ''))
                         return
 
+                # ── Создаём задачу в «Поручения агентам» перед dispatch ──
+                _ap_task_id = None
+                try:
+                    from ai_integration.autonomous_agent import _create_agent_delegation_task as _cadt
+                    _ap_task_id = _cadt(user.id, agent_data, task_text[:200])
+                except Exception as _cadt_err:
+                    logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
+
                 try:
                     # Ограничиваем task_text для экономии input-токенов DeepSeek
                     _task_trimmed = task_text[:3000] if len(task_text) > 3000 else task_text
@@ -1527,6 +1544,14 @@ class AnchorEngine:
                     _raw = ('', [])
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
+
+                # ── Обновляем задачу в «Поручения агентам» результатом ──
+                if _ap_task_id and (result or '').strip():
+                    try:
+                        from ai_integration.autonomous_agent import _update_agent_delegation_task as _uadt
+                        _uadt(_ap_task_id, (result or '')[:500])
+                    except Exception as _uadt_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] delegation task update skipped: %s", _uadt_err)
 
                 # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
                 _result_clean = (result or '').strip()
@@ -3528,7 +3553,7 @@ class AnchorEngine:
             _agent = (a.title or '').replace(' — обзор целей', '')
             _tools_info = f" [инструменты: {_tools_tag}]" if _tools_tag else ''
             actions_history.append(
-                f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:200]}"
+                f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:400]}"
             )
 
         # Fallback: если AAL пуст, берём историю из interactions (autopilot proactive сообщения)
@@ -3668,9 +3693,17 @@ class AnchorEngine:
             if total_uses >= 3 and total_fails > total_uses * 0.5:
                 exhausted_strategies.append(strat_name)
 
+        # Имена активных агентов для делегирования
+        from models import UserAgent as _UA_team
+        _team_names = [a.name for a in session.query(_UA_team).filter(
+            _UA_team.author_id == user.id,
+            _UA_team.status.in_(['active', 'paused']),
+        ).all()]
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
+            'team_agents': _team_names,
             'recent_actions': actions_history[:10],
             'recent_messages': recent_messages[:6],
             'email_campaigns': email_summary,
