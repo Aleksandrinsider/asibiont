@@ -2955,7 +2955,7 @@
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:8px;font-size:11px;color:#059669;background:#F3F4F6;border:1px solid #D1D9E0;border-radius:4px;padding:1px 6px;">${t('mp-activated-badge')}</span>
+                                <span style="font-weight:400;color:#068487;font-size:12px;margin-left:6px;">${t('mp-activated-badge')}</span>
                                 ${subLabel ? `<div style="font-size:12px;color:#9CA3AF;margin-top:2px;">${subLabel}</div>` : ''}
                             </div>
                             <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">
@@ -2966,17 +2966,17 @@
                         const isArenaActive = a.status === 'active';
                         const privacyLabel = a.is_private ? t('mp-private') : t('mp-public');
                         const activationLabel = a.is_subscribed ? t('mp-status-active') : t('mp-status-inactive');
-                        const activationColor = a.is_subscribed ? '#059669' : '#8C959F';
+                        const activationColor = a.is_subscribed ? '#068487' : '#8C959F';
                         const arenaLabel = isArenaActive ? t('mp-in-arena') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : '';
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
-                                <span style="margin-left:6px;font-size:11px;color:#6B7280;background:#F3F4F6;border:1px solid #E5E7EB;border-radius:4px;padding:1px 6px;">${privacyLabel}</span>
+                                <span style="font-weight:400;color:#6B7280;font-size:12px;margin-left:6px;">${privacyLabel}</span>
                                 <div style="font-size:12px;color:#8C959F;margin-top:3px;">
-                                    <span style="color:${activationColor};font-weight:500;">${activationLabel}</span>
-                                    ${arenaLabel ? `<span style="margin-left:6px;font-size:11px;color:#374151;background:#F3F4F6;border:1px solid #D1D9E0;border-radius:4px;padding:1px 5px;">${arenaLabel}</span>` : ''}
+                                    <span style="color:${activationColor};font-weight:400;">${activationLabel}</span>
+                                    ${arenaLabel ? `<span style="margin-left:6px;font-weight:400;color:#068487;font-size:12px;">${arenaLabel}</span>` : ''}
                                     <span style="margin-left:4px;"> · ${a.subscribers_count} ${t('mp-subscribers')} · ${a.messages_count} ${t('mp-messages-count')}</span>
                                 </div>
                             </div>
