@@ -1530,25 +1530,10 @@ class AnchorEngine:
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
-                # ── Продолжение цепочки: 1 передача для автопилота, 3 для event-якорей ──
-                # Для autopilot: агент A делает исследование → агент B создаёт задачи по нему
-                # Для event-якорей: полная цепочка до 3 передач (task_stale, delegation и т.д.)
-                # Пауза перед chain — чтобы сообщения приходили последовательно, а не разом
-                _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
-                if result and len(result) > 30 and len(_real_agents) >= 1:
-                    await asyncio.sleep(3)  # Координация: пауза между агентами
-                    # Автопилот: 1 продолжение (экономим ресурсы + защита от таймаута Railway)
-                    _chain_max = 1
-                    try:
-                        await asyncio.wait_for(
-                            self._maybe_continue_chain(
-                                user, chosen, anchor, task_text, result, _real_agents, session,
-                                max_cont=_chain_max,
-                            ),
-                            timeout=100,
-                        )
-                    except Exception as _chain_err:
-                        logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
+                # Autopilot НЕ использует chain continuation — round-robin чередует
+                # агентов каждые 5 минут, что эффективнее одной длинной цепочки:
+                # цикл 1: Марк (research) → цикл 2: Кристина (email) → цикл 3: ASI (tasks)
+                # Каждый агент видит результаты предыдущих через recent_actions в data якоря.
 
             # Помечаем якорь доставленным
             anchor.delivered_at = datetime.now(timezone.utc)

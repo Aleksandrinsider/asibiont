@@ -3825,7 +3825,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             "ЗАПРЕЩЕНО называть инструменты в тексте ответа. Пиши естественно: «написал в Telegram», «нашёл контакты», «опубликовал пост».\n"
             "ЗАПРЕЩЕНО маркеры, CAPS-ЗАГОЛОВКИ, шаблонные списки. Сплошной текст.\n"
-            "ОТЧЁТ: что СДЕЛАЛ — конкретные факты. Объём по ситуации: 2-3 предложения при одном действии, 4-6 при нескольких.\n"
+            "ОДНО ДЕЙСТВИЕ: выбери ОДНО самое важное действие прямо сейчас и сделай. "
+            "Следующий цикл подхватит остальное через 5 минут.\n"
+            "ОТЧЁТ: что СДЕЛАЛ — конкретные факты. 2-3 предложения.\n"
             "ПРОГРЕСС: после реального действия — update_goal_progress(goal_title=..., metric_current=N).\n\n"
 
             f"ТВОЯ РОЛЬ:\n{_persona}"
@@ -4242,14 +4244,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _is_autopilot_task:
         system_prompt += (
             "\n\n⚡ АВТОПИЛОТ — СТРОГИЕ ПРАВИЛА:\n"
-            "1. Прочитай раздел «УЖЕ СДЕЛАНО» и «ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ» — то что там перечислено НЕЛЬЗЯ повторять.\n"
-            "2. Прочитай «Частота инструментов» — выбери тот, что использовался МЕНЬШЕ всего или вообще не вызывался.\n"
-            "3. Если find_and_message_relevant_users не находит людей — используй web_search для поиска контактов в ИНТЕРНЕТЕ (email, LinkedIn, сайты компаний).\n"
-            "4. web_search — ОСНОВНОЙ инструмент для поиска контактов. Ищи: 'email директора компании X', 'контакты маркетологов Москва', 'email founders startup Y'. Если первый запрос не дал email — переформулируй запрос.\n"
-            "5. НЕ вызывай list_tasks, list_goals, get_system_status — эти данные уже есть в контексте.\n"
-            "6. Каждый вызов должен создавать РЕАЛЬНЫЙ результат: отправленное письмо, опубликованный пост, созданная задача.\n"
+            "1. Прочитай «УЖЕ СДЕЛАНО» и «ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ» — НЕЛЬЗЯ повторять.\n"
+            "2. Прочитай «Частота инструментов» — выбери малоиспользуемый.\n"
+            "3. ОДНО ДЕЙСТВИЕ за цикл: выбери САМОЕ важное прямо сейчас и сделай. "
+            "Следующий агент подхватит остальное через 5 минут.\n"
+            "4. web_search — ОСНОВНОЙ инструмент для поиска контактов в интернете.\n"
+            "5. НЕ вызывай list_tasks, list_goals, get_system_status — данные уже в контексте.\n"
+            "6. Вызов должен создать РЕАЛЬНЫЙ результат: письмо, пост, задача.\n"
             "7. После действия — update_goal_progress(goal_title=..., metric_current=N).\n"
-            "8. Ответ: 2-4 предложения — что конкретно сделано и какой результат получен."
+            "8. Ответ: 2-3 предложения — что сделано и результат."
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
@@ -4272,19 +4275,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
-    # autopilot: research → find_contacts → send → update_progress → final — нужно ≥5 шагов
-    # обычный: 2 шага достаточно для делегированной задачи (вызов + финал)
-    _max_iters = 5 if _is_autopilot_task else 2
+    # Adaptive dispatch: 1 осмысленное действие за цикл, round-robin чередует агентов
+    # autopilot: action + summary/update_progress (2 итерации, ~110с worst case)
+    # обычный: action + summary (2 итерации)
+    _max_iters = 2
     for _iter in range(_max_iters):
-        # autopilot: до 4 tool-вызовов (больше работы за одну сессию, меньше cold-start-ов)
-        # обычный: до 2 tool-вызовов
-        _max_tool_calls = 4 if _is_autopilot_task else 2
+        # До 2 tool-вызовов (1 действие + update_goal_progress)
+        _max_tool_calls = 2
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
-        # Для autopilot-задач: первые 2 итерации — required (research → add_task)
-        # Это устраняет ситуацию когда AI пишет "создала задачу" без реального вызова tool
+        # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
         if _use_tools_now:
-            if _is_autopilot_task and _tool_call_count < 2:
+            if _is_autopilot_task and _tool_call_count == 0:
                 _tc_mode = "required"
             else:
                 _tc_mode = "auto"
@@ -4384,16 +4386,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         for _tc_skip in _tool_calls[2:]:
             _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
                               "content": '{"status":"skipped"}'})
-        # Инструкция после tool-call: для автопилота — требуем конкретное следующее действие
-        if _is_autopilot_task and _tool_call_count == 1:
-            # После первого tool call: направляем на следующее действие
-            _messages.append({"role": "user", "content": (
-                "Данные получены. Выбери следующий инструмент для продвижения цели."
-            )})
-        elif _is_autopilot_task:
+        # Инструкция после tool-call: для автопилота — итог + update_progress за один шаг
+        if _is_autopilot_task:
             _messages.append({"role": "user", "content": (
                 "Если было реальное действие — вызови update_goal_progress(goal_title=..., metric_current=N). "
-                "Затем подведи итог: что сделано, какой результат. Сплошной текст, без списков."
+                "Затем подведи итог: что КОНКРЕТНО сделано и какой результат. Сплошной текст, 2-3 предложения."
             )})
         else:
             _messages.append({"role": "user", "content": (
