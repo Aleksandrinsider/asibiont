@@ -321,6 +321,127 @@
                 font-size: 24px;
             }
         }
+        /* ── Секция Автопилот целей ── */
+        .autopilot-section {
+            margin: 80px 0 0 0;
+            padding: 0;
+        }
+        .autopilot-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .autopilot-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #DAFBE1;
+            color: #1A7F37;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 12px;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+        .autopilot-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1F2328;
+            margin: 0 0 8px 0;
+        }
+        .autopilot-header p {
+            font-size: 14px;
+            color: #374151;
+            line-height: 1.6;
+            margin: 0 auto;
+            max-width: 640px;
+        }
+        .autopilot-cycle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin: 28px 0 24px 0;
+            flex-wrap: wrap;
+        }
+        .autopilot-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 12px;
+            min-width: 100px;
+        }
+        .autopilot-step-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            border: 2px solid #D1D9E0;
+            background: white;
+        }
+        .autopilot-step-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+            text-align: center;
+            line-height: 1.3;
+        }
+        .autopilot-arrow {
+            font-size: 18px;
+            color: #D1D9E0;
+            flex-shrink: 0;
+            margin-top: -20px;
+        }
+        .autopilot-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+        .autopilot-card {
+            border: 1px solid #D1D9E0;
+            border-radius: 6px;
+            padding: 20px;
+            background: white;
+            transition: border-color 0.2s;
+        }
+        .autopilot-card:hover {
+            border-color: #1F2328;
+        }
+        .autopilot-card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1F2328;
+            margin: 0 0 6px 0;
+        }
+        .autopilot-card p {
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.5;
+            margin: 0;
+        }
+        @media (max-width: 768px) {
+            .autopilot-cards {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .autopilot-cycle {
+                gap: 0;
+            }
+            .autopilot-step {
+                min-width: 70px;
+                padding: 10px 6px;
+            }
+            .autopilot-step-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+            .autopilot-arrow {
+                font-size: 14px;
+            }
+        }
         .feature-icon {
             width: 48px;
             height: 48px;
