@@ -1097,6 +1097,9 @@ class AnchorEngine:
             # Если нет пользовательских агентов — используем прямой AI-вызов через основной чат
             # Для goal_autopilot_review — используем полноценный prompt из _AGENT_DISPATCH_TRIGGERS,
             # а не просто anchor.topic (он слишком лаконичен для автономной работы агента)
+            data = anchor.data or {}
+            if isinstance(data, str):
+                data = json.loads(data)
             if anchor.anchor_type == 'goal_autopilot_review':
                 # Адаптивный промпт — стратегия подбирается под категорию целей пользователя
                 _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
@@ -1105,9 +1108,6 @@ class AnchorEngine:
                 task_text = _AGENT_DISPATCH_TRIGGERS.get(
                     anchor.anchor_type, anchor.topic or '',
                 )
-            data = anchor.data or {}
-            if isinstance(data, str):
-                data = json.loads(data)
 
             # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — идут первыми, задают контекст работы ──
             _user_rules = data.get('user_rules', [])
