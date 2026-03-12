@@ -4763,6 +4763,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _is_autopilot_task and not _tools_used and len((_final_text or '').strip()) < 100:
         _final_text = ''  # слишком короткий текст без действий = noise
 
+    # Шаблонные ответы с инструментами: "Выполнил поиск." — тоже noise
+    if _is_autopilot_task and _tools_used and _final_text:
+        _ft_lower = _final_text.strip().lower()
+        _GENERIC_PATTERNS_AA = ('выполнил поиск', 'выполнила поиск', 'обновил прогресс',
+                                'обновила прогресс', 'провёл поиск', 'провела поиск')
+        if len(_final_text.strip()) < 100 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
+            logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
+            _final_text = ''
+
     return _final_text, _tools_used
 
 
