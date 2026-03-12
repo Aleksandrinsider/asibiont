@@ -6668,9 +6668,9 @@ except Exception as e:
                     'empty_result': '#6e7781', 'no_action': '#6e7781',
                 };
                 const _statusLabels = {
-                    'completed': '✓', 'in_progress': '⏳', 'failed': '✗',
-                    'noise_filtered': '⊘', 'dedup_filtered': '⊘',
-                    'empty_result': '—', 'no_action': '—',
+                    'completed': 'OK', 'in_progress': '...', 'failed': 'ERR',
+                    'noise_filtered': 'skip', 'dedup_filtered': 'skip',
+                    'empty_result': 'skip', 'no_action': 'skip',
                 };
                 const _sc = _statusColors[a.status] || '#6e7781';
                 const _sl = _statusLabels[a.status] || a.status;

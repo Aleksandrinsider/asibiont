@@ -763,6 +763,21 @@ class AnchorEngine:
             Anchor.created_at.asc()
         ).limit(20).all()
 
+        # ── STUCK ANCHOR RECOVERY: если autopilot-якорь висит >15 мин без delivered_at ──
+        _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=15)
+        _stuck_cleared = 0
+        for _sa in deliverable:
+            if _sa.anchor_type == 'goal_autopilot_review':
+                _tr = _sa.triggered_at
+                if _tr and (_tr.tzinfo is None and _tr < _stuck_threshold.replace(tzinfo=None)
+                            or _tr.tzinfo is not None and _tr < _stuck_threshold):
+                    _sa.delivered_at = datetime.now(timezone.utc)
+                    _stuck_cleared += 1
+        if _stuck_cleared:
+            session.commit()
+            deliverable = [a for a in deliverable if a.delivered_at is None]
+            logger.warning("[ANCHOR] User %d: cleared %d stuck autopilot anchors (>15min)", user_id, _stuck_cleared)
+
         # ── 0. BACKGROUND RESEARCH — выполнить отложенные исследования ──
         _bg_now = datetime.utcnow()  # naive UTC для сравнения с triggered_at из PostgreSQL (naive)
         bg_due = [a for a in deliverable if a.anchor_type == 'background_research'
@@ -1413,28 +1428,33 @@ class AnchorEngine:
                             pass
                         return
 
-                # Log dispatch (для ASI не записываем ref_id) — отдельным коммитом
+                # Log dispatch — используем raw SQL через отдельное соединение
+                # ORM-вставка через shared session ненадёжна (session state после token spend)
                 _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
+                _aal_id = None
                 try:
-                    session.add(_AAL_ap(
-                        user_id=user.id,
-                        activity_type='goal_autopilot_dispatch',
-                        title=f'{agent_name} — обзор целей',
-                        content=_log_content,
-                        target=anchor.source,
-                        status='in_progress',
-                        ref_id=chosen.id if chosen.id != 0 else None,
-                    ))
+                    from sqlalchemy import text as _aal_text
+                    _aal_ref = chosen.id if chosen.id != 0 else None
+                    _aal_res = session.execute(_aal_text(
+                        "INSERT INTO agent_activity_log (user_id, activity_type, title, content, target, status, ref_id, created_at) "
+                        "VALUES (:uid, 'goal_autopilot_dispatch', :title, :content, :target, 'in_progress', :ref_id, NOW()) "
+                        "RETURNING id"
+                    ), {'uid': user.id, 'title': f'{agent_name} — обзор целей', 'content': _log_content[:500], 'target': anchor.source, 'ref_id': _aal_ref})
+                    _aal_row = _aal_res.fetchone()
+                    _aal_id = _aal_row[0] if _aal_row else None
                     session.commit()
+                    logger.info("[ANCHOR-AUTOPILOT] AAL created id=%s for user %d", _aal_id, user.id)
                 except Exception as _log_err:
-                    logger.warning("[ANCHOR-AUTOPILOT] activity log creation failed: %s (type: %s)", _log_err, type(_log_err).__name__)
+                    logger.warning("[ANCHOR-AUTOPILOT] AAL creation failed (SQL): %s", _log_err)
                     try:
                         session.rollback()
                     except Exception:
                         pass
-                    # Retry with minimal data
+                    # Fallback: отдельная сессия
                     try:
-                        session.add(_AAL_ap(
+                        from models import Session as _AAL_Session
+                        _aal_s = _AAL_Session()
+                        _aal_s.add(_AAL_ap(
                             user_id=user.id,
                             activity_type='goal_autopilot_dispatch',
                             title=f'{agent_name} — обзор целей',
@@ -1442,10 +1462,14 @@ class AnchorEngine:
                             target=anchor.source,
                             status='in_progress',
                         ))
-                        session.commit()
-                    except Exception:
+                        _aal_s.commit()
+                        _aal_id = _aal_s.query(_AAL_ap).filter_by(user_id=user.id, activity_type='goal_autopilot_dispatch').order_by(_AAL_ap.id.desc()).first()
+                        _aal_id = _aal_id.id if _aal_id else None
+                        _aal_s.close()
+                    except Exception as _fb_err:
+                        logger.error("[ANCHOR-AUTOPILOT] AAL fallback creation also failed: %s", _fb_err)
                         try:
-                            session.rollback()
+                            _aal_s.close()
                         except Exception:
                             pass
 
@@ -1457,12 +1481,38 @@ class AnchorEngine:
                         logger.info("[ANCHOR-AUTOPILOT] user %d: skip — agent billing failed: %s", user.id, _bill.get('error', ''))
                         return
 
-                _raw = await asyncio.wait_for(
-                    _exec_agent_for_director(
-                        agent_data, task_text, user.telegram_id,
-                    ),
-                    timeout=180,
-                )
+                try:
+                    _raw = await asyncio.wait_for(
+                        _exec_agent_for_director(
+                            agent_data, task_text, user.telegram_id,
+                        ),
+                        timeout=180,
+                    )
+                except (asyncio.TimeoutError, Exception) as _ai_err:
+                    logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
+                    # Вместо полной тишины — отправляем краткий статус-отчёт
+                    _goals_summary = data.get('goals', [])
+                    if _goals_summary and self.bot:
+                        _goal_lines = ', '.join(g.get('title', '')[:50] for g in _goals_summary[:3])
+                        _fallback_msg = f"Работаю над целями: {_goal_lines}. Анализирую возможные шаги."
+                        try:
+                            await self.bot.send_message(chat_id=user.telegram_id, text=f"{agent_name}:\n\n{_fallback_msg}")
+                            session.add(Interaction(
+                                user_id=user.id,
+                                message_type='proactive',
+                                content=json.dumps({
+                                    '__agent': {'name': agent_name, 'id': chosen.id, 'avatar_url': _safe_avatar(getattr(chosen, 'avatar_url', ''), chosen.id)},
+                                    'text': _fallback_msg,
+                                    '__anchor_type': 'goal_autopilot_review',
+                                }, ensure_ascii=False),
+                            ))
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+                    _raw = ('', [])
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
 
@@ -1599,30 +1649,27 @@ class AnchorEngine:
             # Результат сохранён в AgentActivityLog.result → context_builder читает его напрямую
 
             # Обновляем статус dispatch-лога (ВСЕГДА — даже если result пустой)
-            if agents:
+            if agents and _aal_id:
                 try:
-                    log = session.query(_AAL_ap).filter_by(
-                        user_id=user.id,
-                        activity_type='goal_autopilot_dispatch',
-                        target=anchor.source,
-                    ).order_by(_AAL_ap.id.desc()).first()
-                    if log:
-                        _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
-                        _filter_tag = f"[filtered:{_filter_reason}] " if _filter_reason else ''
-                        _full_result = _filter_tag + _tools_prefix + (result or '')
-                        if result and result.strip() and not _is_noise_result:
-                            log.status = 'completed'
-                        elif _filter_reason == 'dedup':
-                            log.status = 'dedup_filtered'
-                        elif _filter_reason == 'noise':
-                            log.status = 'noise_filtered'
-                        elif result and result.strip():
-                            log.status = 'no_action'
-                        else:
-                            log.status = 'empty_result'
-                        log.result = _full_result[:400] if _full_result.strip() else 'empty'
-                        log.updated_at = datetime.now(timezone.utc)
-                        session.commit()
+                    _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
+                    _filter_tag = f"[filtered:{_filter_reason}] " if _filter_reason else ''
+                    _full_result = _filter_tag + _tools_prefix + (result or '')
+                    if result and result.strip() and not _is_noise_result:
+                        _aal_status = 'completed'
+                    elif _filter_reason == 'dedup':
+                        _aal_status = 'dedup_filtered'
+                    elif _filter_reason == 'noise':
+                        _aal_status = 'noise_filtered'
+                    elif result and result.strip():
+                        _aal_status = 'no_action'
+                    else:
+                        _aal_status = 'empty_result'
+                    _aal_result_text = _full_result[:400] if _full_result.strip() else 'empty'
+                    from sqlalchemy import text as _aal_upd_text
+                    session.execute(_aal_upd_text(
+                        "UPDATE agent_activity_log SET status=:st, result=:res, updated_at=NOW() WHERE id=:aid"
+                    ), {'st': _aal_status, 'res': _aal_result_text, 'aid': _aal_id})
+                    session.commit()
                 except Exception as _upd_err:
                     logger.warning("[ANCHOR-AUTOPILOT] AAL status update failed: %s", _upd_err)
                     try:
@@ -1632,31 +1679,25 @@ class AnchorEngine:
 
         except Exception as e:
             logger.warning("[ANCHOR-AUTOPILOT] error for user %d: %s", user.id, e)
-            # anchor.delivered_at already committed before AI call (line ~1394)
-            # Rollback any dirty state from cancelled/failed inner coroutine
             try:
                 session.rollback()
             except Exception:
                 pass
-            # Update log status — critical to avoid stuck in_progress logs
+            # Update AAL by id (if we have it) via raw SQL — more reliable
             try:
-                from models import AgentActivityLog as _AAL_f
-                _stuck = session.query(_AAL_f).filter_by(
-                    user_id=user.id,
-                    activity_type='goal_autopilot_dispatch',
-                    target=anchor.source,
-                    status='in_progress',
-                ).order_by(_AAL_f.id.desc()).first()
-                if _stuck:
-                    _stuck.status = 'failed'
-                    _stuck.result = f'Error: {str(e)[:300]}'
+                _aal_id_err = locals().get('_aal_id')
+                if _aal_id_err:
+                    from sqlalchemy import text as _aal_err_text
+                    session.execute(_aal_err_text(
+                        "UPDATE agent_activity_log SET status='failed', result=:res, updated_at=NOW() WHERE id=:aid"
+                    ), {'res': f'Error: {str(e)[:300]}', 'aid': _aal_id_err})
                     session.commit()
             except Exception:
                 try:
                     session.rollback()
                 except Exception:
                     pass
-            # Ensure anchor.delivered_at is committed (may have been rolled back above)
+            # Ensure anchor.delivered_at is committed
             try:
                 anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
