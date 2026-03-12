@@ -1490,7 +1490,8 @@ class ContextBuilder:
     _integration_rec_cache: dict = {}
 
     def _recommend_integration(self, user, profile, all_goals, session) -> str | None:
-        """Передаёт агенту список неподключённых интеграций — агент сам решает что и когда предложить.
+        """Передаёт агенту список неподключённых интеграций И неиспользуемых фич —
+        агент сам решает что и когда предложить.
 
         Anti-spam: не чаще 1 раза за 72 часа на пользователя.
         """
@@ -1505,12 +1506,14 @@ class ContextBuilder:
         _has_tg_channel = bool(getattr(user, 'telegram_channel', None))
         _has_discord = bool(getattr(user, 'discord_webhook', None))
         _has_gmail_oauth = bool(getattr(user, 'google_oauth_token', None))
+        _has_autopilot = bool(getattr(profile, 'goal_autopilot_enabled', False)) if profile else False
 
         from models import UserAgent as _UA_rec
         _agents = session.query(_UA_rec).filter(
             _UA_rec.author_id == user.id,
             _UA_rec.status != 'disabled',
         ).all()
+        _has_agents = len(_agents) > 0
         _kup = ' '.join((_a.user_api_keys or '').upper() for _a in _agents)
         _clo = ' '.join((_a.python_code or '').lower() for _a in _agents)
 
@@ -1522,57 +1525,190 @@ class ContextBuilder:
         _has_notion = 'NOTION' in _kup
         _has_slack = 'SLACK' in _kup
         _has_rss = 'feedparser' in _clo or 'RSS' in _kup
+        _has_trello = 'TRELLO' in _kup
+        _has_jira = 'JIRA' in _kup or 'ATLASSIAN' in _kup
+        _has_gsheets = 'GOOGLE_SHEETS' in _kup or 'gspread' in _clo or 'SHEETS' in _kup
+        _has_airtable = 'AIRTABLE' in _kup
+        _has_stripe = 'STRIPE' in _kup
+        _has_shopify = 'SHOPIFY' in _kup
+        _has_whatsapp = 'WHATSAPP' in _kup or 'TWILIO' in _kup
+        _has_twitter = 'TWITTER' in _kup or 'X_API' in _kup or 'TWEEPY' in _kup
+        _has_openai = 'OPENAI' in _kup
+        _has_calendar = 'GOOGLE_CALENDAR' in _kup or 'CALDAV' in _kup
+        _has_crm = 'BITRIX' in _kup or 'AMOCRM' in _kup or 'HUBSPOT' in _kup or 'SALESFORCE' in _kup
+        _has_webhook = 'WEBHOOK_URL' in _kup or 'webhook' in _clo
+        _has_1c = '1C' in _kup or 'ODATA' in _kup
 
+        # Проверяем использование фич
+        _has_content_campaign = False
+        _has_email_campaign = False
+        _has_delegation_campaign = False
+        try:
+            from models import ContentCampaign as _CC_r, EmailCampaign as _EC_r, DelegationCampaign as _DC_r
+            _has_content_campaign = session.query(_CC_r).filter_by(user_id=user.id).first() is not None
+            _has_email_campaign = session.query(_EC_r).filter_by(user_id=user.id).first() is not None
+            try:
+                _has_delegation_campaign = session.query(_DC_r).filter_by(user_id=user.id).first() is not None
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        from models import AgentSubscription as _AS_r
+        _has_marketplace_agents = session.query(_AS_r).filter_by(user_id=user.id).first() is not None
+
+        # ═══ ИНТЕГРАЦИИ (через агентов) ═══
         # (not_connected, name, benefit, how_to_connect)
-        _options = [
+        _integrations = [
             (not _has_tg_channel,
              "Telegram-канал",
-             "автопостинг по контент-стратегии ежедневно",
-             "Настройки → поле «Telegram-канал» (@username или chat ID)"),
+             "автопостинг контента по стратегии",
+             "Настройки → «Telegram-канал» (@username или chat ID)"),
             (not _has_discord,
              "Discord webhook",
-             "автопубликация контента в Discord-канал",
-             "Discord → канал → Настройки → Интеграции → Webhooks → URL → вставить в профиле"),
+             "автопубликация в Discord-канал",
+             "Discord → канал → Настройки → Webhooks → URL → в профиле"),
             (not _has_email,
              "Личная почта (Gmail/Яндекс/Mail.ru)",
-             "email от имени пользователя — выше доверие, больше ответов (вместо outreach@asibiont.com)",
-             "Настройки → Gmail OAuth, или пароль приложения в настройках агента"),
+             "email от имени пользователя, автоответы, аутрич",
+             "Gmail OAuth в настройках, или пароль приложения в агенте"),
             (_has_email and not _has_imap,
              "IMAP-мониторинг входящих",
-             "агент читает inbox и уведомляет/отвечает автоматически",
-             "создать агента с python_code для IMAP + ключи USER/PASS"),
+             "агент читает inbox, уведомляет и отвечает автоматически",
+             "создать агента с python_code для IMAP + ключи"),
             (not _has_github,
-             "GitHub API",
-             "автоматизация issues, PR, мониторинг репозиториев",
-             "создать агента с GITHUB_TOKEN в ключах"),
+             "GitHub",
+             "автоматизация issues/PR, мониторинг репозиториев, CI/CD",
+             "агент + GITHUB_TOKEN"),
             (not _has_notion,
-             "Notion API",
-             "синхронизация задач/заметок, обновление баз данных",
-             "создать агента с NOTION_TOKEN в ключах"),
+             "Notion",
+             "синхронизация задач, обновление баз знаний",
+             "агент + NOTION_TOKEN"),
             (not _has_slack,
-             "Slack Bot",
-             "отчёты в каналы, уведомления о задачах, мониторинг сообщений",
-             "создать агента с SLACK_BOT_TOKEN в ключах"),
+             "Slack",
+             "отчёты в каналы, мониторинг сообщений",
+             "агент + SLACK_BOT_TOKEN"),
             (not _has_rss,
              "RSS-мониторинг",
-             "автосбор новостей/трендов из RSS-лент с дайджестом",
-             "создать агента с feedparser в python_code"),
+             "автосбор новостей из любых источников с дайджестом",
+             "агент с feedparser в python_code"),
+            (not _has_trello,
+             "Trello",
+             "синхронизация задач, автоматическое перемещение карточек",
+             "агент + TRELLO_API_KEY + TRELLO_TOKEN"),
+            (not _has_jira,
+             "Jira / Atlassian",
+             "трекинг задач, обновление статусов, уведомления",
+             "агент + JIRA_URL + JIRA_TOKEN"),
+            (not _has_gsheets,
+             "Google Sheets",
+             "автоматические отчёты, обновление таблиц, сбор данных",
+             "агент + GOOGLE_SHEETS_CREDENTIALS или gspread"),
+            (not _has_airtable,
+             "Airtable",
+             "CRM, таблицы, автоматизация баз данных",
+             "агент + AIRTABLE_API_KEY"),
+            (not _has_stripe,
+             "Stripe",
+             "мониторинг платежей, отчёты по выручке",
+             "агент + STRIPE_SECRET_KEY"),
+            (not _has_shopify,
+             "Shopify",
+             "мониторинг заказов, обновление товаров",
+             "агент + SHOPIFY_ACCESS_TOKEN"),
+            (not _has_whatsapp,
+             "WhatsApp (Twilio)",
+             "рассылки и уведомления через WhatsApp",
+             "агент + TWILIO_SID + TWILIO_TOKEN"),
+            (not _has_twitter,
+             "Twitter / X",
+             "автопостинг, мониторинг упоминаний",
+             "агент + X_API_KEY + X_API_SECRET"),
+            (not _has_calendar,
+             "Google Calendar",
+             "синхронизация задач с календарём, авторасписание",
+             "агент + GOOGLE_CALENDAR_CREDENTIALS"),
+            (not _has_crm,
+             "CRM (Bitrix24 / AmoCRM / HubSpot)",
+             "синхронизация контактов, воронка продаж",
+             "агент + API-ключ CRM-системы"),
+            (not _has_webhook,
+             "Webhook (любой сервис)",
+             "отправка данных в любой сервис по событиям",
+             "агент + WEBHOOK_URL в ключах"),
+            (not _has_1c,
+             "1С / ERP",
+             "синхронизация данных с 1С через OData API",
+             "агент + 1C_URL + 1C_USER + 1C_PASS"),
+            (not _has_openai,
+             "OpenAI / GPT-4",
+             "использование GPT-4 для специализированных задач агента",
+             "агент + OPENAI_API_KEY"),
         ]
 
-        available = [(n, b, h) for flag, n, b, h in _options if flag]
-        if not available:
+        # ═══ ФИЧИ ПЛАТФОРМЫ (не активированы) ═══
+        _features = []
+        if not _has_autopilot:
+            _features.append((
+                "Автопилот целей",
+                "агенты автономно работают над целями: исследуют, создают задачи, отправляют письма",
+                "кнопка ⚡ в шапке дашборда или скажи «включи автопилот»"
+            ))
+        if not _has_agents:
+            _features.append((
+                "Команда агентов",
+                "создай агентов-специалистов: маркетолог, аналитик, ассистент — каждый со своими интеграциями и скриптами",
+                "https://asibiont.com/dashboard → раздел «Агенты» → «Создать агента»"
+            ))
+        if not _has_content_campaign:
+            _features.append((
+                "Контент-кампании",
+                "автопубликация постов по расписанию в блог/TG/Discord с AI-генерацией",
+                "скажи «запусти кампанию контента» или start_content_campaign"
+            ))
+        if not _has_email_campaign:
+            _features.append((
+                "Email-кампании",
+                "массовый аутрич с персонализацией, follow-up и отслеживанием ответов",
+                "скажи «запусти email-кампанию» или start_email_campaign"
+            ))
+        if not _has_delegation_campaign:
+            _features.append((
+                "Кампании делегирования",
+                "автопоиск людей и рассылка приглашений к сотрудничеству",
+                "скажи «найди партнёров для [задача]» или start_delegation_campaign"
+            ))
+        if not _has_marketplace_agents:
+            _features.append((
+                "Маркетплейс агентов",
+                "подключи готовых агентов других пользователей — аналитики, копирайтеры, исследователи",
+                "https://asibiont.com/dashboard → «Маркетплейс» → подписка на агента"
+            ))
+
+        available_integrations = [(n, b, h) for flag, n, b, h in _integrations if flag]
+        all_items = []
+
+        if available_integrations:
+            all_items.append("ДОСТУПНЫЕ ИНТЕГРАЦИИ (не подключены у пользователя):")
+            for name, benefit, how in available_integrations:
+                all_items.append(f"• {name} — {benefit}. Подключить: {how}")
+
+        if _features:
+            all_items.append("НЕИСПОЛЬЗУЕМЫЕ ВОЗМОЖНОСТИ ПЛАТФОРМЫ:")
+            for name, benefit, how in _features:
+                all_items.append(f"• {name} — {benefit}. Активировать: {how}")
+
+        if not all_items:
             return None
 
-        lines = ["ДОСТУПНЫЕ ИНТЕГРАЦИИ (не подключены):"]
-        for name, benefit, how in available:
-            lines.append(f"• {name} — {benefit}. Подключить: {how}")
-        lines.append(
-            "Упомяни одну из них ТОЛЬКО если она полезна в контексте текущего разговора. "
-            "Не перечисляй все, не навязывай. Если ничего не релевантно — промолчи."
+        all_items.append(
+            "Упомяни 1-2 из них ТОЛЬКО если релевантно текущему разговору. "
+            "Предлагай конкретно: «для этой задачи подойдёт X — подключить?». "
+            "Не перечисляй все. Если ничего не релевантно — промолчи."
         )
 
         self._integration_rec_cache[uid] = now
-        return '\n'.join(lines)
+        return '\n'.join(all_items)
 
     def _find_similar_users(self, user, profile, session, user_tz):
         """Поиск пользователей с пересекающимися интересами, навыками и задачами."""
