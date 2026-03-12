@@ -1439,7 +1439,7 @@ class AnchorEngine:
                     _exec_agent_for_director(
                         agent_data, task_text, user.telegram_id,
                     ),
-                    timeout=120,
+                    timeout=180,
                 )
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
@@ -1582,18 +1582,13 @@ class AnchorEngine:
 
         except Exception as e:
             logger.warning("[ANCHOR-AUTOPILOT] error for user %d: %s", user.id, e)
-            # Коммитим delivered_at ПЕРВЫМ в отдельной транзакции — чтобы не потерять при
-            # возможном rollback обновления лога ниже.
+            # anchor.delivered_at already committed before AI call (line ~1394)
+            # Rollback any dirty state from cancelled/failed inner coroutine
             try:
-                anchor.delivered_at = datetime.now(timezone.utc)
-                session.commit()
+                session.rollback()
             except Exception:
-                try:
-                    session.rollback()
-                except Exception:
-                    pass
-                return  # anchor уже expired или ошибка сессии
-            # Отдельно обновляем статус лога — уже не критично если это упадёт
+                pass
+            # Update log status — critical to avoid stuck in_progress logs
             try:
                 from models import AgentActivityLog as _AAL_f
                 _stuck = session.query(_AAL_f).filter_by(
@@ -1606,6 +1601,15 @@ class AnchorEngine:
                     _stuck.status = 'failed'
                     _stuck.result = f'Error: {str(e)[:300]}'
                     session.commit()
+            except Exception:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+            # Ensure anchor.delivered_at is committed (may have been rolled back above)
+            try:
+                anchor.delivered_at = datetime.now(timezone.utc)
+                session.commit()
             except Exception:
                 try:
                     session.rollback()
@@ -6337,11 +6341,38 @@ class AnchorEngine:
                 else:
                     parts.append(f"Дедлайн по «{title}» приближается. Нужна помощь?")
             elif a.anchor_type == 'service_degraded':
-                svc = data.get('service', a.source or 'service')
+                # Parse services list from data, map to human-readable names
+                _SVC_NAMES = {
+                    'deepseek': 'AI-модель (DeepSeek)',
+                    'ddg': 'веб-поиск (DuckDuckGo)',
+                    'openweathermap': 'прогноз погоды',
+                    'resend': 'отправка email',
+                    'telegram': 'Telegram',
+                    'discord': 'Discord',
+                    'yookassa': 'платежи (ЮKassa)',
+                }
+                _SVC_NAMES_EN = {
+                    'deepseek': 'AI model (DeepSeek)',
+                    'ddg': 'web search (DuckDuckGo)',
+                    'openweathermap': 'weather service',
+                    'resend': 'email delivery',
+                    'telegram': 'Telegram',
+                    'discord': 'Discord',
+                    'yookassa': 'payments (YooKassa)',
+                }
+                svcs_raw = data.get('services', [])
+                if not svcs_raw:
+                    # fallback: parse from source like 'service_health:deepseek'
+                    _src_parts = (a.source or '').split(':', 1)
+                    svcs_raw = [_src_parts[1]] if len(_src_parts) > 1 else ['сервис']
                 if user_lang == 'en':
-                    parts.append(f"Service {svc} is temporarily unavailable. We're monitoring the situation.")
+                    svc_names = [_SVC_NAMES_EN.get(s, s) for s in svcs_raw]
+                    svc_str = ', '.join(svc_names)
+                    parts.append(f"Heads up: {svc_str} is temporarily down. We're on it, should be back shortly.")
                 else:
-                    parts.append(f"Сервис {svc} временно недоступен. Следим за ситуацией.")
+                    svc_names = [_SVC_NAMES.get(s, s) for s in svcs_raw]
+                    svc_str = ', '.join(svc_names)
+                    parts.append(f"Кстати, {svc_str} сейчас временно недоступен. Обычно восстанавливается быстро, следим.")
             else:
                 # Другие ALWAYS_DELIVER типы — берём topic из якоря
                 topic = getattr(a, 'topic', '') or ''
