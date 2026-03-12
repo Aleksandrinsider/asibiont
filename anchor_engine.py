@@ -1282,6 +1282,17 @@ class AnchorEngine:
                             + task_text
                         )
 
+                # ── Проверяем и списываем токены за автопилот ──
+                from token_service import has_enough_tokens as _het_ap, spend_tokens as _sp_ap
+                from config import FREE_ACCESS_MODE as _FAM_ap
+                if not _FAM_ap:
+                    if not _het_ap(user.telegram_id, 'proactive_message', session=session):
+                        logger.info("[ANCHOR-AUTOPILOT] user %d: skip — not enough tokens", user.id)
+                        anchor.delivered_at = datetime.now(timezone.utc)
+                        session.commit()
+                        return
+                    _sp_ap(user.telegram_id, 'proactive_message', description='goal_autopilot_dispatch', session=session, auto_commit=False)
+
                 # Log dispatch (для ASI не записываем ref_id)
                 _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
                 session.add(_AAL_ap(
@@ -1519,6 +1530,15 @@ class AnchorEngine:
 
                     # Выбираем агента: AI решает кто лучше подходит (fallback → keywords)
                     chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+
+                    # ── Проверяем и списываем токены за event-dispatch ──
+                    from token_service import has_enough_tokens as _het_ev, spend_tokens as _sp_ev
+                    from config import FREE_ACCESS_MODE as _FAM_ev
+                    if not _FAM_ev:
+                        if not _het_ev(user.telegram_id, 'proactive_message', session=_s):
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — not enough tokens", user.id, anchor.anchor_type)
+                            continue
+                        _sp_ev(user.telegram_id, 'proactive_message', description=f'event_dispatch_{anchor.anchor_type}', session=_s, auto_commit=False)
 
                     # Логируем dispatch (cooldown guard)
                     _s.add(_AAL(
@@ -1794,6 +1814,15 @@ class AnchorEngine:
                 ref_id=_next_ag.id,
             ))
             session.commit()
+
+            # ── Проверяем и списываем токены за chain-продолжение ──
+            from token_service import has_enough_tokens as _het_ch, spend_tokens as _sp_ch
+            from config import FREE_ACCESS_MODE as _FAM_ch
+            if not _FAM_ch:
+                if not _het_ch(user.telegram_id, 'proactive_message', session=session):
+                    logger.info("[ANCHOR-CHAIN] user %d: skip chain — not enough tokens", user.id)
+                    return
+                _sp_ch(user.telegram_id, 'proactive_message', description='agent_chain_continue', session=session, auto_commit=False)
 
             # Запускаем следующего агента
             from ai_integration.autonomous_agent import _exec_agent_for_director

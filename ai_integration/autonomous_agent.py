@@ -4418,6 +4418,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             'author_id': _author_id,
                         }
                         logger.info("[SUBDELEGATE] %s → %s: %s", agent.get('name'), _target_agent.name, _sd['task'][:80])
+                        # Списываем токены за субделегирование
+                        try:
+                            from token_service import spend_tokens as _sp_sub, has_enough_tokens as _het_sub
+                            from config import FREE_ACCESS_MODE as _FAM_sub
+                            if not _FAM_sub:
+                                if not _het_sub(user_id, 'agent_task'):
+                                    logger.info("[SUBDELEGATE] skip %s — not enough tokens", _target_agent.name)
+                                    continue
+                                _sp_sub(user_id, 'agent_task', description=f'subdelegate:{_target_agent.name}')
+                        except Exception:
+                            pass
                         try:
                             _sub_res, _sub_tools = await asyncio.wait_for(
                                 _exec_agent_for_director(_ta_dict, _sd['task'], user_id, dialog_context, _depth=_depth + 1),
