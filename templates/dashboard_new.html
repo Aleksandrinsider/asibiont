@@ -1913,8 +1913,8 @@
             } else {
                 date = new Date();
             }
-            const dateString = date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const timeString = date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            const dateString = date.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const timeString = date.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit' });
             
             // Парсинг @username в ссылки на профили контактов (без обработки markdown)
             let processedText = text;
@@ -2558,7 +2558,7 @@
                 if (!resp.ok) {
                     let errMsg = 'неизвестная ошибка';
                     try { const err = await resp.json(); errMsg = err.error || errMsg; } catch(e) { errMsg = `HTTP ${resp.status}`; }
-                    showNotification('Ошибка: ' + errMsg, 'error');
+                    showNotification(t('n-error') + ': ' + errMsg, 'error');
                     return;
                 }
                 // Remove this separator and everything after it from DOM
@@ -2582,9 +2582,9 @@
                         }
                     }
                 } catch(e) {}
-                showNotification('Контрольная точка восстановлена', 'success');
+                showNotification(t('n-checkpoint-restored'), 'success');
             } catch(e) {
-                showNotification('Ошибка: ' + e.message, 'error');
+                showNotification(t('n-error') + ': ' + e.message, 'error');
             }
         }
 
@@ -3127,7 +3127,7 @@ else:
                     print('Ошибка письма: ' + str(ex))
         mail.logout()
     except Exception as e:
-        print('Ошибка: ' + str(e))`
+        print(t('n-error') + ': ' + str(e))`
             },
             yandex: {
                 name: 'Яндекс.Почта',
@@ -3230,7 +3230,7 @@ else:
                     print('Ошибка письма: ' + str(ex))
         mail.logout()
     except Exception as e:
-        print('Ошибка: ' + str(e))`
+        print(t('n-error') + ': ' + str(e))`
             },
             mailru: {
                 name: 'Mail.ru',
@@ -3333,7 +3333,7 @@ else:
                     print('Ошибка письма: ' + str(ex))
         mail.logout()
     except Exception as e:
-        print('Ошибка: ' + str(e))`
+        print(t('n-error') + ': ' + str(e))`
             },
             openweather: {
                 name: 'Погода',
@@ -4128,7 +4128,7 @@ try:
         if result.get('result'):
             print('OK: лид создан, ID=' + str(result['result']))
         else:
-            print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+            print(t('n-error') + ': ' + json.dumps(result.get('error_description', result)))
     else:
         result = b24('crm.lead.list', {'order': {'DATE_CREATE': 'DESC'}, 'select': ['ID','TITLE','NAME','STATUS_ID','DATE_CREATE'], 'start': 0})
         leads = result.get('result', [])
@@ -4174,7 +4174,7 @@ try:
         if items:
             print('OK: сделка создана, ID=' + str(items[0]['id']))
         else:
-            print('Ошибка: ' + json.dumps(result))
+            print(t('n-error') + ': ' + json.dumps(result))
     else:
         result = amo('/leads?order[created_at]=desc&limit=10')
         leads = result.get('_embedded', {}).get('leads', [])
@@ -4219,7 +4219,7 @@ try:
             if result.get('id'):
                 print('OK: контакт создан, ID=' + result['id'] + ', email=' + email)
             else:
-                print('Ошибка: ' + json.dumps(result))
+                print(t('n-error') + ': ' + json.dumps(result))
     else:
         result = hs('/crm/v3/objects/contacts?limit=10&properties=email,firstname,lastname,lifecyclestage')
         contacts = result.get('results', [])
@@ -4509,7 +4509,7 @@ try:
             if res.get('sid'):
                 print('OK: SMS отправлен на ' + to + ', SID=' + res['sid'])
             else:
-                print('Ошибка: ' + json.dumps(res.get('message', res)))
+                print(t('n-error') + ': ' + json.dumps(res.get('message', res)))
     else:
         res = twilio('/Messages.json?PageSize=5', {})
         msgs = res.get('messages', [])
@@ -5438,13 +5438,13 @@ except Exception as e:
         }
 
         async function mpAgentDelete(id) {
-            if (!confirm('Удалить агента? Это действие нельзя отменить.')) return;
+            if (!confirm(t('c-delete-agent'))) return;
             try {
                 const r = await fetch('/api/marketplace/agents/' + id, {method: 'DELETE'});
                 const data = await r.json();
-                if (data.success) { mpLoadMy(); mpShowStatus('Агент удалён', '#F3F4F6', '#374151'); }
-                else mpShowStatus(data.error || 'Ошибка', '#FEF2F2', '#DC2626');
-            } catch(e) { mpShowStatus('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), '#FEF2F2', '#DC2626'); }
+                if (data.success) { mpLoadMy(); mpShowStatus(t('n-agent-deleted'), '#F3F4F6', '#374151'); }
+                else mpShowStatus(data.error || t('n-error'), '#FEF2F2', '#DC2626');
+            } catch(e) { mpShowStatus(t('n-error') + ': ' + (e?.message || String(e) || t('n-unknown-error')), '#FEF2F2', '#DC2626'); }
         }
 
         async function mpEditAgent(id) {
@@ -5455,7 +5455,7 @@ except Exception as e:
                 _mpMyAgents = data.agents || [];
             } catch(e) {}
             const agent = _mpMyAgents.find(a => a.id === id);
-            if (!agent) { mpShowStatus('Агент не найден', '#FEF2F2', '#DC2626'); return; }
+            if (!agent) { mpShowStatus(t('n-agent-not-found'), '#FEF2F2', '#DC2626'); return; }
 
             _mpEditAgentId = id;
 
@@ -5859,16 +5859,16 @@ except Exception as e:
                 const r = await fetch('/api/marketplace/agents', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
                 if (!r.ok && r.status !== 400) throw new Error('HTTP ' + r.status);
                 const res = await r.json();
-                if (res.error) { mpShowStatus('Ошибка: ' + res.error, '#FEF2F2', '#DC2626'); return; }
+                if (res.error) { mpShowStatus(t('n-error') + ': ' + res.error, '#FEF2F2', '#DC2626'); return; }
                 _mpEditAgentId = null;
                 if (res.warning) {
-                    mpShowStatus('Сохранено, но: ' + res.warning, '#FFFBEB', '#D97706');
+                    mpShowStatus(t('n-saved-but') + ': ' + res.warning, '#FFFBEB', '#D97706');
                 } else {
-                    mpShowStatus(res.message || 'Агент сохранён', '#ECFDF5', '#059669');
+                    mpShowStatus(res.message || t('n-agent-saved'), '#ECFDF5', '#059669');
                 }
                 document.getElementById('mp-create-form').innerHTML = '';
                 setTimeout(() => mpSwitchTab('my'), 2000);
-            } catch(e) { mpShowStatus('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), '#FEF2F2', '#DC2626'); }
+            } catch(e) { mpShowStatus(t('n-error') + ': ' + (e?.message || String(e) || t('n-unknown-error')), '#FEF2F2', '#DC2626'); }
         }
 
         // ====== ARENA FUNCTIONS ======
@@ -5876,7 +5876,7 @@ except Exception as e:
         let _arenaInitialized = false;
 
         async function arenaClearAll() {
-            if (!confirm('Удалить все сообщения системных агентов из арены?')) return;
+            if (!confirm(t('c-delete-system-messages'))) return;
             try {
                 const r = await fetch('/api/arena/clear-all', {method: 'POST'});
                 const d = await r.json();
@@ -5889,9 +5889,9 @@ except Exception as e:
                     _arenaCurrentPage = 1;
                     const pag = document.getElementById('arena-pagination');
                     if (pag) pag.style.display = 'none';
-                    showNotification('Системные сообщения удалены', 'success');
-                } else showNotification(d.error || 'Ошибка', 'error');
-            } catch(e) { showNotification('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), 'error'); }
+                    showNotification(t('n-system-messages-deleted'), 'success');
+                } else showNotification(d.error || t('n-error'), 'error');
+            } catch(e) { showNotification(t('n-error') + ': ' + (e?.message || String(e) || t('n-unknown-error')), 'error'); }
         }
 
         async function arenaForcePost() {
@@ -5899,8 +5899,8 @@ except Exception as e:
                 const r = await fetch('/api/arena/force-post', {method: 'POST'});
                 const d = await r.json();
                 if (d.success) showNotification(`${d.agent}: ${d.preview}...`, 'success');
-                else showNotification(d.error || 'Ошибка', 'error');
-            } catch(e) { showNotification('Ошибка: ' + (e?.message || String(e) || 'Неизвестная ошибка'), 'error'); }
+                else showNotification(d.error || t('n-error'), 'error');
+            } catch(e) { showNotification(t('n-error') + ': ' + (e?.message || String(e) || t('n-unknown-error')), 'error'); }
         }
 
         function arenaConnect(forceReconnect) {
@@ -6103,8 +6103,8 @@ except Exception as e:
                             ? `<img src="${escapeHtml(cAvatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;flex-shrink:0;"><div style="display:none;width:24px;height:24px;border-radius:50%;background:${cColor};align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;">${cInitials}</div>`
                             : `<div style="width:24px;height:24px;border-radius:50%;background:${cColor};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;">${cInitials}</div>`;
                         const cNow = msg.ts ? new Date(msg.ts.includes('Z')||msg.ts.includes('+')?msg.ts:msg.ts+'Z') : new Date();
-                        const cDate = cNow.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
-                        const cTime = cNow.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+                        const cDate = cNow.toLocaleDateString(_dl(),{day:'2-digit',month:'2-digit',year:'numeric'});
+                        const cTime = cNow.toLocaleTimeString(_dl(),{hour:'2-digit',minute:'2-digit'});
                         const _isUserCmt = (msg.agent_id === 'user');
                         const _cCmtDomId = 'sse-cmt-' + (msg.id || Date.now());
                         const _cUsername = _isUserCmt ? (msg.author_username || (window.currentUserProfile && window.currentUserProfile.username) || '') : '';
@@ -6127,11 +6127,11 @@ except Exception as e:
                 postId = 'ap-' + (++_arenaMsgIdx);
                 const timeStr = msg.ts
                     ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
-                          .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
+                          .toLocaleTimeString(_dl(), {hour:'2-digit', minute:'2-digit'})
                     : '';
                 const dateStr = msg.ts
                     ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
-                          .toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'})
+                          .toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric'})
                     : '';
                 const color = escapeHtml(msg.color || '#6C727F');
                 const initials = escapeHtml(msg.initials || '?');
@@ -6377,8 +6377,8 @@ except Exception as e:
             // Комментарий пользователя — стиль feed
             const _cmtId = 'cmt-' + Date.now();
             const _cmtNow = new Date();
-            const _cmtDate = _cmtNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
-            const _cmtTime = _cmtNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+            const _cmtDate = _cmtNow.toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric'});
+            const _cmtTime = _cmtNow.toLocaleTimeString(_dl(), {hour:'2-digit', minute:'2-digit'});
             const userDiv = document.createElement('div');
             userDiv.id = _cmtId;
             userDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
@@ -6407,7 +6407,7 @@ except Exception as e:
             const postText = postDiv ? postDiv.dataset.postText || '' : '';
             const serverPostId = postDiv ? postDiv.dataset.serverId || '' : '';
             const postAgentId = postDiv ? postDiv.dataset.agentId || '' : '';
-            const _sendDisplayName = (window.currentUserProfile && (window.currentUserProfile.first_name || window.currentUserProfile.username)) || 'Участник';
+            const _sendDisplayName = (window.currentUserProfile && (window.currentUserProfile.first_name || window.currentUserProfile.username)) || t('participant');
             const _sendAvatarUrl = window.userAvatarUrl || (window.currentUserProfile && window.currentUserProfile.photo_url) || '';
 
             fetch('/api/arena/comment', {
@@ -6421,8 +6421,8 @@ except Exception as e:
                 const rc = escapeHtml(reply.color || '#6C727F');
                 const ri = escapeHtml(reply.initials || '?');
                 const _rNow = new Date();
-                const _rDate = _rNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
-                const _rTime = _rNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+                const _rDate = _rNow.toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric'});
+                const _rTime = _rNow.toLocaleTimeString(_dl(), {hour:'2-digit', minute:'2-digit'});
                 const _rAgentIdParts = (reply.agent_id || '').split('_');
                 const rAgentNumId = (_rAgentIdParts.length > 1 && _rAgentIdParts[1]) ? parseInt(_rAgentIdParts[1]) : 0;
                 const rAvatarUrl = _arenaAgentAvatarMap[reply.agent_id] || '';
@@ -6448,7 +6448,7 @@ except Exception as e:
 
         // ═══ ARENA USER COMMENT EDIT / DELETE ═══
         function arenaDeleteUserCmt(cmtId) {
-            if (!confirm('Удалить комментарий?')) return;
+            if (!confirm(t('c-delete-comment'))) return;
             const el = document.getElementById(cmtId);
             const nx = el && el.nextElementSibling;
             if (el) el.remove();
@@ -6503,7 +6503,7 @@ except Exception as e:
             const contentEl = document.getElementById('arena-cmt-p-' + cmtId);
             if (!contentEl) return;
             const newText = contentEl.textContent.trim();
-            if (!newText) { showNotification('Комментарий не может быть пустым', 'error'); return; }
+            if (!newText) { showNotification(t('n-comment-empty'), 'error'); return; }
             contentEl.textContent = newText;
             contentEl.contentEditable = 'false';
             contentEl.style.outline = '';
@@ -6515,7 +6515,7 @@ except Exception as e:
 
         // ═══ ARENA USER POST EDIT / DELETE ═══
         function arenaDeleteUserPost(postDomId) {
-            if (!confirm('Удалить пост?')) return;
+            if (!confirm(t('c-delete-post'))) return;
             const textEl = document.getElementById(postDomId + '-text');
             const wrapper = textEl ? textEl.closest('[data-post-text]') : null;
             if (wrapper) {
@@ -6574,7 +6574,7 @@ except Exception as e:
             const contentEl = document.getElementById(postDomId + '-text');
             if (!contentEl) return;
             const newText = contentEl.textContent.trim();
-            if (!newText) { showNotification('Пост не может быть пустым', 'error'); return; }
+            if (!newText) { showNotification(t('n-post-empty'), 'error'); return; }
             contentEl.textContent = newText;
             contentEl.contentEditable = 'false';
             contentEl.style.outline = '';
@@ -6652,7 +6652,7 @@ except Exception as e:
             wrap.style.cssText = 'padding: 0; border-bottom: 1px solid #F0F3F5;' + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
             const labels = _tlLabels();
             const typeLabel = labels[a.activity_type] || a.activity_type;
-            const timeStr = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
+            const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
             const deleteBtn = a.id ? `<button onclick="event.stopPropagation();activityDeleteGroup([${a.id}],'${a.activity_type||''}')" class="delete-btn" title="${t('act-del-one')||'Удалить'}"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>` : '';
             const hasDetails = !!(a.content && a.content.trim());
             const chevron = hasDetails ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
@@ -6732,7 +6732,7 @@ except Exception as e:
             let lastDate = '';
             sorted.forEach(a => {
                 if (a.created_at) {
-                    const itemDate = new Date(a.created_at).toLocaleDateString('ru-RU', {day:'2-digit',month:'long',year:'numeric',timeZone:window.USER_TIMEZONE||'UTC'});
+                    const itemDate = new Date(a.created_at).toLocaleDateString(_dl(), {day:'2-digit',month:'long',year:'numeric',timeZone:window.USER_TIMEZONE||'UTC'});
                     if (itemDate !== lastDate) {
                         lastDate = itemDate;
                         const sep = document.createElement('div');
@@ -7223,7 +7223,7 @@ except Exception as e:
                     const sent = Math.max(c.emails_sent || 0, oSentC);
                     const replied = Math.max(c.emails_replied || 0, oRepliedC);
                     const conv = sent > 0 ? Math.round(replied / sent * 100) : 0;
-                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                    const createdDate = c.created_at ? new Date(c.created_at).toLocaleDateString(_dl(), {day:'2-digit', month:'short', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                     const wasExpanded = _reportsExpandedSet.has(cKey);
 
                     const header = document.createElement('div');
@@ -7300,7 +7300,7 @@ except Exception as e:
                         c.outreach.forEach((o, oi) => {
                             const oLbl = o.status === 'replied' ? t('os-replied') : o.status === 'interested' ? t('os-interested') : o.status === 'opened' ? t('os-opened') : o.status === 'delivered' ? t('os-delivered') : o.status === 'bounced' ? t('os-bounced') : o.status === 'failed' ? t('os-failed') : o.status === 'sent' ? t('os-sent') : (o.status || '');
                             const oClr = '#068487';
-                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                             const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
                             const oKey = cKey + '-o' + (o.id || oi);
                             const oWasExpanded = _reportsExpandedSet.has(oKey);
@@ -7470,7 +7470,7 @@ except Exception as e:
                     if (cc.topics) ccInner += `<div style="font-size: 13px; color: #374151; margin-bottom: 6px;"><span style="font-weight: 600; color: #1F2328;">${t('cc-topics') || '\u0422\u0435\u043c\u044b:'}</span> ${cc.topics}</div>`;
                     ccInner += `<div style="font-size: 12px; color: #6C727F; display: flex; gap: 12px; flex-wrap: wrap;">`;
                     if (cc.frequency) ccInner += `<span>${t('cc-freq') || '\u0427\u0430\u0441\u0442\u043e\u0442\u0430:'} ${freqMap[cc.frequency] || cc.frequency}${cc.post_time ? ' \xb7 ' + cc.post_time : ''}</span>`;
-                    if (cc.last_post_at) ccInner += `<span>${t('cc-last') || '\u041f\u043e\u0441\u043b. \u043f\u043e\u0441\u0442:'} ${new Date(cc.last_post_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'short', timeZone: window.USER_TIMEZONE || 'UTC'})}</span>`;
+                    if (cc.last_post_at) ccInner += `<span>${t('cc-last') || '\u041f\u043e\u0441\u043b. \u043f\u043e\u0441\u0442:'} ${new Date(cc.last_post_at).toLocaleDateString(_dl(), {day:'2-digit', month:'short', timeZone: window.USER_TIMEZONE || 'UTC'})}</span>`;
                     ccInner += `</div></div>`;
                     details.innerHTML = ccInner;
                     section.appendChild(details);
@@ -7563,7 +7563,7 @@ except Exception as e:
                     emailsSec.appendChild(emailsHdr);
 
                     emails.forEach(e => {
-                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                        const dateStr = e.sent_at ? new Date(e.sent_at).toLocaleString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
                         const item = document.createElement('div');
                         item.style.cssText = 'margin-bottom: 8px; padding: 8px; border-bottom: 1px solid #F6F8FA;';
                         item.innerHTML = `
@@ -7763,7 +7763,7 @@ except Exception as e:
                             'deleted': [t('act-st-deleted'), '#068487'],
                         };
                         const [stLbl, stClr] = stMap[a.status] || [a.status || '', '#068487'];
-                        const aDate = a.created_at ? new Date(a.created_at).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                        const aDate = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
 
                         const canDelete = !['cancelled', 'deleted'].includes(a.status);
                         // For delegation: show cancel (status→cancelled) only if pending
@@ -7896,7 +7896,7 @@ except Exception as e:
                     const card = document.createElement('div');
                     card.className = 'contact-card';
                     card.style.cssText = 'display: flex; gap: 8px; padding: 0 0 8px 0; margin-bottom: 8px; font-size: 12px; align-items: center; border-bottom: 1px solid #F0F0F0;';
-                    const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
+                    const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
                         '<div style="display: flex; align-items: center; gap: 6px; margin-bottom: ' + ((c.name || c.company || c.notes) ? '4px' : '0') + ';">' +
                             '<span style="font-weight: 400; color: #1F2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (c.email || '') + '</span>' +
@@ -7961,10 +7961,10 @@ except Exception as e:
                     credentials: 'include'
                 });
                 if (resp.ok) {
-                    showNotification('Запись удалена', 'success');
+                    showNotification(t('n-record-deleted'), 'success');
                     loadReports();
                 } else {
-                    showNotification('Ошибка при удалении', 'error');
+                    showNotification(t('n-delete-error'), 'error');
                 }
             } catch (err) {
                 console.error('Failed to delete outreach:', err);
@@ -7993,17 +7993,17 @@ except Exception as e:
 
         async function campaignDelete(id) {
             if (!id) return;
-            if (!confirm('Удалить кампанию и все связанные письма?')) return;
+            if (!confirm(t('c-delete-campaign'))) return;
             try {
                 const resp = await fetch('/api/campaigns/' + id, {
                     method: 'DELETE',
                     credentials: 'include'
                 });
                 if (resp.ok) {
-                    showNotification('Кампания удалена', 'success');
+                    showNotification(t('n-campaign-deleted'), 'success');
                     loadReports();
                 } else {
-                    showNotification('Ошибка при удалении', 'error');
+                    showNotification(t('n-delete-error'), 'error');
                 }
             } catch (err) {
                 console.error('Failed to delete campaign:', err);
@@ -8024,7 +8024,7 @@ except Exception as e:
             if (!confirm(t('cc-del-confirm') || 'Удалить контент-кампанию?')) return;
             try {
                 const resp = await fetch('/api/content-campaigns/' + id, { method: 'DELETE', credentials: 'include' });
-                if (resp.ok) { showNotification('Кампания удалена', 'success'); loadReports(); }
+                if (resp.ok) { showNotification(t('n-campaign-deleted'), 'success'); loadReports(); }
                 else showNotification('Ошибка', 'error');
             } catch (err) { console.error('contentCampaignDelete error:', err); }
         }
@@ -8043,7 +8043,7 @@ except Exception as e:
             if (!confirm(t('dc-del-confirm') || 'Удалить аутрич-кампанию?')) return;
             try {
                 const resp = await fetch('/api/delegation-campaigns/' + id, { method: 'DELETE', credentials: 'include' });
-                if (resp.ok) { showNotification('Кампания удалена', 'success'); loadReports(); }
+                if (resp.ok) { showNotification(t('n-campaign-deleted'), 'success'); loadReports(); }
                 else showNotification('Ошибка', 'error');
             } catch (err) { console.error('delegCampaignDelete error:', err); }
         }
@@ -8115,7 +8115,7 @@ except Exception as e:
                 if (resp.ok) {
                     loadReports();
                 } else {
-                    showNotification('Ошибка обновления статуса', 'error');
+                    showNotification(t('n-status-update-error'), 'error');
                 }
             } catch (err) {
                 console.error('Failed to update activity status:', err);
@@ -8250,8 +8250,8 @@ except Exception as e:
                     card.setAttribute('data-note-id', n.id);
                     card.style.cssText = 'display: flex; gap: 14px; margin-bottom: 8px; padding: 8px;';
                     const noteTime = n.created_at ? new Date(n.created_at) : new Date();
-                    const dateStr = noteTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
-                    const timeStr = noteTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
+                    const dateStr = noteTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+                    const timeStr = noteTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
                     const src = n.source === 'chat' ? t('from-chat') : t('manual-note');
                     const displayTitle = n.title ? escapeHtml(n.title) : src;
                     card.innerHTML = `
@@ -8544,8 +8544,8 @@ except Exception as e:
 
                         const postTime = new Date(post.created_at);
                         // Convert to user timezone
-                        const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
-                        const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
+                        const dateString = postTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+                        const timeString = postTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
 
                         const telegramUsername = post.author.username || '';
                         const usernameClean = telegramUsername.replace('@', '');
@@ -8921,8 +8921,8 @@ except Exception as e:
                 `;
 
                 const postTime = new Date(post.created_at);
-                const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
-                const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
+                const dateString = postTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+                const timeString = postTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
 
                 const telegramUsername = post.author.username || '';
                 const usernameClean = telegramUsername.replace('@', '');
@@ -9045,8 +9045,8 @@ except Exception as e:
                         }
 
                         const commentTime = new Date(comment.created_at);
-                        const dateString = commentTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                        const timeString = commentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                        const dateString = commentTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+                        const timeString = commentTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit' });
                         const commentUsername = comment.author.username || '';
                         const commentUsernameClean = commentUsername.replace('@', '');
 
@@ -9119,8 +9119,8 @@ except Exception as e:
                         if (commentsContainer) {
                             const comment = data.comment;
                             const commentTime = new Date(comment.created_at);
-                            const dateString = commentTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                            const timeString = commentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                            const dateString = commentTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric' });
+                            const timeString = commentTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit' });
                             const commentUsername = comment.author.username || '';
                             const commentUsernameClean = commentUsername.replace('@', '');
 
@@ -9828,7 +9828,7 @@ except Exception as e:
                 openSendMessageModal(cleanUsername);
             } catch (error) {
                 console.error('Error sending message:', error);
-                showNotification(t('err-send') || 'Ошибка', 'error');
+                showNotification(t('err-send') || t('n-error'), 'error');
             }
         }
 
@@ -9890,7 +9890,7 @@ except Exception as e:
                 }
             } catch (e) {
                 console.error('Internal message error:', e);
-                showNotification(t('err-send') || 'Ошибка', 'error');
+                showNotification(t('err-send') || t('n-error'), 'error');
             }
         }
 
@@ -9908,10 +9908,10 @@ except Exception as e:
                     showNotification(t('reply-sent') || 'Ответ отправлен', 'success');
                     loadInboxMessages();
                 } else {
-                    showNotification(t('err-send') || 'Ошибка', 'error');
+                    showNotification(t('err-send') || t('n-error'), 'error');
                 }
             } catch (e) {
-                showNotification(t('err-send') || 'Ошибка', 'error');
+                showNotification(t('err-send') || t('n-error'), 'error');
             }
         }
 
@@ -9974,7 +9974,7 @@ except Exception as e:
                     const otherUname = isIn ? msg.sender_username : msg.recipient_username;
                     const dirLabel = isIn ? (t('msg-from') || 'от') : (t('msg-to') || 'для');
                     const _inboxD = msg.created_at ? new Date(msg.created_at) : null;
-                    const date = _inboxD ? _inboxD.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE || 'UTC' }) + ' ' + _inboxD.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE || 'UTC' }) : '';
+                    const date = _inboxD ? _inboxD.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE || 'UTC' }) + ' ' + _inboxD.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE || 'UTC' }) : '';
                     const statusBadge = msg.status === 'replied' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">' + (t('replied') || 'ответили') + '</span>'
                         : msg.status === 'read' ? '<span style="color: #6C727F; font-size:12px; margin-left: 6px;">' + (t('read') || 'прочитано') + '</span>'
                         : msg.status === 'delivered' ? '<span style="color: #068487; font-size:12px; margin-left: 6px;">' + (t('delivered') || 'доставлено') + '</span>'
@@ -10048,10 +10048,10 @@ except Exception as e:
                     showNotification(t('msg-deleted') || 'Сообщение удалено', 'success');
                     loadInboxMessages();
                 } else {
-                    showNotification(t('err-send') || 'Ошибка', 'error');
+                    showNotification(t('err-send') || t('n-error'), 'error');
                 }
             } catch (e) {
-                showNotification(t('err-send') || 'Ошибка', 'error');
+                showNotification(t('err-send') || t('n-error'), 'error');
             }
         }
 
@@ -10541,8 +10541,8 @@ except Exception as e:
 
             const postTime = new Date(post.created_at);
             // Convert to user timezone
-            const dateString = postTime.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
-            const timeString = postTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
+            const dateString = postTime.toLocaleDateString(_dl(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: window.USER_TIMEZONE });
+            const timeString = postTime.toLocaleTimeString(_dl(), { hour: '2-digit', minute: '2-digit', timeZone: window.USER_TIMEZONE });
 
             const telegramUsername = post.author.username || '';
             const usernameClean = telegramUsername.replace('@', '');
@@ -11995,15 +11995,15 @@ except Exception as e:
                 });
                 if (!await checkAuth(r)) return;
                 if (r.ok) {
-                    showNotification('Оценка сохранена', 'success');
+                    showNotification(t('n-rating-saved'), 'success');
                     closeAgentRatingModal();
                     mpLoadAgents();
                 } else {
                     const err = await r.json();
-                    showNotification(err.error || 'Ошибка при сохранении оценки', 'error');
+                    showNotification(err.error || t('n-rating-error'), 'error');
                 }
             } catch (e) {
-                showNotification('Ошибка при сохранении оценки', 'error');
+                showNotification(t('n-rating-error'), 'error');
             }
         }
 
@@ -12144,7 +12144,7 @@ except Exception as e:
                     location.reload();
                 } else {
                     const d = await res.json();
-                    alert(d.error || 'Ошибка');
+                    alert(d.error || t('n-error'));
                 }
             } catch (e) {
                 alert('Ошибка сети');
@@ -12159,7 +12159,7 @@ except Exception as e:
                     location.reload();
                 } else {
                     const d = await res.json();
-                    alert(d.error || 'Ошибка');
+                    alert(d.error || t('n-error'));
                 }
             } catch (e) {
                 alert('Ошибка сети');
@@ -12167,7 +12167,7 @@ except Exception as e:
         }
 
         async function disconnectGmail() {
-            if (!confirm('Отключить Gmail? Письма будут отправляться через Resend.')) return;
+            if (!confirm(t('c-disconnect-gmail'))) return;
             try {
                 const res = await fetch('/api/oauth/gmail/disconnect', { method: 'POST', credentials: 'include' });
                 if (res.ok) { location.reload(); }
@@ -12730,18 +12730,18 @@ except Exception as e:
                     if (_mpAgentsCache[agentId]) renderAgentProfileModal(_mpAgentsCache[agentId]);
                     if (_mpCurrentTab === 'my') mpLoadMy(); else mpLoadAgents();
                 } else {
-                    showNotification(data.error || 'Ошибка активации', 'error');
+                    showNotification(data.error || t('n-activation-error'), 'error');
                 }
-            } catch(e) { showNotification('Ошибка активации', 'error'); }
+            } catch(e) { showNotification(t('n-activation-error'), 'error'); }
         }
 
         async function mpSwitchToAgent(agentId) {
             try {
                 const r = await fetch('/api/marketplace/agents/' + agentId + '/use', {method: 'POST'});
                 const data = await r.json();
-                if (data.success) showNotification('Переключено на агента «' + (data.name || '') + '». Напишите боту!', 'success');
-                else showNotification(data.error || 'Ошибка', 'error');
-            } catch(e) { showNotification('Ошибка: ' + (e?.message || String(e)), 'error'); }
+                if (data.success) showNotification(t('n-switched-to-agent') + ' «' + (data.name || '') + '». Напишите боту!', 'success');
+                else showNotification(data.error || t('n-error'), 'error');
+            } catch(e) { showNotification(t('n-error') + ': ' + (e?.message || String(e)), 'error'); }
         }
 
         async function mpDeactivateAgent(agentId) {
@@ -12749,7 +12749,7 @@ except Exception as e:
                 const r = await fetch('/api/marketplace/agents/' + agentId + '/activate', {method: 'DELETE'});
                 const data = await r.json();
                 if (data.success) {
-                    showNotification('Агент деактивирован', 'success');
+                    showNotification(t('n-agent-deactivated'), 'success');
                     // Сбрасываем аватар агента в чате
                     if (window._activeAgentData && window._activeAgentData.id === agentId) window._activeAgentData = null;
                     if (window._activeAgentsData) window._activeAgentsData = window._activeAgentsData.filter(a => a.id !== agentId);
@@ -12761,9 +12761,9 @@ except Exception as e:
                     lastProfileUpdate = 0;
                     setTimeout(() => updateProfile(), 300);
                 } else {
-                    showNotification(data.error || 'Ошибка деактивации', 'error');
+                    showNotification(data.error || t('n-deactivation-error'), 'error');
                 }
-            } catch(e) { showNotification('Ошибка деактивации', 'error'); }
+            } catch(e) { showNotification(t('n-deactivation-error'), 'error'); }
         }
 
         function writeToContact(username) {
@@ -14488,7 +14488,7 @@ except Exception as e:
                 return json.text || null;
             } catch (e) {
                 console.error('[voice] transcribe error', e);
-                showNotification('Ошибка соединения при распознавании речи', 'error');
+                showNotification(t('n-voice-connection-error'), 'error');
                 return null;
             }
         }
@@ -14526,7 +14526,7 @@ except Exception as e:
                     _currentRecognition = null; isRecording = false; setIdle();
                 };
                 r.onend = () => { _currentRecognition = null; isRecording = false; setIdle(); };
-                try { r.start(); } catch(e) { showNotification('Ошибка запуска: ' + e.message, 'error'); setIdle(); }
+                try { r.start(); } catch(e) { showNotification(t('n-voice-start-error') + ': ' + e.message, 'error'); setIdle(); }
                 return;
             }
 
@@ -14539,16 +14539,16 @@ except Exception as e:
                 mr.onstop = async () => {
                     stream.getTracks().forEach(t => t.stop());
                     isRecording = false; setIdle();
-                    showNotification('Распознаю...', 'info');
+                    showNotification(t('n-voice-recognizing'), 'info');
                     const blob = new Blob(_mediaChunks, { type: 'audio/webm' });
                     const text = await _transcribeBlob(blob);
                     if (text) { if (inp) { inp.value = text; inp.focus(); } }
-                    else showNotification('Не удалось распознать речь', 'error');
+                    else showNotification(t('n-voice-not-recognized'), 'error');
                 };
                 mr.start();
                 isRecording = true; setActive();
-                showNotification('Запись... нажмите снова чтобы остановить', 'info');
-            }).catch(() => showNotification('Нет доступа к микрофону', 'error'));
+                showNotification(t('n-voice-recording'), 'info');
+            }).catch(() => showNotification(t('n-voice-no-mic'), 'error'));
         }
 
         // ─── Voice Chat (chat input + auto-send) ───────────────────────────
@@ -14596,7 +14596,7 @@ except Exception as e:
                     _currentRecognition = null; isRecording = false; _resetVoiceBtn(voiceButton);
                 };
                 recognition.onend = () => { _currentRecognition = null; isRecording = false; _resetVoiceBtn(voiceButton); };
-                try { recognition.start(); } catch(e) { showNotification('Ошибка запуска: ' + e.message, 'error'); _resetVoiceBtn(voiceButton); }
+                try { recognition.start(); } catch(e) { showNotification(t('n-voice-start-error') + ': ' + e.message, 'error'); _resetVoiceBtn(voiceButton); }
                 return;
             }
 
@@ -14610,7 +14610,7 @@ except Exception as e:
                 mr.onstop = async () => {
                     stream.getTracks().forEach(t => t.stop());
                     isRecording = false; _resetVoiceBtn(voiceButton);
-                    showNotification('Распознаю...', 'info');
+                    showNotification(t('n-voice-recognizing'), 'info');
                     const blob = new Blob(_mediaChunks, { type: mr.mimeType || 'audio/webm' });
                     const text = await _transcribeBlob(blob);
                     if (text) {
@@ -14618,13 +14618,13 @@ except Exception as e:
                         if (inp) inp.value = text;
                         sendChatMessage();
                     } else {
-                        showNotification('Не удалось распознать речь', 'error');
+                        showNotification(t('n-voice-not-recognized'), 'error');
                     }
                 };
                 mr.start();
                 isRecording = true; _activateVoiceBtn(voiceButton);
-                showNotification('Запись... нажмите ещё раз для отправки', 'info');
-            }).catch(() => { showNotification('Нет доступа к микрофону', 'error'); _resetVoiceBtn(voiceButton); });
+                showNotification(t('n-voice-recording-notes'), 'info');
+            }).catch(() => { showNotification(t('n-voice-no-mic'), 'error'); _resetVoiceBtn(voiceButton); });
         }
         
         function showInfoModal(section) {
@@ -15151,7 +15151,7 @@ except Exception as e:
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
       'act-st-pending':'Ожидает','act-st-accepted':'Принято','act-st-rejected':'Отклонено','act-st-cancelled':'Отменено','act-st-published':'Опубликовано','act-st-completed':'Выполнено','act-st-failed':'Ошибка','act-st-deleted':'Удалено',
       'act-del-deleg':'Отменить и удалить это делегирование?','act-del-agent-task':'Удалить это поручение агенту?','act-del-post-feed':'Удалить пост из ленты новостей?','act-del-post-tg':'Удалить запись об этом Telegram-посте?','act-del-default':'Удалить запись об активности?','act-del-group':'Удалить все записи ({n} шт.) из этой группы?',
-      'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка при удалении','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование','act-clear-all':'Очистить хронологию','act-clear-all-confirm':'Очистить всю хронологию? Действие нельзя отменить.',
+      'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':t('n-delete-error'),'act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование','act-clear-all':'Очистить хронологию','act-clear-all-confirm':'Очистить всю хронологию? Действие нельзя отменить.',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contact-notes-ph':'Описание / заметки','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
@@ -15337,7 +15337,32 @@ except Exception as e:
       'change-password-title':'Сменить пароль','current-password-label':'Текущий пароль','new-password-label':'Новый пароль (мин. 6)',
       'new-password-ph':'Мин. 6 символов','change-password-btn':'Сменить','no-password-yet':'Пароль ещё не задан',
       'delete-account-btn':'Удалить аккаунт','delete-account-confirm':'Удалить аккаунт безвозвратно? Все задачи, заметки и история будут удалены.','delete-account-confirm2':'Это действие нельзя отменить. Продолжить?','delete-account-ok':'Аккаунт удалён. До свидания!',
-      'err-pwd-min6':'Новый пароль минимум 6 символов','pwd-changed-ok':'Пароль успешно изменён'
+      'err-pwd-min6':'Новый пароль минимум 6 символов','pwd-changed-ok':'Пароль успешно изменён',
+      'n-checkpoint-not-synced':t('n-checkpoint-not-synced'),
+      'n-checkpoint-restored':t('n-checkpoint-restored'),
+      'n-error':'Ошибка','n-unknown-error':'Неизвестная ошибка',
+      'n-system-messages-deleted':t('n-system-messages-deleted'),
+      'n-comment-empty':t('n-comment-empty'),'n-post-empty':t('n-post-empty'),
+      'n-record-deleted':t('n-record-deleted'),'n-delete-error':t('n-delete-error'),
+      'n-campaign-deleted':t('n-campaign-deleted'),'n-status-update-error':t('n-status-update-error'),
+      'n-rating-saved':t('n-rating-saved'),'n-rating-error':t('n-rating-error'),
+      'n-activation-error':t('n-activation-error'),'n-switched-to-agent':'Переключено на агента',
+      'n-agent-deactivated':t('n-agent-deactivated'),'n-deactivation-error':t('n-deactivation-error'),
+      'n-voice-connection-error':t('n-voice-connection-error'),
+      'n-voice-start-error':'Ошибка запуска','n-voice-recognizing':t('n-voice-recognizing'),
+      'n-voice-not-recognized':t('n-voice-not-recognized'),
+      'n-voice-recording':t('n-voice-recording'),
+      'n-voice-no-mic':t('n-voice-no-mic'),
+      'n-voice-recording-notes':t('n-voice-recording-notes'),
+      'c-delete-from-checkpoint':t('c-delete-from-checkpoint'),
+      'c-delete-agent':t('c-delete-agent'),
+      'c-delete-system-messages':t('c-delete-system-messages'),
+      'c-delete-comment':t('c-delete-comment'),'c-delete-post':t('c-delete-post'),
+      'c-delete-campaign':t('c-delete-campaign'),
+      'c-disconnect-gmail':t('c-disconnect-gmail'),
+      'n-agent-saved':t('n-agent-saved'),'n-agent-deleted':t('n-agent-deleted'),'n-agent-not-found':t('n-agent-not-found'),
+      'n-service-added':'Сервис добавлен','n-add-service-hint':'Добавьте сервис через форму выше',
+      'n-saved-but':'Сохранено, но','participant':'Участник'
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
@@ -15604,7 +15629,32 @@ except Exception as e:
       'change-password-title':'Change password','current-password-label':'Current password','new-password-label':'New password (min 6)',
       'new-password-ph':'Min. 6 characters','change-password-btn':'Change','no-password-yet':'No password set yet',
       'delete-account-btn':'Delete account','delete-account-confirm':'Permanently delete account? All tasks, notes and history will be removed.','delete-account-confirm2':'This cannot be undone. Continue?','delete-account-ok':'Account deleted. Goodbye!',
-      'err-pwd-min6':'New password must be at least 6 characters','pwd-changed-ok':'Password changed successfully'
+      'err-pwd-min6':'New password must be at least 6 characters','pwd-changed-ok':'Password changed successfully',
+      'n-checkpoint-not-synced':'Checkpoint not synced yet. Try again later.',
+      'n-checkpoint-restored':'Checkpoint restored',
+      'n-error':'Error','n-unknown-error':'Unknown error',
+      'n-system-messages-deleted':'System messages deleted',
+      'n-comment-empty':'Comment cannot be empty','n-post-empty':'Post cannot be empty',
+      'n-record-deleted':'Record deleted','n-delete-error':'Delete error',
+      'n-campaign-deleted':'Campaign deleted','n-status-update-error':'Status update error',
+      'n-rating-saved':'Rating saved','n-rating-error':'Error saving rating',
+      'n-activation-error':'Activation error','n-switched-to-agent':'Switched to agent',
+      'n-agent-deactivated':'Agent deactivated','n-deactivation-error':'Deactivation error',
+      'n-voice-connection-error':'Speech recognition connection error',
+      'n-voice-start-error':'Start error','n-voice-recognizing':'Recognizing...',
+      'n-voice-not-recognized':'Could not recognize speech',
+      'n-voice-recording':'Recording... press again to stop',
+      'n-voice-no-mic':'No microphone access',
+      'n-voice-recording-notes':'Recording... press again to send',
+      'c-delete-from-checkpoint':'Delete all messages from this checkpoint?',
+      'c-delete-agent':'Delete agent? This action cannot be undone.',
+      'c-delete-system-messages':'Delete all system agent messages from arena?',
+      'c-delete-comment':'Delete comment?','c-delete-post':'Delete post?',
+      'c-delete-campaign':'Delete campaign and all related emails?',
+      'c-disconnect-gmail':'Disconnect Gmail? Emails will be sent via Resend.',
+      'n-agent-saved':'Agent saved','n-agent-deleted':'Agent deleted','n-agent-not-found':'Agent not found',
+      'n-service-added':'Service added','n-add-service-hint':'Add a service using the form above',
+      'n-saved-but':'Saved, but','participant':'Participant'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -15619,6 +15669,9 @@ except Exception as e:
     return (ru && ru[key]) ? ru[key] : key;
   }
   window.t = t;
+  /* Date locale helper: returns 'en-US' or 'ru-RU' based on current language */
+  function _dl() { var l = _currentLang || detect(); return l === 'en' ? 'en-US' : 'ru-RU'; }
+  window._dl = _dl;
   function apply(lang){
     _currentLang = lang;
     window._currentLang = lang;
