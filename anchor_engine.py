@@ -255,6 +255,31 @@ class AnchorEngine:
         # Стартовая задержка: даём серверу прогреться перед первым сканированием.
         # Это предотвращает лавину якорей / уведомлений сразу после деплоя.
         await asyncio.sleep(120)
+        # ── Recovery: помечаем "застрявшие" in_progress dispatch-записи как failed ──
+        # Это обычно происходит после рестарта Railway: процесс убит, error handler не сработал
+        try:
+            from models import Session as _RecDb, AgentActivityLog as _RecAAL
+            _s_rec = _RecDb()
+            try:
+                _stuck = (
+                    _s_rec.query(_RecAAL)
+                    .filter(
+                        _RecAAL.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch', 'agent_chain_continue']),
+                        _RecAAL.status == 'in_progress',
+                        _RecAAL.created_at < datetime.now(timezone.utc) - timedelta(minutes=10),
+                    )
+                    .all()
+                )
+                if _stuck:
+                    for _st in _stuck:
+                        _st.status = 'failed'
+                        _st.result = (_st.result or '') + ' [recovered: process restart]'
+                    _s_rec.commit()
+                    logger.info("[ANCHOR] Recovery: marked %d stuck in_progress entries as failed", len(_stuck))
+            finally:
+                _s_rec.close()
+        except Exception as _rec_err:
+            logger.debug("[ANCHOR] Recovery error: %s", _rec_err)
         while self.running:
             try:
                 import time as _time
@@ -1270,8 +1295,11 @@ class AnchorEngine:
                 anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
 
-                _raw = await _exec_agent_for_director(
-                    agent_data, task_text, user.telegram_id,
+                _raw = await asyncio.wait_for(
+                    _exec_agent_for_director(
+                        agent_data, task_text, user.telegram_id,
+                    ),
+                    timeout=120,
                 )
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
@@ -1352,13 +1380,15 @@ class AnchorEngine:
                 _real_agents = [a for a in agents if getattr(a, 'id', 0) != 0]
                 if result and len(result) > 30 and len(_real_agents) >= 1:
                     await asyncio.sleep(3)  # Координация: пауза между агентами
-                    # Лимит цепочки = кол-во реальных агентов (но не более 3)
-                    # ASI-анализ решает уместность каждого шага
-                    _chain_max = min(len(_real_agents), 3)
+                    # Автопилот: 1 продолжение (экономим ресурсы + защита от таймаута Railway)
+                    _chain_max = 1
                     try:
-                        await self._maybe_continue_chain(
-                            user, chosen, anchor, task_text, result, _real_agents, session,
-                            max_cont=_chain_max,
+                        await asyncio.wait_for(
+                            self._maybe_continue_chain(
+                                user, chosen, anchor, task_text, result, _real_agents, session,
+                                max_cont=_chain_max,
+                            ),
+                            timeout=100,
                         )
                     except Exception as _chain_err:
                         logger.debug("[ANCHOR-AUTOPILOT] chain error: %s", _chain_err)
@@ -1784,8 +1814,11 @@ class AnchorEngine:
                 user.id, prev_agent.name, _next_ag.name, _next_task[:80],
             )
 
-            _next_raw = await _exec_agent_for_director(
-                _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
+            _next_raw = await asyncio.wait_for(
+                _exec_agent_for_director(
+                    _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
+                ),
+                timeout=90,
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
             _chain_tools_used = list(_next_raw[1]) if isinstance(_next_raw, (tuple, list)) and len(_next_raw) > 1 else []
