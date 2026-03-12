@@ -6,23 +6,23 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <title>Токены ASI Biont — Пополните баланс | AI-партнёр для бизнеса</title>
-    <meta name="description" content="Пополните баланс токенов ASI Biont. 1 токен = 1 рубль. Все функции открыты: задачи, делегирование, маркетинг, автопостинг, проактивные рекомендации. Пакеты от 1 500₽. Бонусы до +20%.">
-    <meta name="keywords" content="токены AI партнёр, баланс AI ассистент, автоматизация задач, поиск партнёров, делегирование, автопостинг, проактивные предложения, телеграм бот, ASI Biont цены">
+    <title>{% if lang == 'en' %}ASI Biont Tokens — Top Up Balance | AI Partner{% else %}Токены ASI Biont — Пополните баланс | AI-партнёр для бизнеса{% endif %}</title>
+    <meta name="description" content="{% if lang == 'en' %}Top up ASI Biont tokens. 1 token = $0.01 USDT. All features unlocked: tasks, delegation, marketing, auto-posting. Packages from $15. Bonuses up to +20%.{% else %}Пополните баланс токенов ASI Biont. 1 токен = 1 рубль. Все функции открыты: задачи, делегирование, маркетинг, автопостинг, проактивные рекомендации. Пакеты от 1 500₽. Бонусы до +20%.{% endif %}">
+    <meta name="keywords" content="{% if lang == 'en' %}AI partner tokens, AI assistant balance, task automation, delegation, auto-posting, proactive recommendations, telegram bot, ASI Biont pricing{% else %}токены AI партнёр, баланс AI ассистент, автоматизация задач, поиск партнёров, делегирование, автопостинг, проактивные предложения, телеграм бот, ASI Biont цены{% endif %}">
     <meta name="author" content="ASI Biont">
     <meta name="robots" content="index, follow">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://asibiont.com/subscription-tiers">
-    <meta property="og:title" content="Токены ASI Biont — AI-партнёр, который не спит">
-    <meta property="og:description" content="Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).">
+    <meta property="og:title" content="{% if lang == 'en' %}ASI Biont Tokens — AI Partner That Never Sleeps{% else %}Токены ASI Biont — AI-партнёр, который не спит{% endif %}">
+    <meta property="og:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).{% endif %}">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Токены ASI Biont — AI-партнёр, который не спит">
-    <meta name="twitter:description" content="Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).">
+    <meta name="twitter:title" content="{% if lang == 'en' %}ASI Biont Tokens — AI Partner That Never Sleeps{% else %}Токены ASI Biont — AI-партнёр, который не спит">
+    <meta name="twitter:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).{% endif %}">
     <meta name="twitter:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
@@ -36,30 +36,30 @@
     {
         "@context": "https://schema.org",
         "@type": "WebPage",
-        "name": "Токены ASI Biont",
-        "description": "Пополнение баланса AI-партнёра: все функции открыты, оплата за использование",
-        "url": "https://asibiont.com/subscription-tiers",
+        "name": "{% if lang == 'en' %}ASI Biont Tokens{% else %}Токены ASI Biont{% endif %}",
+        "description": "{% if lang == 'en' %}Top up your AI partner balance: all features unlocked, pay per use{% else %}Пополнение баланса AI-партнёра: все функции открыты, оплата за использование{% endif %}",
+        "url": "https://asibiont.com{% if lang == 'en' %}/en{% endif %}/subscription-tiers",
         "mainEntity": {
             "@type": "ItemList",
-            "name": "Пакеты токенов",
+            "name": "{% if lang == 'en' %}Token Packages{% else %}Пакеты токенов{% endif %}",
             "itemListElement": [
                 {
                     "@type": "Product",
-                    "name": "Стартовый",
-                    "description": "1 500 токенов для знакомства с AI-партнёром.",
-                    "offers": { "@type": "Offer", "price": "1500", "priceCurrency": "RUB" }
+                    "name": "{% if lang == 'en' %}Starter{% else %}Стартовый{% endif %}",
+                    "description": "{% if lang == 'en' %}1,500 tokens to get started with your AI partner.{% else %}1 500 токенов для знакомства с AI-партнёром.{% endif %}",
+                    "offers": { "@type": "Offer", "price": "{% if lang == 'en' %}15{% else %}1500{% endif %}", "priceCurrency": "{% if lang == 'en' %}USD{% else %}RUB{% endif %}" }
                 },
                 {
                     "@type": "Product",
-                    "name": "Оптимальный",
-                    "description": "5 500 токенов (+10% бонус) — самый популярный выбор.",
-                    "offers": { "@type": "Offer", "price": "5000", "priceCurrency": "RUB" }
+                    "name": "{% if lang == 'en' %}Standard{% else %}Оптимальный{% endif %}",
+                    "description": "{% if lang == 'en' %}5,500 tokens (+10% bonus) — most popular choice.{% else %}5 500 токенов (+10% бонус) — самый популярный выбор.{% endif %}",
+                    "offers": { "@type": "Offer", "price": "{% if lang == 'en' %}50{% else %}5000{% endif %}", "priceCurrency": "{% if lang == 'en' %}USD{% else %}RUB{% endif %}" }
                 },
                 {
                     "@type": "Product",
-                    "name": "Максимальный",
-                    "description": "60 000 токенов (+20% бонус) — максимальная выгода.",
-                    "offers": { "@type": "Offer", "price": "50000", "priceCurrency": "RUB" }
+                    "name": "{% if lang == 'en' %}Premium{% else %}Максимальный{% endif %}",
+                    "description": "{% if lang == 'en' %}60,000 tokens (+20% bonus) — best value.{% else %}60 000 токенов (+20% бонус) — максимальная выгода.{% endif %}",
+                    "offers": { "@type": "Offer", "price": "{% if lang == 'en' %}500{% else %}50000{% endif %}", "priceCurrency": "{% if lang == 'en' %}USD{% else %}RUB{% endif %}" }
                 }
             ]
         }
@@ -219,8 +219,10 @@
         { name: 'Оптимальный', sub: 'Самый популярный выбор', desc: '+500 токенов сверху. Вы на встрече — он делегирует задачи. Вы спите — постит в канал. Автопилот, который не выключается.' },
         { name: 'Максимальный', sub: 'Максимальная выгода за токен', desc: '+10 000 токенов сверху. Контент, делегирование, алерты, инсайты — всё на автопилоте. Вы растёте, пока AI работает.' }
       ],
+      prices: ['1 500 ₽', '5 000 ₽', '50 000 ₽'],
+      tokens: ['1 500 токенов', '5 500 токенов', '60 000 токенов'],
       topup: ['Пополнить — 1 500 ₽', 'Пополнить — 5 000 ₽', 'Пополнить — 50 000 ₽'],
-
+      payFunc: 'selectPack',
       ctaBtn1: 'Попробовать бесплатно — 1 500 токенов', ctaBtn2: 'Установить приложение',
       cta: 'Все функции доступны сразу.',
       fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
@@ -237,7 +239,10 @@
         { name: 'Standard', sub: 'Most popular choice', desc: '+500 bonus tokens. On a call — it delegates. Sleeping — it posts. An autopilot that never stops.' },
         { name: 'Premium', sub: 'Best value per token', desc: '+10,000 bonus tokens. Content, delegation, alerts, insights — all on autopilot. You grow while AI works.' }
       ],
+      prices: ['$15 USDT', '$50 USDT', '$500 USDT'],
+      tokens: ['1,500 tokens', '5,500 tokens', '60,000 tokens'],
       topup: ['Pay $15 USDT', 'Pay $50 USDT', 'Pay $500 USDT'],
+      payFunc: 'selectPackCrypto',
       ctaBtn1: 'Try for free — 1,500 tokens', ctaBtn2: 'Install App',
       cta: 'All features available immediately.',
       fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
@@ -270,13 +275,22 @@
     var badge = document.querySelector('[style*="background: #59636E"][style*="border-radius: 12px"]');
     if (badge) badge.textContent = t.badge;
     // Cards
+    var packs = ['small', 'medium', 'large'];
     var cards = document.querySelectorAll('.tiers-grid > div');
     cards.forEach(function(card, i) {
       if (!t.cards[i]) return;
       var h2 = card.querySelector('h2'); if (h2) h2.textContent = t.cards[i].name;
+      var priceDiv = card.querySelector('[style*="font-size: 28px"]'); if (priceDiv) priceDiv.textContent = t.prices[i];
+      var tokenDiv = card.querySelector('[style*="font-size: 13px"][style*="margin-bottom: 4px"]');
+      if (tokenDiv) {
+        var span = tokenDiv.querySelector('span');
+        if (span) { tokenDiv.firstChild.textContent = t.tokens[i] + ' '; }
+        else { tokenDiv.textContent = t.tokens[i]; }
+      }
       var subdiv = card.querySelector('[style*="font-size: 12px"]'); if (subdiv) subdiv.textContent = t.cards[i].sub;
       var descdiv = card.querySelector('[style*="line-height: 1.6"]'); if (descdiv) descdiv.textContent = t.cards[i].desc;
-      var btn = card.querySelector('button'); if (btn) btn.textContent = t.topup[i];
+      var btn = card.querySelector('button');
+      if (btn) { btn.textContent = t.topup[i]; btn.setAttribute('onclick', t.payFunc + "('" + packs[i] + "')"); }
     });
     // Bottom buttons (Home + Support)
     // CTA
