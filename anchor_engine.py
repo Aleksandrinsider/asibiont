@@ -135,22 +135,23 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     # goal_autopilot_review: используется как fallback-prompt в _dispatch_agent_for_anchor
     'goal_autopilot_review': (
         "Продвинь цель пользователя на один конкретный шаг вперёд.\n"
-        "Анализ → выбор → действие. Не планируй — ДЕЛАЙ.\n\n"
+        "Анализ → выбор → РЕАЛЬНОЕ действие. Не планируй — ДЕЛАЙ.\n\n"
         "ВАЖНО: твой текстовый ответ увидит пользователь в Telegram. Пиши кратко (2-4 предложения), "
         "только ФАКТЫ: что конкретно ты сделал и что получилось. Не пиши служебную информацию, "
         "не сообщай об ошибках сервисов (DuckDuckGo, таймаут и т.п.) — просто используй другой инструмент.\n\n"
-        "Прочитай цель + историю → что ещё НЕ пробовалось? → выбери из полного арсенала:\n"
-        "  Аутрич/email: send_outreach_email, send_follow_up_email, send_email, negotiate_by_email, reply_to_outreach_email\n"
-        "  Поиск людей: find_and_message_relevant_users, find_relevant_contacts_for_task, save_email_contact\n"
-        "  Контент: create_post, publish_to_telegram, publish_to_discord, generate_image, set_content_strategy\n"
-        "  Кампании: start_content_campaign, start_delegation_campaign, manage_content_campaign, manage_delegation_campaign\n"
-        "  Исследования: research_topic, get_news_trends\n"
-        "  Делегирование: delegate_task, get_delegation_progress\n"
-        "  Задачи/план: add_task, list_tasks\n"
-        "  Прогресс: update_goal_progress, complete_goal, update_goal, list_goals, create_goal\n"
-        "  Платформа: send_message_to_user, list_marketplace, switch_agent\n"
-        "  Интеграции: run_agent_action (Gmail, Slack, Notion, GitHub, Ozon, Wildberries, Jira, Bitrix24, AmoCRM, HubSpot, Trello, Airtable, Google Sheets, PostgreSQL, Redis, AWS S3, RSS, Calendly, Twilio, Firebase, CoinGecko, YouTube, OpenAI, Gemini, USDT, HTTP API и 30+)\n\n"
-        "Каждый цикл = новое конкретное действие из ЛЮБОГО раздела (не повтор).\n"
+        "ПРИОРИТЕТ ДЕЙСТВИЙ (от самого эффективного к менее):\n"
+        "  1. Email-аутрич: send_outreach_email с РЕАЛЬНЫМ email адресом конкретного человека\n"
+        "  2. Контент: create_post + publish_to_telegram / publish_to_discord — пост с призывом к действию\n"
+        "  3. Делегирование: delegate_task — поручить конкретную подзадачу\n"
+        "  4. Email-кампания: start_email_campaign (но только если есть реальные контакты in add_email_leads)\n"
+        "  5. Поиск контактов: find_relevant_contacts_for_task, save_email_contact\n"
+        "  6. Исследование: research_topic, get_news_trends (ТОЛЬКО если нужна информация для действия)\n\n"
+        "НЕ ДЕЛАЙ:\n"
+        "  - НЕ вызывай list_tasks/list_goals/get_system_status — данные уже в контексте\n"
+        "  - НЕ повторяй инструменты из раздела ЗАБЛОКИРОВАННЫЕ\n"
+        "  - НЕ делай research без следующего за ним ДЕЙСТВИЯ\n"
+        "  - НЕ пиши 'Задачу выполнил' без реального инструмента\n\n"
+        "Каждый цикл = одно конкретное ДЕЙСТВИЕ + update_goal_progress.\n"
         "Если один инструмент не сработал — молча попробуй другой, НЕ сообщай пользователю об ошибке.\n"
         "Отчёт: 2-4 предложения — что сделано и что получено."
     ),
@@ -1104,6 +1105,22 @@ class AnchorEngine:
                     + '\n'.join(f"  • {t}" for t in agent_tasks_done)
                 )
 
+            # Инструменты которые уже не работают — ЗАПРЕЩЕНО вызывать
+            _failed_tl = data.get('failed_tools', {})
+            if _failed_tl:
+                _banned = ', '.join(f"{t} (провалился {n}x)" for t, n in _failed_tl.items())
+                task_text += (
+                    f"\n\n🚫 ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ (не дали результата):\n"
+                    f"  {_banned}\n"
+                    f"  НЕ вызывай эти инструменты. Выбери ДРУГОЙ подход."
+                )
+
+            # Статистика использования — для разнообразия подходов
+            _tool_freq = data.get('tool_frequency', {})
+            if _tool_freq:
+                _freq_str = ', '.join(f"{t}: {n}x" for t, n in sorted(_tool_freq.items(), key=lambda x: -x[1])[:8])
+                task_text += f"\n\n📈 Частота инструментов за 48ч: {_freq_str}. Выбери малоиспользуемый."
+
             # ══ Блок отсутствующих интеграций: агент видит что нужно и сообщает пользователю ══
             import os as _os_intg
             _missing_intg_notes = []
@@ -1365,8 +1382,11 @@ class AnchorEngine:
                     target=anchor.source,
                 ).order_by(_AAL_ap.id.desc()).first()
                 if log:
-                    log.status = 'completed'
-                    log.result = (result or '')[:400]
+                    # Prefix tools_used into result for future dedup analysis
+                    _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
+                    _full_result = _tools_prefix + (result or '')
+                    log.status = 'completed' if not _is_noise_result else 'no_action'
+                    log.result = _full_result[:400]
                     session.commit()
 
         except Exception as e:
@@ -3072,14 +3092,12 @@ class AnchorEngine:
         if not active_goals:
             return []
 
-        # ── ЖЁСТКИЙ GUARD: не создавать якорь если dispatch был меньше 15 минут назад ──
-        # Этот guard не зависит от cooldown_hours (которые могут быть переопределены старым кодом).
-        # Проверяем напрямую через AgentActivityLog.
+        # ── ЖЁСТКИЙ GUARD: не создавать якорь если dispatch был меньше 60 минут назад ──
         from models import AgentActivityLog as _AAL_guard
         _last_dispatch = session.query(_AAL_guard).filter(
             _AAL_guard.user_id == user.id,
             _AAL_guard.activity_type == 'goal_autopilot_dispatch',
-            _AAL_guard.created_at >= now_utc - timedelta(minutes=15),
+            _AAL_guard.created_at >= now_utc - timedelta(minutes=60),
         ).first()
         if _last_dispatch:
             return []
@@ -3099,14 +3117,33 @@ class AnchorEngine:
         recent_actions = session.query(_AAL_scan).filter(
             _AAL_scan.user_id == user.id,
             _AAL_scan.activity_type.in_(['goal_autopilot_dispatch', 'agent_chain_continue']),
-            _AAL_scan.created_at >= now_utc - timedelta(hours=24),
-        ).order_by(_AAL_scan.created_at.desc()).limit(10).all()
+            _AAL_scan.created_at >= now_utc - timedelta(hours=48),
+        ).order_by(_AAL_scan.created_at.desc()).limit(15).all()
 
         actions_history = []
+        # Считаем частоту инструментов для блэклиста
+        _tool_freq: dict = {}
+        _failed_tools: dict = {}
         for a in recent_actions:
+            # Извлекаем инструменты из result (формат: "[tools: web_search, find_and_message_relevant_users] text")
+            _tools_tag = ''
+            _res = a.result or ''
+            if _res.startswith('[tools:'):
+                _idx = _res.find(']')
+                if _idx > 0:
+                    _tools_tag = _res[7:_idx].strip()
+                    _res = _res[_idx+1:].strip()
+                    for _tn in _tools_tag.split(', '):
+                        _tn = _tn.strip()
+                        if _tn:
+                            _tool_freq[_tn] = _tool_freq.get(_tn, 0) + 1
+                            # Если результат короткий или "не нашла/не нашёл" — считаем провалом
+                            if len(_res) < 30 or 'не наш' in _res.lower() or 'нет подходящ' in _res.lower() or 'error' in _res.lower():
+                                _failed_tools[_tn] = _failed_tools.get(_tn, 0) + 1
+            _agent = (a.title or '').replace(' — обзор целей', '')
+            _tools_info = f" [инструменты: {_tools_tag}]" if _tools_tag else ''
             actions_history.append(
-                f"[{a.created_at.strftime('%H:%M')}] {a.status}: {(a.title or '')[:80]}"
-                + (f" → {(a.result or '')[:200]}" if a.result else '')
+                f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:200]}"
             )
 
         # Последние proactive/agent_msg сообщения за 2 часа — что реально было сказано
@@ -3203,13 +3240,15 @@ class AnchorEngine:
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
-            'recent_actions': actions_history[:5],
+            'recent_actions': actions_history[:10],
             'recent_messages': recent_messages[:6],
             'email_campaigns': email_summary,
             'known_contacts': contacts_summary[:10],
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
+            'failed_tools': {k: v for k, v in _failed_tools.items() if v >= 2},
+            'tool_frequency': _tool_freq,
         }
 
         return [Anchor(
@@ -3223,7 +3262,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.25,
+            cooldown_hours=1.0,
             batch_group='goals',
         )]
 

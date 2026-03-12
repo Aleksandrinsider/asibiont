@@ -4073,11 +4073,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if _is_autopilot_task:
             logger.info('[DIRECTOR] Autopilot task → focused toolset for %s', agent.get('name'))
             _autopilot_tools = {
-                'add_task', 'list_tasks', 'complete_task', 'edit_task',
-                'list_goals', 'create_goal', 'update_goal_progress', 'update_goal',
+                'add_task', 'complete_task', 'edit_task',
+                'update_goal_progress', 'update_goal',
                 'research_topic', 'web_search', 'quick_topic_search', 'get_news_trends',
-                'create_post', 'publish_to_telegram', 'delegate_task',
-                'generate_image', 'get_system_status',
+                'create_post', 'publish_to_telegram', 'publish_to_discord', 'delegate_task',
+                'generate_image',
                 'find_and_message_relevant_users',
                 'run_agent_action',  # внешние интеграции агентов
                 # Email — агенты должны уметь слать/читать письма в автопилоте
@@ -4158,13 +4158,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Для autopilot-задач: усиливаем мышление — не давать заготовки, а думать
     if _is_autopilot_task:
         system_prompt += (
-            "\n\n⚡ АВТОПИЛОТ — ПЕРЕД ДЕЙСТВИЕМ СНАЧАЛА ПОДУМАЙ:\n"
-            "1. Проверь историю (recent_actions ниже в контексте) — что делалось последние 2+ раза? Это НЕЛЬЗЯ повторять.\n"
-            "2. Задай себе вопрос: «Какой канал/подход ещё НЕ пробовался?» — иди туда.\n"
-            "3. Задай себе вопрос: «Что СЕЙЧАС реально доступно?» — DDG сломан → используй get_news_trends или find_and_message_relevant_users.\n"
-            "4. Выбери ОДИН конкретный инструмент и ВЫПОЛНИ его прямо сейчас, не планируй.\n"
-            "5. После реального действия — update_goal_progress(goal_title=..., metric_current=N).\n"
-            "Отчёт: только реально выполненные действия. Коротко если одно действие, подробнее если несколько."
+            "\n\n⚡ АВТОПИЛОТ — СТРОГИЕ ПРАВИЛА:\n"
+            "1. Прочитай раздел «УЖЕ СДЕЛАНО» и «ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ» — то что там перечислено НЕЛЬЗЯ повторять.\n"
+            "2. Прочитай «Частота инструментов» — выбери тот, что использовался МЕНЬШЕ всего или вообще не вызывался.\n"
+            "3. Если find_and_message_relevant_users не находит людей — НЕ вызывай его снова. Используй email, посты, делегирование.\n"
+            "4. Если web_search/get_news_trends не даёт полезного — переходи к ДЕЙСТВИЯМ: send_outreach_email, create_post, publish_to_telegram.\n"
+            "5. НЕ вызывай list_tasks, list_goals, get_system_status — эти данные уже есть в контексте.\n"
+            "6. Каждый вызов должен создавать РЕАЛЬНЫЙ результат: отправленное письмо, опубликованный пост, созданная задача.\n"
+            "7. После действия — update_goal_progress(goal_title=..., metric_current=N).\n"
+            "8. Ответ: 2-4 предложения — что конкретно сделано и какой результат получен."
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
@@ -4439,6 +4441,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
     except Exception:
         pass
+
+    # Для автопилота: если ни один инструмент не вызван — результат неэффективен
+    if _is_autopilot_task and not _tools_used:
+        _final_text = ''  # пустой результат = noise, не отправится пользователю
+
     return _final_text, _tools_used
 
 
