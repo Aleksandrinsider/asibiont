@@ -1321,7 +1321,7 @@ class AnchorEngine:
                                         _consec += 1
                                     else:
                                         break
-                                if _consec >= 2:
+                                if _consec >= 3:
                                     _rr_recent_fails[_ag_rr_id] = _consec
                         except Exception as _rr_err:
                             logger.warning("[ANCHOR-AUTOPILOT] round-robin query failed (table may not exist): %s", _rr_err)
@@ -1334,7 +1334,7 @@ class AnchorEngine:
                         def _rr_key(a):
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
-                            fail_penalty = _rr_recent_fails.get(aid, 0) * 100  # 2+ consecutive fails → huge penalty
+                            fail_penalty = _rr_recent_fails.get(aid, 0) * 50  # 3+ consecutive fails → penalty
                             # ASI получает priority=99999 (выбирается последним среди равных)
                             tie_break = aid if aid != 0 else 99999
                             return (cnt + fail_penalty, tie_break)

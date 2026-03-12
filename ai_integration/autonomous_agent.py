@@ -4022,7 +4022,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Агент использует платформенные инструменты (web_search, add_task и т.д.) для автопилота
     # Если нужны внешние данные — агент вызовет run_agent_action явно через tool-call
     script_context = ""
-    if (agent.get('python_code') or '').strip() and not _is_autopilot_task:
+    if (agent.get('python_code') or '').strip():
         try:
             _wrapped = _wrap_agent_code(agent['python_code'].strip())
             _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os2.environ.get('PATH', '/usr/bin:/bin')}
@@ -4304,10 +4304,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive dispatch: 1 осмысленное действие за цикл, round-robin чередует агентов
     # autopilot: action + summary/update_progress (2 итерации, ~110с worst case)
     # обычный: action + summary (2 итерации)
-    _max_iters = 2
+    _max_iters = 3
     for _iter in range(_max_iters):
-        # До 2 tool-вызовов (1 действие + update_goal_progress)
-        _max_tool_calls = 2
+        # До 3 tool-вызовов (действие + follow-up + update_goal_progress)
+        _max_tool_calls = 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -4325,7 +4325,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools_now,
                     tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=350,
+                    max_tokens=500,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
                 timeout=API_TIMEOUT_LONG + 5,
