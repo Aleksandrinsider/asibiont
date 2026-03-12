@@ -1479,22 +1479,59 @@ class AnchorEngine:
                         anchor.delivered_at = datetime.now(timezone.utc)
                         session.commit()
                         return
-                    _sp_ap(user.telegram_id, 'proactive_message', description='goal_autopilot_dispatch', session=session, auto_commit=False)
+                    _spend_result = _sp_ap(user.telegram_id, 'proactive_message', description='goal_autopilot_dispatch', session=session, auto_commit=False)
+                    if not _spend_result.get('success'):
+                        logger.info("[ANCHOR-AUTOPILOT] user %d: skip — spend_tokens failed: %s", user.id, _spend_result.get('error', ''))
+                        anchor.delivered_at = datetime.now(timezone.utc)
+                        try:
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+                        return
 
-                # Log dispatch (для ASI не записываем ref_id)
-                _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
-                session.add(_AAL_ap(
-                    user_id=user.id,
-                    activity_type='goal_autopilot_dispatch',
-                    title=f'{agent_name} — обзор целей',
-                    content=_log_content,
-                    target=anchor.source,
-                    status='in_progress',
-                    ref_id=chosen.id if chosen.id != 0 else None,
-                ))
                 # Помечаем якорь доставленным ДО AI-вызова — защита от перезапуска Railway
                 anchor.delivered_at = datetime.now(timezone.utc)
-                session.commit()
+                try:
+                    session.commit()
+                except Exception as _commit_err:
+                    logger.warning("[ANCHOR-AUTOPILOT] commit anchor.delivered_at failed: %s", _commit_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                    # Retry without the log entry
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    try:
+                        session.commit()
+                    except Exception:
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                        return
+
+                # Log dispatch (для ASI не записываем ref_id) — отдельным коммитом
+                _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
+                try:
+                    session.add(_AAL_ap(
+                        user_id=user.id,
+                        activity_type='goal_autopilot_dispatch',
+                        title=f'{agent_name} — обзор целей',
+                        content=_log_content,
+                        target=anchor.source,
+                        status='in_progress',
+                        ref_id=chosen.id if chosen.id != 0 else None,
+                    ))
+                    session.commit()
+                except Exception as _log_err:
+                    logger.warning("[ANCHOR-AUTOPILOT] activity log creation failed: %s", _log_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
 
                 # ── Биллинг кастомного агента (роялти автору) ──
                 if getattr(chosen, 'id', 0) != 0:
@@ -2052,8 +2089,37 @@ class AnchorEngine:
             }
             _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
 
-            # Делегация — внутренний процесс, НЕ отправляем пользователю.
-            # Пользователь увидит только итоговый результат работы следующего агента.
+            # ── Уведомление о передаче между агентами ──
+            # Пользователь видит, как один агент передаёт задачу другому
+            _transfer_text = f"📋 {prev_agent.name} → {_next_ag.name}: {_next_task[:200]}"
+            if self.bot:
+                try:
+                    await self.bot.send_message(chat_id=user.telegram_id, text=_transfer_text)
+                except Exception:
+                    pass
+            # Сохраняем в interaction для web-чата
+            _transfer_content = json.dumps({
+                '__agent': {
+                    'name': 'ASI Biont',
+                    'id': 0,
+                    'avatar_url': '',
+                },
+                'text': _transfer_text,
+                '__anchor_type': 'agent_chain_transfer',
+            }, ensure_ascii=False)
+            session.add(Interaction(
+                user_id=user.id,
+                message_type='proactive',
+                content=_transfer_content,
+            ))
+            try:
+                session.commit()
+            except Exception:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+
             logger.info(
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s)",
                 user.id, prev_agent.name, _next_ag.name, _next_task[:80],
