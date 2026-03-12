@@ -5781,30 +5781,11 @@ class AnchorEngine:
 
                 logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(live_drafts)} for campaign #{campaign_id}")
 
-                # Списываем токены: стоимость × кол-во реально отправленных писем
+                # Списываем токены: по одному за каждое реально отправленное письмо
                 if not FREE_ACCESS_MODE and sent_count > 0:
-                    from token_service import spend_tokens as _sp_bulk, ACTION_COSTS, DEFAULT_TOOL_COST
-                    _email_unit = ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
-                    _email_total = _email_unit * sent_count
-                    from sqlalchemy import text as _sa_text_em
-                    result_bulk = session.execute(
-                        _sa_text_em(
-                            "UPDATE users SET token_balance = token_balance - :cost, "
-                            "tokens_spent = COALESCE(tokens_spent, 0) + :cost "
-                            "WHERE id = :uid AND COALESCE(token_balance, 0) >= :cost "
-                            "RETURNING id, token_balance"
-                        ),
-                        {'cost': _email_total, 'uid': user.id}
-                    ).fetchone()
-                    if result_bulk:
-                        from models import TokenTransaction as _TTx
-                        session.add(_TTx(
-                            user_id=user.id,
-                            amount=-_email_total,
-                            action=action,
-                            description=f'anchor_email_outreach_send x{sent_count}',
-                            balance_after=result_bulk[1],
-                        ))
+                    from token_service import spend_tokens as _sp_bulk
+                    for _i_sent in range(sent_count):
+                        _sp_bulk(user.telegram_id, action, description=f'anchor_email_outreach_send {_i_sent+1}/{sent_count}', session=session, auto_commit=False)
 
                 # Помечаем якорь как доставленный
                 anchor.delivered_at = datetime.now(timezone.utc)
@@ -5889,9 +5870,11 @@ class AnchorEngine:
                 except Exception as _fu_err:
                     logger.error(f"[ANCHOR] Follow-up compose/send error: {_fu_err}")
 
-                # Списываем токены
+                # Списываем токены за follow-up
                 if not FREE_ACCESS_MODE:
-                    spend_tokens(user.telegram_id, action, description=f'anchor_email_follow_up', session=session, auto_commit=False)
+                    _fu_spend = spend_tokens(user.telegram_id, action, description=f'anchor_email_follow_up', session=session, auto_commit=False)
+                    if not _fu_spend.get('success'):
+                        logger.info("[ANCHOR] User %d: skip follow-up billing — %s", user.telegram_id, _fu_spend.get('error', ''))
 
                 # Помечаем якорь как доставленный
                 anchor.delivered_at = datetime.now(timezone.utc)

@@ -1995,19 +1995,31 @@ async def chat_handler(request):
                 # Сохраняем сообщение пользователя ДО вызова AI
                 save_context_to_db(user_id, message, None)
 
-                # AI работает по готовности — без искусственных ограничений
-                try:
-                    ai_result = await chat_with_ai(
-                        message, context, user_id, file_content,
-                        db_session=session_db,
-                        progress_callback=web_progress_callback,
-                        web_context=True
-                    )
-                    response = ai_result['response']
-                    logger.info("AI response: %s...", response[:100])
-                except Exception as e:
-                    logger.error(f"Error getting AI response: {e}", exc_info=True)
-                    response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
+                # Проверяем баланс токенов ДО вызова AI
+                _web_tokens_ok = True
+                if not FREE_ACCESS_MODE:
+                    from token_service import has_enough_tokens as _het_web
+                    if not _het_web(user_id, 'message'):
+                        from token_service import insufficient_balance_message
+                        response = insufficient_balance_message(user_id, 'message')
+                        _web_tokens_ok = False
+
+                if not _web_tokens_ok:
+                    pass  # response уже заполнен сообщением об ошибке
+                else:
+                    # AI работает по готовности — без искусственных ограничений
+                    try:
+                        ai_result = await chat_with_ai(
+                            message, context, user_id, file_content,
+                            db_session=session_db,
+                            progress_callback=web_progress_callback,
+                            web_context=True
+                        )
+                        response = ai_result['response']
+                        logger.info("AI response: %s...", response[:100])
+                    except Exception as e:
+                        logger.error(f"Error getting AI response: {e}", exc_info=True)
+                        response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
 
                 # Save agent response to Interaction table (skip empty — agents already saved their own messages)
                 # Используем НОВУЮ сессию для сохранения — основная session_db могла протухнуть

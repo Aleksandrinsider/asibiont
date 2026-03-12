@@ -150,11 +150,17 @@ def _spend_arena_tokens(ua) -> None:
         if not ua or not ua.author_id:
             return
         from models import Session as DbSession, User as UserModel
-        from token_service import spend_tokens
+        from token_service import spend_tokens, has_enough_tokens
+        from config import FREE_ACCESS_MODE
+        if FREE_ACCESS_MODE:
+            return
         s2 = DbSession()
         try:
             owner = s2.query(UserModel).filter_by(id=ua.author_id).first()
             if owner and owner.telegram_id:
+                if not has_enough_tokens(owner.telegram_id, 'arena_agent_post'):
+                    logger.info("[ARENA] skip arena post billing — owner %d has no tokens", owner.telegram_id)
+                    return
                 spend_tokens(
                     owner.telegram_id,
                     'arena_agent_post',

@@ -4867,8 +4867,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         # Списываем токены за запуск агента директором
         try:
             from config import FREE_ACCESS_MODE as _FAM
-            from token_service import spend_tokens as _st
+            from token_service import spend_tokens as _st, has_enough_tokens as _het_at
             if not _FAM:
+                if not _het_at(user_id, 'agent_task'):
+                    logger.info("[DIRECTOR] user %d: skip agent_task — not enough tokens", user_id)
+                    return "Недостаточно токенов для запуска агента."
                 _st(user_id, 'agent_task', description=f'{ag["name"]}: {task[:60]}')
         except Exception:
             pass
