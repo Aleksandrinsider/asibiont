@@ -897,7 +897,17 @@ class AnchorEngine:
                 await self._deliver(user, anchors_batch, msg, session)
                 logger.info(f"[ANCHOR] User {user_id}: ✅ Delivered {len(anchors_batch)} {label} anchors")
             else:
-                logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for {label} anchors")
+                # FALLBACK: если AI не справился, для ALWAYS_DELIVER генерируем шаблон
+                always = [a for a in anchors_batch if a.anchor_type in ALWAYS_DELIVER_TYPES]
+                if always:
+                    fallback = self._compose_always_deliver_fallback(always, user)
+                    if fallback:
+                        logger.info(f"[ANCHOR] User {user_id}: ⚡ ALWAYS_DELIVER fallback for {[a.anchor_type for a in always]}")
+                        await self._deliver(user, always, fallback, session)
+                    else:
+                        logger.warning(f"[ANCHOR] User {user_id}: AI decided SKIP for {label} anchors (ALWAYS_DELIVER fallback empty)")
+                else:
+                    logger.info(f"[ANCHOR] User {user_id}: AI decided SKIP for {label} anchors")
 
         await _deliver_batch(system_dialog_anchors, 'system')
         if agent_dialog_anchors:
@@ -6295,6 +6305,51 @@ class AnchorEngine:
             logger.error(f"[ANCHOR] _ai_compose_post error: {e}\n{traceback.format_exc()}")
             return None
 
+    def _compose_always_deliver_fallback(self, anchors: list, user) -> str | None:
+        """Шаблонный fallback для ALWAYS_DELIVER якорей когда AI недоступен.
+
+        Гарантирует доставку напоминаний и критических уведомлений
+        даже при сбое AI (timeout, API down и т.д.).
+        """
+        parts = []
+        user_lang = getattr(user, 'language', None) or 'ru'
+        for a in anchors:
+            try:
+                data = json.loads(a.data) if isinstance(a.data, str) and a.data else {}
+            except Exception:
+                data = {}
+            title = data.get('title') or ''
+
+            if a.anchor_type == 'task_reminder':
+                sched = data.get('scheduled_time', '')
+                if user_lang == 'en':
+                    parts.append(f"Time for \"{title}\" has come{f' (scheduled {sched})' if sched else ''}. How's it going — done, in progress, or need to reschedule?")
+                else:
+                    parts.append(f"Пора: «{title}»{f' (назначено на {sched})' if sched else ''} — готово, в процессе или перенести?")
+            elif a.anchor_type == 'task_overdue':
+                if user_lang == 'en':
+                    parts.append(f"Task \"{title}\" is overdue. Want to reschedule or mark complete?")
+                else:
+                    parts.append(f"Задача «{title}» просрочена. Перенести или отметить выполненной?")
+            elif a.anchor_type == 'task_deadline_soon':
+                if user_lang == 'en':
+                    parts.append(f"Deadline for \"{title}\" is approaching. Need help?")
+                else:
+                    parts.append(f"Дедлайн по «{title}» приближается. Нужна помощь?")
+            elif a.anchor_type == 'service_degraded':
+                svc = data.get('service', a.source or 'service')
+                if user_lang == 'en':
+                    parts.append(f"Service {svc} is temporarily unavailable. We're monitoring the situation.")
+                else:
+                    parts.append(f"Сервис {svc} временно недоступен. Следим за ситуацией.")
+            else:
+                # Другие ALWAYS_DELIVER типы — берём topic из якоря
+                topic = getattr(a, 'topic', '') or ''
+                if topic:
+                    parts.append(topic[:300])
+
+        return '\n'.join(parts) if parts else None
+
     async def _ai_decide_and_compose(self, user, anchors: list, session, force_deliver: bool = False) -> str | None:
         """AI получает все якоря + контекст и РЕШАЕТ: писать или нет + ЧТО писать.
         
@@ -6697,13 +6752,30 @@ class AnchorEngine:
 
             logger.info(f"[ANCHOR] AI call for user {user.telegram_id}: {len(anchors)} anchors, prompt {len(full_prompt)} chars")
 
+            # Для якорей-напоминаний используем mode='reminder' (без forced tool calling)
+            # — быстрее и надёжнее чем anchor mode с обязательным web-search
+            _reminder_only_types = {'task_reminder', 'task_overdue', 'task_deadline_soon'}
+            _anchor_types_set = {a.anchor_type for a in anchors}
+            if _anchor_types_set <= _reminder_only_types:
+                _ai_mode = 'reminder'
+                _ai_instruction = (
+                    "Напиши напоминание о задаче на основе контекста ниже. "
+                    "Стиль: живой, как друг в мессенджере. Кратко, 1-3 предложения. "
+                    "Спроси готовность. НЕ создавай новые задачи."
+                )
+                _ai_max_iter = 1
+            else:
+                _ai_mode = 'anchor'
+                _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
+                _ai_max_iter = 2
+
             result = await agent.generate_system_message(
                 user_id=user.telegram_id,
-                mode='anchor',
-                instruction="Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд.",
+                mode=_ai_mode,
+                instruction=_ai_instruction,
                 extra_context=full_prompt,
                 max_tokens=600,
-                max_iterations=2
+                max_iterations=_ai_max_iter
             )
 
             logger.info(f"[ANCHOR] AI result for user {user.telegram_id}: {'SKIP/None' if not result else result[:100]}")

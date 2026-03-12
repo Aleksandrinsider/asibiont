@@ -2842,6 +2842,15 @@ class HybridAutonomousAgent:
         elif mode == 'result_check':
             return "Great, task completed!" if lang == 'en' else "Отлично, задача выполнена!"
         elif mode == 'anchor':
+            # Для anchor-режима пытаемся извлечь задачу из instruction
+            import re
+            match = re.search(r'[«"](.+?)[»"]', instruction)
+            if match:
+                task_name = match.group(1)
+                if lang == 'en':
+                    return f"Time for \"{task_name}\" — done, in progress, or reschedule?"
+                else:
+                    return f"Пора: «{task_name}» — готово, в процессе или перенести?"
             return None
         elif mode == 'proactive':
             return None
