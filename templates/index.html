@@ -395,7 +395,7 @@
                 gap: 12px;
             }
             .autopilot-left .bonus-num {
-                font-size: 24px;
+                font-size: 24px !important;
             }
             .autopilot-points {
                 grid-template-columns: 1fr;
@@ -469,6 +469,7 @@
                 width: 48px !important;
                 height: 48px !important;
                 margin: 0 !important;
+                display: inline-block !important;
                 flex-shrink: 0;
             }
             .mobile-header-row .login-buttons {
@@ -485,7 +486,7 @@
             }
         }
         @media (max-width: 400px) {
-            img[alt="ASI Biont"]:not(.mobile-header-row img) {
+            .auth-container > img[alt="ASI Biont"] {
                 width: 150px !important;
                 height: 150px !important;
             }
@@ -669,7 +670,7 @@
     </script>
     <div class="auth-container">
         <div class="mobile-header-row">
-        <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 180px; height: 180px; display: block; margin: 0 auto 20px; max-width: 100%;">
+        <img src="/static/asibiont.svg" alt="ASI Biont" style="width: 180px; height: 180px; display: block; margin: 0 0 20px 0; max-width: 100%;">
         <div class="login-buttons" style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 0 0 32px 0;">
             <!-- Email login button -->
             <button onclick="openEmailModal()" id="email-login-btn" title="Войти по email" data-i18n-title="emailLogin" style="display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; background: #374151; color: white; border: none; border-radius: 50%; cursor: pointer; flex-shrink: 0;" onmouseover="this.style.background='#4B5563'" onmouseout="this.style.background='#374151'">
