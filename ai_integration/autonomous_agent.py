@@ -3799,33 +3799,70 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         ""  # агент без внешних API — не упоминаем run_agent_action
     )
 
+    # Роле-специфичные инструкции для автопилота: агенты с интеграциями должны ИХ использовать
+    _intg_action_hint = ""
+    if _intg_hint and _is_autopilot_task:
+        _api_keys_lower = (agent.get('user_api_keys') or '').lower()
+        _pc_lower = (agent.get('python_code') or '').lower()
+        _hints = []
+        if any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'mail', 'resend')):
+            _hints.append(
+                "\n\n📧 У тебя есть EMAIL-интеграция. ПРИОРИТЕТ: "
+                "найди контакты → отправь outreach письма (send_outreach_email). "
+                "Или проверь входящие через run_agent_action и ответь на важные."
+            )
+        if any(w in _api_keys_lower for w in ('rss', 'feed', 'habr')) or any(w in _pc_lower for w in ('feedparser', 'rss', 'habr')):
+            _hints.append(
+                "\n\n📰 У тебя есть RSS/новостная интеграция. ПРИОРИТЕТ: "
+                "загрузи данные через run_agent_action и используй найденную информацию "
+                "для создания задач, контактов, или делегирования коллегам."
+            )
+        if any(w in _api_keys_lower for w in ('github', 'gitlab')):
+            _hints.append(
+                "\n\n💻 У тебя есть GitHub/GitLab. ПРИОРИТЕТ: "
+                "проверь issues/PRs через run_agent_action, создай задачи по находкам."
+            )
+        if any(w in _api_keys_lower for w in ('slack', 'discord', 'telegram')):
+            _hints.append(
+                "\n\n💬 У тебя есть мессенджер-интеграция. ПРИОРИТЕТ: "
+                "используй для рассылки или мониторинга каналов."
+            )
+        _intg_action_hint = ''.join(_hints[:2])
+
     if _is_autopilot_task:
-        # ── Autopilot: живой диалог, не отчёты ──
+        # ── Autopilot: агент как живой специалист в команде ──
         system_prompt = (
-            f"Ты — {agent['name']}, агент ASI Biont. Ты работаешь автономно, без команд. Сейчас: {_now_str}.\n"
+            f"Ты — {agent['name']}, специалист в команде ASI Biont. Сейчас: {_now_str}.\n"
             f"Пиши от первого лица как {agent['name']}.\n\n"
 
-            "КАК ТЫ ОБЩАЕШЬСЯ С ПОЛЬЗОВАТЕЛЕМ:\n"
-            "Ты пишешь пользователю в чат как живой помощник, а не робот. "
-            "Расскажи ЧТО ИМЕННО ты нашёл, КОНКРЕТНЫЕ факты, имена, цифры, ссылки. "
-            "Поделись своими мыслями и выводами. Предложи следующий шаг.\n"
-            "Примеры ХОРОШЕГО ответа:\n"
-            "  • 'Нашёл 3 сообщества тестировщиков: QA Hub (2к участников), TestGuild (5к), BetaList. "
-            "Думаю стоит начать с BetaList — там аудитория ищет новые продукты.'\n"
-            "  • 'Посмотрел что делают конкуренты: TaskMaster запустил реферальную программу, "
-            "а FocusPlan привлекают блогеров. Может попробуем похожий подход?'\n"
-            "Примеры ПЛОХОГО ответа (ЗАПРЕЩЕНО):\n"
-            "  • 'Выполнил поиск.' — бессмысленно\n"
-            "  • 'Обновил прогресс цели.' — это техническое действие, не информация\n"
-            "  • 'Задачу выполнил.' — что за задача? какой результат?\n\n"
+            "ТЫ — ЖИВОЙ СПЕЦИАЛИСТ, НЕ РОБОТ.\n"
+            "Представь: ты — эксперт в команде из 3 человек. Каждый — со своими способностями и доступами. "
+            "Вы работаете по очереди каждые 15 минут, двигаясь к общей цели шаг за шагом.\n\n"
 
-            "КОМАНДА: Ты часть команды агентов. Каждые 15 мин работает один агент.\n"
-            "Смотри 'УЖЕ СДЕЛАНО' — там результаты коллег. ИСПОЛЬЗУЙ эти данные!\n"
-            "Если коллега нашёл контакты — напиши им. Нашёл ссылки — исследуй их. Нашёл проблему — реши.\n"
-            "Если ТЫ нашёл что-то для другого агента — напиши DELEGATE[Имя]: задача.\n"
-            "Пример: DELEGATE[Кристина]: отправь письмо на test@example.com с предложением тестирования\n\n"
+            "ТВОЙ ПОДХОД К РАБОТЕ:\n"
+            "1. ИЗУЧИ что сделали коллеги (раздел «УЖЕ СДЕЛАНО»). Прочитай ВНИМАТЕЛЬНО — "
+            "там контакты, ссылки, находки. Не повторяй их работу — ПРОДВИГАЙ дальше.\n"
+            "2. ПОДУМАЙ: что логичный следующий шаг? Какое ОДНО действие даст максимальный результат?\n"
+            "3. СДЕЛАЙ это действие — поиск, письмо, задача, делегирование коллеге.\n"
+            "4. РАССКАЖИ пользователю что конкретно ты сделал и нашёл — факты, имена, цифры.\n\n"
+
+            "ПРИМЕРЫ КАЧЕСТВЕННОЙ РАБОТЫ:\n"
+            "  • Марк нашёл 3 QA-сообщества → ТЫ исследуешь лучшее из них глубже и создаёшь задачу с планом\n"
+            "  • Кристина отправила письмо → ТЫ проверяешь ответ или ищешь новые контакты\n"
+            "  • ASI нашёл email тестировщика → DELEGATE[Кристина]: напиши ему с предложением\n"
+            "  • Никто ещё не искал → ТЫ исследуешь тему и находишь данные для команды\n\n"
+
+            "ЗАПРЕЩЕНО:\n"
+            "  • 'Выполнил поиск.' — ПУСТЫЕ слова, скажи ЧТО нашёл\n"
+            "  • 'Обновил прогресс цели.' — техническое действие, не информация\n"
+            "  • Повторять поиск коллеги — СТРОЙТЕ друг на друге\n"
+            "  • Называть инструменты в тексте — пиши естественно\n\n"
+
+            "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ:\n"
+            "Если нашёл данные для коллеги с нужной интеграцией → DELEGATE[Имя]: задача с КОНКРЕТНЫМИ данными.\n"
+            "Пример: DELEGATE[Кристина]: отправь письмо на ivan@test.ru — он QA-лид, предложи тестирование ASI Biont\n\n"
+
             f"Инструменты: используй схему API{_intg_line}\n"
-            "ЗАПРЕЩЕНО называть инструменты в тексте ответа. Пиши естественно.\n"
             "После реального действия — update_goal_progress.\n\n"
 
             f"ТВОЯ РОЛЬ:\n{_persona}"
@@ -4272,13 +4309,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Для autopilot-задач: усиливаем мышление — не давать заготовки, а думать
     if _is_autopilot_task:
         system_prompt += (
-            "\n\n⚡ АВТОПИЛОТ:\n"
+            "\n\n⚡ АВТОПИЛОТ — ЦЕПОЧКА ДЕЙСТВИЙ:\n"
             "1. Смотри «УЖЕ СДЕЛАНО» — там результаты КОМАНДЫ. Используй найденные данные, не повторяй поиск.\n"
-            "2. ОДНО реальное ДЕЙСТВИЕ за цикл (не list_tasks, не get_system_status — данные в контексте).\n"
-            "3. После действия — update_goal_progress.\n"
+            "2. ЦЕПОЧКА за цикл: ПОИСК → ДЕЙСТВИЕ с результатами → update_goal_progress.\n"
+            "   Пример: web_search('QA communities') → send_outreach_email(найденный контакт) → update_goal_progress.\n"
+            "   Пример: research_topic('beta testers') → add_task(конкретный шаг) → update_goal_progress.\n"
+            "3. НЕ ОСТАНАВЛИВАЙСЯ НА ПОИСКЕ. Поиск БЕЗ действия = провал. Нашёл данные → ИСПОЛЬЗУЙ их.\n"
             "4. ГЛАВНОЕ — твой текстовый ответ пользователю. Ему придёт в Telegram. "
-            "Пиши как живой человек: что нашёл, какие факты, что думаешь, что дальше.\n"
+            "Пиши как живой человек: что нашёл, что СДЕЛАЛ с этим, что дальше.\n"
             "5. Если нашёл задачу для другого агента — DELEGATE[Имя]: задача (будет выполнено автоматически)."
+            + (_intg_action_hint or '')
         )
 
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
@@ -4301,13 +4341,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
-    # Adaptive dispatch: 1 осмысленное действие за цикл, round-robin чередует агентов
-    # autopilot: action + summary/update_progress (2 итерации, ~110с worst case)
+    # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
+    # autopilot: search + action + progress/delegate (3 итерации, ~150с worst case)
     # обычный: action + summary (2 итерации)
     _max_iters = 3
     for _iter in range(_max_iters):
-        # До 3 tool-вызовов (действие + follow-up + update_goal_progress)
-        _max_tool_calls = 3
+        # Autopilot: 5 tool calls (search + action + followup + delegate + progress)
+        # Regular: 3 tool calls (action + followup + progress)
+        _max_tool_calls = 5 if _is_autopilot_task else 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -4359,9 +4400,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _early_text = _content or _done_fb
             break
 
-        # Агент вызвал инструменты — выполняем (макс 2 за итерацию для полноты)
+        # Агент вызвал инструменты — выполняем
+        # Autopilot: до 3 за итерацию (search + action + progress)
+        # Regular: до 2
+        _tc_limit = 3 if _is_autopilot_task else 2
         _messages.append(_msg)
-        for _tc in _tool_calls[:2]:
+        for _tc in _tool_calls[:_tc_limit]:
             _tname = _tc.get('function', {}).get('name', '')
             try:
                 _targs = json.loads(_tc.get('function', {}).get('arguments', '{}'))
@@ -4409,18 +4453,29 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
         _tool_call_count += 1
         # Добавляем фиктивные результаты для пропущенных tool_calls (OpenAI/DeepSeek требует все)
-        for _tc_skip in _tool_calls[2:]:
+        for _tc_skip in _tool_calls[_tc_limit:]:
             _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
                               "content": '{"status":"skipped"}'})
-        # Инструкция после tool-call: для автопилота — живой диалог
+        # Инструкция после tool-call: для автопилота — цепочка действий
         if _is_autopilot_task:
-            _messages.append({"role": "user", "content": (
-                "Данные получены. Если было действие — вызови update_goal_progress. "
-                "Затем расскажи пользователю ЧТО КОНКРЕТНО нашёл/сделал — факты, имена, цифры из результатов. "
-                "Пиши в свободной форме, как будто рассказываешь коллеге. "
-                "НЕ пиши 'выполнил поиск' или 'обновил прогресс' — это пустые слова. "
-                "Расскажи РЕЗУЛЬТАТ: что именно нашлось, какие выводы, что планируешь дальше."
-            )})
+            if _iter == 0 and _tool_call_count <= 2:
+                # После первого tool-call: ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ, не останавливайся на поиске
+                _messages.append({"role": "user", "content": (
+                    "Данные получены. ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ — используй результаты:\n"
+                    "— Нашёл email/контакт → отправь outreach письмо (send_outreach_email) или сохрани (save_email_contact)\n"
+                    "— Нашёл площадку/сообщество → создай КОНКРЕТНУЮ задачу (add_task) с деталями\n"
+                    "— Нашёл информацию для коллеги → DELEGATE[Имя]: задача с найденными данными\n"
+                    "— Нашёл проблему → создай задачу или реши сам\n"
+                    "НЕ останавливайся на 'нашёл и рассказал'. СДЕЛАЙ что-то с результатами!"
+                )})
+            else:
+                # После второго+ tool-call: завершай цепочку, обнови прогресс
+                _messages.append({"role": "user", "content": (
+                    "Действие выполнено. Вызови update_goal_progress, затем расскажи пользователю "
+                    "ЧТО КОНКРЕТНО ты СДЕЛАЛ — факты, имена, цифры из результатов. "
+                    "НЕ пиши 'выполнил поиск' — пиши что НАШЁЛ и что С ЭТИМ СДЕЛАЛ. "
+                    "Расскажи РЕЗУЛЬТАТ действия и что планируешь дальше."
+                )})
         else:
             _messages.append({"role": "user", "content": (
                 "Данные от инструмента получены. Дай ГОТОВЫЙ результат. "
@@ -4581,18 +4636,49 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             logger.warning("[SUBDELEGATE] %s error: %s", _target_agent.name, _sub_err)
 
                     if _sub_results:
-                        # Результаты в чат — агенты общаются как живые
-                        _final_text += "\n\n" + "\n".join(_sub_results)
-                        # + дублируем в задачи «Поручения агентам» для трекинга
+                        # Каждый субделегированный результат отправляется ОТДЕЛЬНЫМ сообщением
+                        # (не батчим в один текст — пользователь видит планомерную работу команды)
                         for _sd_item, _sr in zip(_pending_subdelegations[:2], _sub_results):
+                            _sd_target_name = _sr.split(':')[0].strip()
+                            _sd_result_text = ':'.join(_sr.split(':')[1:]).strip() if ':' in _sr else _sr
+
+                            # Отправляем сразу в Telegram + сохраняем в Interaction
                             try:
-                                _sd_target_name = _sr.split(':')[0].strip()
-                                _sd_result_text = ':'.join(_sr.split(':')[1:]).strip() if ':' in _sr else _sr
-                                _sd_agent_dict = {'id': 0, 'name': _sd_target_name}
-                                for _tn2, _ta2 in _team_map.items():
-                                    if _ta2.name == _sd_target_name:
-                                        _sd_agent_dict['id'] = _ta2.id
-                                        break
+                                import aiogram
+                                from models import Session as _MsgDb, Interaction as _MsgInt, User as _MsgU
+                                _msg_s = _MsgDb()
+                                try:
+                                    _msg_u = _msg_s.query(_MsgU).filter_by(telegram_id=user_id).first()
+                                    if _msg_u:
+                                        # Формируем agent data для interaction
+                                        _sd_ag_id = 0
+                                        _sd_ag_avatar = ''
+                                        for _tn2, _ta2 in _team_map.items():
+                                            if _ta2.name == _sd_target_name:
+                                                _sd_ag_id = _ta2.id
+                                                _sd_ag_avatar = getattr(_ta2, 'avatar_url', '') or ''
+                                                break
+                                        # Сохраняем interaction
+                                        _msg_s.add(_MsgInt(
+                                            user_id=_msg_u.id,
+                                            message_type='proactive',
+                                            content=json.dumps({
+                                                '__agent': {'name': _sd_target_name, 'id': _sd_ag_id, 'avatar_url': _sd_ag_avatar},
+                                                'text': _sd_result_text[:600],
+                                                '__tools_used': [],
+                                                '__anchor_type': 'agent_delegation',
+                                            }, ensure_ascii=False),
+                                        ))
+                                        _msg_s.commit()
+                                        logger.info("[SUBDELEGATE] saved %s result as separate interaction", _sd_target_name)
+                                finally:
+                                    _msg_s.close()
+                            except Exception as _msg_err:
+                                logger.debug('[SUBDELEGATE] msg save error: %s', _msg_err)
+
+                            # Также создаём задачу для трекинга
+                            try:
+                                _sd_agent_dict = {'id': _sd_ag_id, 'name': _sd_target_name}
                                 _create_agent_delegation_task(
                                     _author_id, _sd_agent_dict,
                                     _sd_item.get('task', '')[:200],
@@ -4600,6 +4686,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                 )
                             except Exception as _sd_task_err:
                                 logger.debug('[SUBDELEGATE] task create error: %s', _sd_task_err)
+
+                        # В текст родительского агента добавляем КРАТКУЮ ссылку, а не полные результаты
+                        _sd_names = [sr.split(':')[0].strip() for sr in _sub_results]
+                        _final_text += f"\n\n(Поручил{'а' if _is_fem else ''} задачи: {', '.join(_sd_names)} — их ответы отправлены отдельно)"
             finally:
                 _sub_s.close()
         except Exception as _sd_err:
