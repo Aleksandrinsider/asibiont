@@ -4579,9 +4579,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if _actions:
             _final_text = ', '.join(_actions).capitalize() + '.'
 
-    # Для автопилота: если ни один инструмент не вызван — результат неэффективен
-    if _is_autopilot_task and not _tools_used:
-        _final_text = ''  # пустой результат = noise, не отправится пользователю
+    # Для автопилота без инструментов: если текст содержательный (>100 символов) — пропускаем как аналитику,
+    # если короткий/шаблонный — noise-фильтр в _dispatch_agent_for_anchor отсечёт
+    if _is_autopilot_task and not _tools_used and len((_final_text or '').strip()) < 100:
+        _final_text = ''  # слишком короткий текст без действий = noise
 
     return _final_text, _tools_used
 
@@ -5514,7 +5515,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         if _director_response is not None:
             # Агент ответил напрямую — ASI молчит (ответ уже в DB)
             if _director_response == "__agent_handled__":
-                return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None}
+                return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None, 'agent_handled': True}
 
             # Распаковываем dict → строка
             if isinstance(_director_response, dict):

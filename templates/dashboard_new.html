@@ -1925,6 +1925,9 @@
             // Рендерим Markdown для AI-сообщений, для user — только escape + linkify
             if (normalizedSender === 'ai' && typeof marked !== 'undefined') {
                 try {
+                    // Очистка email-артефактов из IMAP перед markdown-рендером
+                    text = text.replace(/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
+                    text = text.replace(/mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
                     marked.setOptions({ breaks: true, gfm: true });
                     // Отключаем raw HTML из AI-ответа (безопасность)
                     const renderer = new marked.Renderer();

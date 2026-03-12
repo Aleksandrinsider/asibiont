@@ -993,8 +993,10 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         from ai_integration import chat_with_ai
         db_session = Session()
         response_text = ""
+        _agent_handled = False
         try:
             result = await chat_with_ai(text, context=context, user_id=user_id, db_session=db_session, progress_callback=progress_callback)
+            _agent_handled = result.get('agent_handled', False) if isinstance(result, dict) else False
             response_text = result.get('response', '') if isinstance(result, dict) else str(result)
             # Финальная очистка HTML/email артефактов
             if response_text:
@@ -1015,29 +1017,33 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                     pass
             
             # Защита от пустого ответа
-            if not response_text or not response_text.strip():
+            if not _agent_handled and (not response_text or not response_text.strip()):
                 response_text = "Done! What's next?" if lang == 'en' else "Готово! Что дальше?"
             
-            # Гарантируем кликабельность ссылок в Telegram (HTML parse_mode)
-            response_html = _format_html(response_text)
-
-            # Разбиваем длинный ответ на части (Telegram лимит 4096)
-            if len(response_html) > 4000:
-                # Умная разбивка: не ломаем HTML-теги и URL
-                chunks = _smart_split_html(response_html, 4000)
-                for chunk in chunks:
-                    try:
-                        await message.bot.send_message(message.chat.id, chunk, parse_mode='HTML')
-                    except Exception:
-                        # Fallback: отправляем plain text кусок соответствующей длины
-                        await message.bot.send_message(message.chat.id, chunk[:4000])
+            # Если агент уже ответил (через директора) — не отправляем и не сохраняем
+            if _agent_handled:
+                logger.info(f"[PTM] Agent handled for user {user_id}, skipping ASI response")
             else:
-                try:
-                    await message.bot.send_message(message.chat.id, response_html, parse_mode='HTML')
-                except Exception as html_err:
-                    # Fallback without HTML if formatting breaks
-                    logger.warning(f"[PTM] HTML send failed, falling back to plain text: {html_err}")
-                    await message.bot.send_message(message.chat.id, response_text)
+                # Гарантируем кликабельность ссылок в Telegram (HTML parse_mode)
+                response_html = _format_html(response_text)
+
+                # Разбиваем длинный ответ на части (Telegram лимит 4096)
+                if len(response_html) > 4000:
+                    # Умная разбивка: не ломаем HTML-теги и URL
+                    chunks = _smart_split_html(response_html, 4000)
+                    for chunk in chunks:
+                        try:
+                            await message.bot.send_message(message.chat.id, chunk, parse_mode='HTML')
+                        except Exception:
+                            # Fallback: отправляем plain text кусок соответствующей длины
+                            await message.bot.send_message(message.chat.id, chunk[:4000])
+                else:
+                    try:
+                        await message.bot.send_message(message.chat.id, response_html, parse_mode='HTML')
+                    except Exception as html_err:
+                        # Fallback without HTML if formatting breaks
+                        logger.warning(f"[PTM] HTML send failed, falling back to plain text: {html_err}")
+                        await message.bot.send_message(message.chat.id, response_text)
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:
@@ -1055,32 +1061,33 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         finally:
             db_session.close()
         
-        # СОХРАНЯЕМ ОТВЕТ AI
-        logger.info(f"[PTM] Step 4: saving AI response")
-        try:
-            session = Session()
+        # СОХРАНЯЕМ ОТВЕТ AI (только если агент не ответил сам)
+        if not _agent_handled:
+            logger.info(f"[PTM] Step 4: saving AI response")
             try:
-                user = session.query(User).filter_by(telegram_id=user_id).first()
-                if user:
-                    if response_text and response_text.strip():
-                        interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
+                session = Session()
+                try:
+                    user = session.query(User).filter_by(telegram_id=user_id).first()
+                    if user:
+                        if response_text and response_text.strip():
+                            interaction = Interaction(user_id=user.id, message_type='ai', content=response_text.strip())
+                        else:
+                            fallback_content = "Sorry, could not generate a response." if lang == 'en' else "Хм, не получилось сформулировать ответ — попробуй переспросить"
+                            interaction = Interaction(
+                                user_id=user.id,
+                                message_type='ai',
+                                content=fallback_content)
+                        session.add(interaction)
+                        session.commit()
                     else:
-                        fallback_content = "Sorry, could not generate a response." if lang == 'en' else "Хм, не получилось сформулировать ответ — попробуй переспросить"
-                        interaction = Interaction(
-                            user_id=user.id,
-                            message_type='ai',
-                            content=fallback_content)
-                    session.add(interaction)
-                    session.commit()
-                else:
-                    logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
-            finally:
-                session.close()
-        except Exception as e:
-            logger.error(f"Failed to save AI response for {user_id}: {e}")
+                        logger.warning(f"User not found for telegram_id {user_id}, cannot save interactions")
+                finally:
+                    session.close()
+            except Exception as e:
+                logger.error(f"Failed to save AI response for {user_id}: {e}")
 
-        # AGENT CHAT HOOKS: подписанные агенты могут добавить свои наблюдения (non-blocking)
-        if response_text and text:
+        # AGENT CHAT HOOKS: подписанные агенты наблюдают (non-blocking, НЕ при агентском ответе)
+        if not _agent_handled and response_text and text:
             try:
                 from anchor_engine import get_anchor_engine
                 _ae_hook = get_anchor_engine()
