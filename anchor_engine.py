@@ -174,23 +174,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         "Анализ → выбор → РЕАЛЬНОЕ действие. Не планируй — ДЕЛАЙ.\n\n"
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{channels_hint}\n"
-        "ВАЖНО: твой текстовый ответ увидит пользователь в Telegram. Пиши подробно (2-4 предложения, "
-        "МИНИМУМ 100 символов), только ФАКТЫ: что конкретно ты сделал, какие данные получил, "
-        "какой результат. 'Выполнил поиск' — это НЕ отчёт. Не пиши служебную информацию, "
-        "не сообщай об ошибках сервисов — просто используй другой инструмент.\n\n"
+        "ФОРМАТ ОТВЕТА — это сообщение увидит пользователь в Telegram:\n"
+        "Пиши как живой помощник, а не робот. Расскажи что нашёл, поделись фактами, "
+        "предложи идею. Назови конкретные имена, цифры, ссылки из результатов поиска.\n"
+        "Примеры:\n"
+        "  ✅ 'Нашёл 3 площадки для размещения: ProductHunt (запуск бесплатный), "
+        "BetaList (очередь ~2 недели), и Hacker News Show HN. Думаю начать с ProductHunt — "
+        "там самая активная аудитория для SaaS-продуктов.'\n"
+        "  ❌ 'Выполнил поиск.' — бессмысленно\n" 
+        "  ❌ 'Обновил прогресс цели.' — техническое действие, не информация\n\n"
         "ЛОГИКА ВЫБОРА (используй инструменты из схемы API):\n"
         "  - Что мешает прогрессу конкретно сейчас?\n"
         "  - Какой инструмент даст максимум результата за 1 вызов?\n"
-        "  - Что НЕ делалось раньше? (см. раздел ЗАБЛОКИРОВАННЫЕ)\n"
-        "  - Если один подход не работает — переключись на другой\n\n"
+        "  - Что НЕ делалось раньше? (см. раздел ЗАБЛОКИРОВАННЫЕ)\n\n"
         "НЕ ДЕЛАЙ:\n"
         "  - НЕ вызывай list_tasks/list_goals/get_system_status — данные уже в контексте\n"
         "  - НЕ повторяй инструменты из раздела ЗАБЛОКИРОВАННЫЕ\n"
-        "  - НЕ делай research без следующего за ним ДЕЙСТВИЯ\n"
         "  - НЕ пиши 'Задачу выполнил' без реального инструмента\n\n"
         "Каждый цикл = одно конкретное ДЕЙСТВИЕ + update_goal_progress.\n"
-        "Если один инструмент не сработал — молча попробуй другой.\n"
-        "Отчёт: 2-4 предложения, МИНИМУМ 100 символов — что именно сделано, какие данные, что получилось."
+        "Если один инструмент не сработал — молча попробуй другой."
     )
 
 # Группы батчинга
@@ -1575,7 +1577,7 @@ class AnchorEngine:
                 if _is_noise_result:
                     _filter_reason = 'noise'
 
-                # ── Dedup: не отправлять если похожее сообщение было недавно ──
+                # ── Dedup: не отправлять если ПОЧТИ ИДЕНТИЧНОЕ сообщение было недавно ──
                 if not _is_noise_result and _result_clean:
                     try:
                         _recent_proactives = session.query(Interaction.content).filter(
@@ -1583,16 +1585,23 @@ class AnchorEngine:
                             Interaction.message_type == 'proactive',
                             Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
                         ).order_by(Interaction.created_at.desc()).limit(6).all()
-                        _new_prefix = _result_clean[:120].lower()
+                        _new_words = set(_result_clean.lower().split())
                         for (_rp_content,) in _recent_proactives:
                             try:
                                 _rp_text = json.loads(_rp_content).get('text', '')
                             except Exception:
                                 _rp_text = _rp_content or ''
-                            if _rp_text and _rp_text[:120].lower() == _new_prefix:
+                            if not _rp_text:
+                                continue
+                            _old_words = set(_rp_text.lower().split())
+                            # Dedup только если тексты ПОЧТИ ИДЕНТИЧНЫ (>85% совпадение слов)
+                            _common = len(_new_words & _old_words)
+                            _total = max(len(_new_words | _old_words), 1)
+                            if _common / _total > 0.85:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup'
-                                logger.info("[ANCHOR-AUTOPILOT] dedup: skipping similar message from %s", agent_name)
+                                logger.info("[ANCHOR-AUTOPILOT] dedup: %.0f%% overlap with recent msg from %s",
+                                            _common / _total * 100, agent_name)
                                 break
                     except Exception:
                         pass
