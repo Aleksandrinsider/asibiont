@@ -3092,12 +3092,12 @@ class AnchorEngine:
         if not active_goals:
             return []
 
-        # ── ЖЁСТКИЙ GUARD: не создавать якорь если dispatch был меньше 60 минут назад ──
+        # ── ЖЁСТКИЙ GUARD: не создавать якорь если dispatch был меньше 15 минут назад ──
         from models import AgentActivityLog as _AAL_guard
         _last_dispatch = session.query(_AAL_guard).filter(
             _AAL_guard.user_id == user.id,
             _AAL_guard.activity_type == 'goal_autopilot_dispatch',
-            _AAL_guard.created_at >= now_utc - timedelta(minutes=60),
+            _AAL_guard.created_at >= now_utc - timedelta(minutes=15),
         ).first()
         if _last_dispatch:
             return []
@@ -3262,7 +3262,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=1.0,
+            cooldown_hours=0.25,
             batch_group='goals',
         )]
 
