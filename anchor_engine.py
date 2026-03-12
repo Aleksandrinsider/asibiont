@@ -1308,6 +1308,14 @@ class AnchorEngine:
                 anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
 
+                # ── Биллинг кастомного агента (роялти автору) ──
+                if getattr(chosen, 'id', 0) != 0:
+                    from ai_integration.user_agents import bill_agent_message as _bam_ap
+                    _bill = _bam_ap(user.telegram_id, chosen.id, session=session)
+                    if not _bill.get('success'):
+                        logger.info("[ANCHOR-AUTOPILOT] user %d: skip — agent billing failed: %s", user.id, _bill.get('error', ''))
+                        return
+
                 _raw = await asyncio.wait_for(
                     _exec_agent_for_director(
                         agent_data, task_text, user.telegram_id,
@@ -1568,6 +1576,14 @@ class AnchorEngine:
                         'avatar_url': _safe_avatar(chosen.avatar_url, chosen.id),
                         'tools': _jd.loads(chosen.tools_allowed or '[]'),
                     }
+
+                    # ── Биллинг кастомного агента (роялти автору) ──
+                    if getattr(chosen, 'id', 0) != 0:
+                        from ai_integration.user_agents import bill_agent_message as _bam_ev
+                        _bill_ev = _bam_ev(user.telegram_id, chosen.id, session=_s)
+                        if not _bill_ev.get('success'):
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — agent billing failed: %s", user.id, chosen.name, _bill_ev.get('error', ''))
+                            continue
 
                     # Запускаем агента и при необходимости продолжаем цепочку
                     try:
@@ -1849,6 +1865,14 @@ class AnchorEngine:
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s)",
                 user.id, prev_agent.name, _next_ag.name, _next_task[:80],
             )
+
+            # ── Биллинг кастомного агента (роялти автору) ──
+            if getattr(_next_ag, 'id', 0) != 0:
+                from ai_integration.user_agents import bill_agent_message as _bam_ch
+                _bill_ch = _bam_ch(user.telegram_id, _next_ag.id, session=session)
+                if not _bill_ch.get('success'):
+                    logger.info("[ANCHOR-CHAIN] user %d: skip chain — agent billing failed: %s", user.id, _bill_ch.get('error', ''))
+                    return
 
             _next_raw = await asyncio.wait_for(
                 _exec_agent_for_director(
