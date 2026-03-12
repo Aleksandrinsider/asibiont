@@ -6969,8 +6969,8 @@ async def api_interactions_handler(request):
                         _check_text = _jp['text'].strip()
                 except Exception:
                     pass
-            # Skip noise messages (short AI/agent/proactive messages matching noise patterns)
-            if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 200:
+            # Skip noise messages (very short AI/agent messages with template text)
+            if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 60:
                 if any(n in _check_text for n in _NOISE_PATTERNS):
                     continue
             # Time-window dedup: skip if exact same content appeared in last 5 minutes

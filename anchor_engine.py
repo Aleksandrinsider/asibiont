@@ -137,163 +137,10 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
 }
 
 
-# ── Адаптивный промпт автопилота: стратегия подбирается под категорию целей ──
-
-_AUTOPILOT_STRATEGIES: dict[str, str] = {
-    # Привлечение пользователей / маркетинг / продажи / бизнес-рост
-    'outreach': (
-        "ПРИОРИТЕТ ДЕЙСТВИЙ (ВЫБЕРИ подходящее для ситуации, НЕ следуй списку по порядку):\n"
-        "  • web_search — ищи КОНКРЕТНЫХ людей/ресурсы: '[роль] email [город/ниша]', '[ниша] telegram каналы', 'site:linkedin.com [запрос]'\n"
-        "  • find_relevant_contacts_for_task — поиск на платформе\n"
-        "  • find_and_message_relevant_users — найти + написать на платформе\n"
-        "  • save_email_contact + send_outreach_email — если нашёл email → сохрани и напиши\n"
-        "  • create_post + publish_to_telegram / publish_to_discord — объявление/контент с призывом к действию\n"
-        "  • research_topic — анализ каналов привлечения: где искать ЦА для ЭТОЙ цели\n"
-        "  • delegate_task — поручи задачу агенту-специалисту\n"
-        "  • start_delegation_campaign — массовый поиск исполнителей\n"
-        "ПОДХОД: определи ЛУЧШИЙ канал для этой задачи (соцсети, email, платформа, контент) и действуй через него.\n"
-        "Варьируй подходы: если email не подходит — используй контент, поиск контактов, делегирование."
-    ),
-    # Обучение / саморазвитие / навыки
-    'learning': (
-        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
-        "  1. research_topic(depth='deep') — найди лучшие материалы, курсы, статьи по теме\n"
-        "  2. add_task — создай конкретную учебную задачу (прочитать главу, пройти урок, решить задачу)\n"
-        "  3. get_news_trends — новости и тренды в области обучения\n"
-        "  4. create_post — оформи конспект или заметку по изученному материалу\n"
-        "  5. update_goal_progress — обнови прогресс после каждого шага\n"
-        "ПОДХОД: разбивай обучение на маленькие ежедневные шаги. Находи конкретные ресурсы."
-    ),
-    # Здоровье / спорт / привычки
-    'health': (
-        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
-        "  1. add_task — создай конкретную задачу-привычку (тренировка, питание, сон, медитация)\n"
-        "  2. research_topic — найди научные рекомендации по теме здоровья\n"
-        "  3. update_goal_progress — обнови прогресс (вес, тренировки, дни без вредных привычек)\n"
-        "  4. get_news_trends — тренды в области здоровья и фитнеса\n"
-        "  5. create_post — мотивационная запись о прогрессе\n"
-        "ПОДХОД: маленькие ежедневные шаги, трекинг метрик, напоминания о привычках."
-    ),
-    # Творчество / контент / дизайн
-    'creative': (
-        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
-        "  1. research_topic — вдохновение, референсы, тренды в нише\n"
-        "  2. create_post — создай черновик контента (текст, идея, сценарий)\n"
-        "  3. generate_image — сгенерируй визуал для проекта\n"
-        "  4. publish_to_telegram / publish_to_discord — опубликуй готовый контент\n"
-        "  5. add_task — задача на следующий этап (редактура, публикация, продвижение)\n"
-        "  6. start_content_campaign — запусти серию публикаций\n"
-        "ПОДХОД: креативный поиск → создание → публикация → анализ реакции."
-    ),
-    # Финансы / инвестиции / экономия
-    'finance': (
-        "ПРИОРИТЕТ ДЕЙСТВИЙ:\n"
-        "  1. research_topic(depth='deep') — анализ рынка, инвестиций, финансовых инструментов\n"
-        "  2. get_news_trends — финансовые новости и тренды\n"
-        "  3. add_task — конкретный финансовый шаг (оплатить, проверить, перевести)\n"
-        "  4. create_post — записать финансовый план или анализ\n"
-        "  5. update_goal_progress — обнови метрику (накоплено, заработано, сэкономлено)\n"
-        "ПОДХОД: анализ → конкретное действие → отслеживание результата."
-    ),
-    # Проект / разработка / техническая задача
-    'project': (
-        "ПРИОРИТЕТ ДЕЙСТВИЙ (ВЫБЕРИ подходящее):\n"
-        "  • add_task — декомпозиция: создай подзадачу для следующего этапа\n"
-        "  • research_topic — технические решения, библиотеки, best practices\n"
-        "  • web_search — найди конкретное решение, документацию, примеры\n"
-        "  • delegate_task — поручи задачу специалисту (агенту или человеку)\n"
-        "  • run_agent_action — запусти скрипт/интеграцию если агент настроен\n"
-        "  • create_post — оформи технический отчёт или документацию\n"
-        "  • update_goal_progress — обнови прогресс проекта\n"
-        "ПОДХОД: декомпозиция → исследование → действие → делегирование если нужно."
-    ),
-    # Универсальная стратегия (если категория не определена)
-    'general': (
-        "Проанализируй цель пользователя и определи ЛУЧШЕЕ действие:\n"
-        "  • Нужна информация → research_topic / web_search\n"
-        "  • Нужны люди → find_relevant_contacts_for_task / web_search / find_and_message_relevant_users\n"
-        "  • Нужен контент → create_post / publish_to_telegram / generate_image\n"
-        "  • Нужна декомпозиция → add_task (подзадача)\n"
-        "  • Можно делегировать → delegate_task / start_delegation_campaign\n"
-        "  • Есть email контакт → send_outreach_email\n"
-        "  • Нужен прогресс → update_goal_progress\n"
-        "ПОДХОД: определи ЧТО сейчас мешает прогрессу цели и устрани именно это."
-    ),
-}
-
-# Маппинг категорий целей → ключ стратегии
-_GOAL_CATEGORY_MAP: dict[str, str] = {
-    'business': 'outreach', 'career': 'outreach',
-    'marketing': 'outreach', 'sales': 'outreach', 'growth': 'outreach',
-    'learning': 'learning', 'education': 'learning', 'study': 'learning',
-    'skill': 'learning', 'development': 'learning',
-    'health': 'health', 'fitness': 'health', 'sport': 'health',
-    'wellness': 'health', 'habit': 'health',
-    'creative': 'creative', 'content': 'creative', 'design': 'creative',
-    'writing': 'creative', 'art': 'creative', 'music': 'creative',
-    'finance': 'finance', 'money': 'finance', 'investment': 'finance',
-    'savings': 'finance', 'budget': 'finance',
-    'project': 'project', 'product': 'project', 'tech': 'project',
-    # 'work' и 'personal' слишком общие — не маппим, определяем по ключевым словам
-}
-
-# Ключевые слова в названии цели → стратегия (fallback если категория не задана)
-_GOAL_TITLE_KEYWORDS: dict[str, list[str]] = {
-    'outreach': ['привлечь', 'найти пользовател', 'найти клиент', 'найти тестировщик',
-                 'продажи', 'клиенты', 'подписчик', 'аудитори', 'outreach', 'лиды',
-                 'пользовател', 'продвижени', 'маркетинг', 'реклам', 'привлечени',
-                 'нетворк', 'b2b', 'лидогенерац', 'трафик', 'конверси',
-                 'найти партнёр', 'найти инвестор', 'найти специалист', 'найти сотрудник'],
-    'learning': ['выучить', 'изучить', 'научиться', 'курс', 'обучени', 'навык',
-                 'learn', 'study', 'practice', 'прочитать', 'учебник', 'экзамен', 'сертификат',
-                 'английск', 'язык', 'програм'],
-    'health': ['похудеть', 'тренировк', 'здоровье', 'спорт', 'фитнес', 'привычк',
-               'бросить', 'медитац', 'сон', 'питани', 'вес ', 'бег', 'зарядк', 'йога'],
-    'creative': ['написать', 'создать контент', 'блог', 'видео', 'подкаст', 'дизайн',
-                 'рисова', 'музык', 'сценарий', 'публикац', 'книг', 'роман', 'статью',
-                 'reels', 'shorts', 'tiktok', 'youtube', 'стрим'],
-    'finance': ['заработать', 'накопить', 'инвестиц', 'бюджет', 'доход', 'экономи',
-                'финанс', 'прибыль', 'revenue', 'крипт', 'биткоин', 'портфел'],
-    'project': ['разработ', 'проект', 'запуск', 'mvp', 'релиз', 'deploy', 'систем',
-                'приложени', 'бот', 'сайт', 'платформ', 'стартап', 'startup',
-                'автоматизац', 'интеграц', 'api'],
-}
-
-
-def _detect_goal_strategy(goals_summary: list) -> str:
-    """Определяет оптимальную стратегию автопилота по категориям и названиям целей."""
-    strategy_votes: dict[str, int] = {}
-
-    for g in goals_summary:
-        cat = (g.get('category') or '').lower().strip()
-        title = (g.get('title') or '').lower()
-        desc = (g.get('description') or '').lower()
-        combined = title + ' ' + desc
-
-        # 1. По категории цели
-        if cat in _GOAL_CATEGORY_MAP:
-            s = _GOAL_CATEGORY_MAP[cat]
-            strategy_votes[s] = strategy_votes.get(s, 0) + 2
-
-        # 2. По ключевым словам в названии/описании
-        for strategy, keywords in _GOAL_TITLE_KEYWORDS.items():
-            for kw in keywords:
-                if kw in combined:
-                    strategy_votes[strategy] = strategy_votes.get(strategy, 0) + 1
-                    break
-
-    if not strategy_votes:
-        return 'general'
-
-    return max(strategy_votes, key=strategy_votes.get)
-
-
 def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
-    """Строит адаптивный промпт автопилота на основе категорий целей и каналов пользователя."""
-    strategy = _detect_goal_strategy(goals_summary)
-    strategy_block = _AUTOPILOT_STRATEGIES.get(strategy, _AUTOPILOT_STRATEGIES['general'])
+    """Строит адаптивный промпт автопилота — AI сам выбирает стратегию по контексту целей."""
 
-    # Определяем доступные каналы пользователя для подсказки AI
+    # Определяем доступные каналы пользователя
     channels_hint = ""
     if user:
         _channels = []
@@ -308,14 +155,37 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         else:
             channels_hint = "\nУ пользователя нет подключённых каналов — используй платформу (поиск контактов, посты в ленту, задачи).\n"
 
+    # Краткое описание целей для контекста AI
+    _goals_desc = '; '.join(
+        f"{g.get('title', '?')} ({g.get('progress', 0)}%)"
+        for g in goals_summary[:5]
+    )
+
     return (
         "Продвинь цель пользователя на один конкретный шаг вперёд.\n"
         "Анализ → выбор → РЕАЛЬНОЕ действие. Не планируй — ДЕЛАЙ.\n\n"
+        f"ЦЕЛИ: {_goals_desc}\n"
+        f"{channels_hint}\n"
         "ВАЖНО: твой текстовый ответ увидит пользователь в Telegram. Пиши кратко (2-4 предложения), "
         "только ФАКТЫ: что конкретно ты сделал и что получилось. Не пиши служебную информацию, "
-        "не сообщай об ошибках сервисов (DuckDuckGo, таймаут и т.п.) — просто используй другой инструмент.\n"
-        f"{channels_hint}\n"
-        f"{strategy_block}\n\n"
+        "не сообщай об ошибках сервисов (DuckDuckGo, таймаут и т.п.) — просто используй другой инструмент.\n\n"
+        "ДОСТУПНЫЕ ИНСТРУМЕНТЫ (выбери 1-2 самых эффективных для ЭТОЙ ситуации):\n"
+        "  • web_search — поиск людей, ресурсов, решений\n"
+        "  • research_topic — глубокий анализ темы\n"
+        "  • find_relevant_contacts_for_task / find_and_message_relevant_users — поиск людей на платформе\n"
+        "  • save_email_contact + send_outreach_email — email-аутрич\n"
+        "  • create_post + publish_to_telegram / publish_to_discord — контент\n"
+        "  • generate_image — визуал для контента\n"
+        "  • add_task — конкретная подзадача для пользователя\n"
+        "  • delegate_task — поручить агенту-специалисту\n"
+        "  • run_agent_action — запуск скрипта/интеграции\n"
+        "  • start_delegation_campaign / start_content_campaign — массовые кампании\n"
+        "  • update_goal_progress — обнови прогресс после действия\n\n"
+        "ЛОГИКА ВЫБОРА (думай сам, не следуй списку по порядку):\n"
+        "  - Что мешает прогрессу конкретно сейчас?\n"
+        "  - Какой инструмент даст максимум результата за 1 вызов?\n"
+        "  - Что НЕ делалось раньше? (см. раздел ЗАБЛОКИРОВАННЫЕ)\n"
+        "  - Если один подход не работает — переключись на другой\n\n"
         "НЕ ДЕЛАЙ:\n"
         "  - НЕ вызывай list_tasks/list_goals/get_system_status — данные уже в контексте\n"
         "  - НЕ повторяй инструменты из раздела ЗАБЛОКИРОВАННЫЕ\n"
@@ -323,7 +193,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         "  - НЕ пиши 'Задачу выполнил' без реального инструмента\n\n"
         "Каждый цикл = одно конкретное ДЕЙСТВИЕ + update_goal_progress.\n"
         "Если один инструмент не сработал — молча попробуй другой, НЕ сообщай пользователю об ошибке.\n"
-        "Если ВСЕ подходы по теме исчерпаны — переключись на другой тип действия из списка.\n"
         "Отчёт: 2-4 предложения — что сделано и что получено."
     )
 
@@ -1551,23 +1420,30 @@ class AnchorEngine:
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
 
                 # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
-                _NOISE_PREFIXES = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена',
-                                   'веб-поиск временно', 'duckduckgo не', 'сервис недоступ',
-                                   'задача создана', 'понял задачу')
                 _result_clean = (result or '').strip()
                 _result_lower = _result_clean.lower()
                 # Динамический список всех агентов для фильтрации утечек делегаций
                 _all_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
-                # Если агент реально вызвал инструменты — результат значимый,
-                # даже если текст шаблонный (email отправлен, задача создана и т.д.)
+                # Если агент реально вызвал инструменты — результат значимый
                 _has_real_actions = bool(_tools_used)
+
+                # Контекстный noise-фильтр: не блокируем по префиксам,
+                # а оцениваем реальную ценность ответа
+                _EMPTY_RESPONSES = {
+                    'задачу выполнил', 'задачу выполнила', 'данных нет',
+                    'задача выполнена', 'понял задачу', 'принял в работу',
+                    'задачу принял', 'задачу приняла',
+                }
                 _is_noise_result = (
+                    # Шум: нет инструментов + пустой/шаблонный ответ
                     not _has_real_actions and (
-                        len(_result_clean) < 20
-                        or _result_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
-                        or any(_result_lower.startswith(p) for p in _NOISE_PREFIXES)
+                        len(_result_clean) < 15
+                        or _result_lower.rstrip('.!') in _EMPTY_RESPONSES
                     )
-                    # Фильтруем обращения к другим агентам (утечки делегаций) — всегда
+                    # Шум: ответ содержит ТОЛЬКО техническую ошибку без полезной информации
+                    or (not _has_real_actions and len(_result_clean) < 80
+                        and any(w in _result_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно', 'ошибка подключения')))
+                    # Утечки делегаций: ответ начинается с обращения к другому агенту
                     or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
                 )
 
@@ -2007,15 +1883,16 @@ class AnchorEngine:
                 "role": "user",
                 "content": (
                     f"Задача: {task_text[:200]}\n"
-                    f"Агент {prev_agent.name} выполнил: {result[:400]}\n\n"
-                    f"Другие агенты команды: {_agents_desc}\n\n"
-                    "Нужен ли ДРУГОЙ агент чтобы продолжить/дополнить результат?\n"
-                    "Например: один исследовал → другой создаёт задачи; один нашёл контакты → другой пишет письма.\n"
-                    "Если задача решена или нет подходящего агента — {\"continue\": false}\n"
-                    "Если нужен другой агент — {\"continue\": true, \"agent_name\": \"имя\", \"task\": \"конкретное задание\"}\n"
-                    "Только JSON, без ```:"
+                    f"{prev_agent.name} сделал: {result[:400]}\n\n"
+                    f"Команда: {_agents_desc}\n\n"
+                    "Результат достаточен или нужен другой агент для следующего шага?\n"
+                    "Примеры цепочек: исследование → задачи; поиск контактов → письма; анализ → контент.\n"
+                    "Если задача решена — {\"continue\": false}\n"
+                    "Если нужен агент — {\"continue\": true, \"agent_name\": \"имя\", "
+                    "\"task\": \"конкретное задание на основе результата\"}\n"
+                    "JSON:"
                 ),
-            }], max_tokens=100)
+            }], max_tokens=120)
 
             if not _analysis:
                 return
@@ -2087,22 +1964,29 @@ class AnchorEngine:
                 'avatar_url': _safe_avatar(_next_ag.avatar_url, _next_ag.id),
                 'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
             }
-            _ctx = f"Предыдущий результат от {prev_agent.name}:\n{result[:300]}"
+            _ctx = (
+                f"{prev_agent.name} уже сделал:\n{result[:300]}\n\n"
+                f"Продолжи работу — используй его результат как основу. "
+                f"Отчитайся пользователю: что ты сделал и что получилось."
+            )
 
             # ── Уведомление о передаче между агентами ──
-            # Пользователь видит, как один агент передаёт задачу другому
-            _transfer_text = f"📋 {prev_agent.name} → {_next_ag.name}: {_next_task[:200]}"
+            # Передача от имени предыдущего агента — естественная коммуникация
+            _transfer_text = f"Передаю {_next_ag.name}: {_next_task[:200]}"
             if self.bot:
                 try:
-                    await self.bot.send_message(chat_id=user.telegram_id, text=_transfer_text)
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=f"{prev_agent.name}:\n\n{_transfer_text}",
+                    )
                 except Exception:
                     pass
-            # Сохраняем в interaction для web-чата
+            # Сохраняем в interaction для web-чата (от имени передающего агента)
             _transfer_content = json.dumps({
                 '__agent': {
-                    'name': 'ASI Biont',
-                    'id': 0,
-                    'avatar_url': '',
+                    'name': prev_agent.name,
+                    'id': getattr(prev_agent, 'id', 0),
+                    'avatar_url': _safe_avatar(getattr(prev_agent, 'avatar_url', ''), getattr(prev_agent, 'id', 0)),
                 },
                 'text': _transfer_text,
                 '__anchor_type': 'agent_chain_transfer',
@@ -2165,17 +2049,20 @@ class AnchorEngine:
             # Отправляем результат следующего агента пользователю (с noise-фильтром)
             _chain_clean = (_next_result or '').strip()
             _chain_lower = _chain_clean.lower()
-            _NOISE_PREFIXES_CHAIN = ('задачу выполнил', 'данных нет', 'нет данных', 'задача выполнена',
-                                     'веб-поиск временно', 'duckduckgo не', 'сервис недоступ',
-                                     'задача создана', 'понял задачу')
+            _EMPTY_RESPONSES_CHAIN = {
+                'задачу выполнил', 'задачу выполнила', 'данных нет',
+                'задача выполнена', 'понял задачу', 'принял в работу',
+                'задачу принял', 'задачу приняла',
+            }
             _chain_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
             _chain_has_actions = bool(_chain_tools_used)
             _chain_is_noise = (
                 not _chain_has_actions and (
-                    len(_chain_clean) < 20
-                    or _chain_lower.rstrip('.!') in ('задачу выполнил', 'задачу выполнила', 'данных нет', 'задача выполнена', 'понял задачу')
-                    or any(_chain_lower.startswith(p) for p in _NOISE_PREFIXES_CHAIN)
+                    len(_chain_clean) < 15
+                    or _chain_lower.rstrip('.!') in _EMPTY_RESPONSES_CHAIN
                 )
+                or (not _chain_has_actions and len(_chain_clean) < 80
+                    and any(w in _chain_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно')))
                 or any(_chain_lower.startswith(n.lower() + ',') for n in _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
