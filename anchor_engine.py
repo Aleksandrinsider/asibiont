@@ -1343,6 +1343,15 @@ class AnchorEngine:
                     + "\n".join(_missing_intg_notes)
                 )
 
+            # ── Предупреждения о достижимости целей ──
+            _feasibility = data.get('feasibility_warnings', [])
+            if _feasibility:
+                task_text += (
+                    "\n\n🎯 ОЦЕНКА ДОСТИЖИМОСТИ:\n"
+                    + '\n'.join(f"  {w}" for w in _feasibility)
+                    + "\n  Если видишь стагнацию или нехватку инструментов — НАПИШИ пользователю что нужно сделать."
+                )
+
             if agents:
                 # ── ROUND-ROBIN для goal_autopilot_review: агенты чередуются строго ──
                 # AI-выбор всегда жмёт на ASI (specialization=goal_management) →
@@ -1696,6 +1705,12 @@ class AnchorEngine:
                     'проверил данные', 'проверила данные',
                     'выполнено', 'поиск завершён',
                 )
+                # Антиэхо: НЕЗАВИСИМО от tools_used — эхо-текст всегда noise
+                _is_echo = (
+                    any(w in _result_lower[:120] for w in ('смотрю, что уже сделано', 'смотрю что уже сделано', 'что уже сделано коллегами', 'что сделали коллеги', 'результаты коллег'))
+                    or any(_result_lower.startswith(p) for p in ('смотрю,', 'смотрю ', 'отлично, проанализировал', 'проанализировал'))
+                    and any(w in _result_lower[:150] for w in ('коллег', 'уже сделано', 'уже сделали', 'результаты команды'))
+                )
                 _is_noise_result = (
                     # Шум: нет инструментов + пустой/шаблонный ответ
                     not _has_real_actions and (
@@ -1708,10 +1723,8 @@ class AnchorEngine:
                     # Шум: инструменты вызваны, но текст короткий и шаблонный (нет фактов)
                     or (_has_real_actions and len(_result_clean) < 100
                         and any(p in _result_lower for p in _GENERIC_TOOL_PATTERNS))
-                    # Антиэхо: агент просто пересказывает что сделали коллеги
-                    or (_result_lower.startswith('смотрю') and any(w in _result_lower[:80] for w in ('коллег', 'уже сделано', 'уже сделали')))
-                    or (_result_lower.startswith('отлично') and 'коллег' in _result_lower[:80])
-                    or (_result_lower.startswith('проанализировал') and 'коллег' in _result_lower[:100])
+                    # Антиэхо: ВСЕГДА фильтруем эхо — даже если tools_used
+                    or _is_echo
                     # Утечки делегаций: ответ начинается с обращения к другому агенту
                     or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
                 )
@@ -1750,10 +1763,14 @@ class AnchorEngine:
                 # ── Watchdog: если >3ч без AP-сообщения — форсировать доставку ──
                 # Работает ПОСЛЕ noise + dedup фильтров — обходит оба
                 if _is_noise_result and _force_delivery and len(_result_clean) > 50:
-                    _is_noise_result = False
-                    logger.info("[ANCHOR-AUTOPILOT] watchdog override (%s): forcing delivery for %s (%d chars)",
-                                _filter_reason, agent_name, len(_result_clean))
-                    _filter_reason = ''
+                    # Watchdog НЕ обходит echo-фильтр — пересказы коллег бесполезны даже через 3ч
+                    if _filter_reason != 'noise' or not _is_echo:
+                        _is_noise_result = False
+                        logger.info("[ANCHOR-AUTOPILOT] watchdog override (%s): forcing delivery for %s (%d chars)",
+                                    _filter_reason, agent_name, len(_result_clean))
+                        _filter_reason = ''
+                    else:
+                        logger.info("[ANCHOR-AUTOPILOT] watchdog BLOCKED echo delivery for %s", agent_name)
 
                 if result and result.strip() and self.bot and not _is_noise_result:
                     try:
@@ -3831,6 +3848,43 @@ class AnchorEngine:
                 'capabilities': _ta_caps[:6],
             })
 
+        # ── Оценка достижимости целей текущими инструментами ──
+        _feasibility_warnings = []
+        _team_caps_all = set()
+        for tp in _team_profiles:
+            for c in tp.get('capabilities', []):
+                _team_caps_all.add(c.lower())
+        _has_email_cap = any(w in c for c in _team_caps_all for w in ('mail', 'почт', 'email', 'imap', 'smtp'))
+        _has_content_cap = any(w in c for c in _team_caps_all for w in ('telegram', 'discord', 'контент'))
+        _has_github_cap = any('github' in c for c in _team_caps_all)
+
+        for g in goals_summary:
+            _gt = g.get('title', '').lower()
+            _mt = g.get('metric_target')
+            _mc = g.get('metric_current', 0)
+            _gap = (_mt or 0) - (_mc or 0)
+
+            # Цель требует привлечения людей но нет email
+            if any(w in _gt for w in ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'лид', 'участник')) and _gap > 5:
+                if not _has_email_cap:
+                    _feasibility_warnings.append(
+                        f"⚠️ Цель '{g['title']}' требует привлечения людей, но НИ ОДИН агент не имеет Email-интеграции. "
+                        f"Добавь агенту SMTP/IMAP ключи для отправки outreach-писем."
+                    )
+                if not _has_content_cap and _gap > 20:
+                    _feasibility_warnings.append(
+                        f"💡 Для '{g['title']}' ({_gap} осталось) полезен Telegram-канал или Discord для массового охвата."
+                    )
+
+            # Стагнация: >12ч без реального прогресса
+            if actions_history and _mt:
+                _action_count = len(actions_history)
+                if _action_count >= 6 and _mc <= 1:
+                    _feasibility_warnings.append(
+                        f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, но реальный прогресс = {int(_mc)}/{int(_mt)}. "
+                        f"Текущая стратегия не работает. Сообщи пользователю что нужно сменить подход или добавить интеграции."
+                    )
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -3846,6 +3900,7 @@ class AnchorEngine:
             'failed_tools': {k: v for k, v in _failed_tools.items() if v >= 2},
             'tool_frequency': _tool_freq,
             'exhausted_strategies': exhausted_strategies,
+            'feasibility_warnings': _feasibility_warnings,
         }
 
         return [Anchor(

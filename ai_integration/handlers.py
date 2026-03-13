@@ -446,7 +446,19 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         return _t(user_id, 'task_title_empty')
     
     title = title.strip()
-    
+
+    # САНИТИЗАЦИЯ: убираем утечки system prompt из title
+    import re as _re_san
+    # Паттерны утечек: [РОЛЬ], [АВТОПИЛОТ], ТВОЯ РОЛЬ:, etc.
+    if _re_san.match(r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН)\]?', title, _re_san.IGNORECASE):
+        title = _re_san.sub(r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН)\]?\s*:?\s*(Ты:?\s*)?', '', title, flags=_re_san.IGNORECASE).strip()
+    # Если после санитизации title стал > 80 символов или содержит personality-текст — берём первые 8 слов
+    if len(title) > 80 or any(p in title.lower() for p in ('специалист в команде', 'циник,', 'pr служба', 'координатор команды')):
+        _words = [w for w in title.split() if len(w) > 2][:8]
+        title = ' '.join(_words) if _words else title[:80]
+    if not title:
+        return 'Название задачи пустое после очистки.'
+
     # УМНОЕ СОКРАЩЕНИЕ НАЗВАНИЯ: если слишком длинное, пытаемся извлечь суть
     original_title = title
     word_count = len(title.split())
@@ -4265,6 +4277,19 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     return f"metric_current ({mc}) не больше текущего ({_old_mc}). Обновляй ТОЛЬКО когда нашёл РЕАЛЬНОГО нового пользователя/контакт."
                 if mc - _old_mc < 1.0:
                     return f"Прирост метрики слишком мал ({mc - _old_mc:.1f}). Увеличивай на целые единицы — 1 единица = 1 реальный найденный пользователь."
+                # RATE LIMIT: максимум 1 обновление метрики за 3 часа
+                try:
+                    from models import AgentActivityLog as _AAL_rl
+                    _recent_updates = session.query(_AAL_rl).filter(
+                        _AAL_rl.user_id == user.id,
+                        _AAL_rl.activity_type == 'goal_updated',
+                        _AAL_rl.ref_id == matched.id,
+                        _AAL_rl.created_at >= datetime.now() - timedelta(hours=3),
+                    ).count()
+                    if _recent_updates >= 1:
+                        return f"Метрика цели '{matched.title}' уже обновлялась менее 3ч назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
+                except Exception:
+                    pass
                 matched.metric_current = mc
                 pct = int(mc / matched.metric_target * 100)
                 pct = max(0, min(100, pct))

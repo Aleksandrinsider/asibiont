@@ -4761,18 +4761,24 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _final_text = ''  # слишком короткий текст без действий = noise
 
     # Шаблонные ответы с инструментами: "Выполнил поиск." — тоже noise
-    if _is_autopilot_task and _tools_used and _final_text:
+    if _is_autopilot_task and _final_text:
         _ft_lower = _final_text.strip().lower()
         _GENERIC_PATTERNS_AA = ('выполнил поиск', 'выполнила поиск', 'обновил прогресс',
                                 'обновила прогресс', 'провёл поиск', 'провела поиск')
         if len(_final_text.strip()) < 100 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
-        # Антиэхо: агент просто пересказывает что сделали коллеги (только если нет реальных tool-действий)
-        elif not _tools_used and (_ft_lower.startswith('смотрю') and any(w in _ft_lower[:80] for w in ('коллег', 'уже сделано', 'уже сделали'))):
+        # Антиэхо: ВСЕГДА фильтруем эхо — НЕЗАВИСИМО от tools_used
+        elif any(w in _ft_lower[:120] for w in ('смотрю, что уже сделано', 'смотрю что уже сделано', 'что уже сделано коллегами', 'что сделали коллеги', 'результаты коллег')):
             logger.info("[DIRECTOR-EXEC] autopilot echo filtered: %r", _final_text[:80])
             _final_text = ''
-        elif not _tools_used and _ft_lower.startswith('проанализировал') and 'коллег' in _ft_lower[:100]:
+        elif any(_ft_lower.startswith(p) for p in ('смотрю,', 'смотрю ')) and any(w in _ft_lower[:150] for w in ('коллег', 'уже сделано', 'уже сделали')):
+            logger.info("[DIRECTOR-EXEC] autopilot echo filtered: %r", _final_text[:80])
+            _final_text = ''
+        elif _ft_lower.startswith('проанализировал') and 'коллег' in _ft_lower[:100]:
+            logger.info("[DIRECTOR-EXEC] autopilot echo filtered: %r", _final_text[:80])
+            _final_text = ''
+        elif _ft_lower.startswith('отлично') and any(w in _ft_lower[:120] for w in ('коллег', 'уже сделано', 'результат')):
             logger.info("[DIRECTOR-EXEC] autopilot echo filtered: %r", _final_text[:80])
             _final_text = ''
 
