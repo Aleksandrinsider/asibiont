@@ -7838,6 +7838,14 @@ class AnchorEngine:
                     _a2 = _s2.query(Anchor).filter_by(id=anchor.id).first()
                     if _a2 and not _a2.delivered_at:
                         _a2.delivered_at = datetime.now(timezone.utc)
+                        # Записываем ошибку в delivery_log чтобы видеть её в диагностике
+                        _err_log = AnchorDeliveryLog(
+                            user_id=_a2.user_id,
+                            anchor_ids=json.dumps([_a2.id]),
+                            message_text=f'[EMAIL_SILENT_ERROR] {_a2.anchor_type}: {str(e)[:300]}',
+                            anchor_types=json.dumps([_a2.anchor_type]),
+                        )
+                        _s2.add(_err_log)
                         _s2.commit()
                         logger.info(f"[ANCHOR] email_silent_anchor #{anchor.id}: marked delivered via fallback session after exception")
                 finally:
