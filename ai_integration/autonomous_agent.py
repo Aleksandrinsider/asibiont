@@ -3792,69 +3792,125 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     except Exception:
         pass
     # Строим чёткую строку о том что подключено и КАКОЙ инструмент использовать
+    # ── Универсальный _intg_line из лейблов _parse_agent_integrations ──────────
+    # Не проверяем сырые api_keys — работаем с нормализованными лейблами.
+    # Любая новая интеграция из _INTEGRATION_LABELS автоматически попадёт сюда.
     _intg_line = ''
     if _intg_hint:
-        _api_keys_str = (agent.get('user_api_keys') or '')
-        _email_accounts = []
-        for _kl in _api_keys_str.splitlines():
-            _kl = _kl.strip()
-            if _kl.startswith('GMAIL_USER='):
-                _email_accounts.append(_kl.split('=',1)[1].strip() + ' (Gmail)')
-            elif _kl.startswith('YANDEX_USER='):
-                _email_accounts.append(_kl.split('=',1)[1].strip() + ' (Яндекс)')
-            elif _kl.startswith('MAILRU_USER='):
-                _email_accounts.append(_kl.split('=',1)[1].strip() + ' (Mail.ru)')
+        # Категории определяются по тексту лейбла, а не по именам ключей
+        _EMAIL_LBL = ('почт', 'mail', 'imap', 'smtp', 'gmail', 'яндекс', 'resend', 'mailgun', 'sendgrid')
+        _CODE_LBL  = ('github', 'gitlab', 'bitbucket', 'gitea')
+        _RSS_LBL   = ('rss', 'лент', 'feed', 'новост', 'хабр')
+        _MSG_LBL   = ('slack', 'discord', 'telegram', 'whatsapp', 'вконтакт', 'viber')
+        _CRM_LBL   = ('crm', 'amocrm', 'битрикс', 'hubspot', 'pipedrive', 'salesforce', 'zoho')
+        _SHOP_LBL  = ('ozon', 'wildberries', 'авито', 'shopify', 'маркет', 'wb')
+        _SHEETS_LBL = ('sheets', 'airtable', 'notion', 'excel', 'таблиц', 'gspread')
+        _CRYPTO_LBL = ('binance', 'bybit', 'coinbase', 'крипт', 'биржа')
+        _AD_LBL    = ('директ', 'adwords', 'яндекс.директ', 'google ads', 'mytarget')
+        # Маппинг категории → (emoji, инструмент)
+        _CAT_MAP = [
+            (_EMAIL_LBL,  '📧', 'check_emails / send_email / list_email_contacts'),
+            (_CODE_LBL,   '💻', 'run_agent_action'),
+            (_RSS_LBL,    '📰', 'run_agent_action'),
+            (_MSG_LBL,    '💬', 'run_agent_action'),
+            (_CRM_LBL,    '🤝', 'run_agent_action'),
+            (_SHOP_LBL,   '🛒', 'run_agent_action'),
+            (_SHEETS_LBL, '📊', 'run_agent_action'),
+            (_CRYPTO_LBL, '📈', 'run_agent_action'),
+            (_AD_LBL,     '📣', 'run_agent_action'),
+        ]
         _intg_parts = []
-        if _email_accounts:
-            _intg_parts.append(f"📧 Почта: {', '.join(_email_accounts)} — используй check_emails, send_email, list_email_contacts")
-        _has_rss = any(w in (agent.get('user_api_keys','') or '').upper() for w in ('RSS_URL','FEED_URL')) \
-                   or any(w in (agent.get('python_code','') or '').lower() for w in ('feedparser','rss'))
-        if _has_rss:
-            _rss_url = next((l.split('=',1)[1].strip() for l in _api_keys_str.splitlines() if l.strip().upper().startswith('RSS_URL=')), 'RSS')
-            _intg_parts.append(f"📰 RSS: {_rss_url} — используй run_agent_action")
-        _has_github = 'GITHUB_TOKEN=' in _api_keys_str.upper()
-        if _has_github:
-            _intg_parts.append("💻 GitHub — используй run_agent_action")
-        # остальные интеграции — кратко
-        _rest = [h for h in _intg_hint[:6] if not any(x in h.lower() for x in ('gmail','яндекс','mail.ru','rss','github'))]
-        if _rest:
-            _intg_parts.append(f"🔧 Ещё: {', '.join(_rest[:4])}")
-        _intg_line = '\nПодключено у тебя: ' + ' | '.join(_intg_parts) if _intg_parts else ''
+        _seen_emojis: set = set()
+        for _ih in _intg_hint[:8]:
+            _ih_low = _ih.lower()
+            _em, _tool = '🔧', 'run_agent_action'
+            for _kws, _e, _t in _CAT_MAP:
+                if any(w in _ih_low for w in _kws):
+                    _em, _tool = _e, _t
+                    break
+            # Для почты — добавляем аккаунт из ключей если есть
+            _acc = ''
+            if _em == '📧' and '📧' not in _seen_emojis:
+                _acc = next((
+                    lk.split('=', 1)[1].strip()
+                    for lk in (agent.get('user_api_keys') or '').splitlines()
+                    if '=' in lk and any(
+                        f'{p}_USER' in lk.upper()
+                        for p in ('GMAIL', 'YANDEX', 'MAILRU', 'IMAP', 'EMAIL', 'SMTP')
+                    )
+                ), '')
+            _label = f"{_em} {_ih}" + (f" ({_acc})" if _acc else '') + f" → {_tool}"
+            _intg_parts.append(_label)
+            _seen_emojis.add(_em)
+        _intg_line = '\nПодключено у тебя:\n  ' + '\n  '.join(_intg_parts) if _intg_parts else ''
 
-    # Роле-специфичные инструкции для автопилота: агенты с интеграциями должны ИХ использовать
+    # ── Универсальные подсказки по действиям из лейблов интеграций ─────────────
+    # Работаем с _intg_hint (уже нормализованные лейблы) — не трогаем сырые api_keys.
+    # Новые интеграции из _INTEGRATION_LABELS будут корректно распознаны автоматически.
     _intg_action_hint = ""
     if _intg_hint and _is_autopilot_task:
-        _api_keys_lower = (agent.get('user_api_keys') or '').lower()
-        _pc_lower = (agent.get('python_code') or '').lower()
         _hints = []
-        if any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'mail', 'resend')):
+        _lbl_text = ' '.join(h.lower() for h in _intg_hint)  # всё в одну строку для проверки
+        _has_email_h = any(w in _lbl_text for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun'))
+        _has_code_h  = any(w in _lbl_text for w in ('github', 'gitlab', 'bitbucket'))
+        _has_rss_h   = any(w in _lbl_text for w in ('rss', 'лент', 'feed'))
+        _has_msg_h   = any(w in _lbl_text for w in ('slack', 'discord', 'telegram', 'whatsapp'))
+        _has_crm_h   = any(w in _lbl_text for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'pipedrive'))
+        _has_shop_h  = any(w in _lbl_text for w in ('ozon', 'wildberries', 'авито', 'shopify'))
+        _has_sheets_h = any(w in _lbl_text for w in ('sheets', 'airtable', 'notion'))
+        _other_h = [
+            h for h in _intg_hint
+            if not any(w in h.lower() for w in (
+                'почт','mail','imap','smtp','gmail','github','gitlab',
+                'rss','лент','feed','slack','discord','telegram',
+                'crm','amocrm','битрикс','hubspot','ozon','wildberries',
+                'авито','shopify','sheets','airtable','notion',
+            ))
+        ]
+        if _has_email_h:
             _hints.append(
-                "\n\n📧 У тебя есть EMAIL-интеграция. ПРИОРИТЕТ: "
-                "проверь входящие (check_emails) — если кто-то ответил, это самое ценное. "
-                "Или используй контакты из list_email_contacts → отправь outreach письма."
+                "\n\n📧 Email-интеграция. ПРИОРИТЕТ: "
+                "проверь входящие (check_emails) — ответы важнее нового поиска. "
+                "Или: list_email_contacts → send_outreach_email."
             )
-        if any(w in _api_keys_lower for w in ('github', 'gitlab')):
+        if _has_code_h:
             _hints.append(
-                "\n\n💻 У тебя есть GitHub/GitLab — ГЛАВНЫЙ инструмент поиска людей. ПРИОРИТЕТ: "
-                "ищи разработчиков, контрибьюторов, issues через run_agent_action. "
-                "НЕ используй web_search для поиска людей — ищи через GitHub API."
+                "\n\n💻 GitHub/GitLab. Главный канал поиска людей — "
+                "ищи разработчиков и контакты через run_agent_action. "
+                "web_search — только для тем/контекста."
             )
-        if any(w in _api_keys_lower for w in ('rss', 'feed', 'habr')) or any(w in _pc_lower for w in ('feedparser', 'rss', 'habr')):
+        if _has_rss_h:
             _hints.append(
-                "\n\n📰 У тебя есть RSS/новостная интеграция. ПРИОРИТЕТ: "
-                "загрузи данные через run_agent_action и используй найденную информацию "
-                "для создания задач, контактов, или делегирования коллегам."
+                "\n\n📰 RSS/лента. Загрузи данные через run_agent_action — "
+                "используй для задач, контактов и делегирования."
             )
-        if any(w in _api_keys_lower for w in ('slack', 'discord', 'telegram')):
+        if _has_msg_h:
             _hints.append(
-                "\n\n💬 У тебя есть мессенджер-интеграция. ПРИОРИТЕТ: "
-                "используй для рассылки или мониторинга каналов."
+                "\n\n💬 Мессенджер. Рассылка / мониторинг каналов через run_agent_action."
             )
-        # Общее правило: web_search — для исследований, НЕ для поиска людей
+        if _has_crm_h:
+            _hints.append(
+                "\n\n🤝 CRM. Обнови статус сделок, проверь новые лиды через run_agent_action."
+            )
+        if _has_shop_h:
+            _hints.append(
+                "\n\n🛒 Маркетплейс. Проверь заказы / аналитику продаж через run_agent_action."
+            )
+        if _has_sheets_h:
+            _hints.append(
+                "\n\n📊 Таблицы/Notion. Обнови данные или выгрузи отчёт через run_agent_action."
+            )
+        if not _hints and _other_h:
+            # Неизвестная интеграция — даём общую инструкцию с её названием
+            _other_names = ', '.join(h.split('(')[0].strip() for h in _other_h[:3])
+            _hints.append(
+                f"\n\n🔧 Твои интеграции: {_other_names}. "
+                "Используй их через run_agent_action — это твой главный канал действий."
+            )
         if _hints:
             _hints.append(
-                "\n\n🔎 web_search и research_topic — ТОЛЬКО для исследований тем, трендов, аналитики. "
-                "Для поиска людей и контактов — используй СВОИ интеграции (GitHub, email, RSS)."
+                "\n\nweb_search / research_topic — для исследований и фоновой информации. "
+                "Свои интеграции — для реальных действий с данными."
             )
         _intg_action_hint = ''.join(_hints[:3])
 
@@ -4242,21 +4298,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'research_topic', 'web_search', 'quick_topic_search',
                 'delegate_task', 'run_agent_action',
             }
-            # Smart extend: добавляем инструменты по специализации и интеграциям агента
+            # Smart extend: добавляем инструменты по специализации и интеграциям агента.
+            # Используем _intg_hint (лейблы из _parse_agent_integrations) — универсально
+            # для любых интеграций, без захардкоженных имён сервисов.
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
-            _api_keys_lower = (agent.get('user_api_keys') or '').lower()
-            _pc_lower = (agent.get('python_code') or '').lower()
-            # Email — только если агент связан с email
+            _lbl_ap = ' '.join(h.lower() for h in _intg_hint)  # все лейблы в одну строку
+            # Email — агент имеет почтовую интеграцию ИЛИ специализируется на email
             if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'crm', 'контакт', 'sales')) or
-                    any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'email', 'mail', 'resend')) or
-                    any(w in _pc_lower for w in ('imap', 'smtplib', 'email.mime'))):
+                    any(w in _lbl_ap for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun'))):
                 _autopilot_tools.update({
                     'send_email', 'check_emails', 'send_outreach_email', 'reply_to_outreach_email',
                     'start_email_campaign', 'list_email_contacts', 'save_email_contact',
                     'find_relevant_contacts_for_task', 'add_email_leads',
                 })
-            # Контент/маркетинг
-            if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram', 'pr ', 'пиар', 'копирайт', 'редактор', 'discord')):
+            # Контент/маркетинг — по специализации или мессенджер-интеграции
+            if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr ', 'пиар', 'копирайт', 'редактор')) or
+                    any(w in _lbl_ap for w in ('telegram', 'discord', 'slack', 'вконтакт'))):
                 _autopilot_tools.update({
                     'create_post', 'publish_to_telegram', 'publish_to_discord',
                     'generate_image', 'start_content_campaign', 'manage_content_campaign',
@@ -4265,9 +4322,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Аналитика/исследования
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _autopilot_tools.update({'get_news_trends', 'find_and_message_relevant_users'})
-            # RSS/мониторинг — агенты с RSS-лентами могут делегировать outreach и создавать контент
-            if (any(w in _api_keys_lower for w in ('rss', 'feed', 'habr')) or
-                    any(w in _pc_lower for w in ('feedparser', 'rss', 'atom'))):
+            # RSS/мониторинг — по лейблу интеграции
+            if any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')):
                 _autopilot_tools.update({
                     'get_news_trends', 'save_email_contact',
                     'find_relevant_contacts_for_task',
@@ -4279,6 +4335,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'send_outreach_email', 'save_email_contact',
                     'start_delegation_campaign', 'manage_delegation_campaign',
                 })
+            # CRM/маркетплейс/прочие интеграции — run_agent_action уже в core
+            if any(w in _lbl_ap for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'ozon', 'wildberries', 'авито', 'shopify')):
+                _autopilot_tools.update({'find_relevant_contacts_for_task', 'save_email_contact'})
             # Если у агента есть python_code или user_api_keys — run_agent_action уже в core
             logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
             try:
@@ -4290,11 +4349,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         else:
             # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
-            _api_keys_lower = (agent.get('user_api_keys') or '').lower()
+            _lbl_ch = ' '.join(h.lower() for h in _intg_hint)  # лейблы интеграций
             _inferred_tools: set[str] = set()
-            # Email — по специализации ИЛИ по наличию GMAIL/SMTP ключей
+            # Email — по специализации ИЛИ по лейблам интеграций (не по сырым ключам)
             if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach')) or
-                    any(w in _api_keys_lower for w in ('gmail', 'imap', 'smtp', 'email', 'mail'))):
+                    any(w in _lbl_ch for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun', 'sparkpost'))):
+
                 _inferred_tools.update({'send_email', 'check_emails', 'list_email_contacts', 'save_email_contact',
                                         'start_email_campaign', 'negotiate_by_email',
                                         'send_outreach_email', 'reply_to_outreach_email',
@@ -5089,8 +5149,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         return None
 
     # ── Ранний фильтр: вопрос без прямого обращения к агенту → ASI ответит сам ──
-    # Исключение: вопросы про интеграции агента (почта, GitHub) → нужен ЭТОТ агент
-    # Проверяем ДО тяжёлых DB-запросов (_build_user_context_sync, история)
+    # Исключение: вопрос упоминает слова из лейблов интеграций любого агента → нужен агент.
+    # Работаем с нормализованными лейблами _parse_agent_integrations — универсально для любых интеграций.
     if _is_question_message(user_message):
         _msg_lc_early = user_message.lower().strip()
         _has_agent_mention_early = any(
@@ -5098,20 +5158,29 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             and (_a.get('name') or '').lower() in _msg_lc_early
             for _a in _agents
         )
-        # Вопрос об интеграции конкретного агента: "что в почте?", "check github", "новые письма?"
         _integration_question = False
         if not _has_agent_mention_early:
-            _email_q = any(w in _msg_lc_early for w in (
-                'почт', 'письм', 'email', 'gmail', 'inbox', 'входящ', 'рассылк',
-            ))
-            _github_q = any(w in _msg_lc_early for w in ('github', 'gitlab', 'репо', 'коммит'))
+            # Слова сообщения (≥4 символов) — ищем пересечение с лейблами интеграций
+            _msg_words = {w for w in _msg_lc_early.split() if len(w) >= 4}
             for _a in _agents:
-                _ak = (_a.get('user_api_keys') or '').lower()
-                if _email_q and any(w in _ak for w in ('gmail', 'imap', 'smtp', 'mail')):
-                    _integration_question = True
-                    break
-                if _github_q and any(w in _ak for w in ('github', 'gitlab')):
-                    _integration_question = True
+                try:
+                    _a_intg = _parse_agent_integrations(
+                        _a.get('user_api_keys') or '',
+                        _a.get('python_code') or '',
+                        _a.get('tools_allowed') or '',
+                    )
+                except Exception:
+                    _a_intg = []
+                for _intg_label in _a_intg:
+                    # Слова из лейбла (напр. "Gmail (почта)" → {"gmail", "почта"})
+                    _label_words = {
+                        w.lower() for w in _intg_label.replace('(', ' ').replace(')', ' ').split()
+                        if len(w) >= 4
+                    }
+                    if _label_words & _msg_words:
+                        _integration_question = True
+                        break
+                if _integration_question:
                     break
         if not _has_agent_mention_early and not _integration_question:
             logger.debug("[DIRECTOR] early filter: question without agent mention, skip")

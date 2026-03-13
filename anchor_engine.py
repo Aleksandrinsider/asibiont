@@ -1706,27 +1706,35 @@ class AnchorEngine:
                 _chosen_avatar = agent_data.get('avatar_url', '')
 
                 # ── Координатор назначает задачу ПЕРЕД биллингом (всегда видно в чате) ──
+                # ИИ генерирует живое поручение — адаптируется под любого агента и его интеграции.
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
-                    _gl_titles = [g.get('title', '')[:40] for g in data.get('goals', [])[:2]]
+                    _gl_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:3]]
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
-                    # Определяем главную интеграцию агента → живое поручение под специализацию
-                    _api_keys_low = agent_data.get('user_api_keys', '').lower()
-                    if any(w in _api_keys_low for w in ('gmail', 'imap', 'smtp', 'mail')):
-                        _action_verb = "проверь почту и займись"
-                    elif any(w in _api_keys_low for w in ('github', 'gitlab')):
-                        _action_verb = "поищи через GitHub контакты для"
-                    elif _detected:
-                        _action_verb = "используй свои инструменты для"
-                    else:
-                        _action_verb = "займись"
-                    _intg_note = ''
-                    if _detected:
-                        _short = [str(d).split('(')[0].strip() for d in _detected[:2]]
-                        _intg_note = f" [{', '.join(_short)}]"
+                    _intg_list = ', '.join(str(d).split('(')[0].strip() for d in _detected[:4]) if _detected else ''
+                    _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
+                    # Fallback на случай если AI-вызов не удастся
                     _coord_text = (
-                        f"{_chosen_name}, {_action_verb}: {_brief_task}.{_intg_note} "
-                        "Жду отчёт фактами — что нашёл, что сделал."
+                        f"{_chosen_name}, займись: {_brief_task}."
+                        + (f" [{_intg_list}]" if _intg_list else '')
+                        + " Жду отчёт."
                     )
+                    try:
+                        from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
+                        _coord_prompt = (
+                            f"Ты — ASI, координатор команды. Напиши ОДНО короткое живое поручение агенту."
+                            f"\n\nАгент: {_chosen_name}"
+                            + (f" ({_agent_role})" if _agent_role else '')
+                            + (f"\nИнтеграции агента: {_intg_list}" if _intg_list else '')
+                            + f"\nЗадача (цели пользователя): {_brief_task}"
+                            f"\n\nТребования: 1 предложение, 15-25 слов. Обращение по имени. "
+                            f"Конкретно — ЧТО делать с КАКИМИ инструментами. "
+                            f"Живо, по-человечески, без формальностей и markdown."
+                        )
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=70)
+                        if _gen and len(_gen.strip()) > 15:
+                            _coord_text = _gen.strip()
+                    except Exception as _cgen_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     try:
                         _cs = Session()
                         try:
