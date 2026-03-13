@@ -476,7 +476,10 @@ def bill_agent_message(user_id: int, agent_id: int, session=None) -> dict:
         if FREE_ACCESS_MODE:
             return {'success': True, 'error': ''}
 
-        agent = session.query(UserAgent).filter_by(id=agent_id, status='active').first()
+        agent = session.query(UserAgent).filter(
+            UserAgent.id == agent_id,
+            UserAgent.status.in_(['active', 'paused']),
+        ).first()
         if not agent:
             return {'success': False, 'error': 'Агент не найден'}
 
