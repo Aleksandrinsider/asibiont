@@ -153,105 +153,155 @@ _INTEGRATION_PLANS = [
      "Твой уникальный инструмент — чтение входящих (check_emails). Только ты можешь читать ответы на письма и реплаить. Отправлять через Resend могут все агенты и ASI — это обычный канал.",
      ["A) check_emails → есть ответ → reply_to_outreach_email → update_goal_progress",
       "B) start_email_campaign(name, goal, target_audience) → send_outreach_email → update_goal_progress",
-      "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress"]),
+      "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress",
+      "D) check_emails → нет новых ответов → send_follow_up_email (follow-up тем, кто не ответил за 2+ дня)",
+      "E) find_relevant_contacts_for_task → save_email_contact → negotiate_by_email (персональное предложение)",
+      "F) list_email_contacts (status=opened/interested) → negotiate_by_email → update_goal_progress",
+      "G) web_search (форумы/сообщества по теме) → save_email_contact → send_outreach_email"]),
     # Outreach-письма (Resend) — агенты с send_outreach_email, но без IMAP
     (lambda c: any(w in c for w in ('outreach', 'письм')),
      'outreach',
      "Ты можешь отправлять outreach-письма через платформу (Resend). Чтение входящих (check_emails) — только для агентов с подключённым почтовым ящиком.",
      ["A) start_email_campaign(name=цель, goal=цель, target_audience=аудитория) → send_outreach_email → update_goal_progress",
       "B) find_relevant_contacts_for_task → add_email_leads → send_outreach_email → update_goal_progress",
-      "C) web_search → save_email_contact → send_outreach_email (в активную кампанию)"]),
+      "C) web_search → save_email_contact → send_outreach_email (в активную кампанию)",
+      "D) quick_topic_search (тематические сообщества/каналы) → save_email_contact → send_outreach_email",
+      "E) find_and_message_relevant_users → send_outreach_email (пользователи из системы)",
+      "F) negotiate_by_email (персональное письмо тёплым контактам) → update_goal_progress",
+      "G) set_contact_alert (отслеживание активности контакта) → send_follow_up_email при срабатывании"]),
     # GitHub / GitLab
     (lambda c: any(w in c for w in ('github', 'gitlab')),
      'github',
      "Твоя интеграция GitHub — поиск людей и кода.",
      ["A) run_agent_action(action='search_users') → 3-5 контактов → save_email_contact",
       "B) run_agent_action(action='find_contributors') → email/ник → save_email_contact",
-      "C) research_topic → GitHub-проекты → run_agent_action(поиск авторов)"]),
+      "C) research_topic → GitHub-проекты → run_agent_action(поиск авторов)",
+      "D) quick_topic_search (технические блоги по теме) → save_email_contact",
+      "E) run_agent_action(action='search_repos') → авторы звёздных проектов → save_email_contact",
+      "F) web_search 'site:github.com {тема} contributors' → save_email_contact",
+      "G) find_relevant_contacts_for_task → run_agent_action(проверка профиля) → save_email_contact"]),
     # RSS лента / Feedparser
     (lambda c: any(w in c for w in ('rss', 'feed', 'лент')),
      'rss',
-     "Твоя RSS-лента — источник авторов и трендов.",
+     "Твоя RSS-лента — источник авторов и трендов. Найди автора → передай контакт email-агенту.",
      ["A) run_agent_action(action='get_latest') → найди автора → save_email_contact",
-      "B) run_agent_action(action='search') → статьи по теме → сохрани контакты",
-      "C) research_topic → площадки/сообщества → add_task"]),
+      "B) run_agent_action(action='search', query=тема) → статьи → save_email_contact авторов",
+      "C) research_topic → площадки/сообщества → add_task с конкретными контактами",
+      "D) run_agent_action(action='get_latest') → トレンд-анализ → create_post (краткий обзор для Telegram)",
+      "E) quick_topic_search (дополни ленту: форумы, Reddit, Habr) → save_email_contact новых авторов",
+      "F) web_search (расширенный поиск по теме статьи) → save_email_contact экспертов",
+      "G) run_agent_action(action='get_latest') → schedule_background_task (напомни через 24ч о не-ответивших)"]),
     # Slack
     (lambda c: 'slack' in c,
      'slack',
      "Твоя интеграция Slack — коммуникация с командой.",
      ["A) run_agent_action(action='post_message') → отчёт по прогрессу",
       "B) run_agent_action(action='list_channels') → найди релевантный → post_message",
-      "C) research_topic → подготовь сообщение → run_agent_action(action='post_message')"]),
+      "C) research_topic → подготовь сообщение → run_agent_action(action='post_message')",
+      "D) find_relevant_contacts_for_task → run_agent_action(action='invite_to_channel')",
+      "E) web_search → актуальная новость → run_agent_action(action='post_message') как daily digest",
+      "F) add_task (зафиксируй результаты обсуждения) → update_goal_progress"]),
     # Notion
     (lambda c: 'notion' in c,
      'notion',
      "Твоя интеграция Notion — база знаний и планы.",
      ["A) run_agent_action(action='create_page') → зафиксируй план/результат",
       "B) run_agent_action(action='update_page') → обнови прогресс по цели",
-      "C) research_topic → run_agent_action(action='create_page') с найденными данными"]),
+      "C) research_topic → run_agent_action(action='create_page') с найденными данными",
+      "D) run_agent_action(action='query_database') → найди устаревшие записи → обнови",
+      "E) web_search → дополни базу знаний новыми источниками → run_agent_action(action='create_page')",
+      "F) list_tasks → run_agent_action(action='sync_tasks') → синхронизируй с Notion"]),
     # Trello / Jira / Asana / Todoist
     (lambda c: any(w in c for w in ('trello', 'jira', 'asana', 'todoist')),
      'pm',
      "Твой инструмент управления задачами — планируй и трекай.",
      ["A) run_agent_action(action='create_card') → зафиксируй следующий шаг",
       "B) run_agent_action(action='update_card') → обнови статус активных задач",
-      "C) research_topic → создай карточку с конкретными данными"]),
+      "C) research_topic → создай карточку с конкретными данными",
+      "D) run_agent_action(action='get_overdue') → найди просроченные → add_task для эскалации",
+      "E) list_tasks → run_agent_action(action='sync') → синхронизируй платформы",
+      "F) web_search (best practices по теме задачи) → run_agent_action(action='create_card') с чеклистом"]),
     # CRM (AmoCRM, Bitrix24)
     (lambda c: any(w in c for w in ('amocrm', 'битрикс', 'bitrix', 'crm')),
      'crm',
      "Твоя CRM — управление контактами и сделками.",
      ["A) run_agent_action(action='find_lead') → обнови статус → update_goal_progress",
       "B) find_relevant_contacts_for_task → run_agent_action(action='add_contact')",
-      "C) research_topic → add_task с конкретными лидами"]),
+      "C) research_topic → add_task с конкретными лидами",
+      "D) run_agent_action(action='get_deals', stage='stalled') → negotiate_by_email / send_follow_up_email",
+      "E) run_agent_action(action='get_activities') → выяви паттерны → web_search конкурентов-лидов",
+      "F) set_contact_alert → run_agent_action(action='update_deal') при активности контакта"]),
     # E-commerce (Wildberries, Ozon, Shopify, Яндекс.Маркет)
     (lambda c: any(w in c for w in ('wildberries', 'ozon', 'shopify', 'маркетплейс')),
      'ecommerce',
      "Твой маркетплейс — мониторинг продаж, позиций, конкурентов.",
      ["A) run_agent_action(action='get_stats') → анализ → update_goal_progress",
       "B) run_agent_action(action='get_positions') → оптимизация → add_task",
-      "C) research_topic → анализ конкурентов → add_task"]),
+      "C) research_topic → анализ конкурентов → add_task",
+      "D) run_agent_action(action='get_reviews') → анализ отзывов → create_post (ответ/улучшение)",
+      "E) web_search (конкуренты, тренды категории) → run_agent_action(action='update_price') + add_task",
+      "F) quick_topic_search (SEO ключевые слова) → run_agent_action(action='update_description')"]),
     # Crypto / Binance / Bybit
     (lambda c: any(w in c for w in ('binance', 'bybit', 'coinbase', 'крипт', 'биржев')),
      'crypto',
      "Твои данные — крипто-рынок и биржа.",
      ["A) run_agent_action(action='get_price') → оцени тренд → update_goal_progress",
       "B) research_topic → анализ рынка → add_task с сигналами",
-      "C) run_agent_action(action='get_portfolio') → сравнение → add_task"]),
+      "C) run_agent_action(action='get_portfolio') → сравнение → add_task",
+      "D) quick_topic_search (крипто-новости) → run_agent_action(action='set_alert') при пороге",
+      "E) web_search 'дефи тренды {монета}' → research_topic → add_task (стратегия)",
+      "F) run_agent_action(action='get_history', period='7d') → выяви паттерн → create_post"]),
     # Google Sheets / Airtable / Данные
     (lambda c: any(w in c for w in ('sheets', 'google sheets', 'pandas', 'airtable', 'данных')),
      'data',
      "Твой инструмент — данные и таблицы.",
      ["A) run_agent_action(action='read_sheet') → анализ → update_goal_progress",
       "B) research_topic → run_agent_action(action='append_row') → зафиксируй",
-      "C) run_agent_action(action='update_cell') → обнови метрики"]),
+      "C) run_agent_action(action='update_cell') → обнови метрики",
+      "D) run_agent_action(action='read_sheet') → выяви аномалии → add_task (расследование)",
+      "E) web_search (benchmarks по отрасли) → run_agent_action(action='append_row') для сравнения",
+      "F) run_agent_action(action='get_chart') → create_post (визуальный отчёт) → publish_to_telegram"]),
     # Telegram-канал / Discord / Контент
     (lambda c: any(w in c for w in ('telegram', 'discord', 'smm', 'контент', 'публик')),
      'content',
      "Твои инструменты: создание и публикация контента.",
      ["A) research_topic → create_post (актуальный оффер) → publish_to_telegram",
-      "B) get_news_trends → create_post по тренду → publish_to_discord",
-      "C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию"]),
+      "B) quick_topic_search → create_post по тренду → publish_to_discord",
+      "C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию",
+      "D) web_search (вирусные форматы по теме) → create_post (нестандартный формат) → publish_to_telegram",
+      "E) generate_image (визуал) → create_post с картинкой → publish_to_telegram",
+      "F) find_and_message_relevant_users (пригласи ЦА в канал) → update_goal_progress",
+      "G) start_content_campaign (серийный контент на 7 дней) → update_goal_progress"]),
     # HH.ru / LinkedIn / HeadHunter (НР)
     (lambda c: any(w in c for w in ('headhunter', 'hh.ru', 'linkedin', 'рекрут')),
      'hr',
      "Твоя интеграция — поиск людей и вакансий.",
      ["A) run_agent_action(action='search_candidates') → оцени → save_email_contact",
       "B) research_topic → описание вакансии → add_task",
-      "C) run_agent_action(action='get_responses') → оцени отклики → add_task"]),
+      "C) run_agent_action(action='get_responses') → оцени отклики → add_task",
+      "D) web_search 'эксперт {область} телеграм OR github' → save_email_contact",
+      "E) find_and_message_relevant_users → send_outreach_email (партнёрское приглашение)",
+      "F) negotiate_by_email (персональный оффер кандидату) → set_contact_alert"]),
     # Avito
     (lambda c: 'авито' in c or 'avito' in c,
      'avito',
      "Твоя интеграция Авито — объявления, продажи, аренда.",
      ["A) run_agent_action(action='get_listings') → анализ → update_goal_progress",
       "B) run_agent_action(action='create_listing') → новое объявление",
-      "C) research_topic → цены/конкуренты → add_task"]),
+      "C) research_topic → цены/конкуренты → add_task",
+      "D) web_search (конкуренты на Авито) → run_agent_action(action='update_price')",
+      "E) run_agent_action(action='get_messages') → ответь на входящие → update_goal_progress",
+      "F) quick_topic_search (тренды спроса) → run_agent_action(action='create_listing') с новым описанием"]),
     # Stripe / ЮКасса / Платежи
     (lambda c: any(w in c for w in ('stripe', 'юкасс', 'платеж', 'payment')),
      'payments',
      "Твои данные — платежи и выручка.",
      ["A) run_agent_action(action='get_revenue') → анализ → update_goal_progress",
       "B) research_topic → стратегия роста выручки → add_task",
-      "C) run_agent_action(action='list_transactions') → выяви паттерны → add_task"]),
+      "C) run_agent_action(action='list_transactions') → выяви паттерны → add_task",
+      "D) run_agent_action(action='get_failed_payments') → выясни причины → negotiate_by_email",
+      "E) web_search (retention-стратегии) → create_post (оффер для потерявших клиентов)",
+      "F) run_agent_action(action='get_refunds') → анализ → add_task (снижение возвратов)"]),
 ]
 
 # Тип интеграции → описание для матрицы делегирования
@@ -275,9 +325,13 @@ _INTEGRATION_TYPE_LABELS = {
 
 
 def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None) -> str:
-    """Строит адаптивный промпт автопилота — конкретная инструкция ПОД АГЕНТА И ЕГО ИНСТРУМЕНТЫ."""
+    """Строит адаптивный промпт автопилота.
+    Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
+    и предоставляет AI свободу выбора лучшей цепочки под цель и интеграции агента.
+    """
+    import re as _re_ap
 
-    # Определяем доступные каналы пользователя
+    # ── Каналы пользователя ──
     channels_hint = ""
     if user:
         _channels = []
@@ -290,7 +344,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _channels:
             channels_hint = f"Каналы пользователя: {', '.join(_channels)}.\n"
 
-    # Краткое описание целей
+    # ── Краткое описание целей ──
     _goals_desc = '; '.join(
         f"{g.get('title', '?')} ({g.get('progress', 0)}%"
         + (f", {g.get('metric_current', 0)}/{g.get('metric_target', '?')}" if g.get('metric_target') else '')
@@ -301,116 +355,157 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _caps_lower = [c.lower() for c in (agent_caps or [])]
     _caps_str = ', '.join(agent_caps or [])
 
-    # ── Находим первый подходящий план из таблицы ──
-    _matched_type = None
-    _action_plan = ''
-    for _pred, _itype, _heading, _steps in _INTEGRATION_PLANS:
-        if any(_pred(c) for c in _caps_lower):
-            _matched_type = _itype
-            # Добавляем cross-referral хинт для интеграций email/github/rss
-            _cross = ''
-            if _itype not in ('email', 'outreach') and team_profiles:
-                # Для не-email агентов: намекаем делегировать отправку email-агенту
-                _em_col = next((tp['name'] for tp in team_profiles
-                                if any(w in c.lower() for c in tp.get('capabilities', [])
-                                       for w in ('mail', 'email', 'smtp', 'gmail'))), None)
-                if _em_col:
-                    _cross = f"\n  D) Нашёл email/контакт → DELEGATE[{_em_col}]: отправь outreach [email] — [цель]."
-            elif _itype == 'outreach' and team_profiles:
-                # Outreach-агент сам умеет слать, но не читать — делегирует чтение IMAP-агенту
-                _imap_col = next((tp['name'] for tp in team_profiles
-                                  if any(w in c.lower() for c in tp.get('capabilities', [])
-                                         for w in ('imap', 'gmail', 'yandex', 'mailru', 'провер', 'check_email'))), None)
-                if _imap_col:
-                    _cross = f"\n  D) Ждёшь ответа? → DELEGATE[{_imap_col}]: check_emails — прочитай входящие ответы."
-            elif _itype == 'email' and team_profiles:
-                _gh_col = next((tp['name'] for tp in team_profiles
-                                if any(w in c.lower() for c in tp.get('capabilities', [])
-                                       for w in ('github', 'gitlab'))), None)
-                if _gh_col:
-                    _cross = f"\n  D) Нет email у контакта? → DELEGATE[{_gh_col}]: найди email через GitHub."
-            _action_plan = (
-                f"{_heading}\n"
-                "ПЛАН (выбери один и выполни прямо сейчас):\n"
-                + '\n'.join(f"  {step}" for step in _steps)
-                + _cross + '\n'
-            )
-            break
+    # ── Детектируем реальные интеграции агента ──
+    _has_imap = any(w in c for c in _caps_lower for w in ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru'))
+    _has_script = any(w in c for c in _caps_lower for w in ('python', 'http', 'скрипт', 'run_agent', 'все инструменты'))
+    _has_rss    = any(w in c for c in _caps_lower for w in ('rss', 'feed', 'лент'))
+    _has_github = any(w in c for c in _caps_lower for w in ('github', 'gitlab'))
+    _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'контент', 'smm'))
 
-    # Если ни одна интеграция не определена — универсальный фоллбэк
-    if not _action_plan:
-        _cross_hints = ''
-        if team_profiles:
-            for tp in team_profiles:
-                _tp_c = [c.lower() for c in tp.get('capabilities', [])]
-                _tp_type = None
-                for _p2, _t2, _, __ in _INTEGRATION_PLANS:
-                    if any(_p2(c2) for c2 in _tp_c):
-                        _tp_type = _t2
-                        break
-                if _tp_type and _tp_type in _INTEGRATION_TYPE_LABELS:
-                    _label = _INTEGRATION_TYPE_LABELS[_tp_type]
-                    _cross_hints += f"\n  → Нужно '{_label}' → DELEGATE[{tp['name']}]: конкретная задача."
-        _action_plan = (
-            "Твои инструменты: поиск, исследования, задачи, делегирование. Ценность = находить данные и передавать нужным людям.\n"
-            "ПЛАН (выбери один и выполни прямо сейчас):\n"
-            "  A) web_search → find_relevant_contacts_for_task → save_email_contact\n"
-            "  B) research_topic → add_task (конкретный следующий шаг с деталями)\n"
-            "  C) find_relevant_contacts_for_task → делегируй коллеге с нужной интеграцией\n"
-            f"{_cross_hints}\n"
-        )
+    # ── История инструментов → что запрещено/предупреждение ──
+    _tool_cnt: dict = {}
+    if agent_history:
+        for _h in agent_history:
+            _m = _re_ap.search(r'\[([^\]]+)\]', _h)
+            if _m:
+                for _t in _m.group(1).split(','):
+                    _t = _t.strip()
+                    if _t:
+                        _tool_cnt[_t] = _tool_cnt.get(_t, 0) + 1
+    _banned = {t for t, n in _tool_cnt.items() if n >= 2}   # порог: 2+ раза = пробовали, пора менять
+    _warn   = {t for t, n in _tool_cnt.items() if n == 1}
 
-    # ── Динамическая матрица делегирования: кому что отдавать ──
+    def _ti(name: str) -> str:
+        """Помечает заблокированный инструмент."""
+        return f"[БАН:{name}]" if name in _banned else name
+
+    # ── Динамический каталог инструментов ──
+    # Пытаемся получить описания из платформы; при ошибке — компактный встроенный список
+    _tool_descs: dict = {}
+    try:
+        from ai_integration.tools import get_available_tools as _gat
+        for _td in _gat(None):
+            _fn = _td.get('function', {})
+            _name = _fn.get('name', '')
+            _desc = _fn.get('description', '')
+            # Берём первое предложение (до первой точки/переноса) — кратко
+            _short = _desc.split('.')[0].split('\n')[0][:80]
+            _tool_descs[_name] = _short
+    except Exception:
+        pass
+
+    def _td(name: str) -> str:
+        desc = _tool_descs.get(name, '')
+        base = f"{_ti(name)}" + (f" — {desc}" if desc else '')
+        return f"  {base}"
+
+    _imap_note = '✅ IMAP-ключи есть' if _has_imap else '⛔ IMAP нет (читать входящие может только коллега с Gmail)'
+    _script_note = '✅ python_code есть' if (_has_script or _has_rss or _has_github) else '⚠️ нужен python_code'
+
+    _catalog = (
+        "ПОЛНЫЙ КАТАЛОГ ИНСТРУМЕНТОВ — сам выбери лучшую цепочку под цель и свои интеграции:\n"
+        "\n📧 Email / Outreach:\n"
+        + _td('send_outreach_email') + '\n'
+        + _td('start_email_campaign') + '\n'
+        + f"  {_ti('check_emails')} — входящие [{_imap_note}]\n"
+        + _td('reply_to_outreach_email') + '\n'
+        + _td('send_follow_up_email') + '\n'
+        + _td('negotiate_by_email') + '\n'
+        + _td('save_email_contact') + '\n'
+        + _td('list_email_contacts') + '\n'
+        "\n🔍 Поиск и исследования:\n"
+        + _td('web_search') + '\n'
+        + _td('research_topic') + '\n'
+        + _td('quick_topic_search') + '\n'
+        + _td('find_relevant_contacts_for_task') + '\n'
+        + _td('find_partners') + '\n'
+        + _td('get_news_trends') + '\n'
+        + _td('analyze_situation_and_suggest_tasks') + '\n'
+        + _td('research_and_plan') + '\n'
+        "\n📢 Контент и публикации:\n"
+        + _td('create_post') + '\n'
+        + _td('publish_to_telegram') + '\n'
+        + _td('publish_to_discord') + '\n'
+        + _td('generate_image') + '\n'
+        + _td('generate_marketing_content') + '\n'
+        + _td('start_content_campaign') + '\n'
+        + _td('find_and_message_relevant_users') + '\n'
+        "\n🤝 Делегирование:\n"
+        + _td('delegate_task') + '\n'
+        + _td('start_delegation_campaign') + '\n'
+        + _td('send_message_to_user') + '\n'
+        "\n🎯 Задачи, цели, планирование:\n"
+        + _td('add_task') + '\n'
+        + _td('update_goal_progress') + '\n'
+        + _td('schedule_background_task') + '\n'
+        + _td('set_contact_alert') + '\n'
+        + _td('set_reminder') + '\n'
+        + _td('list_tasks') + '\n'
+        "\n⚙️ Внешние интеграции / кастомный скрипт:\n"
+        + f"  {_ti('run_agent_action')} [{_script_note}] — выполняет твой Python-скрипт\n"
+        + (f"  Примеры action=: get_latest (RSS), search_users (GitHub), post_message (Slack), "
+           f"find_contributors, get_stats, create_listing, get_price...\n"
+           if (_has_script or _has_rss or _has_github) else
+           "  (API-ключи или python_code агента не настроены — инструмент недоступен)\n")
+    )
+
+    # ── Матрица делегирования команды ──
     _team_block = ''
     if team_profiles:
-        _delegate_hints = []
+        _delegate_lines = []
         for tp in team_profiles:
-            _tp_c = [c.lower() for c in tp.get('capabilities', [])]
-            for _p3, _t3, _, __ in _INTEGRATION_PLANS:
-                if _t3 == _matched_type:
-                    continue  # Не делегируем самому себе
-                # email-агент сам умеет отправлять — не нужно делегировать outreach
-                if _matched_type == 'email' and _t3 == 'outreach':
-                    continue
-                if any(_p3(c3) for c3 in _tp_c) and _t3 in _INTEGRATION_TYPE_LABELS:
-                    _label3 = _INTEGRATION_TYPE_LABELS[_t3]
-                    _delegate_hints.append(f"  → Нужно '{_label3}' → DELEGATE[{tp['name']}]: [konkretnaя задача с данными]")
-                    break
-        if _delegate_hints:
+            if tp.get('name') == agent_name:
+                continue
+            _tp_caps = tp.get('capabilities', [])[:5]
+            if _tp_caps:
+                _delegate_lines.append(
+                    f"  DELEGATE[{tp['name']}]"
+                    + (f" ({tp.get('job_title', '')})" if tp.get('job_title') else '')
+                    + f": {', '.join(_tp_caps)}"
+                )
+        if _delegate_lines:
             _team_block = (
-                "\n\nДЕЛЕГИРОВАНИЕ — отдай коллеге если у него есть нужная интеграция:\n"
-                + '\n'.join(_delegate_hints)
-                + "\nФормат: DELEGATE[Имя]: конкретная задача с данными.\n"
+                "\nКОМАНДА (делегируй если нужна их специализация):\n"
+                + '\n'.join(_delegate_lines)
+                + "\nФормат: DELEGATE[Имя]: конкретная задача с данными\n"
             )
 
-    # ── Блок памяти агента: что уже делал — чтобы не повторять ──
+    # ── Блок памяти ──
     _memory_block = ''
     if agent_history:
-        _mem_lines = [f"  {i+1}. {h}" for i, h in enumerate(agent_history[:5])]
+        _mem_lines = [f"  {i+1}. {h}" for i, h in enumerate(agent_history[:6])]
         _memory_block = (
-            "\nТВОЯ ПАМЯТЬ (что ты уже делал — НЕ ПОВТОРЯЙ):\n"
-            + '\n'.join(_mem_lines)
-            + "\nЕсли прошлое действие не принесло результата — используй ДРУГОЙ инструмент.\n"
+            "\nТВОЯ ИСТОРИЯ (последние действия — НЕ ПОВТОРЯЙ без нового результата):\n"
+            + '\n'.join(_mem_lines) + '\n'
         )
+        if _banned:
+            _memory_block += (
+                f"🚫 ЗАБЛОКИРОВАНО (2+ раз без прогресса): {', '.join(sorted(_banned))}\n"
+                "→ Выбери ЛЮБОЙ другой инструмент из каталога выше.\n"
+            )
+        if _warn:
+            _memory_block += f"⚠️ Использовано по 1 разу — лучше попробовать новое: {', '.join(sorted(_warn))}\n"
 
-    # ── Имена активных целей для привязки задач ──
+    # ── Имена целей для привязки задач ──
     _first_goal_title = goals_summary[0].get('title', '') if goals_summary else ''
 
     return (
         f"ЦЕЛИ: {_goals_desc}\n"
-        f"{'Твои интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
+        f"{'Твои интеграции/специализация: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
-        f"{_action_plan}"
+        f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
-        "2. Цепочка: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress.\n"
-        "3. Нашёл контакт без нужной интеграции → НЕМЕДЛЕННО делегируй коллеге с конкретными данными.\n"
-        "4. Отчёт = ФАКТЫ: что нашёл, кому написал, что ответили.\n"
-        "5. Инструмент не работает → сразу пробуй следующий из плана выше.\n"
-        "6. НЕ пиши людям из памяти повторно — они уже контактированы.\n"
-        + (f"7. При вызове add_task ВСЕГДА передавай goal_title='{_first_goal_title}' чтобы задача была привязана к цели.\n"
+        "2. Сам анализируй каталог и выбирай лучшую цепочку под свою цель и интеграции.\n"
+        "3. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress.\n"
+        "4. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
+        "5. Каждый цикл = другие инструменты: если уже делал web_search → пробуй research_topic, "
+        "negotiate_by_email, find_and_message_relevant_users, start_content_campaign и т.д.\n"
+        "6. НЕ пиши одним и тем же людям повторно.\n"
+        "7. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
+        + (f"8. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
            if _first_goal_title else "")
     )
 
@@ -3006,14 +3101,14 @@ class AnchorEngine:
                             _t_al = _t_al.strip()
                             if _t_al:
                                 _tc[_t_al] = _tc.get(_t_al, 0) + 1
-                _banned_al = [t for t, n in _tc.items() if n >= 3]
+                _banned_al = [t for t, n in _tc.items() if n >= 2]   # порог: 2+ раз = пора менять
                 if _banned_al:
                     _agent_banned_tools[_p_al['name']] = _banned_al
             _banned_tools_str = ''
             if _agent_banned_tools:
-                _banned_tools_str = '\n🚫 ЗАПРЕЩЁННЫЕ инструменты по агентам (3+ раз без прогресса — строго запрещены):\n'
+                _banned_tools_str = '\n🚫 ЗАБЛОКИРОВАННЫЕ инструменты (2+ раз без прогресса — строго не назначать):\n'
                 for _ag_bt, _tl_bt in _agent_banned_tools.items():
-                    _banned_tools_str += f'  {_ag_bt}: НЕ использовать [{", ".join(_tl_bt)}] — дай ДРУГОЕ задание!\n'
+                    _banned_tools_str += f'  {_ag_bt}: НЕ использовать [{", ".join(_tl_bt)}] — дай ДРУГОЙ инструмент из каталога!\n'
 
             # ── Форсированный outreach при стагнации цели ──
             _stagnant_instr = ''
@@ -3040,30 +3135,32 @@ class AnchorEngine:
                 f"{_banned_tools_str}"
                 f"{_stagnant_instr}\n"
                 f"Создай план для ВСЕХ {_n_agents} агентов — каждому ОДНО конкретное задание прямо СЕЙЧАС.\n"
-                "Правила:\n"
-                "1. Задание СТРОГО использует реальную интеграцию агента:\n"
-                "   • Email (IMAP/Gmail) → check_emails / send_outreach_email / start_email_campaign\n"
-                "   • RSS/лента → анализируй RSS через run_agent_action, ищи авторов статей\n"
-                "   • GitHub/GitLab → поиск разработчиков через run_agent_action\n"
-                "   • Если нет специальных интеграций → web_search / research_topic\n"
-                "   НЕ назначай web_search RSS-агенту и не назначай check_emails агенту без email!\n"
-                "2. Задания дополняют друг друга — не дублируют то, что агент уже делал.\n"
-                "3. Не используй глобально заблокированные инструменты.\n"
-                "4. Задание = конкретное действие + инструмент из его интеграций + цель.\n"
-                "5. Если агент уже делал действие — давай ему ДРУГОЕ задание.\n"
-                "6. Можно включить шаг для ASI (web_search/research_topic).\n"
-                "7. НЕ отправляй письма на адреса из списка 'уже получили письма'.\n"
-                "8. ВАЖНО: send_outreach_email требует активной кампании. Если кампаний нет → "
-                "дай email-агенту задание start_email_campaign(name, goal, target_audience) ПЕРВЫМ. "
-                "start_email_campaign сама находит лидов и начинает рассылку.\n"
-                "9. Только агент с IMAP/Gmail ключами может вызывать check_emails.\n"
-                "10. АНТИЗАЦИКЛИВАНИЕ: если инструмент агента в 🚫 ЗАПРЕЩЁННЫХ — СТРОГО не использовать, "
-                "давай задание с ДРУГИМ инструментом из его арсенала.\n"
-                "11. Если email-агент уже 3+ раз делал check_emails → его задача ТОЛЬКО: "
-                "start_email_campaign или send_outreach_email или save_email_contact или find_relevant_contacts_for_task.\n"
-                "12. RSS-агент = анализ ленты и отчёт о находках. "
-                "Задачи по контактам (save_email_contact, outreach) — email-агенту или ASI, "
-                "которые используют данные от RSS-агента. Не назначай RSS-агенту задачи по сбору контактов.\n"
+                "\nДОСТУПНЫЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ (полный список — выбирай любой подходящий):\n"
+                "  📧 Email: send_outreach_email, start_email_campaign, check_emails(только IMAP), "
+                "reply_to_outreach_email, send_follow_up_email, negotiate_by_email, "
+                "save_email_contact, list_email_contacts\n"
+                "  🔍 Поиск: web_search, research_topic, quick_topic_search, "
+                "find_relevant_contacts_for_task, find_partners, get_news_trends, analyze_situation_and_suggest_tasks\n"
+                "  📢 Контент: create_post, publish_to_telegram, publish_to_discord, generate_image, "
+                "generate_marketing_content, start_content_campaign, find_and_message_relevant_users\n"
+                "  🤝 Делегирование: delegate_task, start_delegation_campaign, send_message_to_user\n"
+                "  🎯 Задачи/цели: add_task, update_goal_progress, schedule_background_task, set_contact_alert\n"
+                "  ⚙️ Внешние интеграции (нужен python_code): run_agent_action (RSS/GitHub/Slack/Notion/CRM/маркетплейс...)\n"
+                "\nПравила:\n"
+                "1. Задание отталкивается от РЕАЛЬНЫХ интеграций агента (см. капабилити выше).\n"
+                "   Если у агента IMAP/Gmail — check_emails/send_outreach_email/negotiate_by_email.\n"
+                "   Если RSS/python_code — run_agent_action(get_latest/search).\n"
+                "   Если GitHub — run_agent_action(search_users/find_contributors).\n"
+                "   Нет спец. интеграций — web_search/research_topic/quick_topic_search/create_post.\n"
+                "2. Задания РАЗНЫЕ — не дублируют друг друга и не повторяют историю агента.\n"
+                "3. 🚫 Заблокированные инструменты — строго не назначать! Используй ЧТО-ТО ДРУГОЕ из каталога выше.\n"
+                "4. Задание = КОНКРЕТНОЕ действие + инструмент + параметры + привязка к цели.\n"
+                "5. Каждый агент получает уникальное задание — не дублируй между агентами.\n"
+                "6. НЕ назначай check_emails агенту без IMAP-ключей.\n"
+                "7. НЕ отправляй письма адресатам из списка 'уже получили письма'.\n"
+                "8. Если кампаний нет — email-агент ОБЯЗАН вызвать start_email_campaign первым делом.\n"
+                "9. Поощряй разнообразие: используй negotiate_by_email, send_follow_up_email, "
+                "quick_topic_search, generate_marketing_content, set_contact_alert если базовые шаги уже сделаны.\n"
                 f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
             )
