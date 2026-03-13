@@ -12116,14 +12116,56 @@ async def check_emails(
 
         limit = max(1, min(limit, 20))
 
+        # Загружаем уже-известные контакты для фильтрации дублей
+        _my_email = chosen.get('email_user', '').lower()
+        _known_emails: set = set()
+        try:
+            from models import EmailContact as _EC_ce
+            _known_emails = {r.email.lower() for r in session.query(_EC_ce.email).filter_by(user_id=user.id).all() if r.email}
+        except Exception:
+            pass
+
         if chosen['type'] == 'gmail_oauth':
-            return await _check_emails_gmail_api(chosen['token_data'], limit, user, session)
+            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_email)
         elif chosen['type'] in ('smtp', 'gmail_server'):
-            return await _check_emails_imap(chosen, limit)
+            result = await _check_emails_imap(chosen, limit, _known_emails, _my_email)
         elif chosen['type'] == 'resend':
             return "Resend — сервис только для отправки, входящие не поддерживаются."
         else:
             return f"Тип интеграции '{chosen['type']}' не поддерживает чтение входящих."
+
+        # Автоматически сохраняем новые контакты из входящих в EmailContact
+        _no_new_keywords = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
+        if result and not any(kw in result.lower() for kw in _no_new_keywords):
+            import re as _re_ce
+            _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result, _re_ce.IGNORECASE))
+            _new_auto = _found_em - _known_emails - {_my_email}
+            for _new_em in list(_new_auto)[:5]:
+                try:
+                    import datetime as _dt_ce
+                    from models import EmailContact as _EC_ce2
+                    _existing_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_new_em).first()
+                    if not _existing_ec:
+                        _ec_new = _EC_ce2(
+                            user_id=user.id,
+                            email=_new_em,
+                            source='imap_reply',
+                            status='replied',
+                            notes='Автоматически найден во входящих письмах',
+                            last_contacted_at=_dt_ce.datetime.utcnow(),
+                        )
+                        session.add(_ec_new)
+                        session.commit()
+                        _known_emails.add(_new_em)
+                        logger.info(f'[CHECK_EMAILS] Auto-saved contact: {_new_em} for user {user.id}')
+                except Exception as _e_save:
+                    logger.debug(f'[CHECK_EMAILS] auto-save contact failed: {_e_save}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
+        return result
     except Exception as e:
         logger.error(f"[CHECK_EMAILS] Error: {e}", exc_info=True)
         return f"Ошибка при проверке почты: {e}"
@@ -12132,7 +12174,7 @@ async def check_emails(
             session.close()
 
 
-async def _check_emails_gmail_api(token_data: dict, limit: int, user, session) -> str:
+async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_email: str = '') -> str:
     """Читает входящие через Gmail API v1."""
     import base64 as _b64_r
     import json as _jsn_r
@@ -12193,6 +12235,8 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session) -
                 return "Входящих писем нет."
 
             results = []
+            skipped_known_g = []
+            import re as _re_gm
             for msg_ref in msgs[:limit]:
                 msg_resp = await _h.get(
                     f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
@@ -12205,15 +12249,26 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session) -
                 msg_data = await msg_resp.json()
                 headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
                 snippet = msg_data.get('snippet', '')[:200]
+                from_hdr = headers.get('From', '?')
+                # Фильтруем уже-известные контакты
+                if known_emails:
+                    _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
+                    _gm_em_low = _gm_ems[0].lower() if _gm_ems else ''
+                    if _gm_em_low and _gm_em_low in known_emails and _gm_em_low != my_email:
+                        skipped_known_g.append(from_hdr)
+                        continue
                 results.append(
-                    f"От: {headers.get('From', '?')}\n"
+                    f"От: {from_hdr}\n"
                     f"Тема: {headers.get('Subject', '(без темы)')}\n"
                     f"Дата: {headers.get('Date', '?')}\n"
                     f"Превью: {snippet}\n"
                 )
             if not results:
-                return "Не удалось загрузить письма."
-            return f"Входящие ({gmail_email}, последние {len(results)}):\n\n" + "\n---\n".join(results)
+                if skipped_known_g:
+                    return (f"Нет новых писем от незнакомых контактов. Уже в базе: {len(skipped_known_g)} контакт(а). "
+                            f"Переключись на задачу: start_email_campaign или send_outreach_email для поиска новых.")
+                return "Входящих писем нет."
+            return f"Новые входящие ({gmail_email}, {len(results)} новых):\n\n" + "\n---\n".join(results)
 
     result = await _fetch(access_token)
     if result is None:
@@ -12225,8 +12280,8 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session) -
     return result
 
 
-async def _check_emails_imap(integration: dict, limit: int) -> str:
-    """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""
+async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_email: str = '') -> str:
+    """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""    
     import asyncio
     import imaplib
     import email as _email_mod
@@ -12275,6 +12330,8 @@ async def _check_emails_imap(integration: dict, limit: int) -> str:
             ids.reverse()
 
             results = []
+            skipped_known = []
+            import re as _re_imap
             for mid in ids:
                 _s, _d = mail.fetch(mid, '(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])')
                 if _s != 'OK':
@@ -12284,6 +12341,14 @@ async def _check_emails_imap(integration: dict, limit: int) -> str:
                 from_addr = msg.get('From', '?')
                 subject = _decode_subj(msg.get('Subject', '(без темы)'))
                 date = msg.get('Date', '?')
+
+                # Фильтруем уже-известные контакты
+                if known_emails:
+                    _from_ems = _re_imap.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_addr, _re_imap.IGNORECASE)
+                    _from_low = _from_ems[0].lower() if _from_ems else ''
+                    if _from_low and _from_low in known_emails and _from_low != my_email:
+                        skipped_known.append(from_addr)
+                        continue
 
                 # Snippet: BODY.PEEK[TEXT] первые 200 символов
                 _st, _dt2 = mail.fetch(mid, '(BODY.PEEK[TEXT]<0.500>)')
@@ -12302,8 +12367,12 @@ async def _check_emails_imap(integration: dict, limit: int) -> str:
                 )
             mail.logout()
             if not results:
-                return "Не удалось загрузить письма."
-            return f"Входящие ({email_user}, последние {len(results)}):\n\n" + "\n---\n".join(results)
+                if skipped_known:
+                    return (f"Нет новых писем от незнакомых контактов. Уже в базе: {len(skipped_known)} контакт(а) "
+                            f"({', '.join(s[:50] for s in skipped_known[:3])}). "
+                            f"Переключись на задачу: start_email_campaign или send_outreach_email для поиска новых контактов.")
+                return "Входящих писем нет."
+            return f"Новые входящие ({email_user}, {len(results)} новых):\n\n" + "\n---\n".join(results)
         except imaplib.IMAP4.error as e:
             return f"Ошибка IMAP ({label}): {e}. Проверь пароль приложения."
         except Exception as e:
@@ -12843,6 +12912,7 @@ async def save_email_contact(
     position: str = None,
     notes: str = None,
     source: str = 'manual',
+    status: str = None,
     user_id: int = None,
     session=None,
     close_session: bool = True,
@@ -12890,6 +12960,7 @@ async def save_email_contact(
             position=(position or '').strip() or None,
             notes=(notes or '').strip() or None,
             source=source or 'manual',
+            status=status or 'replied',
         )
         session.add(contact)
         session.commit()

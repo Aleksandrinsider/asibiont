@@ -986,7 +986,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "save_email_contact",
-            "description": "📇 СОХРАНИТЬ email-контакт в справочник пользователя. Вызывай когда пользователь даёт email для будущих рассылок или после отправки письма.",
+            "description": "📇 СОХРАНИТЬ email-контакт в справочник пользователя. Вызывай когда нашёл email человека через IMAP/RSS/поиск или после получения ответа. Сохранённые контакты учитываются в прогрессе целей.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1008,11 +1008,15 @@ TOOLS = [
                     },
                     "notes": {
                         "type": "string",
-                        "description": "Заметки — почему контакт релевантен"
+                        "description": "Заметки — почему контакт релевантен, что предлагали"
                     },
                     "source": {
                         "type": "string",
-                        "description": "Источник: manual / campaign / import"
+                        "description": "Источник: manual / campaign / import / imap_reply / rss"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Статус: new / contacted / replied / interested / unsubscribed. По умолчанию replied (если человек сам написал)."
                     }
                 },
                 "required": ["email"]

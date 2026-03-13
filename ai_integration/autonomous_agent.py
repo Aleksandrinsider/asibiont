@@ -4471,11 +4471,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "❗ Чистый текст без вызова инструментов = ОШИБКА и провал задачи.\n"
             "1. В задаче написан ПЛАН ДЕЙСТВИЙ — вызови первый подходящий инструмент прямо сейчас.\n"
             "2. ЦЕПОЧКА за цикл: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress.\n"
-            "   Пример: web_search('QA тестировщики telegram') → save_email_contact → update_goal_progress.\n"
-            "   Пример: check_emails() → reply_to_outreach_email → update_goal_progress.\n"
+            "   Пример: web_search('QA тестировщики telegram') → save_email_contact(status='replied') → update_goal_progress.\n"
+            "   Пример: check_emails() → если нашёл новое письмо → save_email_contact(email=..., status='replied') → update_goal_progress.\n"
+            "   Пример: find_relevant_contacts_for_task → send_outreach_email или start_email_campaign.\n"
             "3. НЕ ПИШИ О ТОМ ЧТО СОБИРАЕШЬСЯ СДЕЛАТЬ — просто вызови инструмент.\n"
             "4. Если один инструмент заблокирован/недоступен — сразу вызови другой из твоего списка.\n"
-            "5. Нашёл задачу для коллеги → DELEGATE[Имя]: задача с конкретными данными."
+            "5. Нашёл задачу для коллеги → DELEGATE[Имя]: задача с конкретными данными.\n"
+            "6. Если check_emails вернул 'нет новых писем от незнакомых контактов' → НЕ повторяй check_emails! "
+            "Вместо этого вызови start_email_campaign или find_relevant_contacts_for_task."
             + (_intg_action_hint or '')
         )
 

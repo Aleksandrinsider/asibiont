@@ -2902,27 +2902,72 @@ class AnchorEngine:
                 if _email_campaigns_raw else 'нет активных кампаний'
             )
             _n_agents = len(_profiles)
+
+            # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
+            import re as _re_al
+            _agent_banned_tools: dict = {}
+            for _p_al in _profiles:
+                _hist_al = _per_agent_history.get(_p_al['name'], [])
+                _tc: dict = {}
+                for _h_al in _hist_al:
+                    _tm_al = _re_al.search(r'\[([^\]]+)\]', _h_al)
+                    if _tm_al:
+                        for _t_al in _tm_al.group(1).split(','):
+                            _t_al = _t_al.strip()
+                            if _t_al:
+                                _tc[_t_al] = _tc.get(_t_al, 0) + 1
+                _banned_al = [t for t, n in _tc.items() if n >= 3]
+                if _banned_al:
+                    _agent_banned_tools[_p_al['name']] = _banned_al
+            _banned_tools_str = ''
+            if _agent_banned_tools:
+                _banned_tools_str = '\n🚫 ЗАПРЕЩЁННЫЕ инструменты по агентам (3+ раз без прогресса — строго запрещены):\n'
+                for _ag_bt, _tl_bt in _agent_banned_tools.items():
+                    _banned_tools_str += f'  {_ag_bt}: НЕ использовать [{", ".join(_tl_bt)}] — дай ДРУГОЕ задание!\n'
+
+            # ── Форсированный outreach при стагнации цели ──
+            _stagnant_instr = ''
+            _stagnant_goals = [g for g in _goals if g.get('progress', 0) < 15 and g.get('metric_target')]
+            if _stagnant_goals and len(_recent) >= 4:
+                _sg = _stagnant_goals[0]
+                _stagnant_instr = (
+                    f"\n⚠️ СРОЧНО: Цель «{_sg['title'][:50]}» стагнирует ({_sg.get('progress',0)}% за {len(_recent)}+ циклов). "
+                    "ПРИНУДИТЕЛЬНЫЙ шаг этого цикла:\n"
+                    "  1. Если нет активных кампаний → email-агент ОБЯЗАН вызвать start_email_campaign прямо сейчас.\n"
+                    "  2. Если кампания есть → email-агент ОБЯЗАН вызвать send_outreach_email (не check_emails!).\n"
+                    "  3. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
+                    "  НЕ назначай check_emails и RSS-поиск как основные задачи в этом цикле!\n"
+                )
+
             _plan_prompt = (
                 f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
                 f"Цели пользователя: {_goals_str}\n"
                 f"Контактов в базе={_known_contacts}, писем отправлено={_email_sent}\n"
                 f"Email-кампании:\n{_email_campaigns_str}\n"
                 f"Уже получили письма (НЕ писать повторно): {_already_sent_str}\n"
-                f"Общие последние действия:\n{_recent_txt}\n"
-                f"Заблокированные инструменты: {_failed_str}\n\n"
+                f"Последние общие действия:\n{_recent_txt}\n"
+                f"Глобально заблокированные инструменты: {_failed_str}\n"
+                f"{_banned_tools_str}"
+                f"{_stagnant_instr}\n"
                 f"Создай план для ВСЕХ {_n_agents} агентов — каждому ОДНО конкретное задание прямо СЕЙЧАС.\n"
                 "Правила:\n"
                 "1. Задание ИСПОЛЬЗУЕТ уникальную интеграцию агента (email/github/rss/другая).\n"
                 "2. Задания дополняют друг друга — не дублируют то, что агент уже делал.\n"
-                "3. Не используй заблокированные инструменты.\n"
+                "3. Не используй глобально заблокированные инструменты.\n"
                 "4. Задание = конкретное действие + инструмент + цель.\n"
                 "5. Если агент уже делал действие — давай ему ДРУГОЕ задание.\n"
                 "6. Можно включить шаг для ASI (web_search/research_topic).\n"
                 "7. НЕ отправляй письма на адреса из списка 'уже получили письма'.\n"
                 "8. ВАЖНО: send_outreach_email требует активной кампании. Если кампаний нет → "
-                "дай email-агенту задание start_email_campaign(name, goal, target_audience) ПЕРВЫМ, "
-                "затем send_outreach_email. start_email_campaign также автоматически ищет лидов.\n"
-                "9. Только агент с IMAP/Gmail ключами может вызывать check_emails (чтение входящих).\n"
+                "дай email-агенту задание start_email_campaign(name, goal, target_audience) ПЕРВЫМ. "
+                "start_email_campaign сама находит лидов и начинает рассылку.\n"
+                "9. Только агент с IMAP/Gmail ключами может вызывать check_emails.\n"
+                "10. АНТИЗАЦИКЛИВАНИЕ: если инструмент агента в 🚫 ЗАПРЕЩЁННЫХ — СТРОГО не использовать, "
+                "давай задание с ДРУГИМ инструментом из его арсенала.\n"
+                "11. Если email-агент уже 3+ раз делал check_emails → его задача ТОЛЬКО: "
+                "start_email_campaign или send_outreach_email или save_email_contact или find_relevant_contacts_for_task.\n"
+                "12. Если RSS-агент нашёл авторов → его задача ОБЯЗАТЕЛЬНО включает save_email_contact "
+                "для сохранения контактов найденных людей.\n"
                 f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
             )
@@ -4835,6 +4880,31 @@ class AnchorEngine:
                 }
         except Exception as _up_err:
             logger.debug("[AUTOPILOT] user profile load failed: %s", _up_err)
+
+        # ── Авто-обновление прогресса цели из EmailContact (replied/interested) ──
+        try:
+            from models import EmailContact as _EC_au
+            for _g_au in active_goals:
+                _gt_au = (_g_au.title or '').lower()
+                if (any(w in _gt_au for w in ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'лид', 'участник'))
+                        and (_g_au.metric_target or 0) > 0):
+                    _ec_count = session.query(_EC_au).filter(
+                        _EC_au.user_id == user.id,
+                        _EC_au.status.in_(['replied', 'interested']),
+                    ).count()
+                    if _ec_count > (_g_au.metric_current or 0):
+                        _g_au.metric_current = float(_ec_count)
+                        _g_au.progress_percentage = min(100, int(_ec_count * 100 / _g_au.metric_target))
+                        try:
+                            session.commit()
+                            logger.info(
+                                f"[AUTOPILOT] Auto-updated goal #{_g_au.id} from contacts: "
+                                f"{_ec_count}/{int(_g_au.metric_target)}"
+                            )
+                        except Exception:
+                            session.rollback()
+        except Exception as _au_err:
+            logger.debug("[AUTOPILOT] auto-update goal metric: %s", _au_err)
 
         # Формируем полный контекст
         context_data = {
