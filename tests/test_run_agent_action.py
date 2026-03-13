@@ -29,9 +29,14 @@ os.environ.setdefault("DEEPSEEK_API_KEY", "test")
 # ── minimal DB setup ──────────────────────────────────────────────────────────
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 import models
 
-engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 models.Base.metadata.create_all(engine)
 TestSession = sessionmaker(bind=engine)
 
