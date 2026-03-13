@@ -5556,7 +5556,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _ac = _json.dumps({
             '__agent': {'name': ag.get('name'), 'id': _ag_id, 'avatar_url': _av_url},
             'text': resp,
-            'tools_used': _agent_tools_used,
+            '__tools_used': _agent_tools_used,
         }, ensure_ascii=False)
         # Отправляем ответ агента в чат (Telegram: форматируется в progress_callback,
         # web SSE: агентский пузырь с аватаром). DB sync дедуплицирует через addMessage().
