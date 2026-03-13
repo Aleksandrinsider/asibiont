@@ -28,9 +28,14 @@ os.environ.setdefault("TELEGRAM_TOKEN", "123456:TEST")
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 import models
 
-engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 models.Base.metadata.create_all(engine)
 TestSession = sessionmaker(bind=engine)
 
@@ -40,7 +45,8 @@ import ai_integration.conversation_history as ch_mod
 import token_service as ts_mod
 import subscription_service as ss_mod
 
-for mod in (models, h_mod, ag_mod, ch_mod, ts_mod, ss_mod):
+_ALL_MODS = (models, h_mod, ag_mod, ch_mod, ts_mod, ss_mod)
+for mod in _ALL_MODS:
     mod.Session = TestSession
 
 UID = 888001  # основной тестовый пользователь
@@ -68,6 +74,17 @@ with TestSession() as s:
             goal_autopilot_enabled=True,
         ))
     s.commit()
+
+
+import pytest
+
+@pytest.fixture(autouse=True)
+def _restore_autopilot_session():
+    """Защита от кросс-тест контаминации: другие test-файлы перезаписывают h_mod.Session.
+    Перед каждым тестом возвращаем пропатченный TestSession обратно."""
+    for mod in _ALL_MODS:
+        mod.Session = TestSession
+    yield
 
 
 def run(coro):

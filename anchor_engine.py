@@ -2979,10 +2979,15 @@ class AnchorEngine:
                 f"{_stagnant_instr}\n"
                 f"Создай план для ВСЕХ {_n_agents} агентов — каждому ОДНО конкретное задание прямо СЕЙЧАС.\n"
                 "Правила:\n"
-                "1. Задание ИСПОЛЬЗУЕТ уникальную интеграцию агента (email/github/rss/другая).\n"
+                "1. Задание СТРОГО использует реальную интеграцию агента:\n"
+                "   • Email (IMAP/Gmail) → check_emails / send_outreach_email / start_email_campaign\n"
+                "   • RSS/лента → анализируй RSS через run_agent_action, ищи авторов статей\n"
+                "   • GitHub/GitLab → поиск разработчиков через run_agent_action\n"
+                "   • Если нет специальных интеграций → web_search / research_topic\n"
+                "   НЕ назначай web_search RSS-агенту и не назначай check_emails агенту без email!\n"
                 "2. Задания дополняют друг друга — не дублируют то, что агент уже делал.\n"
                 "3. Не используй глобально заблокированные инструменты.\n"
-                "4. Задание = конкретное действие + инструмент + цель.\n"
+                "4. Задание = конкретное действие + инструмент из его интеграций + цель.\n"
                 "5. Если агент уже делал действие — давай ему ДРУГОЕ задание.\n"
                 "6. Можно включить шаг для ASI (web_search/research_topic).\n"
                 "7. НЕ отправляй письма на адреса из списка 'уже получили письма'.\n"
@@ -3145,47 +3150,9 @@ class AnchorEngine:
                         logger.info("[COORD] skip %s — billing: %s", _ag_name, _bill_c2.get('error'))
                         continue
 
-                # Координатор даёт задание — живое сообщение
-                _assign_msg = f"{_ag_name}, задание: {_ag_task[:150]}"
-                try:
-                    _msg_p = (
-                        f"Ты — ASI, координатор. Дай задание агенту {_ag_name} одним предложением.\n"
-                        f"Задача: {_ag_task[:150]}. Инструмент: {_tool_hint or 'по ситуации'}.\n"
-                        f"По имени, конкретно, без markdown, без [АВТОПИЛОТ]."
-                    )
-                    _msg_gen = await asyncio.wait_for(
-                        _quick_ai_call_raw([{"role": "user", "content": _msg_p}], max_tokens=60),
-                        timeout=8,
-                    )
-                    if _msg_gen and len(_msg_gen.strip()) > 15:
-                        _assign_msg = _msg_gen.strip()
-                except Exception:
-                    pass
-
-                if self.bot:
-                    try:
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=f"ASI → {_ag_name}:\n\n{_assign_msg}",
-                        )
-                    except Exception:
-                        pass
-                try:
-                    session.add(Interaction(
-                        user_id=user.id, message_type='agent_msg',
-                        content=json.dumps({
-                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': _assign_msg,
-                            '__to_agent': _ag_name,
-                            '__anchor_type': 'coordinator_assignment',
-                        }, ensure_ascii=False),
-                    ))
-                    session.commit()
-                except Exception:
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
+                # Индивидуальные per-agent assignment сообщения убраны:
+                # ASI уже отправил развёрнутый анонс выше — повторное сообщение = дубль.
+                # Агент просто выполняет задачу и отчитывается в чат сам.
 
                 # Собираем agent_data для _exec_agent_for_director
                 if _is_asi_step:
