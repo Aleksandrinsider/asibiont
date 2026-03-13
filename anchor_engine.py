@@ -147,13 +147,20 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
 
 # ── Таблица планов по интеграциям: (предикат, тип, заголовок, [пункты плана]) ──
 _INTEGRATION_PLANS = [
-    # Email / IMAP / SMTP
-    (lambda c: any(w in c for w in ('mail', 'почт', 'email', 'imap', 'smtp', 'gmail', 'resend')),
+    # Email / IMAP — агент с подключённым почтовым ящиком (Gmail/Яндекс/Mail.ru)
+    (lambda c: any(w in c for w in ('mail', 'почт', 'email', 'imap', 'smtp', 'gmail', 'yandex', 'mailru')),
      'email',
-     "Твой уникальный инструмент — email. Пиши, получай, отвечай.",
+     "Твой уникальный инструмент — чтение входящих (check_emails). Только ты можешь читать ответы на письма и реплаить. Отправлять через Resend могут все агенты и ASI — это обычный канал.",
      ["A) check_emails → есть ответ → reply_to_outreach_email → update_goal_progress",
       "B) find_relevant_contacts_for_task → send_outreach_email → update_goal_progress",
-      "C) list_email_contacts → выбери нового → send_outreach_email"]),
+      "C) list_email_contacts → выбери нового (не из памяти) → send_outreach_email"]),
+    # Outreach-письма (Resend) — агенты с send_outreach_email, но без IMAP
+    (lambda c: any(w in c for w in ('outreach', 'письм')),
+     'outreach',
+     "Ты можешь отправлять outreach-письма через платформу (Resend). Чтение входящих (check_emails) — только для агентов с подключённым почтовым ящиком.",
+     ["A) find_relevant_contacts_for_task → send_outreach_email → update_goal_progress",
+      "B) web_search → save_email_contact → send_outreach_email → update_goal_progress",
+      "C) list_email_contacts → выбери новых (не из памяти) → send_outreach_email"]),
     # GitHub / GitLab
     (lambda c: any(w in c for w in ('github', 'gitlab')),
      'github',
@@ -249,7 +256,8 @@ _INTEGRATION_PLANS = [
 
 # Тип интеграции → описание для матрицы делегирования
 _INTEGRATION_TYPE_LABELS = {
-    'email':     'отправка/получение писем',
+    'email':     'чтение входящих / ответы (check_emails)',
+    'outreach':  'отправка outreach-писем (send_outreach_email)',
     'github':    'поиск разработчиков/контрибьюторов',
     'rss':       'мониторинг ленты/поиск авторов',
     'slack':     'коммуникация/рассылка в Slack',
@@ -301,13 +309,21 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _matched_type = _itype
             # Добавляем cross-referral хинт для интеграций email/github/rss
             _cross = ''
-            if _itype != 'email' and team_profiles:
+            if _itype not in ('email', 'outreach') and team_profiles:
+                # Для не-email агентов: намекаем делегировать отправку email-агенту
                 _em_col = next((tp['name'] for tp in team_profiles
                                 if any(w in c.lower() for c in tp.get('capabilities', [])
                                        for w in ('mail', 'email', 'smtp', 'gmail'))), None)
                 if _em_col:
                     _cross = f"\n  D) Нашёл email/контакт → DELEGATE[{_em_col}]: отправь outreach [email] — [цель]."
-            if _itype == 'email' and team_profiles:
+            elif _itype == 'outreach' and team_profiles:
+                # Outreach-агент сам умеет слать, но не читать — делегирует чтение IMAP-агенту
+                _imap_col = next((tp['name'] for tp in team_profiles
+                                  if any(w in c.lower() for c in tp.get('capabilities', [])
+                                         for w in ('imap', 'gmail', 'yandex', 'mailru', 'провер', 'check_email'))), None)
+                if _imap_col:
+                    _cross = f"\n  D) Ждёшь ответа? → DELEGATE[{_imap_col}]: check_emails — прочитай входящие ответы."
+            elif _itype == 'email' and team_profiles:
                 _gh_col = next((tp['name'] for tp in team_profiles
                                 if any(w in c.lower() for c in tp.get('capabilities', [])
                                        for w in ('github', 'gitlab'))), None)
@@ -353,6 +369,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             for _p3, _t3, _, __ in _INTEGRATION_PLANS:
                 if _t3 == _matched_type:
                     continue  # Не делегируем самому себе
+                # email-агент сам умеет отправлять — не нужно делегировать outreach
+                if _matched_type == 'email' and _t3 == 'outreach':
+                    continue
                 if any(_p3(c3) for c3 in _tp_c) and _t3 in _INTEGRATION_TYPE_LABELS:
                     _label3 = _INTEGRATION_TYPE_LABELS[_t3]
                     _delegate_hints.append(f"  → Нужно '{_label3}' → DELEGATE[{tp['name']}]: [konkretnaя задача с данными]")
@@ -4627,15 +4646,14 @@ class AnchorEngine:
             logger.debug("[AUTOPILOT] per_agent_history: %s", _pah_err)
 
         # Уже отправленные письма — не писать повторно одним и тем же адресатам
+        # Запрашиваем по user_id напрямую (не только по активным кампаниям)
         _already_sent_emails: list = []
         try:
-            _ecids = [c.id for c in email_campaigns]
-            if _ecids:
-                _sent_outreach = session.query(EmailOutreach).filter(
-                    EmailOutreach.campaign_id.in_(_ecids),
-                    EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-                ).limit(100).all()
-                _already_sent_emails = list({o.recipient_email for o in _sent_outreach if o.recipient_email})
+            _sent_outreach = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).order_by(EmailOutreach.sent_at.desc()).limit(200).all()
+            _already_sent_emails = list({o.recipient_email for o in _sent_outreach if o.recipient_email})
         except Exception as _ase_err:
             logger.debug("[AUTOPILOT] already_sent_emails: %s", _ase_err)
 
