@@ -1052,12 +1052,11 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                     logger.warning(f"[PTM] spend_tokens failed for user {user_id}: {_spend_result}")
         except Exception as e:
             logger.error(f"Error in autonomous chat for user {user_id}: {e}", exc_info=True)
+            response_text = "Sorry, an error occurred while processing your message." if lang == 'en' else "Что-то пошло не так — попробуй ещё раз"
             try:
-                err_msg = "Sorry, an error occurred while processing your message." if lang == 'en' else "Что-то пошло не так — попробуй ещё раз"
-                await message.bot.send_message(message.chat.id, err_msg)
+                await message.bot.send_message(message.chat.id, response_text)
             except Exception:
                 logger.error(f"Failed to send error message to user {user_id}")
-            response_text = ""
         finally:
             db_session.close()
         
