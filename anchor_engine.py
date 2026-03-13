@@ -498,14 +498,19 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_memory_block}\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
-        "2. Сам анализируй каталог и выбирай лучшую цепочку под свою цель и интеграции.\n"
-        "3. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress.\n"
-        "4. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
-        "5. Каждый цикл = другие инструменты: если уже делал web_search → пробуй research_topic, "
+        "2. Работай ПО СВОЕЙ РОЛИ и специализации — не выходи за рамки профиля.\n"
+        "   Аналитик — анализирует, исследует, оценивает. Маркетолог — контент, аудитория.\n"
+        "   HR/рекрутер — поиск людей. Если задача не твоя — делегируй коллеге.\n"
+        "3. Задания МОГУТ БЫТЬ КОСВЕННЫМИ: изучи тренды → предложи темы, найди экспертов → сохрани,\n"
+        "   проанализируй конкурентов → сделай вывод. НЕ ОБЯЗАТЕЛЬНО прямые массовые действия.\n"
+        "4. Сам анализируй каталог и выбирай лучшую цепочку под свою цель и интеграции.\n"
+        "5. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress.\n"
+        "6. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
+        "7. Каждый цикл = другие инструменты: если уже делал web_search → пробуй research_topic, "
         "negotiate_by_email, find_and_message_relevant_users, start_content_campaign и т.д.\n"
-        "6. НЕ пиши одним и тем же людям повторно.\n"
-        "7. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
-        + (f"8. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
+        "8. НЕ пиши одним и тем же людям повторно.\n"
+        "9. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
+        + (f"10. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
            if _first_goal_title else "")
     )
 
@@ -3047,6 +3052,8 @@ class AnchorEngine:
                     'name': ag.name,
                     'id': getattr(ag, 'id', 0),
                     'job': ag.job_title or ag.specialization or '',
+                    'desc': (getattr(ag, 'description', '') or '')[:200],
+                    'spec': getattr(ag, 'specialization', '') or '',
                     'caps': _caps[:6],
                     'tools': _tools_list[:8],
                 })
@@ -3074,16 +3081,12 @@ class AnchorEngine:
                     ' | '.join(h[:100] for h in _hist[:3])
                     if _hist else 'нет истории'
                 )
-                _profiles_lines.append(
-                    f'  - "{p["name"]}" ({p["job"]}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
-                    f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
-                    f'\n    последние действия: {_hist_str}'
-                )
-            _profiles_str = '\n'.join(_profiles_lines)
-
-            _email_campaigns_raw = data.get('email_campaigns', [])
-            _email_campaigns_str = (
-                '\n'.join(f'  {e}' for e in _email_campaigns_raw)
+                    _desc_part = f', описание: {p["desc"][:150]}' if p.get('desc') else ''
+                    _spec_part = f' [{p["spec"]}]' if p.get('spec') else ''
+                    _profiles_lines.append(
+                        f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
+                        f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
+                        f'{_desc_part}'
                 if _email_campaigns_raw else 'нет активных кампаний'
             )
             _n_agents = len(_profiles)
@@ -3134,35 +3137,42 @@ class AnchorEngine:
                 f"Глобально заблокированные инструменты: {_failed_str}\n"
                 f"{_banned_tools_str}"
                 f"{_stagnant_instr}\n"
-                f"Создай план для ВСЕХ {_n_agents} агентов — каждому ОДНО конкретное задание прямо СЕЙЧАС.\n"
-                "\nДОСТУПНЫЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ (полный список — выбирай любой подходящий):\n"
+                f"Создай план для ВСЕХ {_n_agents} агентов — каждому задание по ЕГО ПРОФИЛЮ и специализации.\n"
+                "\nДОСТУПНЫЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ (выбирай любой подходящий):\n"
                 "  📧 Email: send_outreach_email, start_email_campaign, check_emails(только IMAP), "
                 "reply_to_outreach_email, send_follow_up_email, negotiate_by_email, "
                 "save_email_contact, list_email_contacts\n"
-                "  🔍 Поиск: web_search, research_topic, quick_topic_search, "
-                "find_relevant_contacts_for_task, find_partners, get_news_trends, analyze_situation_and_suggest_tasks\n"
+                "  🔍 Поиск/анализ: web_search, research_topic, quick_topic_search, get_news_trends, "
+                "find_relevant_contacts_for_task, find_partners, analyze_situation_and_suggest_tasks\n"
                 "  📢 Контент: create_post, publish_to_telegram, publish_to_discord, generate_image, "
                 "generate_marketing_content, start_content_campaign, find_and_message_relevant_users\n"
                 "  🤝 Делегирование: delegate_task, start_delegation_campaign, send_message_to_user\n"
                 "  🎯 Задачи/цели: add_task, update_goal_progress, schedule_background_task, set_contact_alert\n"
-                "  ⚙️ Внешние интеграции (нужен python_code): run_agent_action (RSS/GitHub/Slack/Notion/CRM/маркетплейс...)\n"
-                "\nПравила:\n"
-                "1. Задание отталкивается от РЕАЛЬНЫХ интеграций агента (см. капабилити выше).\n"
-                "   Если у агента IMAP/Gmail — check_emails/send_outreach_email/negotiate_by_email.\n"
-                "   Если RSS/python_code — run_agent_action(get_latest/search).\n"
-                "   Если GitHub — run_agent_action(search_users/find_contributors).\n"
-                "   Нет спец. интеграций — web_search/research_topic/quick_topic_search/create_post.\n"
-                "2. Задания РАЗНЫЕ — не дублируют друг друга и не повторяют историю агента.\n"
-                "3. 🚫 Заблокированные инструменты — строго не назначать! Используй ЧТО-ТО ДРУГОЕ из каталога выше.\n"
-                "4. Задание = КОНКРЕТНОЕ действие + инструмент + параметры + привязка к цели.\n"
-                "5. Каждый агент получает уникальное задание — не дублируй между агентами.\n"
+                "  ⚙️ Внешние интеграции (нужен python_code): run_agent_action (RSS/GitHub/Slack/Notion/CRM...)\n"
+                "\nПРАВИЛА:\n"
+                "1. 🎭 ЗАДАНИЕ = ПО ПРОФИЛЮ агента (имя + должность + описание выше).\n"
+                "   Аналитик/финансист → research_topic, get_news_trends, analyze_situation_and_suggest_tasks.\n"
+                "   SMM/контент → generate_marketing_content, quick_topic_search, create_post.\n"
+                "   HR/рекрутер → find_relevant_contacts_for_task (кандидаты/тестировщики).\n"
+                "   Email-агент (IMAP/Gmail) → check_emails, send_outreach_email, negotiate_by_email.\n"
+                "   RSS/скрипты → run_agent_action(get_latest/search).\n"
+                "   GitHub → run_agent_action(search_users/find_contributors).\n"
+                "   Общий профиль → web_search/research_topic по теме его специализации.\n"
+                "   ЗАПРЕЩЕНО давать агенту задачи ВНЕ его профиля (HR-задачи аналитику, поиск кода маркетологу).\n"
+                "2. 💡 ЗАДАНИЯ МОГУТ БЫТЬ КОСВЕННЫМИ и аналитическими:\n"
+                "   'изучи тренды X и предложи темы для постов', 'мониторь конкурентов, сделай сравнительный анализ',\n"
+                "   'найди экспертов в X и сохрани как контакт', 'оцени текущий прогресс цели и предложи следующий шаг'.\n"
+                "   НЕ ОБЯЗАТЕЛЬНО прямое массовое действие (send_email всем) — ДУМАЙ, АНАЛИЗИРУЙ, СОВЕТУЙ.\n"
+                "3. Задания РАЗНЫЕ — не дублируют друг друга и не повторяют историю агента.\n"
+                "4. 🚫 Заблокированные инструменты — строго не назначать! Выбери другой из каталога.\n"
+                "5. Задание = КОНКРЕТНОЕ: инструмент + параметры + привязка к цели.\n"
                 "6. НЕ назначай check_emails агенту без IMAP-ключей.\n"
                 "7. НЕ отправляй письма адресатам из списка 'уже получили письма'.\n"
                 "8. Если кампаний нет — email-агент ОБЯЗАН вызвать start_email_campaign первым делом.\n"
-                "9. Поощряй разнообразие: используй negotiate_by_email, send_follow_up_email, "
-                "quick_topic_search, generate_marketing_content, set_contact_alert если базовые шаги уже сделаны.\n"
+                "9. Поощряй разнообразие: negotiate_by_email, send_follow_up_email, "
+                "quick_topic_search, generate_marketing_content если базовые шаги уже сделаны.\n"
                 f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
-                '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
+                '[{"agent": "имя", "task": "задача 2-3 предл. по профилю агента", "tool": "главный_инструмент"}]'
             )
 
             try:
