@@ -3975,6 +3975,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Если видишь email в данных скрипта или в письме — используй ТОЧНО его, без изменений. "
         "Генерировать email из имени человека = ОШИБКА.\n\n"
 
+        + (f"ТВОИ ИНТЕГРАЦИИ:\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "") +
         f"ТВОЯ РОЛЬ:\n{_persona}"
     )
     # Гендерная инструкция — чтобы агент использовал правильный род
@@ -4112,11 +4113,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         logger.debug('[DIRECTOR-EXEC] team load for agent: %s', _te_team)
 
     # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
-    # Пропускаем для автопилота: экономит 35с + предотвращает OOM от IMAP/RSS subprocess
-    # Агент использует платформенные инструменты (web_search, add_task и т.д.) для автопилота
-    # Если нужны внешние данные — агент вызовет run_agent_action явно через tool-call
+    # Пропускаем для автопилота: экономит 35с + предотвращает hang от IMAP/RSS subprocess.
+    # В автопилоте агент использует платформенные инструменты (check_emails, run_agent_action и т.д.)
+    # напрямую через tool-calling — это быстрее и безопаснее чем subprocess в executor.
     script_context = ""
-    if (agent.get('python_code') or '').strip():
+    if not _is_autopilot_task and (agent.get('python_code') or '').strip():
         try:
             _wrapped = _wrap_agent_code(agent['python_code'].strip())
             _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os2.environ.get('PATH', '/usr/bin:/bin')}
@@ -5088,6 +5089,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         return None
 
     # ── Ранний фильтр: вопрос без прямого обращения к агенту → ASI ответит сам ──
+    # Исключение: вопросы про интеграции агента (почта, GitHub) → нужен ЭТОТ агент
     # Проверяем ДО тяжёлых DB-запросов (_build_user_context_sync, история)
     if _is_question_message(user_message):
         _msg_lc_early = user_message.lower().strip()
@@ -5096,7 +5098,22 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             and (_a.get('name') or '').lower() in _msg_lc_early
             for _a in _agents
         )
+        # Вопрос об интеграции конкретного агента: "что в почте?", "check github", "новые письма?"
+        _integration_question = False
         if not _has_agent_mention_early:
+            _email_q = any(w in _msg_lc_early for w in (
+                'почт', 'письм', 'email', 'gmail', 'inbox', 'входящ', 'рассылк',
+            ))
+            _github_q = any(w in _msg_lc_early for w in ('github', 'gitlab', 'репо', 'коммит'))
+            for _a in _agents:
+                _ak = (_a.get('user_api_keys') or '').lower()
+                if _email_q and any(w in _ak for w in ('gmail', 'imap', 'smtp', 'mail')):
+                    _integration_question = True
+                    break
+                if _github_q and any(w in _ak for w in ('github', 'gitlab')):
+                    _integration_question = True
+                    break
+        if not _has_agent_mention_early and not _integration_question:
             logger.debug("[DIRECTOR] early filter: question without agent mention, skip")
             return None
 

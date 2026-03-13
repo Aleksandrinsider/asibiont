@@ -1709,13 +1709,23 @@ class AnchorEngine:
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
                     _gl_titles = [g.get('title', '')[:40] for g in data.get('goals', [])[:2]]
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
-                    _intg_hint = ''
+                    # Определяем главную интеграцию агента → живое поручение под специализацию
+                    _api_keys_low = agent_data.get('user_api_keys', '').lower()
+                    if any(w in _api_keys_low for w in ('gmail', 'imap', 'smtp', 'mail')):
+                        _action_verb = "проверь почту и займись"
+                    elif any(w in _api_keys_low for w in ('github', 'gitlab')):
+                        _action_verb = "поищи через GitHub контакты для"
+                    elif _detected:
+                        _action_verb = "используй свои инструменты для"
+                    else:
+                        _action_verb = "займись"
+                    _intg_note = ''
                     if _detected:
-                        _short = [str(d).split('(')[0].strip() for d in _detected[:3]]
-                        _intg_hint = f" (интеграции: {', '.join(_short)})"
+                        _short = [str(d).split('(')[0].strip() for d in _detected[:2]]
+                        _intg_note = f" [{', '.join(_short)}]"
                     _coord_text = (
-                        f"@{_chosen_name}, твоя задача: {_brief_task}.{_intg_hint} "
-                        "Действуй через свои интеграции и отчитайся фактами."
+                        f"{_chosen_name}, {_action_verb}: {_brief_task}.{_intg_note} "
+                        "Жду отчёт фактами — что нашёл, что сделал."
                     )
                     try:
                         _cs = Session()
