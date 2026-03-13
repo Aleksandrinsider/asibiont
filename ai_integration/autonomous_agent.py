@@ -482,17 +482,14 @@ class HybridAutonomousAgent:
 
     # ===== ADAPTIVE TOOL CHOICE =====
 
-    # Тривиальные сообщения — tool_choice=auto (не заставляем)
+    # Умный выбор tool_choice: required для действий, auto для разговора
     def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
-        """PERF_OPT_V1: всегда auto — убрали лишний round-trip при пустом профиле.
+        """Возвращает "auto" — модель сама решает когда вызывать инструменты.
         
-        Откат: вернуть `if filled < 2: return "required"` после подсчёта filled.
+        tool_choice="required" используется только в автопилоте (_exec_agent_for_director),
+        где агент ОБЯЗАН совершить действие. В чате модель определяет это самостоятельно
+        на основе system prompt и контекста — точнее любой ключевой эвристики.
         """
-        profile_data = profile_data or {}
-        key_fields = ['city', 'company', 'position', 'skills', 'interests', 'goals']
-        filled = sum(1 for f in key_fields if profile_data.get(f))
-        # PERF_OPT_V1: было return "required" когда filled < 2
-        logger.info(f"[HYBRID] tool_choice=auto (profile {filled}/6) for: '{user_message[:50]}'")
         return "auto"
 
     # Phrases moved to i18n.py — these are fallbacks only
@@ -3838,7 +3835,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _intg_action_hint = ''.join(_hints[:3])
 
     if _is_autopilot_task:
-        # ── Динамический список коллег из task context ──
+        # ── Компактный autopilot system prompt ──
+        # Принцип: минимум правил, максимум конкретики.
+        # Агент — живой специалист: вызывает инструменты СВОЕЙ специализации,
+        # отчитывается фактами, делегирует коллегам через DELEGATE[].
         import re as _re_team
         _team_section = ''
         _team_match = _re_team.search(r'ТВОЯ КОМАНДА[^\n]*\n((?:  [•\-].*\n)*)', task or '')
@@ -3847,61 +3847,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         elif 'ТВОЯ КОМАНДА:' in (task or ''):
             _m2 = _re_team.search(r'ТВОЯ КОМАНДА:[^\n]+', task or '')
             _team_section = _m2.group(0) if _m2 else ''
-
-        # Примеры делегирования — из реальных коллег из контекста
-        _delegate_examples = ''
         _colleague_names = _re_team.findall(r'•\s+(\S+)\s+\(', _team_section) if _team_section else []
+        _delegate_example = ''
         if _colleague_names:
-            _first = _colleague_names[0]
-            _delegate_examples = (
-                f"  • Нашёл контакт/данные для коллеги → DELEGATE[{_first}]: задача с конкретными данными\n"
-            )
+            _fn = _colleague_names[0]
+            _delegate_example = f"Нашёл данные для коллеги → DELEGATE[{_fn}]: задача с конкретными данными."
 
-        # ── Autopilot: агент как самостоятельный специалист ──
         system_prompt = (
-            f"Ты — {agent['name']}, специалист в команде ASI Biont. Сейчас: {_now_str}.\n"
-            f"Пиши от первого лица как {agent['name']}.\n\n"
-
-            "КАК ТЫ ДУМАЕШЬ перед каждым действием:\n"
-            "1. Что конкретно я могу сделать ПРЯМО СЕЙЧАС своими инструментами?\n"
-            "2. Какой ОДИН шаг приблизит цель к результату?\n"
-            "3. Что я ПОЛУЧИЛ (имя, email, ссылка, ответ, число) — это и есть мой отчёт.\n\n"
-
-            "ТЫ РАБОТАЕШЬ КАК ЖИВОЙ СПЕЦИАЛИСТ:\n"
-            "Представь что ты сидишь за компьютером и тебе дали задачу. Ты не рассказываешь что 'планируешь сделать' — \n"
-            "ты ОТКРЫВАЕШЬ нужный сервис, ДЕЛАЕШЬ действие, и СООБЩАЕШЬ результат.\n"
-            "Твой ответ юзеру — это краткий отчёт О ЧЁМ ТЫ УЗНАЛ, а не о том что ты делал.\n\n"
-
-            "ФОРМАТ ТВОЕГО ОТВЕТА — только факты из действий:\n"
-            "  'Отправила письмо Ивану Петрову (ivan@mail.ru) с предложением тестирования.'\n"
-            "  'В RSS нашла статью про multi-agent системы (habr.com/...) — авторы из Яндекса, их контакт...'\n"
-            "  'Проверила входящие — ответ от Марии К.: готова попробовать, просит ссылку на бота.'\n"
-            "  'Через web_search нашла 3 Telegram-группы QA: Testing Chat (5к), QA Russia (12к), Автотесты (3к).'\n\n"
-
-            "Если инструмент не дал результата — попробуй другой подход, не описывай неудачу.\n"
+            f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
+            f"Работаешь в команде ASI Biont. Сейчас: {_now_str}.\n"
+            f"{_intg_line}\n\n"
+            "СДЕЛАЙ ОДНО конкретное действие прямо сейчас — используй свой главный инструмент.\n"
+            "Отчёт юзеру = 2-3 предложения ФАКТОВ: что нашёл, кому написал, что узнал.\n"
+            "Примеры хорошего отчёта:\n"
+            "  «Проверила входящие — ответ от Марии К.: готова тестировать, просит ссылку.»\n"
+            "  «В RSS нашёл статью про multi-agent на Хабре, контакт автора: user@habr.com.»\n"
+            "  «web_search: нашёл 3 TG-группы QA (5к, 12к, 3к чел.), добавил в задачу.»\n\n"
+            "Делегируй коллеге ТОЛЬКО если у него есть нужная интеграция, которой у тебя нет.\n"
+            + (f"Формат: {_delegate_example}\n" if _delegate_example else "Формат: DELEGATE[Имя]: задача с данными.\n") +
             "Если ничего не получилось — верни пустую строку, не выдумывай.\n\n"
-
-            "САМОАНАЛИЗ ИНТЕГРАЦИЙ:\n"
-            "Если для задачи нужен сервис, которого у тебя нет (нет ключей/скрипта) — "
-            "скажи пользователю конкретно: «Для этого мне нужна интеграция с X. "
-            "Добавь ключи в настройках агента на дашборде.» "
-            "Доступные интеграции платформы: Gmail, Яндекс Почта, Mail.ru, "
-            "GitHub, Notion, Slack, Telegram Bot, Discord, Trello, Jira, Airtable, "
-            "Bitrix24, AmoCRM, HubSpot, RSS, Google Sheets, Ozon, Wildberries, и др.\n\n"
-
-            "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ:\n"
-            + (_delegate_examples or "  DELEGATE[Имя]: конкретная задача с данными, которые ты уже нашёл\n") +
-            "\n"
-
-            "ПРАВИЛО web_search/research_topic:\n"
-            "Эти инструменты — ТОЛЬКО для исследований тем, трендов, аналитики.\n"
-            "Для поиска людей и контактов — используй СВОИ интеграции (GitHub API, email контакты, RSS).\n"
-            "Если у тебя нет интеграции для поиска людей — делегируй коллеге у которого она есть.\n\n"
-
-            f"Инструменты: используй схему API{_intg_line}\n"
-            "update_goal_progress — ТОЛЬКО после реального нового контакта/результата.\n\n"
-
-            f"ТВОЯ РОЛЬ:\n{_persona}"
+            f"{_persona}"
         )
     else:
         system_prompt = (

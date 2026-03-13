@@ -1132,6 +1132,24 @@ class AnchorEngine:
             from ai_integration.autonomous_agent import _exec_agent_for_director
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
 
+            # ── Guard: предотвращаем дублирование при параллельных scan-циклах ──
+            # Если для этого якоря уже выполняется dispatch (in_progress < 3 мин) — пропускаем.
+            try:
+                from sqlalchemy import text as _guard_text
+                _recent = session.execute(_guard_text(
+                    "SELECT id FROM agent_activity_log "
+                    "WHERE user_id=:uid AND target=:tgt AND status='in_progress' "
+                    "AND created_at > NOW() - INTERVAL '3 minutes'"
+                ), {'uid': user.id, 'tgt': anchor.source}).fetchone()
+                if _recent:
+                    logger.info(
+                        "[DISPATCH-GUARD] Skip duplicate dispatch for %s (AAL id=%s in_progress)",
+                        anchor.source, _recent[0]
+                    )
+                    return
+            except Exception as _guard_err:
+                logger.debug("[DISPATCH-GUARD] guard check failed (non-critical): %s", _guard_err)
+
             # Используем только агентов с AgentSubscription — те что пользователь активировал в чате
             from models import AgentSubscription as _AS_ap
             _sub_ids = {r.agent_id for r in session.query(_AS_ap).filter_by(user_id=user.id).all()}
