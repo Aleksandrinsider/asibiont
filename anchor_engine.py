@@ -1700,10 +1700,51 @@ class AnchorEngine:
                         except Exception:
                             pass
 
-                # ── Сохраняем имя/id агента ДО любых коммитов (session.commit() expiry) ──
-                _chosen_id = getattr(chosen, 'id', 0)
-                _chosen_name = getattr(chosen, 'name', '') or agent_name
-                _chosen_avatar = _safe_avatar(getattr(chosen, 'avatar_url', ''), _chosen_id)
+                # ── Берём id/name/avatar из agent_data (сформирован до любых commit-ов) ──
+                _chosen_id = agent_data.get('id', 0)
+                _chosen_name = agent_data.get('name', '') or agent_name
+                _chosen_avatar = agent_data.get('avatar_url', '')
+
+                # ── Координатор назначает задачу ПЕРЕД биллингом (всегда видно в чате) ──
+                if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
+                    _gl_titles = [g.get('title', '')[:40] for g in data.get('goals', [])[:2]]
+                    _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
+                    _intg_hint = ''
+                    if _detected:
+                        _short = [str(d).split('(')[0].strip() for d in _detected[:3]]
+                        _intg_hint = f" (интеграции: {', '.join(_short)})"
+                    _coord_text = (
+                        f"@{_chosen_name}, твоя задача: {_brief_task}.{_intg_hint} "
+                        "Действуй через свои интеграции и отчитайся фактами."
+                    )
+                    try:
+                        _cs = Session()
+                        try:
+                            _coord_content = json.dumps({
+                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                'text': _coord_text,
+                                '__to_agent': _chosen_name,
+                                '__anchor_type': 'goal_autopilot_assignment',
+                            }, ensure_ascii=False)
+                            _cs.add(Interaction(
+                                user_id=user.id,
+                                message_type='agent_msg',
+                                content=_coord_content,
+                            ))
+                            _cs.commit()
+                            logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
+                        finally:
+                            _cs.close()
+                        if self.bot:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=f"ASI → {_chosen_name}:\n\n{_coord_text}",
+                                )
+                            except Exception:
+                                pass
+                    except Exception as _cas_err:
+                        logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
                 # ── Биллинг кастомного агента (роялти автору) ──
                 if _chosen_id != 0:
@@ -1720,49 +1761,6 @@ class AnchorEngine:
                     _ap_task_id = _cadt(user.id, agent_data, task_text[:200])
                 except Exception as _cadt_err:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
-
-                # ── Координатор назначает задачу: сообщение в чат (видно в веб-чате и Telegram) ──
-                if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
-                    _gl_titles = [g.get('title', '')[:40] for g in data.get('goals', [])[:2]]
-                    _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
-                    _intg_hint = ''
-                    if _detected:
-                        _short = [str(d).split('(')[0].strip() for d in _detected[:3]]
-                        _intg_hint = f" (интеграции: {', '.join(_short)})"
-                    _coord_text = (
-                        f"@{_chosen_name}, твоя задача: {_brief_task}.{_intg_hint} "
-                        "Действуй через свои интеграции и отчитайся фактами."
-                    )
-                    # Используем отдельную сессию — main session может быть expired после billing commit
-                    try:
-                        from models import Session as _CoordSession
-                        _cs = _CoordSession()
-                        try:
-                            _coord_content = json.dumps({
-                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                'text': _coord_text,
-                                '__to_agent': _chosen_name,
-                                '__anchor_type': 'goal_autopilot_assignment',
-                            }, ensure_ascii=False)
-                            _cs.add(Interaction(
-                                user_id=user.id,
-                                message_type='agent_msg',
-                                content=_coord_content,
-                            ))
-                            _cs.commit()
-                            logger.info("[ANCHOR-AUTOPILOT] coord-assign saved for user %d → %s", user.id, _chosen_name)
-                        finally:
-                            _cs.close()
-                        if self.bot:
-                            try:
-                                await self.bot.send_message(
-                                    chat_id=user.telegram_id,
-                                    text=f"ASI → {_chosen_name}:\n\n{_coord_text}",
-                                )
-                            except Exception:
-                                pass
-                    except Exception as _cas_err:
-                        logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
                 try:
                     # Ограничиваем task_text для экономии input-токенов DeepSeek
