@@ -11191,11 +11191,43 @@ async def add_email_leads(
                 parsed = []
 
             if not parsed and isinstance(leads, str):
-                # Простой список email через запятую/перенос строки
-                for line in re.split(r'[,\n;]+', leads):
-                    email_addr = line.strip()
-                    if '@' in email_addr and '.' in email_addr:
-                        parsed.append({'email': email_addr})
+                # Простой список email через запятую/перенос строки.
+                # ВАЖНО: сначала пробуем парсить каждую строку как JSON-объект,
+                # чтобы не сохранять фрагменты вроде '{"email": "foo@bar.com"'
+                # (это происходит когда AI передаёт JSONL-строку и json.loads fails,
+                # тогда split(',') режет JSON-объекты по запятым внутри них).
+                _email_re = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
+                _seen_emails_fp: set = set()
+                for line in re.split(r'\n', leads):
+                    line = line.strip(' ,;[]')
+                    if not line:
+                        continue
+                    # Попытка: парсим строку как JSON-объект (JSONL формат)
+                    if line.startswith('{'):
+                        try:
+                            _obj = json.loads(line.rstrip(','))
+                            if isinstance(_obj, dict):
+                                _em = str(_obj.get('email', '')).strip().lower()
+                                if _em and '@' in _em and _em not in _seen_emails_fp:
+                                    _seen_emails_fp.add(_em)
+                                    parsed.append({k: v for k, v in _obj.items()})
+                                continue
+                        except Exception:
+                            pass
+                        # Fallback: вытащить email regex из фрагмента JSON
+                        _match = _email_re.search(line)
+                        if _match:
+                            _em = _match.group(0).lower()
+                            if _em not in _seen_emails_fp:
+                                _seen_emails_fp.add(_em)
+                                parsed.append({'email': _em})
+                        continue
+                    # Обычная строка: ищем email регуляркой
+                    for _m in _email_re.finditer(line):
+                        _em = _m.group(0).lower()
+                        if _em not in _seen_emails_fp:
+                            _seen_emails_fp.add(_em)
+                            parsed.append({'email': _em})
 
         if not parsed:
             return " Не удалось распарсить email-адреса. Укажи JSON или через запятую."

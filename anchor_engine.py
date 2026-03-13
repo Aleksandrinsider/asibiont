@@ -393,6 +393,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + "\nЕсли прошлое действие не принесло результата — используй ДРУГОЙ инструмент.\n"
         )
 
+    # ── Имена активных целей для привязки задач ──
+    _first_goal_title = goals_summary[0].get('title', '') if goals_summary else ''
+
     return (
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Твои интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
@@ -407,6 +410,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "4. Отчёт = ФАКТЫ: что нашёл, кому написал, что ответили.\n"
         "5. Инструмент не работает → сразу пробуй следующий из плана выше.\n"
         "6. НЕ пиши людям из памяти повторно — они уже контактированы.\n"
+        + (f"7. При вызове add_task ВСЕГДА передавай goal_title='{_first_goal_title}' чтобы задача была привязана к цели.\n"
+           if _first_goal_title else "")
     )
 
 # Группы батчинга
@@ -1953,22 +1958,48 @@ class AnchorEngine:
                     try:
                         _cs = Session()
                         try:
-                            _coord_content = json.dumps({
-                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                'text': _coord_text,
-                                '__to_agent': _chosen_name,
-                                '__anchor_type': 'goal_autopilot_assignment',
-                            }, ensure_ascii=False)
-                            _cs.add(Interaction(
-                                user_id=user.id,
-                                message_type='agent_msg',
-                                content=_coord_content,
-                            ))
-                            _cs.commit()
-                            logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
+                            # ── DEDUP: не отправляем если очень похоже на последние coord-сообщения ──
+                            _skip_coord = False
+                            try:
+                                _recent_coords = _cs.query(Interaction).filter(
+                                    Interaction.user_id == user.id,
+                                    Interaction.message_type == 'agent_msg',
+                                    Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=3),
+                                ).order_by(Interaction.created_at.desc()).limit(5).all()
+                                for _rc in _recent_coords:
+                                    try:
+                                        _rc_d = json.loads(_rc.content or '{}')
+                                        if _rc_d.get('__anchor_type') == 'goal_autopilot_assignment':
+                                            _rc_words = set((_rc_d.get('text', '') or '').lower().split())
+                                            _new_words = set((_coord_text or '').lower().split())
+                                            if _rc_words and _new_words:
+                                                _overlap = len(_rc_words & _new_words) / max(len(_rc_words | _new_words), 1)
+                                                if _overlap > 0.65:
+                                                    _skip_coord = True
+                                                    logger.info("[ANCHOR-AUTOPILOT] coord-assign DEDUP: %.0f%% overlap with recent, skip sending", _overlap * 100)
+                                                    break
+                                    except Exception:
+                                        pass
+                            except Exception as _dc_err:
+                                logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
+
+                            if not _skip_coord:
+                                _coord_content = json.dumps({
+                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                    'text': _coord_text,
+                                    '__to_agent': _chosen_name,
+                                    '__anchor_type': 'goal_autopilot_assignment',
+                                }, ensure_ascii=False)
+                                _cs.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='agent_msg',
+                                    content=_coord_content,
+                                ))
+                                _cs.commit()
+                                logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
                         finally:
                             _cs.close()
-                        if self.bot:
+                        if not _skip_coord and self.bot:
                             try:
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
@@ -2168,6 +2199,37 @@ class AnchorEngine:
                                 _filter_reason = 'dedup'
                                 logger.info("[ANCHOR-AUTOPILOT] dedup: %.0f%% overlap with recent msg from %s",
                                             _common / _total * 100, agent_name)
+                                break
+                    except Exception:
+                        pass
+
+                # ── Dedup для tool-based результатов: RSS/новости не должны повторяться ──
+                # Даже если агент использовал инструменты, один и тот же материал отсылается многократно.
+                # Проверяем по ВЫСОКОМУ порогу (75%) только за последний час.
+                if not _is_noise_result and _result_clean and _has_real_actions:
+                    try:
+                        _recent_tool_msgs = session.query(Interaction.content).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'agent_msg',
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
+                        ).order_by(Interaction.created_at.desc()).limit(4).all()
+                        _new_words_t = set(_result_clean.lower().split())
+                        for (_rt_content,) in _recent_tool_msgs:
+                            try:
+                                _rt_j = json.loads(_rt_content or '{}')
+                                _rt_text = _rt_j.get('text', '') or ''
+                            except Exception:
+                                _rt_text = ''
+                            if not _rt_text or len(_rt_text) < 30:
+                                continue
+                            _old_words_t = set(_rt_text.lower().split())
+                            _common_t = len(_new_words_t & _old_words_t)
+                            _total_t = max(len(_new_words_t | _old_words_t), 1)
+                            if _common_t / _total_t > 0.75:
+                                _is_noise_result = True
+                                _filter_reason = 'dedup_tools'
+                                logger.info("[ANCHOR-AUTOPILOT] tools dedup: %.0f%% overlap with recent tool msg from %s",
+                                            _common_t / _total_t * 100, agent_name)
                                 break
                     except Exception:
                         pass
@@ -7289,7 +7351,9 @@ class AnchorEngine:
                     campaign_id=campaign_id, status='draft'
                 ).limit(10).all()
                 if not live_drafts:
-                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, skip")
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
                     return
 
                 from ai_integration.api_client import get_api_client
@@ -7609,7 +7673,24 @@ class AnchorEngine:
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_email_silent_anchor error: {e}\n{traceback.format_exc()}")
-            session.rollback()
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            # Safety: mark anchor as delivered via NEW session so it isn't stuck PENDING forever.
+            # Next scan cycle will create a fresh anchor if there's still work to do.
+            try:
+                _s2 = Session()
+                try:
+                    _a2 = _s2.query(Anchor).filter_by(id=anchor.id).first()
+                    if _a2 and not _a2.delivered_at:
+                        _a2.delivered_at = datetime.now(timezone.utc)
+                        _s2.commit()
+                        logger.info(f"[ANCHOR] email_silent_anchor #{anchor.id}: marked delivered via fallback session after exception")
+                finally:
+                    _s2.close()
+            except Exception as _fb_err:
+                logger.warning(f"[ANCHOR] email_silent_anchor #{anchor.id}: fallback deliver failed: {_fb_err}")
 
     async def _ai_compose_post(self, user, anchor_data: dict, session, mode: str = 'feed') -> str | None:
         """Просит AI создать пост на основе данных пользователя.
