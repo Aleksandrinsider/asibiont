@@ -145,7 +145,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
 }
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None) -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None) -> str:
     """Строит адаптивный промпт автопилота — конкретная инструкция ПОД АГЕНТА И ЕГО ИНСТРУМЕНТЫ."""
 
     # Определяем доступные каналы пользователя
@@ -169,8 +169,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         for g in goals_summary[:5]
     )
 
-    # ── Конкретный план действий под интеграции агента ──
-    _action_plan = ''
     _caps_lower = [c.lower() for c in (agent_caps or [])]
     _caps_str = ', '.join(agent_caps or [])
     _has_email = any('mail' in c or 'почт' in c or 'email' in c or 'imap' in c or 'smtp' in c for c in _caps_lower)
@@ -178,59 +176,119 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_github = any('github' in c or 'gitlab' in c for c in _caps_lower)
     _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'slack', 'smm', 'контент'))
 
+    # ── Матрица делегирования: кому что отдавать ──
+    _team_block = ''
+    if team_profiles:
+        _email_ag = next((tp['name'] for tp in team_profiles
+                          if any(w in c.lower() for c in tp.get('capabilities', [])
+                                 for w in ('mail', 'email', 'imap', 'smtp', 'gmail'))), None)
+        _github_ag = next((tp['name'] for tp in team_profiles
+                           if any('github' in c.lower() or 'gitlab' in c.lower()
+                                  for c in tp.get('capabilities', []))), None)
+        _rss_ag = next((tp['name'] for tp in team_profiles
+                        if any(w in c.lower() for c in tp.get('capabilities', [])
+                               for w in ('rss', 'feed', 'лент'))), None)
+        _delegate_hints = []
+        if _email_ag and not _has_email:
+            _delegate_hints.append(f"  → Нашёл email/контакт — DELEGATE[{_email_ag}]: отправь письмо [кому] о [цели]")
+        if _github_ag and not _has_github:
+            _delegate_hints.append(f"  → Нужны GitHub контакты — DELEGATE[{_github_ag}]: найди разработчиков по [теме]")
+        if _rss_ag and not _has_rss:
+            _delegate_hints.append(f"  → Нужны свежие статьи — DELEGATE[{_rss_ag}]: загрузи RSS по [теме], найди авторов")
+        if _delegate_hints:
+            _team_block = (
+                "\n\nДЕЛЕГИРОВАНИЕ — отдай коллеге если у него есть нужная интеграция:\n"
+                + '\n'.join(_delegate_hints)
+                + "\nФормат: DELEGATE[Имя]: конкретная задача с данными.\n"
+            )
+
+    # ── Конкретный план действий под интеграции агента ──
+    # Определяем email-коллегу для cross-referral hints
+    _email_colleague = next((tp['name'] for tp in (team_profiles or [])
+                             if any(w in c.lower() for c in tp.get('capabilities', [])
+                                    for w in ('mail', 'email', 'imap', 'smtp', 'gmail'))
+                             ), None)
+    _github_colleague = next((tp['name'] for tp in (team_profiles or [])
+                              if any('github' in c.lower() for c in tp.get('capabilities', []))), None)
+
     if _has_email:
+        _delegate_hint_em = (
+            f"\n  D) Нашёл контакт без email? → DELEGATE[{_github_colleague}]: найди email через GitHub."
+            if _github_colleague and not _has_github else ''
+        )
         _action_plan = (
-            "Ты — единственный в команде с доступом к email (Gmail).\n\n"
-            "Сейчас сядь и сделай ОДНО из этого:\n"
-            "  Проверь входящие (check_emails) — если кто-то ответил, это самое ценное.\n"
-            "  Или отправь письмо конкретному человеку (из контактов или из данных коллег).\n"
-            "  Или найди email через list_email_contacts / save_email_contact.\n"
-            "web_search — только для ИССЛЕДОВАНИЙ тем и трендов, НЕ для поиска людей.\n"
+            "Ты в команде — единственный с email. Твоя работа: писать и получать письма.\n"
+            "ПЛАН (выбери один и выполни прямо сейчас):\n"
+            "  A) check_emails → есть ответ → reply_to_outreach_email → update_goal_progress\n"
+            "  B) find_relevant_contacts_for_task → send_outreach_email → update_goal_progress\n"
+            "  C) list_email_contacts → выбери нового → send_outreach_email\n"
+            f"{_delegate_hint_em}\n"
         )
     elif _has_github:
+        _email_hint = (
+            f"\n  D) Нашёл email разработчика → DELEGATE[{_email_colleague}]: отправь outreach на [email], упомяни [цель]."
+            if _email_colleague else '\n  D) Нашёл email → save_email_contact, добавь задачу для рассылки.'
+        )
         _action_plan = (
-            "У тебя есть GitHub API — это твой ГЛАВНЫЙ инструмент для поиска людей.\n\n"
-            "Сейчас сядь и сделай ОДНО из этого:\n"
-            "  Найди разработчиков/контрибьюторов через run_agent_action (поиск по интересам, языку, теме).\n"
-            "  Или посмотри issues/PRs/stars релевантных проектов — ищи контакты и email.\n"
-            "  Если нашёл email — делегируй коллеге: DELEGATE[Имя]: отправить приглашение на [email].\n"
-            "web_search — только для ИССЛЕДОВАНИЙ тем и трендов, НЕ для поиска людей. Люди — через GitHub.\n"
+            "Твоя интеграция GitHub — главный инструмент для поиска людей и кода.\n"
+            "ПЛАН (выбери один и выполни прямо сейчас):\n"
+            "  A) run_agent_action(action='search_users') → найди 3-5 контактов → save_email_contact\n"
+            "  B) run_agent_action(action='find_contributors') → извлеки email/ник → делегируй письма\n"
+            "  C) research_topic → найди GitHub-проекты → run_agent_action для поиска авторов\n"
+            f"{_email_hint}\n"
         )
     elif _has_rss:
+        _email_hint = (
+            f"\n  D) Нашёл автора статьи с email → DELEGATE[{_email_colleague}]: напиши [автору] — он пишет о [теме], пригласи тестировать."
+            if _email_colleague else ''
+        )
         _action_plan = (
-            "У тебя есть RSS-лента (мониторинг статей и новостей).\n\n"
-            "Сейчас сядь и сделай ОДНО из этого:\n"
-            "  Прочитай RSS через run_agent_action — найди статью или автора релевантных цели.\n"
-            "  Если нашёл чей-то email/ник — делегируй коллеге с email: DELEGATE[Имя]: отправить письмо на...\n"
-            "  Или исследуй тему через research_topic — ищи сообщества и площадки.\n"
-            "web_search — только для ИССЛЕДОВАНИЙ тем, НЕ для поиска людей.\n"
+            "Твоя RSS-лента — источник контента и авторов для контактов.\n"
+            "ПЛАН (выбери один и выполни прямо сейчас):\n"
+            "  A) run_agent_action(action='get_latest') → найди автора → save_email_contact\n"
+            "  B) run_agent_action(action='search') → найди статьи по теме цели → извлеки контакты\n"
+            "  C) research_topic → найди площадки/сообщества → add_task с конкретными данными\n"
+            f"{_email_hint}\n"
         )
     elif _has_content:
         _action_plan = (
-            "У тебя есть инструменты публикации контента.\n\n"
-            "Сейчас сядь и сделай ОДНО из этого:\n"
-            "  Напиши привлекающий пост и опубликуй его (create_post → publish_to_telegram/discord).\n"
-            "  Или найди целевые каналы/сообщества через research_topic.\n"
+            "Твои инструменты: создание и публикация контента для привлечения аудитории.\n"
+            "ПЛАН (выбери один и выполни прямо сейчас):\n"
+            "  A) research_topic → create_post (актуальный оффер) → publish_to_telegram\n"
+            "  B) get_news_trends → create_post по тренду → publish_to_discord\n"
+            "  C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию\n"
         )
     else:
+        _rss_colleague = next((tp['name'] for tp in (team_profiles or [])
+                               if any(w in c.lower() for c in tp.get('capabilities', [])
+                                      for w in ('rss', 'feed'))), None)
+        _cross_hints = ''
+        if _email_colleague:
+            _cross_hints += f"\n  D) Нашёл контакт → DELEGATE[{_email_colleague}]: отправь outreach на [email] — [why]."
+        if _rss_colleague:
+            _cross_hints += f"\n  E) Нужны свежие данные → DELEGATE[{_rss_colleague}]: загрузи RSS по теме [тема]."
         _action_plan = (
-            "У тебя есть web_search, research_topic, add_task, delegate_task.\n\n"
-            "Сейчас сядь и сделай ОДНО из этого:\n"
-            "  Найди конкретные контакты (имя + email/ник) через web_search → делегируй коллеге с email.\n"
-            "  Или найди конкретные сообщества/группы → создай задачу с планом.\n"
-            "  Твоя ценность = НАХОДИТЬ данные и передавать тем, кто умеет действовать.\n"
+            "Твои инструменты: поиск, исследования, задачи, делегирование.\n"
+            "ПЛАН (выбери один и выполни прямо сейчас):\n"
+            "  A) web_search → find_relevant_contacts_for_task → save_email_contact\n"
+            "  B) research_topic → add_task (конкретный следующий шаг с деталями)\n"
+            "  C) find_relevant_contacts_for_task → делегируй email-коллеге обнаруженный контакт\n"
+            f"{_cross_hints}\n"
+            "Твоя ценность = находить данные и правильно делегировать тем, у кого есть нужные интеграции.\n"
         )
 
     return (
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Твои интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
-        f"{channels_hint}\n"
-        f"{_action_plan}\n"
-        "ВАЖНО: Твой ответ ОБЯЗАН содержать вызов хотя бы одного инструмента. "
-        "Без вызова инструментов = провал задачи. Сначала действуй, потом пиши итог.\n"
-        "Если первый инструмент не дал результата — немедленно попробуй следующий из списка.\n"
-        "Отчёт юзеру — только реальные факты из результатов инструментов (имена, ссылки, цифры).\n"
-        "update_goal_progress — только при реальном новом контакте или ответе."
+        f"{channels_hint}"
+        f"{_action_plan}"
+        f"{_team_block}\n"
+        "ПРАВИЛА АВТОПИЛОТА:\n"
+        "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
+        "2. Цепочка: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress.\n"
+        "3. Нашёл контакт без нужной интеграции → НЕМЕДЛЕННО делегируй коллеге с конкретными данными.\n"
+        "4. Отчёт = ФАКТЫ: что нашёл, кому написал, что ответили.\n"
+        "5. Инструмент не работает → сразу пробуй следующий из плана выше.\n"
     )
 
 # Группы батчинга
@@ -1173,6 +1231,13 @@ class AnchorEngine:
                     'Нашёл данные для коллеги → DELEGATE[Имя]: задача. '
                     f'Коллеги: {", ".join(_agent_names_for_asi)}. '
                 )
+            _asi_tools_list = [
+                'web_search', 'research_topic', 'find_relevant_contacts_for_task',
+                'save_email_contact', 'add_task', 'complete_task', 'edit_task',
+                'delegate_task', 'send_outreach_email', 'send_email',
+                'update_goal_progress', 'update_goal', 'create_goal',
+                'quick_topic_search', 'get_news_trends',
+            ]
             _asi_synth = _NS_ap(
                 id=0, name='ASI',
                 job_title='Координатор команды',
@@ -1180,13 +1245,17 @@ class AnchorEngine:
                 description='Координатор: исследует стратегию, создаёт задачи, делегирует по способностям.',
                 personality=(
                     'Ты — координатор команды ASI Biont. '
-                    'Твои инструменты: web_search, research_topic, add_task, delegate_task. '
-                    'Ты исследуешь, находишь возможности и ДЕЛЕГИРУЕШЬ по способностям коллег. '
+                    'Ты используешь web_search, research_topic, find_relevant_contacts_for_task, '
+                    'save_email_contact, send_outreach_email, add_task, delegate_task, update_goal_progress. '
+                    'Ты СНАЧАЛА делаешь сам (ищешь, находишь контакты, отправляешь письма), '
+                    'И делегируешь коллегам задачи по их специализации. '
                     + _delegate_examples +
-                    'Ты ВСЕГДА делаешь реальное действие — поиск, задача, делегирование. '
-                    'НИКОГДА не пишешь «предлагаю» или «рекомендую» — ты делаешь.'
+                    'НИКОГДА не пишешь «предлагаю» — только действуешь инструментами.'
                 ),
-                python_code='', user_api_keys='', tools_allowed='', avatar_url='',
+                python_code='', user_api_keys='',
+                tools_allowed=json.dumps(_asi_tools_list),
+                avatar_url='',
+                tools=_asi_tools_list,
             )
             agents.append(_asi_synth)
 
@@ -1408,7 +1477,18 @@ class AnchorEngine:
                         chosen = agents[0] if agents else _asi_synth
                     _rr_debug = f'[CUSTOM] target_agent_id={_ca_target_id} chosen={chosen.name}'
                 elif anchor.anchor_type == 'goal_autopilot_review':
-                    # ── SMART ROUTING: выбираем агента по способностям + fairness ──
+                    # ── COORDINATOR MODE: 2+ агентов → ASI строит план для команды ──
+                    _coord_real = [a for a in agents if getattr(a, 'id', 0) != 0]
+                    if len(_coord_real) >= 2:
+                        try:
+                            _coord_ok = await self._run_coordinator_dispatch(
+                                user, data, _coord_real, task_text, anchor, session,
+                            )
+                            if _coord_ok:
+                                return
+                        except Exception as _coord_exc:
+                            logger.warning("[COORD] failed, fallback to round-robin: %s", _coord_exc)
+                    # ── FALLBACK / SINGLE-AGENT: оригинальный round-robin ──
                     _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
                     _rotation_pool = _real_ags + ([_asi_ag] if _asi_ag else [])
@@ -1554,6 +1634,7 @@ class AnchorEngine:
                     _autopilot_prompt = _build_autopilot_prompt(
                         _goals_for_prompt, user=user,
                         agent_caps=_detected, agent_name=chosen.name,
+                        team_profiles=_team_profiles,
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:
@@ -2448,16 +2529,30 @@ class AnchorEngine:
                 'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
             }
             _ctx = (
-                f"[АВТОПИЛОТ] Результат {prev_agent.name}:\n{result[:300]}\n\n"
-                f"Это данные от коллеги. Используй их как вводную: \n"
-                f"если есть контакт/ссылка — действуй с ними, \n"
-                f"если нет полезных данных — сделай свой шаг по цели.\n"
-                f"Пиши юзеру только что ТЫ сделал и узнал."
+                f"Данные от коллеги {prev_agent.name}:\n{result[:300]}\n\n"
+                f"Если есть email/контакт/ссылка в данных выше — используй их немедленно: действуй инструментом.\n"
+                f"Если данных нет — сделай следующий самостоятельный шаг по цели.\n"
+                f"Сообщай пользователю только КОНКРЕТНЫЕ факты: что сделал, что нашёл, кому написал."
             )
 
             # ── Уведомление о передаче между агентами ──
             # Передача от имени предыдущего агента — естественная коммуникация
-            _transfer_text = f"Передаю {_next_ag.name}: {_next_task[:200]}"
+            _transfer_text = f"{_next_ag.name}, передаю тебе задачу: {_next_task[:180]}"
+            try:
+                from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_tr
+                _tr_p = (
+                    f"Ты — {prev_agent.name}, специалист. Одним предложением передай задачу коллеге {_next_ag.name}.\n"
+                    f"Что нашёл: {result[:200]}. Что ему делать: {_next_task[:150]}.\n"
+                    f"Живо, конкретно, по имени {_next_ag.name}. Без [АВТОПИЛОТ], без markdown."
+                )
+                _tr_gen = await asyncio.wait_for(
+                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=70),
+                    timeout=8,
+                )
+                if _tr_gen and len(_tr_gen.strip()) > 15:
+                    _transfer_text = _tr_gen.strip()
+            except Exception:
+                pass
             if self.bot:
                 try:
                     await self.bot.send_message(
@@ -2590,6 +2685,424 @@ class AnchorEngine:
 
         except Exception as _chain_e:
             logger.debug("[ANCHOR-CHAIN] error for user %d: %s", user.id, _chain_e)
+
+    # ═══════════════════════════════════════════════════════
+    # COORDINATOR DISPATCH — multi-agent plan execution
+    # ═══════════════════════════════════════════════════════
+
+    async def _run_coordinator_dispatch(
+        self, user, data: dict, real_agents: list, base_task_text: str, anchor, session,
+    ) -> bool:
+        """ASI-координатор: строит план для каждого агента по их способностям → запускает последовательно.
+
+        Логика:
+        1. Собирает профили агентов (интеграции, инструменты)
+        2. LLM создаёт JSON-план: каждому агенту — конкретная задача под его интеграцию
+        3. ASI объявляет план (живое сообщение)
+        4. Выполняет каждый шаг через _exec_agent_for_director
+        5. Отправляет результаты пользователю
+
+        Returns True если хотя бы один шаг выполнен или токены кончились (anchor помечен).
+        Returns False → вызывающий должен использовать fallback round-robin.
+        """
+        try:
+            from ai_integration.autonomous_agent import (
+                _exec_agent_for_director, _quick_ai_call_raw, _parse_agent_integrations,
+            )
+
+            # Собираем профили агентов для планировщика
+            _profiles = []
+            for ag in real_agents:
+                try:
+                    _caps = _parse_agent_integrations(
+                        getattr(ag, 'user_api_keys', '') or '',
+                        getattr(ag, 'python_code', '') or '',
+                        getattr(ag, 'tools_allowed', '') or '',
+                        getattr(ag, 'search_scope', '') or '',
+                    )
+                except Exception:
+                    _caps = []
+                try:
+                    _tools_list = json.loads(getattr(ag, 'tools_allowed', '') or '[]')
+                except Exception:
+                    _tools_list = []
+                _profiles.append({
+                    'name': ag.name,
+                    'id': getattr(ag, 'id', 0),
+                    'job': ag.job_title or ag.specialization or '',
+                    'caps': _caps[:6],
+                    'tools': _tools_list[:8],
+                })
+
+            _goals = data.get('goals', [])
+            _goals_str = '; '.join(
+                f"{g['title']} ({g.get('progress', 0)}%, {g.get('metric_current', 0)}/{g.get('metric_target', '?')})"
+                for g in _goals[:3]
+            )
+            _recent = data.get('recent_actions', [])
+            _recent_txt = '\n'.join(_recent[-4:]) if _recent else 'нет'
+            _known_contacts = len(data.get('known_contacts', []))
+            _email_sent = data.get('total_emails_sent', 0)
+            _failed_tools = data.get('failed_tools', {})
+            _failed_str = ', '.join(f"{t}({n}x)" for t, n in _failed_tools.items()) if _failed_tools else 'нет'
+
+            _profiles_str = '\n'.join(
+                f'  - "{p["name"]}" ({p["job"]}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
+                f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
+                for p in _profiles
+            )
+            _plan_prompt = (
+                f"Команда агентов:\n{_profiles_str}\n\n"
+                f"Цели пользователя: {_goals_str}\n"
+                f"Контактов={_known_contacts}, писем отправлено={_email_sent}\n"
+                f"Последние действия:\n{_recent_txt}\n"
+                f"Заблокированные инструменты: {_failed_str}\n\n"
+                "Создай план: каждому агенту — ОДНО конкретное задание прямо СЕЙЧАС.\n"
+                "Правила:\n"
+                "1. Задание должно ИСПОЛЬЗОВАТЬ уникальную интеграцию агента (email/github/rss).\n"
+                "2. Задания дополняют друг друга (поиск контактов + письма + исследование).\n"
+                "3. Не используй заблокированные инструменты.\n"
+                "4. Задание = конкретное действие с конкретным инструментом и целью.\n"
+                "5. Можно добавить шаг для ASI (web_search/research_topic/send_outreach_email).\n"
+                "Верни ТОЛЬКО JSON-массив без объяснений:\n"
+                '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
+            )
+
+            try:
+                _plan_json = await asyncio.wait_for(
+                    _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=500),
+                    timeout=25,
+                )
+            except Exception as _pe:
+                logger.warning("[COORD] plan generation failed: %s", _pe)
+                return False
+
+            import re as _re_coord
+            _plan = []
+            try:
+                _m = _re_coord.search(r'\[[\s\S]*?\]', _plan_json or '')
+                if _m:
+                    _plan = json.loads(_m.group())
+            except Exception as _je:
+                logger.warning("[COORD] JSON parse: %s — raw: %s", _je, (_plan_json or '')[:200])
+                return False
+
+            if not _plan:
+                return False
+
+            logger.info("[COORD] user %d: plan=%s", user.id,
+                        [(p.get('agent'), p.get('tool')) for p in _plan])
+
+            # ── Биллинг + anchor.delivered_at ПЕРЕД первым AI-вызовом ──
+            from token_service import has_enough_tokens as _het_c, spend_tokens as _sp_c
+            from config import FREE_ACCESS_MODE as _FAM_c
+            if not _FAM_c:
+                if not _het_c(user.telegram_id, 'proactive_message', session=session):
+                    logger.info("[COORD] user %d: not enough tokens", user.id)
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
+                    return True
+                _sp_c(user.telegram_id, 'proactive_message',
+                      description='coordinator_autopilot', session=session, auto_commit=False)
+            anchor.delivered_at = datetime.now(timezone.utc)
+            try:
+                session.commit()
+            except Exception:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+
+            # ── AAL запись ──
+            from models import AgentActivityLog as _AAL_c
+            _aal_id_c = None
+            try:
+                _aal_c = _AAL_c(
+                    user_id=user.id,
+                    activity_type='goal_autopilot_dispatch',
+                    title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan[:3])}',
+                    content=base_task_text[:600],
+                    target=anchor.source,
+                    status='in_progress',
+                    ref_id=None,
+                )
+                session.add(_aal_c)
+                session.commit()
+                _aal_id_c = _aal_c.id
+            except Exception as _aal_err:
+                logger.warning("[COORD] AAL create: %s", _aal_err)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+
+            # ── Анонс ASI: живое сообщение о распределении задач ──
+            _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
+            _plan_preview = '; '.join(
+                f'{p.get("agent", "?")} — {p.get("tool", "действие") or "действие"}'
+                for p in _plan[:3]
+            )
+            _coord_announce = f"Работаю над {_brief_goals}: {_plan_preview}."
+            try:
+                _ann_p = (
+                    f"Ты — ASI, координатор команды. 1-2 предложения: раздаёшь задания агентам прямо сейчас.\n"
+                    f"Агенты: {', '.join(p['agent'] for p in _plan[:3])}.\n"
+                    f"Цели: {_brief_goals}.\n"
+                    f"Задания: {_plan_preview}.\n"
+                    f"Кратко, по-деловому, без markdown, без [АВТОПИЛОТ]."
+                )
+                _ann_gen = await asyncio.wait_for(
+                    _quick_ai_call_raw([{"role": "user", "content": _ann_p}], max_tokens=80),
+                    timeout=10,
+                )
+                if _ann_gen and len(_ann_gen.strip()) > 20:
+                    _coord_announce = _ann_gen.strip()
+            except Exception:
+                pass
+
+            if self.bot:
+                try:
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id, text=f"ASI:\n\n{_coord_announce}",
+                    )
+                except Exception:
+                    pass
+            try:
+                session.add(Interaction(
+                    user_id=user.id, message_type='proactive',
+                    content=json.dumps({
+                        '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                        'text': _coord_announce,
+                        '__anchor_type': 'coordinator_plan',
+                    }, ensure_ascii=False),
+                ))
+                session.commit()
+            except Exception:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+
+            # ── Выполняем каждый шаг плана (максимум 3 агента) ──
+            _results_summary = []
+            _all_tools = []
+
+            for _step in _plan[:3]:
+                _ag_name = (_step.get('agent') or '').strip()
+                _ag_task = (_step.get('task') or '').strip()
+                _tool_hint = (_step.get('tool') or '').strip()
+                if not _ag_name or not _ag_task:
+                    continue
+
+                # Ищем агента в команде
+                _target_ag = next(
+                    (a for a in real_agents if a.name.lower() == _ag_name.lower()), None
+                )
+                _is_asi_step = not _target_ag and _ag_name.lower() in ('asi', 'аси', 'координатор')
+
+                if not _target_ag and not _is_asi_step:
+                    logger.info("[COORD] agent '%s' not in team, skip", _ag_name)
+                    continue
+
+                # Биллинг кастомного агента
+                if _target_ag and getattr(_target_ag, 'id', 0) != 0:
+                    from ai_integration.user_agents import bill_agent_message as _bam_c2
+                    _bill_c2 = _bam_c2(user.telegram_id, _target_ag.id, session=session)
+                    if not _bill_c2.get('success'):
+                        logger.info("[COORD] skip %s — billing: %s", _ag_name, _bill_c2.get('error'))
+                        continue
+
+                # Координатор даёт задание — живое сообщение
+                _assign_msg = f"{_ag_name}, задание: {_ag_task[:150]}"
+                try:
+                    _msg_p = (
+                        f"Ты — ASI, координатор. Дай задание агенту {_ag_name} одним предложением.\n"
+                        f"Задача: {_ag_task[:150]}. Инструмент: {_tool_hint or 'по ситуации'}.\n"
+                        f"По имени, конкретно, без markdown, без [АВТОПИЛОТ]."
+                    )
+                    _msg_gen = await asyncio.wait_for(
+                        _quick_ai_call_raw([{"role": "user", "content": _msg_p}], max_tokens=60),
+                        timeout=8,
+                    )
+                    if _msg_gen and len(_msg_gen.strip()) > 15:
+                        _assign_msg = _msg_gen.strip()
+                except Exception:
+                    pass
+
+                if self.bot:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=f"ASI → {_ag_name}:\n\n{_assign_msg}",
+                        )
+                    except Exception:
+                        pass
+                try:
+                    session.add(Interaction(
+                        user_id=user.id, message_type='agent_msg',
+                        content=json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _assign_msg,
+                            '__to_agent': _ag_name,
+                            '__anchor_type': 'coordinator_assignment',
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
+                except Exception:
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
+                # Собираем agent_data для _exec_agent_for_director
+                if _is_asi_step:
+                    _asi_tools = [
+                        'web_search', 'research_topic', 'find_relevant_contacts_for_task',
+                        'save_email_contact', 'add_task', 'delegate_task',
+                        'send_outreach_email', 'update_goal_progress', 'quick_topic_search',
+                    ]
+                    _ag_data = {
+                        'id': 0, 'name': 'ASI',
+                        'job_title': 'Координатор',
+                        'specialization': 'goal_management',
+                        'description': 'Координатор ASI Biont — исследует, находит контакты, создаёт задачи.',
+                        'personality': '',
+                        'python_code': '', 'user_api_keys': '',
+                        'tools_allowed': json.dumps(_asi_tools),
+                        'tools': _asi_tools,
+                        'avatar_url': '',
+                    }
+                else:
+                    _ag_data = {
+                        'id': _target_ag.id,
+                        'name': _target_ag.name,
+                        'job_title': _target_ag.job_title or '',
+                        'specialization': _target_ag.specialization or '',
+                        'description': _target_ag.description or '',
+                        'personality': _target_ag.personality or '',
+                        'python_code': _target_ag.python_code or '',
+                        'user_api_keys': _target_ag.user_api_keys or '',
+                        'tools_allowed': _target_ag.tools_allowed or '',
+                        'tools': json.loads(_target_ag.tools_allowed or '[]'),
+                        'avatar_url': _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _target_ag.id),
+                        'search_scope': getattr(_target_ag, 'search_scope', '') or '',
+                        'knowledge_base': getattr(_target_ag, 'knowledge_base', '') or '',
+                    }
+
+                # Строим команду для контекста (кто ещё в команде)
+                _team_lines_c = []
+                for _prof in _profiles:
+                    if _prof['name'].lower() != _ag_name.lower():
+                        _c = ', '.join(_prof['caps'][:3]) or 'базовые инструменты'
+                        _team_lines_c.append(f"  • {_prof['name']} — {_c}")
+                if not _is_asi_step:
+                    _team_lines_c.append("  • ASI — web_search, research_topic, send_outreach_email")
+
+                # Task prompt для агента — его конкретное задание + контекст
+                _agent_goals_block = '\n'.join(
+                    f"  • {g['title']} ({g.get('progress', 0)}%)" for g in _goals[:3]
+                )
+                _agent_contacts_block = '\n'.join(
+                    f"  {c}" for c in data.get('known_contacts', [])[:5]
+                )
+                _agent_recent_block = '\n'.join(
+                    f"  {a}" for a in _recent[-3:]
+                )
+
+                _agent_prompt = (
+                    f"[АВТОПИЛОТ]\n"
+                    f"Твоё задание прямо сейчас:\n{_ag_task}\n"
+                    + (f"\nПриоритетный инструмент: {_tool_hint}\n" if _tool_hint else '')
+                    + f"\nАктивные цели:\n{_agent_goals_block}"
+                    + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
+                    + (f"\n\nУже сделано (не повторяй):\n{_agent_recent_block}" if _agent_recent_block else '')
+                    + (f"\n\nКоманда (делегируй если у них есть нужная интеграция):\n" + '\n'.join(_team_lines_c[:3])
+                       if _team_lines_c else '')
+                )
+
+                try:
+                    _raw = await asyncio.wait_for(
+                        _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
+                        timeout=85,
+                    )
+                except (asyncio.TimeoutError, Exception) as _ae:
+                    logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
+                    continue
+
+                _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
+                _step_tools = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
+                _all_tools.extend(_step_tools)
+
+                if not _result or not _result.strip() or len(_result.strip()) < 20:
+                    continue
+
+                # Очистка и отправка результата пользователю
+                _ag_avatar = _ag_data.get('avatar_url', '')
+                _ag_id = _ag_data.get('id', 0)
+                try:
+                    from ai_integration.utils import clean_technical_details as _ctd_c
+                    _cleaned = _ctd_c(_result.strip())
+                    if not _cleaned or len(_cleaned.strip()) < 10:
+                        _cleaned = _result.strip()
+                except Exception:
+                    _cleaned = _result.strip()
+
+                if self.bot and len(_cleaned) > 30:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=f"{_ag_name}:\n\n{_cleaned}",
+                        )
+                    except Exception:
+                        pass
+
+                try:
+                    _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
+                    session.add(Interaction(
+                        user_id=user.id,
+                        message_type=_msg_type_c2,
+                        content=json.dumps({
+                            '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
+                            'text': _strip_html(_cleaned),
+                            '__tools_used': _step_tools,
+                            '__anchor_type': 'coordinator_result',
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
+                except Exception:
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
+                _results_summary.append(
+                    f"{_ag_name}[{','.join(_step_tools[:2])}]: {_cleaned[:150]}"
+                )
+                await asyncio.sleep(1)  # небольшая пауза между агентами
+
+            # ── Обновляем AAL ──
+            if _aal_id_c:
+                try:
+                    _tools_pfx = f"[tools: {', '.join(_all_tools)}] " if _all_tools else ''
+                    _full_res = _tools_pfx + ' | '.join(_results_summary[:3])
+                    _st = 'completed' if _results_summary else 'empty_result'
+                    from sqlalchemy import text as _aal_t_c
+                    session.execute(_aal_t_c(
+                        "UPDATE agent_activity_log SET status=:st, result=:res, updated_at=NOW() WHERE id=:aid"
+                    ), {'st': _st, 'res': _full_res[:800], 'aid': _aal_id_c})
+                    session.commit()
+                except Exception as _upd:
+                    logger.warning("[COORD] AAL update: %s", _upd)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
+            return True  # coordinator ran
+
+        except Exception as _coord_main_err:
+            logger.warning("[COORD] coordinator dispatch error: %s", _coord_main_err)
+            return False
 
     # ═══════════════════════════════════════════════════════
     # SCAN — обнаружение якорей
