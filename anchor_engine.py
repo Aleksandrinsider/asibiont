@@ -1547,8 +1547,59 @@ class AnchorEngine:
                         task_text = task_text.replace(_placeholder, _placeholder + _autopilot_prompt + "\n", 1)
                     else:
                         task_text = _autopilot_prompt + "\n\n" + task_text
-                elif anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                else:
                     pass  # handled above
+                # ── custom_anchor: перестраиваем task_text под реальные интеграции агента ──
+                if anchor.anchor_type == 'custom_anchor':
+                    _api_keys = getattr(chosen, 'user_api_keys', '') or ''
+                    _pc = getattr(chosen, 'python_code', '') or ''
+                    _api_lower = _api_keys.lower()
+                    _pc_lower = _pc.lower()
+
+                    # Определяем главное действие по интеграциям конкретного агента
+                    _primary_actions = []
+                    # Почта — самая ценная: проверить входящие
+                    _email_accounts = []
+                    for _kl in _api_keys.splitlines():
+                        _kl = _kl.strip()
+                        if _kl.startswith('GMAIL_USER='):
+                            _email_accounts.append((_kl.split('=',1)[1].strip(), 'Gmail'))
+                        elif _kl.startswith('YANDEX_USER='):
+                            _email_accounts.append((_kl.split('=',1)[1].strip(), 'Яндекс'))
+                        elif _kl.startswith('MAILRU_USER='):
+                            _email_accounts.append((_kl.split('=',1)[1].strip(), 'Mail.ru'))
+                    if _email_accounts:
+                        for _ea, _elabel in _email_accounts[:1]:
+                            _primary_actions.append(
+                                f"1. Проверь входящие через check_emails — аккаунт {_ea} ({_elabel}). "
+                                "Если есть ответы — сообщи кто написал и о чём."
+                            )
+                        _primary_actions.append(
+                            "2. Если нужно — используй send_outreach_email или reply_to_outreach_email."
+                        )
+                    # RSS/новости
+                    if any(w in _api_lower for w in ('rss_url=', 'feed_url=')) or 'feedparser' in _pc_lower:
+                        _rss_url = next((l.split('=',1)[1].strip() for l in _api_keys.splitlines() if l.strip().upper().startswith('RSS_URL=')), '')
+                        _primary_actions.append(
+                            f"1. Загрузи новости через run_agent_action (RSS{': ' + _rss_url[:60] if _rss_url else ''}). "
+                            "Найди релевантные статьи и создай задачу или делегируй Кристине."
+                        )
+                    # GitHub
+                    if 'github_token=' in _api_lower:
+                        _primary_actions.append(
+                            "1. Используй run_agent_action для GitHub API — ищи разработчиков или issues."
+                        )
+
+                    if _primary_actions:
+                        _actions_text = '\n'.join(_primary_actions)
+                        task_text = (
+                            f"[АВТОПИЛОТ]\n"
+                            f"Ты — {chosen.name}, {chosen.job_title or chosen.specialization or 'специалист'}.\n"
+                            f"Тема: {anchor.topic or 'проактивное сообщение'}\n\n"
+                            f"ДЕЙСТВИЯ (выполни прямо сейчас):\n{_actions_text}\n\n"
+                            "Отчёт пользователю — только ФАКТЫ: что нашёл, кто написал, что узнал.\n"
+                        )
+                    # Иначе оставляем task_text как был
 
                 # ── Проверяем и списываем токены за автопилот ──
                 from token_service import has_enough_tokens as _het_ap, spend_tokens as _sp_ap
