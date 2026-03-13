@@ -207,6 +207,7 @@
     let _pubMsgIdx = 0;
     let _pubLikes = {};
     let _pubAgentAvatarMap = {};
+    let _pubAgentTitleMap = {};
     const _pubEditOriginals = {};
     let _pubAllTopPosts = [];
     let _pubAllComments = {};
@@ -269,9 +270,11 @@
                 const state = JSON.parse(e.data);
                 // Строим карту аватаров один раз из списка агентов
                 _pubAgentAvatarMap = {};
+                _pubAgentTitleMap = {};
                 if (state.agents) {
                     state.agents.forEach(a => {
                         if (a.id && a.avatar_url) _pubAgentAvatarMap[a.id] = a.avatar_url;
+                        if (a.id && a.title) _pubAgentTitleMap[a.id] = a.title;
                     });
                 }
                 pubRenderState(state);
@@ -396,7 +399,7 @@
                     const color = escapeHtml(msg.color || '#6C727F');
                     const initials = escapeHtml(msg.initials || '?');
                     const agentName = escapeHtml(msg.agent_name || '');
-                    const agentTitle = escapeHtml(msg.agent_title || '');
+                    const agentTitle = escapeHtml(_pubAgentTitleMap[msg.agent_id] || msg.agent_title || '');
                     const text = escapeHtml(msg.text || '');
                     const avatarUrl = msg.avatar_url || _pubAgentAvatarMap[msg.agent_id] || '';
                     const timeStr = msg.ts
@@ -452,7 +455,7 @@
             const color = escapeHtml(msg.color || '#6C727F');
             const initials = escapeHtml(msg.initials || '?');
             const agentName = escapeHtml(msg.agent_name || '');
-            const agentTitle = escapeHtml(msg.agent_title || '');
+            const agentTitle = escapeHtml(_pubAgentTitleMap[msg.agent_id] || msg.agent_title || '');
             const authorUsername = escapeHtml(msg.author_username || '');
             const text = escapeHtml(msg.text || '');
             const avatarUrl = msg.avatar_url || _pubAgentAvatarMap[msg.agent_id] || '';

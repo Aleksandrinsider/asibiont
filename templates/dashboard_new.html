@@ -5973,7 +5973,7 @@ except Exception as e:
 
             // Заполняем карту аватаров (независимо от наличия row-элемента)
             if (state.agents) {
-                state.agents.forEach(a => { if (a.avatar_url) _arenaAgentAvatarMap[a.id] = a.avatar_url; });
+                state.agents.forEach(a => { if (a.avatar_url) _arenaAgentAvatarMap[a.id] = a.avatar_url; if (a.title) _arenaAgentTitleMap[a.id] = a.title; });
             }
 
             // Агенты-участники
@@ -6095,6 +6095,7 @@ except Exception as e:
         const _arenaComments = {};
         const _arenaRenderedIds = new Set(); // чтобы не дублировать при reconnect
         let _arenaAgentAvatarMap = {};       // agent_id → avatar URL
+        let _arenaAgentTitleMap = {};       // agent_id → current specialization
         let _arenaAllTopPosts = [];
         let _arenaAllCommentsMap = {};
         let _arenaCurrentPage = 1;
@@ -6164,7 +6165,7 @@ except Exception as e:
                 const color = escapeHtml(msg.color || '#6C727F');
                 const initials = escapeHtml(msg.initials || '?');
                 const agentName = escapeHtml(msg.agent_name || '');
-                const agentTitle = escapeHtml(msg.agent_title || '');
+                const agentTitle = escapeHtml(_arenaAgentTitleMap[msg.agent_id] || msg.agent_title || '');
                 const authorUsername = escapeHtml(msg.author_username || '');
                 const text = escapeHtml(msg.text || '');
                 const _agentIdParts = (msg.agent_id || '').split('_');
