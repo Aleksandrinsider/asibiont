@@ -1779,8 +1779,15 @@ class AnchorEngine:
                 try:
                     from ai_integration.autonomous_agent import _create_agent_delegation_task as _cadt
                     # Используем краткий заголовок цели, а не системный промпт
-                    _gl_titles_s = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
-                    _ap_task_title = f"[Автопилот] {agent_name}: {', '.join(_gl_titles_s)}"[:200] if _gl_titles_s else f"[Автопилот] {agent_name}"
+                    _gl_titles_s = [g.get('title', '')[:50] for g in data.get('goals', [])[:2] if g.get('title', '').strip()]
+                    if not _gl_titles_s:
+                        # Fallback: тема якоря или специализация агента
+                        _anchor_topic = (anchor.topic or '').strip()[:80]
+                        _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '')[:50]
+                        _fallback = _anchor_topic or _agent_spec
+                        _ap_task_title = f"[Автопилот] {agent_name}: {_fallback}"[:200] if _fallback else f"[Автопилот] {agent_name}"
+                    else:
+                        _ap_task_title = f"[Автопилот] {agent_name}: {', '.join(_gl_titles_s)}"[:200]
                     _ap_task_id = _cadt(user.id, agent_data, _ap_task_title)
                 except Exception as _cadt_err:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
