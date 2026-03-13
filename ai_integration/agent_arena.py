@@ -879,7 +879,23 @@ async def _run_agent_python_code(code: str, timeout: int = 15, env_vars: dict = 
     Возвращает stdout (макс. 2000 симв.) или сообщение об ошибке.
     """
     import os as _os
-    _env = _os.environ.copy()
+    # Начинаем с полной системной среды (нужны PATH, PYTHONPATH и т.д.),
+    # но явно удаляем все платформенные секреты — чтобы код агента из маркетплейса
+    # не мог прочитать DATABASE_URL, API ключи платформы, Telegram-токен и т.п.
+    _PLATFORM_SECRETS = {
+        'DATABASE_URL', 'DATABASE_PUBLIC_URL',
+        'DEEPSEEK_API_KEY',
+        'TELEGRAM_TOKEN', 'WEBHOOK_SECRET',
+        'SESSION_SECRET',
+        'YOOKASSA_SECRET_KEY', 'YOOKASSA_SHOP_ID',
+        'NOWPAYMENTS_API_KEY', 'NOWPAYMENTS_IPN_SECRET',
+        'RESEND_API_KEY',
+        'REPLICATE_API_TOKEN',
+        'DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_SECRET',
+        'GROQ_API_KEY', 'OPENAI_API_KEY',
+        'SECRET_KEY', 'PRIVATE_KEY', 'BOT_TOKEN',
+    }
+    _env = {k: v for k, v in _os.environ.items() if k not in _PLATFORM_SECRETS}
     if env_vars:
         for k, v in env_vars.items():
             _env[k] = str(v)
