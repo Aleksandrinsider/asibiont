@@ -11927,12 +11927,14 @@ def _get_user_email_integrations(user, session) -> list:
                     env[k.strip().upper()] = v.strip()
             # Gmail — через серверный Resend + Reply-To (SMTP заблокирован на Railway)
             _gmail_u = env.get('GMAIL_USER', '')
+            _gmail_p = env.get('GMAIL_PASS', '')
             if _gmail_u and _gmail_u not in seen_emails:
                 seen_emails.add(_gmail_u)
                 results.append({
                     'type': 'gmail_server',
                     'label': 'Gmail',
                     'email_user': _gmail_u,
+                    'email_pass': _gmail_p,  # пароль приложения для IMAP
                     'reply_to': _gmail_u,
                     'agent_name': agent.name or 'Gmail',
                     'agent_id': agent.id,
@@ -12245,8 +12247,9 @@ async def _check_emails_imap(integration: dict, limit: int) -> str:
 
     email_pass = integration.get('email_pass', '')
     if not email_pass:
-        # Gmail через app-password в user_api_keys
-        return f"Для чтения входящих через IMAP нужен пароль приложения. Настрой YANDEX_PASS или MAILRU_PASS."
+        svc = 'GMAIL_PASS' if 'gmail' in (email_user or label or '').lower() else 'YANDEX_PASS или MAILRU_PASS'
+        return (f"Для чтения входящих через IMAP нужен пароль приложения. "
+                f"Настрой {svc} в настройках агента на дашборде.")
 
     def _decode_subj(raw):
         parts = _dh(raw)

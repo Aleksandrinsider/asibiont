@@ -3791,11 +3791,35 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         )
     except Exception:
         pass
-    _intg_line = (
-        f"\nТвои подключённые интеграции (run_agent_action): {', '.join(_intg_hint[:8])}"
-        if _intg_hint else
-        ""  # агент без внешних API — не упоминаем run_agent_action
-    )
+    # Строим чёткую строку о том что подключено и КАКОЙ инструмент использовать
+    _intg_line = ''
+    if _intg_hint:
+        _api_keys_str = (agent.get('user_api_keys') or '')
+        _email_accounts = []
+        for _kl in _api_keys_str.splitlines():
+            _kl = _kl.strip()
+            if _kl.startswith('GMAIL_USER='):
+                _email_accounts.append(_kl.split('=',1)[1].strip() + ' (Gmail)')
+            elif _kl.startswith('YANDEX_USER='):
+                _email_accounts.append(_kl.split('=',1)[1].strip() + ' (Яндекс)')
+            elif _kl.startswith('MAILRU_USER='):
+                _email_accounts.append(_kl.split('=',1)[1].strip() + ' (Mail.ru)')
+        _intg_parts = []
+        if _email_accounts:
+            _intg_parts.append(f"📧 Почта: {', '.join(_email_accounts)} — используй check_emails, send_email, list_email_contacts")
+        _has_rss = any(w in (agent.get('user_api_keys','') or '').upper() for w in ('RSS_URL','FEED_URL')) \
+                   or any(w in (agent.get('python_code','') or '').lower() for w in ('feedparser','rss'))
+        if _has_rss:
+            _rss_url = next((l.split('=',1)[1].strip() for l in _api_keys_str.splitlines() if l.strip().upper().startswith('RSS_URL=')), 'RSS')
+            _intg_parts.append(f"📰 RSS: {_rss_url} — используй run_agent_action")
+        _has_github = 'GITHUB_TOKEN=' in _api_keys_str.upper()
+        if _has_github:
+            _intg_parts.append("💻 GitHub — используй run_agent_action")
+        # остальные интеграции — кратко
+        _rest = [h for h in _intg_hint[:6] if not any(x in h.lower() for x in ('gmail','яндекс','mail.ru','rss','github'))]
+        if _rest:
+            _intg_parts.append(f"🔧 Ещё: {', '.join(_rest[:4])}")
+        _intg_line = '\nПодключено у тебя: ' + ' | '.join(_intg_parts) if _intg_parts else ''
 
     # Роле-специфичные инструкции для автопилота: агенты с интеграциями должны ИХ использовать
     _intg_action_hint = ""
