@@ -2999,8 +2999,9 @@ class AnchorEngine:
                 "давай задание с ДРУГИМ инструментом из его арсенала.\n"
                 "11. Если email-агент уже 3+ раз делал check_emails → его задача ТОЛЬКО: "
                 "start_email_campaign или send_outreach_email или save_email_contact или find_relevant_contacts_for_task.\n"
-                "12. Если RSS-агент нашёл авторов → его задача ОБЯЗАТЕЛЬНО включает save_email_contact "
-                "для сохранения контактов найденных людей.\n"
+                "12. RSS-агент = анализ ленты и отчёт о находках. "
+                "Задачи по контактам (save_email_contact, outreach) — email-агенту или ASI, "
+                "которые используют данные от RSS-агента. Не назначай RSS-агенту задачи по сбору контактов.\n"
                 f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
             )
@@ -3073,20 +3074,20 @@ class AnchorEngine:
                 except Exception:
                     pass
 
-            # ── Анонс ASI: живое сообщение о распределении задач ──
+            # ── Анонс ASI: что команда делает (без имён агентов, без названий инструментов) ──
             _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
-            _plan_preview = '; '.join(
-                f'{p.get("agent", "?")} — {p.get("tool", "действие") or "действие"}'
+            _tasks_preview = '; '.join(
+                (p.get('task') or '')[:60]
                 for p in _plan
             )
-            _coord_announce = f"Работаю над {_brief_goals}: {_plan_preview}."
+            _coord_announce = f"Работаю над {_brief_goals}."
             try:
                 _ann_p = (
-                    f"Ты — ASI, координатор команды. 1-2 предложения: раздаёшь задания агентам прямо сейчас.\n"
-                    f"Агенты: {', '.join(p['agent'] for p in _plan)}.\n"
+                    f"Ты — ASI, координатор. 1-2 предложения: кратко ЧТО команда делает прямо сейчас.\n"
                     f"Цели: {_brief_goals}.\n"
-                    f"Задания: {_plan_preview}.\n"
-                    f"Кратко, по-деловому, без markdown, без [АВТОПИЛОТ]."
+                    f"Задачи: {_tasks_preview}.\n"
+                    f"Правила: без имён агентов, без названий инструментов, без markdown, без [АВТОПИЛОТ]. "
+                    f"Только суть — что ищем/делаем для достижения цели."
                 )
                 _ann_gen = await asyncio.wait_for(
                     _quick_ai_call_raw([{"role": "user", "content": _ann_p}], max_tokens=80),
@@ -3123,6 +3124,7 @@ class AnchorEngine:
             # ── Выполняем каждый шаг плана (до 8 агентов, нет ж. ограничения на 3) ──
             _results_summary = []
             _all_tools = []
+            _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
             _max_steps = min(len(_plan), max(len(real_agents) + 1, 8))
 
             for _step in _plan[:_max_steps]:
@@ -3220,11 +3222,11 @@ class AnchorEngine:
                 _agent_prompt = (
                     f"[АВТОПИЛОТ]\n"
                     f"Твоё задание прямо сейчас:\n{_ag_task}\n"
-                    + (f"\nПриоритетный инструмент: {_tool_hint}\n" if _tool_hint else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + (f"\n\nТвоя история (не повторяй это):\n{_agent_memory_block}" if _agent_memory_block else '')
+                    + (f"\n\nРезультаты предыдущих шагов (используй в своей работе):\n{_prev_steps_context}" if _prev_steps_context else '')
                     + (f"\n\nКоманда (делегируй если у них есть нужная интеграция):\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
                 )
@@ -3287,6 +3289,8 @@ class AnchorEngine:
                 _results_summary.append(
                     f"{_ag_name}[{','.join(_step_tools[:2])}]: {_cleaned[:150]}"
                 )
+                # Накапливаем контекст для следующих агентов в цепочке
+                _prev_steps_context += f"• {_ag_name}: {_cleaned[:300]}\n"
                 await asyncio.sleep(1)  # небольшая пауза между агентами
 
             # ── Обновляем AAL ──
