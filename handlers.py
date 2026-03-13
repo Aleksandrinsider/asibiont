@@ -966,6 +966,17 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             persist=True — отправить как отдельное постоянное сообщение (для диалога директора).
             """
             display_text = text or ('Processing...' if lang == 'en' else 'Обрабатываю...')
+            # Telegram не умеет рендерить JSON — конвертируем __agent JSON в читаемый текст
+            if persist and isinstance(display_text, str) and display_text.strip().startswith('{'):
+                try:
+                    import json as _j_tg
+                    _p_tg = _j_tg.loads(display_text)
+                    if _p_tg.get('__agent') and _p_tg.get('text'):
+                        _name_tg = _p_tg['__agent'].get('name', 'Агент')
+                        _txt_tg = _p_tg['text'][:1000].strip()
+                        display_text = f"\U0001f4ac {_name_tg}:\n{_txt_tg}"
+                except Exception:
+                    pass
             try:
                 if persist:
                     # Директорский диалог: отправляем новое сообщение, НЕ удаляем
