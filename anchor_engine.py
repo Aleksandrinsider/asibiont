@@ -92,7 +92,7 @@ SCAN_INTERVAL_MINUTES = 5
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
-MIN_AUTOPILOT_GAP_MINUTES = 37  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -3625,15 +3625,23 @@ class AnchorEngine:
         if not active_goals:
             return []
 
-        # ── ЖЁСТКИЙ GUARD: не создавать якорь если dispatch был меньше 15 минут назад ──
-        from models import AgentActivityLog as _AAL_guard
-        _last_dispatch = session.query(_AAL_guard).filter(
-            _AAL_guard.user_id == user.id,
-            _AAL_guard.activity_type == 'goal_autopilot_dispatch',
-            _AAL_guard.created_at >= now_utc - timedelta(minutes=15),
-        ).first()
-        if _last_dispatch:
-            return []
+        # ── ЖЁСТКИЙ GUARD: не создавать якорь если последнее autopilot-сообщение было меньше 15 минут назад ──
+        # Проверяем Interactions как основной источник (всегда пишется)
+        try:
+            _last_ap_interaction = session.query(Interaction.created_at).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == 'proactive',
+                Interaction.content.like('%goal_autopilot_review%'),
+            ).order_by(Interaction.created_at.desc()).first()
+            if _last_ap_interaction:
+                _ap_time = _last_ap_interaction[0]
+                if _ap_time.tzinfo is None:
+                    _ap_time = _ap_time.replace(tzinfo=timezone.utc)
+                _gap = (now_utc - _ap_time).total_seconds() / 60
+                if _gap < MIN_AUTOPILOT_GAP_MINUTES:
+                    return []
+        except Exception:
+            pass
 
         # Собираем задачи к целям — не только count, а полный список
         goal_ids = [g.id for g in active_goals]
