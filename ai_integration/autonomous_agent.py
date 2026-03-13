@@ -1114,6 +1114,17 @@ class HybridAutonomousAgent:
                 import json as _json
                 params['leads'] = _json.dumps(v, ensure_ascii=False)
 
+        # === delegate_task: AI иногда передаёт task_title вместо title ===
+        elif tool_name == 'delegate_task':
+            if 'task_title' in params and 'title' not in params:
+                params['title'] = params.pop('task_title')
+                logger.info(f"[FIX_PARAMS] delegate_task: renamed task_title → title")
+            elif 'task_name' in params and 'title' not in params:
+                params['title'] = params.pop('task_name')
+            if not params.get('title'):
+                params['title'] = (user_message or 'задача')[:80]
+                logger.info(f"[FIX_PARAMS] delegate_task: generated title from message")
+
         if tool_name == 'find_relevant_contacts_for_task':
             if 'description' in params and 'task_description' not in params:
                 params['task_description'] = params.pop('description')
