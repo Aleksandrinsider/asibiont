@@ -1665,6 +1665,14 @@
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="status">Статус</label>
                         <input type="text" id="quick-status" placeholder="Инвестор, Фрилансер..." data-i18n-ph="status-ph" maxlength="100" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="bio-label">О себе</label>
+                        <textarea id="quick-bio" placeholder="2–3 предложения о себе, вашем проекте или деятельности..." data-i18n-ph="bio-ph" rows="2" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;"></textarea>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="content-strategy">Контент-стратегия</label>
+                        <textarea id="quick-content-strategy" placeholder="О чём хотите публиковать, целевая аудитория, цели контента..." data-i18n-ph="content-strategy-ph" rows="2" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;"></textarea>
+                    </div>
                     <!-- Password change section -->
                     <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 10px; margin-top: 2px;">
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
@@ -12154,6 +12162,8 @@ except Exception as e:
                 const skillsField = document.getElementById('quick-skills');
                 const goalsField = document.getElementById('quick-goals');
                 const statusField = document.getElementById('quick-status');
+                const bioField = document.getElementById('quick-bio');
+                const contentStrategyField = document.getElementById('quick-content-strategy');
                 const telegramChannelField = document.getElementById('quick-telegram-channel');
                 const discordWebhookField = document.getElementById('quick-discord-webhook');
                 
@@ -12171,6 +12181,8 @@ except Exception as e:
                 if (skillsField) skillsField.value = {{ (profile.skills or "") | tojson }};
                 if (goalsField) goalsField.value = {{ (profile.goals or "") | tojson }};
                 if (statusField) statusField.value = {{ (profile.status_text or "") | tojson }};
+                if (bioField) bioField.value = {{ (profile.bio or "") | tojson }};
+                if (contentStrategyField) contentStrategyField.value = {{ (profile.content_strategy or "") | tojson }};
                 {% endif %}
                 {% if telegram_channel %}
                 if (telegramChannelField) telegramChannelField.value = {{ (telegram_channel or "") | tojson }};
@@ -12351,6 +12363,8 @@ except Exception as e:
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
             const statusText = document.getElementById('quick-status').value.trim();
+            const bio = document.getElementById('quick-bio').value.trim();
+            const contentStrategy = document.getElementById('quick-content-strategy').value.trim();
             const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
             const discordWebhook = document.getElementById('quick-discord-webhook').value.trim();
             const emailVal = document.getElementById('quick-email').value.trim();
@@ -12388,6 +12402,8 @@ except Exception as e:
                 profileData.company = company;
                 profileData.position = position;
                 profileData.status_text = statusText;
+                profileData.bio = bio;
+                profileData.content_strategy = contentStrategy;
                 profileData.telegram_channel = telegramChannel;
                 profileData.discord_webhook = discordWebhook;
                 profileData.email = emailVal;

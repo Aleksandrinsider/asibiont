@@ -8852,6 +8852,8 @@ async def api_profile_handler(request):
                     profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
                 if 'bio' in data:
                     profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
+                if 'content_strategy' in data:
+                    profile.content_strategy = data['content_strategy'].strip() if data['content_strategy'] and data['content_strategy'].strip() else None
 
                 # Update user fields
                 if 'first_name' in data:
