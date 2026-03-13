@@ -3233,6 +3233,21 @@ class AnchorEngine:
                 except Exception:
                     pass
 
+            # Читаем результаты предыдущего цикла координатора — для единого голоса ASI
+            _prev_cycle_result = ''
+            try:
+                from models import AgentActivityLog as _AAL_prev_c
+                _prev_aal = session.query(_AAL_prev_c).filter(
+                    _AAL_prev_c.user_id == user.id,
+                    _AAL_prev_c.activity_type == 'goal_autopilot_dispatch',
+                    _AAL_prev_c.status == 'completed',
+                    _AAL_prev_c.result.isnot(None),
+                ).order_by(_AAL_prev_c.id.desc()).first()
+                if _prev_aal and _prev_aal.result:
+                    _prev_cycle_result = _prev_aal.result[:400]
+            except Exception:
+                pass
+
             # ── Анонс ASI: что команда делает (без имён агентов, без названий инструментов) ──
             _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
             _tasks_preview = '; '.join(
@@ -3244,8 +3259,13 @@ class AnchorEngine:
                 _ann_p = (
                     f"Ты — ASI, координатор. 1-2 предложения: кратко ЧТО команда делает прямо сейчас.\n"
                     f"Цели: {_brief_goals}.\n"
-                    f"Задачи: {_tasks_preview}.\n"
-                    f"Правила: без имён агентов, без названий инструментов, без markdown, без [АВТОПИЛОТ]. "
+                    f"Задачи сейчас: {_tasks_preview}.\n"
+                    + (
+                        f"Результаты прошлого цикла: {_prev_cycle_result}.\n"
+                        if _prev_cycle_result else ''
+                    )
+                    + f"Правила: без имён агентов, без названий инструментов, без markdown, без [АВТОПИЛОТ]. "
+                    f"Если есть результаты прошлого цикла — упомяни их естественно (напр.: 'Уже нашли 10 контактов, сейчас будем писать им').\n"
                     f"Только суть — что ищем/делаем для достижения цели."
                 )
                 _ann_gen = await asyncio.wait_for(
@@ -3487,13 +3507,24 @@ class AnchorEngine:
                             pass
 
                 if self.bot and len(_cleaned) > 30:
-                    try:
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=f"{_ag_name}:\n\n{_cleaned}",
-                        )
-                    except Exception:
-                        pass
+                    # Фильтр технических ошибок — не отправляем в чат пользователя
+                    _error_phrases = [
+                        'при обработке запроса произошла ошибка',
+                        'таймаут', 'timeout', 'tool timeout',
+                        'инструмент завершил работу',
+                        'traceback', 'exception:', 'error:',
+                    ]
+                    _is_tech_error = any(p in _cleaned.lower() for p in _error_phrases)
+                    if not _is_tech_error:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=f"{_ag_name}:\n\n{_cleaned}",
+                            )
+                        except Exception:
+                            pass
+                    else:
+                        logger.info("[COORD] Suppressed tech error from user chat: %s", _cleaned[:100])
 
                 try:
                     _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
@@ -7593,6 +7624,22 @@ class AnchorEngine:
                         elif result and ('лимит' in result.lower() or 'limit' in result.lower()):
                             logger.info(f"[ANCHOR] Daily limit reached, stopping batch")
                             break
+                        elif result and ('resend api' in result.lower() or 'не настроен' in result.lower() or 'domain' in result.lower()):
+                            # Постоянная ошибка конфигурации — прекращаем всю партию,
+                            # уведомляем пользователя один раз
+                            logger.error(f"[ANCHOR] Permanent send error for campaign #{campaign_id}: {result[:200]}")
+                            # Уведомляем пользователя о проблеме
+                            try:
+                                _notify_text = (
+                                    f"⚠️ Не удаётся отправить письма по кампании «{campaign_name}».\n"
+                                    f"Причина: {result.strip()[:200]}\n"
+                                    f"\nПроверь настройки Resend в Railway Variables (RESEND_FROM должен быть верифицированным доменом).\n"
+                                    f"Письма ждут в черновиках — как только исправишь, отправятся автоматически."
+                                )
+                                await self._send_telegram_message(user.telegram_id, _notify_text)
+                            except Exception as _ntf_err:
+                                logger.warning(f"[ANCHOR] Failed to notify user about send error: {_ntf_err}")
+                            break  # не пытаемся остальных — та же ошибка будет
 
                     except Exception as _compose_err:
                         logger.error(f"[ANCHOR] Compose/send error for {email}: {_compose_err}")

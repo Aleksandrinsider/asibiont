@@ -10753,11 +10753,13 @@ async def send_outreach_email(
                 _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
                                  'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
                 _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
-                _from_addr = (
-                    _effective_resend_from
-                    if _effective_resend_from and _sender_domain in _free_domains
-                    else (campaign.sender_email or _effective_resend_from or 'noreply@asibiont.com')
-                )
+                # Free-mail domains (gmail, yandex, mail.ru etc.) cannot be used as Resend
+                # sender — Resend requires a verified domain. Always use RESEND_FROM / platform
+                # default for free-mail senders. reply_to is set to the real user address below.
+                if _sender_domain in _free_domains:
+                    _from_addr = _effective_resend_from or 'outreach@asibiont.com'
+                else:
+                    _from_addr = campaign.sender_email or _effective_resend_from or 'outreach@asibiont.com'
                 from_header = f"{campaign.sender_name} <{_from_addr}>"
                 # reply_to указывает на реальный адрес пользователя (может быть gmail)
                 _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
