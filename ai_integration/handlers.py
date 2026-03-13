@@ -10681,7 +10681,19 @@ async def send_outreach_email(
         resend_id = None
         try:
             async with _aiohttp.ClientSession() as http:
-                from_header = f"{campaign.sender_name} <{campaign.sender_email}>"
+                # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
+                from config import RESEND_FROM as _resend_from_cfg
+                _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+                                 'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
+                _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
+                _from_addr = (
+                    _resend_from_cfg
+                    if _resend_from_cfg and _sender_domain in _free_domains
+                    else (campaign.sender_email or _resend_from_cfg or 'noreply@asibiont.com')
+                )
+                from_header = f"{campaign.sender_name} <{_from_addr}>"
+                # reply_to указывает на реальный адрес пользователя (может быть gmail)
+                _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
                 resp = await http.post(
                     'https://api.resend.com/emails',
                     headers={
@@ -10691,7 +10703,7 @@ async def send_outreach_email(
                     json={
                         'from': from_header,
                         'to': [recipient_email],
-                        'reply_to': [campaign.sender_email] if campaign.sender_email and '@' in campaign.sender_email else None,
+                        'reply_to': [_reply_to_addr] if _reply_to_addr else None,
                         'subject': subject,
                         'text': body,
                         'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},

@@ -3281,6 +3281,18 @@ class AnchorEngine:
                 _all_tools.extend(_step_tools)
 
                 if not _result or not _result.strip() or len(_result.strip()) < 20:
+                    if _step_task_id:
+                        try:
+                            from sqlalchemy import text as _sql_t_empty
+                            session.execute(_sql_t_empty(
+                                "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
+                            ), {'n': 'Агент вернул пустой результат', 'id': _step_task_id})
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     continue
 
                 # Очистка и отправка результата пользователю
@@ -7405,7 +7417,7 @@ class AnchorEngine:
                             close_session=False,
                         )
                         logger.info(f"[ANCHOR] Direct send to {email}: {(result or '')[:100]}")
-                        if result and '' in result:
+                        if result and ('отправлено' in result.lower() or 'sent' in result.lower()):
                             sent_count += 1
                         elif result and ('лимит' in result.lower() or 'limit' in result.lower()):
                             logger.info(f"[ANCHOR] Daily limit reached, stopping batch")

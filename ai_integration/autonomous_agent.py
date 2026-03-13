@@ -3880,9 +3880,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         ]
         if _has_email_h:
             _hints.append(
-                "\n\n📧 Email-интеграция. ПРИОРИТЕТ: "
-                "проверь входящие (check_emails) — ответы важнее нового поиска. "
-                "Или: list_email_contacts → send_outreach_email."
+                "\n\n📧 Email-интеграция. ПРИОРИТЕТ — отправка: "
+                "send_outreach_email (если есть кампания с лидами) или start_email_campaign (ещё нет кампании). "
+                "check_emails — ТОЛЬКО когда ждёшь ответов на уже отправленные письма. "
+                "Если check_emails вернул 'нет новых писем' — НЕ повторяй, сразу иди к отправке."
             )
         if _has_code_h:
             _hints.append(
@@ -4570,8 +4571,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _my_tools_safe = locals().get('_my_tools', [])
                 if _my_tools_safe:
                     _priority_order = [
-                        'check_emails', 'run_agent_action', 'research_topic',
-                        'web_search', 'send_outreach_email', 'find_relevant_contacts_for_task',
+                        'send_outreach_email', 'start_email_campaign', 'run_agent_action',
+                        'research_topic', 'web_search', 'find_relevant_contacts_for_task',
+                        'check_emails',
                     ]
                     for _pt in _priority_order:
                         if _pt in _my_tools_safe:

@@ -180,6 +180,8 @@ SMTP_FROM = os.getenv("SMTP_FROM", "ASI Biont <aleksandr.insider@gmail.com>")
 
 # Resend.com HTTP Email API (fallback when SMTP ports are blocked)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+# Верифицированный from-адрес Resend (должен совпадать с доменом Resend Domains)
+RESEND_FROM = os.getenv("RESEND_FROM", "")
 # Full-access key for reading inbound/received emails (Resend Receiving API)
 RESEND_RECEIVING_API_KEY = os.getenv("RESEND_RECEIVING_API_KEY", "") or RESEND_API_KEY
 
