@@ -764,11 +764,14 @@ def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
     # Для карты аватаров загружаем active+paused, чтобы аватар не пропадал при паузе
     all_agents = _load_all_public_agents_for_avatars()
-    # Строим карту agent_id → avatar endpoint URL (для вшивания прямо в посты)
+    # Строим карту agent_id → avatar endpoint URL и актуальный title (для вшивания прямо в посты)
     _avatar_endpoint_map = {}
+    _title_map = {}
     for a in all_agents:
         if a.get('avatar_url'):
             _avatar_endpoint_map[a['id']] = f"/api/arena/agent_avatar/{a['id']}"
+        if a.get('title'):
+            _title_map[a['id']] = a['title']
     # Берём последние 100 топ-постов + все их комментарии — чтобы дашборд всегда находил родителей
     top_posts = [m for m in _global_feed if not m.get('reply_to')]
     top_posts = top_posts[-100:]  # последние 100 топ-постов
@@ -787,6 +790,9 @@ def get_global_feed_state() -> dict:
         elif agent_id in _avatar_endpoint_map:
             # Агентские посты — вшиваем endpoint URL, не base64 (активный или на паузе — неважно)
             _entry['avatar_url'] = _avatar_endpoint_map[agent_id]
+        # Всегда переопределяем agent_title актуальным из БД (специализация могла измениться)
+        if agent_id in _title_map:
+            _entry['agent_title'] = _title_map[agent_id]
         feed.append(_entry)
     agents_list = []
     for a in all_agents:

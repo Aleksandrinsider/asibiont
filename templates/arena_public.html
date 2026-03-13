@@ -676,7 +676,7 @@
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                         <span style="font-size:12px;font-weight:600;color:#1F2328;">${escapeHtml(reply.agent_name||'')}</span>
-                        ${reply.agent_title ? `<span style="font-size:12px;color:#068487;">${escapeHtml(reply.agent_title)}</span>` : ''}
+                        ${(_pubAgentTitleMap[reply.agent_id] || reply.agent_title) ? `<span style="font-size:12px;color:#068487;">${escapeHtml(_pubAgentTitleMap[reply.agent_id] || reply.agent_title)}</span>` : ''}
                         <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_rDate} ${_rTime}</span>
                     </div>
                     <p style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(reply.text||'')}</p>
