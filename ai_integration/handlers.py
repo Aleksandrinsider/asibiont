@@ -9492,7 +9492,7 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
 
 
 async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
-                           offer: str, session) -> tuple:
+                           offer: str, session, github_token: str = '') -> tuple:
     """Автоматический поиск лидов: multi-pass подход для 50 лидов/день.
 
     Pass 0:  GitHub API — публичные email разработчиков (бесплатно, 20-50 за поиск)
@@ -9511,6 +9511,25 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     import aiohttp
     import random
     api = get_api_client()
+
+    # Ищем GITHUB_TOKEN у агентов пользователя если не передан явно
+    if not github_token:
+        try:
+            from models import UserAgent as _UA_gl
+            _agents_with_keys = session.query(_UA_gl).filter(
+                _UA_gl.author_id == user.id,
+                _UA_gl.user_api_keys.isnot(None),
+            ).all()
+            for _ag_gl in _agents_with_keys:
+                for _line in (_ag_gl.user_api_keys or '').splitlines():
+                    if _line.strip().upper().startswith('GITHUB_TOKEN='):
+                        github_token = _line.split('=', 1)[1].strip()
+                        logger.info(f'[AUTO_LEADS] Using GITHUB_TOKEN from agent {_ag_gl.name}')
+                        break
+                if github_token:
+                    break
+        except Exception as _gt_err:
+            logger.debug(f'[AUTO_LEADS] GITHUB_TOKEN lookup error: {_gt_err}')
 
     keywords = target_audience[:200].replace(',', ' ').replace('.', ' ')
     goal_kw = goal[:100].replace(',', ' ').replace('.', ' ')
@@ -9611,6 +9630,7 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                     queries=gh_queries,
                     max_users_per_query=20,
                     page=_gh_page,
+                    github_token=github_token or None,
                 )
                 for lead in github_leads:
                     em = lead.get('email', '').lower().strip('.')

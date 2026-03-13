@@ -223,6 +223,7 @@ class ExternalAPIClient:
         max_users: int = 30,
         cache_ttl: int = 3600,
         page: int = 1,
+        github_token: str = None,
     ) -> List[dict]:
         """
         Поиск пользователей GitHub по теме и сбор их email из коммитов + профилей.
@@ -246,7 +247,8 @@ class ExternalAPIClient:
         if cached is not None:
             return cached
         
-        github_token = os.environ.get('GITHUB_TOKEN', '')
+        # github_token: явно переданный (из user_api_keys агента) > env переменная
+        github_token = github_token or os.environ.get('GITHUB_TOKEN', '')
         headers = {
             'Accept': 'application/vnd.github+json',
             'User-Agent': 'ASI-Biont-LeadFinder/1.0',
@@ -414,6 +416,7 @@ class ExternalAPIClient:
         max_users_per_query: int = 20,
         cache_ttl: int = 3600,
         page: int = 1,
+        github_token: str = None,
     ) -> List[dict]:
         """
         Параллельный поиск по нескольким запросам GitHub.
@@ -426,7 +429,7 @@ class ExternalAPIClient:
         seen_emails = set()
         
         for q in queries:
-            results = await self.github_search_emails(q, max_users=max_users_per_query, cache_ttl=cache_ttl, page=page)
+            results = await self.github_search_emails(q, max_users=max_users_per_query, cache_ttl=cache_ttl, page=page, github_token=github_token)
             for lead in results:
                 email = lead['email'].lower()
                 if email not in seen_emails:
