@@ -4259,6 +4259,12 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         if metric_current is not None and matched.metric_target:
             try:
                 mc = float(metric_current)
+                # GUARD: metric_current должен увеличиться хотя бы на 1 целую единицу
+                _old_mc = float(matched.metric_current or 0)
+                if mc <= _old_mc:
+                    return f"metric_current ({mc}) не больше текущего ({_old_mc}). Обновляй ТОЛЬКО когда нашёл РЕАЛЬНОГО нового пользователя/контакт."
+                if mc - _old_mc < 1.0:
+                    return f"Прирост метрики слишком мал ({mc - _old_mc:.1f}). Увеличивай на целые единицы — 1 единица = 1 реальный найденный пользователь."
                 matched.metric_current = mc
                 pct = int(mc / matched.metric_target * 100)
                 pct = max(0, min(100, pct))

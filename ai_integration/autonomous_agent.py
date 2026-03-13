@@ -4771,6 +4771,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if len(_final_text.strip()) < 100 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
+        # Антиэхо: агент просто пересказывает что сделали коллеги (только если нет реальных tool-действий)
+        elif not _tools_used and (_ft_lower.startswith('смотрю') and any(w in _ft_lower[:80] for w in ('коллег', 'уже сделано', 'уже сделали'))):
+            logger.info("[DIRECTOR-EXEC] autopilot echo filtered: %r", _final_text[:80])
+            _final_text = ''
+        elif not _tools_used and _ft_lower.startswith('проанализировал') and 'коллег' in _ft_lower[:100]:
+            logger.info("[DIRECTOR-EXEC] autopilot echo filtered: %r", _final_text[:80])
+            _final_text = ''
 
     return _final_text, _tools_used
 
