@@ -213,6 +213,54 @@ class Strategist(AgentRole):
                 else:
                     strategies.append('ЗАДАЧ НЕТ → Спроси над чем работает СЕЙЧАС. Предложи помощь в ТЕКУЩЕМ моменте. НЕ откладывай на завтра.')
         
+        # Адаптивный фолбэк — если стратег не добавил ничего (general intent + всё нормально)
+        # ИИ в этом случае получал пустой блок [СТРАТЕГ], теперь всегда получает контекст
+        if not strategies:
+            _parts = []
+            if profile_data:
+                _pos   = profile_data.get('position', '')
+                _goals = profile_data.get('goals', '')
+                _skl   = profile_data.get('skills', '')
+                _int   = profile_data.get('interests', '')
+                _gaps  = [k for k in ('goals', 'skills', 'interests') if not profile_data.get(k)]
+
+                if lang == 'en':
+                    if _pos or _int:
+                        _parts.append(f"Context: {_pos or 'specialist'}"
+                                      + (f", interests: {_int[:60]}" if _int else "")
+                                      + (f", goals: {_goals[:60]}" if _goals else ""))
+                    if _gaps:
+                        _parts.append(f"Profile gaps (learn naturally): {', '.join(_gaps)}")
+                    if has_tasks and _goals:
+                        _parts.append(f"Active pursuit: {_goals[:70]} — connect current message to their deeper goal")
+                    elif has_tasks and not _goals:
+                        _parts.append("Has tasks but no declared goals — ask what big outcome they're working toward")
+                else:
+                    if _pos or _int:
+                        _parts.append(f"Контекст: {_pos or 'специалист'}"
+                                      + (f", интересы: {_int[:60]}" if _int else "")
+                                      + (f", цели: {_goals[:60]}" if _goals else ""))
+                    if _gaps:
+                        _parts.append(f"Не заполнено в профиле (узнавай естественно): {', '.join(_gaps)}")
+                    if has_tasks and _goals:
+                        _parts.append(f"В работе: {_goals[:70]} — свяжи это сообщение с их настоящей целью")
+                    elif has_tasks and not _goals:
+                        _parts.append("Есть задачи, но целей нет — уместно спросить к чему ведёт эта работа")
+            elif has_tasks:
+                _parts.append(
+                    "Has tasks, profile unknown — help with the current request, learn who they are organically"
+                    if lang == 'en' else
+                    "Есть задачи, профиль неизвестен — помоги с текущим запросом, узнай кто этот человек органично"
+                )
+            else:
+                _parts.append(
+                    "Fresh start: no profile, no tasks — introduce yourself as a thinking partner, ask one genuine question"
+                    if lang == 'en' else
+                    "Чистый старт: нет профиля, нет задач — представься как мыслящий партнёр, задай один живой вопрос"
+                )
+            if _parts:
+                strategies.append("\n".join(_parts))
+
         return "\n".join(strategies)
 
 

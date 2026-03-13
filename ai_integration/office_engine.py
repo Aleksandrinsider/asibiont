@@ -1326,16 +1326,22 @@ class OfficeEngine:
             s.close()
 
         prompt = (
-            "Ты — ASI-координатор. Проанализируй цели пользователя и его агентов.\n"
-            "Если есть конкретное действие, которое агент может сделать прямо сейчас "
-            "для продвижения цели — назначь его. Если всё в порядке — скажи wait.\n\n"
+            "Ты — ASI-координатор. Проанализируй цели и агентов пользователя.\n"
+            "Если агенты могут прямо сейчас продвинуть разные цели — назначь каждому конкретную задачу.\n"
+            "Если нечего делать или всё уже делается — wait.\n\n"
             f"ЦЕЛИ:\n{goals_text}\n\n"
             f"АГЕНТЫ:\n{agents_text}\n\n"
             f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
+            "Правила:\n"
+            "1. Не повторяй задачи из активности за 6ч.\n"
+            "2. Задачу описывай КОНКРЕТНО (40+ слов): что сделать, какой результат, зачем.\n"
+            "3. Можешь назначить нескольким агентам если у них разные цели.\n"
+            "4. Если цель имеет конкретный дедлайн — пометь urgency=high.\n\n"
             "Ответь JSON (без ```):\n"
-            '{"action": "delegate", "agent_name": "имя", "task": "конкретная задача", "goal": "для какой цели"}\n'
+            '{"action": "delegate", "agent_name": "имя", "task": "подробная задача 40+ слов", "goal": "для какой цели", "urgency": "high/normal"}\n'
+            'или {"action": "delegate_multiple", "assignments": [{"agent_name": "...", "task": "...", "goal": "...", "urgency": "normal"}, ...]}\n'
             'или {"action": "wait", "reason": "почему"}\n'
-            "Не повторяй то, что уже делалось за 6ч. Ответь ТОЛЬКО JSON."
+            "Ответь ТОЛЬКО JSON."
         )
 
         try:
@@ -1344,7 +1350,7 @@ class OfficeEngine:
                     "https://api.deepseek.com/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                     json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                          "max_tokens": 200, "temperature": 0.3},
+                          "max_tokens": 400, "temperature": 0.5},
                     timeout=aiohttp.ClientTimeout(total=15),
                 ) as resp:
                     if resp.status != 200:
@@ -1370,67 +1376,84 @@ class OfficeEngine:
             logger.info("[OFFICE-L2] user=%d: wait — %s", user_db_id, plan.get('reason', '')[:60])
             return
 
-        if action != 'delegate':
+        # Нормализуем: single delegate и delegate_multiple → общий список
+        if action == 'delegate_multiple':
+            _assignments = plan.get('assignments', [])[:3]  # max 3 агента за цикл
+        elif action == 'delegate':
+            _an = plan.get('agent_name', '').strip()
+            _at = plan.get('task', '').strip()
+            _ag = plan.get('goal', '').strip()
+            if not _an or not _at:
+                return
+            _assignments = [{'agent_name': _an, 'task': _at, 'goal': _ag,
+                             'urgency': plan.get('urgency', 'normal')}]
+        else:
             return
 
-        agent_name = plan.get('agent_name', '')
-        task = plan.get('task', '')
-        goal_text = plan.get('goal', '')
-        if not agent_name or not task:
-            return
-
-        # Находим агента
-        agent_match = next(
-            (a for a in agents if a[1] and a[1].lower() == agent_name.lower()),
-            next((a for a in agents if a[1] and agent_name.lower() in a[1].lower()), None)
-        )
-        if not agent_match:
-            logger.debug("[OFFICE-L2] agent not found: %s", agent_name)
-            return
-
-        agent_id, agent_name_db, agent_spec, agent_desc = agent_match
-
-        # Создаём задачу-делегирование + якорь + лог
-        _auto_delegate_to_agent_sync(user_db_id, agent_id, agent_name_db, task[:200])
-
-        # Якорь координации (cooldown 2ч)
-        _now = datetime.now(timezone.utc)
-        _save_office_anchor_sync(
-            user_db_id, agent_name_db,
-            f"L2: поручил «{task[:80]}» для цели «{goal_text[:60]}»"
-        )
-
-        # Дополнительный якорь для cooldown-проверки L2
         from models import Session as Db2, Anchor, AnchorPriority
-        s2 = Db2()
-        try:
-            s2.add(Anchor(
-                user_id=user_db_id,
-                anchor_type='agent_office_update',
-                source=f'l2-coord:{_now.strftime("%Y-%m-%d-%H")}',
-                topic=f'L2: {agent_name_db} → {task[:60]}',
-                priority=AnchorPriority.LOW,
-                data=_json.dumps(plan, ensure_ascii=False),
-                triggered_at=_now,
-                expires_at=_now + timedelta(hours=8),
-                cooldown_hours=2,
-                batch_group='integration',
-            ))
-            s2.commit()
-        except Exception:
-            s2.rollback()
-        finally:
-            s2.close()
+        _now = datetime.now(timezone.utc)
 
-        # Логируем
-        _log_agent_activity_sync(
-            user_db_id, agent_name_db, agent_id,
-            f'L2 координация: {task[:120]}',
-            f'Цель: {goal_text}. Задача: {task}',
-            activity_type='agent_task',
-        )
+        for _asgn in _assignments:
+            _aname = (_asgn.get('agent_name') or '').strip()
+            _atask = (_asgn.get('task') or '').strip()
+            _agoal = (_asgn.get('goal') or '').strip()
+            _urgency = _asgn.get('urgency', 'normal')
+            if not _aname or not _atask:
+                continue
 
-        logger.info("[OFFICE-L2] user=%d: delegated to %s: %s", user_db_id, agent_name_db, task[:60])
+            # Находим агента
+            _agent_match = next(
+                (a for a in agents if a[1] and a[1].lower() == _aname.lower()),
+                next((a for a in agents if a[1] and _aname.lower() in a[1].lower()), None)
+            )
+            if not _agent_match:
+                logger.debug("[OFFICE-L2] agent not found: %s", _aname)
+                continue
+
+            _agent_id, _agent_name_db, _agent_spec, _agent_desc = _agent_match
+
+            # Приоритет под urgency
+            _anchor_priority = AnchorPriority.HIGH if _urgency == 'high' else AnchorPriority.LOW
+
+            # Создаём задачу-делегирование + якорь + лог
+            _auto_delegate_to_agent_sync(user_db_id, _agent_id, _agent_name_db, _atask[:200])
+
+            _save_office_anchor_sync(
+                user_db_id, _agent_name_db,
+                f"L2: поручил «{_atask[:80]}» для цели «{_agoal[:60]}»"
+            )
+
+            s2 = Db2()
+            try:
+                s2.add(Anchor(
+                    user_id=user_db_id,
+                    anchor_type='agent_office_update',
+                    source=f'l2-coord:{_now.strftime("%Y-%m-%d-%H")}:{_agent_name_db[:8]}',
+                    topic=f'L2: {_agent_name_db} → {_atask[:60]}',
+                    priority=_anchor_priority,
+                    data=_json.dumps({'action': 'delegate', 'agent_name': _aname,
+                                      'task': _atask, 'goal': _agoal,
+                                      'urgency': _urgency}, ensure_ascii=False),
+                    triggered_at=_now,
+                    expires_at=_now + timedelta(hours=8),
+                    cooldown_hours=2,
+                    batch_group='integration',
+                ))
+                s2.commit()
+            except Exception:
+                s2.rollback()
+            finally:
+                s2.close()
+
+            _log_agent_activity_sync(
+                user_db_id, _agent_name_db, _agent_id,
+                f'L2 координация: {_atask[:120]}',
+                f'Цель: {_agoal}. Задача: {_atask}',
+                activity_type='agent_task',
+            )
+
+            logger.info("[OFFICE-L2] user=%d: delegated to %s [%s]: %s",
+                        user_db_id, _agent_name_db, _urgency, _atask[:60])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

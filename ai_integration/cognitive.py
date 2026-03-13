@@ -427,6 +427,35 @@ class CognitiveEngine:
                 if overlap > 0.5:
                     repeated_patterns.append('начало ответа повторяет предыдущее из предыдущих ответов')
 
+        # Паттерн «только вопросы» — 3+ ответа подряд заканчиваются вопросом,
+        # но ни один не содержит вызова инструмента → пора ДЕЙСТВОВАТЬ
+        if len(last_bot_msgs) >= 3:
+            _last3 = [m.get('content', '') for m in last_bot_msgs[-3:]]
+            _q_count = sum(
+                1 for _m in _last3
+                if _m.rstrip().endswith('?') or _m.rstrip().endswith('?')
+                or (_m.count('?') >= 1 and len(_m) < 800)
+            )
+            _has_tool_signal = any(
+                any(kw in _m.lower() for kw in ('записал', 'создал', 'добавил', 'нашёл',
+                                                  'поставил', 'отправил', 'делегировал',
+                                                  'запустил', 'опубликовал', 'сохранил',
+                                                  'recorded', 'created', 'added', 'found',
+                                                  'sent', 'delegated', 'started'))
+                for _m in _last3
+            )
+            if _q_count >= 3 and not _has_tool_signal:
+                if lang == 'en':
+                    repeated_patterns.append(
+                        "3 replies in a row end with questions, no actions taken — "
+                        "STOP ASKING, use a tool to ACT or give concrete advice"
+                    )
+                else:
+                    repeated_patterns.append(
+                        "3 ответа подряд заканчиваются вопросом, действий нет — "
+                        "ХВАТИТ СПРАШИВАТЬ, вызови инструмент или дай конкретный совет"
+                    )
+
         if repeated_patterns:
             if lang == 'en':
                 return (
