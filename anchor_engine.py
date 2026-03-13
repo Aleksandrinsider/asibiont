@@ -959,25 +959,24 @@ class AnchorEngine:
 
         # ── 3b. GOAL AUTOPILOT — ПЕРВЫМ после dialog, до постов/email ──
         # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
-        # Gap check только по AUTOPILOT-сообщениям (не всем proactive) —
-        # иначе service_degraded/email/пост блокирует автопилот на 10 мин.
+        # Gap check по DELIVERED autopilot-якорям — надёжнее чем Interaction content.
+        # Cooldown на source уже блокирует, но этот guard — двойная защита.
         if autopilot_anchors:
             _ap_gap_ok = True
             try:
-                # Ищем только autopilot-оригинированные сообщения (содержат __anchor_type: goal_autopilot_review)
-                _last_ap_msg = session.query(Interaction.created_at, Interaction.content).filter(
-                    Interaction.user_id == user.id,
-                    Interaction.message_type == 'proactive',
-                    Interaction.content.like('%goal_autopilot_review%'),
-                ).order_by(Interaction.created_at.desc()).first()
-                if _last_ap_msg:
-                    _ap_time = _last_ap_msg[0]
+                _last_ap_delivered = session.query(Anchor.delivered_at).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'goal_autopilot_review',
+                    Anchor.delivered_at.isnot(None),
+                ).order_by(Anchor.delivered_at.desc()).first()
+                if _last_ap_delivered:
+                    _ap_time = _last_ap_delivered[0]
                     if _ap_time.tzinfo is None:
                         _ap_time = _ap_time.replace(tzinfo=timezone.utc)
                     _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
                     if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
                         _ap_gap_ok = False
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last autopilot msg {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
             except Exception:
                 pass
 
@@ -1659,21 +1658,21 @@ class AnchorEngine:
                 _has_real_actions = bool(_tools_used)
                 _filter_reason = ''
 
-                # ── Watchdog: если >3ч без autopilot-сообщения → пропустить noise-фильтр ──
+                # ── Watchdog: если >3ч без успешной доставки autopilot → пропустить noise-фильтр ──
                 _force_delivery = False
                 try:
-                    _last_ap = session.query(Interaction.created_at).filter(
-                        Interaction.user_id == user.id,
-                        Interaction.message_type == 'proactive',
-                        Interaction.content.like('%goal_autopilot_review%'),
-                    ).order_by(Interaction.created_at.desc()).first()
-                    if _last_ap:
-                        _ap_age_h = (datetime.now(timezone.utc) - _last_ap[0].replace(tzinfo=timezone.utc)).total_seconds() / 3600
+                    _last_ap_dlv = session.query(Anchor.delivered_at).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == 'goal_autopilot_review',
+                        Anchor.delivered_at.isnot(None),
+                    ).order_by(Anchor.delivered_at.desc()).first()
+                    if _last_ap_dlv:
+                        _ap_age_h = (datetime.now(timezone.utc) - _last_ap_dlv[0].replace(tzinfo=timezone.utc)).total_seconds() / 3600
                         if _ap_age_h > 3:
                             _force_delivery = True
-                            logger.info("[ANCHOR-AUTOPILOT] watchdog: last autopilot msg %.1fh ago → force delivery", _ap_age_h)
+                            logger.info("[ANCHOR-AUTOPILOT] watchdog: last autopilot delivered %.1fh ago → force delivery", _ap_age_h)
                     else:
-                        _force_delivery = True  # Ни одного сообщения — первый раз
+                        _force_delivery = True  # Ни одной доставки — первый раз
                 except Exception:
                     pass
 
@@ -3625,16 +3624,16 @@ class AnchorEngine:
         if not active_goals:
             return []
 
-        # ── ЖЁСТКИЙ GUARD: не создавать якорь если последнее autopilot-сообщение было меньше 15 минут назад ──
-        # Проверяем Interactions как основной источник (всегда пишется)
+        # ── ЖЁСТКИЙ GUARD: не создавать якорь если последний autopilot-якорь доставлен меньше MIN_AUTOPILOT_GAP_MINUTES назад ──
+        # Проверяем Anchor.delivered_at — самый надёжный источник (всегда коммитится перед AI-вызовом)
         try:
-            _last_ap_interaction = session.query(Interaction.created_at).filter(
-                Interaction.user_id == user.id,
-                Interaction.message_type == 'proactive',
-                Interaction.content.like('%goal_autopilot_review%'),
-            ).order_by(Interaction.created_at.desc()).first()
-            if _last_ap_interaction:
-                _ap_time = _last_ap_interaction[0]
+            _last_ap_anchor = session.query(Anchor.delivered_at).filter(
+                Anchor.user_id == user.id,
+                Anchor.anchor_type == 'goal_autopilot_review',
+                Anchor.delivered_at.isnot(None),
+            ).order_by(Anchor.delivered_at.desc()).first()
+            if _last_ap_anchor:
+                _ap_time = _last_ap_anchor[0]
                 if _ap_time.tzinfo is None:
                     _ap_time = _ap_time.replace(tzinfo=timezone.utc)
                 _gap = (now_utc - _ap_time).total_seconds() / 60
@@ -3687,12 +3686,11 @@ class AnchorEngine:
                 f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:600]}"
             )
 
-        # Fallback: если AAL пуст, берём историю из interactions (autopilot proactive сообщения)
+        # Fallback: если AAL пуст, берём историю из interactions (proactive сообщения за 24ч)
         if not actions_history:
             _ap_fallback = session.query(Interaction).filter(
                 Interaction.user_id == user.id,
                 Interaction.message_type == 'proactive',
-                Interaction.content.like('%goal_autopilot_review%'),
                 Interaction.created_at >= now_utc - timedelta(hours=24),
             ).order_by(Interaction.created_at.desc()).limit(10).all()
             for _fb in _ap_fallback:
