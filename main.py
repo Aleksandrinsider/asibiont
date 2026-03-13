@@ -8436,6 +8436,7 @@ async def api_reports_handler(request):
                 completed_tasks_30d = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'completed',
+                    Task.source != 'agent',
                     or_(
                         and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= seven_days_ago_stats),
                         and_(Task.actual_completion_time.is_(None), Task.created_at >= seven_days_ago_stats)
@@ -8451,6 +8452,7 @@ async def api_reports_handler(request):
                 personal_stats['tasks_deleted'] = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'cancelled',
+                    Task.source != 'agent',
                     or_(
                         and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= seven_days_ago_stats),
                         and_(Task.actual_completion_time.is_(None), Task.created_at >= seven_days_ago_stats)
@@ -8459,6 +8461,7 @@ async def api_reports_handler(request):
                 personal_stats['tasks_deleted_today'] = session_db.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status == 'cancelled',
+                    Task.source != 'agent',
                     or_(
                         and_(Task.actual_completion_time.isnot(None), Task.actual_completion_time >= today_start_ps),
                         and_(Task.actual_completion_time.is_(None), Task.created_at >= today_start_ps)
