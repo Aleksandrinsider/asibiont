@@ -156,6 +156,15 @@ async def generate_progress_post(user_id, session):
         if not profile:
             return None
 
+        # Проверяем и списываем токены перед вызовом DeepSeek
+        from config import FREE_ACCESS_MODE
+        from token_service import has_enough_tokens, spend_tokens
+        if not FREE_ACCESS_MODE:
+            if not has_enough_tokens(user_id, 'auto_post'):
+                logger.info(f"[AUTO_POST] skip user {user_id}: insufficient tokens")
+                return None
+            spend_tokens(user_id, 'auto_post', description='Автопост дня')
+
         # Timezone & time-of-day
         user_tz = pytz.timezone(user.timezone) if user.timezone else pytz.timezone('Europe/Moscow')
         now_utc = datetime.now(pytz.UTC)

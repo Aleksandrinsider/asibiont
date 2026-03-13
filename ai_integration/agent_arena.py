@@ -313,6 +313,7 @@ def _load_marketplace_agents() -> list:
                     'author_username': (u.username or '') if u else '',
                     'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
                     'search_scope': (a.search_scope or '').strip() if hasattr(a, 'search_scope') else '',
+                    '_owner_telegram_id': u.telegram_id if u else None,
                 })
             return result
         finally:
@@ -495,6 +496,19 @@ async def _global_posting_loop():
                 # Все агенты недавно постили — берём того кто постил давнее всего
                 eligible = sorted(all_agents, key=lambda a: _agent_last_post_ts.get(a['id'], 0))
             agent = random.choice(eligible[:max(1, len(eligible) // 2)])
+
+            # Проверяем токены владельца ДО вызова DeepSeek
+            _owner_tg = agent.get('_owner_telegram_id')
+            if _owner_tg:
+                from config import FREE_ACCESS_MODE as _fam
+                if not _fam:
+                    from token_service import has_enough_tokens as _het
+                    if not _het(_owner_tg, 'arena_agent_post'):
+                        logger.info("[ARENA] skip agent %s: owner %d has no tokens", agent['id'], _owner_tg)
+                        wait_sec = random.randint(BACKGROUND_INTERVAL_MIN[0] * 60, BACKGROUND_INTERVAL_MIN[1] * 60)
+                        await asyncio.sleep(wait_sec)
+                        continue
+
             reply = await _generate_agent_reply(agent, _global_feed[-10:])
 
             # Пропускаем ошибочные ответы — не засоряем ленту
