@@ -89,10 +89,12 @@ MAX_CHANNEL_PER_DAY = 1
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
 MORNING_START_HOUR = PROACTIVE_SEND_START_HOUR   # Общая настройка: 10
 SCAN_INTERVAL_MINUTES = 5
+AUTOPILOT_DEEP_NIGHT_START = 2  # Глубокая ночь: автопилот не работает даже для включённых (02:00-06:00)
+AUTOPILOT_DEEP_NIGHT_END = 6
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
-MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 60  # Интервал между autopilot dispatch'ами (было 15, поднято для масштабируемости)
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -751,7 +753,8 @@ class AnchorEngine:
                         has_unreplied_email = u.id in _night_exc_unreplied
                         has_email_drafts = u.id in _night_exc_drafts
                         has_follow_ups = u.id in _night_exc_followups
-                        has_autopilot = u.id in _night_exc_autopilot
+                        is_deep_night = AUTOPILOT_DEEP_NIGHT_START <= user_now.hour < AUTOPILOT_DEEP_NIGHT_END
+                        has_autopilot = (u.id in _night_exc_autopilot) and not is_deep_night
                         if not has_pending_reminder and not has_unreplied_email and not has_email_drafts and not has_follow_ups and not has_autopilot:
                             skipped_night += 1
                             continue
@@ -780,7 +783,7 @@ class AnchorEngine:
 
         # ── PHASE 1+2: Параллельная обработка eligible пользователей ──
         # DB-scan безопасен при высоком параллелизме, AI ограничен семафором
-        BATCH_CONCURRENCY = 10
+        BATCH_CONCURRENCY = 25
         for i in range(0, len(eligible), BATCH_CONCURRENCY):
             batch = eligible[i:i + BATCH_CONCURRENCY]
             tasks = []
@@ -3081,14 +3084,13 @@ class AnchorEngine:
                     ' | '.join(h[:100] for h in _hist[:3])
                     if _hist else 'нет истории'
                 )
-                    _desc_part = f', описание: {p["desc"][:150]}' if p.get('desc') else ''
-                    _spec_part = f' [{p["spec"]}]' if p.get('spec') else ''
-                    _profiles_lines.append(
-                        f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
-                        f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
-                        f'{_desc_part}'
-                if _email_campaigns_raw else 'нет активных кампаний'
-            )
+                _desc_part = f', описание: {p["desc"][:150]}' if p.get('desc') else ''
+                _spec_part = f' [{p["spec"]}]' if p.get('spec') else ''
+                _profiles_lines.append(
+                    f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
+                    f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
+                    f'{_desc_part}'
+                )
             _n_agents = len(_profiles)
 
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
