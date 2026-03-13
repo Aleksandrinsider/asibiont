@@ -145,8 +145,8 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
 }
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
-    """Строит адаптивный промпт автопилота — AI сам выбирает стратегию по контексту целей."""
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None) -> str:
+    """Строит адаптивный промпт автопилота — конкретная инструкция ПОД АГЕНТА И ЕГО ИНСТРУМЕНТЫ."""
 
     # Определяем доступные каналы пользователя
     channels_hint = ""
@@ -159,42 +159,86 @@ def _build_autopilot_prompt(goals_summary: list, user=None) -> str:
         if getattr(user, 'email', None):
             _channels.append("Email")
         if _channels:
-            channels_hint = f"\nДОСТУПНЫЕ КАНАЛЫ ПОЛЬЗОВАТЕЛЯ: {', '.join(_channels)}. Используй ИХ в первую очередь.\n"
-        else:
-            channels_hint = "\nУ пользователя нет подключённых каналов — используй платформу (поиск контактов, посты в ленту, задачи).\n"
+            channels_hint = f"Каналы пользователя: {', '.join(_channels)}.\n"
 
-    # Краткое описание целей для контекста AI
+    # Краткое описание целей
     _goals_desc = '; '.join(
-        f"{g.get('title', '?')} ({g.get('progress', 0)}%)"
+        f"{g.get('title', '?')} ({g.get('progress', 0)}%"
+        + (f", {g.get('metric_current', 0)}/{g.get('metric_target', '?')}" if g.get('metric_target') else '')
+        + ")"
         for g in goals_summary[:5]
     )
 
+    # ── Конкретный план действий под интеграции агента ──
+    _action_plan = ''
+    _caps_lower = [c.lower() for c in (agent_caps or [])]
+    _caps_str = ', '.join(agent_caps or [])
+    _has_email = any('mail' in c or 'почт' in c or 'email' in c or 'imap' in c or 'smtp' in c for c in _caps_lower)
+    _has_rss = any('rss' in c or 'feed' in c for c in _caps_lower)
+    _has_github = any('github' in c or 'gitlab' in c for c in _caps_lower)
+    _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'slack', 'smm', 'контент'))
+
+    if _has_email:
+        _action_plan = (
+            "ТВОИ ИНСТРУМЕНТЫ: email (Gmail). Ты ЕДИНСТВЕННЫЙ в команде кто может отправлять и читать письма.\n\n"
+            "КОНКРЕТНЫЙ ПЛАН ДЕЙСТВИЙ (выбери ОДНО):\n"
+            "  A) Проверь входящие: run_agent_action(action='check_emails') → если есть ответы от людей, сохрани контакт через save_email_contact\n"
+            "  B) Отправь outreach: run_agent_action(action='send_email', to='email@...', subject='...', body='...') → конкретному человеку из контактов или найденному через web_search\n"
+            "  C) Запусти email-кампанию: найди через web_search конкретные email-адреса людей и отправь каждому персональное письмо\n\n"
+            "ПРАВИЛО: НЕ делай web_search без последующего действия с результатами. "
+            "Нашёл email → СРАЗУ отправь письмо. Нашёл сообщество → создай задачу с конкретным планом.\n"
+        )
+    elif _has_rss:
+        _action_plan = (
+            "ТВОИ ИНСТРУМЕНТЫ: RSS-лента (мониторинг новостей/статей).\n\n"
+            "КОНКРЕТНЫЙ ПЛАН ДЕЙСТВИЙ (выбери ОДНО):\n"
+            "  A) Прочитай RSS: run_agent_action() → найди статью/тему РЕЛЕВАНТНУЮ цели → создай задачу (add_task) с конкретным планом использования\n"
+            "  B) Исследуй тему глубже: research_topic → найди конкретные сообщества, каналы, контакты СВЯЗАННЫЕ с целью\n"
+            "  C) Делегируй коллеге: если нашёл email-контакт для outreach → DELEGATE[коллега с email]: отправить письмо на конкретный адрес\n\n"
+            "ПРАВИЛО: RSS-мониторинг ценен только если ты НАШЁЛ конкретные данные для цели. "
+            "Просто 'прочитал новости' = бесполезно. Создай задачу или делегируй.\n"
+        )
+    elif _has_github:
+        _action_plan = (
+            "ТВОИ ИНСТРУМЕНТЫ: GitHub/GitLab API.\n\n"
+            "КОНКРЕТНЫЙ ПЛАН ДЕЙСТВИЙ (выбери ОДНО):\n"
+            "  A) Найди разработчиков: run_agent_action → поиск людей по интересам через GitHub\n"
+            "  B) Найди open-source проекты: issues, contributors → создай задачу для outreach\n"
+            "  C) Делегируй: нашёл email-адрес разработчика → DELEGATE[коллега с email]: отправить приглашение\n\n"
+        )
+    elif _has_content:
+        _action_plan = (
+            "ТВОИ ИНСТРУМЕНТЫ: публикация контента.\n\n"
+            "КОНКРЕТНЫЙ ПЛАН ДЕЙСТВИЙ (выбери ОДНО):\n"
+            "  A) Создай привлекающий пост через create_post → publish_to_telegram/discord\n"
+            "  B) Найди целевые каналы/сообщества для публикации\n\n"
+        )
+    else:
+        # ASI или агент без специфических интеграций
+        _action_plan = (
+            "ТВОИ ИНСТРУМЕНТЫ: web_search, research_topic, add_task, delegate_task.\n\n"
+            "КОНКРЕТНЫЙ ПЛАН ДЕЙСТВИЙ (выбери ОДНО):\n"
+            "  A) Найди КОНКРЕТНЫЕ контакты (имя + email/ник/профиль) через web_search → делегируй коллеге с email для outreach\n"
+            "  B) Найди КОНКРЕТНЫЕ сообщества/группы по теме цели → создай задачу (add_task) с планом\n"
+            "  C) Исследуй конкретную стратегию через research_topic → создай задачу\n\n"
+            "ПРАВИЛО: ценность координатора = НАХОДИТЬ данные и ДЕЛЕГИРОВАТЬ. "
+            "Не пиши 'предлагаю поискать' — ТЫ ищешь и делегируешь СЕЙЧАС.\n"
+        )
+
     return (
-        "Продвинь цель пользователя на один НОВЫЙ конкретный шаг вперёд.\n"
-        "Ты — часть КОМАНДЫ специалистов. Каждые 37 минут работает один из вас.\n\n"
         f"ЦЕЛИ: {_goals_desc}\n"
+        f"{'ТВОИ СПОСОБНОСТИ: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}\n"
-        "ТВОЯ ЗАДАЧА — СДЕЛАТЬ что-то НОВОЕ. Не описывать что сделали другие.\n\n"
-        "ПРОЦЕСС:\n"
-        "  1. Бегло просмотри «УЖЕ СДЕЛАНО» — найди данные (email, ссылку, контакт)\n"
-        "  2. СДЕЛАЙ ОДНО НОВОЕ действие используя СВОИ интеграции\n"
-        "  3. update_goal_progress ТОЛЬКО если нашёл реального нового пользователя/контакт\n\n"
-        "КРИТИЧЕСКИ ВАЖНО:\n"
-        "  - НЕ ПЕРЕСКАЗЫВАЙ что сделали коллеги — пользователь это уже видел\n"
-        "  - НЕ НАЧИНАЙ с 'Смотрю что уже сделано' — это трата времени\n"
-        "  - НЕ вызывай update_goal_progress если ты НЕ нашёл нового реального человека\n"
-        "  - Поиск БЕЗ конкретного результата = НЕ ПИШИ пользователю (вернёшь пустоту)\n\n"
-        "ЧТО ЗНАЧИТ ХОРОШИЙ РЕЗУЛЬТАТ:\n"
-        "  - Нашёл конкретное сообщество/группу + написал туда или создал задачу\n"
-        "  - Получил ответ от реального человека\n"
-        "  - Отправил outreach-письмо конкретному человеку\n"
-        "  - Нашёл конкретные контакты (имя + email/ник)\n\n"
-        "ПЛОХОЙ РЕЗУЛЬТАТ (НЕ ПИШИ пользователю):\n"
-        "  - 'Нашла несколько площадок' без конкретных действий\n"
-        "  - Пересказ того что сделали коллеги\n"
-        "  - Общие рассуждения без фактов\n\n"
-        "Если инструмент не сработал — молча попробуй другой.\n"
-        "Если ничего нового не нашёл — верни ПУСТУЮ строку, не выдумывай."
+        f"{_action_plan}"
+        "РЕЗУЛЬТАТ ДЛЯ ПОЛЬЗОВАТЕЛЯ:\n"
+        "  Напиши ТОЛЬКО если ты сделал конкретное действие с конкретным результатом.\n"
+        "  Пример хорошего: 'Отправила письмо Ивану Петрову (ivan@mail.ru) с предложением тестирования.'\n"
+        "  Пример хорошего: 'Нашёл Telegram-группу QA Russia (2к участников). Создала задачу: написать модератору.'\n"
+        "  Пример ПЛОХОГО: 'Нашла несколько площадок для поиска тестировщиков.' (нет действия)\n"
+        "  Пример ПЛОХОГО: 'Смотрю что уже сделано коллегами.' (пересказ)\n\n"
+        "update_goal_progress — ТОЛЬКО если нашёл реальный новый контакт или получил реальный ответ.\n"
+        "Если ничего конкретного не сделал — верни пустую строку.\n"
+        "Если инструмент не сработал — молча попробуй другой."
     )
 
 # Группы батчинга
@@ -1132,9 +1176,9 @@ class AnchorEngine:
             if isinstance(data, str):
                 data = json.loads(data)
             if anchor.anchor_type == 'goal_autopilot_review':
-                # Адаптивный промпт — стратегия подбирается под категорию целей пользователя
+                # Промпт будет перестроен ПОСЛЕ выбора агента с учётом его интеграций
                 _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
-                task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n" + _build_autopilot_prompt(_goals_for_prompt, user=user)
+                task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"  # placeholder — дополнится ниже
             else:
                 task_text = _AGENT_DISPATCH_TRIGGERS.get(
                     anchor.anchor_type, anchor.topic or '',
@@ -1162,18 +1206,13 @@ class AnchorEngine:
                 )
                 task_text += f"\n\nАктивные цели:\n{goals_block}"
 
-            # Добавляем историю предыдущих действий
+            # Добавляем историю предыдущих действий — кратко, без провокации эхо
             recent_actions = data.get('recent_actions', [])
             if recent_actions:
                 task_text += (
-                    "\n\n⚠️ УЖЕ СДЕЛАНО (за 48ч) — результаты КОМАНДЫ. ИЗУЧИ внимательно:\n"
+                    "\n\n📜 ИСТОРИЯ (не повторяй, не пересказывай):\n"
                     + '\n'.join(f"  {a}" for a in recent_actions[:8])
-                    + "\n\nКАК ИСПОЛЬЗОВАТЬ эти данные:\n"
-                    "  — Коллега нашла контакт/email → отправь письмо или создай задачу по этому контакту\n"
-                    "  — Коллега нашла площадку/сообщество → исследуй её глубже или напиши туда\n"
-                    "  — Коллега создала задачу → проверь статус, продвинь дальше\n"
-                    "  — Коллега отправила письмо → проверь ответ, подготовь следующий шаг\n"
-                    "  НЕ повторяй уже сделанные действия. СТРОЙ на них."
+                    + "\n  ↑ Эти действия уже сделаны. НЕ описывай их. Делай НОВОЕ."
                 )
 
             # Добавляем информацию о команде с их способностями
@@ -1440,7 +1479,8 @@ class AnchorEngine:
                 # Используем _parse_agent_integrations — она определяет реальные интеграции
                 # из user_api_keys (имена ключей) + python_code (импорты) + tools_allowed.
                 # Работает для любых 30+ интеграций без хардкода в anchor_engine.
-                if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                _detected = []
+                if anchor.anchor_type == 'goal_autopilot_review':
                     try:
                         from ai_integration.autonomous_agent import _parse_agent_integrations as _pai
                         _detected = _pai(
@@ -1451,21 +1491,18 @@ class AnchorEngine:
                         )
                     except Exception:
                         _detected = []
-                    if _detected:
-                        _role_desc = ' / '.join(filter(None, [
-                            (getattr(chosen, 'job_title', '') or '').strip(),
-                            (getattr(chosen, 'specialization', '') or '').strip(),
-                            (getattr(chosen, 'description', '') or '').strip()[:150],
-                        ]))
-                        _intg_str = ', '.join(_detected[:6])
-                        # НЕ перезаписываем task_text — дополняем ролью агента.
-                        # Оригинальный промпт содержит цели, историю, запреты повторов — всё важно.
-                        task_text = (
-                            f"[РОЛЬ] Ты: {_role_desc or chosen.name}. "
-                            f"Твои интеграции: {_intg_str}. "
-                            f"Если задача подходит под твою специализацию — используй run_agent_action.\n\n"
-                            + task_text
-                        )
+                    # Перестраиваем task_text — вставляем промпт после placeholder
+                    _autopilot_prompt = _build_autopilot_prompt(
+                        _goals_for_prompt, user=user,
+                        agent_caps=_detected, agent_name=chosen.name,
+                    )
+                    _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
+                    if _placeholder in task_text:
+                        task_text = task_text.replace(_placeholder, _placeholder + _autopilot_prompt + "\n", 1)
+                    else:
+                        task_text = _autopilot_prompt + "\n\n" + task_text
+                elif anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                    pass  # handled above
 
                 # ── Проверяем и списываем токены за автопилот ──
                 from token_service import has_enough_tokens as _het_ap, spend_tokens as _sp_ap
