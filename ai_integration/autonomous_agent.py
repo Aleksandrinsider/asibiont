@@ -5020,6 +5020,22 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
             # Убираем дубликат имени агента в начале task_text ("Кристина: Кристина, ...")
             _clean_task = task_text.strip()
             import re as _re_title
+            # Удаляем мусорные системные префиксы (роль, правила, автопилот-контекст)
+            _GARBAGE_PATS = [
+                r'^\[РОЛЬ\]\s*',
+                r'^ТВОЯ РОЛЬ:\s*',
+                r'^\[АВТОПИЛОТ\][^\n]*\n?',
+                r'^📌\s*Правила[^\n]*\n?',
+                r'^ПРАВИЛА И ПРЕДПОЧТЕНИЯ[^\n]*\n?',
+                r'^ТЫ[:\s]',
+            ]
+            for _gp in _GARBAGE_PATS:
+                _m = _re_title.match(_gp, _clean_task, flags=_re_title.IGNORECASE)
+                if _m:
+                    _clean_task = _clean_task[_m.end():].lstrip()
+            # Если после очистки получился мусор или пустышка — ставим дефолт
+            if len(_clean_task.strip()) < 5:
+                _clean_task = f"Задача агента {_aname}"
             # Удаляем имя агента из начала (любые вариации: запятая, двоеточие, пробел)
             _clean_task = _re_title.sub(
                 r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',

@@ -1988,20 +1988,48 @@ class AnchorEngine:
                         return
 
                 # ── Создаём задачу в «Поручения агентам» перед dispatch ──
+                # Dedup: не создаём новую задачу если агент уже получил задачу за последние 4 ч
                 _ap_task_id = None
                 try:
                     from ai_integration.autonomous_agent import _create_agent_delegation_task as _cadt
-                    # Используем краткий заголовок цели, а не системный промпт
-                    _gl_titles_s = [g.get('title', '')[:50] for g in data.get('goals', [])[:2] if g.get('title', '').strip()]
+                    # Используем краткий заголовок активной цели, никогда не используем anchor.topic
+                    _gl_titles_s = [g.get('title', '')[:60] for g in data.get('goals', [])[:2] if g.get('title', '').strip()]
                     if not _gl_titles_s:
-                        # Fallback: тема якоря или специализация агента
-                        _anchor_topic = (anchor.topic or '').strip()[:80]
-                        _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '')[:50]
-                        _fallback = _anchor_topic or _agent_spec
-                        _ap_task_title = f"[Автопилот] {agent_name}: {_fallback}"[:200] if _fallback else f"[Автопилот] {agent_name}"
+                        # Fallback: берём активные цели напрямую из БД
+                        try:
+                            from models import Goal as _Goal_ap
+                            _db_goals = session.query(_Goal_ap).filter(
+                                _Goal_ap.user_id == user.id,
+                                _Goal_ap.status == 'active',
+                            ).order_by(_Goal_ap.created_at.desc()).limit(2).all()
+                            _gl_titles_s = [g.title[:60] for g in _db_goals if g.title and g.title.strip()]
+                        except Exception:
+                            pass
+                    if not _gl_titles_s:
+                        # Последний fallback: специализация агента (НИКОГДА anchor.topic)
+                        _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
+                        _ap_task_title = f"[Автопилот] {agent_name}: {_agent_spec}"[:200] if _agent_spec else f"[Автопилот] {agent_name}"
                     else:
                         _ap_task_title = f"[Автопилот] {agent_name}: {', '.join(_gl_titles_s)}"[:200]
-                    _ap_task_id = _cadt(user.id, agent_data, _ap_task_title)
+                    # Dedup: пропускаем создание задачи если в последние 4ч уже была задача этого агента
+                    _skip_ap_task = False
+                    try:
+                        from models import Task as _Task_ap
+                        import datetime as _dt_ap
+                        _ap_cutoff = _dt_ap.datetime.now(_dt_ap.timezone.utc) - _dt_ap.timedelta(hours=4)
+                        _ap_recent = session.query(_Task_ap).filter(
+                            _Task_ap.user_id == user.id,
+                            _Task_ap.source == 'agent',
+                            _Task_ap.created_by_agent_id == agent_data.get('id'),
+                            _Task_ap.created_at >= _ap_cutoff,
+                        ).first()
+                        if _ap_recent:
+                            _skip_ap_task = True
+                            logger.debug("[ANCHOR-AUTOPILOT] dedup: skip task for agent %s, recent task id=%s", agent_name, _ap_recent.id)
+                    except Exception:
+                        pass
+                    if not _skip_ap_task:
+                        _ap_task_id = _cadt(user.id, agent_data, _ap_task_title)
                 except Exception as _cadt_err:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
 
