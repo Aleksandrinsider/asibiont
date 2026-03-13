@@ -1705,6 +1705,49 @@ class AnchorEngine:
                 except Exception as _cadt_err:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
 
+                # ── Координатор назначает задачу: сообщение в чат (видно в веб-чате и Telegram) ──
+                if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                    _gl_titles = [g.get('title', '')[:40] for g in data.get('goals', [])[:2]]
+                    _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
+                    # Краткая подсказка по интеграциям агента
+                    # _detected — список строк вида ['Gmail (почта)', 'GitHub API', ...]
+                    _intg_hint = ''
+                    if _detected:
+                        # Берём первые 3 интеграции, убираем скобочное описание
+                        _short = [str(d).split('(')[0].strip() for d in _detected[:3]]
+                        _intg_hint = f" (интеграции: {', '.join(_short)})"
+                    _coord_text = (
+                        f"@{chosen.name}, твоя задача: {_brief_task}.{_intg_hint} "
+                        "Действуй через свои интеграции и отчитайся фактами."
+                    )
+                    try:
+                        _coord_content = json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _coord_text,
+                            '__to_agent': chosen.name,
+                            '__anchor_type': 'goal_autopilot_assignment',
+                        }, ensure_ascii=False)
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=_coord_content,
+                        ))
+                        session.commit()
+                        if self.bot:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=f"ASI → {chosen.name}:\n\n{_coord_text}",
+                                )
+                            except Exception:
+                                pass
+                    except Exception as _cas_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+
                 try:
                     # Ограничиваем task_text для экономии input-токенов DeepSeek
                     _task_trimmed = task_text[:3000] if len(task_text) > 3000 else task_text
@@ -1820,7 +1863,7 @@ class AnchorEngine:
                     try:
                         _recent_proactives = session.query(Interaction.content).filter(
                             Interaction.user_id == user.id,
-                            Interaction.message_type == 'proactive',
+                            Interaction.message_type.in_(['proactive', 'agent_msg']),
                             Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
                         ).order_by(Interaction.created_at.desc()).limit(6).all()
                         _new_words = set(_result_clean.lower().split())
@@ -1878,10 +1921,12 @@ class AnchorEngine:
                             '__tools_used': _tools_used,
                             '__anchor_type': anchor.anchor_type,
                         }, ensure_ascii=False)
-                        # Сохраняем в interaction — чтобы следующая итерация видела что уже сделано
+                        # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
+                        # ASI сохраняем как proactive — координаторская инициатива
+                        _msg_type_result = 'agent_msg' if getattr(chosen, 'id', 0) != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,
-                            message_type='proactive',
+                            message_type=_msg_type_result,
                             content=_agent_content,
                         ))
                         session.commit()
@@ -1893,10 +1938,15 @@ class AnchorEngine:
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
-                # Autopilot НЕ использует chain continuation — round-robin чередует
-                # агентов каждые 5 минут, что эффективнее одной длинной цепочки:
-                # цикл 1: Марк (research) → цикл 2: Кристина (email) → цикл 3: ASI (tasks)
-                # Каждый агент видит результаты предыдущих через recent_actions в data якоря.
+                # ── Цепочка: агент может делегировать через DELEGATE[X]: → запускаем следующего ──
+                # Максимум одно продолжение за цикл чтобы не перегружать Railway.
+                if result and len(result) > 30 and not _is_noise_result and agents:
+                    try:
+                        await self._maybe_continue_chain(
+                            user, chosen, anchor, task_text, result, agents, session, max_cont=1,
+                        )
+                    except Exception as _chain_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] chain continuation error: %s", _chain_err)
 
             # Помечаем якорь доставленным
             anchor.delivered_at = datetime.now(timezone.utc)
