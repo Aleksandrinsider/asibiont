@@ -424,10 +424,10 @@ def clean_technical_details(text):
     text = re.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', text)
     # То же с mailto: mailto:email@domain.com">email → email
     text = re.sub(r'mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', text)
-    # Тот же паттерн в скобках
-    text = re.sub(r'\(@?[a-zA-Z0-9.-]*\.[a-zA-Z]{2,}["\']?\s*>?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)', r'(\1)', text)
-    # Паттерн (mailto:email">email) → (email)
-    text = re.sub(r'\(mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)', r'(\1)', text)
+    # Тот же паттерн в скобках — > ОБЯЗАТЕЛЕН чтобы не ломать (email@domain.com)
+    text = re.sub(r'\(@?[a-zA-Z0-9.-]*\.[a-zA-Z]{2,}["\']?\s*>\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)', r'(\1)', text)
+    # Паттерн (mailto:email">email) → (email) — > ОБЯЗАТЕЛЕН
+    text = re.sub(r'\(mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\)', r'(\1)', text)
     text = re.sub(r'["\']?\s*/?\s*>(?=\S)', '', text)
     
     # КРИТИЧЕСКАЯ ПРОВЕРКА: если после очистки ничего не осталось,
