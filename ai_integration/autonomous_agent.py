@@ -3810,7 +3810,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _hints.append(
                 "\n\n📧 У тебя есть EMAIL-интеграция. ПРИОРИТЕТ: "
                 "проверь входящие (check_emails) — если кто-то ответил, это самое ценное. "
-                "Или найди контакты → отправь outreach письма (send_outreach_email)."
+                "Или используй контакты из list_email_contacts → отправь outreach письма."
+            )
+        if any(w in _api_keys_lower for w in ('github', 'gitlab')):
+            _hints.append(
+                "\n\n💻 У тебя есть GitHub/GitLab — ГЛАВНЫЙ инструмент поиска людей. ПРИОРИТЕТ: "
+                "ищи разработчиков, контрибьюторов, issues через run_agent_action. "
+                "НЕ используй web_search для поиска людей — ищи через GitHub API."
             )
         if any(w in _api_keys_lower for w in ('rss', 'feed', 'habr')) or any(w in _pc_lower for w in ('feedparser', 'rss', 'habr')):
             _hints.append(
@@ -3818,17 +3824,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 "загрузи данные через run_agent_action и используй найденную информацию "
                 "для создания задач, контактов, или делегирования коллегам."
             )
-        if any(w in _api_keys_lower for w in ('github', 'gitlab')):
-            _hints.append(
-                "\n\n💻 У тебя есть GitHub/GitLab. ПРИОРИТЕТ: "
-                "проверь issues/PRs через run_agent_action, создай задачи по находкам."
-            )
         if any(w in _api_keys_lower for w in ('slack', 'discord', 'telegram')):
             _hints.append(
                 "\n\n💬 У тебя есть мессенджер-интеграция. ПРИОРИТЕТ: "
                 "используй для рассылки или мониторинга каналов."
             )
-        _intg_action_hint = ''.join(_hints[:2])
+        # Общее правило: web_search — для исследований, НЕ для поиска людей
+        if _hints:
+            _hints.append(
+                "\n\n🔎 web_search и research_topic — ТОЛЬКО для исследований тем, трендов, аналитики. "
+                "Для поиска людей и контактов — используй СВОИ интеграции (GitHub, email, RSS)."
+            )
+        _intg_action_hint = ''.join(_hints[:3])
 
     if _is_autopilot_task:
         # ── Динамический список коллег из task context ──
@@ -3885,6 +3892,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ:\n"
             + (_delegate_examples or "  DELEGATE[Имя]: конкретная задача с данными, которые ты уже нашёл\n") +
             "\n"
+
+            "ПРАВИЛО web_search/research_topic:\n"
+            "Эти инструменты — ТОЛЬКО для исследований тем, трендов, аналитики.\n"
+            "Для поиска людей и контактов — используй СВОИ интеграции (GitHub API, email контакты, RSS).\n"
+            "Если у тебя нет интеграции для поиска людей — делегируй коллеге у которого она есть.\n\n"
 
             f"Инструменты: используй схему API{_intg_line}\n"
             "update_goal_progress — ТОЛЬКО после реального нового контакта/результата.\n\n"
