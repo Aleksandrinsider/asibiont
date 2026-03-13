@@ -145,7 +145,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
 }
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None) -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None) -> str:
     """Строит адаптивный промпт автопилота — конкретная инструкция ПОД АГЕНТА И ЕГО ИНСТРУМЕНТЫ."""
 
     # Определяем доступные каналы пользователя
@@ -277,18 +277,30 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "Твоя ценность = находить данные и правильно делегировать тем, у кого есть нужные интеграции.\n"
         )
 
+    # ── Блок памяти агента: что уже делал — чтобы не повторять ──
+    _memory_block = ''
+    if agent_history:
+        _mem_lines = [f"  {i+1}. {h}" for i, h in enumerate(agent_history[:5])]
+        _memory_block = (
+            "\nТВОЯ ПАМЯТЬ (что ты уже делал — НЕ ПОВТОРЯЙ):\n"
+            + '\n'.join(_mem_lines)
+            + "\nЕсли прошлое действие не принесло результата — используй ДРУГОЙ инструмент.\n"
+        )
+
     return (
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Твои интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_action_plan}"
-        f"{_team_block}\n"
+        f"{_team_block}"
+        f"{_memory_block}\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
         "2. Цепочка: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress.\n"
         "3. Нашёл контакт без нужной интеграции → НЕМЕДЛЕННО делегируй коллеге с конкретными данными.\n"
         "4. Отчёт = ФАКТЫ: что нашёл, кому написал, что ответили.\n"
         "5. Инструмент не работает → сразу пробуй следующий из плана выше.\n"
+        "6. НЕ пиши людям из памяти повторно — они уже контактированы.\n"
     )
 
 # Группы батчинга
@@ -1374,7 +1386,15 @@ class AnchorEngine:
             # Добавляем известные контакты
             known_contacts = data.get('known_contacts', [])
             if known_contacts:
-                task_text += f"\n\nИзвестные контакты:\n" + '\n'.join(f"  {c}" for c in known_contacts[:5])
+                task_text += f"\n\nИзвестные контакты:\n" + '\n'.join(f"  {c}" for c in known_contacts[:8])
+
+            # Уже отправленные письма — не дублировать
+            _already_sent_str_ctx = data.get('already_sent_emails', [])
+            if _already_sent_str_ctx:
+                task_text += (
+                    f"\n\n⚠️ Уже получили письма (НЕ писать повторно): "
+                    + ', '.join(_already_sent_str_ctx[:20])
+                )
 
             # Задачи уже созданные агентами — не создавай дублей, предлагай новые шаги
             agent_tasks_done = data.get('agent_tasks_history', [])
@@ -1631,10 +1651,12 @@ class AnchorEngine:
                     except Exception:
                         _detected = []
                     # Перестраиваем task_text — вставляем промпт после placeholder
+                    _per_agent_hist = data.get('per_agent_history', {}).get(chosen.name, [])
                     _autopilot_prompt = _build_autopilot_prompt(
                         _goals_for_prompt, user=user,
                         agent_caps=_detected, agent_name=chosen.name,
                         team_profiles=_team_profiles,
+                        agent_history=_per_agent_hist,
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:
@@ -2737,34 +2759,51 @@ class AnchorEngine:
             _goals = data.get('goals', [])
             _goals_str = '; '.join(
                 f"{g['title']} ({g.get('progress', 0)}%, {g.get('metric_current', 0)}/{g.get('metric_target', '?')})"
-                for g in _goals[:3]
+                for g in _goals[:5]
             )
             _recent = data.get('recent_actions', [])
-            _recent_txt = '\n'.join(_recent[-4:]) if _recent else 'нет'
+            _recent_txt = '\n'.join(_recent[-5:]) if _recent else 'нет'
             _known_contacts = len(data.get('known_contacts', []))
             _email_sent = data.get('total_emails_sent', 0)
             _failed_tools = data.get('failed_tools', {})
             _failed_str = ', '.join(f"{t}({n}x)" for t, n in _failed_tools.items()) if _failed_tools else 'нет'
+            _per_agent_history = data.get('per_agent_history', {})
+            _already_sent = data.get('already_sent_emails', [])
+            _already_sent_str = ', '.join(_already_sent[:20]) if _already_sent else 'нет'
 
-            _profiles_str = '\n'.join(
-                f'  - "{p["name"]}" ({p["job"]}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
-                f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
-                for p in _profiles
-            )
+            # Строим детальный профиль каждого агента с его личной историей действий
+            _profiles_lines = []
+            for p in _profiles:
+                _hist = _per_agent_history.get(p['name'], [])
+                _hist_str = (
+                    ' | '.join(h[:100] for h in _hist[:3])
+                    if _hist else 'нет истории'
+                )
+                _profiles_lines.append(
+                    f'  - "{p["name"]}" ({p["job"]}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
+                    f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
+                    f'\n    последние действия: {_hist_str}'
+                )
+            _profiles_str = '\n'.join(_profiles_lines)
+
+            _n_agents = len(_profiles)
             _plan_prompt = (
-                f"Команда агентов:\n{_profiles_str}\n\n"
+                f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
                 f"Цели пользователя: {_goals_str}\n"
-                f"Контактов={_known_contacts}, писем отправлено={_email_sent}\n"
-                f"Последние действия:\n{_recent_txt}\n"
+                f"Контактов в базе={_known_contacts}, писем отправлено={_email_sent}\n"
+                f"Уже получили письма (НЕ писать повторно): {_already_sent_str}\n"
+                f"Общие последние действия:\n{_recent_txt}\n"
                 f"Заблокированные инструменты: {_failed_str}\n\n"
-                "Создай план: каждому агенту — ОДНО конкретное задание прямо СЕЙЧАС.\n"
+                f"Создай план для ВСЕХ {_n_agents} агентов — каждому ОДНО конкретное задание прямо СЕЙЧАС.\n"
                 "Правила:\n"
-                "1. Задание должно ИСПОЛЬЗОВАТЬ уникальную интеграцию агента (email/github/rss).\n"
-                "2. Задания дополняют друг друга (поиск контактов + письма + исследование).\n"
+                "1. Задание ИСПОЛЬЗУЕТ уникальную интеграцию агента (email/github/rss/другая).\n"
+                "2. Задания дополняют друг друга — не дублируют то, что агент уже делал.\n"
                 "3. Не используй заблокированные инструменты.\n"
-                "4. Задание = конкретное действие с конкретным инструментом и целью.\n"
-                "5. Можно добавить шаг для ASI (web_search/research_topic/send_outreach_email).\n"
-                "Верни ТОЛЬКО JSON-массив без объяснений:\n"
+                "4. Задание = конкретное действие + инструмент + цель.\n"
+                "5. Если агент уже делал действие — давай ему ДРУГОЕ задание.\n"
+                "6. Можно включить шаг для ASI (web_search/research_topic).\n"
+                "7. НЕ отправляй письма на адреса из списка 'уже получили письма'.\n"
+                f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
             )
 
@@ -2820,7 +2859,7 @@ class AnchorEngine:
                 _aal_c = _AAL_c(
                     user_id=user.id,
                     activity_type='goal_autopilot_dispatch',
-                    title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan[:3])}',
+                    title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}',
                     content=base_task_text[:600],
                     target=anchor.source,
                     status='in_progress',
@@ -2840,13 +2879,13 @@ class AnchorEngine:
             _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
             _plan_preview = '; '.join(
                 f'{p.get("agent", "?")} — {p.get("tool", "действие") or "действие"}'
-                for p in _plan[:3]
+                for p in _plan
             )
             _coord_announce = f"Работаю над {_brief_goals}: {_plan_preview}."
             try:
                 _ann_p = (
                     f"Ты — ASI, координатор команды. 1-2 предложения: раздаёшь задания агентам прямо сейчас.\n"
-                    f"Агенты: {', '.join(p['agent'] for p in _plan[:3])}.\n"
+                    f"Агенты: {', '.join(p['agent'] for p in _plan)}.\n"
                     f"Цели: {_brief_goals}.\n"
                     f"Задания: {_plan_preview}.\n"
                     f"Кратко, по-деловому, без markdown, без [АВТОПИЛОТ]."
@@ -2883,11 +2922,12 @@ class AnchorEngine:
                 except Exception:
                     pass
 
-            # ── Выполняем каждый шаг плана (максимум 3 агента) ──
+            # ── Выполняем каждый шаг плана (до 8 агентов, нет ж. ограничения на 3) ──
             _results_summary = []
             _all_tools = []
+            _max_steps = min(len(_plan), max(len(real_agents) + 1, 8))
 
-            for _step in _plan[:3]:
+            for _step in _plan[:_max_steps]:
                 _ag_name = (_step.get('agent') or '').strip()
                 _ag_task = (_step.get('task') or '').strip()
                 _tool_hint = (_step.get('tool') or '').strip()
@@ -3000,13 +3040,19 @@ class AnchorEngine:
 
                 # Task prompt для агента — его конкретное задание + контекст
                 _agent_goals_block = '\n'.join(
-                    f"  • {g['title']} ({g.get('progress', 0)}%)" for g in _goals[:3]
+                    f"  • {g['title']} ({g.get('progress', 0)}%)" for g in _goals[:5]
                 )
                 _agent_contacts_block = '\n'.join(
-                    f"  {c}" for c in data.get('known_contacts', [])[:5]
+                    f"  {c}" for c in data.get('known_contacts', [])[:8]
                 )
-                _agent_recent_block = '\n'.join(
-                    f"  {a}" for a in _recent[-3:]
+                # Личная история этого агента (не глобальная) — что он сам уже делал
+                _this_agent_hist = _per_agent_history.get(_ag_name, [])
+                _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:5])
+
+                # Уже отправленные письма — этот агент должен знать
+                _sent_emails_block = (
+                    'Уже получили письма (НЕ писать повторно): ' + ', '.join(_already_sent[:15])
+                    if _already_sent else ''
                 )
 
                 _agent_prompt = (
@@ -3015,8 +3061,9 @@ class AnchorEngine:
                     + (f"\nПриоритетный инструмент: {_tool_hint}\n" if _tool_hint else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
-                    + (f"\n\nУже сделано (не повторяй):\n{_agent_recent_block}" if _agent_recent_block else '')
-                    + (f"\n\nКоманда (делегируй если у них есть нужная интеграция):\n" + '\n'.join(_team_lines_c[:3])
+                    + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
+                    + (f"\n\nТвоя история (не повторяй это):\n{_agent_memory_block}" if _agent_memory_block else '')
+                    + (f"\n\nКоманда (делегируй если у них есть нужная интеграция):\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
                 )
 
@@ -4466,6 +4513,45 @@ class AnchorEngine:
         ).order_by(_EC_scan.created_at.desc()).limit(20).all()
         contacts_summary = [f"{c.name or '?'} <{c.email}> (src={c.source})" for c in contacts] if contacts else []
 
+        # Per-agent action memory — чтобы каждый агент не зацикливался и не повторял своё
+        _per_agent_history: dict = {}  # {agent_name: [action_str, ...]}
+        try:
+            _agent_interactions = session.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type.in_(['proactive', 'agent_msg']),
+                Interaction.created_at >= now_utc - timedelta(hours=48),
+            ).order_by(Interaction.created_at.desc()).limit(80).all()
+            for _ai_item in _agent_interactions:
+                try:
+                    _j = json.loads(_ai_item.content or '{}')
+                    _ag_nm = _j.get('__agent', {}).get('name', '')
+                    if not _ag_nm:
+                        continue
+                    _txt = (_j.get('text', '') or '')[:250]
+                    _tl = _j.get('__tools_used', [])
+                    _tl_s = f"[{', '.join(_tl)}] " if _tl else ''
+                    _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:200]}"
+                    _per_agent_history.setdefault(_ag_nm, [])
+                    if len(_per_agent_history[_ag_nm]) < 6:
+                        _per_agent_history[_ag_nm].append(_entry)
+                except Exception:
+                    pass
+        except Exception as _pah_err:
+            logger.debug("[AUTOPILOT] per_agent_history: %s", _pah_err)
+
+        # Уже отправленные письма — не писать повторно одним и тем же адресатам
+        _already_sent_emails: list = []
+        try:
+            _ecids = [c.id for c in email_campaigns]
+            if _ecids:
+                _sent_outreach = session.query(EmailOutreach).filter(
+                    EmailOutreach.campaign_id.in_(_ecids),
+                    EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                ).limit(100).all()
+                _already_sent_emails = list({o.recipient_email for o in _sent_outreach if o.recipient_email})
+        except Exception as _ase_err:
+            logger.debug("[AUTOPILOT] already_sent_emails: %s", _ase_err)
+
         # Правила пользователя — из user.memory['rules'] (сохраняются AI через save_user_rule)
         user_rules = []
         try:
@@ -4635,6 +4721,8 @@ class AnchorEngine:
             'exhausted_strategies': exhausted_strategies,
             'feasibility_warnings': _feasibility_warnings,
             'user_profile': _user_profile_ctx,
+            'per_agent_history': _per_agent_history,
+            'already_sent_emails': _already_sent_emails,
         }
 
         return [Anchor(
