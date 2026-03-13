@@ -4445,14 +4445,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Для autopilot-задач: фокус на конкретное действие, не на анализ истории
     if _is_autopilot_task:
         system_prompt += (
-            "\n\n⚡ АВТОПИЛОТ — КОНКРЕТНОЕ ДЕЙСТВИЕ:\n"
-            "1. В задаче написан ПЛАН ДЕЙСТВИЙ — выполни ОДНО из предложенных.\n"
-            "2. ЦЕПОЧКА за цикл: ДЕЙСТВИЕ → РЕЗУЛЬТАТ → update_goal_progress.\n"
-            "   Пример: run_agent_action(action='send_email', to='found@email.com') → update_goal_progress.\n"
-            "   Пример: web_search('QA тестировщики telegram') → add_task(конкретный шаг) → update_goal_progress.\n"
-            "3. НЕ ОСТАНАВЛИВАЙСЯ НА ПОИСКЕ. Поиск БЕЗ действия = провал. Нашёл данные → ИСПОЛЬЗУЙ их.\n"
-            "4. Текстовый ответ: только КОНКРЕТНЫЕ факты — что сделал, какой результат, что дальше.\n"
-            "5. Нашёл задачу для другого агента → DELEGATE[Имя]: задача с конкретными данными."
+            "\n\n⚡ АВТОПИЛОТ — ОБЯЗАТЕЛЬНОЕ ДЕЙСТВИЕ (НЕ ТЕКСТ):\n"
+            "❗ Твой ПЕРВЫЙ ответ ДОЛЖЕН быть вызовом инструмента — НЕ текстом.\n"
+            "❗ Чистый текст без вызова инструментов = ОШИБКА и провал задачи.\n"
+            "1. В задаче написан ПЛАН ДЕЙСТВИЙ — вызови первый подходящий инструмент прямо сейчас.\n"
+            "2. ЦЕПОЧКА за цикл: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress.\n"
+            "   Пример: web_search('QA тестировщики telegram') → save_email_contact → update_goal_progress.\n"
+            "   Пример: check_emails() → reply_to_outreach_email → update_goal_progress.\n"
+            "3. НЕ ПИШИ О ТОМ ЧТО СОБИРАЕШЬСЯ СДЕЛАТЬ — просто вызови инструмент.\n"
+            "4. Если один инструмент заблокирован/недоступен — сразу вызови другой из твоего списка.\n"
+            "5. Нашёл задачу для коллеги → DELEGATE[Имя]: задача с конкретными данными."
             + (_intg_action_hint or '')
         )
 
@@ -4531,6 +4533,92 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _content = _re_sub.sub(
                     r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
                 ).strip()
+
+            # ── Autopilot retry: агент ответил текстом на первой итерации —
+            # Делаем короткий повторный запрос с прямым указанием инструмента ──
+            if _is_autopilot_task and _iter == 0 and not _tool_calls and not _tools_used:
+                # Определяем какой инструмент нужно вызвать первым
+                _first_tool = None
+                _my_tools_safe = locals().get('_my_tools', [])
+                if _my_tools_safe:
+                    _priority_order = [
+                        'check_emails', 'run_agent_action', 'research_topic',
+                        'web_search', 'send_outreach_email', 'find_relevant_contacts_for_task',
+                    ]
+                    for _pt in _priority_order:
+                        if _pt in _my_tools_safe:
+                            _first_tool = _pt
+                            break
+                    if not _first_tool:
+                        _first_tool = _my_tools_safe[0] if _my_tools_safe else None
+
+                if _first_tool:
+                    logger.info(
+                        "[DIRECTOR-EXEC] autopilot text-without-tools retry for %s → suggest %s",
+                        agent.get('name'), _first_tool,
+                    )
+                    _messages.append({"role": "assistant", "content": _content or ""})
+                    _messages.append({"role": "user", "content": (
+                        f"СТОП. Ты написал текст без вызова инструмента — это ошибка. "
+                        f"Вызови инструмент {_first_tool} прямо сейчас. "
+                        f"Не пиши текст — только вызов инструмента."
+                    )})
+                    try:
+                        _retry_resp = await asyncio.wait_for(
+                            _agent_inst.call_ai(
+                                _messages,
+                                use_tools=True,
+                                tool_choice="required",
+                                exclude_tools=_exclude_for_agent,
+                                max_tokens=300,
+                                api_timeout=API_TIMEOUT_LONG,
+                            ),
+                            timeout=API_TIMEOUT_LONG + 5,
+                        )
+                        if _retry_resp and _retry_resp.get('choices'):
+                            _retry_msg = _retry_resp['choices'][0]['message']
+                            _retry_tools = _retry_msg.get('tool_calls') or []
+                            if _retry_tools:
+                                logger.info(
+                                    "[DIRECTOR-EXEC] autopilot retry succeeded: %s tools called",
+                                    len(_retry_tools),
+                                )
+                                # Заменяем последние сообщения и продолжаем с инструментами
+                                _messages.append(_retry_msg)
+                                _tc_limit = 3
+                                for _tc in _retry_tools[:_tc_limit]:
+                                    _tname = _tc.get('function', {}).get('name', '')
+                                    try:
+                                        _targs = json.loads(_tc.get('function', {}).get('arguments', '{}'))
+                                    except Exception:
+                                        _targs = {}
+                                    _tools_used.append(_tname)
+                                    if _tname == 'add_task' and agent.get('id'):
+                                        _targs['created_by_agent_id'] = agent['id']
+                                    try:
+                                        _tres = await asyncio.wait_for(
+                                            _agent_inst.execute_actions(
+                                                [{"tool": _tname, "params": _targs, "reason": f"{agent['name']}: {_tname}"}],
+                                                user_id, session=None, user_message=task,
+                                            ),
+                                            timeout=_TOOL_TIMEOUT,
+                                        )
+                                        _r0 = _tres[0] if _tres else {"success": False}
+                                        if _r0.get('success'):
+                                            _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)[:1500]
+                                        else:
+                                            _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
+                                    except asyncio.TimeoutError:
+                                        _tc_result = json.dumps({"error": "tool timeout"}, ensure_ascii=False)
+                                    except Exception as _te:
+                                        _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
+                                    _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                                _tool_call_count += 1
+                                # Continue to next iteration for summary
+                                continue
+                    except Exception as _retry_err:
+                        logger.debug("[DIRECTOR-EXEC] autopilot retry failed: %s", _retry_err)
+
             # Сохраняем результат и выходим из цикла — субделегирования обработаются ниже
             _early_text = _content or _done_fb
             break
