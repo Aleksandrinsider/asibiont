@@ -885,6 +885,7 @@ class AnchorEngine:
         CONTENT_SILENT_TYPES = {'content_campaign_publish'}
         DELEGATION_SILENT_TYPES = {'delegation_campaign_send', 'delegation_campaign_follow_up'}
         AUTOPILOT_SILENT_TYPES = {'goal_autopilot_review'}
+        CUSTOM_AGENT_TYPES = {'custom_anchor'}  # агент пишет первым — dispatch с tools
         critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post', 'discord_post')]
@@ -892,9 +893,10 @@ class AnchorEngine:
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
         autopilot_anchors = [a for a in ready if a.anchor_type in AUTOPILOT_SILENT_TYPES]
-        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors and a not in autopilot_anchors]
+        custom_agent_anchors = [a for a in ready if a.anchor_type in CUSTOM_AGENT_TYPES]
+        regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors and a not in autopilot_anchors and a not in custom_agent_anchors]
 
-        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}, custom_agent={len(custom_agent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
         # ── 3. ДОСТАВКА — системные якоря (ASI) и агентские ОТДЕЛЬНО ──
         # Разделение: task_reminder/task_overdue доставляются от ASI,
@@ -985,6 +987,14 @@ class AnchorEngine:
                 for _ap in autopilot_anchors[:1]:
                     async with self._ai_semaphore:
                         await self._dispatch_agent_for_anchor(user, _ap, session)
+
+        # ── 3b2. CUSTOM AGENT ANCHORS — агент пишет первым с инструментами ──
+        # custom_anchor создаёт якорь для конкретного агента (из UserAgent.custom_anchors).
+        # Маршрутизируем через _dispatch_agent_for_anchor → агент получает tools.
+        if custom_agent_anchors and has_proactive_tokens:
+            for _ca in custom_agent_anchors[:1]:
+                async with self._ai_semaphore:
+                    await self._dispatch_agent_for_anchor(user, _ca, session)
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         if not is_night and has_proactive_tokens:
@@ -1168,6 +1178,20 @@ class AnchorEngine:
                 # Промпт будет перестроен ПОСЛЕ выбора агента с учётом его интеграций
                 _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
                 task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"  # placeholder — дополнится ниже
+            elif anchor.anchor_type == 'custom_anchor':
+                # custom_anchor: агент пишет первым — используем topic как задачу
+                _ca_agent_name = data.get('agent_name', '')
+                task_text = (
+                    f"[АВТОПИЛОТ]\n"
+                    f"Ты — {_ca_agent_name}. Тебе нужно ПРОАКТИВНО написать пользователю.\n"
+                    f"Тема: {anchor.topic or 'проактивное сообщение'}\n\n"
+                    "ИНСТРУКЦИЯ: Не пиши просто комментарий. СДЕЛАЙ что-то полезное:\n"
+                    "  — Проверь входящие (check_emails), если у тебя есть email-интеграция\n"
+                    "  — Найди информацию через web_search или research_topic\n"
+                    "  — Создай задачу (add_task) для продвижения цели\n"
+                    "  — Делегируй конкретную работу коллеге (DELEGATE[Имя]: задача)\n\n"
+                    "Отчёт юзеру — только ФАКТЫ из действий (имена, ссылки, цифры).\n"
+                )
             else:
                 task_text = _AGENT_DISPATCH_TRIGGERS.get(
                     anchor.anchor_type, anchor.topic or '',
@@ -1343,7 +1367,15 @@ class AnchorEngine:
                 # кастомные агенты (Кристина, Марк) выпадают из ротации.
                 # Решение: для autopilot принудительно чередуем агентов в порядке их id,
                 # используя последний dispatched-агент из AgentActivityLog как указатель.
-                if anchor.anchor_type == 'goal_autopilot_review':
+                if anchor.anchor_type == 'custom_anchor':
+                    # ── CUSTOM ANCHOR: force-select agent from anchor.data ──
+                    _ca_target_id = data.get('agent_id')
+                    if _ca_target_id:
+                        chosen = next((a for a in agents if getattr(a, 'id', 0) == _ca_target_id), None)
+                    if not _ca_target_id or not chosen:
+                        chosen = agents[0] if agents else _asi_synth
+                    _rr_debug = f'[CUSTOM] target_agent_id={_ca_target_id} chosen={chosen.name}'
+                elif anchor.anchor_type == 'goal_autopilot_review':
                     # ── SMART ROUTING: выбираем агента по способностям + fairness ──
                     _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
@@ -1712,7 +1744,8 @@ class AnchorEngine:
                     _filter_reason = 'noise'
 
                 # ── Dedup: не отправлять если ПОЧТИ ИДЕНТИЧНОЕ сообщение было недавно ──
-                if not _is_noise_result and _result_clean:
+                # Пропускаем dedup если агент реально вызвал инструменты — результат ценен
+                if not _is_noise_result and _result_clean and not _has_real_actions:
                     try:
                         _recent_proactives = session.query(Interaction.content).filter(
                             Interaction.user_id == user.id,
