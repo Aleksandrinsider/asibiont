@@ -3877,16 +3877,41 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _fn = _colleague_names[0]
             _delegate_example = f"Нашёл данные для коллеги → DELEGATE[{_fn}]: задача с конкретными данными."
 
+        # Базовые знания о продукте из knowledge_base агента
+        _kb_block = ''
+        _kb_raw = agent.get('knowledge_base') or ''
+        if _kb_raw:
+            try:
+                import json as _kb_json
+                _kb_items = _kb_json.loads(_kb_raw) if _kb_raw.strip().startswith('[') else []
+                _kb_lines = []
+                for _item in _kb_items[:8]:
+                    if isinstance(_item, dict):
+                        _kbtype = _item.get('type', '')
+                        _kbname = _item.get('name', '')
+                        _kbcontent = _item.get('content') or _item.get('url') or ''
+                        if _kbcontent:
+                            _kb_lines.append(f"  [{_kbtype}] {_kbname}: {str(_kbcontent)[:200]}")
+                if _kb_lines:
+                    _kb_block = "\n📚 База знаний (используй в отчётах, письмах, ссылках):\n" + '\n'.join(_kb_lines) + '\n'
+            except Exception:
+                # Если не JSON — используем как есть (просто текст)
+                if len(_kb_raw) < 1000:
+                    _kb_block = f"\n📚 База знаний:\n{_kb_raw[:800]}\n"
+
         system_prompt = (
             f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
             f"Работаешь в команде ASI Biont. Сейчас: {_now_str}.\n"
-            f"{_intg_line}\n\n"
+            f"{_intg_line}\n"
+            f"{_kb_block}\n"
             "СДЕЛАЙ ОДНО конкретное действие прямо сейчас — используй свой главный инструмент.\n"
             "Отчёт юзеру = 2-3 предложения ФАКТОВ: что нашёл, кому написал, что узнал.\n"
             "Примеры хорошего отчёта:\n"
-            "  «Проверила входящие — ответ от Марии К.: готова тестировать, просит ссылку.»\n"
+            "  «Проверила входящие — ответ от Марии К.: готова тестировать, просит ссылку на asibiont.com.»\n"
             "  «В RSS нашёл статью про multi-agent на Хабре, контакт автора: user@habr.com.»\n"
             "  «web_search: нашёл 3 TG-группы QA (5к, 12к, 3к чел.), добавил в задачу.»\n\n"
+            "В письмах и ответах — используй РЕАЛЬНЫЕ данные из базы знаний (URL, описание, инструкции).\n"
+            "Не пиши [ссылка на демо] или [добавить ссылку] — если не знаешь URL, не упоминай ссылку.\n"
             "Делегируй коллеге ТОЛЬКО если у него есть нужная интеграция, которой у тебя нет.\n"
             + (f"Формат: {_delegate_example}\n" if _delegate_example else "Формат: DELEGATE[Имя]: задача с данными.\n") +
             "Если ничего не получилось — верни пустую строку, не выдумывай.\n\n"

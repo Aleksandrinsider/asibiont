@@ -1518,6 +1518,7 @@ class AnchorEngine:
                     'tools': json.loads(_tools_for_dispatch or '[]'),
                     'avatar_url': _safe_avatar(getattr(chosen, 'avatar_url', ''), chosen.id),
                     'search_scope': getattr(chosen, 'search_scope', '') or '',
+                    'knowledge_base': getattr(chosen, 'knowledge_base', '') or '',
                 }
                 agent_name = chosen.name
 
