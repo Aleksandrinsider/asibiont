@@ -10168,14 +10168,14 @@ If no relevant emails found return []"""
                         em = item['email'].lower().strip('.')
                         if _is_generic_email(em):
                             continue
-                        # Фильтр по relevance score — порог 5 даёт больше контактов
-                        # (AI нередко даёт 5-6 релевантным кандидатам при неполном контексте)
+                        # Фильтр по relevance score — порог 4 пропускает кандидатов с uncertain context
+                        # (AI часто ставит 4-5 когда контекст неполный, но email встречен на релевантной площадке)
                         relevance = item.get('relevance', 0)
                         try:
                             relevance = int(relevance)
                         except (ValueError, TypeError):
                             relevance = 0
-                        if relevance < 5:
+                        if relevance < 4:
                             logger.info(f"[AUTO_LEADS] Skipping low-relevance lead: "
                                         f"{em} (score={relevance})")
                             continue

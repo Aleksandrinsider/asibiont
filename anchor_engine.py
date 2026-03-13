@@ -5676,9 +5676,10 @@ class AnchorEngine:
                         session.rollback()
                     continue  # Skip anchors for completed campaign
 
-            # --- 3b. Нужны новые лиды: нет черновиков, но кампания не заполнена ---
-            # Срабатывает когда: активная кампания, 0 черновиков, ещё есть квота (total/daily)
-            if not is_paused and not drafts and remaining_daily > 0 and remaining_total > 0:
+            # --- 3b. Нужны новые лиды: мало черновиков, но кампания не заполнена ---
+            # Срабатывает когда: активная кампания, < 5 черновиков, ещё есть квота (total/daily)
+            # Порог 5 (не 0) позволяет строить пайплайн лидов заранее, не ждать когда кончатся
+            if not is_paused and len(drafts) < 5 and remaining_daily > 0 and remaining_total > 0:
                 # Считаем сколько контактов уже есть (sent + draft)
                 total_in_pipeline = len(_camp_outreach)
 
@@ -5696,7 +5697,7 @@ class AnchorEngine:
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='email_need_leads',
-                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}',
+                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}-{now_utc.hour // 2}',
                         topic=_t(user,
                             f' Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
                             f' Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
