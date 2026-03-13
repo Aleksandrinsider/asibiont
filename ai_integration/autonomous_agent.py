@@ -4762,7 +4762,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     # Шаблонные ответы с инструментами: "Выполнил поиск." — тоже noise
     if _is_autopilot_task and _final_text:
-        _ft_lower = _final_text.strip().lower()
+        # Нормализуем для проверки: убираем markdown bold/italic, эмодзи, ведущие пробелы
+        _ft_stripped = re.sub(r'^\s*(?:[^\w\s]|\*{1,2}|_{1,2})+\s*', '', _final_text.strip())
+        _ft_lower = _ft_stripped.lower()
         _GENERIC_PATTERNS_AA = ('выполнил поиск', 'выполнила поиск', 'обновил прогресс',
                                 'обновила прогресс', 'провёл поиск', 'провела поиск')
         if len(_final_text.strip()) < 100 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):

@@ -1664,7 +1664,9 @@ class AnchorEngine:
 
                 # ── Отправляем РЕЗУЛЬТАТ работы агента пользователю ──
                 _result_clean = (result or '').strip()
-                _result_lower = _result_clean.lower()
+                # Нормализуем для echo-проверки: убираем markdown bold/italic, эмодзи, пробелы
+                _result_normalized = re.sub(r'^\s*(?:[^\w\s]|\*{1,2}|_{1,2})+\s*', '', _result_clean)
+                _result_lower = _result_normalized.lower()
                 # Динамический список всех агентов для фильтрации утечек делегаций
                 _all_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
                 # Если агент реально вызвал инструменты — результат значимый
@@ -1708,8 +1710,8 @@ class AnchorEngine:
                 # Антиэхо: НЕЗАВИСИМО от tools_used — эхо-текст всегда noise
                 _is_echo = (
                     any(w in _result_lower[:120] for w in ('смотрю, что уже сделано', 'смотрю что уже сделано', 'что уже сделано коллегами', 'что сделали коллеги', 'результаты коллег'))
-                    or any(_result_lower.startswith(p) for p in ('смотрю,', 'смотрю ', 'отлично, проанализировал', 'проанализировал'))
-                    and any(w in _result_lower[:150] for w in ('коллег', 'уже сделано', 'уже сделали', 'результаты команды'))
+                    or (any(_result_lower.startswith(p) for p in ('смотрю,', 'смотрю ', 'отлично, проанализировал', 'проанализировал'))
+                        and any(w in _result_lower[:150] for w in ('коллег', 'уже сделано', 'уже сделали', 'результаты команды')))
                 )
                 _is_noise_result = (
                     # Шум: нет инструментов + пустой/шаблонный ответ
@@ -2266,9 +2268,10 @@ class AnchorEngine:
                 'tools': _jd2.loads(_next_ag.tools_allowed or '[]'),
             }
             _ctx = (
-                f"{prev_agent.name} уже сделал:\n{result[:300]}\n\n"
+                f"[АВТОПИЛОТ] {prev_agent.name} уже сделал:\n{result[:300]}\n\n"
                 f"Продолжи работу — используй его результат как основу. "
-                f"Отчитайся пользователю: что ты сделал и что получилось."
+                f"НЕ начинай ответ со 'Смотрю что уже сделано' или пересказа коллег. "
+                f"Выполни КОНКРЕТНОЕ действие и отчитайся: что ты сделал и что получилось."
             )
 
             # ── Уведомление о передаче между агентами ──
@@ -2349,7 +2352,9 @@ class AnchorEngine:
 
             # Отправляем результат следующего агента пользователю (с noise-фильтром)
             _chain_clean = (_next_result or '').strip()
-            _chain_lower = _chain_clean.lower()
+            # Нормализуем для echo-проверки: убираем markdown, эмодзи
+            _chain_normalized = re.sub(r'^\s*(?:[^\w\s]|\*{1,2}|_{1,2})+\s*', '', _chain_clean)
+            _chain_lower = _chain_normalized.lower()
             _EMPTY_RESPONSES_CHAIN = {
                 'задачу выполнил', 'задачу выполнила', 'данных нет',
                 'задача выполнена', 'понял задачу', 'принял в работу',
@@ -2357,6 +2362,11 @@ class AnchorEngine:
             }
             _chain_agent_names = [a.name for a in agents if getattr(a, 'id', 0) != 0] + ['ASI']
             _chain_has_actions = bool(_chain_tools_used)
+            # Антиэхо: chain тоже фильтрует echo-паттерны
+            _chain_is_echo = (
+                any(w in _chain_lower[:120] for w in ('смотрю, что уже сделано', 'смотрю что уже сделано', 'что уже сделано коллегами', 'что сделали коллеги', 'результаты коллег'))
+                or (any(_chain_lower.startswith(p) for p in ('смотрю,', 'смотрю ')) and any(w in _chain_lower[:150] for w in ('коллег', 'уже сделано', 'уже сделали')))
+            )
             _chain_is_noise = (
                 not _chain_has_actions and (
                     len(_chain_clean) < 15
@@ -2365,6 +2375,7 @@ class AnchorEngine:
                 or (not _chain_has_actions and len(_chain_clean) < 80
                     and any(w in _chain_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно')))
                 or any(_chain_lower.startswith(n.lower() + ',') for n in _chain_agent_names)
+                or _chain_is_echo
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
                 try:
