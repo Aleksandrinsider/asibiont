@@ -2213,6 +2213,10 @@ class AnchorEngine:
             _next_task = _decision.get('task', '')
             if not _next_name or not _next_task:
                 return
+            # Маркер автопилота в TASK (не только в dialog_context!) —
+            # иначе _is_autopilot_task=False → нет echo-фильтра, нет tool_choice=required
+            if '[АВТОПИЛОТ]' not in _next_task:
+                _next_task = f'[АВТОПИЛОТ] {_next_task}'
 
             # Находим следующего агента
             _next_ag = None

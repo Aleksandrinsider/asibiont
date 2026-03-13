@@ -3771,11 +3771,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     )
     from datetime import datetime as _dt_exec
     _now_str = _dt_exec.now().strftime('%Y-%m-%d %H:%M (%A)')
+    _combined_ctx = (task or '') + '\n' + (dialog_context or '')
     _is_autopilot_task = (
-        'АВТОПИЛОТ ЦЕЛЕЙ' in (task or '')
-        or 'autopilot' in (task or '').lower()
-        or 'Активные цели:' in (task or '')
-        or '[АВТОПИЛОТ]' in (task or '')
+        'АВТОПИЛОТ ЦЕЛЕЙ' in _combined_ctx
+        or 'autopilot' in _combined_ctx.lower()
+        or 'Активные цели:' in _combined_ctx
+        or '[АВТОПИЛОТ]' in _combined_ctx
         # Делегированные email/outreach-задачи из контекста автопилота
         or any(w in (task or '').lower() for w in (
             'email-кампани', 'email кампани', 'запустить кампани',
@@ -4226,6 +4227,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Аналитика/исследования
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _autopilot_tools.update({'get_news_trends', 'find_and_message_relevant_users'})
+            # RSS/мониторинг — агенты с RSS-лентами могут делегировать outreach и создавать контент
+            if (any(w in _api_keys_lower for w in ('rss', 'feed', 'habr')) or
+                    any(w in _pc_lower for w in ('feedparser', 'rss', 'atom'))):
+                _autopilot_tools.update({
+                    'get_news_trends', 'save_email_contact',
+                    'find_relevant_contacts_for_task',
+                })
             # Продажи/HR/нетворкинг
             if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b')):
                 _autopilot_tools.update({
