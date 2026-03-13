@@ -4057,16 +4057,11 @@ class AnchorEngine:
                     _up_parts.append(f"Компания/проект: {_up.company}")
                 if _up.position:
                     _up_parts.append(f"Должность: {_up.position}")
-                if _up.bio:
-                    _up_parts.append(f"О пользователе: {_up.bio[:200]}")
                 if _up.goals:
                     _up_parts.append(f"Личные цели: {str(_up.goals)[:150]}")
-                if _up.content_strategy:
-                    _up_parts.append(f"Контент-стратегия: {str(_up.content_strategy)[:150]}")
                 _user_profile_ctx = {
                     'company': _up.company or '',
                     'position': _up.position or '',
-                    'bio': (_up.bio or '')[:200],
                     'summary': '\n'.join(_up_parts),
                 }
         except Exception as _up_err:
