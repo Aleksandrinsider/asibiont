@@ -3156,6 +3156,30 @@ class AnchorEngine:
                 # ASI уже отправил развёрнутый анонс выше — повторное сообщение = дубль.
                 # Агент просто выполняет задачу и отчитывается в чат сам.
 
+                # ── Создаём задачу «в работе» в Поручениях агентов ──
+                _step_task_id = None
+                try:
+                    from models import Task as _Task_c2
+                    import datetime as _dt_c2
+                    _step_task = _Task_c2(
+                        user_id=user.id,
+                        title=_ag_task[:200],
+                        description='',
+                        status='in_progress',
+                        source='agent',
+                        created_by_agent_id=_target_ag.id if _target_ag else None,
+                        delegated_to_username=_ag_name,
+                    )
+                    session.add(_step_task)
+                    session.commit()
+                    _step_task_id = _step_task.id
+                except Exception as _tc_err:
+                    logger.debug("[COORD] task create skipped: %s", _tc_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
                 # Собираем agent_data для _exec_agent_for_director
                 if _is_asi_step:
                     _asi_tools = [
@@ -3193,14 +3217,14 @@ class AnchorEngine:
                         'knowledge_base': getattr(_target_ag, 'knowledge_base', '') or '',
                     }
 
-                # Строим команду для контекста (кто ещё в команде)
+                # Строим команду для контекста (кто ещё в команде) — только имя + специализация
                 _team_lines_c = []
                 for _prof in _profiles:
                     if _prof['name'].lower() != _ag_name.lower():
-                        _c = ', '.join(_prof['caps'][:3]) or 'базовые инструменты'
+                        _c = _prof.get('job') or 'специалист'
                         _team_lines_c.append(f"  • {_prof['name']} — {_c}")
                 if not _is_asi_step:
-                    _team_lines_c.append("  • ASI — web_search, research_topic, send_outreach_email")
+                    _team_lines_c.append("  • ASI — координатор команды")
 
                 # Task prompt для агента — его конкретное задание + контекст
                 _agent_goals_block = '\n'.join(
@@ -3220,14 +3244,13 @@ class AnchorEngine:
                 )
 
                 _agent_prompt = (
-                    f"[АВТОПИЛОТ]\n"
-                    f"Твоё задание прямо сейчас:\n{_ag_task}\n"
+                    f"Твоё задание:\n{_ag_task}\n"
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
-                    + (f"\n\nТвоя история (не повторяй это):\n{_agent_memory_block}" if _agent_memory_block else '')
-                    + (f"\n\nРезультаты предыдущих шагов (используй в своей работе):\n{_prev_steps_context}" if _prev_steps_context else '')
-                    + (f"\n\nКоманда (делегируй если у них есть нужная интеграция):\n" + '\n'.join(_team_lines_c)
+                    + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
+                    + (f"\n\nУже сделано командой (используй):\n{_prev_steps_context}" if _prev_steps_context else '')
+                    + (f"\n\nКоманда:\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
                 )
 
@@ -3238,6 +3261,19 @@ class AnchorEngine:
                     )
                 except (asyncio.TimeoutError, Exception) as _ae:
                     logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
+                    # Помечаем задачу как невыполненную
+                    if _step_task_id:
+                        try:
+                            from sqlalchemy import text as _sql_t_ae
+                            session.execute(_sql_t_ae(
+                                "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
+                            ), {'n': f'Ошибка выполнения: {str(_ae)[:200]}', 'id': _step_task_id})
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     continue
 
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
@@ -3257,6 +3293,27 @@ class AnchorEngine:
                         _cleaned = _result.strip()
                 except Exception:
                     _cleaned = _result.strip()
+
+                # ── Помечаем задачу выполненной ──
+                if _step_task_id:
+                    try:
+                        from sqlalchemy import text as _sql_t_done
+                        import datetime as _dt_done
+                        session.execute(_sql_t_done(
+                            "UPDATE tasks SET status='completed', completion_notes=:n, "
+                            "actual_completion_time=:t WHERE id=:id"
+                        ), {
+                            'n': _cleaned[:500],
+                            't': _dt_done.datetime.now(_dt_done.timezone.utc),
+                            'id': _step_task_id,
+                        })
+                        session.commit()
+                    except Exception as _tu_err:
+                        logger.debug("[COORD] task update error: %s", _tu_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
 
                 if self.bot and len(_cleaned) > 30:
                     try:
