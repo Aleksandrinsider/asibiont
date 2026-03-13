@@ -8071,12 +8071,16 @@ async def api_delegation_campaign_delete_handler(request):
 _TIMELINE_VISIBLE_TYPES = {
     'task_completed', 'task_blocked',
     'delegation', 'delegation_accepted', 'delegation_rejected',
-    'goal_created', 'goal_completed',
+    'goal_created', 'goal_completed', 'goal_updated',
     'post_newsfeed', 'post_telegram', 'post_discord',
     'content_campaign', 'delegation_campaign',
     'background_research_ready',
     'agent_task',
     'run_agent_action',
+    'email',
+    'inbox_reply',
+    'checkpoint',
+    'daily_report',
 }
 
 
@@ -8322,12 +8326,11 @@ async def api_reports_handler(request):
                 logger.warning(f"[API_REPORTS] Status sync error: {e}")
 
             # Agent activities (delegations, auto-posts, TG posts, etc.)
-            _ACTIVITIES_HIDDEN_TYPES = set()
             agent_activities_data = []
             try:
                 activities = session_db.query(AgentActivityLog).filter(
                     AgentActivityLog.user_id == user.id,
-                    AgentActivityLog.activity_type.notin_(_ACTIVITIES_HIDDEN_TYPES),
+                    AgentActivityLog.activity_type.in_(_TIMELINE_VISIBLE_TYPES),
                 ).order_by(AgentActivityLog.created_at.desc()).limit(100).all()
                 for a in activities:
                     agent_activities_data.append({
