@@ -484,12 +484,63 @@ class HybridAutonomousAgent:
 
     # Умный выбор tool_choice: required для действий, auto для разговора
     def _determine_tool_choice(self, user_message, profile_data=None, tasks_data=None):
-        """Возвращает "auto" — модель сама решает когда вызывать инструменты.
+        """Возвращает "required" для явных action-запросов (напомни, создай, удали...).
         
-        tool_choice="required" используется только в автопилоте (_exec_agent_for_director),
-        где агент ОБЯЗАН совершить действие. В чате модель определяет это самостоятельно
-        на основе system prompt и контекста — точнее любой ключевой эвристики.
+        Для чётких запросов на создание/изменение/удаление сущностей — tool_choice="required"
+        гарантирует, что DeepSeek вызовет инструмент, а не просто напишет "сделано".
+        
+        Для Разговорных сообщений, вопросов, анализа — "auto".
         """
+        m = (user_message or '').strip().lower()
+
+        # ── ЗАДАЧИ: create ──────────────────────────────────────────────────────
+        _add_task_patterns = (
+            'напомни ', 'напомни,', 'поставь напоминани', 'поставь напомин',
+            'добавь задачу', 'создай задачу', 'новая задача', 'добавь напоминани',
+            'add task', 'add reminder', 'set reminder', 'remind me',
+            'создай напоминани', 'запиши задачу', 'запиши что',
+        )
+        if any(m.startswith(p) or p in m for p in _add_task_patterns):
+            return "required"
+
+        # ── ЗАДАЧИ: delete / complete / edit ────────────────────────────────────
+        _task_action_patterns = (
+            'удали задачу', 'удалить задачу', 'убери задачу', 'убери напоминани',
+            'отметь задачу', 'отметь как выполн', 'задача выполнена', 'сделал задачу',
+            'перенеси задачу', 'измени задачу', 'измени время задачи',
+            'delete task', 'remove task', 'complete task', 'mark task',
+        )
+        if any(p in m for p in _task_action_patterns):
+            return "required"
+
+        # ── ЦЕЛИ: create / delete / update ─────────────────────────────────────
+        _goal_action_patterns = (
+            'создай цель', 'добавь цель', 'новая цель',
+            'удали цель', 'убери цель', 'удали цели', 'убери цели',
+            'удали все цел',
+            'обнови цель', 'прогресс цели',
+            'create goal', 'add goal', 'delete goal', 'remove goal',
+        )
+        if any(p in m for p in _goal_action_patterns):
+            return "required"
+
+        # ── ПРОФИЛЬ: update ─────────────────────────────────────────────────────
+        _profile_patterns = (
+            'запомни что я', 'запомни, что я', 'обнови профиль', 'измени профиль',
+            'я живу в ', 'я работаю в ', 'я работаю как ', 'мой город',
+            'save to profile', 'update profile',
+        )
+        if any(p in m for p in _profile_patterns):
+            return "required"
+
+        # ── ПРАВИЛА ─────────────────────────────────────────────────────────────
+        _rule_patterns = (
+            'запомни правило', 'сохрани правило', 'правило:', 'запомни:', 'всегда ', 'никогда ',
+        )
+        if any(m.startswith(p) for p in _rule_patterns):
+            return "required"
+
+        # Всё остальное — auto (вопросы, анализ, разговор)
         return "auto"
 
     # Phrases moved to i18n.py — these are fallbacks only
