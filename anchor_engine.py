@@ -7415,7 +7415,7 @@ class AnchorEngine:
                 def _has_cyr(s):
                     return any('\u0400' <= c <= '\u04ff' for c in (s or ''))
 
-                # Сильные сигналы получателя
+                # Сильные сигналы получателя — однозначно русский
                 ru_domains = any((email or '').lower().endswith(d)
                                  for d in ('.ru', '.by', '.ua', '.kz', '.рф'))
                 cyr_in_name = _has_cyr(f"{name} {company}")
@@ -7428,12 +7428,19 @@ class AnchorEngine:
                 if ru_domains or cyr_in_name or ru_platforms:
                     return 'Russian'
 
-                # Фолбэк: язык кампании (goal + offer)
-                campaign_text = f"{campaign_goal} {campaign_offer}"
-                cyr_count = sum(1 for c in campaign_text if '\u0400' <= c <= '\u04ff')
-                if cyr_count > 8:
-                    return 'Russian'
+                # Анализируем язык контекста получателя (надёжнее языка кампании)
+                # Кампания может быть написана на русском, а получатель — международный разработчик
+                if context:
+                    _ctx_cyr = sum(1 for c in context if '\u0400' <= c <= '\u04ff')
+                    _ctx_lat = sum(1 for c in context if 'a' <= c.lower() <= 'z')
+                    if _ctx_lat > 20 and _ctx_cyr < _ctx_lat * 0.3:
+                        return 'English'   # контекст явно на английском — пишем на английском
+                    if _ctx_cyr > 20 and _ctx_cyr > _ctx_lat:
+                        return 'Russian'   # контекст явно на русском
 
+                # По умолчанию — английский для международных получателей.
+                # НЕ используем язык кампании как фолбэк: русскоязычная цель кампании
+                # не означает что получатель говорит по-русски.
                 return 'English'
 
             if anchor.anchor_type == 'email_outreach_send':
@@ -7513,7 +7520,9 @@ class AnchorEngine:
                         f"Research context about recipient: {context or 'none'}\n"
                         f"USE THE CONTEXT ABOVE to personalize the email! If context mentions specific "
                         f"projects, products, articles, or achievements — reference them in your opening.\n\n"
-                        f"Language: {lang_hint}\n\n"
+                        f"Language: {lang_hint} — write the ENTIRE email (subject AND body) in {lang_hint} only. "
+                        f"Language was auto-detected from recipient signals (domain, name, context language). "
+                        f"Do NOT mix languages.\n\n"
                         f"Return ONLY a JSON object: {{\"subject\": \"...\", \"body\": \"...\"}}\n\n"
                         f"STRICT QUALITY RULES:\n"
                         f"- Subject: 3-7 words, specific to THIS person, no spam words (free, amazing, opportunity)\n"
@@ -7641,7 +7650,7 @@ class AnchorEngine:
                     f"Recipient: {recipient_email} ({recipient_name})\n"
                     f"{'Company: ' + company_info if company_info else ''}\n"
                     f"Days since sent: {days_since}\n"
-                    f"Language: {lang_hint}\n\n"
+                    f"Language: {lang_hint} — write the entire follow-up in {lang_hint} only (auto-detected from recipient).\n\n"
                     f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
                     f"Rules: short (60-100 words), 2-3 paragraphs, add new value, don't repeat original, be polite, no pressure.\n"
                     f"PARAGRAPH BREAKS: separate every paragraph with a blank line (\\n\\n) in the body field. Plain text only."
