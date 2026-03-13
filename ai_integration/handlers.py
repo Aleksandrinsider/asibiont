@@ -12075,6 +12075,240 @@ async def _send_via_gmail_api(
         return False, f"Gmail API exception: {_ge}"
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# check_emails — чтение входящих писем из почты пользователя
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def check_emails(
+    limit: int = 5,
+    from_account: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Проверить входящие письма из подключённой почты пользователя (Gmail/Яндекс/Mail.ru)."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        _integrations = _get_user_email_integrations(user, session)
+        if not _integrations:
+            return ("У тебя не подключена почта. Попроси пользователя добавить почтовые ключи "
+                    "(GMAIL_USER, YANDEX_USER/YANDEX_PASS или MAILRU_USER/MAILRU_PASS) "
+                    "в настройках агента на дашборде.")
+
+        # Выбираем интеграцию
+        chosen = None
+        if from_account:
+            _fa = from_account.strip().lower()
+            for _intg in _integrations:
+                if _fa in _intg['email_user'].lower() or _fa in _intg['label'].lower():
+                    chosen = _intg
+                    break
+        if not chosen:
+            chosen = _integrations[0]
+
+        limit = max(1, min(limit, 20))
+
+        if chosen['type'] == 'gmail_oauth':
+            return await _check_emails_gmail_api(chosen['token_data'], limit, user, session)
+        elif chosen['type'] in ('smtp', 'gmail_server'):
+            return await _check_emails_imap(chosen, limit)
+        elif chosen['type'] == 'resend':
+            return "Resend — сервис только для отправки, входящие не поддерживаются."
+        else:
+            return f"Тип интеграции '{chosen['type']}' не поддерживает чтение входящих."
+    except Exception as e:
+        logger.error(f"[CHECK_EMAILS] Error: {e}", exc_info=True)
+        return f"Ошибка при проверке почты: {e}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def _check_emails_gmail_api(token_data: dict, limit: int, user, session) -> str:
+    """Читает входящие через Gmail API v1."""
+    import base64 as _b64_r
+    import json as _jsn_r
+    import datetime as _dt_r
+    from config import GOOGLE_CLIENT_ID as _GCI_r, GOOGLE_CLIENT_SECRET as _GCS_r
+
+    access_token = token_data.get('access_token', '')
+    refresh_token = token_data.get('refresh_token', '')
+    gmail_email = token_data.get('email', '')
+
+    async def _refresh():
+        nonlocal access_token
+        if not refresh_token or not _GCI_r or not _GCS_r:
+            return False
+        try:
+            async with aiohttp.ClientSession() as _h:
+                _r = await _h.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'client_id': _GCI_r,
+                        'client_secret': _GCS_r,
+                        'refresh_token': refresh_token,
+                        'grant_type': 'refresh_token',
+                    },
+                    timeout=aiohttp.ClientTimeout(total=10),
+                )
+                _rd = await _r.json()
+                if 'access_token' in _rd:
+                    access_token = _rd['access_token']
+                    new_tok = dict(token_data)
+                    new_tok['access_token'] = access_token
+                    new_tok['saved_at'] = _dt_r.datetime.utcnow().isoformat()
+                    from config import encrypt_token as _et_r
+                    user.google_oauth_token = _et_r(_jsn_r.dumps(new_tok))
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return True
+        except Exception as _re:
+            logger.warning(f'[CHECK_EMAILS_GMAIL] Token refresh error: {_re}')
+        return False
+
+    async def _fetch(tok):
+        async with aiohttp.ClientSession() as _h:
+            # Список последних писем
+            _resp = await _h.get(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages',
+                headers={'Authorization': f'Bearer {tok}'},
+                params={'maxResults': str(limit), 'labelIds': 'INBOX'},
+                timeout=aiohttp.ClientTimeout(total=15),
+            )
+            if _resp.status == 401:
+                return None  # need refresh
+            _data = await _resp.json()
+            msgs = _data.get('messages', [])
+            if not msgs:
+                return "Входящих писем нет."
+
+            results = []
+            for msg_ref in msgs[:limit]:
+                msg_resp = await _h.get(
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
+                    headers={'Authorization': f'Bearer {tok}'},
+                    params={'format': 'metadata', 'metadataHeaders': 'From,Subject,Date'},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                )
+                if msg_resp.status != 200:
+                    continue
+                msg_data = await msg_resp.json()
+                headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
+                snippet = msg_data.get('snippet', '')[:200]
+                results.append(
+                    f"От: {headers.get('From', '?')}\n"
+                    f"Тема: {headers.get('Subject', '(без темы)')}\n"
+                    f"Дата: {headers.get('Date', '?')}\n"
+                    f"Превью: {snippet}\n"
+                )
+            if not results:
+                return "Не удалось загрузить письма."
+            return f"Входящие ({gmail_email}, последние {len(results)}):\n\n" + "\n---\n".join(results)
+
+    result = await _fetch(access_token)
+    if result is None:
+        # Token expired → refresh
+        if await _refresh():
+            result = await _fetch(access_token)
+        if result is None:
+            return "Не удалось авторизоваться в Gmail. Пользователю нужно переподключить Google OAuth."
+    return result
+
+
+async def _check_emails_imap(integration: dict, limit: int) -> str:
+    """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""
+    import asyncio
+    import imaplib
+    import email as _email_mod
+    from email.header import decode_header as _dh
+
+    label = integration.get('label', 'Email')
+    email_user = integration.get('email_user', '')
+
+    # Определяем IMAP-сервер
+    if 'gmail' in label.lower() or 'gmail' in email_user.lower():
+        imap_host = 'imap.gmail.com'
+    elif 'yandex' in label.lower() or 'yandex' in email_user.lower():
+        imap_host = 'imap.yandex.ru'
+    elif 'mail.ru' in label.lower() or 'mail.ru' in email_user.lower():
+        imap_host = 'imap.mail.ru'
+    else:
+        imap_host = integration.get('smtp_host', '').replace('smtp.', 'imap.')
+
+    email_pass = integration.get('email_pass', '')
+    if not email_pass:
+        # Gmail через app-password в user_api_keys
+        return f"Для чтения входящих через IMAP нужен пароль приложения. Настрой YANDEX_PASS или MAILRU_PASS."
+
+    def _decode_subj(raw):
+        parts = _dh(raw)
+        result = []
+        for data, charset in parts:
+            if isinstance(data, bytes):
+                result.append(data.decode(charset or 'utf-8', errors='replace'))
+            else:
+                result.append(str(data))
+        return ' '.join(result)
+
+    def _imap_fetch():
+        try:
+            mail = imaplib.IMAP4_SSL(imap_host, 993, timeout=15)
+            mail.login(email_user, email_pass)
+            mail.select('INBOX', readonly=True)
+            _status, _nums = mail.search(None, 'ALL')
+            if _status != 'OK' or not _nums[0]:
+                mail.logout()
+                return "Входящих писем нет."
+            ids = _nums[0].split()
+            ids = ids[-limit:]  # последние N
+            ids.reverse()
+
+            results = []
+            for mid in ids:
+                _s, _d = mail.fetch(mid, '(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])')
+                if _s != 'OK':
+                    continue
+                raw_header = _d[0][1] if _d[0] and len(_d[0]) > 1 else b''
+                msg = _email_mod.message_from_bytes(raw_header)
+                from_addr = msg.get('From', '?')
+                subject = _decode_subj(msg.get('Subject', '(без темы)'))
+                date = msg.get('Date', '?')
+
+                # Snippet: BODY.PEEK[TEXT] первые 200 символов
+                _st, _dt2 = mail.fetch(mid, '(BODY.PEEK[TEXT]<0.500>)')
+                snippet = ''
+                if _st == 'OK' and _dt2[0] and len(_dt2[0]) > 1:
+                    raw_body = _dt2[0][1]
+                    try:
+                        snippet = raw_body.decode('utf-8', errors='replace')[:200].strip()
+                    except Exception:
+                        snippet = str(raw_body[:200])
+                results.append(
+                    f"От: {from_addr}\n"
+                    f"Тема: {subject}\n"
+                    f"Дата: {date}\n"
+                    f"Превью: {snippet}\n"
+                )
+            mail.logout()
+            if not results:
+                return "Не удалось загрузить письма."
+            return f"Входящие ({email_user}, последние {len(results)}):\n\n" + "\n---\n".join(results)
+        except imaplib.IMAP4.error as e:
+            return f"Ошибка IMAP ({label}): {e}. Проверь пароль приложения."
+        except Exception as e:
+            return f"Ошибка при чтении почты ({label}): {e}"
+
+    return await asyncio.get_running_loop().run_in_executor(None, _imap_fetch)
+
+
 async def send_email(
     to: str = None,
     subject: str = None,

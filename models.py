@@ -5,7 +5,30 @@ import json
 import os
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, Float, text, Index
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
-from config import DATABASE_URL
+from sqlalchemy.types import TypeDecorator
+from config import DATABASE_URL, encrypt_token, decrypt_token
+
+logger = logging.getLogger(__name__)
+Base = declarative_base()
+
+
+class EncryptedText(TypeDecorator):
+    """Прозрачно шифрует/расшифровывает текстовые поля через Fernet.
+    Backwards-compatible: decrypt_token обрабатывает plaintext, enc:, obf: форматы."""
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if not value or not value.strip():
+            return value
+        if value.startswith('enc:') or value.startswith('obf:'):
+            return value  # уже зашифровано
+        return encrypt_token(value)
+
+    def process_result_value(self, value, dialect):
+        if not value:
+            return value
+        return decrypt_token(value)
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -860,7 +883,7 @@ class UserAgent(Base):
     integrations = Column(Text)                           # JSON: {service: key_encrypted}
 
     # Пользовательские API ключи (предоставляются автором агента)
-    user_api_keys = Column(Text)                          # plaintext KEY=value lines
+    user_api_keys = Column(EncryptedText)                  # encrypted KEY=value lines (Fernet)
 
     # Python-код, выполняемый агентом перед генерацией ответа (для получения данных)
     python_code = Column(Text)                            # Пользовательский Python-скрипт (stdout → контекст ИИ)

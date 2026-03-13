@@ -931,6 +931,27 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "check_emails",
+            "description": "📬 Проверить входящие письма в почтовом ящике пользователя (Gmail/Яндекс/Mail.ru). Используй чтобы узнать кто написал, есть ли ответы на отправленные письма.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Количество последних писем (1-20, по умолчанию 5)"
+                    },
+                    "from_account": {
+                        "type": "string",
+                        "description": "Email-аккаунт, из которого читать (если несколько подключено). По умолчанию — первый доступный."
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "send_email",
             "description": "📧 Отправить одиночное письмо с личной почты пользователя. Не связан с кампаниями.",
             "parameters": {
