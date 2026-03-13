@@ -1217,6 +1217,16 @@ class AnchorEngine:
                     anchor.anchor_type, anchor.topic or '',
                 )
 
+            # ── КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ — кто владелец, какой проект ──
+            _user_profile = data.get('user_profile', {})
+            if _user_profile and _user_profile.get('summary'):
+                task_text = (
+                    "👤 Контекст пользователя (работай на ЕГО проект, а не абстрактный):\n"
+                    + _user_profile['summary']
+                    + "\n\n"
+                    + task_text
+                )
+
             # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — идут первыми, задают контекст работы ──
             _user_rules = data.get('user_rules', [])
             if _user_rules:
@@ -4036,6 +4046,32 @@ class AnchorEngine:
                         f"Текущая стратегия не работает. Сообщи пользователю что нужно сменить подход или добавить интеграции."
                     )
 
+        # ── Профиль пользователя: агенты должны знать кому служат ──
+        _user_profile_ctx = {}
+        try:
+            from models import UserProfile as _UP_scan
+            _up = session.query(_UP_scan).filter_by(user_id=user.id).first()
+            if _up:
+                _up_parts = []
+                if _up.company:
+                    _up_parts.append(f"Компания/проект: {_up.company}")
+                if _up.position:
+                    _up_parts.append(f"Должность: {_up.position}")
+                if _up.bio:
+                    _up_parts.append(f"О пользователе: {_up.bio[:200]}")
+                if _up.goals:
+                    _up_parts.append(f"Личные цели: {str(_up.goals)[:150]}")
+                if _up.content_strategy:
+                    _up_parts.append(f"Контент-стратегия: {str(_up.content_strategy)[:150]}")
+                _user_profile_ctx = {
+                    'company': _up.company or '',
+                    'position': _up.position or '',
+                    'bio': (_up.bio or '')[:200],
+                    'summary': '\n'.join(_up_parts),
+                }
+        except Exception as _up_err:
+            logger.debug("[AUTOPILOT] user profile load failed: %s", _up_err)
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -4052,6 +4088,7 @@ class AnchorEngine:
             'tool_frequency': _tool_freq,
             'exhausted_strategies': exhausted_strategies,
             'feasibility_warnings': _feasibility_warnings,
+            'user_profile': _user_profile_ctx,
         }
 
         return [Anchor(
