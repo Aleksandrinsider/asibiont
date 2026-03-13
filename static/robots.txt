@@ -30,6 +30,7 @@ User-agent: GPTBot
 Allow: /
 Allow: /llms.txt
 Allow: /llms-full.txt
+Allow: /llms-en.txt
 
 User-agent: ChatGPT-User
 Allow: /
@@ -60,5 +61,6 @@ Sitemap: https://asibiont.com/sitemap.xml
 
 # LLMs.txt — AI-readable site description
 # https://llmstxt.org
-# /llms.txt — краткое описание
-# /llms-full.txt — полное описание с кейсами и FAQ
+# /llms.txt — bilingual summary (English + Russian)
+# /llms-en.txt — full English description with FAQ and use cases
+# /llms-full.txt — полное описание на русском с кейсами и FAQ

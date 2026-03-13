@@ -11939,6 +11939,7 @@ app.router.add_get('/d6193b04262141bba808b1279123715b.txt', lambda r: web.FileRe
 # AI SEO: llms.txt for AI crawlers (ChatGPT, Perplexity, Yandex GPT)
 app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
+app.router.add_get('/llms-en.txt', lambda r: web.FileResponse('static/llms-en.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
 app.router.add_get('/arena', arena_public_handler)
