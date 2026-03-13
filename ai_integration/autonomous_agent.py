@@ -3887,9 +3887,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
         if _has_code_h:
             _hints.append(
-                "\n\n💻 GitHub/GitLab. Главный канал поиска людей — "
-                "ищи разработчиков и контакты через run_agent_action. "
-                "web_search — только для тем/контекста."
+                "\n\n💻 GitHub/GitLab. Твой токен подхватывается платформой автоматически — "
+                "find_relevant_contacts_for_task / start_email_campaign найдут разработчиков через GitHub API. "
+                "run_agent_action — для работы с репозиторием, релизами, PR и любых других GitHub-операций. "
+                "web_search — для контекста и информации о технологиях."
             )
         if _has_rss_h:
             _hints.append(

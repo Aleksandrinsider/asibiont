@@ -10288,16 +10288,29 @@ If no relevant emails found return []"""
         # Подсказки по отсутствующим интеграциям
         import os as _os_leads
         _intg_hints = []
-        if _is_tech_audience and not _os_leads.getenv('GITHUB_TOKEN'):
+        # GITHUB_TOKEN: сначала проверяем уже найденный в user_api_keys, затем env
+        if _is_tech_audience and not github_token and not _os_leads.getenv('GITHUB_TOKEN'):
             _intg_hints.append(
-                "💡 Для поиска разработчиков на GitHub — подключи GITHUB_TOKEN "
-                "(Railway → Variables → GITHUB_TOKEN=ghp_... — получить: github.com/settings/tokens). "
+                "💡 Для поиска разработчиков на GitHub — добавь GITHUB_TOKEN в настройки агента "
+                "(дашборд → агент → API-ключи → GITHUB_TOKEN=ghp_...). "
                 "Увеличит лимит запросов с 60 до 5000 в час."
             )
-        if not _os_leads.getenv('RESEND_API_KEY'):
+        # RESEND_API_KEY: проверяем platform env + личный ключ в user_api_keys агентов
+        _has_personal_resend_h = False
+        try:
+            from models import UserAgent as _UA_rh
+            _has_personal_resend_h = session.query(_UA_rh).filter(
+                _UA_rh.author_id == user.id,
+                _UA_rh.user_api_keys.isnot(None),
+                _UA_rh.user_api_keys.contains('RESEND_API_KEY='),
+            ).first() is not None
+        except Exception:
+            pass
+        if not _os_leads.getenv('RESEND_API_KEY') and not _has_personal_resend_h:
             _intg_hints.append(
                 "💡 Для отправки писем нужен RESEND_API_KEY "
-                "(Railway → Variables → RESEND_API_KEY=re_... — регистрация: resend.com)."
+                "(добавь в настройки агента → API-ключи → RESEND_API_KEY=re_...). "
+                "Регистрация бесплатна: resend.com"
             )
         _hint_msg = ("\n⚠️ Интеграции для улучшения поиска: \n" + "\n".join(_intg_hints)) if _intg_hints else ""
         return 0, _hint_msg
@@ -10576,7 +10589,7 @@ async def send_outreach_email(
         session = Session()
         close_session = True
     try:
-        from config import RESEND_API_KEY
+        from config import RESEND_API_KEY as _platform_resend_key
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
@@ -10588,8 +10601,40 @@ async def send_outreach_email(
         if _rcpt and _user_email and _rcpt == _user_email:
             return f" Нельзя отправлять outreach на собственный email ({_rcpt}). Найди другого получателя."
 
+        # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
+        RESEND_API_KEY = _platform_resend_key
+        _personal_resend_from = ''
+        try:
+            from models import UserAgent as _UA_rs
+            for _ag_rs in session.query(_UA_rs).filter(
+                _UA_rs.author_id == user.id,
+                _UA_rs.status != 'disabled',
+                _UA_rs.user_api_keys.isnot(None),
+            ).all():
+                _env_rs = {}
+                for _ln_rs in (_ag_rs.user_api_keys or '').splitlines():
+                    _ln_rs = _ln_rs.strip()
+                    if '=' in _ln_rs and not _ln_rs.startswith('#'):
+                        _k_rs, _, _v_rs = _ln_rs.partition('=')
+                        _env_rs[_k_rs.strip().upper()] = _v_rs.strip()
+                if _env_rs.get('RESEND_API_KEY'):
+                    RESEND_API_KEY = _env_rs['RESEND_API_KEY']
+                    _personal_resend_from = (
+                        _env_rs.get('RESEND_FROM') or
+                        _env_rs.get('SENDER_EMAIL') or
+                        _env_rs.get('FROM_EMAIL') or ''
+                    )
+                    import logging as _log_rs
+                    _log_rs.getLogger(__name__).info(
+                        f'[EMAIL_OUTREACH] Using personal RESEND_API_KEY from agent {_ag_rs.name}'
+                    )
+                    break
+        except Exception as _rs_err:
+            import logging as _log_rs2
+            _log_rs2.getLogger(__name__).debug(f'[EMAIL_OUTREACH] Personal Resend lookup: {_rs_err}')
+
         if not RESEND_API_KEY:
-            return " Resend API не настроен. Установите RESEND_API_KEY."
+            return " Resend API не настроен. Добавьте RESEND_API_KEY в настройки агента (API-ключи) или Railway Variables."
 
         # Найти кампанию
         campaign = None
@@ -10702,14 +10747,16 @@ async def send_outreach_email(
         try:
             async with _aiohttp.ClientSession() as http:
                 # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
+                # _personal_resend_from: из user_api_keys агента (RESEND_FROM/SENDER_EMAIL/FROM_EMAIL)
                 from config import RESEND_FROM as _resend_from_cfg
+                _effective_resend_from = _personal_resend_from or _resend_from_cfg
                 _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
                                  'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
                 _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
                 _from_addr = (
-                    _resend_from_cfg
-                    if _resend_from_cfg and _sender_domain in _free_domains
-                    else (campaign.sender_email or _resend_from_cfg or 'noreply@asibiont.com')
+                    _effective_resend_from
+                    if _effective_resend_from and _sender_domain in _free_domains
+                    else (campaign.sender_email or _effective_resend_from or 'noreply@asibiont.com')
                 )
                 from_header = f"{campaign.sender_name} <{_from_addr}>"
                 # reply_to указывает на реальный адрес пользователя (может быть gmail)
@@ -13161,13 +13208,40 @@ async def generate_image(
         session = Session()
         close_session = True
     try:
-        from config import REPLICATE_API_TOKEN, TELEGRAM_TOKEN
-        if not REPLICATE_API_TOKEN:
-            return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в переменные окружения."
+        from config import REPLICATE_API_TOKEN as _platform_replicate_key, TELEGRAM_TOKEN
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return " Пользователь не найден."
+
+        # Личный REPLICATE_API_TOKEN из user_api_keys агентов пользователя имеет приоритет
+        REPLICATE_API_TOKEN = _platform_replicate_key
+        try:
+            from models import UserAgent as _UA_rep
+            for _ag_rep in session.query(_UA_rep).filter(
+                _UA_rep.author_id == user.id,
+                _UA_rep.status != 'disabled',
+                _UA_rep.user_api_keys.isnot(None),
+            ).all():
+                _env_rep = {}
+                for _ln_rep in (_ag_rep.user_api_keys or '').splitlines():
+                    _ln_rep = _ln_rep.strip()
+                    if '=' in _ln_rep and not _ln_rep.startswith('#'):
+                        _k_rep, _, _v_rep = _ln_rep.partition('=')
+                        _env_rep[_k_rep.strip().upper()] = _v_rep.strip()
+                if _env_rep.get('REPLICATE_API_TOKEN'):
+                    REPLICATE_API_TOKEN = _env_rep['REPLICATE_API_TOKEN']
+                    import logging as _log_rep
+                    _log_rep.getLogger(__name__).info(
+                        f'[GENERATE_IMAGE] Using personal REPLICATE_API_TOKEN from agent {_ag_rep.name}'
+                    )
+                    break
+        except Exception as _rep_err:
+            import logging as _log_rep2
+            _log_rep2.getLogger(__name__).debug(f'[GENERATE_IMAGE] Personal Replicate lookup: {_rep_err}')
+
+        if not REPLICATE_API_TOKEN:
+            return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
         # Строим полный промпт (всегда на английском для лучшего качества)
         full_prompt = prompt
