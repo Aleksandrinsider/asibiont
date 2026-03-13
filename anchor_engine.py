@@ -731,9 +731,9 @@ class AnchorEngine:
             logger.debug(f"[ANCHOR] Dedup error (non-critical): {_e_dedup}")
             session.rollback()
 
-        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>4 мин) как failed
+        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>8 мин) как failed
         try:
-            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=4)  # naive UTC — PostgreSQL возвращает naive datetime
+            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=8)  # naive UTC — PostgreSQL возвращает naive datetime
             from models import AgentActivityLog as _AAL_stuck
             _stuck_logs = session.query(_AAL_stuck).filter(
                 _AAL_stuck.user_id == user.id,
@@ -1133,18 +1133,20 @@ class AnchorEngine:
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
 
             # ── Guard: предотвращаем дублирование при параллельных scan-циклах ──
-            # Если для этого якоря уже выполняется dispatch (in_progress < 3 мин) — пропускаем.
+            # Проверяем: нет ли ЛЮБОГО dispatch (любой target) в in_progress < 5 мин.
+            # Один пользователь — один активный dispatch в момент времени.
             try:
                 from sqlalchemy import text as _guard_text
                 _recent = session.execute(_guard_text(
-                    "SELECT id FROM agent_activity_log "
-                    "WHERE user_id=:uid AND target=:tgt AND status='in_progress' "
-                    "AND created_at > NOW() - INTERVAL '3 minutes'"
-                ), {'uid': user.id, 'tgt': anchor.source}).fetchone()
+                    "SELECT id, target FROM agent_activity_log "
+                    "WHERE user_id=:uid AND activity_type='goal_autopilot_dispatch' "
+                    "AND status='in_progress' "
+                    "AND created_at > NOW() - INTERVAL '5 minutes'"
+                ), {'uid': user.id}).fetchone()
                 if _recent:
                     logger.info(
-                        "[DISPATCH-GUARD] Skip duplicate dispatch for %s (AAL id=%s in_progress)",
-                        anchor.source, _recent[0]
+                        "[DISPATCH-GUARD] Skip dispatch for %s — already running AAL id=%s (target=%s)",
+                        anchor.source, _recent[0], _recent[1]
                     )
                     return
             except Exception as _guard_err:
