@@ -4292,6 +4292,27 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 'update_goal_progress', 'update_goal', 'complete_goal',
                 'research_topic', 'web_search', 'delegate_task',
             })
+            # Для email-агентов: добавляем start_email_campaign + add_email_leads
+            # чтобы агент мог самостоятельно создать кампанию перед отправкой писем
+            _spec_ext = (
+                (agent.get('specialization') or '') + ' ' +
+                (agent.get('job_title') or '') + ' ' +
+                (agent.get('description') or '')
+            ).lower()
+            _lbl_ext = ' '.join(h.lower() for h in _intg_hint)
+            _tools_str_ext = (agent.get('tools_allowed') or '').lower()
+            _has_email_tools = (
+                any(w in _spec_ext for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'sales', 'crm')) or
+                any(w in _lbl_ext for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'outreach', 'письм')) or
+                any(w in _tools_str_ext for w in ('check_emails', 'send_outreach_email', 'send_email', 'start_email_campaign'))
+            )
+            if _has_email_tools:
+                _allowed_tools.update({
+                    'send_outreach_email', 'reply_to_outreach_email',
+                    'start_email_campaign', 'add_email_leads',
+                    'list_email_contacts', 'save_email_contact',
+                    'find_relevant_contacts_for_task',
+                })
         try:
             from .tools import get_available_tools as _gat2
             _all_names = {t['function']['name'] for t in _gat2()}

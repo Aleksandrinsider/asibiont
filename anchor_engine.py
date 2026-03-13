@@ -152,15 +152,15 @@ _INTEGRATION_PLANS = [
      'email',
      "Твой уникальный инструмент — чтение входящих (check_emails). Только ты можешь читать ответы на письма и реплаить. Отправлять через Resend могут все агенты и ASI — это обычный канал.",
      ["A) check_emails → есть ответ → reply_to_outreach_email → update_goal_progress",
-      "B) find_relevant_contacts_for_task → send_outreach_email → update_goal_progress",
-      "C) list_email_contacts → выбери нового (не из памяти) → send_outreach_email"]),
+      "B) start_email_campaign(name, goal, target_audience) → send_outreach_email → update_goal_progress",
+      "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress"]),
     # Outreach-письма (Resend) — агенты с send_outreach_email, но без IMAP
     (lambda c: any(w in c for w in ('outreach', 'письм')),
      'outreach',
      "Ты можешь отправлять outreach-письма через платформу (Resend). Чтение входящих (check_emails) — только для агентов с подключённым почтовым ящиком.",
-     ["A) find_relevant_contacts_for_task → send_outreach_email → update_goal_progress",
-      "B) web_search → save_email_contact → send_outreach_email → update_goal_progress",
-      "C) list_email_contacts → выбери новых (не из памяти) → send_outreach_email"]),
+     ["A) start_email_campaign(name=цель, goal=цель, target_audience=аудитория) → send_outreach_email → update_goal_progress",
+      "B) find_relevant_contacts_for_task → add_email_leads → send_outreach_email → update_goal_progress",
+      "C) web_search → save_email_contact → send_outreach_email (в активную кампанию)"]),
     # GitHub / GitLab
     (lambda c: any(w in c for w in ('github', 'gitlab')),
      'github',
@@ -1353,6 +1353,7 @@ class AnchorEngine:
                 'web_search', 'research_topic', 'find_relevant_contacts_for_task',
                 'save_email_contact', 'add_task', 'complete_task', 'edit_task',
                 'delegate_task', 'send_outreach_email', 'send_email',
+                'start_email_campaign', 'add_email_leads', 'check_emails',
                 'update_goal_progress', 'update_goal', 'create_goal',
                 'quick_topic_search', 'get_news_trends',
             ]
@@ -1364,8 +1365,11 @@ class AnchorEngine:
                 personality=(
                     'Ты — координатор команды ASI Biont. '
                     'Ты используешь web_search, research_topic, find_relevant_contacts_for_task, '
-                    'save_email_contact, send_outreach_email, add_task, delegate_task, update_goal_progress. '
-                    'Ты СНАЧАЛА делаешь сам (ищешь, находишь контакты, отправляешь письма), '
+                    'save_email_contact, start_email_campaign, add_email_leads, send_outreach_email, '
+                    'add_task, delegate_task, update_goal_progress. '
+                    'Для email-рассылок: сначала start_email_campaign (создаёт кампанию + находит лиды), '
+                    'затем send_outreach_email. '
+                    'Ты СНАЧАЛА делаешь сам (ищешь, создаёшь кампании, находишь контакты, отправляешь письма), '
                     'И делегируешь коллегам задачи по их специализации. '
                     + _delegate_examples +
                     'НИКОГДА не пишешь «предлагаю» — только действуешь инструментами.'
@@ -2892,11 +2896,17 @@ class AnchorEngine:
                 )
             _profiles_str = '\n'.join(_profiles_lines)
 
+            _email_campaigns_raw = data.get('email_campaigns', [])
+            _email_campaigns_str = (
+                '\n'.join(f'  {e}' for e in _email_campaigns_raw)
+                if _email_campaigns_raw else 'нет активных кампаний'
+            )
             _n_agents = len(_profiles)
             _plan_prompt = (
                 f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
                 f"Цели пользователя: {_goals_str}\n"
                 f"Контактов в базе={_known_contacts}, писем отправлено={_email_sent}\n"
+                f"Email-кампании:\n{_email_campaigns_str}\n"
                 f"Уже получили письма (НЕ писать повторно): {_already_sent_str}\n"
                 f"Общие последние действия:\n{_recent_txt}\n"
                 f"Заблокированные инструменты: {_failed_str}\n\n"
@@ -2909,6 +2919,10 @@ class AnchorEngine:
                 "5. Если агент уже делал действие — давай ему ДРУГОЕ задание.\n"
                 "6. Можно включить шаг для ASI (web_search/research_topic).\n"
                 "7. НЕ отправляй письма на адреса из списка 'уже получили письма'.\n"
+                "8. ВАЖНО: send_outreach_email требует активной кампании. Если кампаний нет → "
+                "дай email-агенту задание start_email_campaign(name, goal, target_audience) ПЕРВЫМ, "
+                "затем send_outreach_email. start_email_campaign также автоматически ищет лидов.\n"
+                "9. Только агент с IMAP/Gmail ключами может вызывать check_emails (чтение входящих).\n"
                 f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "главный_инструмент"}]'
             )
@@ -3105,7 +3119,9 @@ class AnchorEngine:
                     _asi_tools = [
                         'web_search', 'research_topic', 'find_relevant_contacts_for_task',
                         'save_email_contact', 'add_task', 'delegate_task',
-                        'send_outreach_email', 'update_goal_progress', 'quick_topic_search',
+                        'send_outreach_email', 'start_email_campaign', 'add_email_leads',
+                        'check_emails', 'update_goal_progress', 'update_goal', 'create_goal',
+                        'quick_topic_search', 'get_news_trends',
                     ]
                     _ag_data = {
                         'id': 0, 'name': 'ASI',
