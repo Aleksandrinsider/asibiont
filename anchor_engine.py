@@ -3514,7 +3514,7 @@ class AnchorEngine:
             _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
             _MAX_DYNAMIC_STEPS = 6
 
-            _step_queue = list(_plan[:1])  # Берём только ПЕРВЫЙ шаг из плана — остальные решаем динамически
+            _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
 
             _executed = 0
             while _executed < _MAX_DYNAMIC_STEPS:
@@ -3586,6 +3586,27 @@ class AnchorEngine:
                 if not _ag_name or not _ag_task:
                     continue
 
+                # ── Уточнение задания на основе результатов предыдущих шагов (ReAct refinement) ──
+                if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
+                    try:
+                        _refine_p = (
+                            f"Координатор уточняет задание агенту {_ag_name} с учётом уже выполненного.\n"
+                            f"Уже сделано командой:\n{_prev_steps_context[:500]}\n\n"
+                            f"Исходное задание: {_ag_task}\n"
+                            + (f"Цель: {_ag_goal_title}\n" if _ag_goal_title else "")
+                            + "\nУточни задание (1-3 предложения) — используй конкретные результаты выше."
+                            " Если задание актуально без изменений — верни его дословно. Только текст задания."
+                        )
+                        _refined_task = await asyncio.wait_for(
+                            _quick_ai_call_raw([{"role": "user", "content": _refine_p}], max_tokens=120),
+                            timeout=8,
+                        )
+                        if _refined_task and len(_refined_task.strip()) > 20:
+                            _ag_task = _refined_task.strip()
+                            logger.info("[COORD] refined task step %d for %s", _executed, _ag_name)
+                    except Exception as _ref_e:
+                        logger.debug("[COORD] task refinement failed: %s", _ref_e)
+
                 # Ищем агента в команде
                 _target_ag = next(
                     (a for a in real_agents if a.name.lower() == _ag_name.lower()), None
@@ -3653,10 +3674,16 @@ class AnchorEngine:
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
+                    # Короткий заголовок = первое предложение/строка задания
+                    _task_title_short = (_ag_task.split('\n')[0].split('.')[0])[:100].strip()
+                    if len(_task_title_short) < 15:
+                        _task_title_short = ' '.join(_ag_task.split()[:14])
+                    # Описание = полный текст только если отличается от заголовка
+                    _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
                     _step_task = _Task_c2(
                         user_id=user.id,
-                        title=_ag_task[:200],
-                        description=_ag_task[:2000],
+                        title=_task_title_short[:200],
+                        description=_task_desc or None,
                         status='in_progress',
                         source='agent',
                         created_by_agent_id=_target_ag.id if _target_ag else None,
@@ -3735,6 +3762,19 @@ class AnchorEngine:
                     if _already_sent else ''
                 )
 
+                # Инструменты которые агент уже вызывал недавно — не повторять бессмысленно
+                _recently_used_tools: set = set()
+                for _rh in _this_agent_hist[:3]:
+                    if '[' in _rh and ']' in _rh:
+                        _bt = _rh[_rh.find('[')+1:_rh.find(']')]
+                        for _btt in _bt.split(','):
+                            _recently_used_tools.add(_btt.strip())
+                _dedup_hint = (
+                    f"\n🚫 Ты уже вызывал: {', '.join(sorted(_recently_used_tools)[:6])} — "
+                    "НЕ вызывай их снова если результат уже известен, выбери следующий логичный шаг.\n"
+                    if _recently_used_tools else ''
+                )
+
                 _user_profile_ag = data.get('user_profile', {})
                 _user_profile_sum_ag = (_user_profile_ag.get('summary', '') or '') if _user_profile_ag else ''
                 _user_rules_ag = data.get('user_rules', [])
@@ -3744,6 +3784,7 @@ class AnchorEngine:
                        f"   ⚠️ При вызове update_goal_progress используй goal_title='{_ag_goal_title}' ТОЧНО.\n"
                        if _ag_goal_title else '')
                     + (f"⚙️ Рекомендуемый инструмент: {_tool_hint}\n" if _tool_hint else '')
+                    + _dedup_hint
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
