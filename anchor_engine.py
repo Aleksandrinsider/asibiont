@@ -3203,8 +3203,17 @@ class AnchorEngine:
                 )
                 _desc_part = f', описание: {p["desc"][:150]}' if p.get('desc') else ''
                 _spec_part = f' [{p["spec"]}]' if p.get('spec') else ''
+                # Добавляем конкретный RSS URL чтобы координатор понимал тематику ленты
+                _ag_obj = next((a for a in real_agents if a.name == p['name']), None)
+                _rss_url_val = ''
+                if _ag_obj:
+                    for _kline in (getattr(_ag_obj, 'user_api_keys', '') or '').splitlines():
+                        if _kline.strip().upper().startswith('RSS_URL='):
+                            _rss_url_val = _kline.split('=', 1)[1].strip()[:80]
+                            break
+                _rss_note = f', RSS={_rss_url_val}' if _rss_url_val else ''
                 _profiles_lines.append(
-                    f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]'
+                    f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}'
                     f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
                     f'{_desc_part}'
                 )
@@ -3269,9 +3278,19 @@ class AnchorEngine:
                     "Без него — только web_search."
                 )
             if _has_any and not any('alpha_vantage' in (getattr(a, 'user_api_keys', '') or '').lower() for a in real_agents):
+                # Проверим — есть ли агент с RSS, но его RSS не финансовый
+                _finance_rss_missing = False
+                for _a_chk in real_agents:
+                    for _kl in (getattr(_a_chk, 'user_api_keys', '') or '').splitlines():
+                        if _kl.strip().upper().startswith('RSS_URL='):
+                            _rss_val = _kl.split('=', 1)[1].strip().lower()
+                            if not any(w in _rss_val for w in ('finance', 'tass', 'rbc', 'investing', 'oil', 'moex', 'finam', 'quote', 'market')):
+                                _finance_rss_missing = True
                 _missing_intg_coord.append(
-                    "💡 Для котировок нефти/акций подключи Alpha Vantage (alphavantage.co) — "
-                    "ALPHAVANTAGE_API_KEY бесплатно, 500 запросов/день. Или используй run_agent_action с Python-скриптом."
+                    "💡 Для котировок нефти/акций добавь ALPHAVANTAGE_API_KEY (alphavantage.co, бесплатно 500 req/день). "
+                    "Или в RSS_URL агента-аналитика укажи нефтяной фид: https://tass.ru/rss/v2.xml (ТАСС Экономика) "
+                    "или https://rbc.ru/v10/tags/news/oil (РБК нефть) — это бесплатнее и надёжнее web_search."
+                    + (" ⚠️ RSS агента сейчас указывает НЕ на финансовые источники — web_search будет основным." if _finance_rss_missing else '')
                 )
             # Без GITHUB_TOKEN при поиске разработчиков
             if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _os_coord.getenv('GITHUB_TOKEN'):
@@ -3295,7 +3314,7 @@ class AnchorEngine:
                 'finance':  'Используй: web_search/research_topic/get_news_trends (анализ рынка), run_agent_action (котировки). НЕ email.',
                 'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
                 'dev':      'Используй: run_agent_action (GitHub API: search_users), find_relevant_contacts_for_task. GitHub Token есть у агента.',
-                'people':   'Используй: find_relevant_contacts_for_task, send_outreach_email, start_email_campaign, save_email_contact.',
+                'people':   'Если у агента GITHUB_TOKEN → сначала run_agent_action (GitHub API: search_users?q=language:python+topic:AI) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
                 'content':  'Используй: generate_marketing_content, create_post, publish_to_telegram/discord, start_content_campaign.',
                 'sales':    'Используй: find_partners, find_relevant_contacts_for_task, send_outreach_email, start_email_campaign.',
             }
