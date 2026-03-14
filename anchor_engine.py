@@ -3202,8 +3202,49 @@ class AnchorEngine:
                         prev_agent.name, len(_found_emails), _email_agent_relay.name,
                     )
 
+            # ── Детектор входящих писем (результат check_emails) ──
+            # Формат "Новые входящие (...): От: / Тема: / Превью:" от обоих IMAP/Gmail-бэкендов.
+            # Email-адреса отправителей ≠ outreach-цели! Нужно передать ASI для решения.
+            _INBOX_MARKERS = ('Новые входящие', 'От: ', 'Тема: ', 'Превью: ')
+            _is_inbox_result = sum(1 for p in _INBOX_MARKERS if p in result) >= 3
+            if _is_inbox_result:
+                _found_emails = []       # не рассылать письма людям из входящих
+                _email_agent_relay = None
+
             _decision: dict = {}
-            if _email_agent_relay and _found_emails:
+            if _is_inbox_result:
+                # Агент нашёл входящие → логируем activity + передаём ASI для решения
+                _inbox_count = len(_re2.findall(r'^От:', result, _re2.MULTILINE)) or 1
+                try:
+                    from models import AgentActivityLog as _AAL_ibox, Session as _Db_ibox
+                    _si_ibox = _Db_ibox()
+                    _si_ibox.add(_AAL_ibox(
+                        user_id=user.id,
+                        activity_type='inbox_reply',
+                        status='new',
+                        target=f'agent:{prev_agent.name}',
+                        title=f'{prev_agent.name}: {_inbox_count} новых письма',
+                        content=result[:500],
+                    ))
+                    _si_ibox.commit()
+                    _si_ibox.close()
+                    logger.info('[ANCHOR-CHAIN] inbox-relay: logged inbox_reply for %s (%d msgs)',
+                                prev_agent.name, _inbox_count)
+                except Exception as _e_ibox:
+                    logger.debug('[ANCHOR-CHAIN] inbox_reply log error: %s', _e_ibox)
+                _decision = {
+                    'continue': True,
+                    'agent_name': 'ASI',
+                    'task': (
+                        f"{prev_agent.name} проверил почту и нашёл {_inbox_count} новых письма. "
+                        f"Реши что делать: ответить (reply_to_outreach_email), "
+                        f"сохранить контакт (save_email_contact), создать задачу (add_task) или другое.\n\n"
+                        f"Входящие письма:\n{result[:600]}"
+                    ),
+                }
+                logger.info('[ANCHOR-CHAIN] inbox-relay: %s → ASI (%d inbox msgs)',
+                            prev_agent.name, _inbox_count)
+            elif _email_agent_relay and _found_emails:
                 _emails_relay_str = ', '.join(_found_emails[:5])
                 _decision = {
                     'continue': True,
