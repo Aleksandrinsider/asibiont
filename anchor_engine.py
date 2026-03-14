@@ -3541,6 +3541,7 @@ class AnchorEngine:
                     try:
                         _agents_avail_str = '\n'.join(
                             f"  {_pr['name']} — {_pr.get('job', 'специалист')}"
+                            + (f" [интеграции: {', '.join(_pr['caps'][:4])}]" if _pr.get('caps') else '')
                             for _pr in _profiles
                         )
                         _goals_remain_str = '\n'.join(
@@ -3557,7 +3558,8 @@ class AnchorEngine:
                         _next_prompt = (
                             f"Ты — координатор ASI. Команда только что сделала:\n{_done_str}\n\n"
                             f"Активные цели:\n{_goals_remain_str}\n\n"
-                            f"Доступные агенты:\n{_agents_avail_str}\n\n"
+                            f"Доступные агенты:\n{_agents_avail_str}\n"
+                            f"⚠️ ЗАПРЕЩЕНО давать агенту задачу с инструментом/интеграцией которой НЕТ в его [интеграции] списке!\n\n"
                             + (f"Рекомендуемые инструменты по целям:\n{_domains_hint}\n\n" if _domains_hint else '')
                             + f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
                             f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
@@ -3806,9 +3808,11 @@ class AnchorEngine:
                     + (f"\n🎯 Работаешь НА ЦЕЛЬ: «{_ag_goal_title}»\n"
                        f"   🚫 update_goal_progress — ТОЛЬКО goal_title='{_ag_goal_title}'. Другие цели НЕ ТРОГАЙ.\n"
                        f"   🚫 update_goal_progress вызывай ТОЛЬКО при КОНКРЕТНОМ исходящем действии:\n"
-                       f"      ✅ отправил письмо/сообщение → можно обновить notes\n"
-                       f"      ✅ нашёл НОВОГО пользователя/контакт → можно обновить metric_current\n"
+                       f"      ✅ отправил письмо/сообщение ЧЕЛОВЕКУ → обновляй notes\n"
+                       f"      ✅ получил ОТВЕТ/подтверждение интереса от нового контакта СНАРУЖИ → обновляй metric_current\n"
                        f"      ❌ прочитал RSS / сделал web_search / вызвал run_agent_action — НЕ обновлять прогресс!\n"
+                       f"      ❌ find_relevant_contacts_for_task — контакты ИЗ БАЗЫ, уже учтены ранее. НЕ обновляй metric_current!\n"
+                       f"      ❌ start_email_campaign — запуск кампании не = новый пользователь. НЕ обновляй metric_current!\n"
                        if _ag_goal_title else '')
                     + (f"⚙️ Рекомендуемый инструмент: {_tool_hint}\n" if _tool_hint else '')
                     + _rap_note

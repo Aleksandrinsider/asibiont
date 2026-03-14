@@ -3841,7 +3841,8 @@ def get_partners_list(user_id=None, session=None):
     for partner in partners[:5]:  # Log top 5
         partner_user = _top5_user_by_id.get(partner.user_id)
         if partner_user:
-            logger.info(f"[PARTNERS] Top partner: @{partner_user.username}, task_score={partner.task_relevance_score}, relevance={partner.task_relevance}")
+            if partner_user.username:
+                logger.info(f"[PARTNERS] Top partner: @{partner_user.username}, task_score={partner.task_relevance_score}, relevance={partner.task_relevance}")
         else:
             partner.common_skills = None
             
