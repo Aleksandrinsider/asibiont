@@ -4335,18 +4335,21 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 if mc - _old_mc < 1.0:
                     return f"Прирост метрики слишком мал ({mc - _old_mc:.1f}). Увеличивай на целые единицы — 1 единица = 1 реальный найденный пользователь."
                 # RATE LIMIT: максимум 1 обновление метрики за 3 часа
-                try:
-                    from models import AgentActivityLog as _AAL_rl
-                    _recent_updates = session.query(_AAL_rl).filter(
-                        _AAL_rl.user_id == user.id,
-                        _AAL_rl.activity_type == 'goal_updated',
-                        _AAL_rl.ref_id == matched.id,
-                        _AAL_rl.created_at >= datetime.now() - timedelta(hours=3),
-                    ).count()
-                    if _recent_updates >= 1:
-                        return f"Метрика цели '{matched.title}' уже обновлялась менее 3ч назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
-                except Exception:
-                    pass
+                # Исключение: если это финальный update (цель достигается) — rate-limit пропускаем
+                _would_complete = (mc >= matched.metric_target)
+                if not _would_complete:
+                    try:
+                        from models import AgentActivityLog as _AAL_rl
+                        _recent_updates = session.query(_AAL_rl).filter(
+                            _AAL_rl.user_id == user.id,
+                            _AAL_rl.activity_type == 'goal_updated',
+                            _AAL_rl.ref_id == matched.id,
+                            _AAL_rl.created_at >= datetime.now() - timedelta(hours=3),
+                        ).count()
+                        if _recent_updates >= 1:
+                            return f"Метрика цели '{matched.title}' уже обновлялась менее 3ч назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
+                    except Exception:
+                        pass
                 matched.metric_current = mc
                 pct = int(mc / matched.metric_target * 100)
                 pct = max(0, min(100, pct))

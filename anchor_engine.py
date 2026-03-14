@@ -2517,6 +2517,57 @@ class AnchorEngine:
             anchor.delivered_at = datetime.now(timezone.utc)
             session.commit()
 
+            # ── Проверяем: закрыл ли агент цель в этом сеансе ──
+            # Ищем goal_completed события за последние 5 минут для этого пользователя.
+            # Если цель завершена: экспирируем pending-якоря + уведомляем пользователя.
+            try:
+                from models import AgentActivityLog as _AAL_gc, Goal as _Goal_gc
+                _gc_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                _completed_goal_logs = session.query(_AAL_gc).filter(
+                    _AAL_gc.user_id == user.id,
+                    _AAL_gc.activity_type == 'goal_completed',
+                    _AAL_gc.created_at >= _gc_cutoff,
+                ).all()
+                if _completed_goal_logs:
+                    # Авто-экспирируем все pending goal_autopilot_review якоря пользователя
+                    _pending_ap = session.query(Anchor).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == 'goal_autopilot_review',
+                        Anchor.delivered_at.is_(None),
+                    ).all()
+                    for _pa in _pending_ap:
+                        _pa.delivered_at = datetime.now(timezone.utc)
+                    if _pending_ap:
+                        session.commit()
+                        logger.info(
+                            "[ANCHOR-AUTOPILOT] goal_completed: expired %d pending anchors for user %d",
+                            len(_pending_ap), user.id,
+                        )
+                    # Уведомляем пользователя о каждой закрытой цели
+                    for _gc_log in _completed_goal_logs:
+                        try:
+                            _gc_goal = session.query(_Goal_gc).filter_by(
+                                id=_gc_log.ref_id, user_id=user.id
+                            ).first()
+                            if _gc_goal and self.bot:
+                                _gc_msg = (
+                                    f"🎯 Цель достигнута!\n\n"
+                                    f"«{_gc_goal.title}» — выполнено на 100%.\n"
+                                    f"Автопилот для этой цели остановлен."
+                                )
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=_gc_msg,
+                                )
+                                logger.info(
+                                    "[ANCHOR-AUTOPILOT] goal_completed notify: user %d goal='%s'",
+                                    user.id, _gc_goal.title,
+                                )
+                        except Exception as _gc_notify_err:
+                            logger.debug("[ANCHOR-AUTOPILOT] goal completion notify err: %s", _gc_notify_err)
+            except Exception as _gc_outer_err:
+                logger.debug("[ANCHOR-AUTOPILOT] goal completion check err: %s", _gc_outer_err)
+
             logger.info(
                 "[ANCHOR-AUTOPILOT] user %d: %s executed goal review → %d chars",
                 user.id, agent_name, len(result or ''),
