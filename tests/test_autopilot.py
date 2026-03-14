@@ -337,9 +337,10 @@ def test_exec_agent_text_response():
         result = run(ag_mod._exec_agent_for_director(agent_data, task, UID))
 
     assert isinstance(result, tuple), f"Должен возвращать tuple: {type(result)}"
-    text, tools = result
+    text, tools, total_tokens = result
     assert isinstance(text, str), f"Первый элемент — строка: {type(text)}"
     assert isinstance(tools, list), f"Второй элемент — список: {type(tools)}"
+    assert isinstance(total_tokens, int), f"Третий элемент — int токены: {type(total_tokens)}"
     assert len(text) > 0, "Текст не должен быть пустым"
 
 
@@ -371,7 +372,7 @@ def test_exec_agent_creates_task_via_tool_call():
     task = "[АВТОПИЛОТ ЦЕЛЕЙ] Продвинь цель 'Набрать 50 учеников' (30%). Действуй."
 
     with mock.patch("aiohttp.ClientSession.post", fake_post):
-        text, tools = run(ag_mod._exec_agent_for_director(agent_data, task, UID))
+        text, tools, total_tokens = run(ag_mod._exec_agent_for_director(agent_data, task, UID))
 
     assert isinstance(text, str)
     # Задача должна быть создана или упомянута в ответе
