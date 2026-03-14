@@ -374,6 +374,11 @@ class HybridAutonomousAgent:
                                     timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
                 if resp.status == 200:
                     result = await resp.json()
+                    _usage = result.get('usage', {})
+                    _pt = _usage.get('prompt_tokens', 0)
+                    _ct = _usage.get('completion_tokens', 0)
+                    _cached = _usage.get('prompt_cache_hit_tokens', 0)
+                    logger.info(f"[DEEPSEEK] call_ai prompt={_pt}(cache={_cached}) compl={_ct} model={chosen_model}")
                     if use_tools:
                         msg = result.get('choices', [{}])[0].get('message', {})
                         tcs = msg.get('tool_calls', [])
@@ -3011,7 +3016,7 @@ def _is_question_message(msg: str) -> bool:
     return False
 
 
-async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
+async def _quick_ai_call_raw(messages: list, max_tokens: int = 400, _caller: str = '') -> str:
     """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
     try:
         _sess = await _get_shared_ai_session()
@@ -3028,6 +3033,10 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 400) -> str:
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
+                    _usage = data.get('usage', {})
+                    _prompt_t = _usage.get('prompt_tokens', 0)
+                    _compl_t = _usage.get('completion_tokens', 0)
+                    logger.info(f"[DEEPSEEK] {_caller or 'quick_ai'}: prompt={_prompt_t} compl={_compl_t}")
                     return data["choices"][0]["message"]["content"].strip()
     except Exception as e:
         logger.debug("[DIRECTOR] AI call error: %s", e)
@@ -5810,7 +5819,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
                 return None  # Отмена — сброс миссии
 
-        decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250)
+        decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250, _caller='director_decision')
         if not decision_raw:
             return None
 
@@ -5969,7 +5978,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f'"my_action": "конкретное действие"}}\n'
             )
             _review_raw = await _quick_ai_call_raw(
-                [{"role": "user", "content": _review_prompt}], max_tokens=250
+                [{"role": "user", "content": _review_prompt}], max_tokens=250, _caller='director_review'
             )
 
             _review_decision = None
@@ -5990,15 +5999,14 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
             try:
                 _fu_final_text = await _quick_ai_call_raw([{
-                    "role": "user",
-                    "content": (
+                    "role": "user", "content": (
                         f"Ты ASI — директор офиса. Агент {_agent_name_d} отработал по задаче: {_task[:200]}\n"
                         f"Использованные инструменты: {_agent_did}\n"
                         f"Результат агента (уже видим пользователю): {_round_history[-1]['result'][:300] if _round_history else ''}\n\n"
                         f"Напиши 1-2 предложения от лица директора — что ты делаешь ДАЛЬШЕ. "
                         f"НЕ пересказывай что делал агент. Без markdown, без списков."
                     ),
-                }], max_tokens=150)
+                }], max_tokens=150, _caller='director_followup')
                 if _fu_final_text and len(_fu_final_text.strip()) > 10:
                     try:
                         from .utils import clean_technical_details as _ctd_fu

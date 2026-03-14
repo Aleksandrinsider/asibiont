@@ -2041,7 +2041,7 @@ class AnchorEngine:
                 from token_service import has_enough_tokens as _het_ap, spend_tokens as _sp_ap
                 from config import FREE_ACCESS_MODE as _FAM_ap
                 if not _FAM_ap:
-                    if not _het_ap(user.telegram_id, 'proactive_message', session=session):
+                    if not _het_ap(user.telegram_id, 'agent_task', session=session):
                         logger.info("[ANCHOR-AUTOPILOT] user %d: skip — not enough tokens", user.id)
                         anchor.delivered_at = datetime.now(timezone.utc)
                         session.commit()
@@ -4286,8 +4286,8 @@ class AnchorEngine:
                     except Exception:
                         pass
 
-            # ── Итоговый отчёт координатора пользователю ──
-            if _results_summary and self.bot:
+            # ── Итоговый отчёт координатора — только в AgentActivityLog, без лишнего сообщения ──
+            if _results_summary:
                 try:
                     _summ_lines = []
                     for _rs in _results_summary[:4]:
@@ -4297,11 +4297,8 @@ class AnchorEngine:
                         _rs_agent = _rs[:_colon + 1] if _colon >= 0 else ''
                         _summ_lines.append(f"• {_rs_agent} {_rs_text[:120]}" if _rs_agent else f"• {_rs_text[:120]}")
                     _g_titles = ', '.join(g['title'][:40] for g in _goals[:2]) if _goals else 'цели'
-                    _coord_report = (
-                        f"Команда завершила работу по: {_g_titles}\n\n"
-                        + '\n'.join(_summ_lines)
-                    )
-                    # Сохраняем итоговый отчёт как Interaction с автором ASI
+                    _coord_report = '\n'.join(_summ_lines)
+                    # Сохраняем итоговый отчёт как Interaction с автором ASI (БЕЗ отправки в Telegram)
                     try:
                         session.add(Interaction(
                             user_id=user.id,
@@ -4319,11 +4316,6 @@ class AnchorEngine:
                             session.rollback()
                         except Exception:
                             pass
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text=f"ASI:\n\n{_coord_report}",
-                    )
-
                     # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
                     try:
                         _intg_rec = _missing_intg_coord[0] if _missing_intg_coord else None
