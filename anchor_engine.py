@@ -7040,10 +7040,14 @@ class AnchorEngine:
             Anchor.delivered_at >= now_utc - timedelta(hours=max_cooldown)
         ).all()
 
-        # Индексируем по source (точный ключ) и по anchor_type (fallback)
-        last_delivery_by_source: dict = {}
-        last_delivery_by_type: dict = {}
+        # Индексируем по (anchor_type, source) точный ключ, по source fallback, по anchor_type глобальный fallback
+        last_delivery_by_type_source: dict = {}  # (anchor_type, source) → datetime
+        last_delivery_by_source: dict = {}        # source → datetime (fallback)
+        last_delivery_by_type: dict = {}          # anchor_type → datetime (глобальный fallback)
         for atype, asource, delivered_at in recent_deliveries:
+            ts_key = (atype, asource)
+            if ts_key not in last_delivery_by_type_source or delivered_at > last_delivery_by_type_source[ts_key]:
+                last_delivery_by_type_source[ts_key] = delivered_at
             if asource and (asource not in last_delivery_by_source or delivered_at > last_delivery_by_source[asource]):
                 last_delivery_by_source[asource] = delivered_at
             if atype not in last_delivery_by_type or delivered_at > last_delivery_by_type[atype]:
@@ -7068,27 +7072,36 @@ class AnchorEngine:
 
             cooldown_h = anchor.cooldown_hours if anchor.cooldown_hours is not None and anchor.cooldown_hours > 0 else PRIORITY_COOLDOWN.get(anchor.priority, 4)
 
-            # Приоритет: per-source cooldown → per-type fallback
-            # Якоря агентов (source=agent:{id}:custom:{entry}) получают независимый cooldown
-            if anchor.source and anchor.source in last_delivery_by_source:
-                last_delivered = last_delivery_by_source[anchor.source]
-            else:
-                # Для якорей с уникальным entity-source — type-level fallback НЕ применяем:
-                # каждая задача/цель/погода/агент имеет независимый cooldown по своей записи.
-                # ALWAYS_DELIVER_TYPES (task_deadline_soon, service_degraded и т.д.) тоже используют
-                # только per-source cooldown, чтобы уведомление о task:171 не блокировалось
-                # из-за недавней доставки task:170.
+            # Приоритет: (anchor_type, source) точный ключ → per-source fallback → per-type fallback
+            # Точный ключ гарантирует что task_reminder НЕ блокирует task_overdue у той же задачи.
+            _ts_key = (anchor.anchor_type, anchor.source)
+            if _ts_key in last_delivery_by_type_source:
+                last_delivered = last_delivery_by_type_source[_ts_key]
+            elif anchor.source and anchor.source in last_delivery_by_source:
+                # per-source fallback только для НЕ entity-источников (агенты, диспатч, ...)
                 _entity_source_prefixes = (
                     'agent:', 'dispatch:', 'autopilot:', 'agent_scheduled:',
                     'task:', 'goal:', 'weather:', 'service_health:',
-                    'email_campaign:',  # каждая кампания — независимый cooldown
+                    'email_campaign:',
+                )
+                if anchor.source.startswith(_entity_source_prefixes):
+                    # Entity-source: используем только per-(type,source) — уже проверили выше, не совпало
+                    last_delivered = None
+                else:
+                    last_delivered = last_delivery_by_source[anchor.source]
+            else:
+                # Для якорей с уникальным entity-source — type-level fallback НЕ применяем:
+                # каждая задача/цель/погода/агент имеет независимый cooldown по своей записи.
+                _entity_source_prefixes2 = (
+                    'agent:', 'dispatch:', 'autopilot:', 'agent_scheduled:',
+                    'task:', 'goal:', 'weather:', 'service_health:',
+                    'email_campaign:',
                 )
                 _no_type_fallback = (
-                    (anchor.source and anchor.source.startswith(_entity_source_prefixes))
+                    (anchor.source and anchor.source.startswith(_entity_source_prefixes2))
                     or anchor.anchor_type in ALWAYS_DELIVER_TYPES
                 )
                 if _no_type_fallback:
-                    # Конкретный entity не был доставлен недавно — разрешаем
                     last_delivered = None
                 else:
                     last_delivered = last_delivery_by_type.get(anchor.anchor_type)
