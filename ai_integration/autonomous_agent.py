@@ -1079,6 +1079,8 @@ class HybridAutonomousAgent:
                         # Не закрываем переданную извне сессию — это ответственность вызывающего
                         if 'close_session' in sig.parameters:
                             params['close_session'] = False
+                        elif 'close_session' in params:
+                            del params['close_session']  # ИИ передал, но функция не принимает
                     # Web-контекст: не отправляем изображения в Telegram при запросе с дашборда
                     if web_context and tool_name == 'generate_image' and 'send_to_telegram' in sig.parameters:
                         params['send_to_telegram'] = False

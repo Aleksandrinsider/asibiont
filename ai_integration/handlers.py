@@ -7691,7 +7691,7 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
             session.close()
 
 
-async def web_search(query: str, user_id: int = None, session=None):
+async def web_search(query: str, user_id: int = None, session=None, close_session: bool = False):
     """
     Прямой поиск в интернете — возвращает результаты с ссылками.
     Универсальный: ищет любую информацию — людей, контакты, ресурсы, статьи.
