@@ -6714,7 +6714,7 @@ except Exception as e:
             header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasDetails ? 'cursor:pointer;user-select:none;' : '');
             header.innerHTML = `
                 <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;">
-                    <span style="font-size:13px;font-weight:500;color:#1F2328;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;">${cleanTitle}</span>
+                    <span style="font-size:13px;font-weight:500;color:#1F2328;flex:1;min-width:0;word-break:break-word;">${cleanTitle}</span>
                     ${_statusBadge}
                     <span style="font-size:12px;color:#6C727F;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>
                 </div>
@@ -11228,15 +11228,12 @@ except Exception as e:
                     const isOldDelegationText = cleanDesc.match(/^(Задача|Task)\s+(от|для|на|from|for|to)\s+@?[\wА-Яа-яЁё]+$/i);
                     if (!isOldDelegationText) {
                         let shortDesc = cleanDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
-                        if (shortDesc.length > 120) {
-                            shortDesc = shortDesc.substring(0, 120) + '...';
-                        }
                         descText = shortDesc;
                     }
                 }
                 // Всегда рендерим div с id для возможности редактирования
                 const escapedFull = (task.description || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;');
-                html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069;' + (descText ? '' : ' display: none;') + '">' + escapeHtml(descText) + '</div>';
+                html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069; white-space: pre-wrap; word-break: break-word;' + (descText ? '' : ' display: none;') + '">' + escapeHtml(descText) + '</div>';
             }
             
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
