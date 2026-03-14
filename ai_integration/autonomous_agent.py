@@ -4065,17 +4065,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if len(_kb_raw) < 1000:
                     _kb_block = f"\n📚 База знаний:\n{_kb_raw[:800]}\n"
 
+        # Примеры отчёта с правильным родом (по _is_fem)
+        _ex_found   = 'Нашла' if _is_fem else 'Нашёл'
+        _ex_checked = 'Проверила' if _is_fem else 'Проверил'
+        _ex_added   = 'добавила' if _is_fem else 'добавил'
+        _ex_wrote   = 'написала' if _is_fem else 'написал'
         system_prompt = (
             f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
             f"Работаешь в команде ASI Biont. Сейчас: {_now_str}.\n"
             f"{_intg_line}\n"
             f"{_kb_block}\n"
             "Оцени задачу и свои интеграции — выбери лучший из доступных инструментов для продвижения к цели.\n"
-            "Отчёт юзеру = 2-3 предложения ФАКТОВ: что нашёл, кому написал, что узнал.\n"
+            f"Отчёт юзеру = 2-3 предложения ФАКТОВ от первого лица ({agent['name']} — пишешь О СЕБЕ в правильном роде).\n"
             "Примеры хорошего отчёта:\n"
-            "  «Проверила входящие — ответ от Марии К.: готова тестировать, просит ссылку на asibiont.com.»\n"
-            "  «В RSS нашёл статью про multi-agent на Хабре, контакт автора: user@habr.com.»\n"
-            "  «Нашёл 3 TG-группы QA (5к, 12к, 3к чел.), добавил в задачу.»\n\n"
+            f"  «{_ex_checked} входящие — ответ от Марии К.: готова тестировать, просит ссылку на asibiont.com.»\n"
+            f"  «В RSS {_ex_found.lower()} статью про multi-agent на Хабре, контакт автора: user@habr.com.»\n"
+            f"  «{_ex_found} 3 TG-группы QA (5к, 12к, 3к чел.), {_ex_added} в задачу.»\n\n"
             "⛔ ЗАПРЕЩЕНО: упоминать названия инструментов в тексте ответа (web_search, send_email, research_topic и т.д.). "
             "Пиши что СДЕЛАЛ и что РЕЗУЛЬТАТ, а не через какой инструмент.\n"
             "В письмах и ответах — используй РЕАЛЬНЫЕ данные из базы знаний (URL, описание, инструкции).\n"
@@ -4428,7 +4433,6 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _autopilot_tools = {
                 'add_task', 'complete_task', 'edit_task',
                 'update_goal_progress', 'update_goal', 'complete_goal',
-                'research_topic', 'web_search', 'quick_topic_search',
                 'delegate_task', 'run_agent_action',
             }
             # Smart extend: добавляем инструменты по специализации и интеграциям агента.
@@ -4471,6 +4475,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # CRM/маркетплейс/прочие интеграции — run_agent_action уже в core
             if any(w in _lbl_ap for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'ozon', 'wildberries', 'авито', 'shopify')):
                 _autopilot_tools.update({'find_relevant_contacts_for_task', 'save_email_contact'})
+            # web_search / research_topic — только если нет специализированных интеграций
+            # (у агента с RSS, email, TG и т.д. сначала должны идти run_agent_action)
+            _has_specialized_intg = bool(_intg_hint)  # True если у агента есть хоть одна интеграция
+            if not _has_specialized_intg:
+                _autopilot_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
             # Если у агента есть python_code или user_api_keys — run_agent_action уже в core
             logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
             try:

@@ -3429,8 +3429,19 @@ class AnchorEngine:
                             _rss_url_val = _kline.split('=', 1)[1].strip()[:80]
                             break
                 _rss_note = f', RSS={_rss_url_val}' if _rss_url_val else ''
+                # Определяем может ли агент ОТПРАВЛЯТЬ письма (SMTP/Resend/Gmail send)
+                _ag_api_keys = (getattr(_ag_obj, 'user_api_keys', '') or '') if _ag_obj else ''
+                _keys_lower = _ag_api_keys.lower()
+                _has_imap = any(k in _keys_lower for k in ('imap_', 'gmail_imap', 'yandex_imap', 'mail_'))
+                _can_send = any(k in _keys_lower for k in ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_'))
+                # Gmail/Яндекс без явного smtp_password = только чтение
+                if not _can_send and any(k in _keys_lower for k in ('gmail_', 'yandex_')):
+                    _can_send = ('smtp_password=' in _keys_lower and 'smtp_password=\n' not in _keys_lower and 'smtp_password= ' not in _keys_lower) or \
+                                ('gmail_app_password=' in _keys_lower and 'gmail_app_password=\n' not in _keys_lower)
+                _send_note = (' [отправка+чтение email]' if _can_send else
+                              ' [только чтение email]' if _has_imap else '')
                 _profiles_lines.append(
-                    f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}'
+                    f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}{_send_note}'
                     f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
                     f'{_desc_part}'
                 )
@@ -3585,11 +3596,13 @@ class AnchorEngine:
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + f"\nЗАДАЧА: Назначь каждому агенту задание исходя из его РЕАЛЬНЫХ интеграций и АКТИВНЫХ ЦЕЛЕЙ.\n"
-                "ПРИНЦИП: Каждый агент работает от своих интеграций. Агент с Gmail — может рассылать письма, "
-                "вести переписку, находить контакты. Агент с RSS — получает свежие данные из ленты, "
-                "может анализировать, исследовать, сохранять контакты авторов. "
-                "НО любой агент может использовать web_search, research_topic, add_task, update_goal_progress — "
-                "это универсальные инструменты. Выбирай задачу которая лучше всего подходит агенту под его реальные возможности.\n"
+                "ПРИНЦИП: Каждый агент работает ТОЛЬКО от своих уникальных интеграций.\n"
+                "• Агент с RSS → ПЕРВЫЙ инструмент run_agent_action (читает ленту). research_topic/web_search — только если RSS не по теме задачи.\n"
+                "• Агент с IMAP (только чтение) → check_emails, find_relevant_contacts_for_task. НЕ send_outreach_email — у него нет отправки!\n"
+                "• Агент с IMAP+SMTP или Resend/Gmail → может send_outreach_email, start_email_campaign.\n"
+                "• ASI (нет интеграций) → web_search, research_topic, find_relevant_contacts_for_task, send_outreach_email (через платформу).\n"
+                "• НЕ назначай агенту инструмент которого нет в его колонке 'инструменты' и 'интеграции'.\n"
+                "• web_search и research_topic может делать ASI — реальным агентам давай задачи по их интеграциям.\n"
                 "ВАЖНО: покрой каждую активную цель хотя бы одним конкретным шагом. "
                 "НЕ отправляй письма адресатам из списка уже_написали.\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
