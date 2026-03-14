@@ -3508,13 +3508,77 @@ class AnchorEngine:
                 except Exception:
                     pass
 
-            # ── Выполняем каждый шаг плана (до 8 агентов, нет ж. ограничения на 3) ──
+            # ── Выполняем шаги в режиме ReAct: дать задание → дождаться результата → решить следующий шаг ──
             _results_summary = []
             _all_tools = []
             _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
-            _max_steps = min(len(_plan), max(len(real_agents) + 1, 8))
+            _MAX_DYNAMIC_STEPS = 6
 
-            for _step in _plan[:_max_steps]:
+            _step_queue = list(_plan[:1])  # Берём только ПЕРВЫЙ шаг из плана — остальные решаем динамически
+
+            _executed = 0
+            while _executed < _MAX_DYNAMIC_STEPS:
+                # ── Получаем следующий шаг ──
+                if _step_queue:
+                    _step = _step_queue.pop(0)
+                elif _executed > 0 and _prev_steps_context:
+                    # ── Динамическое решение следующего шага на основе накопленных результатов ──
+                    try:
+                        _agents_avail_str = '\n'.join(
+                            f"  {_pr['name']} — {_pr.get('job', 'специалист')}"
+                            for _pr in _profiles
+                        )
+                        _goals_remain_str = '\n'.join(
+                            f"  • {_g['title']} ({_g.get('progress', 0)}%)"
+                            for _g in _goals[:5]
+                        )
+                        _done_str = _prev_steps_context.strip()
+                        _domains_hint = '\n'.join(
+                            f"  Цель «{_g['title'][:40]}» → {_DOMAIN_TOOL_MAP.get(_domain, 'web_search')}"
+                            for _g in _goals[:3]
+                            for _domain, _kws in _DOMAIN_TOOLS.items()
+                            if any(w in (_g.get('title','') + ' ' + _g.get('description','')).lower() for w in _kws)
+                        )
+                        _next_prompt = (
+                            f"Ты — координатор ASI. Команда только что сделала:\n{_done_str}\n\n"
+                            f"Активные цели:\n{_goals_remain_str}\n\n"
+                            f"Доступные агенты:\n{_agents_avail_str}\n\n"
+                            + (f"Рекомендуемые инструменты по целям:\n{_domains_hint}\n\n" if _domains_hint else '')
+                            + f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
+                            f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
+                            f"Если цели достаточно продвинуты или нет смысла продолжать — верни {{\"done\": true}}.\n"
+                            f"Если нужен ещё шаг — верни ОДИН JSON-объект:\n"
+                            f'[{{"agent": "имя_агента", "task": "конкретная задача 2-3 предложения с учётом уже сделанного", '
+                            f'"tool": "главный_инструмент", "goal": "точное название цели"}}]\n'
+                            f'Точные названия целей: {"; ".join(repr(g["title"]) for g in _goals[:5])}'
+                        )
+                        _next_raw = await asyncio.wait_for(
+                            _quick_ai_call_raw([{"role": "user", "content": _next_prompt}], max_tokens=200),
+                            timeout=12,
+                        )
+                        _next_raw = _next_raw or ''
+                        if '"done"' in _next_raw.lower() and 'true' in _next_raw.lower():
+                            logger.info("[COORD] dynamic: done after %d steps", _executed)
+                            break
+                        import re as _re_dyn
+                        _nm = _re_dyn.search(r'\[[\s\S]*?\]', _next_raw)
+                        if _nm:
+                            _next_parsed = json.loads(_nm.group())
+                            if _next_parsed:
+                                _step = _next_parsed[0]
+                                logger.info("[COORD] dynamic next step %d: %s → %s",
+                                            _executed + 1, _step.get('agent'), _step.get('tool'))
+                            else:
+                                break
+                        else:
+                            break
+                    except Exception as _dyn_e:
+                        logger.debug("[COORD] dynamic next step error: %s", _dyn_e)
+                        break
+                else:
+                    break
+
+                _executed += 1
                 _ag_name = (_step.get('agent') or '').strip()
                 _ag_task = (_step.get('task') or '').strip()
                 _tool_hint = (_step.get('tool') or '').strip()
