@@ -385,7 +385,7 @@ class HybridAutonomousAgent:
                     return result
                 error = await resp.text()
                 if resp.status < 500 or _attempt >= 1:
-                    raise Exception(f"AI call failed: {resp.status} {error}")
+                    raise Exception(f"AI call failed: {resp.status} {error[:200]}")
                 logger.warning(f"[AI] Server error {resp.status}, retrying...")
                 await asyncio.sleep(2)
           except asyncio.TimeoutError:
