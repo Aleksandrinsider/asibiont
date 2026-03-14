@@ -1250,29 +1250,39 @@ class AnchorEngine:
         # Gap check по DELIVERED autopilot-якорям — надёжнее чем Interaction content.
         # Cooldown на source уже блокирует, но этот guard — двойная защита.
         if autopilot_anchors:
-            _ap_gap_ok = True
-            try:
-                _last_ap_delivered = session.query(Anchor.delivered_at).filter(
-                    Anchor.user_id == user.id,
-                    Anchor.anchor_type == 'goal_autopilot_review',
-                    Anchor.delivered_at.isnot(None),
-                ).order_by(Anchor.delivered_at.desc()).first()
-                if _last_ap_delivered:
-                    _ap_time = _last_ap_delivered[0]
-                    if _ap_time.tzinfo is None:
-                        _ap_time = _ap_time.replace(tzinfo=timezone.utc)
-                    _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
-                    if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
-                        _ap_gap_ok = False
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
-            except Exception:
-                pass
+            # ── GUARD: проверяем флаг прямо перед dispatch (мог быть выключен после создания якоря) ──
+            _profile_recheck = session.query(UserProfile).filter_by(user_id=user.id).first()
+            _autopilot_still_on = _profile_recheck and getattr(_profile_recheck, 'goal_autopilot_enabled', False)
+            if not _autopilot_still_on:
+                logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot anchors skipped — goal_autopilot_enabled=False (disabled after anchor was created)")
+                # Помечаем как delivered чтобы не накапливались в БД
+                for _ap in autopilot_anchors:
+                    _ap.delivered_at = datetime.now(timezone.utc)
+                session.commit()
+            else:
+                _ap_gap_ok = True
+                try:
+                    _last_ap_delivered = session.query(Anchor.delivered_at).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == 'goal_autopilot_review',
+                        Anchor.delivered_at.isnot(None),
+                    ).order_by(Anchor.delivered_at.desc()).first()
+                    if _last_ap_delivered:
+                        _ap_time = _last_ap_delivered[0]
+                        if _ap_time.tzinfo is None:
+                            _ap_time = _ap_time.replace(tzinfo=timezone.utc)
+                        _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
+                        if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
+                            _ap_gap_ok = False
+                            logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
+                except Exception:
+                    pass
 
-            if _ap_gap_ok:
-                logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
-                for _ap in autopilot_anchors[:1]:
-                    async with self._ai_semaphore:
-                        await self._dispatch_agent_for_anchor(user, _ap, session)
+                if _ap_gap_ok:
+                    logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
+                    for _ap in autopilot_anchors[:1]:
+                        async with self._ai_semaphore:
+                            await self._dispatch_agent_for_anchor(user, _ap, session)
 
         # ── 3b2. CUSTOM AGENT ANCHORS — агент пишет первым с инструментами ──
         # custom_anchor создаёт якорь для конкретного агента (из UserAgent.custom_anchors).
