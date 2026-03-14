@@ -3056,28 +3056,81 @@ class AnchorEngine:
             # ASI анализирует результат и решает кому передать
             from ai_integration.autonomous_agent import _quick_ai_call_raw
             import re as _re2
-            _agents_desc = ', '.join(
-                f"{a.name} ({a.job_title or a.specialization or '?'})"
-                for a in agents if getattr(a, 'id', 0) != getattr(prev_agent, 'id', -1)
-            )
+            import types as _types_chain
 
-            # ── Быстрый детектор: нашли email-контакты → email-агент без AI-анализа ──
+            # ── Аннотируем агентов по реальным возможностям (send vs read) ──
+            def _chain_agent_note(a) -> str:
+                _k = (getattr(a, 'user_api_keys', '') or '').lower()
+                _t = (getattr(a, 'tools_allowed', '') or '').lower()
+                _SEND_KEYS = ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_')
+                _READ_KEYS = ('imap_', 'gmail_imap', 'yandex_imap')
+                _gmail_send = ('gmail_app_password=' in _k and
+                               'gmail_app_password=\n' not in _k and
+                               'gmail_app_password= ' not in _k)
+                if any(s in _k for s in _SEND_KEYS) or _gmail_send:
+                    return ' [отправляет email]'
+                if any(r in _k for r in _READ_KEYS) or any(m in _k for m in ('gmail_', 'yandex_')):
+                    return ' [только читает email — НЕ отправляет]'
+                if 'send_outreach_email' in _t:
+                    return ' [отправляет email через платформу]'
+                return ''
+
+            _agents_desc = ', '.join(
+                f"{a.name} ({a.job_title or a.specialization or '?'}){_chain_agent_note(a)}"
+                for a in agents if getattr(a, 'id', 0) != getattr(prev_agent, 'id', -1)
+            ) + ', ASI (координатор, отправляет письма через платформу Resend)'
+
+            # ── Быстрый детектор: нашли email-контакты → находим кто УМЕЕТ ОТПРАВЛЯТЬ ──
+            # Принципиально: IMAP (Gmail read-only) ≠ отправка.
+            # Приоритеты: 1) агент с ключами SMTP/Resend/Sendgrid, 2) агент с send_outreach_email в tools,
+            #             3) ASI через платформу Resend (всегда доступно).
             _found_emails = _re2.findall(
                 r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-.]{2,}', result
             )
             _email_agent_relay = None
             if _found_emails:
-                _EMAIL_RELAY_CAPS = ('imap', 'gmail', 'smtp', 'mail', 'yandex', 'почт', 'mailru')
+                _SEND_KEY_CAPS = ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_')
+                _relay_p1 = None   # агент с явными SEND-ключами (SMTP/Resend/Sendgrid)
+                _relay_p2 = None   # агент с send_outreach_email в tools_allowed
                 for _ag_r in agents:
                     if getattr(_ag_r, 'id', 0) == getattr(prev_agent, 'id', -1):
                         continue
                     _ag_r_keys = (getattr(_ag_r, 'user_api_keys', '') or '').lower()
-                    _ag_r_script = (getattr(_ag_r, 'python_code', '') or '').lower()
                     _ag_r_tools = (getattr(_ag_r, 'tools_allowed', '') or '').lower()
-                    if any(k in _ag_r_keys or k in _ag_r_script or k in _ag_r_tools
-                           for k in _EMAIL_RELAY_CAPS):
-                        _email_agent_relay = _ag_r
+                    _gmail_can_send_r = (
+                        'gmail_' in _ag_r_keys and
+                        'gmail_app_password=' in _ag_r_keys and
+                        'gmail_app_password=\n' not in _ag_r_keys and
+                        'gmail_app_password= ' not in _ag_r_keys
+                    )
+                    if any(k in _ag_r_keys for k in _SEND_KEY_CAPS) or _gmail_can_send_r:
+                        _relay_p1 = _ag_r
                         break
+                    if not _relay_p2 and 'send_outreach_email' in _ag_r_tools:
+                        _relay_p2 = _ag_r
+                _email_agent_relay = _relay_p1 or _relay_p2
+                if not _email_agent_relay:
+                    # Ни у кого нет send-способности → ASI отправит через платформу Resend
+                    _email_agent_relay = _types_chain.SimpleNamespace(
+                        id=0, name='ASI',
+                        job_title='AI-координатор',
+                        specialization='outreach через Resend',
+                        description='Отправляет outreach-письма через платформу (Resend).',
+                        personality='', python_code='', user_api_keys='', avatar_url='',
+                        tools_allowed=('["send_outreach_email","negotiate_by_email",'
+                                       '"start_email_campaign","add_email_leads",'
+                                       '"save_email_contact","update_goal_progress",'
+                                       '"find_relevant_contacts_for_task"]'),
+                        search_scope='',
+                    )
+                    logger.info(
+                        "[ANCHOR-CHAIN] contact-relay: no send-capable agent → ASI will send via Resend",
+                    )
+                else:
+                    logger.info(
+                        "[ANCHOR-CHAIN] contact-relay: %s found %d emails → %s",
+                        prev_agent.name, len(_found_emails), _email_agent_relay.name,
+                    )
 
             _decision: dict = {}
             if _email_agent_relay and _found_emails:
@@ -3131,12 +3184,15 @@ class AnchorEngine:
             if '[АВТОПИЛОТ]' not in _next_task:
                 _next_task = f'[АВТОПИЛОТ] {_next_task}'
 
-            # Находим следующего агента
+            # Находим следующего агента (ASI — синтетический объект, не в списке)
             _next_ag = None
-            for ag in agents:
-                if ag.name.lower() == _next_name.lower():
-                    _next_ag = ag
-                    break
+            if _next_name.upper() == 'ASI' and _email_agent_relay and getattr(_email_agent_relay, 'id', -1) == 0:
+                _next_ag = _email_agent_relay
+            else:
+                for ag in agents:
+                    if ag.name.lower() == _next_name.lower():
+                        _next_ag = ag
+                        break
             if not _next_ag:
                 return
 
