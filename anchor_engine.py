@@ -444,13 +444,67 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _force_analyse = False
     if len(_last_tools) >= 3 and len(set(_last_tools[-3:])) == 1:
         _force_analyse = True
-    # Детектор "web_search → update_goal_progress" cycling (типичная унылая петля)
+    # Детектор типичных унылых петель:
+    _SEARCH_ONLY = {'web_search', 'quick_topic_search', 'research_topic', 'get_news_trends'}
+    _SAVE_ONLY   = {'save_email_contact', 'add_email_leads', 'add_task'}
+    _PROGRESS_ONLY = {'update_goal_progress'}
+    _last4 = _last_tools[-4:]
+    _last5 = _last_tools[-5:]
     _is_trivial_loop = (
-        len(_last_tools) >= 4
-        and all(t in ('web_search', 'update_goal_progress', 'quick_topic_search') for t in _last_tools[-4:])
+        # Только поиск + обновление прогресса
+        (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _PROGRESS_ONLY for t in _last4))
+        # Поиск → сохранить: цикл без отправки
+        or (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _SAVE_ONLY for t in _last4)
+            and not any(t in ('send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users')
+                        for t in _last_tools))
+        # Только сохранение контактов без отправки (частая получасть collecting-агенте)
+        or (len(_last5) >= 5 and all(t in _SAVE_ONLY for t in _last5))
     )
     if _is_trivial_loop:
         _force_analyse = True
+
+    # Инструменты которые агент ЕЩЁ НЕ пробовал — сортированные по полезности
+    _ALL_ACTION_TOOLS = [
+        'send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users',
+        'start_email_campaign', 'start_content_campaign', 'generate_marketing_content',
+        'create_post', 'publish_to_telegram', 'find_partners', 'start_delegation_campaign',
+        'find_relevant_contacts_for_task', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
+        'send_follow_up_email', 'schedule_background_task', 'set_contact_alert',
+        'research_topic', 'quick_topic_search', 'get_news_trends', 'web_search',
+        'generate_image', 'publish_to_discord', 'list_email_contacts',
+        'add_task', 'save_email_contact', 'update_goal_progress',
+    ]
+    _used_tools = set(_tool_cnt.keys())
+    _untried = [t for t in _ALL_ACTION_TOOLS if t not in _used_tools and t not in _banned]
+    _untried_block = ''
+    if _untried and agent_history:  # показываем только если есть история (есть что менять)
+        _untried_show = _untried[:8]
+        _untried_block = (
+            f"\n✨ ЕЩЁ НЕ ПРОБОВАЛ (0 раз за всё время): "
+            + ', '.join(_untried_show)
+            + ('...' if len(_untried) > 8 else '')
+            + "\nСмело попробуй любой из них — разнообразие = результат.\n"
+        )
+
+    # Goal-state директива: если прогресс 0% и нет действий с людьми → принципиально другой подход
+    _goal_state_hint = ''
+    if goals_summary:
+        _zero_progress = [g for g in goals_summary if (g.get('progress', 0) or 0) == 0]
+        _stuck_goals = [g for g in goals_summary if (g.get('progress', 0) or 0) < 10]
+        _has_outreach_done = any(t in ('send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users')
+                                  for t in _used_tools)
+        _has_search_done = any(t in ('web_search', 'research_topic', 'quick_topic_search') for t in _used_tools)
+        if _zero_progress and not _has_outreach_done and _has_search_done:
+            _goal_state_hint = (
+                "\n🚨 ПРОГРЕСС 0%: поиск сделан, но контактов ещё не было. "
+                "Следующий шаг — выход на людей: "
+                "find_relevant_contacts_for_task → send_outreach_email / find_and_message_relevant_users.\n"
+            )
+        elif _stuck_goals and agent_history and len(agent_history) >= 4 and not _has_outreach_done:
+            _goal_state_hint = (
+                "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
+                "Пора действовать: find_relevant_contacts_for_task или find_and_message_relevant_users.\n"
+            )
 
     def _ti(name: str) -> str:
         """Помечает заблокированный инструмент."""
@@ -556,11 +610,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + '\n'.join(_mem_lines) + '\n'
         )
         if _force_analyse:
+            # Предлагаем конкретные альтернативы из неиспользованных
+            _alts = [t for t in [
+                'find_and_message_relevant_users', 'send_outreach_email', 'negotiate_by_email',
+                'start_content_campaign', 'generate_marketing_content', 'find_partners',
+                'start_delegation_campaign', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
+                'schedule_background_task', 'get_news_trends', 'find_relevant_contacts_for_task',
+            ] if t not in _used_tools][:5]
+            _alts_str = ', '.join(_alts) if _alts else 'research_and_plan, analyze_situation_and_suggest_tasks'
             _memory_block += (
                 "🔴 ПЕТЛЯ ОБНАРУЖЕНА: ты повторяешь одни и те же инструменты без прогресса!\n"
-                "→ ОБЯЗАТЕЛЬНЫЙ следующий шаг: вызови analyze_situation_and_suggest_tasks ИЛИ research_and_plan\n"
-                "   чтобы осмыслить накопленные данные и выработать НОВУЮ стратегию.\n"
-                "   После анализа — update_goal_progress с выводами.\n"
+                f"→ НЕМЕДЛЕННО примени ЛЮБОЙ из этих (ты ещё не пробовал!): {_alts_str}\n"
+                "Правило при застревании: роль вторична, важен результат — выеди за рамки специализации если надо.\n"
             )
         elif _banned:
             _memory_block += (
@@ -569,6 +630,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
         if _warn and not _force_analyse:
             _memory_block += f"⚠️ Использовано по 1 разу — лучше попробовать новое: {', '.join(sorted(_warn))}\n"
+        _memory_block += _untried_block
 
     # ── Имена целей для привязки задач ──
     _first_goal_title = goals_summary[0].get('title', '') if goals_summary else ''
@@ -578,14 +640,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{'Твои интеграции/специализация: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
+        f"{_goal_state_hint}"
         f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
-        "2. Работай ПО СВОЕЙ РОЛИ и специализации — не выходи за рамки профиля.\n"
-        "   Аналитик — анализирует, исследует, оценивает. Маркетолог — контент, аудитория.\n"
-        "   HR/рекрутер — поиск людей. Если задача не твоя — делегируй коллеге.\n"
+        "2. Работай ПО СВОЕЙ РОЛИ и специализации как первый приоритет.\n"
+        "   НО: если в своей нише застрял или нет нужного инструмента — "
+        "выходи за рамки роли и используй ВЕСЬ каталог выше. Результат важнее роли.\n"
         "3. Задания МОГУТ БЫТЬ КОСВЕННЫМИ: изучи тренды → предложи темы, найди экспертов → сохрани,\n"
         "   проанализируй конкурентов → сделай вывод. НЕ ОБЯЗАТЕЛЬНО прямые массовые действия.\n"
         "4. Сам анализируй каталог и выбирай лучшую цепочку под свою цель и интеграции.\n"
