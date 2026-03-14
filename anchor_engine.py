@@ -9195,6 +9195,26 @@ class AnchorEngine:
 
                     source = f'agent:{agent.id}:custom:{entry_id}'
 
+                    # ── COOLDOWN GUARD по delivered_at ──
+                    # Дедупликация existing_keys защищает только пока якорь не доставлен.
+                    # После доставки source исчезает из existing_keys → без этой проверки
+                    # новый якорь создаётся через 5 мин (следующий скан), игнорируя cooldown.
+                    try:
+                        _last_delivered = session.query(Anchor.delivered_at).filter(
+                            Anchor.user_id == user.id,
+                            Anchor.source == source,
+                            Anchor.delivered_at.isnot(None),
+                        ).order_by(Anchor.delivered_at.desc()).first()
+                        if _last_delivered:
+                            _ld_time = _last_delivered[0]
+                            if _ld_time.tzinfo is None:
+                                _ld_time = _ld_time.replace(tzinfo=timezone.utc)
+                            _gap_h = (now_utc - _ld_time).total_seconds() / 3600
+                            if _gap_h < cooldown_h:
+                                continue  # ещё рано — кулдаун не прошёл
+                    except Exception:
+                        pass
+
                     extra_data = {'agent_name': agent.name, 'agent_id': agent.id, 'entry_id': entry_id}
                     if isinstance(entry.get('data'), dict):
                         extra_data.update(entry['data'])
