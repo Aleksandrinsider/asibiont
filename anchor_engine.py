@@ -608,6 +608,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            if _has_imap else '')
         + (f"10. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
            if _first_goal_title else "")
+        + "12. КОМАНДНАЯ ЭСТАФЕТА: если нашёл email-адрес или контакт — "
+          "не держи данные у себя! Сразу делегируй коллеге с email-интеграцией:\n"
+          "   DELEGATE[Имя]: Отправь письмо name@domain.com — [суть предложения в 1-2 предложениях].\n"
+          "   Или укажи адрес в отчёте явно: КОНТАКТ: name@domain.com — ASI передаст его коллеге.\n"
+          "   Коллеги с письмами работают в паре с коллегами-искателями — это командная работа.\n"
     )
 
 # Группы батчинга
@@ -3050,34 +3055,70 @@ class AnchorEngine:
 
             # ASI анализирует результат и решает кому передать
             from ai_integration.autonomous_agent import _quick_ai_call_raw
+            import re as _re2
             _agents_desc = ', '.join(
                 f"{a.name} ({a.job_title or a.specialization or '?'})"
                 for a in agents if getattr(a, 'id', 0) != getattr(prev_agent, 'id', -1)
             )
-            _analysis = await _quick_ai_call_raw([{
-                "role": "user",
-                "content": (
-                    f"Задача: {task_text[:200]}\n"
-                    f"{prev_agent.name} сделал: {result[:400]}\n\n"
-                    f"Команда: {_agents_desc}\n\n"
-                    "Результат достаточен или нужен другой агент для следующего шага?\n"
-                    "Примеры цепочек: исследование → задачи; поиск контактов → письма; анализ → контент.\n"
-                    "Если задача решена — {\"continue\": false}\n"
-                    "Если нужен агент — {\"continue\": true, \"agent_name\": \"имя\", "
-                    "\"task\": \"конкретное задание на основе результата\"}\n"
-                    "JSON:"
-                ),
-            }], max_tokens=120)
 
-            if not _analysis:
-                return
+            # ── Быстрый детектор: нашли email-контакты → email-агент без AI-анализа ──
+            _found_emails = _re2.findall(
+                r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-.]{2,}', result
+            )
+            _email_agent_relay = None
+            if _found_emails:
+                _EMAIL_RELAY_CAPS = ('imap', 'gmail', 'smtp', 'mail', 'yandex', 'почт', 'mailru')
+                for _ag_r in agents:
+                    if getattr(_ag_r, 'id', 0) == getattr(prev_agent, 'id', -1):
+                        continue
+                    _ag_r_keys = (getattr(_ag_r, 'user_api_keys', '') or '').lower()
+                    _ag_r_script = (getattr(_ag_r, 'python_code', '') or '').lower()
+                    _ag_r_tools = (getattr(_ag_r, 'tools_allowed', '') or '').lower()
+                    if any(k in _ag_r_keys or k in _ag_r_script or k in _ag_r_tools
+                           for k in _EMAIL_RELAY_CAPS):
+                        _email_agent_relay = _ag_r
+                        break
 
-            # Парсим решение
-            import re as _re2
-            _m = _re2.search(r'\{[\s\S]*?\}', _analysis)
-            if not _m:
-                return
-            _decision = json.loads(_m.group())
+            _decision: dict = {}
+            if _email_agent_relay and _found_emails:
+                _emails_relay_str = ', '.join(_found_emails[:5])
+                _decision = {
+                    'continue': True,
+                    'agent_name': _email_agent_relay.name,
+                    'task': (
+                        f"Отправь письма контактам, которых только что нашёл {prev_agent.name}: "
+                        f"{_emails_relay_str}. "
+                        f"Используй send_outreach_email или negotiate_by_email."
+                    ),
+                }
+                logger.info(
+                    "[ANCHOR-CHAIN] contact-relay: %s found %d emails → %s",
+                    prev_agent.name, len(_found_emails), _email_agent_relay.name,
+                )
+            else:
+                _analysis = await _quick_ai_call_raw([{
+                    "role": "user",
+                    "content": (
+                        f"Задача: {task_text[:200]}\n"
+                        f"{prev_agent.name} сделал: {result[:400]}\n\n"
+                        f"Команда: {_agents_desc}\n\n"
+                        "Результат достаточен или нужен другой агент для следующего шага?\n"
+                        "Примеры цепочек: исследование → задачи; поиск контактов → письма; анализ → контент.\n"
+                        "Если задача решена — {\"continue\": false}\n"
+                        "Если нужен агент — {\"continue\": true, \"agent_name\": \"имя\", "
+                        "\"task\": \"конкретное задание на основе результата\"}\n"
+                        "JSON:"
+                    ),
+                }], max_tokens=120)
+
+                if not _analysis:
+                    return
+
+                _m = _re2.search(r'\{[\s\S]*?\}', _analysis)
+                if not _m:
+                    return
+                _decision = json.loads(_m.group())
+
             if not _decision.get('continue'):
                 return
 
@@ -3145,9 +3186,14 @@ class AnchorEngine:
             }
             _ctx = (
                 f"Данные от коллеги {prev_agent.name}:\n{result[:300]}\n\n"
-                f"Если есть email/контакт/ссылка в данных выше — используй их немедленно: действуй инструментом.\n"
-                f"Если данных нет — сделай следующий самостоятельный шаг по цели.\n"
-                f"Сообщай пользователю только КОНКРЕТНЫЕ факты: что сделал, что нашёл, кому написал."
+                + (
+                    f"📧 КОНТАКТЫ ДЛЯ ОТПРАВКИ ПРЯМО СЕЙЧАС: {', '.join(_found_emails[:5])}\n"
+                    f"→ Твоя задача: вызови send_outreach_email или negotiate_by_email для каждого из них!\n\n"
+                    if _found_emails and _email_agent_relay else ""
+                )
+                + "Если есть email/контакт/ссылка в данных выше — используй их немедленно: действуй инструментом.\n"
+                + "Если данных нет — сделай следующий самостоятельный шаг по цели.\n"
+                + "Сообщай пользователю только КОНКРЕТНЫЕ факты: что сделал, что нашёл, кому написал."
             )
 
             # ── Уведомление о передаче между агентами ──
