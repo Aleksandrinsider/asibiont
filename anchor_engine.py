@@ -589,12 +589,19 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "3. Задания МОГУТ БЫТЬ КОСВЕННЫМИ: изучи тренды → предложи темы, найди экспертов → сохрани,\n"
         "   проанализируй конкурентов → сделай вывод. НЕ ОБЯЗАТЕЛЬНО прямые массовые действия.\n"
         "4. Сам анализируй каталог и выбирай лучшую цепочку под свою цель и интеграции.\n"
-        "5. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress.\n"
+        "5. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress (максимум ОДИН раз за сессию).\n"
         "6. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
         "7. Каждый цикл = другие инструменты: если уже делал web_search → пробуй research_topic, "
         "negotiate_by_email, find_and_message_relevant_users, start_content_campaign и т.д.\n"
         "8. НЕ пиши одним и тем же людям повторно.\n"
         "9. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
+        + ("10. У тебя RSS-лента — после run_agent_action (RSS) ОБЯЗАТЕЛЬНО вызови save_email_contact "
+           "для каждого найденного автора/источника. Без сохранения данные потеряются!\n"
+           if _has_rss else '')
+        + ("11. Если активная email-кампания уже существует И в базе есть контакты — "
+           "вызови send_outreach_email НАПРЯМУЮ конкретным людям из find_relevant_contacts_for_task. "
+           "НЕ запускай новую кампанию — пиши персонально!\n"
+           if _has_imap else '')
         + (f"10. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
            if _first_goal_title else "")
     )
@@ -3311,7 +3318,7 @@ class AnchorEngine:
                 'sales':    ('продаж', 'лид', 'партнёр', 'сделка', 'b2b', 'outreach'),
             }
             _DOMAIN_TOOL_MAP = {
-                'finance':  'Используй: web_search/research_topic/get_news_trends (анализ рынка), run_agent_action (котировки). НЕ email.',
+                'finance':  'Используй: research_topic (основной!), get_news_trends, web_search. Если есть RSS с финансовой лентой — run_agent_action первым. НЕ email для анализа.',
                 'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
                 'dev':      'Используй: run_agent_action (GitHub API: search_users), find_relevant_contacts_for_task. GitHub Token есть у агента.',
                 'people':   'Если у агента GITHUB_TOKEN → сначала run_agent_action (GitHub API: search_users?q=language:python+topic:AI) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
@@ -3381,6 +3388,9 @@ class AnchorEngine:
                 "7. НЕ назначай email-инструменты агенту без Gmail/SMTP ключей.\n"
                 "8. НЕ отправляй письма адресатам из 'уже получили письма'.\n"
                 "9. Если email-кампаний нет → email-агент ОБЯЗАН вызвать start_email_campaign.\n"
+                f"   Если кампания УЖЕ АКТИВНА и контактов в базе {_known_contacts} шт. → "
+                "email-агент ОБЯЗАН вызвать find_relevant_contacts_for_task + send_outreach_email персонально. "
+                "НЕ создавать ещё одну кампанию — писать живым людям из базы!\n"
                 "10. Для RSS-агента: run_agent_action(action='get_latest') — загрузить ленту и найти контакты. "
                 "ВАЖНО: RSS-агент не имеет финансовых API — для финансовых/нефтяных данных tool='web_search', НЕ run_agent_action.\n"
                 "11. 🔴 ОБЯЗАТЕЛЬНО: каждая цель из списка ДОЛЖНА получить минимум одно задание.\n"
