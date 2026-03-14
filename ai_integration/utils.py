@@ -410,6 +410,9 @@ def clean_technical_details(text):
     
     # Эмодзи НЕ удаляем — агент может использовать их когда уместно
     
+    # Удаляем аннотации инструментов если LLM скопировал формат из истории: [Действия: ...]
+    text = re.sub(r'^\[Действия:[^\]]*\]\s*', '', text)
+
     # Удаляем технические префиксы tool-результатов если они протекли в финальный ответ
     text = re.sub(r'^TASK_UPDATED:\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'^TASK_DELETED:\s*', '', text, flags=re.MULTILINE)

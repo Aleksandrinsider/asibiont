@@ -5721,9 +5721,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 lambda m: m.group(1) + m.group(2).lower(),
                 _dm_display,
             )
-            await _send_visible(_dm_display)
-            _save_interaction_for_director(user_id, _dm_display, message_type='ai')
-            await asyncio.sleep(0.3)
+            # Только логируем в БД (agent_msg не показывается как основной ответ чата),
+            # не отправляем _send_visible — директорское обращение к агенту внутреннее
+            _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
 
         # Списываем токены за запуск агента директором
         try:
@@ -5939,6 +5939,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
             "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
             "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
+            "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
+            "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
             "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
             "director_message: живое КОРОТКОЕ обращение — 'Имя, глагол + суть' (10-15 слов, без копипаста agent_task).\n"
             "director_message — пример: 'Марк, найди 5 площадок где сидят AI-энтузиасты и напиши им'. НЕ: 'Марк, Найти и привлечь тестировщиков'.\n"
@@ -5957,6 +5959,24 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
                             'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
         _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
+
+        # Пре-фильтр: "займитесь сами/без меня/действуйте" без имени агента → всегда self
+        _self_phrases = ('займитесь', 'занимайтесь', 'работайте без меня', 'действуйте сами',
+                         'работайте сами', 'без меня', 'действуйте')
+        _is_autopilot_confirm = any(p in _ml_lower for p in _self_phrases) and not any(
+            a.get('name', '').lower() in _ml_lower for a in _agents
+        )
+        if _is_autopilot_confirm:
+            return None  # process_request ответит коротким подтверждением автопилота
+
+        # Пре-фильтр: личные достижения → только ASI умеет complete_task
+        _achievement_words = ('я заказал', 'я купил', 'я оплатил', 'я позвонил', 'я написал',
+                              'я отправил', 'я настроил', 'я прошёл', 'я починил', 'я записался',
+                              'я сделал', 'я выполнил', 'я завершил', 'я приготовил', 'я убрал')
+        _is_achievement = any(_ml_lower.startswith(p) or f' {p} ' in _ml_lower for p in _achievement_words)
+        if _is_achievement:
+            return None  # process_request вызовет complete_task
+
         if _is_trivial:
             _has_active_mission = False
             _mission_context = ''
