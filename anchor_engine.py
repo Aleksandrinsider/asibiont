@@ -1890,11 +1890,14 @@ class AnchorEngine:
                         # ── Скоринг: способности агента × потребности goal ──
                         def _capability_score(a):
                             aid = getattr(a, 'id', 0)
-                            if aid == 0:
-                                return 0  # ASI = координатор, базовый скор без бонуса
                             _api = (getattr(a, 'user_api_keys', '') or '').lower()
                             _pc = (getattr(a, 'python_code', '') or '').lower()
                             score = 0
+                            if aid == 0:
+                                # ASI — координатор: базовый скор = 1 (поиск),
+                                # чтобы не застревал в конце ротации навсегда.
+                                # Специализированные агенты с интеграциями (score≥3) всё равно приоритетнее.
+                                return 1
                             if 'email' in _needs:
                                 if any(w in _api for w in ('gmail', 'imap', 'smtp', 'resend', 'mail')):
                                     score += 3
@@ -1911,12 +1914,19 @@ class AnchorEngine:
                                 score += 1  # агенты с python_code могут делать доп. исследования
                             return score
 
+                        # Вычисляем медианный id реальных агентов для ASI-tie_break
+                        _real_ids = sorted(getattr(a2, 'id', 1) for a2 in _rotation_pool if getattr(a2, 'id', 0) != 0)
+                        _asi_tie = _real_ids[len(_real_ids) // 2] if _real_ids else 1
+
                         def _rr_key(a):
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 50
                             cap_bonus = _capability_score(a) * 10  # capability даёт бонус
-                            tie_break = aid if aid != 0 else 99999
+                            # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
+                            # ASI участвует в ротации наравне, но специализированные агенты
+                            # получают приоритет через cap_bonus, а не через tie_break.
+                            tie_break = aid if aid != 0 else _asi_tie
                             return (cnt + fail_penalty - cap_bonus, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content

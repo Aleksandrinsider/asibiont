@@ -3179,7 +3179,12 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         line = line.strip()
         if '=' not in line or line.startswith('#'):
             continue
-        key = line.split('=')[0].upper()
+        key, _, val = line.partition('=')
+        key = key.strip().upper()
+        val = val.strip()
+        # Пропускаем пустые значения и явные заглушки — интеграция не настроена
+        if not val or len(val) < 4 or val.lower() in ('none', 'null', 'your_key_here', 'xxx', '...'):
+            continue
         for prefix, label in _INTEGRATION_LABELS.items():
             if key.startswith(prefix):
                 found.add(label)
@@ -4534,6 +4539,49 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     logger.info('[DIRECTOR] Smart filter for %s: inferred %d tools from spec', agent.get('name'), len(_inferred_tools))
                 except Exception:
                     pass
+
+    # ── Кросс-сессионный бан инструментов: агент использовал одно и то же 2+ раз за 24ч
+    # → исключаем из видимых, чтобы AI искал новые подходы (а не повторял провальную стратегию)
+    if _is_autopilot_task and agent.get('id'):
+        try:
+            from models import Session as _DBan, AgentActivityLog as _ALog_ban
+            import re as _re_ban
+            from datetime import datetime as _dt_ban, timezone as _tz_ban, timedelta as _td_ban
+            _db_ban = _DBan()
+            try:
+                _recent_logs_ban = _db_ban.query(_ALog_ban).filter(
+                    _ALog_ban.user_id == user_id,
+                    _ALog_ban.ref_id == agent['id'],
+                    _ALog_ban.created_at >= _dt_ban.now(_tz_ban.utc) - _td_ban(hours=24),
+                ).order_by(_ALog_ban.created_at.desc()).limit(20).all()
+                _ban_counts: dict = {}
+                for _bl in _recent_logs_ban:
+                    _tm_b = _re_ban.search(r'\[([^\]]+)\]', _bl.content or '')
+                    if _tm_b:
+                        for _t_b in _tm_b.group(1).split(','):
+                            _t_b = _t_b.strip()
+                            if _t_b:
+                                _ban_counts[_t_b] = _ban_counts.get(_t_b, 0) + 1
+                _runtime_banned = {t for t, n in _ban_counts.items() if n >= 2}
+                # Не баним core-инструменты (прогресс, задачи) даже при повторах
+                _runtime_banned -= {'update_goal_progress', 'add_task', 'complete_task',
+                                     'edit_task', 'delegate_task'}
+                if _runtime_banned:
+                    logger.info('[DIRECTOR] cross-session banned for %s: %s', agent.get('name'), _runtime_banned)
+                    if _exclude_for_agent is not None:
+                        _exclude_for_agent = _exclude_for_agent | _runtime_banned
+                    else:
+                        # Нет текущего exclude — создаём только из забаненных
+                        try:
+                            from .tools import get_available_tools as _gat_ban
+                            _all_ban_names = {t['function']['name'] for t in _gat_ban()}
+                            _exclude_for_agent = _runtime_banned & _all_ban_names
+                        except Exception:
+                            pass
+            finally:
+                _db_ban.close()
+        except Exception as _ban_err:
+            logger.debug('[DIRECTOR] cross-session ban load: %s', _ban_err)
 
     # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
     # Инжектируем список доступных инструментов в промпт агента
