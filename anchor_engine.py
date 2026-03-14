@@ -424,6 +424,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
             _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
         _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
+        _intg_block += (
+            '→ Если инструмент вернул "не настроен / нет токена / нет ключа / ошибка авторизации" — '
+            'ОБЯЗАТЕЛЬНО сообщи пользователю: (1) что именно не смог сделать, '
+            '(2) какую интеграцию нужно подключить, (3) как это поможет цели.\n'
+            '  Пример: "Не смог получить котировки — нет Alpha Vantage ключа. '
+            'Если подключишь ALPHAVANTAGE_API_KEY, буду присылать актуальные данные по нефти каждый день."\n'
+        )
 
     # ── История инструментов → что запрещено/предупреждение ──
     _tool_cnt: dict = {}
@@ -3931,6 +3938,53 @@ class AnchorEngine:
                 _missing_intg_coord.append(
                     "⚠️ GITHUB_TOKEN не настроен. Добавь в Railway Variables для поиска разработчиков (5000 req/h вместо 60)."
                 )
+            # Telegram-канал: цели связанные с контентом/аудиторией, но нет канала
+            _content_kw_c = ('контент', 'smm', 'пост', 'публикац', 'канал', 'аудитор', 'подписчик', 'продвижен')
+            if any(w in _goals_lower_c for w in _content_kw_c):
+                _has_tg_channel_c = any(
+                    bool(getattr(u_chk, 'telegram_channel', None))
+                    for u_chk in [user]
+                )
+                if not _has_tg_channel_c:
+                    _missing_intg_coord.append(
+                        "💡 Telegram-канал не подключён. Чтобы агенты могли публиковать посты: "
+                        "Дашборд → Профиль → укажи @username канала → добавь бота как администратора."
+                    )
+            # Discord: те же темы
+            if any(w in _goals_lower_c for w in _content_kw_c):
+                _has_discord_c = bool(getattr(user, 'discord_webhook', None))
+                if not _has_discord_c:
+                    _missing_intg_coord.append(
+                        "💡 Discord не подключён. Добавь webhook: Discord → канал → Настройки → "
+                        "Интеграции → Webhooks → скопируй URL → Дашборд → Профиль."
+                    )
+            # Email/IMAP: нет GMAIL у агентов при поиске людей / outreach целях
+            _outreach_kw_c = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'контакт', 'аутрич', 'outreach', 'рекрутинг')
+            if any(w in _goals_lower_c for w in _outreach_kw_c):
+                _has_email_c = any(
+                    any(kw in (getattr(a, 'user_api_keys', '') or '').upper()
+                        for kw in ('GMAIL_USER', 'YANDEX_USER', 'MAILRU_USER', 'IMAP_USER', 'IMAP_HOST'))
+                    for a in real_agents
+                )
+                if not _has_email_c:
+                    _missing_intg_coord.append(
+                        "💡 Email не настроен у агентов. Для outreach: добавь GMAIL_USER + GMAIL_PASS "
+                        "(пароль приложения с myaccount.google.com) в настройки агента."
+                    )
+            # Google Sheets / Airtable: аналитика и отчёты
+            _data_kw_c = ('отчёт', 'аналитик', 'таблиц', 'данные', 'мониторинг продаж', 'crm')
+            if any(w in _goals_lower_c for w in _data_kw_c):
+                _has_sheets_c = any(
+                    any(kw in (getattr(a, 'user_api_keys', '') or '').upper()
+                        for kw in ('GOOGLE_SHEETS', 'GSPREAD', 'AIRTABLE'))
+                    or ('gspread' in (getattr(a, 'python_code', '') or '').lower())
+                    for a in real_agents
+                )
+                if not _has_sheets_c:
+                    _missing_intg_coord.append(
+                        "💡 Google Sheets / Airtable не подключены. "
+                        "Для автоотчётов: Google Cloud Console → Service Account → credentials.json → в настройки агента."
+                    )
             _missing_intg_str_c = ('\n\n⚠️ ВАЖНО для планирования (отсутствующие интеграции):\n'
                                    + '\n'.join(_missing_intg_coord)) if _missing_intg_coord else ''
 

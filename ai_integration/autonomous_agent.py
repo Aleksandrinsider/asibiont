@@ -42,6 +42,89 @@ from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
 
+# ── Integration hint patterns: (substring_in_tool_result_lower, user_recommendation) ─────
+# Используются в _extract_intg_hints() для детектирования ограничений инструментов
+# и автоматической простановки рекомендаций в ответ агента.
+_INTG_HINT_PATTERNS: list[tuple[str, str]] = [
+    # Telegram-канал
+    ("telegram-канал не настроен",
+     "💡 Telegram-канал не настроен. Дашборд → Профиль → укажи @username канала → добавь бота как администратора"),
+    ("telegram channel not configured",
+     "💡 Telegram channel not configured. Dashboard → Profile → set @username → add bot as admin"),
+    # Discord webhook
+    ("discord webhook не настроен",
+     "💡 Discord не подключён. Discord → канал → Настройки → Интеграции → Webhooks → скопируй URL → Дашборд → Профиль"),
+    # GitHub лимит / токен
+    ("60 запросов/час",
+     "💡 GitHub работает без токена (60 запросов/час). Добавь GITHUB_TOKEN в настройки агента: github.com/settings/tokens → лимит вырастет до 5000"),
+    ("github_token не настроен",
+     "💡 GITHUB_TOKEN не настроен. github.com/settings/tokens → Generate (repo, read:user) → добавь в настройки агента"),
+    # NewsAPI
+    ("newsapi исчерпала",
+     "💡 NewsAPI исчерпал дневной лимит. Получи бесплатный ключ: newsapi.org → добавь NEWSAPI_KEY в Railway Variables"),
+    ("newsapi_key не",
+     "💡 NewsAPI не настроен. newsapi.org → бесплатно 100 запросов/день → добавь NEWSAPI_KEY в Railway Variables"),
+    # Email / Gmail / IMAP
+    ("gmail не настроен",
+     "💡 Gmail не настроен. Добавь GMAIL_USER + GMAIL_PASS (пароль приложения: myaccount.google.com → Безопасность → Пароли приложений) в настройки агента"),
+    ("imap не настроен",
+     "💡 IMAP не настроен — агент не может читать входящие. Добавь IMAP_HOST + IMAP_USER + IMAP_PASS в настройки агента"),
+    # OpenWeatherMap
+    ("openweathermap_api_key",
+     "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в Railway Variables"),
+    # Alpha Vantage
+    ("alphavantage_api_key",
+     "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+    # Notion
+    ("notion_token не настроен",
+     "💡 Notion не подключён. notion.so/my-integrations → создай интеграцию → добавь NOTION_TOKEN в настройки агента"),
+    # Google Sheets
+    ("google_sheets_credentials",
+     "💡 Google Sheets не подключён. Google Cloud Console → Service Account → credentials.json → добавь в настройки агента"),
+    # Slack
+    ("slack_bot_token не",
+     "💡 Slack не подключён. api.slack.com/apps → Create App → Bot Token → добавь SLACK_BOT_TOKEN в настройки агента"),
+    # Stripe
+    ("stripe_secret_key не",
+     "💡 Stripe не подключён. Добавь STRIPE_SECRET_KEY в настройки агента для мониторинга платежей"),
+    # Twitter / X
+    ("x_api_key не",
+     "💡 Twitter/X не подключён. developer.twitter.com → добавь X_API_KEY + X_API_SECRET в настройки агента"),
+    # Airtable
+    ("airtable_api_key не",
+     "💡 Airtable не подключён. airtable.com/account → API → добавь AIRTABLE_API_KEY в настройки агента"),
+    # Trello
+    ("trello_api_key не",
+     "💡 Trello не подключён. trello.com/app-key → добавь TRELLO_API_KEY + TRELLO_TOKEN в настройки агента"),
+    # Jira
+    ("jira_email не",
+     "💡 Jira не подключён. Добавь JIRA_URL + JIRA_EMAIL + JIRA_TOKEN в настройки агента"),
+    # HH.ru
+    ("hh_api_token не",
+     "💡 HH.ru не подключён. hh.ru/oauth/authorize → добавь HH_API_TOKEN в настройки агента"),
+]
+
+
+def _extract_intg_hints(messages: list) -> list[str]:
+    """Сканирует tool-результаты и возвращает список рекомендаций по интеграциям.
+
+    Используется в _exec_agent_for_director после цикла tool calls — если инструмент
+    вернул ограничение (нет токена, не настроен и т.д.), добавляем подсказку в ответ агента.
+    Anti-spam: одинаковые рекомендации не дублируются.
+    """
+    seen: set[str] = set()
+    hints: list[str] = []
+    for msg in messages:
+        if msg.get('role') != 'tool':
+            continue
+        content_lower = (msg.get('content') or '').lower()
+        for pattern, hint in _INTG_HINT_PATTERNS:
+            if pattern in content_lower and hint not in seen:
+                seen.add(hint)
+                hints.append(hint)
+    return hints
+
+
 # ── SSRF-защита: преамбула, которая инжектируется перед кодом агента ─────────
 # Патчит urllib.request.urlopen, блокируя запросы во внутренние сети (RFC-1918,
 # link-local, loopback). Защищает от атак типа Server-Side Request Forgery,
@@ -4979,6 +5062,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
         if _last_dot > 200:
             _final_text = _cut[:_last_dot + 1]
+
+    # ── Интеграционные подсказки: если инструмент натолкнулся на ограничение — сообщаем ──
+    # Сканируем tool-результаты — если нашли «не настроен / нет токена» и агент сам
+    # об этом не написал, добавляем короткую рекомендацию. Макс. 2 подсказки на ответ.
+    if _final_text and _final_text != _done_fb and _tools_used and _messages:
+        _hints = _extract_intg_hints(_messages)
+        if _hints:
+            _ft_lower = _final_text.lower()
+            _added = 0
+            for _h in _hints:
+                if _added >= 2:
+                    break
+                # fingerprint — первые 30 символов подсказки после "💡 "
+                _hfp = _h[3:33].lower() if _h.startswith('💡') else _h[:30].lower()
+                if _hfp not in _ft_lower:
+                    _final_text += f"\n\n{_h}"
+                    _added += 1
 
     # Детектируем BLOCKED-маркер в финальном ответе агента
     if _final_text and _final_text.lower().startswith('blocked:'):
