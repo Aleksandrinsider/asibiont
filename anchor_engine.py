@@ -3711,6 +3711,37 @@ class AnchorEngine:
                                 session.rollback()
                             except Exception:
                                 pass
+                    # Отправляем краткое уведомление в чат — агент не смог завершить
+                    _fail_txt = "Не успел завершить задание в срок (технические трудности). Задача отложена."
+                    try:
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {
+                                    'name': _ag_name,
+                                    'id': _ag_data.get('id', 0),
+                                    'avatar_url': _ag_data.get('avatar_url', ''),
+                                },
+                                'text': _fail_txt,
+                                '__tools_used': [],
+                                '__anchor_type': 'coordinator_result',
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception:
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                    if self.bot:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=f"{_ag_name}:\n\n{_fail_txt}",
+                            )
+                        except Exception:
+                            pass
                     continue
 
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
@@ -3730,6 +3761,37 @@ class AnchorEngine:
                                 session.rollback()
                             except Exception:
                                 pass
+                    # Сообщаем пользователю — агент ничего не нашёл/не сделал
+                    _empty_txt = "Проанализировал ситуацию, но пока не нашёл конкретных результатов для отчёта."
+                    try:
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {
+                                    'name': _ag_name,
+                                    'id': _ag_data.get('id', 0),
+                                    'avatar_url': _ag_data.get('avatar_url', ''),
+                                },
+                                'text': _empty_txt,
+                                '__tools_used': [],
+                                '__anchor_type': 'coordinator_result',
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception:
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                    if self.bot:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=f"{_ag_name}:\n\n{_empty_txt}",
+                            )
+                        except Exception:
+                            pass
                     continue
 
                 # Очистка и отправка результата пользователю
@@ -3827,6 +3889,28 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
+
+            # ── Итоговый отчёт координатора пользователю ──
+            if _results_summary and self.bot:
+                try:
+                    _summ_lines = []
+                    for _rs in _results_summary[:4]:
+                        # _rs = "Агент[tool1,tool2]: краткий результат"
+                        _colon = _rs.find(']:')
+                        _rs_text = _rs[_colon + 2:].strip() if _colon >= 0 else _rs
+                        _rs_agent = _rs[:_colon + 1] if _colon >= 0 else ''
+                        _summ_lines.append(f"• {_rs_agent} {_rs_text[:120]}" if _rs_agent else f"• {_rs_text[:120]}")
+                    _g_titles = ', '.join(g['title'][:40] for g in _goals[:2]) if _goals else 'цели'
+                    _coord_report = (
+                        f"Команда завершила работу по: {_g_titles}\n\n"
+                        + '\n'.join(_summ_lines)
+                    )
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=f"ASI:\n\n{_coord_report}",
+                    )
+                except Exception as _sr_e:
+                    logger.debug("[COORD] summary report error: %s", _sr_e)
 
             return True  # coordinator ran
 
