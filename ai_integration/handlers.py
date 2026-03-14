@@ -3556,7 +3556,7 @@ def get_partners_list(user_id=None, session=None):
     top_partners = partners[:5]  # Показываем топ-5 для логирования
     for i, p in enumerate(top_partners):
         partner_user = _user_by_id.get(p.user_id)
-        if partner_user:
+        if partner_user and partner_user.username:
             logger.info(f"[PARTNERS] Top {i+1}: @{partner_user.username} (city: {p.city}, relevance: calculated in sort_key)")
 
     logger.info(f"[PARTNERS] Total partners after sorting: {len(partners)} (using full database for user growth)")
