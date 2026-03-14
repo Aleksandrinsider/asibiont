@@ -4128,7 +4128,7 @@ class AnchorEngine:
             anchors.append(Anchor(
                 user_id=user.id,
                 anchor_type='task_completed_streak',
-                source=f'streak:{recent_completed}',
+                source=f'streak:{now_utc.strftime("%Y-%m-%d")}',  # once per day, not per count
                 topic=_t(user, f'За последние 24ч завершено {recent_completed} задач', f'{recent_completed} tasks completed in the last 24h'),
                 priority=AnchorPriority.MEDIUM,
                 data=json.dumps({'completed_count': recent_completed}),
@@ -4411,6 +4411,22 @@ class AnchorEngine:
             # Проверяем, был ли уже follow-up
             content_preview = (last_user_msg.content or '')[:100]
             if content_preview.strip():
+                # Guard: не повторять если уже доставлен за последние 24ч
+                try:
+                    _src_dlg = f'dialog:{last_user_msg.id}'
+                    _ld_dlg = session.query(Anchor.delivered_at).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.source == _src_dlg,
+                        Anchor.delivered_at.isnot(None),
+                    ).order_by(Anchor.delivered_at.desc()).first()
+                    if _ld_dlg:
+                        _ld_dlg_t = _ld_dlg[0]
+                        if _ld_dlg_t.tzinfo is None:
+                            _ld_dlg_t = _ld_dlg_t.replace(tzinfo=timezone.utc)
+                        if (now_utc - _ld_dlg_t).total_seconds() / 3600 < 24:
+                            return anchors
+                except Exception:
+                    pass
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='dialog_followup',
@@ -9053,11 +9069,11 @@ class AnchorEngine:
             if not errors:
                 return anchors
 
-            # Глобальный cooldown по типу: не более 1 раза за 4 часа независимо от набора сервисов
+            # Глобальный cooldown по типу: не более 1 раза за 12 часов независимо от набора сервисов
             _recent_sd = session.query(AnchorDeliveryLog).filter(
                 AnchorDeliveryLog.user_id == user.id,
                 AnchorDeliveryLog.anchor_types.contains('service_degraded'),
-                AnchorDeliveryLog.created_at >= now_utc - timedelta(hours=4),
+                AnchorDeliveryLog.created_at >= now_utc - timedelta(hours=12),
             ).first()
             if _recent_sd:
                 return anchors
@@ -9082,7 +9098,7 @@ class AnchorEngine:
                 data=json.dumps({'services': list(errors.keys()), 'count': len(errors)}),
                 triggered_at=now_utc,
                 expires_at=now_utc + timedelta(hours=6),
-                cooldown_hours=4,
+                cooldown_hours=12,
                 batch_group='system',
             ))
         except Exception as e:
