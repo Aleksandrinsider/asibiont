@@ -3102,6 +3102,7 @@ class AnchorEngine:
                     f'{_desc_part}'
                 )
             _n_agents = len(_profiles)
+            _profiles_str = '\n'.join(_profiles_lines)
 
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
             import re as _re_al
@@ -3138,6 +3139,8 @@ class AnchorEngine:
                     "  3. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
                     "  НЕ назначай check_emails и RSS-поиск как основные задачи в этом цикле!\n"
                 )
+
+            _email_campaigns_str = '\n'.join(str(e) for e in data.get('email_campaigns', [])) or 'нет'
 
             _plan_prompt = (
                 f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
