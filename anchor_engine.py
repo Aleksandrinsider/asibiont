@@ -2312,7 +2312,7 @@ class AnchorEngine:
                 # Динамический биллинг: списываем по фактическому расходу API
                 # 1 платформенный токен ≈ 1000 DeepSeek-токенов, мин=3, макс=20
                 if not _FAM_ap and (_cycle_tokens > 0 or (result or '').strip()):
-                    _dynamic_cost = max(3, min(20, _cycle_tokens // 1000)) if _cycle_tokens else 3
+                    _dynamic_cost = max(3, min(50, _cycle_tokens // 250)) if _cycle_tokens else 5
                     _sp_ap(user.telegram_id, 'proactive_message', description=f'autopilot_dynamic:{_cycle_tokens}tok', cost=_dynamic_cost)
                     logger.info("[ANCHOR-AUTOPILOT] billed user %d: %d tokens (%d DeepSeek-tok)", user.id, _dynamic_cost, _cycle_tokens)
 

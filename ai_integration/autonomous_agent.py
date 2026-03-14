@@ -348,7 +348,7 @@ class HybridAutonomousAgent:
         data = {
             "model": chosen_model,
             "messages": messages,
-            "max_tokens": kwargs.pop("max_tokens", 500),
+            "max_tokens": kwargs.pop("max_tokens", 400),
             "temperature": kwargs.pop("temperature", 0.7),
             **kwargs
         }
@@ -2100,7 +2100,7 @@ class HybridAutonomousAgent:
 
                 # Text-only call (no tools) uses shorter timeout + fewer tokens
                 _timeout = API_TIMEOUT_NORMAL if not _allow_tools else None
-                _max_tok = 300 if _is_last_iter and all_execution_results else 600
+                _max_tok = 300 if _is_last_iter and all_execution_results else 500
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,
@@ -3016,7 +3016,7 @@ def _is_question_message(msg: str) -> bool:
     return False
 
 
-async def _quick_ai_call_raw(messages: list, max_tokens: int = 400, _caller: str = '') -> str:
+async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '') -> str:
     """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
     try:
         _sess = await _get_shared_ai_session()
@@ -4701,7 +4701,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools_now,
                     tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=500,
+                    max_tokens=400,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
                 timeout=API_TIMEOUT_LONG + 5,
@@ -5675,7 +5675,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
                     f"Минимум 200 символов, 2-3 абзаца, без markdown."
                 ),
-            }], max_tokens=400)
+            }], max_tokens=300)
             if _fallback_resp and len(_fallback_resp) > 50:
                 resp = _fallback_resp
 
