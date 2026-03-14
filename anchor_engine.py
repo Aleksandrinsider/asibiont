@@ -4199,10 +4199,7 @@ class AnchorEngine:
                     ).first()
                     if not _already_sent_rec:
                         _intg_msg = f"ASI:\n\nКстати, {_intg_rec}"
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=_intg_msg,
-                        )
+                        # Сначала сохраняем в БД — чтобы не потерять при bot=None
                         session.add(_Intc(
                             user_id=user.id,
                             message_type='proactive',
@@ -4213,6 +4210,11 @@ class AnchorEngine:
                             }, ensure_ascii=False),
                         ))
                         session.commit()
+                        if self.bot:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=_intg_msg,
+                            )
                 except Exception as _rec_err:
                     logger.debug("[COORD] intg recommend error: %s", _rec_err)
                     try:
