@@ -595,7 +595,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "negotiate_by_email, find_and_message_relevant_users, start_content_campaign и т.д.\n"
         "8. НЕ пиши одним и тем же людям повторно.\n"
         "9. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
-        + ("10. У тебя RSS-лента — после run_agent_action (RSS) ОБЯЗАТЕЛЬНО вызови save_email_contact "
+        "10. ЧЕСТНОСТЬ: если инструмент не дал данных, сервис недоступен или идеи исчерпаны — "
+        "пиши прямо. Если видишь настоящий блокер (нет нужной интеграции, задача невозможна без "
+        "новых данных от пользователя) — начни ответ со слова БЛОКЕР: и опиши суть. "
+        "ASI это прочитает и обратится к пользователю за помощью.\n"
+        + ("11. У тебя RSS-лента — после run_agent_action (RSS) ОБЯЗАТЕЛЬНО вызови save_email_contact "
            "для каждого найденного автора/источника. Без сохранения данные потеряются!\n"
            if _has_rss else '')
         + ("11. Если активная email-кампания уже существует И в базе есть контакты — "
@@ -2217,6 +2221,29 @@ class AnchorEngine:
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
+                elif anchor.anchor_type == 'goal_autopilot_review' and _chosen_id == 0 and self.bot:
+                    # ASI сама выполняет анализ — объявляет что начинает работу
+                    try:
+                        _asi_gl = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
+                        _asi_ann = f"Анализирую цели: {', '.join(_asi_gl)}. Подбираю следующий шаг."
+                        await self.bot.send_message(chat_id=user.telegram_id, text=_asi_ann)
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                'text': _asi_ann,
+                                '__anchor_type': 'asi_self_analysis',
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception as _asi_ann_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] ASI self-announce failed: %s", _asi_ann_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+
                 # ── Биллинг кастомного агента (роялти автору) ──
                 if _chosen_id != 0:
                     from ai_integration.user_agents import bill_agent_message as _bam_ap
@@ -2461,6 +2488,61 @@ class AnchorEngine:
                     else:
                         logger.info("[ANCHOR-AUTOPILOT] watchdog BLOCKED echo delivery for %s", agent_name)
 
+                # ── ESCALATION: ASI обращается к пользователю если агенты застряли ──
+                _fw_esc = data.get('feasibility_warnings', [])
+                _es_esc = data.get('exhausted_strategies', [])
+                _tf_esc = data.get('tool_frequency', {})
+                _tot_disp = sum(_tf_esc.values())
+                _blocker_in_result = bool(result and 'БЛОКЕР:' in result.upper())
+                _stag_warn = next((w for w in _fw_esc if 'СТАГНАЦИЯ' in w.upper()), '')
+                _cap_warns = [w for w in _fw_esc if '⚠️' in w or '⚡' in w]
+                if self.bot and (_stag_warn or _blocker_in_result or len(_es_esc) >= 2 or _tot_disp >= 8) \
+                        and (_is_noise_result or _blocker_in_result):
+                    try:
+                        _esc_recent = session.query(Interaction).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'proactive',
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=3),
+                        ).all()
+                        _esc_sent = any('autopilot_escalation' in (i.content or '') for i in _esc_recent)
+                        if not _esc_sent:
+                            _esc_lines = []
+                            if _blocker_in_result and result:
+                                _bl_line = next((ln for ln in result.splitlines() if 'БЛОКЕР:' in ln.upper()), '')
+                                if _bl_line:
+                                    _esc_lines.append(f"🔴 {_bl_line.strip()}")
+                            if _stag_warn:
+                                _esc_lines.append(_stag_warn)
+                            elif _tot_disp >= 8:
+                                _esc_lines.append(
+                                    f"ℹ️ Автопилот совершил {_tot_disp}+ действий за 48ч, но метрика целей не выросла."
+                                )
+                            if _cap_warns:
+                                _esc_lines.extend(_cap_warns[:2])
+                            if _es_esc:
+                                _esc_lines.append(f"Исчерпаны стратегии: {', '.join(_es_esc)}. Нужна новая точка входа.")
+                            _esc_lines.append("💬 Напиши мне — что добавить или попробовать. Я перенастрою агентов.")
+                            _esc_text = '\n\n'.join(_esc_lines)
+                            await self.bot.send_message(chat_id=user.telegram_id, text=_esc_text)
+                            session.add(Interaction(
+                                user_id=user.id,
+                                message_type='proactive',
+                                content=json.dumps({
+                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                    'text': _esc_text,
+                                    '__anchor_type': 'autopilot_escalation',
+                                }, ensure_ascii=False),
+                            ))
+                            session.commit()
+                            logger.info("[ANCHOR-AUTOPILOT] escalation sent user %d (%d dispatches, blocker=%s)",
+                                        user.id, _tot_disp, _blocker_in_result)
+                    except Exception as _esc_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] escalation send failed: %s", _esc_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+
                 if result and result.strip() and self.bot and not _is_noise_result:
                     try:
                         # Очищаем технические детали ПЕРЕД отправкой пользователю
@@ -2509,6 +2591,51 @@ class AnchorEngine:
                         )
                     except Exception as _chain_err:
                         logger.debug("[ANCHOR-AUTOPILOT] chain continuation error: %s", _chain_err)
+
+                # ── ASI DIRECTOR: после отчёта реального агента — анализирует + даёт следующий шаг ──
+                # Срабатывает только если: реальный агент (не ASI), есть предупреждения, результат доставлен
+                _fw_dir = data.get('feasibility_warnings', [])
+                if not _is_noise_result and result and _chosen_id != 0 and self.bot and _fw_dir:
+                    try:
+                        _dir_goals = ', '.join(
+                            f"«{g.get('title', '')}» ({g.get('progress', 0)}%)"
+                            for g in data.get('goals', [])[:2]
+                        )
+                        _dir_p = (
+                            f"Ты — ASI, координатор проекта. Агент {_chosen_name} только что отчитался:\n"
+                            f"«{result.strip()[:400]}»\n\n"
+                            f"Цели пользователя: {_dir_goals}\n"
+                            f"Предупреждения: {'; '.join(str(w)[:100] for w in _fw_dir[:2])}\n\n"
+                            "Напиши ОДНО короткое предложение (15-25 слов): что планируется дальше "
+                            "ИЛИ что конкретно нужно от пользователя (если застряли). "
+                            "Прямо и конкретно — без общих слов. "
+                            "Обращение от ASI. Живо. Без markdown."
+                        )
+                        from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_d
+                        _dir_resp = await _qar_d(
+                            [{'role': 'user', 'content': _dir_p}],
+                            max_tokens=80, _caller='asi_dir',
+                        )
+                        if _dir_resp and len(_dir_resp.strip()) > 20:
+                            _dir_txt = _dir_resp.strip()
+                            await self.bot.send_message(chat_id=user.telegram_id, text=_dir_txt)
+                            session.add(Interaction(
+                                user_id=user.id,
+                                message_type='proactive',
+                                content=json.dumps({
+                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                    'text': _dir_txt,
+                                    '__anchor_type': 'asi_director_review',
+                                }, ensure_ascii=False),
+                            ))
+                            session.commit()
+                            logger.info("[ANCHOR-AUTOPILOT] ASI director review sent user %d", user.id)
+                    except Exception as _dir_e:
+                        logger.debug("[ANCHOR-AUTOPILOT] ASI director review failed: %s", _dir_e)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
 
             # Помечаем якорь доставленным
             anchor.delivered_at = datetime.now(timezone.utc)
