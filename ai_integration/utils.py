@@ -347,7 +347,11 @@ def clean_technical_details(text):
         r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
         r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
         r'get_incoming_messages|reply_to_user_message|update_user_memory|'
-        r'start_email_campaign|add_email_leads|update_email_campaign'
+        r'start_email_campaign|add_email_leads|update_email_campaign|'
+        r'check_emails|decrypt_token|encrypt_token|install_script|skip_task|'
+        r'run_user_script|toggle_autonomous_feature|save_user_rule|'
+        r'get_email_campaign_status|pause_email_campaign|resume_email_campaign|'
+        r'get_goal_progress|set_goal_deadline|assign_task_to_agent'
     )
     text = re.sub(r'\b(?:' + _ALL_TOOL_NAMES + r')\b', '', text, flags=re.IGNORECASE)
     # Удаляем оставшиеся ТЕХНИЧЕСКИЕ вызовы функций (только snake_case с минимум 2 частями)

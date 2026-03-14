@@ -1803,7 +1803,7 @@ class ContextBuilder:
                     if overlap:
                         task_owner = _rot_owner_by_id.get(t.user_id)
                         if task_owner and task_owner.username:
-                            similar_tasks.append(f"  @{task_owner.username}: {t.title}")
+                            similar_tasks.append(f"  • {t.title}")
 
                 if similar_tasks:
                     hints.append("ПОХОЖИЕ ЗАДАЧИ У ДРУГИХ УЧАСТНИКОВ ПЛАТФОРМЫ (это НЕ твои email-контакты):\n" + "\n".join(similar_tasks[:3]))

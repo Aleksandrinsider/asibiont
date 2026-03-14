@@ -3764,6 +3764,43 @@ class AnchorEngine:
                 except Exception:
                     pass
 
+            # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
+            # Отправляем ДО начала выполнения, чтобы пользователь мог подключить нужную интеграцию
+            if _missing_intg_coord:
+                try:
+                    _intg_rec = _missing_intg_coord[0]
+                    from models import Interaction as _Intc
+                    from datetime import timedelta as _td_i
+                    _rec_cutoff = datetime.now(timezone.utc) - _td_i(hours=6)
+                    _already_sent_rec = session.query(_Intc).filter(
+                        _Intc.user_id == user.id,
+                        _Intc.message_type == 'proactive',
+                        _Intc.content.like('%coordinator_intg_recommend%'),
+                        _Intc.created_at >= _rec_cutoff,
+                    ).first()
+                    if not _already_sent_rec:
+                        _intg_msg = f"ASI:\n\nКстати, {_intg_rec}"
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=_intg_msg,
+                        )
+                        session.add(_Intc(
+                            user_id=user.id,
+                            message_type='proactive',
+                            content=json.dumps({
+                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                'text': f"Кстати, {_intg_rec}",
+                                '__anchor_type': 'coordinator_intg_recommend',
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                except Exception as _rec_err:
+                    logger.debug("[COORD] intg recommend error: %s", _rec_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
             # ── Выполняем шаги в режиме ReAct: дать задание → дождаться результата → решить следующий шаг ──
             _results_summary = []
             _all_tools = []
@@ -4104,37 +4141,7 @@ class AnchorEngine:
                                 session.rollback()
                             except Exception:
                                 pass
-                    # Отправляем краткое уведомление в чат — агент не смог завершить
-                    _fail_txt = "Не успел завершить задание в срок (технические трудности). Задача отложена."
-                    try:
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type='agent_msg',
-                            content=json.dumps({
-                                '__agent': {
-                                    'name': _ag_name,
-                                    'id': _ag_data.get('id', 0),
-                                    'avatar_url': _ag_data.get('avatar_url', ''),
-                                },
-                                'text': _fail_txt,
-                                '__tools_used': [],
-                                '__anchor_type': 'coordinator_result',
-                            }, ensure_ascii=False),
-                        ))
-                        session.commit()
-                    except Exception:
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                    if self.bot:
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=f"{_ag_name}:\n\n{_fail_txt}",
-                            )
-                        except Exception:
-                            pass
+                    # молча пропускаем шаг — не беспокоим пользователя техническими ошибками
                     continue
 
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
@@ -4281,42 +4288,6 @@ class AnchorEngine:
                     session.commit()
                 except Exception as _upd:
                     logger.warning("[COORD] AAL update: %s", _upd)
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
-
-            # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
-            if _missing_intg_coord:
-                try:
-                    _intg_rec = _missing_intg_coord[0]
-                    from models import Interaction as _Intc
-                    from datetime import timedelta as _td_i
-                    _rec_cutoff = datetime.now(timezone.utc) - _td_i(hours=6)
-                    _already_sent_rec = session.query(_Intc).filter(
-                        _Intc.user_id == user.id,
-                        _Intc.message_type == 'proactive',
-                        _Intc.content.like('%coordinator_intg_recommend%'),
-                        _Intc.created_at >= _rec_cutoff,
-                    ).first()
-                    if not _already_sent_rec:
-                        _intg_msg = f"ASI:\n\nКстати, {_intg_rec}"
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=_intg_msg,
-                        )
-                        session.add(_Intc(
-                            user_id=user.id,
-                            message_type='proactive',
-                            content=json.dumps({
-                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                'text': f"Кстати, {_intg_rec}",
-                                '__anchor_type': 'coordinator_intg_recommend',
-                            }, ensure_ascii=False),
-                        ))
-                        session.commit()
-                except Exception as _rec_err:
-                    logger.debug("[COORD] intg recommend error: %s", _rec_err)
                     try:
                         session.rollback()
                     except Exception:
