@@ -3063,13 +3063,16 @@ class AnchorEngine:
                 _k = (getattr(a, 'user_api_keys', '') or '').lower()
                 _t = (getattr(a, 'tools_allowed', '') or '').lower()
                 _SEND_KEYS = ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_')
-                _READ_KEYS = ('imap_', 'gmail_imap', 'yandex_imap')
                 _gmail_send = ('gmail_app_password=' in _k and
                                'gmail_app_password=\n' not in _k and
                                'gmail_app_password= ' not in _k)
-                if any(s in _k for s in _SEND_KEYS) or _gmail_send:
+                # Яндекс и Mail.ru поддерживают SMTP нативно — если есть USER → чаще всего и пароль
+                _yandex_send = ('yandex_user=' in _k)
+                _mailru_send = ('mailru_user=' in _k)
+                if any(s in _k for s in _SEND_KEYS) or _gmail_send or _yandex_send or _mailru_send:
                     return ' [отправляет email]'
-                if any(r in _k for r in _READ_KEYS) or any(m in _k for m in ('gmail_', 'yandex_')):
+                # Gmail без app_password — только чтение IMAP
+                if 'gmail_user=' in _k or 'gmail_imap' in _k or 'imap_' in _k:
                     return ' [только читает email — НЕ отправляет]'
                 if 'send_outreach_email' in _t:
                     return ' [отправляет email через платформу]'
@@ -3090,7 +3093,7 @@ class AnchorEngine:
             _email_agent_relay = None
             if _found_emails:
                 _SEND_KEY_CAPS = ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_')
-                _relay_p1 = None   # агент с явными SEND-ключами (SMTP/Resend/Sendgrid)
+                _relay_p1 = None   # агент с явными SEND-ключами
                 _relay_p2 = None   # агент с send_outreach_email в tools_allowed
                 for _ag_r in agents:
                     if getattr(_ag_r, 'id', 0) == getattr(prev_agent, 'id', -1):
@@ -3103,7 +3106,11 @@ class AnchorEngine:
                         'gmail_app_password=\n' not in _ag_r_keys and
                         'gmail_app_password= ' not in _ag_r_keys
                     )
-                    if any(k in _ag_r_keys for k in _SEND_KEY_CAPS) or _gmail_can_send_r:
+                    # Яндекс и Mail.ru поддерживают SMTP нативно — если есть USER → чаще всего есть и пароль
+                    _yandex_can_send_r = 'yandex_user=' in _ag_r_keys
+                    _mailru_can_send_r = 'mailru_user=' in _ag_r_keys
+                    if (any(k in _ag_r_keys for k in _SEND_KEY_CAPS)
+                            or _gmail_can_send_r or _yandex_can_send_r or _mailru_can_send_r):
                         _relay_p1 = _ag_r
                         break
                     if not _relay_p2 and 'send_outreach_email' in _ag_r_tools:
@@ -3719,17 +3726,22 @@ class AnchorEngine:
                             _rss_url_val = _kline.split('=', 1)[1].strip()[:80]
                             break
                 _rss_note = f', RSS={_rss_url_val}' if _rss_url_val else ''
-                # Определяем может ли агент ОТПРАВЛЯТЬ письма (SMTP/Resend/Gmail send)
+                # Определяем может ли агент ОТПРАВЛЯТЬ письма
                 _ag_api_keys = (getattr(_ag_obj, 'user_api_keys', '') or '') if _ag_obj else ''
                 _keys_lower = _ag_api_keys.lower()
-                _has_imap = any(k in _keys_lower for k in ('imap_', 'gmail_imap', 'yandex_imap', 'mail_'))
+                # Gmail без app_password — только чтение IMAP
+                _has_imap = ('gmail_user=' in _keys_lower or 'imap_' in _keys_lower or 'gmail_imap' in _keys_lower)
                 _can_send = any(k in _keys_lower for k in ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_'))
-                # Gmail/Яндекс без явного smtp_password = только чтение
-                if not _can_send and any(k in _keys_lower for k in ('gmail_', 'yandex_')):
-                    _can_send = ('smtp_password=' in _keys_lower and 'smtp_password=\n' not in _keys_lower and 'smtp_password= ' not in _keys_lower) or \
-                                ('gmail_app_password=' in _keys_lower and 'gmail_app_password=\n' not in _keys_lower)
+                # Gmail с app_password — может отправлять
+                if not _can_send and 'gmail_' in _keys_lower:
+                    _can_send = ('gmail_app_password=' in _keys_lower and
+                                 'gmail_app_password=\n' not in _keys_lower and
+                                 'gmail_app_password= ' not in _keys_lower)
+                # Яндекс и Mail.ru поддерживают SMTP нативно — если есть USER, значит умеет отправлять
+                if not _can_send:
+                    _can_send = 'yandex_user=' in _keys_lower or 'mailru_user=' in _keys_lower
                 _send_note = (' [отправка+чтение email]' if _can_send else
-                              ' [только чтение email]' if _has_imap else '')
+                              ' [только чтение email, НЕ отправляет]' if _has_imap else '')
                 _profiles_lines.append(
                     f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}{_send_note}'
                     f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
