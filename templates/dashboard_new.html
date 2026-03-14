@@ -1297,6 +1297,10 @@
                                 <option value="completed" data-i18n="tf-done">Выполнено</option>
                             </select>
                         </div>
+                        <button onclick="deleteFilteredTasks()" style="margin-top: 6px; width: 100%; padding: 8px 12px; background: #FFFFFF; color: #374151; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 400; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="" id="delete-filtered-tasks-btn" data-i18n-title="delete-filtered-tasks">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                            <span data-i18n="delete-filtered-tasks">Удалить задачи</span>
+                        </button>
                     </div>
                     <div class="tasks-section" id="tasks-scroll-container" style="padding: 0 4px;">
                         <div class="task-groups" id="task-groups">
@@ -14384,15 +14388,14 @@ except Exception as e:
                 try {
                     const response = await fetch('/clear_user_tasks', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ filter: 'all_hard' }),
                         credentials: 'include'
                     });
                     if (!await checkAuth(response)) return;
                     if (response.ok) {
                         showNotification(t('ok-tasks-clear'), 'success');
-                        updateTasks(); // Refresh tasks
+                        updateTasks();
                     } else {
                         const error = await response.json();
                         showNotification(t('err-prefix') + ' ' + error.error, 'error');
@@ -14401,6 +14404,36 @@ except Exception as e:
                     console.error('Error clearing tasks:', error);
                     showNotification(t('err-clear-tasks'), 'error');
                 }
+            }
+        }
+
+        async function deleteFilteredTasks() {
+            const sel = document.getElementById('task-filter-select');
+            const filter = sel ? sel.value : 'all';
+            const filterLabel = sel ? sel.options[sel.selectedIndex].text : '';
+            const msg = (t('confirm-delete-filtered-tasks') || 'Удалить все задачи в разделе')
+                + ' «' + filterLabel + '»? '
+                + (t('confirm-irreversible') || 'Это действие нельзя отменить.');
+            if (!confirm(msg)) return;
+            try {
+                const response = await fetch('/clear_user_tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filter }),
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    const data = await response.json();
+                    showNotification(t('ok-tasks-clear'), 'success');
+                    updateTasks();
+                } else {
+                    const error = await response.json();
+                    showNotification(t('err-prefix') + ' ' + error.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting filtered tasks:', error);
+                showNotification(t('err-clear-tasks'), 'error');
             }
         }
 
@@ -15284,6 +15317,9 @@ except Exception as e:
     'ok-email-contacts-clear':'Email-контакты удалены',
     'err-clear-email-contacts':'Ошибка удаления email-контактов',
     'delete-all-email-contacts':'Удалить все контакты',
+      'delete-filtered-tasks':'Удалить задачи',
+      'confirm-delete-filtered-tasks':'Удалить все задачи в разделе',
+      'confirm-irreversible':'Это действие нельзя отменить.',
       'confirm-self-heal':'Запустить тест системы самоисправления?',
       'err-login':'Ошибка входа','err-card':'Введите корректный номер карты',
       'err-min-withdraw':'Минимальная сумма вывода: 100 токенов','err-insufficient':'Недостаточно средств для вывода',
@@ -15576,6 +15612,9 @@ except Exception as e:
       'ok-email-contacts-clear':'Email contacts deleted',
       'err-clear-email-contacts':'Error deleting email contacts',
       'delete-all-email-contacts':'Delete all contacts',
+      'delete-filtered-tasks':'Delete tasks',
+      'confirm-delete-filtered-tasks':'Delete all tasks in section',
+      'confirm-irreversible':'This cannot be undone.',
       'confirm-self-heal':'Run self-healing system test?',
       'err-login':'Login error','err-card':'Enter a valid card number',
       'err-min-withdraw':'Minimum withdrawal: 100 tokens','err-insufficient':'Insufficient funds',

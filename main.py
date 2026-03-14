@@ -2305,6 +2305,12 @@ async def clear_user_tasks_handler(request):
         logger.warning("No user_id in session")
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    task_filter = body.get('filter', 'all_hard')
+
     session_db = Session()
     try:
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
@@ -2313,30 +2319,76 @@ async def clear_user_tasks_handler(request):
             logger.warning(f"User not found for telegram_id: {user_id}")
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # Count tasks before deletion
-        query_filter = [Task.user_id == user.id]
-        if user.username:
-            query_filter.append(Task.delegated_to_username.ilike(user.username))
-        task_count = session_db.query(Task).filter(
-            or_(*query_filter)
-        ).count()
-        logger.info(f"User {user_id} has {task_count} tasks to clear")
+        import datetime as _dt
+        now_utc = _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
 
-        # Clear user's tasks (both created by user and delegated to user)
-        del_filter = [Task.user_id == user.id]
-        if user.username:
-            del_filter.append(Task.delegated_to_username.ilike(user.username))
-        
-        # Собираем ID всех задач для удаления
-        tasks_to_delete = session_db.query(Task).filter(or_(*del_filter)).all()
+        # Build base query for the user's own tasks
+        base_q = session_db.query(Task).filter(Task.user_id == user.id)
+
+        if task_filter == 'all_hard':
+            # Legacy full wipe: all tasks belonging to user + delegated to user
+            del_filter = [Task.user_id == user.id]
+            if user.username:
+                del_filter.append(Task.delegated_to_username.ilike(user.username))
+            tasks_q = session_db.query(Task).filter(or_(*del_filter))
+        elif task_filter == 'all':
+            # Active tasks (visible in default "Все" view)
+            tasks_q = base_q.filter(Task.status.notin_(['completed', 'rejected', 'cancelled']))
+        elif task_filter == 'my':
+            # Personal tasks: not delegated, active
+            tasks_q = base_q.filter(
+                Task.status.notin_(['completed', 'rejected', 'cancelled']),
+                Task.delegated_to_username.is_(None),
+            )
+        elif task_filter == 'agent':
+            # Tasks delegated to agents (source='agent' with delegated_to_username set)
+            tasks_q = base_q.filter(
+                Task.source == 'agent',
+                Task.delegated_to_username.isnot(None),
+            )
+        elif task_filter == 'assigned-to-me':
+            # Tasks delegated TO this user by someone else
+            if user.username:
+                tasks_q = session_db.query(Task).filter(
+                    Task.delegated_to_username.ilike(user.username),
+                    Task.delegated_by != user.id,
+                    Task.status.notin_(['completed', 'rejected', 'cancelled']),
+                )
+            else:
+                tasks_q = session_db.query(Task).filter(False)
+        elif task_filter == 'assigned-by-me':
+            # Tasks delegated BY this user to others
+            tasks_q = base_q.filter(
+                Task.delegated_by == user.id,
+                Task.delegated_to_username.isnot(None),
+                Task.status.notin_(['completed', 'rejected', 'cancelled']),
+            )
+        elif task_filter == 'overdue':
+            tasks_q = base_q.filter(
+                Task.due_date.isnot(None),
+                Task.due_date < now_utc,
+                Task.status.notin_(['completed', 'rejected', 'cancelled']),
+            )
+        elif task_filter == 'completed':
+            tasks_q = base_q.filter(Task.status == 'completed')
+        elif task_filter == 'background':
+            tasks_q = base_q.filter(
+                Task.title.like('Worker:%'),
+                Task.status != 'cancelled',
+            )
+        else:
+            tasks_q = base_q.filter(Task.status.notin_(['completed', 'rejected', 'cancelled']))
+
+        tasks_to_delete = tasks_q.all()
         task_ids = [t.id for t in tasks_to_delete]
-        
+        logger.info(f"User {user_id} deleting {len(task_ids)} tasks (filter={task_filter})")
+
         if task_ids:
             # Сбрасываем current_task_id у всех пользователей, ссылающихся на эти задачи
             session_db.query(User).filter(User.current_task_id.in_(task_ids)).update(
                 {User.current_task_id: None}, synchronize_session='fetch'
             )
-            
+
             # Удаляем дочерние задачи (parent_task_id FK)
             child_ids = [c.id for c in session_db.query(Task).filter(Task.parent_task_id.in_(task_ids)).all()]
             if child_ids:
@@ -2344,13 +2396,13 @@ async def clear_user_tasks_handler(request):
                     {User.current_task_id: None}, synchronize_session='fetch'
                 )
                 session_db.query(Task).filter(Task.id.in_(child_ids)).delete(synchronize_session='fetch')
-            
+
             # Удаляем сами задачи
             session_db.query(Task).filter(Task.id.in_(task_ids)).delete(synchronize_session='fetch')
-        
+
         session_db.commit()
-        logger.info(f"User {user_id} tasks cleared successfully")
-        return web.json_response({'message': 'Tasks cleared'})
+        logger.info(f"User {user_id} tasks cleared successfully (filter={task_filter}, count={len(task_ids)})")
+        return web.json_response({'message': 'Tasks cleared', 'deleted': len(task_ids)})
     except Exception as e:
         session_db.rollback()
         logger.error(f"Error clearing user tasks: {e}", exc_info=True)
