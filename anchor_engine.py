@@ -4286,73 +4286,41 @@ class AnchorEngine:
                     except Exception:
                         pass
 
-            # ── Итоговый отчёт координатора — только в AgentActivityLog, без лишнего сообщения ──
-            if _results_summary:
+            # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
+            if _missing_intg_coord:
                 try:
-                    _summ_lines = []
-                    for _rs in _results_summary[:4]:
-                        # _rs = "Агент[tool1,tool2]: краткий результат"
-                        _colon = _rs.find(']:')
-                        _rs_text = _rs[_colon + 2:].strip() if _colon >= 0 else _rs
-                        _rs_agent = _rs[:_colon + 1] if _colon >= 0 else ''
-                        _summ_lines.append(f"• {_rs_agent} {_rs_text[:120]}" if _rs_agent else f"• {_rs_text[:120]}")
-                    _g_titles = ', '.join(g['title'][:40] for g in _goals[:2]) if _goals else 'цели'
-                    _coord_report = '\n'.join(_summ_lines)
-                    # Сохраняем итоговый отчёт как Interaction с автором ASI (БЕЗ отправки в Telegram)
-                    try:
-                        session.add(Interaction(
+                    _intg_rec = _missing_intg_coord[0]
+                    from models import Interaction as _Intc
+                    from datetime import timedelta as _td_i
+                    _rec_cutoff = datetime.now(timezone.utc) - _td_i(hours=6)
+                    _already_sent_rec = session.query(_Intc).filter(
+                        _Intc.user_id == user.id,
+                        _Intc.message_type == 'proactive',
+                        _Intc.content.like('%coordinator_intg_recommend%'),
+                        _Intc.created_at >= _rec_cutoff,
+                    ).first()
+                    if not _already_sent_rec:
+                        _intg_msg = f"ASI:\n\nКстати, {_intg_rec}"
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=_intg_msg,
+                        )
+                        session.add(_Intc(
                             user_id=user.id,
                             message_type='proactive',
                             content=json.dumps({
                                 '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                'text': _coord_report,
-                                '__tools_used': [],
-                                '__anchor_type': 'coordinator_summary',
+                                'text': f"Кстати, {_intg_rec}",
+                                '__anchor_type': 'coordinator_intg_recommend',
                             }, ensure_ascii=False),
                         ))
                         session.commit()
-                    except Exception:
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                    # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
+                except Exception as _rec_err:
+                    logger.debug("[COORD] intg recommend error: %s", _rec_err)
                     try:
-                        _intg_rec = _missing_intg_coord[0] if _missing_intg_coord else None
-                        if _intg_rec:
-                            from models import Interaction as _Intc
-                            from datetime import timedelta as _td_i
-                            _rec_cutoff = datetime.now(timezone.utc) - _td_i(hours=6)
-                            _already_sent_rec = session.query(_Intc).filter(
-                                _Intc.user_id == user.id,
-                                _Intc.message_type == 'proactive',
-                                _Intc.content.like('%coordinator_intg_recommend%'),
-                                _Intc.created_at >= _rec_cutoff,
-                            ).first()
-                            if not _already_sent_rec:
-                                _intg_msg = f"ASI:\n\nКстати, {_intg_rec}"
-                                await self.bot.send_message(
-                                    chat_id=user.telegram_id,
-                                    text=_intg_msg,
-                                )
-                                session.add(_Intc(
-                                    user_id=user.id,
-                                    message_type='proactive',
-                                    content=json.dumps({
-                                        '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                        'text': f"Кстати, {_intg_rec}",
-                                        '__anchor_type': 'coordinator_intg_recommend',
-                                    }, ensure_ascii=False),
-                                ))
-                                session.commit()
-                    except Exception as _rec_err:
-                        logger.debug("[COORD] intg recommend error: %s", _rec_err)
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                except Exception as _sr_e:
-                    logger.debug("[COORD] summary report error: %s", _sr_e)
+                        session.rollback()
+                    except Exception:
+                        pass
 
             return True  # coordinator ran
 
