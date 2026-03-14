@@ -3338,7 +3338,8 @@ class AnchorEngine:
                 "generate_marketing_content, start_content_campaign, find_and_message_relevant_users\n"
                 "  🤝 Делегирование: delegate_task, start_delegation_campaign, send_message_to_user\n"
                 "  🎯 Задачи/цели: add_task, update_goal_progress, schedule_background_task, set_contact_alert\n"
-                "  ⚙️ Внешние интеграции (нужен python_code): run_agent_action (RSS/GitHub/Slack/Notion/CRM...)\n"
+                "  ⚙️ run_agent_action — только для агентов с python_code-скриптом. Выполняет ЕГО встроенный скрипт (RSS/GitHub/Slack/Notion). "
+                "НЕ даёт финансовые/нефтяные данные если скрипт не настроен на это. Для web-данных → web_search.\n"
                 "\nПРАВИЛА:\n"
                 "1. 🎯 ГЛАВНОЕ: каждый агент работает на ОДНУ из целей выше — ту, которая подходит его профилю.\n"
                 "   Смотри раздел 'Цели пользователя' выше — там уже указаны нужные инструменты per цель.\n"
@@ -3348,7 +3349,7 @@ class AnchorEngine:
                 "   SMM/контент → generate_marketing_content, quick_topic_search, create_post.\n"
                 "   HR/рекрутер → find_relevant_contacts_for_task (кандидаты/тестировщики).\n"
                 "   Email-агент (IMAP/Gmail) → check_emails, send_outreach_email, negotiate_by_email.\n"
-                "   RSS/скрипты → run_agent_action(get_latest/search).\n"
+                "   RSS/скрипты → run_agent_action(get_latest) для мониторинга ленты. Если задание требует внешних данных (finance/news) → дай инструмент web_search.\n"
                 "   GitHub → run_agent_action(search_users/find_contributors).\n"
                 "   Общий профиль → web_search/research_topic по теме его специализации.\n"
                 "   ЗАПРЕЩЕНО давать агенту задачи ВНЕ его профиля (email-задачи RSS-аналитику, финансовый анализ HR-агенту).\n"
@@ -3361,7 +3362,8 @@ class AnchorEngine:
                 "7. НЕ назначай email-инструменты агенту без Gmail/SMTP ключей.\n"
                 "8. НЕ отправляй письма адресатам из 'уже получили письма'.\n"
                 "9. Если email-кампаний нет → email-агент ОБЯЗАН вызвать start_email_campaign.\n"
-                "10. Для RSS-агента: run_agent_action(action='get_latest') — загрузить ленту и найти контакты.\n"
+                "10. Для RSS-агента: run_agent_action(action='get_latest') — загрузить ленту и найти контакты. "
+                "ВАЖНО: RSS-агент не имеет финансовых API — для финансовых/нефтяных данных tool='web_search', НЕ run_agent_action.\n"
                 "11. 🔴 ОБЯЗАТЕЛЬНО: каждая цель из списка ДОЛЖНА получить минимум одно задание.\n"
                 "    Если агентов меньше целей — один агент получает несколько записей в массиве (разные задания).\n"
                 "    ЗАПРЕЩЕНО игнорировать цели! Проверь: все ли цели покрыты в поле 'goal'?\n"
@@ -3394,6 +3396,18 @@ class AnchorEngine:
 
             if not _plan:
                 return False
+
+            # Дедупликация плана: если один агент назначен дважды с одинаковым инструментом — бессмысленное повторение
+            _seen_agent_tool: set = set()
+            _plan_deduped = []
+            for _p in _plan:
+                _ak = (_p.get('agent', '').strip().lower(), (_p.get('tool') or '').strip().lower())
+                if _ak[0] and _ak not in _seen_agent_tool:
+                    _seen_agent_tool.add(_ak)
+                    _plan_deduped.append(_p)
+                elif _ak[0]:
+                    logger.info("[COORD] dedup: skip dup step %s/%s", _p.get('agent'), _p.get('tool'))
+            _plan = _plan_deduped if _plan_deduped else _plan
 
             logger.info("[COORD] user %d: plan=%s", user.id,
                         [(p.get('agent'), p.get('tool')) for p in _plan])
@@ -3515,6 +3529,7 @@ class AnchorEngine:
             _MAX_DYNAMIC_STEPS = 6
 
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
+            _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
 
             _executed = 0
             while _executed < _MAX_DYNAMIC_STEPS:
@@ -3762,28 +3777,41 @@ class AnchorEngine:
                     if _already_sent else ''
                 )
 
-                # Инструменты которые агент уже вызывал недавно — не повторять бессмысленно
+                # Инструменты которые агент уже вызывал — не повторять бессмысленно
                 _recently_used_tools: set = set()
                 for _rh in _this_agent_hist[:3]:
                     if '[' in _rh and ']' in _rh:
                         _bt = _rh[_rh.find('[')+1:_rh.find(']')]
                         for _btt in _bt.split(','):
                             _recently_used_tools.add(_btt.strip())
+                # Добавляем инструменты из текущего прогона (этот же агент уже делал на предыдущих шагах)
+                _recently_used_tools.update(_current_run_agent_tools.get(_ag_name, set()))
                 _dedup_hint = (
-                    f"\n🚫 Ты уже вызывал: {', '.join(sorted(_recently_used_tools)[:6])} — "
-                    "НЕ вызывай их снова если результат уже известен, выбери следующий логичный шаг.\n"
+                    f"\n🚫 Ты уже вызывал в этом сеансе: {', '.join(sorted(_recently_used_tools)[:6])} — "
+                    "НЕ повторяй с теми же параметрами. Переходи к следующему конкретному шагу.\n"
                     if _recently_used_tools else ''
                 )
 
                 _user_profile_ag = data.get('user_profile', {})
                 _user_profile_sum_ag = (_user_profile_ag.get('summary', '') or '') if _user_profile_ag else ''
                 _user_rules_ag = data.get('user_rules', [])
+                _rap_note = (
+                    f"⚠️ run_agent_action запускает ТОЛЬКО твой встроенный скрипт (RSS/GitHub/etc.) — "
+                    f"он вернёт данные СВОЕЙ ленты, а не произвольные API.\n"
+                    f"   Если результат run_agent_action не по теме задания → немедленно используй web_search.\n"
+                    if _tool_hint == 'run_agent_action' and (_ag_data.get('python_code') or '').strip() else ''
+                )
                 _agent_prompt = (
                     f"Твоё задание:\n{_ag_task}\n"
                     + (f"\n🎯 Работаешь НА ЦЕЛЬ: «{_ag_goal_title}»\n"
-                       f"   ⚠️ При вызове update_goal_progress используй goal_title='{_ag_goal_title}' ТОЧНО.\n"
+                       f"   🚫 update_goal_progress — ТОЛЬКО goal_title='{_ag_goal_title}'. Другие цели НЕ ТРОГАЙ.\n"
+                       f"   🚫 update_goal_progress вызывай ТОЛЬКО при КОНКРЕТНОМ исходящем действии:\n"
+                       f"      ✅ отправил письмо/сообщение → можно обновить notes\n"
+                       f"      ✅ нашёл НОВОГО пользователя/контакт → можно обновить metric_current\n"
+                       f"      ❌ прочитал RSS / сделал web_search / вызвал run_agent_action — НЕ обновлять прогресс!\n"
                        if _ag_goal_title else '')
                     + (f"⚙️ Рекомендуемый инструмент: {_tool_hint}\n" if _tool_hint else '')
+                    + _rap_note
                     + _dedup_hint
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
@@ -3852,6 +3880,9 @@ class AnchorEngine:
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _step_tools = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
                 _all_tools.extend(_step_tools)
+                # Запоминаем инструменты текущего прогона — для dedup следующих шагов того же агента
+                if _step_tools and _ag_name:
+                    _current_run_agent_tools.setdefault(_ag_name, set()).update(_step_tools)
 
                 if not _result or not _result.strip() or len(_result.strip()) < 20:
                     if _step_task_id:
