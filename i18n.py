@@ -189,11 +189,11 @@ _register('task_duplicate',
     "Задача '{title}' уже есть в списке.",
     "Task '{title}' already exists.")
 _register('task_no_time',
-    "ВРЕМЯ НЕ УКАЗАНО. Спроси у пользователя: «На какое время поставить напоминание?»",
-    "NO TIME SPECIFIED. Ask the user: 'What time should I set the reminder for?'")
+    "На какое время поставить напоминание?",
+    "What time should I set the reminder for?")
 _register('task_title_empty',
-    "ERROR: Название задачи не может быть пустым — укажи название.",
-    "ERROR: Task title cannot be empty.")
+    "Название задачи не может быть пустым — укажи название.",
+    "Task title cannot be empty.")
 _register('task_linked_to_goal',
     "Привязана к цели: {goal}",
     "Linked to goal: {goal}")
@@ -207,8 +207,8 @@ _register('time_free',
     "Время свободно, можно создавать задачу.",
     "Time slot is free, you can create a task.")
 _register('self_delegation_error',
-    "SELF_DELEGATION_ERROR: Нельзя поручить задачу самому себе.",
-    "SELF_DELEGATION_ERROR: Cannot delegate a task to yourself.")
+    "Нельзя поручить задачу самому себе.",
+    "Cannot delegate a task to yourself.")
 
 # ═══════════════════════════════════════════════════════
 # СТРОКИ: ЦЕЛИ

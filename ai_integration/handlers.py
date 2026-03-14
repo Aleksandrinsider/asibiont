@@ -1939,7 +1939,7 @@ async def delegate_task(
 
         # If delegating to self, return error marker
         if recipient.id == delegator.id:
-            return "SELF_DELEGATION_ERROR: Нельзя делегировать задачу самому себе"
+            return "Нельзя поручить задачу самому себе."
 
         # Create task with pending delegation status
         task = Task(
@@ -13468,7 +13468,7 @@ async def start_content_campaign(
             return " Укажи название и цель кампании"
 
         if not post_time:
-            return " Время публикации не указано. Спроси пользователя: в какое время публиковать (например, '09:00', '18:00', '21:00'). Не используй 12:00 по умолчанию — пользователь должен указать время явно."
+            return "В какое время публиковать посты? Например: '09:00', '18:00', '21:00'."
 
         if platforms is None:
             platforms = ['feed']

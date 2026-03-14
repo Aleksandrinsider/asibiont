@@ -406,6 +406,16 @@ def clean_technical_details(text):
     
     # Эмодзи НЕ удаляем — агент может использовать их когда уместно
     
+    # Удаляем технические префиксы tool-результатов если они протекли в финальный ответ
+    text = re.sub(r'^TASK_UPDATED:\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^TASK_DELETED:\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^TASK_COMPLETED:\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^ERROR:\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^SELF_DELEGATION_ERROR:\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^NO TIME SPECIFIED\..*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^ВРЕМЯ НЕ УКАЗАНО\..*$', '', text, flags=re.MULTILINE)
+    # Удаляем ведущие ": " или ": " артефакты (после clean срезается слово перед двоеточием)
+    text = re.sub(r'^:\s+', '', text)
     # Нормализуем отступы: \n\n\n+ → \n\n, а \n\n → \n (мессенджер-стиль, без лишних пустых строк)
     text = re.sub(r'\n{3,}', '\n\n', text)  # тройные+ → двойные
     text = re.sub(r'\n\n', '\n', text)       # двойные → одинарные
