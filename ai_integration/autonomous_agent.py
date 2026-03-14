@@ -4587,6 +4587,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _tc_mode = "auto"
         else:
             _tc_mode = None
+        # Anti-repeat: на итерациях > 0 сообщаем модели что уже использовалось
+        if _is_autopilot_task and _iter > 0 and _tools_used:
+            _used_str = ', '.join(_tools_used[-3:])
+            _messages.append({"role": "user", "content": (
+                f"Уже использовал: {_used_str}. "
+                f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
+                f"Если нашёл контакты/email — можно использовать send_outreach_email или start_email_campaign."
+            )})
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
@@ -4633,9 +4641,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _my_tools_safe = locals().get('_my_tools', [])
                 if _my_tools_safe:
                     _priority_order = [
-                        'send_outreach_email', 'start_email_campaign', 'run_agent_action',
-                        'research_topic', 'web_search', 'find_relevant_contacts_for_task',
-                        'check_emails',
+                        'web_search', 'research_topic', 'run_agent_action',
+                        'find_relevant_contacts_for_task', 'check_emails',
+                        'send_outreach_email', 'start_email_campaign',
                     ]
                     for _pt in _priority_order:
                         if _pt in _my_tools_safe:
@@ -4652,7 +4660,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _messages.append({"role": "assistant", "content": _content or ""})
                     _messages.append({"role": "user", "content": (
                         f"СТОП. Ты написал текст без вызова инструмента — это ошибка. "
-                        f"Вызови инструмент {_first_tool} прямо сейчас. "
+                        f"Вызови инструмент прямо сейчас. Оптимальный вариант для этой задачи: {_first_tool}. "
+                        f"Другие доступные: {', '.join([t for t in _my_tools_safe[:6] if t != _first_tool])}. "
                         f"Не пиши текст — только вызов инструмента."
                     )})
                     try:
