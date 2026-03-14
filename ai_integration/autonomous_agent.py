@@ -3988,6 +3988,33 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
         _intg_action_hint = ''.join(_hints[:3])
 
+    # === Универсальный парсинг ACTION из скрипта агента (работает для любого агента) ===
+    _py_code_sa = agent.get('python_code', '').strip()
+    if _py_code_sa and _is_autopilot_task:
+        import re as _re_sa
+        _script_actions: list = []
+        # Паттерн: ACTION == 'value'
+        for _m_sa in _re_sa.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _py_code_sa):
+            _a = _m_sa.group(1).strip()
+            if _a and _a not in _script_actions:
+                _script_actions.append(_a)
+        # Паттерн: ACTION in ('val1', 'val2', ...)
+        for _m_sa in _re_sa.finditer(r"ACTION\s+in\s*\(([^)]+)\)", _py_code_sa):
+            for _part in _m_sa.group(1).split(','):
+                _a = _part.strip().strip("'\" ").strip()
+                if _a and _a not in _script_actions:
+                    _script_actions.append(_a)
+        if _script_actions:
+            _intg_action_hint += (
+                "\n\n🔧 run_agent_action — скрипт поддерживает ТОЛЬКО эти action-имена: "
+                + ', '.join(_script_actions)
+                + ". Используй ТОЛЬКО их. Любое другое имя не распознается скриптом и вернёт пустой результат."
+            )
+        elif _py_code_sa:
+            _intg_action_hint += (
+                "\n\n🔧 run_agent_action — скрипт агента выполняется без параметра action (читает данные автоматически)."
+            )
+
     if _is_autopilot_task:
         # ── Компактный autopilot system prompt ──
         # Принцип: минимум правил, максимум конкретики.
@@ -4533,9 +4560,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "❗ Твой ПЕРВЫЙ ответ ДОЛЖЕН быть вызовом инструмента — НЕ текстом.\n"
             "❗ Чистый текст без вызова инструментов = ОШИБКА и провал задачи.\n"
             "1. В задаче написан ПЛАН ДЕЙСТВИЙ — вызови первый подходящий инструмент прямо сейчас.\n"
-            "2. ЦЕПОЧКА за цикл: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress.\n"
-            "   Пример: web_search('QA тестировщики telegram') → save_email_contact(status='replied') → update_goal_progress.\n"
-            "   Пример: check_emails() → если нашёл новое письмо → save_email_contact(email=..., status='replied') → update_goal_progress.\n"
+            "2. ЦЕПОЧКА за цикл: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress(goal_title='...', progress=N, note='...').\n"
+            "   ⚠️ progress — АБСОЛЮТНОЕ значение % в (0-100), НЕ дельта. Считай сам по факту: \n"
+            "   - Нашёл/отправил контакты: (кол-во_найденных / цель) * 100\n"
+            "   - Получил реальный ответ 'да/буду пользоваться' = +8-10% к текущему\n"
+            "   - Создал кампанию / запустил этап = +5% к текущему\n"
+            "   Пример: цель 50 пользователей, нашёл 3 контакта, получил 1 ответ → progress=12, note='3 контакта, 1 ответ от Александр П.'\n"
+            "   Пример: check_emails() вернул 2 новых ответа → progress=текущий+10, note='2 новых ответа'.\n"
             "   Пример: find_relevant_contacts_for_task → send_outreach_email или start_email_campaign.\n"
             "3. НЕ ПИШИ О ТОМ ЧТО СОБИРАЕШЬСЯ СДЕЛАТЬ — просто вызови инструмент.\n"
             "4. Если один инструмент заблокирован/недоступен — сразу вызови другой из твоего списка.\n"
