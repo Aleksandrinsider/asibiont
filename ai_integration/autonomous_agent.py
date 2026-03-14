@@ -5088,11 +5088,21 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _tool_data_fb.append(_td_fb)
             _tool_data_fb_str = '\n'.join(_tool_data_fb[-3:]) if _tool_data_fb else ''
             if _tool_data_fb_str:
+                _aname_fb2 = (agent.get('name') or '').strip()
+                _is_fem_fb = bool(_aname_fb2 and _aname_fb2[-1] in 'аяАЯ' and _aname_fb2[-2:].lower() not in ('ша', 'жа', 'ца', 'ча'))
+                _gender_fb = (
+                    "Ты женского рода — пиши: нашла, обнаружила, проверила, отправила, сделала.\n"
+                    if _is_fem_fb else
+                    "Ты мужского рода — пиши: нашёл, обнаружил, проверил, отправил, сделал.\n"
+                )
                 _fb_messages = [
                     {"role": "system", "content": (
-                        f"Ты — {agent.get('name', 'агент')}. Расскажи пользователю в чат "
-                        "ЧТО КОНКРЕТНО ты сделал и нашёл. Пиши от первого лица, живо, "
-                        "с фактами и цифрами. НЕ пиши 'выполнил поиск' или 'обновил прогресс'."
+                        f"Ты — {agent.get('name', 'агент')}. Расскажи пользователю ЧТО КОНКРЕТНО нашёл/сделал.\n"
+                        + _gender_fb +
+                        "Пиши от первого лица, живо, с фактами и цифрами.\n"
+                        "НЕ пиши 'выполнил поиск' или 'обновил прогресс'.\n"
+                        "⛔ ЗАПРЕЩЕНО упоминать названия инструментов (save_email_contact, web_search, update_goal_progress и т.д.).\n"
+                        "Пиши что НАШЁЛ и СДЕЛАЛ, а не через какой инструмент."
                     )},
                     {"role": "user", "content": (
                         f"Вот данные из инструментов:\n{_tool_data_fb_str}\n\n"

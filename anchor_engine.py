@@ -2152,8 +2152,9 @@ class AnchorEngine:
                             + (f"\nИнтеграции агента: {_intg_list}" if _intg_list else '')
                             + f"\nЗадача (цели пользователя): {_brief_task}"
                             f"\n\nТребования: 1 предложение, 15-25 слов. Обращение по имени. "
-                            f"Конкретно — ЧТО делать с КАКИМИ инструментами. "
-                            f"Живо, по-человечески, без формальностей и markdown."
+                            f"Конкретно — ЧТО делать. "
+                            f"Живо, по-человечески, без формальностей и markdown. "
+                            f"⛔ НЕ упоминай названия инструментов (web_search, save_email_contact и т.д.)."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=70)
                         if _gen and len(_gen.strip()) > 15:
@@ -2206,9 +2207,11 @@ class AnchorEngine:
                             _cs.close()
                         if not _skip_coord and self.bot:
                             try:
+                                from ai_integration.utils import clean_technical_details as _ctd_coord
+                                _coord_text_clean = _ctd_coord(_coord_text) if _coord_text else _coord_text
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
-                                    text=f"ASI → {_chosen_name}:\n\n{_coord_text}",
+                                    text=_coord_text_clean or _coord_text,
                                 )
                             except Exception:
                                 pass
@@ -2286,7 +2289,7 @@ class AnchorEngine:
                         _goal_lines = ', '.join(g.get('title', '')[:50] for g in _goals_summary[:3])
                         _fallback_msg = f"Работаю над целями: {_goal_lines}. Анализирую возможные шаги."
                         try:
-                            await self.bot.send_message(chat_id=user.telegram_id, text=f"{agent_name}:\n\n{_fallback_msg}")
+                            await self.bot.send_message(chat_id=user.telegram_id, text=_fallback_msg)
                             session.add(Interaction(
                                 user_id=user.id,
                                 message_type='proactive',
@@ -2460,7 +2463,7 @@ class AnchorEngine:
                             _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
-                            text=f"{agent_name}:\n\n{_cleaned_result}",
+                            text=_cleaned_result,
                         )
                         # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                         _agent_content = json.dumps({
@@ -3985,7 +3988,7 @@ class AnchorEngine:
                         try:
                             await self.bot.send_message(
                                 chat_id=user.telegram_id,
-                                text=f"ASI → {_ag_name}:\n\n{_assign_text}",
+                                text=_assign_text,
                             )
                         except Exception:
                             pass

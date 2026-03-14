@@ -480,6 +480,13 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         original_desc = description
         description = description[:197] + "..."
         logger.warning(f"[ADD_TASK] Description truncated from {len(original_desc)} to 200 chars")
+    # Если description дублирует title — очищаем (AI часто копирует название в описание)
+    if description and title:
+        _desc_norm = description.strip().lower()
+        _title_norm = title.strip().lower()
+        if _desc_norm == _title_norm or _desc_norm.startswith(_title_norm[:min(40, len(_title_norm))]):
+            description = ''
+            logger.info("[ADD_TASK] description cleared: duplicated title")
 
     if session is None:
         session = Session()
@@ -12635,6 +12642,8 @@ async def send_email(
         sender_email = _chosen_integration['email_user']
         # Нормализация адресата
         to_clean = to.strip().lower()
+        if not to_clean or '@' not in to_clean:
+            return f" Некорректный email получателя: {to!r}. Укажи адрес в формате name@domain.com"
 
         # ── Gmail OAuth: прямая отправка через Gmail API ──────────────────────
         if _chosen_integration.get('type') == 'gmail_oauth':
