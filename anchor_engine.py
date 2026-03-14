@@ -427,6 +427,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     # ── История инструментов → что запрещено/предупреждение ──
     _tool_cnt: dict = {}
+    _last_tools: list = []   # последовательность инструментов (для детектора зацикливания)
     if agent_history:
         for _h in agent_history:
             _m = _re_ap.search(r'\[([^\]]+)\]', _h)
@@ -435,8 +436,21 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     _t = _t.strip()
                     if _t:
                         _tool_cnt[_t] = _tool_cnt.get(_t, 0) + 1
+                        _last_tools.append(_t)
     _banned = {t for t, n in _tool_cnt.items() if n >= 2}   # порог: 2+ раза = пробовали, пора менять
     _warn   = {t for t, n in _tool_cnt.items() if n == 1}
+
+    # Детектор петли: последние 3 инструментa одинаковые → форсируем analyse
+    _force_analyse = False
+    if len(_last_tools) >= 3 and len(set(_last_tools[-3:])) == 1:
+        _force_analyse = True
+    # Детектор "web_search → update_goal_progress" cycling (типичная унылая петля)
+    _is_trivial_loop = (
+        len(_last_tools) >= 4
+        and all(t in ('web_search', 'update_goal_progress', 'quick_topic_search') for t in _last_tools[-4:])
+    )
+    if _is_trivial_loop:
+        _force_analyse = True
 
     def _ti(name: str) -> str:
         """Помечает заблокированный инструмент."""
@@ -541,12 +555,19 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "\nТВОЯ ИСТОРИЯ (последние действия — НЕ ПОВТОРЯЙ без нового результата):\n"
             + '\n'.join(_mem_lines) + '\n'
         )
-        if _banned:
+        if _force_analyse:
+            _memory_block += (
+                "🔴 ПЕТЛЯ ОБНАРУЖЕНА: ты повторяешь одни и те же инструменты без прогресса!\n"
+                "→ ОБЯЗАТЕЛЬНЫЙ следующий шаг: вызови analyze_situation_and_suggest_tasks ИЛИ research_and_plan\n"
+                "   чтобы осмыслить накопленные данные и выработать НОВУЮ стратегию.\n"
+                "   После анализа — update_goal_progress с выводами.\n"
+            )
+        elif _banned:
             _memory_block += (
                 f"🚫 ЗАБЛОКИРОВАНО (2+ раз без прогресса): {', '.join(sorted(_banned))}\n"
                 "→ Выбери ЛЮБОЙ другой инструмент из каталога выше.\n"
             )
-        if _warn:
+        if _warn and not _force_analyse:
             _memory_block += f"⚠️ Использовано по 1 разу — лучше попробовать новое: {', '.join(sorted(_warn))}\n"
 
     # ── Имена целей для привязки задач ──
@@ -3236,11 +3257,44 @@ class AnchorEngine:
             _missing_intg_str_c = ('\n\n⚠️ ВАЖНО для планирования (отсутствующие интеграции):\n'
                                    + '\n'.join(_missing_intg_coord)) if _missing_intg_coord else ''
 
+            # ── Строим per-goal блок: для каждой цели — её тематика и подходящие инструменты ──
+            _goal_blocks = []
+            _DOMAIN_TOOLS = {
+                'finance':  ('нефт', 'газ', 'биржа', 'акции', 'финанс', 'трейдинг', 'инвест', 'рынок', 'котировк', 'oil', 'stock', 'forex', 'крипто', 'crypto'),
+                'news':     ('новост', 'мониторинг', 'тренды', 'медиа', 'сми', 'пресс', 'обзор', 'аналитик'),
+                'dev':      ('разработ', 'программ', 'github', 'developer', 'код', 'приложен', 'репозитор'),
+                'people':   ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг', 'нанять', 'участник'),
+                'content':  ('контент', 'smm', 'пост', 'публикац', 'канал', 'telegram', 'discord'),
+                'sales':    ('продаж', 'лид', 'партнёр', 'сделка', 'b2b', 'outreach'),
+            }
+            _DOMAIN_TOOL_MAP = {
+                'finance':  'Используй: web_search/research_topic/get_news_trends (анализ рынка), run_agent_action (котировки). НЕ email.',
+                'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
+                'dev':      'Используй: run_agent_action (GitHub API: search_users), find_relevant_contacts_for_task. GitHub Token есть у агента.',
+                'people':   'Используй: find_relevant_contacts_for_task, send_outreach_email, start_email_campaign, save_email_contact.',
+                'content':  'Используй: generate_marketing_content, create_post, publish_to_telegram/discord, start_content_campaign.',
+                'sales':    'Используй: find_partners, find_relevant_contacts_for_task, send_outreach_email, start_email_campaign.',
+            }
+            for _g_plan in _goals[:5]:
+                _gt = (_g_plan.get('title') or '').lower()
+                _gd = (_g_plan.get('description') or '').lower()
+                _gfull = _gt + ' ' + _gd
+                _domain = 'people'  # дефолт
+                for _dom, _kws in _DOMAIN_TOOLS.items():
+                    if any(w in _gfull for w in _kws):
+                        _domain = _dom
+                        break
+                _goal_blocks.append(
+                    f"  Цель «{_g_plan['title'][:50]}» ({_g_plan.get('progress',0)}%) "
+                    f"→ домен: {_domain} → {_DOMAIN_TOOL_MAP[_domain]}"
+                )
+            _goal_domain_str = '\n'.join(_goal_blocks) if _goal_blocks else ''
+
             _plan_prompt = (
                 f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Контекст пользователя (работай на ЕГО проект):\n{_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + (f"Правила пользователя: {'; '.join(_user_rules_coord[:3])}\n\n" if _user_rules_coord else '')
-                + f"Цели пользователя: {_goals_str}\n"
+                + f"Цели пользователя:\n{_goal_domain_str}\n\n"
                 f"Контактов в базе={_known_contacts}, писем отправлено={_email_sent}\n"
                 f"Email-кампании:\n{_email_campaigns_str}\n"
                 f"Уже получили письма (НЕ писать повторно): {_already_sent_str}\n"
@@ -3262,7 +3316,10 @@ class AnchorEngine:
                 "  🎯 Задачи/цели: add_task, update_goal_progress, schedule_background_task, set_contact_alert\n"
                 "  ⚙️ Внешние интеграции (нужен python_code): run_agent_action (RSS/GitHub/Slack/Notion/CRM...)\n"
                 "\nПРАВИЛА:\n"
-                "1. 🎭 ЗАДАНИЕ = ПО ПРОФИЛЮ агента (имя + должность + описание выше).\n"
+                "1. 🎯 ГЛАВНОЕ: каждый агент работает на ОДНУ из целей выше — ту, которая подходит его профилю.\n"
+                "   Смотри раздел 'Цели пользователя' выше — там уже указаны нужные инструменты per цель.\n"
+                "   СТРОГО: агент с RSS/аналитикой → аналитическая цель. Email-агент → цель по людям/outreach.\n"
+                "2. 🎭 ЗАДАНИЕ = ПО ПРОФИЛЮ агента:\n"
                 "   Аналитик/финансист → research_topic, get_news_trends, analyze_situation_and_suggest_tasks.\n"
                 "   SMM/контент → generate_marketing_content, quick_topic_search, create_post.\n"
                 "   HR/рекрутер → find_relevant_contacts_for_task (кандидаты/тестировщики).\n"
@@ -3270,21 +3327,26 @@ class AnchorEngine:
                 "   RSS/скрипты → run_agent_action(get_latest/search).\n"
                 "   GitHub → run_agent_action(search_users/find_contributors).\n"
                 "   Общий профиль → web_search/research_topic по теме его специализации.\n"
-                "   ЗАПРЕЩЕНО давать агенту задачи ВНЕ его профиля (HR-задачи аналитику, поиск кода маркетологу).\n"
-                "2. 💡 ЗАДАНИЯ МОГУТ БЫТЬ КОСВЕННЫМИ и аналитическими:\n"
-                "   'изучи тренды X и предложи темы для постов', 'мониторь конкурентов, сделай сравнительный анализ',\n"
-                "   'найди экспертов в X и сохрани как контакт', 'оцени текущий прогресс цели и предложи следующий шаг'.\n"
-                "   НЕ ОБЯЗАТЕЛЬНО прямое массовое действие (send_email всем) — ДУМАЙ, АНАЛИЗИРУЙ, СОВЕТУЙ.\n"
-                "3. Задания РАЗНЫЕ — не дублируют друг друга и не повторяют историю агента.\n"
-                "4. 🚫 Заблокированные инструменты — строго не назначать! Выбери другой из каталога.\n"
-                "5. Задание = КОНКРЕТНОЕ: инструмент + параметры + привязка к цели.\n"
+                "   ЗАПРЕЩЕНО давать агенту задачи ВНЕ его профиля (email-задачи RSS-аналитику, финансовый анализ HR-агенту).\n"
+                "3. 💡 ЗАДАНИЯ МОГУТ БЫТЬ КОСВЕННЫМИ и аналитическими:\n"
+                "   'изучи тренды X и предложи стратегию', 'мониторь конкурентов и дай сравнение',\n"
+                "   'найди экспертов в X и сохрани как контакт', 'оцени прогресс и предложи следующий шаг'.\n"
+                "4. Задания РАЗНЫЕ — не дублируют друг друга и не повторяют историю агента.\n"
+                "5. 🚫 Заблокированные инструменты — строго не назначать! Выбери другой.\n"
                 "6. НЕ назначай check_emails агенту без IMAP-ключей.\n"
-                "7. НЕ отправляй письма адресатам из списка 'уже получили письма'.\n"
-                "8. Если кампаний нет — email-агент ОБЯЗАН вызвать start_email_campaign первым делом.\n"
-                "9. Поощряй разнообразие: negotiate_by_email, send_follow_up_email, "
-                "quick_topic_search, generate_marketing_content если базовые шаги уже сделаны.\n"
-                f"Верни ТОЛЬКО JSON-массив из {_n_agents}+ объектов без объяснений:\n"
-                '[{"agent": "имя", "task": "задача 2-3 предл. по профилю агента", "tool": "главный_инструмент"}]'
+                "7. НЕ назначай email-инструменты агенту без Gmail/SMTP ключей.\n"
+                "8. НЕ отправляй письма адресатам из 'уже получили письма'.\n"
+                "9. Если email-кампаний нет → email-агент ОБЯЗАН вызвать start_email_campaign.\n"
+                "10. Для RSS-агента: run_agent_action(action='get_latest') — загрузить ленту и найти контакты.\n"
+                "11. 🔴 ОБЯЗАТЕЛЬНО: каждая цель из списка ДОЛЖНА получить минимум одно задание.\n"
+                "    Если агентов меньше целей — один агент получает несколько записей в массиве (разные задания).\n"
+                "    ЗАПРЕЩЕНО игнорировать цели! Проверь: все ли цели покрыты в поле 'goal'?\n"
+                "12. Для темы 'рынок/нефть/финансы/аналитика' — если нет финансового агента, ЛЮБОЙ агент\n"
+                "    может использовать web_search/research_topic — эти инструменты доступны всем.\n"
+                f"    ТОЧНЫЕ названия целей для поля 'goal': {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
+                f"Верни ТОЛЬКО JSON-массив из {max(_n_agents, len(_goals[:5]))}+ объектов "
+                f"(минимум по одному на каждую из {len(_goals[:5])} целей) без объяснений:\n"
+                '[{"agent": "имя", "task": "задача 2-3 предл.", "tool": "главный_инструмент", "goal": "точное название цели из списка выше"}]'
             )
 
             try:
@@ -3432,6 +3494,7 @@ class AnchorEngine:
                 _ag_name = (_step.get('agent') or '').strip()
                 _ag_task = (_step.get('task') or '').strip()
                 _tool_hint = (_step.get('tool') or '').strip()
+                _ag_goal_title = (_step.get('goal') or '').strip()   # привязка к цели из плана координатора
                 if not _ag_name or not _ag_task:
                     continue
 
@@ -3589,6 +3652,10 @@ class AnchorEngine:
                 _user_rules_ag = data.get('user_rules', [])
                 _agent_prompt = (
                     f"Твоё задание:\n{_ag_task}\n"
+                    + (f"\n🎯 Работаешь НА ЦЕЛЬ: «{_ag_goal_title}»\n"
+                       f"   ⚠️ При вызове update_goal_progress используй goal_title='{_ag_goal_title}' ТОЧНО.\n"
+                       if _ag_goal_title else '')
+                    + (f"⚙️ Рекомендуемый инструмент: {_tool_hint}\n" if _tool_hint else '')
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"

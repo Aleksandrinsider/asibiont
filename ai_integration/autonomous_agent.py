@@ -4555,7 +4555,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _pending_subdelegations: list[dict] = []
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
-    _TOOL_TIMEOUT = 30  # секунд на один инструмент (включая research_topic с веб-поиском)
+    _TOOL_TIMEOUT = 55  # секунд на один инструмент (research_topic с веб-поиском занимает 30-45с)
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
