@@ -202,16 +202,17 @@ def has_enough_tokens(user_id: int, action: str, session=None) -> bool:
     return balance >= cost
 
 
-def spend_tokens(user_id: int, action: str, description: str = '', session=None, auto_commit: bool = True) -> dict:
+def spend_tokens(user_id: int, action: str, description: str = '', session=None, auto_commit: bool = True, cost: int = None) -> dict:
     """
     Списывает токены за действие.
     
     Args:
         auto_commit: Если False, не коммитит (вызывающий код коммитит сам) — для транзакционной целостности.
+        cost: Переопределить стоимость вместо ACTION_COSTS[action] (для динамического биллинга).
     
     Returns: {'success': True/False, 'balance': int, 'spent': int, 'error': str}
     """
-    cost = ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
+    cost = cost if cost is not None else ACTION_COSTS.get(action, DEFAULT_TOOL_COST)
     
     close = False
     if session is None:

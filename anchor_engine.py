@@ -2047,7 +2047,7 @@ class AnchorEngine:
                         )
                     # Иначе оставляем task_text как был
 
-                # ── Проверяем и списываем токены за автопилот ──
+                # ── Проверяем токены за автопилот (минимум agent_task=15) ──
                 from token_service import has_enough_tokens as _het_ap, spend_tokens as _sp_ap
                 from config import FREE_ACCESS_MODE as _FAM_ap
                 if not _FAM_ap:
@@ -2056,18 +2056,7 @@ class AnchorEngine:
                         anchor.delivered_at = datetime.now(timezone.utc)
                         session.commit()
                         return
-                    _spend_result = _sp_ap(user.telegram_id, 'proactive_message', description='goal_autopilot_dispatch', session=session, auto_commit=False)
-                    if not _spend_result.get('success'):
-                        logger.info("[ANCHOR-AUTOPILOT] user %d: skip — spend_tokens failed: %s", user.id, _spend_result.get('error', ''))
-                        anchor.delivered_at = datetime.now(timezone.utc)
-                        try:
-                            session.commit()
-                        except Exception:
-                            try:
-                                session.rollback()
-                            except Exception:
-                                pass
-                        return
+                # Биллинг производится ПОСЛЕ AI-вызова (динамически по факту токенов)
 
                 # Помечаем якорь доставленным ДО AI-вызова — защита от перезапуска Railway
                 anchor.delivered_at = datetime.now(timezone.utc)
@@ -2284,7 +2273,7 @@ class AnchorEngine:
 
                 try:
                     # Ограничиваем task_text для экономии input-токенов DeepSeek
-                    _task_trimmed = task_text[:3000] if len(task_text) > 3000 else task_text
+                    _task_trimmed = task_text[:2000] if len(task_text) > 2000 else task_text
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(
                             agent_data, _task_trimmed, user.telegram_id,
@@ -2318,6 +2307,14 @@ class AnchorEngine:
                     _raw = ('', [])
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
+                _cycle_tokens = int(_raw[2]) if isinstance(_raw, (tuple, list)) and len(_raw) > 2 else 0
+
+                # Динамический биллинг: списываем по фактическому расходу API
+                # 1 платформенный токен ≈ 1000 DeepSeek-токенов, мин=3, макс=20
+                if not _FAM_ap and (_cycle_tokens > 0 or (result or '').strip()):
+                    _dynamic_cost = max(3, min(20, _cycle_tokens // 1000)) if _cycle_tokens else 3
+                    _sp_ap(user.telegram_id, 'proactive_message', description=f'autopilot_dynamic:{_cycle_tokens}tok', cost=_dynamic_cost)
+                    logger.info("[ANCHOR-AUTOPILOT] billed user %d: %d tokens (%d DeepSeek-tok)", user.id, _dynamic_cost, _cycle_tokens)
 
                 # ── Обновляем задачу в «Поручения агентам» результатом ──
                 if _ap_task_id and (result or '').strip():

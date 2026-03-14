@@ -4668,14 +4668,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
+    _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
-    # autopilot: search + action + progress/delegate (3 итерации, ~150с worst case)
-    # обычный: action + summary (2 итерации)
-    _max_iters = 3
+    # autopilot: search + action + progress (2 итерации, ~100с worst case)
+    # обычный: action + summary (3 итерации)
+    _max_iters = 2 if _is_autopilot_task else 3
     for _iter in range(_max_iters):
-        # Autopilot: 5 tool calls (search + action + followup + delegate + progress)
-        # Regular: 3 tool calls (action + followup + progress)
-        _max_tool_calls = 5 if _is_autopilot_task else 3
+        # 3 tool calls per iteration для всех режимов (снижаем с 5 для автопилота)
+        _max_tool_calls = 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -4709,6 +4709,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except (asyncio.TimeoutError, Exception) as _ai_err:
             logger.warning("[DIRECTOR-EXEC] agent %s call_ai error: %s", agent.get('name'), _ai_err)
             break
+        if _resp:
+            _u_ap = _resp.get('usage') or {}
+            _total_ap_tokens += _u_ap.get('prompt_tokens', 0) + _u_ap.get('completion_tokens', 0)
         if not _resp or not _resp.get('choices'):
             break
         _msg = _resp['choices'][0]['message']
@@ -5049,10 +5052,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         except Exception:
                             pass
                         try:
-                            _sub_res, _sub_tools = await asyncio.wait_for(
+                            _sub_raw_sd = await asyncio.wait_for(
                                 _exec_agent_for_director(_ta_dict, _sd['task'], user_id, dialog_context, _depth=_depth + 1),
                                 timeout=60,
                             )
+                            _sub_res = _sub_raw_sd[0] if isinstance(_sub_raw_sd, (tuple, list)) else _sub_raw_sd
+                            _sub_tools = list(_sub_raw_sd[1]) if isinstance(_sub_raw_sd, (tuple, list)) and len(_sub_raw_sd) > 1 else []
                             _sub_results.append(f"{_target_agent.name}: {_sub_res}")
                             _tools_used.extend(_sub_tools)
                         except Exception as _sub_err:
@@ -5162,6 +5167,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _agent_inst.call_ai(_fb_messages, use_tools=False, max_tokens=250, api_timeout=25),
                     timeout=30,
                 )
+                if _fb_resp:
+                    _u_fb2 = _fb_resp.get('usage') or {}
+                    _total_ap_tokens += _u_fb2.get('prompt_tokens', 0) + _u_fb2.get('completion_tokens', 0)
                 if _fb_resp and _fb_resp.get('choices'):
                     _fb_text = (_fb_resp['choices'][0]['message'].get('content') or '').strip()
                     if _fb_text and len(_fb_text) > 40:
@@ -5184,7 +5192,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
 
-    return _final_text, _tools_used
+    logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
+    return _final_text, _tools_used, _total_ap_tokens
 
 
 # ══ Вспомогательные функции для delegation pipeline ══════════════════════════
