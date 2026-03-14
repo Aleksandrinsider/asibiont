@@ -6491,6 +6491,15 @@ class AnchorEngine:
         except Exception as _au_err:
             logger.debug("[AUTOPILOT] auto-update goal metric: %s", _au_err)
 
+        # ── Синхронизируем goals_summary с обновлёнными ORM-объектами ──
+        # goals_summary был построен ДО авто-обновления метрик → патчим свежими данными
+        for _gs_item in goals_summary:
+            for _g_sync in active_goals:
+                if _g_sync.id == _gs_item.get('id'):
+                    _gs_item['progress'] = _g_sync.progress_percentage
+                    _gs_item['metric_current'] = _g_sync.metric_current
+                    break
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
