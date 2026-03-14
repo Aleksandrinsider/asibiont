@@ -363,6 +363,67 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_rss    = any(w in c for c in _caps_lower for w in ('rss', 'feed', 'лент'))
     _has_github = any(w in c for c in _caps_lower for w in ('github', 'gitlab'))
     _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'контент', 'smm'))
+    _has_alpha  = any(w in c for c in _caps_lower for w in ('alpha_vantage', 'alphavantage', 'котировк', 'биржа'))
+    _has_news   = any(w in c for c in _caps_lower for w in ('newsapi', 'news api', 'news_api'))
+    _has_notion = any(w in c for c in _caps_lower for w in ('notion',))
+    _has_slack  = any(w in c for c in _caps_lower for w in ('slack',))
+    _has_sheets = any(w in c for c in _caps_lower for w in ('google sheets', 'gsheets', 'spreadsheet'))
+    _has_stripe = any(w in c for c in _caps_lower for w in ('stripe', 'юкасс', 'yookassa', 'платеж'))
+
+    # ── Блок: что подключено у агента, что доступно для целей ──
+    _goals_text_all = ' '.join(g.get('title', '') for g in goals_summary).lower()
+    _intg_connected = []
+    _intg_missing = []
+
+    if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
+    if _has_github:  _intg_connected.append('✅ GitHub — поиск разработчиков, репозитории, issues')
+    if _has_rss:     _intg_connected.append('✅ RSS — мониторинг лент новостей')
+    if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
+    if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
+    if _has_notion:  _intg_connected.append('✅ Notion — записи, базы знаний')
+    if _has_slack:   _intg_connected.append('✅ Slack — коммуникация с командой')
+    if _has_sheets:  _intg_connected.append('✅ Google Sheets — таблицы, аналитика')
+    if _has_stripe:  _intg_connected.append('✅ Stripe/ЮКасса — платёжные данные')
+    if _has_content: _intg_connected.append('✅ Telegram/Discord — публикация контента')
+    if _has_script:  _intg_connected.append('✅ Python / HTTP — кастомные скрипты через run_agent_action')
+
+    # Рекомендации: смотрим на темы целей и чего нет у агента
+    import os as _os_bap
+    _fin_kw = ('нефт', 'газ', 'рынок', 'биржа', 'акции', 'финанс', 'трейд', 'инвест', 'криптo', 'oil', 'stock', 'forex', 'валют')
+    _dev_kw = ('разработ', 'программ', 'github', 'code', 'репозитор', 'деплой')
+    _news_kw = ('новост', 'мониторинг', 'тренды', 'медиа', 'сми', 'пресс', 'обзор рынка')
+    _ppl_kw  = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг')
+    _cnt_kw  = ('контент', 'smm', 'публикац', 'канал', 'посты')
+
+    if any(w in _goals_text_all for w in _fin_kw):
+        if not _has_alpha:
+            _intg_missing.append('⚡ Alpha Vantage — котировки нефти/акций/металлов (ALPHAVANTAGE_API_KEY в настройках агента)')
+        if not _has_news and not _os_bap.getenv('NEWSAPI_KEY'):
+            _intg_missing.append('⚡ NewsAPI — поток финансовых новостей (NEWSAPI_KEY в Railway Variables)')
+    if any(w in _goals_text_all for w in _news_kw):
+        if not _has_news and not _os_bap.getenv('NEWSAPI_KEY'):
+            _intg_missing.append('⚡ NewsAPI — 100+ источников новостей (NEWSAPI_KEY в Railway Variables)')
+        if not _has_rss:
+            _intg_missing.append('⚡ RSS — добавь RSS_URL= в API-ключи агента для мониторинга лент')
+    if any(w in _goals_text_all for w in _dev_kw):
+        if not _has_github and not _os_bap.getenv('GITHUB_TOKEN'):
+            _intg_missing.append('⚡ GitHub Token — поиск разработчиков/контрибьюторов (GITHUB_TOKEN в Railway Variables)')
+    if any(w in _goals_text_all for w in _ppl_kw):
+        if not _has_imap:
+            _intg_missing.append('⚡ Email — добавь GMAIL_USER + пароль приложения в настройки агента для охвата')
+    if any(w in _goals_text_all for w in _cnt_kw):
+        if not _has_content:
+            _intg_missing.append('⚡ Telegram Bot Token — публикация постов в канал (TELEGRAM_BOT_TOKEN в настройках агента)')
+
+    _intg_block = ''
+    if _intg_connected or _intg_missing:
+        _intg_block = '\nИНТЕГРАЦИИ АГЕНТА:\n'
+        if _intg_connected:
+            _intg_block += '\n'.join(f'  {x}' for x in _intg_connected) + '\n'
+        if _intg_missing:
+            _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
+            _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
+        _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
 
     # ── История инструментов → что запрещено/предупреждение ──
     _tool_cnt: dict = {}
@@ -495,6 +556,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Твои интеграции/специализация: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
+        f"{_intg_block}"
         f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
@@ -3142,16 +3204,51 @@ class AnchorEngine:
 
             _email_campaigns_str = '\n'.join(str(e) for e in data.get('email_campaigns', [])) or 'нет'
 
+            # ── Контекст пользователя для координатора ──
+            _user_profile_coord = data.get('user_profile', {})
+            _user_profile_str_c = (_user_profile_coord.get('summary', '') or '') if _user_profile_coord else ''
+            _user_rules_coord = data.get('user_rules', [])
+
+            # ── Подсказки по отсутствующим интеграциям (умный детектор) ──
+            import os as _os_coord
+            _missing_intg_coord = []
+            _goals_lower_c = _goals_str.lower()
+            # Аналитика/финансы: нет NewsAPI или финансовых ключей
+            _finance_kw = ('нефт', 'газ', 'нефтя', 'рынок', 'биржа', 'акци', 'финанс', 'трейдинг', 'oil', 'market', 'stock', 'crypto', 'валют')
+            _analyst_kw = ('анализ', 'исследован', 'мониторинг', 'аналит', 'тренд', 'конкурент')
+            _has_any = any(w in _goals_lower_c for w in _finance_kw)
+            if _has_any and not _os_coord.getenv('NEWSAPI_KEY'):
+                _missing_intg_coord.append(
+                    "💡 Для финансового/рыночного анализа аналитику полезен NewsAPI (newsapi.org) — "
+                    "NEWSAPI_KEY в Railway Variables даёт доступ к 100+ источникам новостей. "
+                    "Без него — только web_search."
+                )
+            if _has_any and not any('alpha_vantage' in (getattr(a, 'user_api_keys', '') or '').lower() for a in real_agents):
+                _missing_intg_coord.append(
+                    "💡 Для котировок нефти/акций подключи Alpha Vantage (alphavantage.co) — "
+                    "ALPHAVANTAGE_API_KEY бесплатно, 500 запросов/день. Или используй run_agent_action с Python-скриптом."
+                )
+            # Без GITHUB_TOKEN при поиске разработчиков
+            if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _os_coord.getenv('GITHUB_TOKEN'):
+                _missing_intg_coord.append(
+                    "⚠️ GITHUB_TOKEN не настроен. Добавь в Railway Variables для поиска разработчиков (5000 req/h вместо 60)."
+                )
+            _missing_intg_str_c = ('\n\n⚠️ ВАЖНО для планирования (отсутствующие интеграции):\n'
+                                   + '\n'.join(_missing_intg_coord)) if _missing_intg_coord else ''
+
             _plan_prompt = (
                 f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
-                f"Цели пользователя: {_goals_str}\n"
+                + (f"Контекст пользователя (работай на ЕГО проект):\n{_user_profile_str_c}\n\n" if _user_profile_str_c else '')
+                + (f"Правила пользователя: {'; '.join(_user_rules_coord[:3])}\n\n" if _user_rules_coord else '')
+                + f"Цели пользователя: {_goals_str}\n"
                 f"Контактов в базе={_known_contacts}, писем отправлено={_email_sent}\n"
                 f"Email-кампании:\n{_email_campaigns_str}\n"
                 f"Уже получили письма (НЕ писать повторно): {_already_sent_str}\n"
                 f"Последние общие действия:\n{_recent_txt}\n"
                 f"Глобально заблокированные инструменты: {_failed_str}\n"
                 f"{_banned_tools_str}"
-                f"{_stagnant_instr}\n"
+                f"{_stagnant_instr}"
+                f"{_missing_intg_str_c}\n"
                 f"Создай план для ВСЕХ {_n_agents} агентов — каждому задание по ЕГО ПРОФИЛЮ и специализации.\n"
                 "\nДОСТУПНЫЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ (выбирай любой подходящий):\n"
                 "  📧 Email: send_outreach_email, start_email_campaign, check_emails(только IMAP), "
@@ -3356,9 +3453,49 @@ class AnchorEngine:
                         logger.info("[COORD] skip %s — billing: %s", _ag_name, _bill_c2.get('error'))
                         continue
 
-                # Индивидуальные per-agent assignment сообщения убраны:
-                # ASI уже отправил развёрнутый анонс выше — повторное сообщение = дубль.
-                # Агент просто выполняет задачу и отчитывается в чат сам.
+                # ── Per-agent assignment: поручение ASI → агент видно в чате ──
+                _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), getattr(_target_ag, 'id', 0)) if _target_ag else ''
+                _assign_text = f"{_ag_name}, {_ag_task[:120]}"
+                try:
+                    _assign_prompt = (
+                        f"Ты — ASI, координатор. Напиши ОДНО живое поручение агенту {_ag_name}.\n"
+                        f"Задача: {_ag_task[:200]}\n"
+                        f"Требования: 1 фраза 10-20 слов, обращение по имени. Конкретное действие. Без markdown."
+                    )
+                    _gen_assign = await asyncio.wait_for(
+                        _quick_ai_call_raw([{'role': 'user', 'content': _assign_prompt}], max_tokens=60),
+                        timeout=8,
+                    )
+                    if _gen_assign and len(_gen_assign.strip()) > 10:
+                        _assign_text = _gen_assign.strip()
+                except Exception as _assign_err:
+                    logger.debug("[COORD] per-agent assign gen failed: %s", _assign_err)
+                try:
+                    _assign_cs = Session()
+                    try:
+                        _assign_cs.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                'text': _assign_text,
+                                '__to_agent': _ag_name,
+                                '__anchor_type': 'coordinator_assignment',
+                            }, ensure_ascii=False),
+                        ))
+                        _assign_cs.commit()
+                    finally:
+                        _assign_cs.close()
+                    if self.bot:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=f"ASI → {_ag_name}:\n\n{_assign_text}",
+                            )
+                        except Exception:
+                            pass
+                except Exception as _assign_save_err:
+                    logger.debug("[COORD] per-agent assign save failed: %s", _assign_save_err)
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
@@ -3368,7 +3505,7 @@ class AnchorEngine:
                     _step_task = _Task_c2(
                         user_id=user.id,
                         title=_ag_task[:200],
-                        description='',
+                        description=_ag_task[:2000],
                         status='in_progress',
                         source='agent',
                         created_by_agent_id=_target_ag.id if _target_ag else None,
@@ -3447,8 +3584,13 @@ class AnchorEngine:
                     if _already_sent else ''
                 )
 
+                _user_profile_ag = data.get('user_profile', {})
+                _user_profile_sum_ag = (_user_profile_ag.get('summary', '') or '') if _user_profile_ag else ''
+                _user_rules_ag = data.get('user_rules', [])
                 _agent_prompt = (
                     f"Твоё задание:\n{_ag_task}\n"
+                    + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
+                    + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')

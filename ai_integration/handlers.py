@@ -4199,7 +4199,7 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         if goal.success_criteria:
             result += f"\nКритерии: {goal.success_criteria}"
         result += f"\n\nТеперь можешь привязывать задачи к этой цели — так ты увидишь прогресс!"
-        
+
         return result
     
     except Exception as e:
