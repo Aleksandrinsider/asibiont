@@ -78,7 +78,7 @@ class ContextBuilder:
                                         except Exception as e:
                                             logger.debug(f"Failed to format task time: {e}")
 
-                                    hints.append(f" @{username} планирует: {task.title}{time_str}")
+                                    hints.append(f"АКТИВНОСТЬ ДРУГОГО УЧАСТНИКА ПЛАТФОРМЫ (не твой email-контакт): @{username} планирует: {task.title}{time_str}")
 
                                     # Update last triggered
                                     alert.last_triggered_at = datetime.now(timezone.utc)
@@ -435,7 +435,7 @@ class ContextBuilder:
                     pass
 
             if real_contacts:
-                hints.append("КОНТАКТЫ В СЕТИ:\n" + "\n".join(f"  {c}" for c in real_contacts))
+                hints.append("ПАРТНЁРЫ НА ПЛАТФОРМЕ (совпадают интересы, НЕ связаны с email-перепиской):\n" + "\n".join(f"  {c}" for c in real_contacts))
             else:
                 hints.append("Контактов пока нет")
 
@@ -1806,7 +1806,7 @@ class ContextBuilder:
                             similar_tasks.append(f"  @{task_owner.username}: {t.title}")
 
                 if similar_tasks:
-                    hints.append(" ПОХОЖИЕ ЗАДАЧИ У ДРУГИХ:\n" + "\n".join(similar_tasks[:3]))
+                    hints.append("ПОХОЖИЕ ЗАДАЧИ У ДРУГИХ УЧАСТНИКОВ ПЛАТФОРМЫ (это НЕ твои email-контакты):\n" + "\n".join(similar_tasks[:3]))
 
         except Exception as e:
             logger.warning(f"[SIMILAR_USERS] Error: {e}")
