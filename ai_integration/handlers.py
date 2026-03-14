@@ -12423,11 +12423,14 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                 headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
                 snippet = msg_data.get('snippet', '')[:200]
                 from_hdr = headers.get('From', '?')
+                # Фильтруем письма от собственного аккаунта (копии исходящих)
+                _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
+                _gm_em_low = _gm_ems[0].lower() if _gm_ems else ''
+                if my_email and _gm_em_low == my_email.lower():
+                    continue
                 # Фильтруем уже-известные контакты
                 if known_emails:
-                    _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
-                    _gm_em_low = _gm_ems[0].lower() if _gm_ems else ''
-                    if _gm_em_low and _gm_em_low in known_emails and _gm_em_low != my_email:
+                    if _gm_em_low and _gm_em_low in known_emails:
                         skipped_known_g.append(from_hdr)
                         continue
                 results.append(
@@ -12516,10 +12519,15 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                 date = msg.get('Date', '?')
 
                 # Фильтруем уже-известные контакты
+                _from_ems = _re_imap.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_addr, _re_imap.IGNORECASE)
+                _from_low = _from_ems[0].lower() if _from_ems else ''
+
+                # Пропускаем письма от собственного аккаунта (копии исходящих, тесты)
+                if my_email and _from_low == my_email.lower():
+                    continue
+
                 if known_emails:
-                    _from_ems = _re_imap.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_addr, _re_imap.IGNORECASE)
-                    _from_low = _from_ems[0].lower() if _from_ems else ''
-                    if _from_low and _from_low in known_emails and _from_low != my_email:
+                    if _from_low and _from_low in known_emails:
                         skipped_known.append(from_addr)
                         continue
 
