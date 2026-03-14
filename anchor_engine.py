@@ -3136,13 +3136,16 @@ class AnchorEngine:
         per_history = data.get('per_agent_history', {})
         recent_txt = ' '.join(data.get('recent_actions', [])).lower()
 
-        # ── Детектор деградированных агентов (технические трудности 2+ раз) ──
+        # ── Детектор деградированных агентов (2 последних записи) ──
+        # Смотрим только 2 последних взаимодействия — если оба провал → деградирован.
+        # Не смотрим всю 48ч историю: иначе агент «вечно деградирован» и никогда не получает шансов.
         degraded_agents = set()
         for ag_name, hist in per_history.items():
-            fail_count = sum(1 for h in hist if 'технические трудности' in h.lower() or 'не успел' in h.lower())
+            _recent2 = list(hist)[-2:]
+            fail_count = sum(1 for h in _recent2 if 'технические трудности' in h.lower() or 'не успел' in h.lower())
             if fail_count >= 2:
                 degraded_agents.add(ag_name)
-                logger.info("[COORD-SM] agent '%s' marked degraded (%dx failures)", ag_name, fail_count)
+                logger.info("[COORD-SM] agent '%s' marked degraded (last 2 = failures)", ag_name)
 
         # ── Карта агентов по доменам ──
         # domain → [agent_name] — выбираем первого подходящего
@@ -3156,8 +3159,7 @@ class AnchorEngine:
             caps_lower = [c.lower() for c in p.get('caps', [])]
             caps_str = ' '.join(caps_lower)
             _name = p.get('name', '')
-            if _name in degraded_agents:
-                continue  # пропускаем деградированных
+            # Деградация = логирование, не блокировка: агент всегда получает шанс работать
             if any(w in caps_str for w in EMAIL_CAPS):
                 _domain_agents['email'].append(_name)
             if any(w in caps_str for w in RSS_CAPS):
@@ -3559,36 +3561,40 @@ class AnchorEngine:
                 )
             _sm_plan_str = '\n'.join(_sm_plan_lines) if _sm_plan_lines else '(цели не определены)'
 
-            # ── Детектор деградированных агентов ──
+            # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
             _degraded_agents_coord = set()
             for _pn_deg, _hn_deg in _per_agent_history.items():
-                _fc_deg = sum(1 for h in _hn_deg if 'технические трудности' in h.lower() or 'не успел' in h.lower())
+                _recent2_deg = list(_hn_deg)[-2:]
+                _fc_deg = sum(1 for h in _recent2_deg if 'технические трудности' in h.lower() or 'не успел' in h.lower())
                 if _fc_deg >= 2:
                     _degraded_agents_coord.add(_pn_deg)
-            _degraded_str = f"⛔ ДЕГРАДИРОВАВШИЕ агенты (2+ таймаута, пропустить): {', '.join(_degraded_agents_coord)}\n" if _degraded_agents_coord else ''
+            _degraded_note = (f"⚠️ Агенты с недавними ошибками (возможно временная проблема): {', '.join(_degraded_agents_coord)}\n"
+                             f"  → Попробуй назначить им другой инструмент или задачу — они могут справиться.\n"
+                             if _degraded_agents_coord else '')
 
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
-                + f"{_degraded_str}"
-                + f"ГОТОВЫЙ ПЛАН (вычислен из реального состояния, СТРОГО СЛЕДУЙ ЕМУ):\n{_sm_plan_str}\n\n"
+                + f"{_degraded_note}"
+                + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:100]}]\n"
                 f"Кампании: {_email_campaigns_str}\n"
                 f"{_banned_tools_str}"
-                f"Заблокированные инструменты: {_failed_str}\n"
+                f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
-                + f"\nЗАДАЧА: Назначь каждому агенту задание строго по ГОТОВОМУ ПЛАНУ выше.\n"
-                "ПРАВИЛА (критичные, только 5):\n"
-                "1. Агент с email/Gmail → ТОЛЬКО цели с доменом email (outreach, поиск тестировщиков).\n"
-                "2. Агент с RSS/аналитикой → ТОЛЬКО цели с доменом research/finance. НЕ email-задачи.\n"
-                "3. Если агент в списке деградировавших → НЕ назначай задания этому агенту.\n"
-                "4. НЕ отправляй письма из списка уже_написали. НЕ создавай кампанию если уже есть активная.\n"
-                "5. tool в JSON ДОЛЖЕН совпадать с инструментом из ГОТОВОГО ПЛАНА.\n"
+                + f"\nЗАДАЧА: Назначь каждому агенту задание исходя из его РЕАЛЬНЫХ интеграций и АКТИВНЫХ ЦЕЛЕЙ.\n"
+                "ПРИНЦИП: Каждый агент работает от своих интеграций. Агент с Gmail — может рассылать письма, "
+                "вести переписку, находить контакты. Агент с RSS — получает свежие данные из ленты, "
+                "может анализировать, исследовать, сохранять контакты авторов. "
+                "НО любой агент может использовать web_search, research_topic, add_task, update_goal_progress — "
+                "это универсальные инструменты. Выбирай задачу которая лучше всего подходит агенту под его реальные возможности.\n"
+                "ВАЖНО: покрой каждую активную цель хотя бы одним конкретным шагом. "
+                "НЕ отправляй письма адресатам из списка уже_написали.\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
-                f"Верни ТОЛЬКО JSON-массив (по одному объекту на каждую директиву из плана):\n"
-                '[{"agent": "имя", "task": "задача 2-3 предл.", "tool": "инструмент_из_плана", "goal": "точное_название"}]'
+                f"Верни ТОЛЬКО JSON-массив (по одному объекту на КАЖДУЮ активную цель):\n"
+                '[{"agent": "имя", "task": "конкретная задача 2-3 предл. с опорой на интеграции агента", "tool": "инструмент", "goal": "точное_название"}]'
             )
 
             try:
@@ -3625,59 +3631,24 @@ class AnchorEngine:
                     logger.info("[COORD] dedup: skip dup step %s/%s", _p.get('agent'), _p.get('tool'))
             _plan = _plan_deduped if _plan_deduped else _plan
 
-            # ── Постфильтрация: жёсткие правила применяются ПОСЛЕ генерации плана ──
-            # 1) Удаляем деградировавших агентов
-            _plan_clean = [_p for _p in _plan if _p.get('agent', '').strip() not in _degraded_agents_coord]
-            if len(_plan_clean) < len(_plan):
-                _removed = [_p.get('agent') for _p in _plan if _p.get('agent', '').strip() in _degraded_agents_coord]
-                logger.info("[COORD] post-filter: removed degraded agents: %s", _removed)
-                _plan = _plan_clean if _plan_clean else _plan  # fallback если все удалены
+            # ── Пост-фильтр: нет принудительных коррекций — агенты сами выбирают инструменты ──
+            # Координатор (LLM) назначил план зная интеграции агентов — доверяем его решению.
+            # Логируем что сделал план для диагностики.
+            logger.info("[COORD] plan accepted as-is (no corrections): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
 
-            # 2) Коррекция tool по SM-директивам: если LLM выбрал не тот инструмент
-            # Строим быстрый lookup  email_agent_names / rss_agent_names / github_agent_names
-            _pf_email_agents: set = set()
-            _pf_rss_agents: set = set()
-            _pf_github_agents: set = set()
-            for _pr in _profiles:
-                _caps_pf_str = ' '.join(c.lower() for c in _pr.get('caps', []))
-                _pn = _pr.get('name', '')
-                if any(w in _caps_pf_str for w in ('imap', 'gmail', 'mail', 'smtp', 'yandex', 'mailru')):
-                    _pf_email_agents.add(_pn)
-                if any(w in _caps_pf_str for w in ('rss', 'feed', 'лент')):
-                    _pf_rss_agents.add(_pn)
-                if any(w in _caps_pf_str for w in ('github', 'gitlab')):
-                    _pf_github_agents.add(_pn)
-
-            # SM-директивы: какой tool должен получить агент по домену
-            _sm_tool_by_domain: dict = {}
-            for _sd in _sm_directives:
-                _sm_tool_by_domain[_sd.get('agent_domain', 'any')] = _sd.get('tool', '')
-
-            for _p in _plan:
-                _p_ag = _p.get('agent', '').strip()
-                _wrong_tool = _p.get('tool', '')
-                # Email агент не должен получать run_agent_action или research/news
-                if _p_ag in _pf_email_agents and _wrong_tool in ('run_agent_action', 'research_topic', 'web_search', 'get_news_trends'):
-                    _sm_forced = _sm_tool_by_domain.get('email', 'send_outreach_email')
-                    logger.info("[COORD] post-filter: corrected %s %s→%s (email agent)", _p_ag, _wrong_tool, _sm_forced)
-                    _p['tool'] = _sm_forced
-                    # ВАЖНО: обновляем и task-текст, чтобы агент не читал "GitHub API" и не шёл в run_agent_action
-                    _ec_str_pf = next((ec for ec in data.get('email_campaigns', []) if 'отправлено' in ec), '')
-                    _nc_pf = len(data.get('known_contacts', []))
-                    _ts_pf = data.get('total_emails_sent', 0)
-                    _p['task'] = (
-                        f'В базе {_nc_pf} контактов. '
-                        + (f'{_ec_str_pf}. ' if _ec_str_pf else 'Кампания активна. ')
-                        + f'Не отправлено ни одного личного письма ({_ts_pf} sent). '
-                        f'НЕ вызывай run_agent_action, НЕ вызывай start_email_campaign. '
-                        f'ПЕРВЫЙ шаг: вызови {_sm_forced} — отправь персональные письма контактам из базы для цели «{_p.get("goal", "")}».'
-                    )
-                # RSS агент не должен получать email-инструменты
-                elif _p_ag in _pf_rss_agents and _p_ag not in _pf_email_agents and _wrong_tool in ('send_outreach_email', 'start_email_campaign', 'check_emails', 'reply_to_outreach_email'):
-                    _sm_forced = _sm_tool_by_domain.get('rss', _sm_tool_by_domain.get('research', 'research_topic'))
-                    logger.info("[COORD] post-filter: corrected %s %s→%s (rss agent)", _p_ag, _wrong_tool, _sm_forced)
-                    _p['tool'] = _sm_forced
-                    _p['task'] = f'Проанализируй данные по цели «{_p.get("goal", "")}» через {_sm_forced}. Сохрани выводы.'
+            # ── ASI fallback: цели без исполнителя в плане ──
+            # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
+            _covered_goals = {(_p.get('goal') or '').strip().lower() for _p in _plan}
+            for _sd_fb in _sm_directives:
+                _sd_goal_fb = (_sd_fb.get('goal') or '').strip()
+                if _sd_goal_fb.lower() not in _covered_goals:
+                    logger.info("[COORD] post-filter: goal '%s' uncovered → ASI fallback", _sd_goal_fb[:40])
+                    _plan.append({
+                        'agent': 'ASI',
+                        'tool': _sd_fb.get('tool', 'research_topic'),
+                        'task': _sd_fb.get('task', f'Проанализируй цель «{_sd_goal_fb}» и предложи следующий конкретный шаг.'),
+                        'goal': _sd_goal_fb,
+                    })
 
             logger.info("[COORD] user %d: plan=%s (sm_directives=%s)", user.id,
                         [(p.get('agent'), p.get('tool')) for p in _plan],
@@ -3820,46 +3791,38 @@ class AnchorEngine:
                             for _g in _goals[:5]
                         )
                         _done_str = _prev_steps_context.strip()
-                        _domains_hint = '\n'.join(
-                            f"  Цель «{_g['title'][:40]}» → {_DOMAIN_TOOL_MAP.get(_domain, 'web_search')}"
-                            for _g in _goals[:3]
-                            for _domain, _kws in _DOMAIN_TOOLS.items()
-                            if any(w in (_g.get('title','') + ' ' + _g.get('description','')).lower() for w in _kws)
+                        # Цели без упоминания в результатах этого цикла
+                        _uncovered_goals = [
+                            g for g in _goals[:5]
+                            if g['title'].lower() not in (_prev_steps_context or '').lower()
+                        ]
+                        _uncovered_note = (
+                            "🎯 Эти цели ещё не получили действия в этом цикле: "
+                            + "; ".join(f'«{g["title"][:40]}»' for g in _uncovered_goals[:3]) + "\n"
+                            if _uncovered_goals else ''
                         )
-                        # Строим строгие domain-constraints для динамического шага
-                        _dyn_domain_rules = []
-                        for _pr_dyn in _profiles:
-                            _caps_dyn = [c.lower() for c in _pr_dyn.get('caps', [])]
-                            _caps_dyn_str = ' '.join(_caps_dyn)
-                            _has_email_dyn = any(w in _caps_dyn_str for w in ('imap', 'gmail', 'mail', 'smtp', 'yandex', 'mailru'))
-                            _has_rss_dyn   = any(w in _caps_dyn_str for w in ('rss', 'feed', 'лент'))
-                            _has_gh_dyn    = any(w in _caps_dyn_str for w in ('github', 'gitlab'))
-                            _allowed = []
-                            if _has_email_dyn:
-                                _allowed.append('send_outreach_email/check_emails/reply_to_outreach_email/find_relevant_contacts_for_task')
-                            if _has_rss_dyn:
-                                _allowed.append('run_agent_action(RSS)/research_topic/web_search/save_email_contact/get_news_trends')
-                            if _has_gh_dyn:
-                                _allowed.append('run_agent_action(GitHub)/save_email_contact')
-                            if not _allowed:
-                                _allowed.append('web_search/research_topic/add_task')
-                            _dyn_domain_rules.append(
-                                f"  {_pr_dyn['name']} → разрешено: {', '.join(_allowed)}"
-                            )
-                        _dyn_domain_str = '\n'.join(_dyn_domain_rules)
+                        # Если email-лимит выбит — подсказываем переключиться, но не запрещаем
+                        _email_limit_hit = any(
+                            w in (_prev_steps_context or '').lower()
+                            for w in ('лимит', 'исчерпан', 'limit exceeded', '30 писем', 'daily limit')
+                        )
+                        _email_limit_note = (
+                            "💡 Дневной лимит email выбит — сейчас лучше заняться другими целями."
+                            " Используй research_topic, web_search или другие инструменты.\n"
+                            if _email_limit_hit else ''
+                        )
                         _next_prompt = (
                             f"Ты — координатор ASI. Команда только что сделала:\n{_done_str}\n\n"
+                            f"{_email_limit_note}"
+                            f"{_uncovered_note}"
                             f"Активные цели:\n{_goals_remain_str}\n\n"
-                            f"Доступные агенты:\n{_agents_avail_str}\n"
-                            f"🚫 ЖЁСТКИЕ domain-ограничения (нарушение = провал):\n{_dyn_domain_str}\n"
-                            f"⚠️ ЗАПРЕЩЕНО: давать агенту инструмент НЕ из его списка выше!\n\n"
-                            + (f"Рекомендуемые инструменты по целям:\n{_domains_hint}\n\n" if _domains_hint else '')
-                            + f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
+                            f"Доступные агенты (используй их возможности):\n{_agents_avail_str}\n\n"
+                            f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
                             f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
-                            f"Если цели достаточно продвинуты или нет смысла продолжать — верни {{\"done\": true}}.\n"
+                            f"Если все ключевые цели получили прогресс — верни {{\"done\": true}}.\n"
                             f"Если нужен ещё шаг — верни ОДИН JSON-объект:\n"
-                            f'[{{"agent": "имя_агента", "task": "конкретная задача 2-3 предложения с учётом уже сделанного", '
-                            f'"tool": "главный_инструмент_из_domain-ограничений", "goal": "точное название цели"}}]\n'
+                            f'[{{"agent": "имя_агента", "task": "конкретная задача исходя из интеграций агента", '
+                            f'"tool": "инструмент", "goal": "точное название цели"}}]\n'
                             f'Точные названия целей: {"; ".join(repr(g["title"]) for g in _goals[:5])}'
                         )
                         _next_raw = await asyncio.wait_for(

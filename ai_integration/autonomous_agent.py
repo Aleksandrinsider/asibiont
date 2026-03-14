@@ -3931,22 +3931,31 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         ]
         if _has_email_h:
             _hints.append(
-                "\n\n📧 Email-интеграция. ПРИОРИТЕТ — отправка: "
-                "send_outreach_email (если есть кампания с лидами) или start_email_campaign (ещё нет кампании). "
-                "check_emails — ТОЛЬКО когда ждёшь ответов на уже отправленные письма. "
-                "Если check_emails вернул 'нет новых писем' — НЕ повторяй, сразу иди к отправке."
+                "\n\n📧 Email/Почта. Твои возможности: "
+                "send_outreach_email (персональные письма), "
+                "check_emails (проверить ответы и входящие), "
+                "reply_to_outreach_email (ответить), "
+                "find_relevant_contacts_for_task (найти контакты), "
+                "start_email_campaign (запустить кампанию). "
+                "Также доступны: web_search, research_topic, add_task. "
+                "Выбирай инструмент исходя из задачи."
             )
         if _has_code_h:
             _hints.append(
-                "\n\n💻 GitHub/GitLab. Твой токен подхватывается платформой автоматически — "
-                "find_relevant_contacts_for_task / start_email_campaign найдут разработчиков через GitHub API. "
-                "run_agent_action — для работы с репозиторием, релизами, PR и любых других GitHub-операций. "
-                "web_search — для контекста и информации о технологиях."
+                "\n\n💻 GitHub/GitLab. Твои возможности: "
+                "run_agent_action (работа с репозиториями, PR, поиск пользователей), "
+                "find_relevant_contacts_for_task (найти разработчиков), "
+                "save_email_contact (сохранить найденных), web_search. "
+                "Токен подхватывается автоматически. Выбирай исходя из задачи."
             )
         if _has_rss_h:
             _hints.append(
-                "\n\n📰 RSS/лента. Загрузи данные через run_agent_action — "
-                "используй для задач, контактов и делегирования."
+                "\n\n📰 RSS/лента. Твои возможности: "
+                "run_agent_action (данные из ленты), "
+                "research_topic (глубокое исследование), "
+                "web_search, get_news_trends (тренды), "
+                "save_email_contact (сохранить автора/контакт). "
+                "Выбирай исходя из задачи."
             )
         if _has_msg_h:
             _hints.append(
@@ -3973,8 +3982,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
         if _hints:
             _hints.append(
-                "\n\nweb_search / research_topic — для исследований и фоновой информации. "
-                "Свои интеграции — для реальных действий с данными."
+                "\n\nweb_search / research_topic — универсальные инструменты, доступны всегда. "
+                "update_goal_progress — обновляй прогресс после значимых действий. "
+                "Выбирай лучшее из доступных инструментов для конкретной задачи."
             )
         _intg_action_hint = ''.join(_hints[:3])
 
@@ -4024,7 +4034,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"Работаешь в команде ASI Biont. Сейчас: {_now_str}.\n"
             f"{_intg_line}\n"
             f"{_kb_block}\n"
-            "СДЕЛАЙ ОДНО конкретное действие прямо сейчас — используй свой главный инструмент.\n"
+            "Оцени задачу и свои интеграции — выбери лучший из доступных инструментов для продвижения к цели.\n"
             "Отчёт юзеру = 2-3 предложения ФАКТОВ: что нашёл, кому написал, что узнал.\n"
             "Примеры хорошего отчёта:\n"
             "  «Проверила входящие — ответ от Марии К.: готова тестировать, просит ссылку на asibiont.com.»\n"
