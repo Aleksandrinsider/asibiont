@@ -444,7 +444,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     if _t:
                         _tool_cnt[_t] = _tool_cnt.get(_t, 0) + 1
                         _last_tools.append(_t)
-    _banned = {t for t, n in _tool_cnt.items() if n >= 2}   # порог: 2+ раза = пробовали, пора менять
+    # Инструменты которые ЗАКОННО вызываются много раз (каждый раз новый получатель/запрос)
+    # Не банить по имени — банить по результату (это делается через _failed_tools в context_data)
+    _MULTI_USE_OK = {
+        'send_outreach_email', 'check_emails', 'reply_to_outreach_email',
+        'send_follow_up_email', 'save_email_contact', 'web_search',
+        'find_relevant_contacts_for_task', 'update_goal_progress', 'add_task',
+    }
+    _banned = {t for t, n in _tool_cnt.items() if n >= 2 and t not in _MULTI_USE_OK}
     _warn   = {t for t, n in _tool_cnt.items() if n == 1}
 
     # Детектор петли: последние 3 инструментa одинаковые → форсируем analyse
@@ -493,7 +500,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + "\nСмело попробуй любой из них — разнообразие = результат.\n"
         )
 
-    # Goal-state директива: если прогресс 0% и нет действий с людьми → принципиально другой подход
+    # Goal-state директива: умная подсказка о прогрессе и следующем шаге
     _goal_state_hint = ''
     if goals_summary:
         _zero_progress = [g for g in goals_summary if (g.get('progress', 0) or 0) == 0]
@@ -501,16 +508,41 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _has_outreach_done = any(t in ('send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users')
                                   for t in _used_tools)
         _has_search_done = any(t in ('web_search', 'research_topic', 'quick_topic_search') for t in _used_tools)
-        if _zero_progress and not _has_outreach_done and _has_search_done:
+        _has_find_contacts = 'find_relevant_contacts_for_task' in _used_tools or 'save_email_contact' in _used_tools
+
+        # Показываем конкретную метрику вместо абстрактного "0%"
+        _metric_hints = []
+        for _g_sh in goals_summary:
+            _mc_sh = _g_sh.get('metric_current', 0) or 0
+            _mt_sh = _g_sh.get('metric_target')
+            _prog_sh = _g_sh.get('progress', 0) or 0
+            if _mt_sh and _mc_sh > 0:
+                _metric_hints.append(
+                    f"«{_g_sh.get('title','')[:40]}»: {int(_mc_sh)}/{int(_mt_sh)} ({int(_prog_sh)}%)"
+                )
+
+        if _metric_hints:
             _goal_state_hint = (
-                "\n🚨 ПРОГРЕСС 0%: поиск сделан, но контактов ещё не было. "
+                f"\n📊 РЕАЛЬНЫЙ ПРОГРЕСС: {'; '.join(_metric_hints)}\n"
+                "→ Каждый сохранённый контакт и отправленное письмо засчитываются в метрику.\n"
+            )
+
+        if _zero_progress and not _has_outreach_done and _has_search_done:
+            _goal_state_hint += (
+                "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
                 "Следующий шаг — выход на людей: "
                 "find_relevant_contacts_for_task → send_outreach_email / find_and_message_relevant_users.\n"
             )
         elif _stuck_goals and agent_history and len(agent_history) >= 4 and not _has_outreach_done:
-            _goal_state_hint = (
+            _goal_state_hint += (
                 "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
                 "Пора действовать: find_relevant_contacts_for_task или find_and_message_relevant_users.\n"
+            )
+        elif _has_find_contacts and _has_outreach_done and not _metric_hints:
+            # Агент искал и отправлял, но метрика не отображается — значит прогресс есть
+            _goal_state_hint += (
+                "\n✅ ПРОГРЕСС ИДЁТ: контакты сохранены, письма отправлены. "
+                "Продолжай outreach и проверяй ответы через check_emails.\n"
             )
 
     def _ti(name: str) -> str:
@@ -3664,16 +3696,57 @@ class AnchorEngine:
                         'task': f'Есть ответы на письма по кампании. Вызови check_emails → reply_to_outreach_email для ответов.',
                         'reason': 'есть ответы на письма',
                     })
-                # Кампания активна, письма отправлены — продолжать outreach
+                # Кампания активна, письма отправлены — выбираем умную стратегию
                 else:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'send_outreach_email',
-                        'task': (f'Продолжи outreach по цели «{title}». Вызови find_relevant_contacts_for_task '
-                                 f'(получи список из базы) и send_outreach_email тем, кто ещё не получал письма. '
-                                 f'Уже отправлено: {int(total_sent)} писем, прогресс: {int(mc)}/{int(mt) if mt else "?"}'),
-                        'reason': f'кампания активна, отправлено {int(total_sent)}, надо продолжать',
-                    })
+                    # Вычисляем пересечение: какие из известных контактов уже отправлены
+                    _contact_emails_sm = set()
+                    for _c_sm in contacts_list:
+                        if '<' in _c_sm and '>' in _c_sm:
+                            _em_sm = _c_sm.split('<')[1].split('>')[0].strip().lower()
+                            _contact_emails_sm.add(_em_sm)
+                    _unsent_set_sm = _contact_emails_sm - already_sent
+                    _all_contacted = (
+                        len(_unsent_set_sm) == 0 and n_contacts > 0
+                        or (n_contacts > 0 and len(already_sent & _contact_emails_sm) >= max(1, len(_contact_emails_sm)) * 0.85)
+                    )
+
+                    if _all_contacted:
+                        # Все известные контакты уже получили письма → ищем НОВЫХ из других источников
+                        import re as _re_smd  # noqa: F811
+                        _camp_ids = [_re_smd.search(r'#(\d+)', ec).group(1) for ec in email_campaigns if _re_smd.search(r'#(\d+)', ec)]
+                        _camp_hint = f' (campaign_id={_camp_ids[0]})' if _camp_ids else ''
+                        directives.append({
+                            'goal': title, 'agent_domain': 'email',
+                            'tool': 'find_relevant_contacts_for_task',
+                            'task': (
+                                f'БАЗА ИСЧЕРПАНА: {n_contacts} контактов уже получили письма '
+                                f'(отправлено {int(total_sent)}, прогресс: {int(mc)}/{int(mt) if mt else "?"}).\n'
+                                f'ОБЯЗАТЕЛЬНЫЙ СЛЕДУЮЩИЙ ШАГ — найти НОВЫХ людей из ДРУГОГО источника:\n'
+                                f'  • Используй find_relevant_contacts_for_task с НОВЫМ запросом (Telegram-группы, форумы, HH.ru, GitHub)\n'
+                                f'  • Не повторяй старый запрос — попробуй: "{title[:40]} telegram group", "beta testers", "QA engineers"\n'
+                                f'  • После нахождения → сохрани через save_email_contact → отправь через send_outreach_email{_camp_hint}\n'
+                                f'  • Или вызови check_emails чтобы проверить — может кто-то уже ответил'
+                            ),
+                            'reason': f'все {n_contacts} известных контактов emailed, ищем новых',
+                        })
+                    else:
+                        # Есть несendted контакты → отправить именно им
+                        _unsent_list = sorted(list(_unsent_set_sm))[:5]
+                        _unsent_hint = (
+                            f' ЕЩЁ НЕ ПОЛУЧИЛИ ПИСЬМА: {", ".join(_unsent_list)}.' if _unsent_list
+                            else f' Отправь тем {len(_unsent_set_sm)} контактам из базы, кто ещё не получал.'
+                        )
+                        directives.append({
+                            'goal': title, 'agent_domain': 'email',
+                            'tool': 'send_outreach_email',
+                            'task': (
+                                f'Продолжи outreach по цели «{title}».\n'
+                                f'{_unsent_hint}\n'
+                                f'Вызови send_outreach_email для каждого из них персонально (тема + тело письма).\n'
+                                f'Уже отправлено: {int(total_sent)} писем, прогресс: {int(mc)}/{int(mt) if mt else "?"}'
+                            ),
+                            'reason': f'есть {len(_unsent_set_sm)} несendted контактов в базе',
+                        })
 
             # ── RESEARCH / FINANCE / NEWS goals ──
             elif any(w in full_l for w in _FINANCE_KW) or any(w in full_l for w in _NEWS_KW):
@@ -6074,8 +6147,25 @@ class AnchorEngine:
                         _tn = _tn.strip()
                         if _tn:
                             _tool_freq[_tn] = _tool_freq.get(_tn, 0) + 1
-                            # Если результат короткий или "не нашла/не нашёл" — считаем провалом
-                            if len(_res) < 30 or 'не наш' in _res.lower() or 'нет подходящ' in _res.lower() or 'error' in _res.lower():
+                            # Провал = пустой/короткий результат ИЛИ явная ошибка
+                            # НЕ считать провалом: "уже отправлено" (дедупликация), "cooldown", "лимит"
+                            # — это нормальная работа защиты от спама, а не сбой инструмента
+                            _res_lower = _res.lower()
+                            _is_skip_response = any(w in _res_lower for w in (
+                                'уже отправлен', 'уже получал', 'cooldown',
+                                'дневной лимит', 'достигнут лимит', 'кросс-кампания',
+                                'заблокирован', 'bounced', 'не писать повторно',
+                            ))
+                            _is_real_fail = (
+                                not _is_skip_response
+                                and (
+                                    len(_res) < 30
+                                    or 'не наш' in _res_lower
+                                    or 'нет подходящ' in _res_lower
+                                    or 'error' in _res_lower
+                                )
+                            )
+                            if _is_real_fail:
                                 _failed_tools[_tn] = _failed_tools.get(_tn, 0) + 1
             _agent = (a.title or '').replace(' — обзор целей', '')
             _tools_info = f" [инструменты: {_tools_tag}]" if _tools_tag else ''
@@ -6353,25 +6443,48 @@ class AnchorEngine:
         except Exception as _up_err:
             logger.debug("[AUTOPILOT] user profile load failed: %s", _up_err)
 
-        # ── Авто-обновление прогресса цели из EmailContact (replied/interested) ──
+        # ── Авто-обновление прогресса цели из EmailContact + EmailOutreach ──
+        # Для целей "найти N пользователей/клиентов": прокси = max(контакты_в_базе, отправленных_писем)
+        # Каждый сохранённый контакт = потенциальный пользователь найден → засчитывается в прогресс.
+        # Не ждём ответов (replied/interested): на старте вероятность ответа 5-15%, прогресс должен
+        # отражать ОХВАТ (сколько людей узнали о продукте), а не только тех кто успел ответить.
         try:
             from models import EmailContact as _EC_au
             for _g_au in active_goals:
                 _gt_au = (_g_au.title or '').lower()
                 if (any(w in _gt_au for w in ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'лид', 'участник'))
                         and (_g_au.metric_target or 0) > 0):
-                    _ec_count = session.query(_EC_au).filter(
+                    # Все сохранённые контакты (любой статус — outreach, manual, etc.)
+                    _ec_any_count = session.query(_EC_au).filter(
+                        _EC_au.user_id == user.id,
+                    ).count()
+                    # Отправленные outreach-письма (уникальные получатели)
+                    try:
+                        from sqlalchemy import func as _func_au, distinct as _dist_au
+                        _eo_sent_count = session.query(
+                            _func_au.count(_dist_au(EmailOutreach.recipient_email))
+                        ).filter(
+                            EmailOutreach.user_id == user.id,
+                            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                        ).scalar() or 0
+                    except Exception:
+                        _eo_sent_count = 0
+                    # Благодарим ответивших/заинтересованных отдельно (вес ×2)
+                    _replied_count = session.query(_EC_au).filter(
                         _EC_au.user_id == user.id,
                         _EC_au.status.in_(['replied', 'interested']),
                     ).count()
-                    if _ec_count > (_g_au.metric_current or 0):
-                        _g_au.metric_current = float(_ec_count)
-                        _g_au.progress_percentage = min(100, int(_ec_count * 100 / _g_au.metric_target))
+                    # Итоговая метрика: контакты + письма + бонус за ответы
+                    _new_metric = max(_ec_any_count, _eo_sent_count) + _replied_count
+                    if _new_metric > (_g_au.metric_current or 0):
+                        _g_au.metric_current = float(_new_metric)
+                        _g_au.progress_percentage = min(100, int(_new_metric * 100 / _g_au.metric_target))
                         try:
                             session.commit()
                             logger.info(
-                                f"[AUTOPILOT] Auto-updated goal #{_g_au.id} from contacts: "
-                                f"{_ec_count}/{int(_g_au.metric_target)}"
+                                f"[AUTOPILOT] Auto-updated goal #{_g_au.id}: "
+                                f"contacts={_ec_any_count}, sent={_eo_sent_count}, replied={_replied_count} "
+                                f"→ metric={_new_metric}/{int(_g_au.metric_target)}"
                             )
                         except Exception:
                             session.rollback()
