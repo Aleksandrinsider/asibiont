@@ -3226,12 +3226,24 @@ class AnchorEngine:
                     })
                 # Есть контакты, ни одного письма не отправлено
                 elif total_sent == 0 and n_contacts > 0:
+                    # Получаем campaign_id из строки данных если кампания активна
+                    _active_cid = ''
+                    for _ec_str in email_campaigns:
+                        import re as _re_sm
+                        _m_cid = _re_sm.search(r'#(\d+)', _ec_str)
+                        if _m_cid:
+                            _active_cid = f' (campaign_id={_m_cid.group(1)})'
+                            break
+                    _no_campaign_note = (f'Активная кампания{_active_cid} уже есть. '
+                                        if has_active_campaign else '')
                     directives.append({
                         'goal': title, 'agent_domain': 'email',
                         'tool': 'send_outreach_email',
                         'task': (f'В базе {n_contacts} контактов, но не отправлено НИ ОДНОГО письма. '
-                                 f'НЕМЕДЛЕННО: вызови find_relevant_contacts_for_task затем send_outreach_email '
-                                 f'каждому персонально. НЕ создавай новую кампанию — пиши живым людям из базы!'),
+                                 f'{_no_campaign_note}'
+                                 f'НЕ вызывай start_email_campaign — кампания не отправляет письма, только создаёт шаблон. '
+                                 f'ВЫЗОВИ send_outreach_email напрямую для персональной рассылки контактам из базы. '
+                                 f'Параметры: goal="{title[:50]}", limit={min(n_contacts, 5)}.'),
                         'reason': f'{n_contacts} контактов в базе, emails_sent=0',
                     })
                 # Кампания активна, есть ответы → обработать
@@ -3613,8 +3625,63 @@ class AnchorEngine:
                     logger.info("[COORD] dedup: skip dup step %s/%s", _p.get('agent'), _p.get('tool'))
             _plan = _plan_deduped if _plan_deduped else _plan
 
-            logger.info("[COORD] user %d: plan=%s", user.id,
-                        [(p.get('agent'), p.get('tool')) for p in _plan])
+            # ── Постфильтрация: жёсткие правила применяются ПОСЛЕ генерации плана ──
+            # 1) Удаляем деградировавших агентов
+            _plan_clean = [_p for _p in _plan if _p.get('agent', '').strip() not in _degraded_agents_coord]
+            if len(_plan_clean) < len(_plan):
+                _removed = [_p.get('agent') for _p in _plan if _p.get('agent', '').strip() in _degraded_agents_coord]
+                logger.info("[COORD] post-filter: removed degraded agents: %s", _removed)
+                _plan = _plan_clean if _plan_clean else _plan  # fallback если все удалены
+
+            # 2) Коррекция tool по SM-директивам: если LLM выбрал не тот инструмент
+            # Строим быстрый lookup  email_agent_names / rss_agent_names / github_agent_names
+            _pf_email_agents: set = set()
+            _pf_rss_agents: set = set()
+            _pf_github_agents: set = set()
+            for _pr in _profiles:
+                _caps_pf_str = ' '.join(c.lower() for c in _pr.get('caps', []))
+                _pn = _pr.get('name', '')
+                if any(w in _caps_pf_str for w in ('imap', 'gmail', 'mail', 'smtp', 'yandex', 'mailru')):
+                    _pf_email_agents.add(_pn)
+                if any(w in _caps_pf_str for w in ('rss', 'feed', 'лент')):
+                    _pf_rss_agents.add(_pn)
+                if any(w in _caps_pf_str for w in ('github', 'gitlab')):
+                    _pf_github_agents.add(_pn)
+
+            # SM-директивы: какой tool должен получить агент по домену
+            _sm_tool_by_domain: dict = {}
+            for _sd in _sm_directives:
+                _sm_tool_by_domain[_sd.get('agent_domain', 'any')] = _sd.get('tool', '')
+
+            for _p in _plan:
+                _p_ag = _p.get('agent', '').strip()
+                _wrong_tool = _p.get('tool', '')
+                # Email агент не должен получать run_agent_action или research/news
+                if _p_ag in _pf_email_agents and _wrong_tool in ('run_agent_action', 'research_topic', 'web_search', 'get_news_trends'):
+                    _sm_forced = _sm_tool_by_domain.get('email', 'send_outreach_email')
+                    logger.info("[COORD] post-filter: corrected %s %s→%s (email agent)", _p_ag, _wrong_tool, _sm_forced)
+                    _p['tool'] = _sm_forced
+                    # ВАЖНО: обновляем и task-текст, чтобы агент не читал "GitHub API" и не шёл в run_agent_action
+                    _ec_str_pf = next((ec for ec in data.get('email_campaigns', []) if 'отправлено' in ec), '')
+                    _nc_pf = len(data.get('known_contacts', []))
+                    _ts_pf = data.get('total_emails_sent', 0)
+                    _p['task'] = (
+                        f'В базе {_nc_pf} контактов. '
+                        + (f'{_ec_str_pf}. ' if _ec_str_pf else 'Кампания активна. ')
+                        + f'Не отправлено ни одного личного письма ({_ts_pf} sent). '
+                        f'НЕ вызывай run_agent_action, НЕ вызывай start_email_campaign. '
+                        f'ПЕРВЫЙ шаг: вызови {_sm_forced} — отправь персональные письма контактам из базы для цели «{_p.get("goal", "")}».'
+                    )
+                # RSS агент не должен получать email-инструменты
+                elif _p_ag in _pf_rss_agents and _p_ag not in _pf_email_agents and _wrong_tool in ('send_outreach_email', 'start_email_campaign', 'check_emails', 'reply_to_outreach_email'):
+                    _sm_forced = _sm_tool_by_domain.get('rss', _sm_tool_by_domain.get('research', 'research_topic'))
+                    logger.info("[COORD] post-filter: corrected %s %s→%s (rss agent)", _p_ag, _wrong_tool, _sm_forced)
+                    _p['tool'] = _sm_forced
+                    _p['task'] = f'Проанализируй данные по цели «{_p.get("goal", "")}» через {_sm_forced}. Сохрани выводы.'
+
+            logger.info("[COORD] user %d: plan=%s (sm_directives=%s)", user.id,
+                        [(p.get('agent'), p.get('tool')) for p in _plan],
+                        [(d.get('goal', '')[:30], d.get('tool')) for d in _sm_directives])
 
             # ── Биллинг + anchor.delivered_at ПЕРЕД первым AI-вызовом ──
             from token_service import has_enough_tokens as _het_c, spend_tokens as _sp_c
@@ -3759,18 +3826,40 @@ class AnchorEngine:
                             for _domain, _kws in _DOMAIN_TOOLS.items()
                             if any(w in (_g.get('title','') + ' ' + _g.get('description','')).lower() for w in _kws)
                         )
+                        # Строим строгие domain-constraints для динамического шага
+                        _dyn_domain_rules = []
+                        for _pr_dyn in _profiles:
+                            _caps_dyn = [c.lower() for c in _pr_dyn.get('caps', [])]
+                            _caps_dyn_str = ' '.join(_caps_dyn)
+                            _has_email_dyn = any(w in _caps_dyn_str for w in ('imap', 'gmail', 'mail', 'smtp', 'yandex', 'mailru'))
+                            _has_rss_dyn   = any(w in _caps_dyn_str for w in ('rss', 'feed', 'лент'))
+                            _has_gh_dyn    = any(w in _caps_dyn_str for w in ('github', 'gitlab'))
+                            _allowed = []
+                            if _has_email_dyn:
+                                _allowed.append('send_outreach_email/check_emails/reply_to_outreach_email/find_relevant_contacts_for_task')
+                            if _has_rss_dyn:
+                                _allowed.append('run_agent_action(RSS)/research_topic/web_search/save_email_contact/get_news_trends')
+                            if _has_gh_dyn:
+                                _allowed.append('run_agent_action(GitHub)/save_email_contact')
+                            if not _allowed:
+                                _allowed.append('web_search/research_topic/add_task')
+                            _dyn_domain_rules.append(
+                                f"  {_pr_dyn['name']} → разрешено: {', '.join(_allowed)}"
+                            )
+                        _dyn_domain_str = '\n'.join(_dyn_domain_rules)
                         _next_prompt = (
                             f"Ты — координатор ASI. Команда только что сделала:\n{_done_str}\n\n"
                             f"Активные цели:\n{_goals_remain_str}\n\n"
                             f"Доступные агенты:\n{_agents_avail_str}\n"
-                            f"⚠️ ЗАПРЕЩЕНО давать агенту задачу с инструментом/интеграцией которой НЕТ в его [интеграции] списке!\n\n"
+                            f"🚫 ЖЁСТКИЕ domain-ограничения (нарушение = провал):\n{_dyn_domain_str}\n"
+                            f"⚠️ ЗАПРЕЩЕНО: давать агенту инструмент НЕ из его списка выше!\n\n"
                             + (f"Рекомендуемые инструменты по целям:\n{_domains_hint}\n\n" if _domains_hint else '')
                             + f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
                             f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
                             f"Если цели достаточно продвинуты или нет смысла продолжать — верни {{\"done\": true}}.\n"
                             f"Если нужен ещё шаг — верни ОДИН JSON-объект:\n"
                             f'[{{"agent": "имя_агента", "task": "конкретная задача 2-3 предложения с учётом уже сделанного", '
-                            f'"tool": "главный_инструмент", "goal": "точное название цели"}}]\n'
+                            f'"tool": "главный_инструмент_из_domain-ограничений", "goal": "точное название цели"}}]\n'
                             f'Точные названия целей: {"; ".join(repr(g["title"]) for g in _goals[:5])}'
                         )
                         _next_raw = await asyncio.wait_for(
@@ -4018,7 +4107,7 @@ class AnchorEngine:
                        f"      ❌ find_relevant_contacts_for_task — контакты ИЗ БАЗЫ, уже учтены ранее. НЕ обновляй metric_current!\n"
                        f"      ❌ start_email_campaign — запуск кампании не = новый пользователь. НЕ обновляй metric_current!\n"
                        if _ag_goal_title else '')
-                    + (f"⚙️ Рекомендуемый инструмент: {_tool_hint}\n" if _tool_hint else '')
+                    + (f"🚫 СТРОГО ПЕРВЫЙ инструмент (обязательно, не игнорировать): {_tool_hint}\n" if _tool_hint else '')
                     + _rap_note
                     + _dedup_hint
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
