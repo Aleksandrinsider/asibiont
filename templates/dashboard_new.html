@@ -11204,21 +11204,21 @@ except Exception as e:
                 }
             }
             
-            html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
-            
             // Для агентских задач показываем "Поручено @agent_name"
             if (task.source === 'agent' && task.agent_name && !delegationInfo) {
                 delegationInfo = t('delegated-to') + ' @' + task.agent_name;
             }
             
-            // Если есть делегирование, показываем отдельной строкой
+            // Если есть делегирование — показываем ВЫШЕ названия задачи
             if (delegationInfo) {
                 const clickableDelegationInfo = delegationInfo.replace(/(@\w+)/g, (match, p1) => {
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
-                html += '<div style="margin-top: 2px;"><span style="font-size: 13px; color: #374151;">' + clickableDelegationInfo + '</span></div>';
+                html += '<div style="margin-bottom: 2px;"><span style="font-size: 12px; color: #068487; font-weight: 500;">' + clickableDelegationInfo + '</span></div>';
             }
+
+            html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
             
             // Показываем описание задачи
             {

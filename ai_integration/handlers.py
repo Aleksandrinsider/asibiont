@@ -821,6 +821,55 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
 
 # set_recurring_task removed - feature not critical, required subscription
 
+async def save_note(content: str, title: str = None, user_id: int = None, session=None) -> str:
+    """Сохранить заметку (без напоминания/дедлайна).
+
+    Args:
+        content: Текст заметки
+        title: Заголовок заметки (опционально)
+        user_id: Telegram ID пользователя
+        session: SQLAlchemy session
+    """
+    if not content or not content.strip():
+        return "Текст заметки не может быть пустым."
+    if user_id is None:
+        return "ERROR: user_id is required"
+
+    close_session = False
+    if session is None:
+        from config import Session as _Session
+        session = _Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            user = User(telegram_id=user_id)
+            session.add(user)
+            session.commit()
+
+        from models import Note
+        note = Note(
+            user_id=user.id,
+            title=(title or content[:60]).strip(),
+            content=content.strip(),
+            source='chat',
+        )
+        session.add(note)
+        session.commit()
+        return f"Заметка сохранена: «{note.title}»"
+    except Exception as e:
+        logger.warning(f"[SAVE_NOTE] Error: {e}")
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return "Не удалось сохранить заметку."
+    finally:
+        if close_session:
+            session.close()
+
+
 async def complete_task(task_id=None, task_title=None, completion_note=None, user_id=None, session=None):
     """Mark task as completed
 
