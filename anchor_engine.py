@@ -3117,6 +3117,202 @@ class AnchorEngine:
     # COORDINATOR DISPATCH — multi-agent plan execution
     # ═══════════════════════════════════════════════════════
 
+    @staticmethod
+    def _compute_state_directives(goals: list, data: dict, profiles: list) -> list:
+        """State machine: вычисляет конкретное следующее действие для каждой цели на основе реального состояния БД.
+
+        Возвращает список директив:
+        [{'goal': str, 'tool': str, 'task': str, 'agent_domain': str, 'reason': str}]
+
+        agent_domain: 'email' | 'research' | 'content' | 'any'
+        """
+        directives = []
+        contacts_list = data.get('known_contacts', [])
+        n_contacts = len(contacts_list)
+        already_sent = set(data.get('already_sent_emails', []))
+        email_campaigns = data.get('email_campaigns', [])
+        total_sent = data.get('total_emails_sent', 0)
+        failed_tools = data.get('failed_tools', {})
+        per_history = data.get('per_agent_history', {})
+        recent_txt = ' '.join(data.get('recent_actions', [])).lower()
+
+        # ── Детектор деградированных агентов (технические трудности 2+ раз) ──
+        degraded_agents = set()
+        for ag_name, hist in per_history.items():
+            fail_count = sum(1 for h in hist if 'технические трудности' in h.lower() or 'не успел' in h.lower())
+            if fail_count >= 2:
+                degraded_agents.add(ag_name)
+                logger.info("[COORD-SM] agent '%s' marked degraded (%dx failures)", ag_name, fail_count)
+
+        # ── Карта агентов по доменам ──
+        # domain → [agent_name] — выбираем первого подходящего
+        EMAIL_CAPS = ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru')
+        RSS_CAPS   = ('rss', 'feed', 'лент')
+        GITHUB_CAPS = ('github', 'gitlab')
+        RESEARCH_CAPS = ('alpha_vantage', 'newsapi', 'news_api')
+
+        _domain_agents: dict = {'email': [], 'rss': [], 'github': [], 'research': [], 'any': []}
+        for p in profiles:
+            caps_lower = [c.lower() for c in p.get('caps', [])]
+            caps_str = ' '.join(caps_lower)
+            _name = p.get('name', '')
+            if _name in degraded_agents:
+                continue  # пропускаем деградированных
+            if any(w in caps_str for w in EMAIL_CAPS):
+                _domain_agents['email'].append(_name)
+            if any(w in caps_str for w in RSS_CAPS):
+                _domain_agents['rss'].append(_name)
+            if any(w in caps_str for w in GITHUB_CAPS):
+                _domain_agents['github'].append(_name)
+            if any(w in caps_str for w in RESEARCH_CAPS):
+                _domain_agents['research'].append(_name)
+            _domain_agents['any'].append(_name)
+
+        def _agent_for(domain: str) -> str:
+            return (_domain_agents.get(domain) or _domain_agents['any'] or [''])[0]
+
+        def _is_tool_failed(tool: str) -> bool:
+            return failed_tools.get(tool, 0) >= 2
+
+        _PEOPLE_KW = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг', 'участник', 'лид')
+        _FINANCE_KW = ('нефт', 'газ', 'рынок', 'биржа', 'акции', 'финанс', 'инвест', 'котировк', 'oil', 'stock', 'forex', 'крипто')
+        _NEWS_KW = ('новост', 'мониторинг', 'тренды', 'медиа', 'пресс', 'обзор')
+        _CONTENT_KW = ('контент', 'smm', 'пост', 'публикац', 'канал', 'telegram')
+        _DEV_KW = ('разработ', 'программ', 'developer', 'репозитор', 'код')
+        _SALES_KW = ('продаж', 'партнёр', 'b2b', 'outreach', 'сделк', 'переговор')
+
+        for g in goals[:5]:
+            title = g.get('title', '')
+            title_l = title.lower()
+            desc_l = (g.get('description', '') or '').lower()
+            full_l = title_l + ' ' + desc_l
+            progress = g.get('progress', 0)
+            mc = g.get('metric_current', 0) or 0
+            mt = g.get('metric_target') or 0
+
+            # ── PEOPLE / OUTREACH goals ──
+            if any(w in full_l for w in _PEOPLE_KW) or any(w in full_l for w in _SALES_KW):
+                unsent = n_contacts - len(already_sent & {c.split('<')[1].rstrip('>').strip() for c in contacts_list if '<' in c})
+                has_active_campaign = any('отправлено' in ec or 'active' in ec.lower() for ec in email_campaigns)
+                email_agent = _agent_for('email') or _agent_for('github') or _agent_for('any')
+
+                if not email_agent:
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'find_relevant_contacts_for_task',
+                        'task': f'Найди потенциальных пользователей для цели «{title}» через поиск контактов.',
+                        'reason': 'нет email-агента, fallback на поиск контактов',
+                    })
+                    continue
+
+                # Есть GitHub-capable агент → приоритет GitHub search
+                if _domain_agents.get('github') and email_agent in _domain_agents.get('github', []):
+                    directives.append({
+                        'goal': title, 'agent_domain': 'github',
+                        'tool': 'run_agent_action',
+                        'task': (f'Через GitHub API найди разработчиков/тестировщиков для цели «{title}». '
+                                 f'Используй run_agent_action с поиском по GitHub, сохрани каждого через save_email_contact.'),
+                        'reason': f'GitHub доступен, прогресс {int(mc)}/{int(mt) if mt else "?"}',
+                    })
+                    continue
+
+                # Нет контактов → найти
+                if n_contacts == 0:
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'find_relevant_contacts_for_task',
+                        'task': f'Найди контакты потенциальных пользователей для цели «{title}». Сохрани через save_email_contact.',
+                        'reason': 'нет контактов в базе',
+                    })
+                # Есть контакты, ни одного письма не отправлено
+                elif total_sent == 0 and n_contacts > 0:
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'send_outreach_email',
+                        'task': (f'В базе {n_contacts} контактов, но не отправлено НИ ОДНОГО письма. '
+                                 f'НЕМЕДЛЕННО: вызови find_relevant_contacts_for_task затем send_outreach_email '
+                                 f'каждому персонально. НЕ создавай новую кампанию — пиши живым людям из базы!'),
+                        'reason': f'{n_contacts} контактов в базе, emails_sent=0',
+                    })
+                # Кампания активна, есть ответы → обработать
+                elif has_active_campaign and any('ответов=' in ec and 'ответов=0' not in ec for ec in email_campaigns):
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'reply_to_outreach_email',
+                        'task': f'Есть ответы на письма по кампании. Вызови check_emails → reply_to_outreach_email для ответов.',
+                        'reason': 'есть ответы на письма',
+                    })
+                # Кампания активна, письма отправлены — продолжать outreach
+                else:
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'send_outreach_email',
+                        'task': (f'Продолжи outreach по цели «{title}». Вызови find_relevant_contacts_for_task '
+                                 f'(получи список из базы) и send_outreach_email тем, кто ещё не получал письма. '
+                                 f'Уже отправлено: {int(total_sent)} писем, прогресс: {int(mc)}/{int(mt) if mt else "?"}'),
+                        'reason': f'кампания активна, отправлено {int(total_sent)}, надо продолжать',
+                    })
+
+            # ── RESEARCH / FINANCE / NEWS goals ──
+            elif any(w in full_l for w in _FINANCE_KW) or any(w in full_l for w in _NEWS_KW):
+                # Выбираем аналитика: RSS → research → any
+                research_agent = _agent_for('rss') or _agent_for('research') or _agent_for('any')
+
+                # Проверяем — у RSS-агента лента финансовая или нет
+                rss_is_finance = False
+                for p in profiles:
+                    if p.get('name') == research_agent:
+                        # Проверяем по caps — если в name есть 'rss' но caps не содержит финансового
+                        agent_caps_str = ' '.join(c.lower() for c in p.get('caps', []))
+                        rss_is_finance = any(w in agent_caps_str for w in ('finance', 'rbc', 'tass', 'oil', 'moex', 'finam'))
+
+                if rss_is_finance and not _is_tool_failed('run_agent_action'):
+                    tool = 'run_agent_action'
+                    task = (f'Запусти run_agent_action для получения финансовых данных из RSS-ленты. '
+                            f'Затем вызови update_goal_progress(notes="ключевые данные") для цели «{title}».')
+                else:
+                    # Нет финансового RSS → web_search/research_topic
+                    tool = 'web_search' if _is_tool_failed('research_topic') else 'research_topic'
+                    task = (f'Для цели «{title}» ({int(progress)}%): вызови {tool} с запросом о '
+                            f'{title[:60]}, марте 2026. Получи ключевые данные и сохрани выводы через '
+                            f'update_goal_progress(notes="краткий итог анализа").')
+
+                directives.append({
+                    'goal': title, 'agent_domain': 'research',
+                    'tool': tool, 'task': task,
+                    'reason': 'финансовый/новостной анализ через research_topic/web_search',
+                })
+
+            # ── CONTENT goals ──
+            elif any(w in full_l for w in _CONTENT_KW):
+                directives.append({
+                    'goal': title, 'agent_domain': 'content',
+                    'tool': 'generate_marketing_content',
+                    'task': f'Создай контент для цели «{title}». Вызови generate_marketing_content, затем create_post.',
+                    'reason': 'контент/smm цель',
+                })
+
+            # ── DEV goals ──
+            elif any(w in full_l for w in _DEV_KW):
+                gh_agent = _agent_for('github') or _agent_for('any')
+                directives.append({
+                    'goal': title, 'agent_domain': 'github',
+                    'tool': 'run_agent_action',
+                    'task': f'Для цели «{title}» используй run_agent_action (GitHub API) для поиска разработчиков.',
+                    'reason': 'dev/code цель',
+                })
+
+            # ── Generic goal ──
+            else:
+                directives.append({
+                    'goal': title, 'agent_domain': 'any',
+                    'tool': 'research_topic' if not _is_tool_failed('research_topic') else 'web_search',
+                    'task': f'Изучи ситуацию по цели «{title}» ({int(progress)}%) и предложи конкретный следующий шаг.',
+                    'reason': 'общая цель',
+                })
+
+        return directives
+
     async def _run_coordinator_dispatch(
         self, user, data: dict, real_agents: list, base_task_text: str, anchor, session,
     ) -> bool:
@@ -3340,68 +3536,47 @@ class AnchorEngine:
                 )
             _goal_domain_str = '\n'.join(_goal_blocks) if _goal_blocks else ''
 
+            # ── Pre-computed State Machine: вычисляем директивы из реального состояния БД ──
+            _sm_directives = self._compute_state_directives(_goals, data, _profiles)
+            _sm_plan_lines = []
+            for _d in _sm_directives:
+                _sm_plan_lines.append(
+                    f"  Цель «{_d['goal'][:50]}» → инструмент={_d['tool']} "
+                    f"(домен={_d['agent_domain']}, причина: {_d['reason']})\n"
+                    f"    Задача: {_d['task'][:200]}"
+                )
+            _sm_plan_str = '\n'.join(_sm_plan_lines) if _sm_plan_lines else '(цели не определены)'
+
+            # ── Детектор деградированных агентов ──
+            import re as _re_deg
+            _degraded_agents_coord = set()
+            for _pn_deg, _hn_deg in _per_agent_history.items():
+                _fc_deg = sum(1 for h in _hn_deg if 'технические трудности' in h.lower() or 'не успел' in h.lower())
+                if _fc_deg >= 2:
+                    _degraded_agents_coord.add(_pn_deg)
+            _degraded_str = f"⛔ ДЕГРАДИРОВАВШИЕ агенты (2+ таймаута, пропустить): {', '.join(_degraded_agents_coord)}\n" if _degraded_agents_coord else ''
+
             _plan_prompt = (
-                f"Команда из {_n_agents} агентов:\n{_profiles_str}\n\n"
-                + (f"Контекст пользователя (работай на ЕГО проект):\n{_user_profile_str_c}\n\n" if _user_profile_str_c else '')
-                + (f"Правила пользователя: {'; '.join(_user_rules_coord[:3])}\n\n" if _user_rules_coord else '')
-                + f"Цели пользователя:\n{_goal_domain_str}\n\n"
-                f"Контактов в базе={_known_contacts}, писем отправлено={_email_sent}\n"
-                f"Email-кампании:\n{_email_campaigns_str}\n"
-                f"Уже получили письма (НЕ писать повторно): {_already_sent_str}\n"
-                f"Последние общие действия:\n{_recent_txt}\n"
-                f"Глобально заблокированные инструменты: {_failed_str}\n"
+                f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
+                + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
+                + f"{_degraded_str}"
+                + f"ГОТОВЫЙ ПЛАН (вычислен из реального состояния, СТРОГО СЛЕДУЙ ЕМУ):\n{_sm_plan_str}\n\n"
+                f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
+                f"уже_написали=[{_already_sent_str[:100]}]\n"
+                f"Кампании: {_email_campaigns_str}\n"
                 f"{_banned_tools_str}"
-                f"{_stagnant_instr}"
-                f"{_missing_intg_str_c}\n"
-                f"Создай план для ВСЕХ {_n_agents} агентов — каждому задание по ЕГО ПРОФИЛЮ и специализации.\n"
-                "\nДОСТУПНЫЕ ИНСТРУМЕНТЫ ПЛАТФОРМЫ (выбирай любой подходящий):\n"
-                "  📧 Email: send_outreach_email, start_email_campaign, check_emails(только IMAP), "
-                "reply_to_outreach_email, send_follow_up_email, negotiate_by_email, "
-                "save_email_contact, list_email_contacts\n"
-                "  🔍 Поиск/анализ: web_search, research_topic, quick_topic_search, get_news_trends, "
-                "find_relevant_contacts_for_task, find_partners, analyze_situation_and_suggest_tasks\n"
-                "  📢 Контент: create_post, publish_to_telegram, publish_to_discord, generate_image, "
-                "generate_marketing_content, start_content_campaign, find_and_message_relevant_users\n"
-                "  🤝 Делегирование: delegate_task, start_delegation_campaign, send_message_to_user\n"
-                "  🎯 Задачи/цели: add_task, update_goal_progress, schedule_background_task, set_contact_alert\n"
-                "  ⚙️ run_agent_action — только для агентов с python_code-скриптом. Выполняет ЕГО встроенный скрипт (RSS/GitHub/Slack/Notion). "
-                "НЕ даёт финансовые/нефтяные данные если скрипт не настроен на это. Для web-данных → web_search.\n"
-                "\nПРАВИЛА:\n"
-                "1. 🎯 ГЛАВНОЕ: каждый агент работает на ОДНУ из целей выше — ту, которая подходит его профилю.\n"
-                "   Смотри раздел 'Цели пользователя' выше — там уже указаны нужные инструменты per цель.\n"
-                "   СТРОГО: агент с RSS/аналитикой → аналитическая цель. Email-агент → цель по людям/outreach.\n"
-                "2. 🎭 ЗАДАНИЕ = ПО ПРОФИЛЮ агента:\n"
-                "   Аналитик/финансист → research_topic, get_news_trends, analyze_situation_and_suggest_tasks.\n"
-                "   SMM/контент → generate_marketing_content, quick_topic_search, create_post.\n"
-                "   HR/рекрутер → find_relevant_contacts_for_task (кандидаты/тестировщики).\n"
-                "   Email-агент (IMAP/Gmail) → check_emails, send_outreach_email, negotiate_by_email.\n"
-                "   RSS/скрипты → run_agent_action(get_latest) для мониторинга ленты. Если задание требует внешних данных (finance/news) → дай инструмент web_search.\n"
-                "   GitHub → run_agent_action(search_users/find_contributors).\n"
-                "   Общий профиль → web_search/research_topic по теме его специализации.\n"
-                "   ЗАПРЕЩЕНО давать агенту задачи ВНЕ его профиля (email-задачи RSS-аналитику, финансовый анализ HR-агенту).\n"
-                "3. 💡 ЗАДАНИЯ МОГУТ БЫТЬ КОСВЕННЫМИ и аналитическими:\n"
-                "   'изучи тренды X и предложи стратегию', 'мониторь конкурентов и дай сравнение',\n"
-                "   'найди экспертов в X и сохрани как контакт', 'оцени прогресс и предложи следующий шаг'.\n"
-                "4. Задания РАЗНЫЕ — не дублируют друг друга и не повторяют историю агента.\n"
-                "5. 🚫 Заблокированные инструменты — строго не назначать! Выбери другой.\n"
-                "6. НЕ назначай check_emails агенту без IMAP-ключей.\n"
-                "7. НЕ назначай email-инструменты агенту без Gmail/SMTP ключей.\n"
-                "8. НЕ отправляй письма адресатам из 'уже получили письма'.\n"
-                "9. Если email-кампаний нет → email-агент ОБЯЗАН вызвать start_email_campaign.\n"
-                f"   Если кампания УЖЕ АКТИВНА и контактов в базе {_known_contacts} шт. → "
-                "email-агент ОБЯЗАН вызвать find_relevant_contacts_for_task + send_outreach_email персонально. "
-                "НЕ создавать ещё одну кампанию — писать живым людям из базы!\n"
-                "10. Для RSS-агента: run_agent_action(action='get_latest') — загрузить ленту и найти контакты. "
-                "ВАЖНО: RSS-агент не имеет финансовых API — для финансовых/нефтяных данных tool='web_search', НЕ run_agent_action.\n"
-                "11. 🔴 ОБЯЗАТЕЛЬНО: каждая цель из списка ДОЛЖНА получить минимум одно задание.\n"
-                "    Если агентов меньше целей — один агент получает несколько записей в массиве (разные задания).\n"
-                "    ЗАПРЕЩЕНО игнорировать цели! Проверь: все ли цели покрыты в поле 'goal'?\n"
-                "12. Для темы 'рынок/нефть/финансы/аналитика' — если нет финансового агента, ЛЮБОЙ агент\n"
-                "    может использовать web_search/research_topic — эти инструменты доступны всем.\n"
-                f"    ТОЧНЫЕ названия целей для поля 'goal': {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
-                f"Верни ТОЛЬКО JSON-массив из {max(_n_agents, len(_goals[:5]))}+ объектов "
-                f"(минимум по одному на каждую из {len(_goals[:5])} целей) без объяснений:\n"
-                '[{"agent": "имя", "task": "задача 2-3 предл.", "tool": "главный_инструмент", "goal": "точное название цели из списка выше"}]'
+                f"Заблокированные инструменты: {_failed_str}\n"
+                + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
+                + f"\nЗАДАЧА: Назначь каждому агенту задание строго по ГОТОВОМУ ПЛАНУ выше.\n"
+                "ПРАВИЛА (критичные, только 5):\n"
+                "1. Агент с email/Gmail → ТОЛЬКО цели с доменом email (outreach, поиск тестировщиков).\n"
+                "2. Агент с RSS/аналитикой → ТОЛЬКО цели с доменом research/finance. НЕ email-задачи.\n"
+                "3. Если агент в списке деградировавших → НЕ назначай задания этому агенту.\n"
+                "4. НЕ отправляй письма из списка уже_написали. НЕ создавай кампанию если уже есть активная.\n"
+                "5. tool в JSON ДОЛЖЕН совпадать с инструментом из ГОТОВОГО ПЛАНА.\n"
+                f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
+                f"Верни ТОЛЬКО JSON-массив (по одному объекту на каждую директиву из плана):\n"
+                '[{"agent": "имя", "task": "задача 2-3 предл.", "tool": "инструмент_из_плана", "goal": "точное_название"}]'
             )
 
             try:
