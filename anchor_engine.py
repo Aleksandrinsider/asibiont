@@ -1808,9 +1808,11 @@ class AnchorEngine:
                         chosen = agents[0] if agents else _asi_synth
                     _rr_debug = f'[CUSTOM] target_agent_id={_ca_target_id} chosen={chosen.name}'
                 elif anchor.anchor_type == 'goal_autopilot_review':
-                    # ── COORDINATOR MODE: 2+ агентов → ASI строит план для команды ──
+                    # ── COORDINATOR MODE: 1+ реальных агентов → ASI строит план для команды ──
                     _coord_real = [a for a in agents if getattr(a, 'id', 0) != 0]
-                    if len(_coord_real) >= 2:
+                    logger.info("[COORD] entry check: _coord_real=%d agent(s): %s",
+                                len(_coord_real), [a.name for a in _coord_real])
+                    if len(_coord_real) >= 1:
                         try:
                             _coord_ok = await self._run_coordinator_dispatch(
                                 user, data, _coord_real, task_text, anchor, session,
@@ -3155,6 +3157,28 @@ class AnchorEngine:
                 })
 
             _goals = data.get('goals', [])
+            # Если data пустой (force-created anchor) — загружаем цели напрямую из DB
+            if not _goals:
+                try:
+                    from models import Goal as _Goal_coord
+                    _db_goals = session.query(_Goal_coord).filter(
+                        _Goal_coord.user_id == user.id,
+                        _Goal_coord.status == 'active',
+                    ).order_by(_Goal_coord.created_at.desc()).limit(5).all()
+                    _goals = [
+                        {
+                            'id': g.id, 'title': g.title,
+                            'description': (g.description or '')[:150],
+                            'progress': g.progress_percentage or 0,
+                            'metric_current': g.metric_current or 0,
+                            'metric_target': g.metric_target,
+                        }
+                        for g in _db_goals
+                    ]
+                    if _goals:
+                        logger.info("[COORD] loaded %d goals from DB (data was empty)", len(_goals))
+                except Exception as _gl_err:
+                    logger.warning("[COORD] failed to load goals from DB: %s", _gl_err)
             _goals_str = '; '.join(
                 f"{g['title']} ({g.get('progress', 0)}%, {g.get('metric_current', 0)}/{g.get('metric_target', '?')})"
                 for g in _goals[:5]
