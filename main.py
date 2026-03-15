@@ -6421,11 +6421,11 @@ async def api_avatar_handler(request):
 
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=False)
 
-        if avatar_url:
-            # Проксируем изображение через сервер, чтобы не раскрывать Bot Token
+        async def _proxy_tg_avatar(url):
+            """Proxy a Telegram file URL, return web.Response or None on failure."""
             try:
                 async with aiohttp.ClientSession() as proxy_session:
-                    async with proxy_session.get(avatar_url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    async with proxy_session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                         if resp.status == 200:
                             data = await resp.read()
                             content_type = resp.headers.get('Content-Type', 'image/jpeg')
@@ -6434,14 +6434,31 @@ async def api_avatar_handler(request):
                                 content_type=content_type,
                                 headers={'Cache-Control': 'public, max-age=3600'}
                             )
-                        else:
-                            return _default_avatar_response()
             except Exception as e:
-                logger.warning(f"Failed to proxy avatar for {telegram_id}: {e}")
-                return _default_avatar_response()
-        else:
-            # Return default avatar placeholder if no avatar found
-            return _default_avatar_response()
+                logger.warning(f"Failed to proxy avatar URL for {telegram_id}: {e}")
+            return None
+
+        if avatar_url:
+            # Проксируем изображение через сервер, чтобы не раскрывать Bot Token
+            result = await _proxy_tg_avatar(avatar_url)
+            if result:
+                return result
+            # Expired Telegram file URL — force-refresh and retry once
+            logger.info(f"Avatar URL expired for {telegram_id}, refreshing from Telegram")
+            fresh_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
+            if fresh_url and fresh_url != avatar_url:
+                result = await _proxy_tg_avatar(fresh_url)
+                if result:
+                    return result
+        elif not avatar_url:
+            # No cached URL — try fetching fresh from Telegram
+            fresh_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
+            if fresh_url:
+                result = await _proxy_tg_avatar(fresh_url)
+                if result:
+                    return result
+
+        return _default_avatar_response()
     except ValueError:
         return web.Response(status=400, text='Invalid telegram_id')
     except Exception as e:
@@ -10293,7 +10310,7 @@ async def api_marketplace_agents_handler(request):
                     'id': a.id, 'name': a.name, 'slug': a.slug,
                     'description': a.description, 'specialization': a.specialization,
                     'job_title': a.job_title or '',
-                    'avatar_url': a.avatar_url,
+                    'avatar_url': f'/api/arena/agent_avatar/mkt_{a.id}' if a.avatar_url else '',
                     'price_per_message': a.price_per_message,
                     'trial_messages': a.trial_messages,
                     'subscribers_count': a.subscribers_count,
@@ -10850,7 +10867,7 @@ async def api_agents_activity_handler(request):
             agents_data = [{'id': a.id, 'name': a.name,
                             'subscribers_count': a.subscribers_count,
                             'messages_count': a.messages_count,
-                            'avatar_url': a.avatar_url or ''} for a in agents]
+                            'avatar_url': f'/api/arena/agent_avatar/mkt_{a.id}' if a.avatar_url else ''} for a in agents]
             # Считаем из ArenaPost (арена пишет туда, не в AgentActivityLog)
             arena_rows = []
             if agent_mkt_ids:
@@ -10958,7 +10975,7 @@ async def api_marketplace_my_handler(request):
                         'job_title': ea.job_title or '',
                         'description': ea.description or '',
                         'personality': '',
-                        'avatar_url': ea.avatar_url or '',
+                        'avatar_url': f'/api/arena/agent_avatar/mkt_{ea.id}' if ea.avatar_url else '',
                         'is_private': bool(ea.is_private),
                         'user_api_keys': '', 'python_code': '', 'search_scope': '',
                         'is_subscribed': True, 'is_external': True,
@@ -10972,7 +10989,7 @@ async def api_marketplace_my_handler(request):
                              'job_title': a.job_title or '',
                              'description': a.description or '',
                              'personality': a.personality or '',
-                             'avatar_url': a.avatar_url or '',
+                             'avatar_url': f'/api/arena/agent_avatar/mkt_{a.id}' if a.avatar_url else '',
                              'is_private': bool(a.is_private),
                              'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
                              'python_code': (a.python_code or '') if a.author_id == user_obj.id else '',
@@ -11440,7 +11457,7 @@ async def api_marketplace_agent_get_handler(request):
                 'description': agent.description or '',
                 'specialization': agent.specialization or '',
                 'job_title': agent.job_title or '',
-                'avatar_url': agent.avatar_url or '',
+                'avatar_url': f'/api/arena/agent_avatar/mkt_{agent.id}' if agent.avatar_url else '',
                 'price_per_message': agent.price_per_message,
                 'trial_messages': agent.trial_messages,
                 'subscribers_count': agent.subscribers_count,
@@ -11771,7 +11788,7 @@ async def api_arena_agent_avatar_handler(request):
                 return web.Response(
                     body=img_bytes,
                     content_type=ct,
-                    headers={'Cache-Control': 'public, max-age=3600'}
+                    headers={'Cache-Control': 'public, max-age=30'}  # short cache so avatar updates are visible quickly
                 )
         return web.Response(status=404)
     except Exception as e:
