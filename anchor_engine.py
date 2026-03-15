@@ -4008,17 +4008,15 @@ class AnchorEngine:
             import os as _os_coord
             _missing_intg_coord = []
             _goals_lower_c = _goals_str.lower()
-            # Аналитика/финансы: нет NewsAPI или финансовых ключей
-            _finance_kw = ('нефт', 'газ', 'нефтя', 'рынок', 'биржа', 'акци', 'финанс', 'трейдинг', 'oil', 'market', 'stock', 'crypto', 'валют')
-            _analyst_kw = ('анализ', 'исследован', 'мониторинг', 'аналит', 'тренд', 'конкурент')
+            # Аналитика/финансы: приоритет — Alpha Vantage (котировки), затем NewsAPI (новостной фон)
+            _finance_kw = ('нефт', 'газ', 'нефтя', 'рынок', 'биржа', 'акци', 'финанс', 'трейдинг', 'oil', 'market', 'stock', 'crypto', 'валют', 'котировк', 'цена актив')
             _has_any = any(w in _goals_lower_c for w in _finance_kw)
-            if _has_any and not _os_coord.getenv('NEWSAPI_KEY'):
-                _missing_intg_coord.append(
-                    "💡 Для финансового/рыночного анализа: Дашборд → Настройки агента → API-ключи → NewsAPI "
-                    "даёт доступ к 100+ источникам новостей. Без него — только web_search."
-                )
-            if _has_any and not any('alpha_vantage' in (getattr(a, 'user_api_keys', '') or '').lower() for a in real_agents):
-                # Проверим — есть ли агент с RSS, но его RSS не финансовый
+            _has_alphavantage = any(
+                any(k in (getattr(a, 'user_api_keys', '') or '').upper() for k in ('ALPHA_VANTAGE', 'ALPHAVANTAGE'))
+                for a in real_agents
+            )
+            if _has_any and not _has_alphavantage:
+                # Проверим RSS финансовый или нет
                 _finance_rss_missing = False
                 for _a_chk in real_agents:
                     for _kl in (getattr(_a_chk, 'user_api_keys', '') or '').splitlines():
@@ -4027,9 +4025,15 @@ class AnchorEngine:
                             if not any(w in _rss_val for w in ('finance', 'tass', 'rbc', 'investing', 'oil', 'moex', 'finam', 'quote', 'market')):
                                 _finance_rss_missing = True
                 _missing_intg_coord.append(
-                    "💡 Для котировок нефти/акций: Дашборд → Настройки агента → API-ключи → Alpha Vantage. "
-                    "Или в RSS_URL агента-аналитика укажи нефтяной фид: tass.ru/rss/v2.xml (ТАСС) или rbc.ru (РБК нефть)."
-                    + (" ⚠️ RSS агента сейчас указывает НЕ на финансовые источники — web_search будет основным." if _finance_rss_missing else '')
+                    "💡 Для котировок и рыночных данных (цены нефти, акций, крипты): "
+                    "Дашборд → Настройки агента → API-ключи → Alpha Vantage (alphavantage.co, бесплатно 25 req/день). "
+                    "Это основной источник числовых данных рынка."
+                    + (" ⚠️ RSS агента сейчас не финансовый — web_search будет основным." if _finance_rss_missing else '')
+                )
+            if _has_any and not _os_coord.getenv('NEWSAPI_KEY'):
+                _missing_intg_coord.append(
+                    "💡 Дополнительно для новостного фона: NewsAPI (newsapi.org) даёт 100+ новостных источников. "
+                    "Дашборд → Настройки агента → API-ключи → NewsAPI. Без него — web_search."
                 )
             # Без GitHub-интеграции при поиске разработчиков
             if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _os_coord.getenv('GITHUB_TOKEN'):
