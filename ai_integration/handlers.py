@@ -13627,8 +13627,8 @@ async def generate_image(
         if _using_personal_key:
             full_prompt = f"{prompt}, {style} style" if style else prompt
         else:
-            _drawn_suffix = "hand-drawn illustration, artistic sketch style, colorful painted drawing, digital art, expressive brushwork"
-            full_prompt = f"{prompt}, {style} style, {_drawn_suffix}" if style else f"{prompt}, {_drawn_suffix}"
+            _drawn_suffix = "pencil sketch, hand-drawn pencil illustration, detailed pencil drawing, graphite sketch, fine line art, black and white pencil art"
+            full_prompt = f"{prompt}, {_drawn_suffix}" if not style else f"{prompt}, {style} style, {_drawn_suffix}"
 
         import aiohttp as _aiohttp
         import asyncio as _asyncio
@@ -13693,11 +13693,10 @@ async def generate_image(
             # Отправляем фото в Telegram (только если send_to_telegram=True)
             send_data = {"ok": False}
             if send_to_telegram:
-                _caption = None if _using_personal_key else "🎨 *ASI Biont*"
+                _caption = None if _using_personal_key else "ASI BIONT"
                 _photo_payload = {"chat_id": user.telegram_id, "photo": image_url}
                 if _caption:
                     _photo_payload["caption"] = _caption
-                    _photo_payload["parse_mode"] = "MarkdownV2"
                 send_resp = await http.post(
                     f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
                     json=_photo_payload,
