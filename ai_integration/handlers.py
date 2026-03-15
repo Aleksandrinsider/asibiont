@@ -13621,10 +13621,9 @@ async def generate_image(
         if not REPLICATE_API_TOKEN:
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
-        # Строим полный промпт (всегда на английском для лучшего качества)
-        full_prompt = prompt
-        if style:
-            full_prompt = f"{prompt}, {style} style"
+        # Строим полный промпт — всегда в нарисованном/иллюстративном стиле
+        _drawn_suffix = "hand-drawn illustration, artistic sketch style, colorful painted drawing, digital art, expressive brushwork"
+        full_prompt = f"{prompt}, {style} style, {_drawn_suffix}" if style else f"{prompt}, {_drawn_suffix}"
 
         import aiohttp as _aiohttp
         import asyncio as _asyncio
@@ -13694,6 +13693,7 @@ async def generate_image(
                     json={
                         "chat_id": user.telegram_id,
                         "photo": image_url,
+                        "caption": "ASI Biont",
                     },
                     timeout=_aiohttp.ClientTimeout(total=30),
                 )
