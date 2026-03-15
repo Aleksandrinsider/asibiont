@@ -448,8 +448,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # Не банить по имени — банить по результату (это делается через _failed_tools в context_data)
     _MULTI_USE_OK = {
         'send_outreach_email', 'check_emails', 'reply_to_outreach_email',
-        'send_follow_up_email', 'save_email_contact', 'web_search',
+        'send_follow_up_email', 'save_email_contact',
         'find_relevant_contacts_for_task', 'update_goal_progress', 'add_task',
+        # web_search специально удалён — должен баниться после 2 раз чтобы не зацикливаться
     }
     _banned = {t for t, n in _tool_cnt.items() if n >= 2 and t not in _MULTI_USE_OK}
     _warn   = {t for t, n in _tool_cnt.items() if n == 1}
@@ -464,15 +465,26 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _PROGRESS_ONLY = {'update_goal_progress'}
     _last4 = _last_tools[-4:]
     _last5 = _last_tools[-5:]
+    # Детектор зацикливания: 2 инструмента чередуются (типичный ping-pong)
+    _last6 = _last_tools[-6:]
+    _is_pingpong = (
+        len(_last6) >= 4
+        and len(set(_last6)) <= 2
+        and len(_last6) >= 4
+    )
     _is_trivial_loop = (
+        # Ping-pong между двумя инструментами (web_search ↔ update_goal_progress и т.д.)
+        _is_pingpong
         # Только поиск + обновление прогресса
-        (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _PROGRESS_ONLY for t in _last4))
+        or (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _PROGRESS_ONLY for t in _last4))
         # Поиск → сохранить: цикл без отправки
         or (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _SAVE_ONLY for t in _last4)
             and not any(t in ('send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users')
                         for t in _last_tools))
         # Только сохранение контактов без отправки (частая получасть collecting-агенте)
         or (len(_last5) >= 5 and all(t in _SAVE_ONLY for t in _last5))
+        # Только поиск (без email и без делегирования) — 4+ циклов
+        or (len(_last4) >= 4 and all(t in _SEARCH_ONLY for t in _last4))
     )
     if _is_trivial_loop:
         _force_analyse = True
@@ -1814,14 +1826,13 @@ class AnchorEngine:
             if email_info:
                 task_text += f"\n\nEmail-кампании:\n" + '\n'.join(f"  {e}" for e in email_info)
 
-            # Показываем общее число отправленных писем / outreach-контактов
+            # Показываем общее число отправленных писем — информационно
             _total_sent = data.get('total_emails_sent', 0)
-            if _total_sent is not None:
+            if _total_sent and _total_sent > 0:
                 task_text += (
-                    f"\n\nOutreach-метрика: всего отправлено писем = {_total_sent}. "
-                    f"Если цель имеет числовую метрику (напр. '50 пользователей') и текущий metric_current "
-                    f"отстаёт от реального числа отправленных — ОБЯЗАТЕЛЬНО вызови "
-                    f"update_goal_progress(goal_title='...', metric_current={_total_sent}) ПРЯМО СЕЙЧАС."
+                    f"\n\nOutreach-статистика: отправлено писем = {_total_sent}. "
+                    f"Это охват (кому написали), а не подтверждённые пользователи. "
+                    f"Метрику цели обновляй ТОЛЬКО если получен реальный ответ/подтверждение участия."
                 )
 
             # Добавляем известные контакты
@@ -1877,7 +1888,7 @@ class AnchorEngine:
                     + "\n  Используй другую категорию."
                 )
 
-            # ══ Блок отсутствующих интеграций: агент видит что нужно и сообщает пользователю ══
+            # ══ Блок отсутствующих интеграций: только если реально мешает текущей задаче ══
             import os as _os_intg
             _missing_intg_notes = []
             _real_agents_intg = [a for a in agents if getattr(a, 'id', 0) != 0]
@@ -1885,18 +1896,19 @@ class AnchorEngine:
             for _ag_chk in _real_agents_intg:
                 if 'run_agent_action' in (_ag_chk.tools_allowed or '') and not (_ag_chk.user_api_keys or '').strip():
                     _missing_intg_notes.append(
-                        f"⚠️ {_ag_chk.name}: инструмент run_agent_action есть, но API-ключи внешних сервисов не добавлены. "
-                        f"Пользователь может добавить ключи в настройках агента на дашборде "
-                        f"(доступны: Slack, Notion, Jira, Gmail, Trello, Airtable, Bitrix24, AmoCRM, HubSpot, GitHub, и др.)"
+                        f"⚠️ {_ag_chk.name}: внешние API-ключи не добавлены — "
+                        f"расширенные интеграции недоступны. "
+                        f"Сообщи пользователю: Дашборд → Настройки агента → API-ключи "
+                        f"(Gmail, GitHub, Slack, Notion, Trello, HubSpot и др.)"
                     )
-            # 2. Email-анкер без RESEND_API_KEY
+            # 2. Email-анкер но email-отправка не настроена на платформе
             _email_anchor_types = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
             if anchor.anchor_type in _email_anchor_types and not _os_intg.getenv('RESEND_API_KEY'):
                 _missing_intg_notes.append(
-                    "❌ Отправка писем не работает: RESEND_API_KEY не настроен. "
-                    "Попроси пользователя добавить RESEND_API_KEY в настройках агента (API-ключи) — регистрация: resend.com."
+                    "❌ Email-отправка через платформу не настроена администратором. "
+                    "Используй email-агента с Gmail/Яндекс ключами, или сообщи пользователю об ограничении."
                 )
-            # 3. Поиск разработчиков без GITHUB_TOKEN
+            # 3. Поиск разработчиков без GitHub-интеграции
             _tech_kw_anchor = [
                 'github', 'developer', 'разработчик', 'программист',
                 'python', 'javascript', 'typescript', 'backend', 'frontend', 'fullstack',
@@ -1905,13 +1917,13 @@ class AnchorEngine:
             if (any(w in task_text.lower() for w in _tech_kw_anchor)
                     and not _os_intg.getenv('GITHUB_TOKEN')):
                 _missing_intg_notes.append(
-                    "⚠️ GITHUB_TOKEN не настроен — поиск разработчиков работает в ограниченном режиме (60 запросов/час). "
-                    "Предложи пользователю добавить GITHUB_TOKEN в настройках агента — даёт 5000 запросов/час "
-                    "(github.com/settings/tokens → Generate new token)."
+                    "⚠️ GitHub-интеграция не настроена — поиск разработчиков ограничен. "
+                    "Используй find_relevant_contacts_for_task или web_search. "
+                    "Сообщи пользователю: Дашборд → Настройки агента → API-ключи → GitHub."
                 )
             if _missing_intg_notes:
                 task_text += (
-                    "\n\nОТСУТСТВУЮТ ИНТЕГРАЦИИ (если это мешает работе — сообщи пользователю как подключить):\n"
+                    "\n\nОТСУТСТВУЮТ ИНТЕГРАЦИИ (сообщи пользователю ТОЛЬКО если это блокирует задачу):\n"
                     + "\n".join(_missing_intg_notes)
                 )
 
@@ -4002,9 +4014,8 @@ class AnchorEngine:
             _has_any = any(w in _goals_lower_c for w in _finance_kw)
             if _has_any and not _os_coord.getenv('NEWSAPI_KEY'):
                 _missing_intg_coord.append(
-                    "💡 Для финансового/рыночного анализа аналитику полезен NewsAPI (newsapi.org) — "
-                    "NEWSAPI_KEY в настройках агента даёт доступ к 100+ источникам новостей. "
-                    "Без него — только web_search."
+                    "💡 Для финансового/рыночного анализа: Дашборд → Настройки агента → API-ключи → NewsAPI "
+                    "даёт доступ к 100+ источникам новостей. Без него — только web_search."
                 )
             if _has_any and not any('alpha_vantage' in (getattr(a, 'user_api_keys', '') or '').lower() for a in real_agents):
                 # Проверим — есть ли агент с RSS, но его RSS не финансовый
@@ -4016,15 +4027,15 @@ class AnchorEngine:
                             if not any(w in _rss_val for w in ('finance', 'tass', 'rbc', 'investing', 'oil', 'moex', 'finam', 'quote', 'market')):
                                 _finance_rss_missing = True
                 _missing_intg_coord.append(
-                    "💡 Для котировок нефти/акций добавь ALPHAVANTAGE_API_KEY (alphavantage.co, бесплатно 500 req/день). "
-                    "Или в RSS_URL агента-аналитика укажи нефтяной фид: https://tass.ru/rss/v2.xml (ТАСС Экономика) "
-                    "или https://rbc.ru/v10/tags/news/oil (РБК нефть) — это бесплатнее и надёжнее web_search."
+                    "💡 Для котировок нефти/акций: Дашборд → Настройки агента → API-ключи → Alpha Vantage. "
+                    "Или в RSS_URL агента-аналитика укажи нефтяной фид: tass.ru/rss/v2.xml (ТАСС) или rbc.ru (РБК нефть)."
                     + (" ⚠️ RSS агента сейчас указывает НЕ на финансовые источники — web_search будет основным." if _finance_rss_missing else '')
                 )
-            # Без GITHUB_TOKEN при поиске разработчиков
+            # Без GitHub-интеграции при поиске разработчиков
             if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _os_coord.getenv('GITHUB_TOKEN'):
                 _missing_intg_coord.append(
-                    "⚠️ GITHUB_TOKEN не настроен. Добавь GITHUB_TOKEN в настройках агента для поиска разработчиков (5000 req/h вместо 60)."
+                    "⚠️ GitHub-интеграция не настроена — используй find_relevant_contacts_for_task или web_search. "
+                    "Добавить GitHub: Дашборд → Настройки агента → API-ключи → GitHub."
                 )
             # Telegram-канал: цели связанные с контентом/аудиторией, но нет канала
             _content_kw_c = ('контент', 'smm', 'пост', 'публикац', 'канал', 'аудитор', 'подписчик', 'продвижен')
@@ -4035,7 +4046,7 @@ class AnchorEngine:
                 )
                 if not _has_tg_channel_c:
                     _missing_intg_coord.append(
-                        "💡 Telegram-канал не подключён. Чтобы агенты могли публиковать посты: "
+                        "💡 Telegram-канал не подключён. Для публикаций постов: "
                         "Дашборд → Профиль → укажи @username канала → добавь бота как администратора."
                     )
             # Discord: те же темы
@@ -4046,7 +4057,7 @@ class AnchorEngine:
                         "💡 Discord не подключён. Добавь webhook: Discord → канал → Настройки → "
                         "Интеграции → Webhooks → скопируй URL → Дашборд → Профиль."
                     )
-            # Email/IMAP: нет GMAIL у агентов при поиске людей / outreach целях
+            # Email/IMAP: нет email у агентов при поиске людей / outreach целях
             _outreach_kw_c = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'контакт', 'аутрич', 'outreach', 'рекрутинг')
             if any(w in _goals_lower_c for w in _outreach_kw_c):
                 _has_email_c = any(
@@ -4056,8 +4067,8 @@ class AnchorEngine:
                 )
                 if not _has_email_c:
                     _missing_intg_coord.append(
-                        "💡 Email не настроен у агентов. Для outreach: добавь GMAIL_USER + GMAIL_PASS "
-                        "(пароль приложения с myaccount.google.com) в настройки агента."
+                        "💡 Email не настроен у агентов. Для outreach: "
+                        "Дашборд → Настройки агента → API-ключи → Gmail (вход + пароль приложения)."
                     )
             # Google Sheets / Airtable: аналитика и отчёты
             _data_kw_c = ('отчёт', 'аналитик', 'таблиц', 'данные', 'мониторинг продаж', 'crm')
@@ -6458,48 +6469,40 @@ class AnchorEngine:
         except Exception as _up_err:
             logger.debug("[AUTOPILOT] user profile load failed: %s", _up_err)
 
-        # ── Авто-обновление прогресса цели из EmailContact + EmailOutreach ──
-        # Для целей "найти N пользователей/клиентов": прокси = max(контакты_в_базе, отправленных_писем)
-        # Каждый сохранённый контакт = потенциальный пользователь найден → засчитывается в прогресс.
-        # Не ждём ответов (replied/interested): на старте вероятность ответа 5-15%, прогресс должен
-        # отражать ОХВАТ (сколько людей узнали о продукте), а не только тех кто успел ответить.
+        # ── Авто-обновление прогресса цели из EmailContact (только подтверждённые) ──
+        # ВАЖНО: для людей-целей метрика = ТОЛЬКО replied/interested (реальные участники).
+        # email-контакты в базе и отправленные письма ≠ тестировщики/пользователи!
+        # Авто-апдейт никогда не ставит 100% — финальное закрытие только через AI или вручную.
         try:
             from models import EmailContact as _EC_au
+            _PPL_KW_AU = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'лид', 'участник')
+            _PPL_UNIT_AU = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
+                            'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
             for _g_au in active_goals:
                 _gt_au = (_g_au.title or '').lower()
-                if (any(w in _gt_au for w in ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'лид', 'участник'))
-                        and (_g_au.metric_target or 0) > 0):
-                    # Все сохранённые контакты (любой статус — outreach, manual, etc.)
-                    _ec_any_count = session.query(_EC_au).filter(
-                        _EC_au.user_id == user.id,
-                    ).count()
-                    # Отправленные outreach-письма (уникальные получатели)
-                    try:
-                        from sqlalchemy import func as _func_au, distinct as _dist_au
-                        _eo_sent_count = session.query(
-                            _func_au.count(_dist_au(EmailOutreach.recipient_email))
-                        ).filter(
-                            EmailOutreach.user_id == user.id,
-                            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-                        ).scalar() or 0
-                    except Exception:
-                        _eo_sent_count = 0
-                    # Благодарим ответивших/заинтересованных отдельно (вес ×2)
+                _gunit_au = (_g_au.metric_unit or '').lower()
+                _is_ppl_goal_au = (
+                    any(w in _gt_au for w in _PPL_KW_AU)
+                    or any(u in _gunit_au for u in _PPL_UNIT_AU)
+                )
+                if _is_ppl_goal_au and (_g_au.metric_target or 0) > 0:
+                    # Только подтверждённые участники (replied/interested)
                     _replied_count = session.query(_EC_au).filter(
                         _EC_au.user_id == user.id,
                         _EC_au.status.in_(['replied', 'interested']),
                     ).count()
-                    # Итоговая метрика: контакты + письма + бонус за ответы
-                    _new_metric = max(_ec_any_count, _eo_sent_count) + _replied_count
-                    if _new_metric > (_g_au.metric_current or 0):
-                        _g_au.metric_current = float(_new_metric)
-                        _g_au.progress_percentage = min(100, int(_new_metric * 100 / _g_au.metric_target))
+                    # Авто-апдейт только если есть реальные ответы
+                    # и текущая метрика отстаёт
+                    if _replied_count > (_g_au.metric_current or 0):
+                        # Никогда не ставим 100% автоматически (max 95%)
+                        _safe_pct = min(95, int(_replied_count * 100 / _g_au.metric_target))
+                        _g_au.metric_current = float(_replied_count)
+                        _g_au.progress_percentage = _safe_pct
                         try:
                             session.commit()
                             logger.info(
-                                f"[AUTOPILOT] Auto-updated goal #{_g_au.id}: "
-                                f"contacts={_ec_any_count}, sent={_eo_sent_count}, replied={_replied_count} "
-                                f"→ metric={_new_metric}/{int(_g_au.metric_target)}"
+                                f"[AUTOPILOT] Auto-updated goal #{_g_au.id} from replied: "
+                                f"replied={_replied_count}/{int(_g_au.metric_target)} ({_safe_pct}%)"
                             )
                         except Exception:
                             session.rollback()
