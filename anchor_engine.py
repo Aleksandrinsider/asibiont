@@ -1399,7 +1399,19 @@ class AnchorEngine:
             if regular_anchors:
                 logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (night hours)")
         elif regular_anchors and dialog_count < MAX_DIALOG_PER_DAY and proactive_gap_ok and not active_dialog:
-            all_dialog_anchors.extend(regular_anchors)
+            # Дедупликация: подавляем dialog_followup если уже есть CRITICAL/HIGH task-якорь
+            # (чтобы не было двух сообщений про одну и ту же задачу/тему)
+            _has_task_critical = any(
+                a.anchor_type in ('task_overdue', 'task_deadline_soon', 'task_reminder')
+                for a in critical_anchors
+            )
+            _filtered_regular = []
+            for _ra in regular_anchors:
+                if _ra.anchor_type == 'dialog_followup' and _has_task_critical:
+                    logger.info(f"[ANCHOR] User {user_id}: 🔇 dialog_followup suppressed (task critical anchor present)")
+                    continue
+                _filtered_regular.append(_ra)
+            all_dialog_anchors.extend(_filtered_regular)
         elif regular_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ regular blocked (dialog_count={dialog_count}/{MAX_DIALOG_PER_DAY}, gap_ok={proactive_gap_ok}, active_dialog={active_dialog})")
 
@@ -2153,7 +2165,10 @@ class AnchorEngine:
                             f"[АВТОПИЛОТ]\n"
                             f"Ты — {chosen.name}, {chosen.job_title or chosen.specialization or 'специалист'}.\n"
                             f"Тема: {anchor.topic or 'проактивное сообщение'}\n\n"
-                            f"ДЕЙСТВИЯ (выполни прямо сейчас):\n{_actions_text}\n\n"
+                            f"ДЕЙСТВИЯ (выполни прямо сейчас, не планируй — делай):\n{_actions_text}\n\n"
+                            "⚠️ ОБЯЗАТЕЛЬНО вызови инструмент и напиши результат по ФАКТУ.\n"
+                            "❌ НЕ пиши 'планирую', 'собираюсь', 'буду' — только факты что уже сделано.\n"
+                            "❌ НЕ создавай задачи пользователю без явной необходимости.\n"
                             "Отчёт пользователю — только ФАКТЫ: что нашёл, кто написал, что узнал.\n"
                         )
                     # Иначе оставляем task_text как был
@@ -9830,12 +9845,32 @@ class AnchorEngine:
             _anchor_types_set = {a.anchor_type for a in anchors}
             if _anchor_types_set <= _reminder_only_types:
                 _ai_mode = 'reminder'
-                _ai_instruction = (
-                    "Напиши напоминание о задаче на основе контекста ниже. "
-                    "Стиль: живой, как друг в мессенджере. Кратко, 1-3 предложения. "
-                    "Спроси готовность. НЕ создавай новые задачи."
+                # Проверяем: нет ли в последних сообщениях пользователя сигнала выполнения
+                _recent_user_texts = ' '.join(
+                    (m.content or '').lower() for m in recent_msgs[:3]
                 )
-                _ai_max_iter = 1
+                _completion_signals = (
+                    'я сделал', 'я заказал', 'я купил', 'я оплатил', 'я позвонил',
+                    'я написал', 'я отправил', 'я настроил', 'я прошёл', 'я записался',
+                    'уже сделал', 'уже заказал', 'уже купил', 'уже оплатил',
+                    'уже готово', 'уже выполнил', 'уже сделано', 'готово', 'выполнено',
+                )
+                _user_says_done = any(sig in _recent_user_texts for sig in _completion_signals)
+                if _user_says_done:
+                    _ai_instruction = (
+                        "ВАЖНО: Пользователь уже сообщил о выполнении задачи (см. ПОСЛЕДНИЕ СООБЩЕНИЯ). "
+                        "Вызови complete_task для этой задачи и коротко подтверди (1 предложение). "
+                        "НЕ спрашивай повторно — это лишнее."
+                    )
+                    _ai_max_iter = 2  # нужен tool call
+                else:
+                    _ai_instruction = (
+                        "Напиши напоминание о задаче на основе контекста ниже. "
+                        "Стиль: живой, как друг в мессенджере. Кратко, 1-3 предложения. "
+                        "Спроси готовность. НЕ создавай новые задачи. "
+                        "Если задача выглядит выполненной или неактуальной — предложи закрыть."
+                    )
+                    _ai_max_iter = 1
             else:
                 _ai_mode = 'anchor'
                 _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
