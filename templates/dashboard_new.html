@@ -5140,6 +5140,7 @@ except Exception as e:
             },
             oil_prices: {
                 name: 'Нефть Brent/WTI (Alpha Vantage)',
+                autodetect: false,
                 fields: [
                     {k:'ALPHAVANTAGE_API_KEY', label:'API Key Alpha Vantage', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
                 ],
@@ -5437,7 +5438,8 @@ except Exception as e:
             if (!desc) {
                 const keyToSvc = {};
                 for (const [svc, tmpl] of Object.entries(_MPA_SVC)) {
-                    for (const f of (tmpl.fields || [])) keyToSvc[f.k] = svc;
+                    if (tmpl.autodetect === false) continue;
+                    for (const f of (tmpl.fields || [])) if (!keyToSvc[f.k]) keyToSvc[f.k] = svc;
                 }
                 const foundSvcs = new Set();
                 for (const line of apiKeys.split('\n')) {
@@ -5477,7 +5479,8 @@ except Exception as e:
             {
                 const keyToSvc2 = {};
                 for (const [svc, tmpl] of Object.entries(_MPA_SVC)) {
-                    for (const f of (tmpl.fields || [])) keyToSvc2[f.k] = svc;
+                    if (tmpl.autodetect === false) continue;
+                    for (const f of (tmpl.fields || [])) if (!keyToSvc2[f.k]) keyToSvc2[f.k] = svc;
                 }
                 const foundSvcs2 = new Set();
                 for (const line of apiKeys.split('\n')) {
