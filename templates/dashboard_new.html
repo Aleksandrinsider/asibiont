@@ -1951,7 +1951,8 @@
             // Убираем лишние пробелы в начале и конце
             processedText = processedText.trim();
             
-            // Проверка на дубликаты: проверяем последние 5 сообщений по тексту и отправителю
+            // Проверка на дубликаты только для AI-сообщений
+            if (normalizedSender === 'ai') {
             const existingMessages = Array.from(messages.querySelectorAll('.message'));
             const lastFiveMessages = existingMessages.slice(-5);
             const plainText = text.replace(/\n/g, ' ').trim();  // для сравнения без форматирования
@@ -1959,10 +1960,11 @@
                 const msgText = (msg.querySelector('.message-text')?.textContent || '').trim();
                 const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
                 
-                // Если найдено сообщение с таким же текстом и отправителем - это дубликат
-                if (msgText === plainText && msgSender === normalizedSender) {
+                // Если найдено AI-сообщение с таким же текстом - это дубликат
+                if (msgText === plainText && msgSender === 'ai') {
                     return; // Не добавляем дубликат
                 }
+            }
             }
             
             if (normalizedSender === 'ai') {
