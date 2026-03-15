@@ -913,7 +913,7 @@ class AnchorEngine:
         logger.info(f"[ANCHOR] 🚀 Starting scan loop (every {SCAN_INTERVAL_MINUTES}min)")
         # Стартовая задержка: даём серверу прогреться перед первым сканированием.
         # Это предотвращает лавину якорей / уведомлений сразу после деплоя.
-        await asyncio.sleep(120)
+        await asyncio.sleep(30)  # reduced from 120s — быстрее восстанавливается после Railway рестартов
         # ── Recovery: помечаем "застрявшие" in_progress dispatch-записи как failed ──
         # Это обычно происходит после рестарта Railway: процесс убит, error handler не сработал
         try:
@@ -4372,27 +4372,39 @@ class AnchorEngine:
                     pass
 
             # ── AAL запись ──
-            from models import AgentActivityLog as _AAL_c
+            from models import AgentActivityLog as _AAL_c, Session as _AAL_Sess
             _aal_id_c = None
             try:
-                _aal_c = _AAL_c(
-                    user_id=user.id,
-                    activity_type='goal_autopilot_dispatch',
-                    title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}',
-                    content=base_task_text[:600],
-                    target=anchor.source,
-                    status='in_progress',
-                    ref_id=None,
-                )
-                session.add(_aal_c)
-                session.commit()
-                _aal_id_c = _aal_c.id
-            except Exception as _aal_err:
-                logger.warning("[COORD] AAL create: %s", _aal_err)
+                # Используем отдельную сессию — основная может быть в ненадёжном состоянии
+                _aal_sess = _AAL_Sess()
                 try:
-                    session.rollback()
-                except Exception:
-                    pass
+                    _aal_c = _AAL_c(
+                        user_id=user.id,
+                        activity_type='goal_autopilot_dispatch',
+                        title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}'[:300],
+                        content=base_task_text[:600],
+                        target=(anchor.source or '')[:300],
+                        status='in_progress',
+                        ref_id=None,
+                    )
+                    _aal_sess.add(_aal_c)
+                    _aal_sess.commit()
+                    _aal_id_c = _aal_c.id
+                    logger.info("[COORD] AAL created id=%s for user %d", _aal_id_c, user.id)
+                except Exception as _aal_err:
+                    logger.warning("[COORD] AAL create failed: %s", _aal_err)
+                    try:
+                        _aal_sess.rollback()
+                    except Exception:
+                        pass
+                finally:
+                    try:
+                        _aal_sess.close()
+                    except Exception:
+                        pass
+            except Exception as _aal_outer:
+                logger.warning("[COORD] AAL session setup failed: %s", _aal_outer)
+
 
             # Читаем результаты предыдущего цикла координатора — для единого голоса ASI
             _prev_cycle_result = ''
@@ -4993,16 +5005,26 @@ class AnchorEngine:
                     _full_res = _tools_pfx + ' | '.join(_results_summary[:3])
                     _st = 'completed' if _results_summary else 'empty_result'
                     from sqlalchemy import text as _aal_t_c
-                    session.execute(_aal_t_c(
-                        "UPDATE agent_activity_log SET status=:st, result=:res, updated_at=NOW() WHERE id=:aid"
-                    ), {'st': _st, 'res': _full_res[:800], 'aid': _aal_id_c})
-                    session.commit()
-                except Exception as _upd:
-                    logger.warning("[COORD] AAL update: %s", _upd)
+                    from models import Session as _AAL_Upd_Sess
+                    _upd_sess = _AAL_Upd_Sess()
                     try:
-                        session.rollback()
-                    except Exception:
-                        pass
+                        _upd_sess.execute(_aal_t_c(
+                            "UPDATE agent_activity_log SET status=:st, result=:res, updated_at=NOW() WHERE id=:aid"
+                        ), {'st': _st, 'res': _full_res[:800], 'aid': _aal_id_c})
+                        _upd_sess.commit()
+                    except Exception as _upd:
+                        logger.warning("[COORD] AAL update: %s", _upd)
+                        try:
+                            _upd_sess.rollback()
+                        except Exception:
+                            pass
+                    finally:
+                        try:
+                            _upd_sess.close()
+                        except Exception:
+                            pass
+                except Exception as _upd_outer:
+                    logger.warning("[COORD] AAL update session setup: %s", _upd_outer)
 
             # ── Финальный отчёт пользователю: что РЕАЛЬНО сделано за этот цикл ──
             if _results_summary:
@@ -5031,31 +5053,43 @@ class AnchorEngine:
                     if _report_gen and len(_report_gen.strip()) > 20:
                         _report_text = _report_gen.strip()
                         try:
-                            session.add(Interaction(
-                                user_id=user.id,
-                                message_type='proactive',
-                                content=json.dumps({
-                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                    'text': _report_text,
-                                    '__anchor_type': 'coordinator_summary',
-                                }, ensure_ascii=False),
-                            ))
-                            # Также логируем в AAL чтобы итог отображался в хронологии
-                            _goals_titles = ', '.join(g['title'][:25] for g in _goals[:2])
-                            session.add(AgentActivityLog(
-                                user_id=user.id,
-                                activity_type='coordinator_summary',
-                                title=f'ASI · итог цикла: {_goals_titles}'[:120],
-                                content=_report_text,
-                                status='completed',
-                                result=_report_text[:800],
-                            ))
-                            session.commit()
-                        except Exception:
+                            from models import Session as _Sum_Sess_cls
+                            _sum_sess = _Sum_Sess_cls()
                             try:
-                                session.rollback()
-                            except Exception:
-                                pass
+                                _sum_sess.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='proactive',
+                                    content=json.dumps({
+                                        '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                        'text': _report_text,
+                                        '__anchor_type': 'coordinator_summary',
+                                    }, ensure_ascii=False),
+                                ))
+                                # Также логируем в AAL чтобы итог отображался в хронологии
+                                _goals_titles = ', '.join(g['title'][:25] for g in _goals[:2])
+                                _sum_sess.add(AgentActivityLog(
+                                    user_id=user.id,
+                                    activity_type='coordinator_summary',
+                                    title=f'ASI · итог цикла: {_goals_titles}'[:120],
+                                    content=_report_text,
+                                    status='completed',
+                                    result=_report_text[:800],
+                                ))
+                                _sum_sess.commit()
+                                logger.info("[COORD] coordinator_summary saved to interactions+AAL for user %d", user.id)
+                            except Exception as _sum_err:
+                                logger.warning("[COORD] summary save failed: %s", _sum_err)
+                                try:
+                                    _sum_sess.rollback()
+                                except Exception:
+                                    pass
+                            finally:
+                                try:
+                                    _sum_sess.close()
+                                except Exception:
+                                    pass
+                        except Exception as _sum_outer:
+                            logger.warning("[COORD] summary session setup failed: %s", _sum_outer)
                         if self.bot:
                             try:
                                 await self.bot.send_message(
@@ -10052,7 +10086,8 @@ class AnchorEngine:
 
             # Для якорей-напоминаний используем mode='reminder' (без forced tool calling)
             # — быстрее и надёжнее чем anchor mode с обязательным web-search
-            _reminder_only_types = {'task_reminder', 'task_overdue', 'task_deadline_soon'}
+            # service_degraded тоже в reminder mode: сообщение шаблонное, инструменты не нужны
+            _reminder_only_types = {'task_reminder', 'task_overdue', 'task_deadline_soon', 'service_degraded'}
             _anchor_types_set = {a.anchor_type for a in anchors}
             if _anchor_types_set <= _reminder_only_types:
                 _ai_mode = 'reminder'
@@ -10314,6 +10349,30 @@ class AnchorEngine:
                 except Exception as send_err:
                     logger.error(f"[ANCHOR] Send failed to {user.telegram_id}: {send_err}")
                     session.rollback()
+                    # ── ANTI-DRAIN: пометить якоря delivered в отдельной сессии ──
+                    # Если send_message провалился — anchor остаётся undelivered и
+                    # цикл повторяется каждые 5 мин, тратя токены на AI-вызов.
+                    # Помечаем якоря (созданные >5 мин назад) как suppressed,
+                    # чтобы engine не вызывал AI снова по тем же якорям.
+                    # Для ALWAYS_DELIVER якорей anchor-creation создаст новый якорь
+                    # при следующем scan если условие ещё актуально.
+                    try:
+                        _now_sup = datetime.now(timezone.utc)
+                        _stale_threshold = timedelta(minutes=5)
+                        _stale_ids = [
+                            a.id for a in anchors
+                            if (_now_sup - (a.created_at.replace(tzinfo=timezone.utc) if a.created_at and a.created_at.tzinfo is None else (a.created_at or _now_sup))).total_seconds() > _stale_threshold.total_seconds()
+                        ]
+                        if _stale_ids:
+                            _sup_sess = Session()
+                            _sup_sess.query(Anchor).filter(Anchor.id.in_(_stale_ids)).update(
+                                {'delivered_at': _now_sup}, synchronize_session=False
+                            )
+                            _sup_sess.commit()
+                            _sup_sess.close()
+                            logger.warning(f"[ANCHOR] ⚠️ Suppressed {len(_stale_ids)} anchors after send_message failure to {user.telegram_id} — они будут пересозданы при следующем scan если условие актуально")
+                    except Exception as _sup_err:
+                        logger.error(f"[ANCHOR] Failed to suppress anchors after send failure: {_sup_err}")
             else:
                 session.commit()
                 logger.info(f"[ANCHOR] Message (no bot): {message[:80]}...")
