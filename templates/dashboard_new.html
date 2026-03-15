@@ -5461,12 +5461,20 @@ except Exception as e:
             if (codeEl) {
                 const existing = codeEl.value.trim();
                 const marker = `# === ${tmpl.name} ===`;
-                if (!existing || existing === '' || existing.includes(marker)) {
-                    // нет кода или это тот же сервис — заменяем целиком
-                    codeEl.value = tmpl.code;
+                const newBlock = marker + '\n' + tmpl.code;
+                if (!existing) {
+                    // первый сервис
+                    codeEl.value = newBlock;
+                } else if (existing.includes(marker)) {
+                    // тот же сервис уже есть — заменяем только его блок, остальное сохраняем
+                    const markerIdx = existing.indexOf(marker);
+                    const before = existing.slice(0, markerIdx).trimEnd();
+                    const afterSearch = existing.indexOf('\n# === ', markerIdx + marker.length);
+                    const after = afterSearch !== -1 ? '\n\n' + existing.slice(afterSearch + 1).trimStart() : '';
+                    codeEl.value = (before ? before + '\n\n' : '') + newBlock + after;
                 } else {
-                    // уже есть код другого сервиса — добавляем блок после
-                    codeEl.value = existing + '\n\n' + marker + '\n' + tmpl.code;
+                    // другой сервис — дописываем блок в конец
+                    codeEl.value = existing + '\n\n' + newBlock;
                 }
                 codeEl.style.height = 'auto';
                 codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
