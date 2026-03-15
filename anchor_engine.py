@@ -3320,9 +3320,11 @@ class AnchorEngine:
                 _k = (getattr(a, 'user_api_keys', '') or '').lower()
                 _t = (getattr(a, 'tools_allowed', '') or '').lower()
                 _SEND_KEYS = ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_')
-                _gmail_send = ('gmail_app_password=' in _k and
-                               'gmail_app_password=\n' not in _k and
-                               'gmail_app_password= ' not in _k)
+                _gmail_send = (
+                    'gmail_' in _k and
+                    any(pk in _k for pk in ('gmail_pass=', 'gmail_app_password=', 'gmail_password='))
+                    and 'gmail_user=' in _k
+                )
                 # Яндекс и Mail.ru поддерживают SMTP нативно — если есть USER → чаще всего и пароль
                 _yandex_send = ('yandex_user=' in _k)
                 _mailru_send = ('mailru_user=' in _k)
@@ -3359,9 +3361,8 @@ class AnchorEngine:
                     _ag_r_tools = (getattr(_ag_r, 'tools_allowed', '') or '').lower()
                     _gmail_can_send_r = (
                         'gmail_' in _ag_r_keys and
-                        'gmail_app_password=' in _ag_r_keys and
-                        'gmail_app_password=\n' not in _ag_r_keys and
-                        'gmail_app_password= ' not in _ag_r_keys
+                        any(pk in _ag_r_keys for pk in ('gmail_pass=', 'gmail_app_password=', 'gmail_password='))
+                        and 'gmail_user=' in _ag_r_keys
                     )
                     # Яндекс и Mail.ru поддерживают SMTP нативно — если есть USER → чаще всего есть и пароль
                     _yandex_can_send_r = 'yandex_user=' in _ag_r_keys
@@ -4173,7 +4174,12 @@ class AnchorEngine:
                     "Дашборд → Настройки агента → API-ключи → NewsAPI. Без него — web_search."
                 )
             # Без GitHub-интеграции при поиске разработчиков
-            if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _os_coord.getenv('GITHUB_TOKEN'):
+            _has_github_c_agent = any(
+                any(k in (getattr(a, 'user_api_keys', '') or '').upper()
+                    for k in ('GITHUB_TOKEN', 'GITHUB_ACCESS_TOKEN'))
+                for a in real_agents
+            )
+            if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _has_github_c_agent:
                 _missing_intg_coord.append(
                     "⚠️ GitHub-интеграция не настроена — используй find_relevant_contacts_for_task или web_search. "
                     "Добавить GitHub: Дашборд → Настройки агента → API-ключи → GitHub."
@@ -4295,11 +4301,22 @@ class AnchorEngine:
                 f"{_banned_tools_str}"
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
+                + (
+                    # Если есть отправленные письма и агент с IMAP — нужно сначала проверить ответы
+                    "⚡ ПРИОРИТЕТ: Есть отправленные письма (уже_написали не пустой) — "
+                    "агент с IMAP должен ПЕРВЫМ делом вызвать check_emails! "
+                    "Ответившие контакты уже в системе (статус replied/interested) — "
+                    "им НЕ нужно новое outreach-письмо, нужен reply/negotiate.\n"
+                    if _already_sent and _email_sent > 0 and
+                    any(any(kw in (getattr(a, 'user_api_keys', '') or '').lower()
+                            for kw in ('gmail_user=', 'imap_')) for a in real_agents)
+                    else ''
+                )
                 + f"\nЗАДАЧА: Назначь каждому агенту задание исходя из его РЕАЛЬНЫХ интеграций и АКТИВНЫХ ЦЕЛЕЙ.\n"
                 "ПРИНЦИП: Каждый агент работает ТОЛЬКО от своих уникальных интеграций.\n"
                 "• Агент с RSS → ПЕРВЫЙ инструмент run_agent_action (читает ленту). research_topic/web_search — только если RSS не по теме задачи.\n"
-                "• Агент с IMAP (только чтение) → check_emails, find_relevant_contacts_for_task. НЕ send_outreach_email — у него нет отправки!\n"
-                "• Агент с IMAP+SMTP или Resend/Gmail → может send_outreach_email, start_email_campaign.\n"
+                "• Агент с IMAP+SMTP или Gmail (GMAIL_USER+GMAIL_PASS) → может и отправлять (send_outreach_email) И читать (check_emails).\n"
+                "• Агент с только IMAP без пароля отправки → check_emails, find_relevant_contacts_for_task. НЕ send_outreach_email!\n"
                 "• ASI (нет интеграций) → web_search, research_topic, find_relevant_contacts_for_task, send_outreach_email (через платформу).\n"
                 "• НЕ назначай агенту инструмент которого нет в его колонке 'инструменты' и 'интеграции'.\n"
                 "• web_search и research_topic может делать ASI — реальным агентам давай задачи по их интеграциям.\n"
@@ -6612,7 +6629,10 @@ class AnchorEngine:
         contacts = session.query(_EC_scan).filter_by(
             user_id=user.id,
         ).order_by(_EC_scan.created_at.desc()).limit(20).all()
-        contacts_summary = [f"{c.name or '?'} <{c.email}> (src={c.source})" for c in contacts] if contacts else []
+        contacts_summary = [
+            f"{c.name or '?'} <{c.email}> [статус: {c.status or 'new'}] (src={c.source})"
+            for c in contacts
+        ] if contacts else []
 
         # Per-agent action memory — чтобы каждый агент не зацикливался и не повторял своё
         _per_agent_history: dict = {}  # {agent_name: [action_str, ...]}
