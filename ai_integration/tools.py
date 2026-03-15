@@ -1442,8 +1442,8 @@ TOOLS = [
                     },
                     "data_type": {
                         "type": "string",
-                        "description": "Тип данных: 'oil' (нефть Brent/WTI), 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта)",
-                        "enum": ["oil", "quote", "forex", "crypto"]
+                        "description": "Тип данных: 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта)",
+                        "enum": ["quote", "forex", "crypto"]
                     }
                 },
                 "required": ["symbol"]

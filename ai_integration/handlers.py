@@ -8314,38 +8314,6 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
         )
 
     symbol = symbol.strip().upper()
-
-    # Нормализация: BRNT → BRENT, WTI остаётся WTI
-    _oil_aliases = {"BRNT": "BRENT", "USOIL": "WTI", "CL": "WTI", "BZ": "BRENT"}
-    if symbol in _oil_aliases or data_type == "oil" or symbol in ("BRENT", "WTI"):
-        _fn = _oil_aliases.get(symbol, symbol if symbol in ("BRENT", "WTI") else "WTI")
-        url = f"https://www.alphavantage.co/query?function={_fn}&interval=monthly&apikey={_api_key}"
-        try:
-            req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with _urllib_req.urlopen(req, timeout=15) as r:
-                d = _json.loads(r.read().decode())
-            if "Information" in d:
-                return f"❌ Функция нефтяных котировок требует Premium-ключа Alpha Vantage (plan: Premium)"
-            data = d.get("data", [])
-            if not data:
-                return f"❌ Нет данных по {_fn}"
-            last = data[0]
-            prev_item = data[1] if len(data) > 1 else last
-            price = last.get("value", "?")
-            prev_price = prev_item.get("value", price)
-            date = last.get("date", "")[:10]
-            try:
-                chg = round(float(price) - float(prev_price), 2)
-                direction = "▲" if chg >= 0 else "▼"
-                chg_str = f"{'+' if chg >= 0 else ''}{chg}"
-            except Exception:
-                direction, chg_str = "", ""
-            name = "Brent (ICE)" if _fn == "BRENT" else "WTI (NYMEX)"
-            return f"🛢 **{name}**: ${price}/барр.  {direction} {chg_str}  ({date})"
-        except Exception as e:
-            logger.error(f"[STOCK] Oil error: {e}")
-            return f"❌ Ошибка получения цены нефти {_fn}: {str(e)}"
-
     try:
         if data_type == "forex" or "/" in symbol:
             from_c, _, to_c = symbol.partition("/")
