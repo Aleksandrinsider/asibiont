@@ -5448,7 +5448,7 @@ except Exception as e:
                 let val = el ? el.value.trim() : '';
                 // textarea: заменяем переносы строк на запятые чтобы значение осталось однострочным
                 if (f.t === 'textarea') val = val.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(',');
-                if (val || f.opt) newKeys[f.k] = f.k + '=' + val;
+                if (val) newKeys[f.k] = f.k + '=' + val;
             }
             // ── Merge: сохраняем уже введённые ключи других сервисов ──
             const apiEl = document.getElementById('mpa-apikeys');
