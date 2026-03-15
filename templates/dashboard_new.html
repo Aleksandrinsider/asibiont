@@ -5094,7 +5094,8 @@ except Exception as e:
                     {k:'AV_SYMBOLS', label:'Тикеры акций через запятую', ph:'AAPL,GOOGL,MSFT,EUR/USD', t:'text', opt:true}
                 ],
                 hint: 'Бесплатный ключ: alphavantage.co → Get Free API Key. 500 запросов/день. Акции: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Металлы: XAU/USD (золото), XAG/USD (серебро). ⚠️ NEWS_SENTIMENT только в Premium.',
-                code: `import urllib.request, json, os
+                code: `# === Alpha Vantage (акции/форекс) ===
+import urllib.request, json, os
 API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 SYMBOLS = os.environ.get('AV_SYMBOLS', 'AAPL,MSFT,GOOGL')
 ACTION = os.environ.get('AGENT_ACTION', 'quotes')
@@ -5144,7 +5145,8 @@ except Exception as e:
                     {k:'ALPHAVANTAGE_API_KEY', label:'API Key Alpha Vantage', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
                 ],
                 hint: 'Бесплатный ключ: alphavantage.co. Возвращает ежемесячные цены Brent и WTI. ⚠️ Alpha Vantage не предоставляет новости о нефти на бесплатном плане — для новостей используй RSS-ленту (neftegaz.ru/news/rss/ или investing.com/rss/news_14.rss).',
-                code: `import urllib.request, json, os
+                code: `# === Нефть Brent/WTI (Alpha Vantage) ===
+import urllib.request, json, os
 API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 
 def get_oil(name, fn):
