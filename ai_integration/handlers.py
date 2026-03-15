@@ -13621,14 +13621,7 @@ async def generate_image(
         if not REPLICATE_API_TOKEN:
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
-        # Строим полный промпт — при платформенном ключе forced drawn-стиль,
-        # при личном ключе пользователь сам управляет стилем
-        _using_personal_key = REPLICATE_API_TOKEN != _platform_replicate_key
-        if _using_personal_key:
-            full_prompt = f"{prompt}, {style} style" if style else prompt
-        else:
-            _drawn_suffix = "pencil sketch, hand-drawn pencil illustration, detailed pencil drawing, graphite sketch, fine line art, black and white pencil art"
-            full_prompt = f"{prompt}, {_drawn_suffix}" if not style else f"{prompt}, {style} style, {_drawn_suffix}"
+        full_prompt = f"{prompt}, {style} style" if style else prompt
 
         import aiohttp as _aiohttp
         import asyncio as _asyncio
@@ -13694,8 +13687,6 @@ async def generate_image(
             send_data = {"ok": False}
             if send_to_telegram:
                 _photo_payload = {"chat_id": user.telegram_id, "photo": image_url}
-                if not _using_personal_key:
-                    _photo_payload["caption"] = "ASI BIONT"
                 send_resp = await http.post(
                     f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
                     json=_photo_payload,
