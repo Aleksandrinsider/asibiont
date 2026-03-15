@@ -3395,12 +3395,13 @@ except Exception as e:
             rss: {
                 name: 'RSS-лента',
                 fields: [
-                    {k:'RSS_URL',   label:'URL RSS-ленты', ph:'https://lenta.ru/rss/news', t:'url'},
-                    {k:'RSS_COUNT', label:'Кол-во новостей', ph:'5', t:'text', opt:true}
+                    {k:'RSS_URLS',  label:'URL RSS-лент (по одному на строку)', ph:'https://lenta.ru/rss/news\nhttps://habr.com/ru/rss/hubs/artificial_intelligence/articles/?fl=ru', t:'textarea'},
+                    {k:'RSS_COUNT', label:'Новостей из каждой ленты', ph:'5', t:'text', opt:true}
                 ],
-                hint: 'Примеры: lenta.ru/rss/news, habr.com/ru/rss/articles, vc.ru/rss. RSS_COUNT — сколько новостей показывать (по умолч. 5).',
+                hint: 'Вставьте любое количество RSS-URL — по одному на строку. RSS_COUNT — сколько новостей из каждой ленты (по умолч. 5).',
                 code: `import urllib.request, re, html, os
-URL   = os.environ.get('RSS_URL', '')
+_raw  = os.environ.get('RSS_URLS', '') or os.environ.get('RSS_URL', '')
+URLS  = [u.strip() for u in re.split(r'[\\n,]+', _raw) if u.strip().startswith('http')]
 COUNT = int(os.environ.get('RSS_COUNT', '5') or '5')
 def _cdata_or_plain(raw):
     raw = raw.strip()
@@ -3409,28 +3410,31 @@ def _cdata_or_plain(raw):
 def _tag(item, tag):
     m = re.search(r'<' + tag + r'[^>]*>(.*?)</' + tag + r'>', item, re.DOTALL)
     return _cdata_or_plain(m.group(1)) if m else ''
-try:
-    if not URL:
-        print('RSS_URL не задан')
-    else:
-        req = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            content = r.read().decode('utf-8', errors='replace')
-        items = re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:COUNT]
-        if not items:
-            print('Нет новостей в ленте')
-        else:
-            print('Последние ' + str(len(items)) + ' новостей из ' + URL + ':\\n')
-            for i, item in enumerate(items, 1):
-                title = _tag(item, 'title') or '(без заголовка)'
-                link  = _tag(item, 'link')
-                desc  = re.sub(r'<[^>]+>', '', _tag(item, 'description')).strip()[:200]
-                print(str(i) + '. ' + title)
-                if link: print('   ' + link)
-                if desc: print('   ' + desc)
-                print()
-except Exception as e:
-    print('Ошибка RSS: ' + str(e))`
+def fetch_rss(url):
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        content = r.read().decode('utf-8', errors='replace')
+    return re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:COUNT]
+if not URLS:
+    print('RSS_URLS не заданы')
+else:
+    for url in URLS:
+        try:
+            items = fetch_rss(url)
+            print('=== ' + url + ' ===')
+            if not items:
+                print('  Нет новостей в ленте')
+            else:
+                for i, item in enumerate(items, 1):
+                    title = _tag(item, 'title') or '(без заголовка)'
+                    link  = _tag(item, 'link')
+                    desc  = re.sub(r'<[^>]+>', '', _tag(item, 'description')).strip()[:200]
+                    print(str(i) + '. ' + title)
+                    if link: print('   ' + link)
+                    if desc: print('   ' + desc)
+                    print()
+        except Exception as e:
+            print('Ошибка ' + url + ': ' + str(e))`
             },
             telegram_bot: {
                 name: 'Telegram Bot',
@@ -5419,7 +5423,13 @@ except Exception as e:
                 let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
                 // Gmail OAuth block — temporarily hidden, manual password only
                 for (const f of tmpl.fields) {
-                    h += `<div><div style="font-size:12px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div><input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;"></div>`;
+                    const label = `<div style="font-size:12px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div>`;
+                    const inputStyle = 'width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;';
+                    if (f.t === 'textarea') {
+                        h += `<div>${label}<textarea id="mpa-svc-${f.k}" placeholder="${f.ph}" rows="3" style="${inputStyle}resize:vertical;"></textarea></div>`;
+                    } else {
+                        h += `<div>${label}<input id="mpa-svc-${f.k}" type="${f.t || 'text'}" placeholder="${f.ph}" style="${inputStyle}"></div>`;
+                    }
                 }
                 h += `<button type="button" onclick="mpApplyTemplateConfirm('${svc}')" class="mp-action-btn" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">Добавить «${tmpl.name}»</button>`;
                 h += '</div>';
