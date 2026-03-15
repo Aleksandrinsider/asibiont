@@ -4862,14 +4862,12 @@ class AnchorEngine:
                 _ag_role_str = (
                     f"{_ag_data.get('job_title', '') or _ag_data.get('specialization', 'специалист')}"
                 ).strip()
-                _ag_caps_for_prompt = ', '.join(
-                    p['caps'][:4] for p in _profiles if p['name'].lower() == _ag_name.lower()
-                    for _ in [1]  # trick to get first match
-                ) if False else ', '.join(
-                    p['caps'][:4]
-                    for p in _profiles
-                    if p['name'].lower() == _ag_name.lower()
-                ) or 'нет подключённых интеграций'
+                _ag_profile_match = next((p for p in _profiles if p['name'].lower() == _ag_name.lower()), None)
+                _ag_caps_for_prompt = (
+                    ', '.join(_ag_profile_match['caps'][:4])
+                    if _ag_profile_match and _ag_profile_match.get('caps')
+                    else 'нет подключённых интеграций'
+                )
 
                 _agent_prompt = (
                     f"Твоё задание:\n{_ag_task}\n"
