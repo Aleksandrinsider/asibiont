@@ -1431,6 +1431,28 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_stock_price",
+            "description": "📈 Получить котировку акции, курс валюты или цену криптовалюты через Alpha Vantage. Работает только если у агента настроен ALPHAVANTAGE_API_KEY. Тикеры акций: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Металлы: XAU/USD (золото). Крипто: BTC, ETH.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {
+                        "type": "string",
+                        "description": "Тикер или пара. Примеры: 'AAPL', 'MSFT', 'EUR/USD', 'USD/RUB', 'XAU/USD', 'BTC'"
+                    },
+                    "data_type": {
+                        "type": "string",
+                        "description": "Тип данных: 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта)",
+                        "enum": ["quote", "forex", "crypto"]
+                    }
+                },
+                "required": ["symbol"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_news_trends",
             "description": "📰 Получить актуальные новости и тренды по теме. Используй когда нужна подборка новостей для анализа рынка, контент-плана или просто «что происходит в нише».",
             "parameters": {

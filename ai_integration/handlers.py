@@ -8259,6 +8259,131 @@ async def get_weather_info(city: str, user_id: int = None, session=None) -> str:
         logger.error(f"[WEATHER] Error: {e}")
         return f" Ошибка получения погоды: {str(e)}"
 
+
+async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = None, session=None) -> str:
+    """Получить котировку акции, курс валюты или цену металла через Alpha Vantage.
+    
+    Работает только если у агента пользователя настроен ALPHAVANTAGE_API_KEY.
+    Тикеры акций: AAPL, MSFT, TSLA, GOOGL, AMZN и т.д.
+    Форекс: EUR/USD, USD/RUB, GBP/USD и т.д.
+    Криптовалюты: BTC (через symbol='BTC', data_type='crypto').
+    """
+    import urllib.request as _urllib_req
+    import json as _json
+
+    if not user_id:
+        return "❌ Не указан user_id"
+
+    # Ищем ALPHAVANTAGE_API_KEY в ключах агентов пользователя
+    _api_key = None
+    try:
+        from models import UserAgent as _UA_av
+        _db_sess = session
+        _close_sess = False
+        if _db_sess is None:
+            from models import SessionLocal
+            _db_sess = SessionLocal()
+            _close_sess = True
+        try:
+            _agents = _db_sess.query(_UA_av).filter(
+                _UA_av.user_id == user_id,
+                _UA_av.user_api_keys.isnot(None),
+                _UA_av.user_api_keys.contains('ALPHAVANTAGE_API_KEY='),
+            ).all()
+            for _ag in _agents:
+                for _line in (_ag.user_api_keys or '').splitlines():
+                    _line = _line.strip()
+                    if _line.startswith('ALPHAVANTAGE_API_KEY='):
+                        _val = _line.split('=', 1)[1].strip()
+                        if _val and len(_val) > 4:
+                            _api_key = _val
+                            break
+                if _api_key:
+                    break
+        finally:
+            if _close_sess:
+                _db_sess.close()
+    except Exception as _e:
+        logger.warning(f"[STOCK] Error fetching API key: {_e}")
+
+    if not _api_key:
+        return (
+            "💡 Котировки недоступны: ALPHAVANTAGE_API_KEY не настроен.\n"
+            "Получи бесплатный ключ на alphavantage.co → добавь в настройки агента → API-ключи:\n"
+            "ALPHAVANTAGE_API_KEY=твой_ключ"
+        )
+
+    symbol = symbol.strip().upper()
+    try:
+        if data_type == "forex" or "/" in symbol:
+            from_c, _, to_c = symbol.partition("/")
+            if not to_c:
+                to_c = "USD"
+            url = (
+                f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE"
+                f"&from_currency={from_c}&to_currency={to_c}&apikey={_api_key}"
+            )
+            req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with _urllib_req.urlopen(req, timeout=15) as r:
+                d = _json.loads(r.read().decode())
+            info = d.get("Realtime Currency Exchange Rate", {})
+            if not info:
+                return f"❌ Данные по паре {from_c}/{to_c} не получены (проверьте ключ или тикер)"
+            rate = info.get("5. Exchange Rate", "?")
+            refreshed = info.get("6. Last Refreshed", "")[:16]
+            bid = info.get("8. Bid Price", "")
+            ask = info.get("9. Ask Price", "")
+            result = f"💱 **{from_c}/{to_c}**: {rate}"
+            if bid and ask:
+                result += f"  (bid: {bid}, ask: {ask})"
+            if refreshed:
+                result += f"\n  Обновлено: {refreshed} UTC"
+            return result
+
+        elif data_type == "crypto":
+            url = (
+                f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE"
+                f"&from_currency={symbol}&to_currency=USD&apikey={_api_key}"
+            )
+            req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with _urllib_req.urlopen(req, timeout=15) as r:
+                d = _json.loads(r.read().decode())
+            info = d.get("Realtime Currency Exchange Rate", {})
+            if not info:
+                return f"❌ Данные по {symbol} не получены"
+            rate = info.get("5. Exchange Rate", "?")
+            refreshed = info.get("6. Last Refreshed", "")[:16]
+            return f"🪙 **{symbol}/USD**: ${rate}  (обновлено: {refreshed} UTC)"
+
+        else:
+            url = (
+                f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE"
+                f"&symbol={symbol}&apikey={_api_key}"
+            )
+            req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with _urllib_req.urlopen(req, timeout=15) as r:
+                d = _json.loads(r.read().decode())
+            q = d.get("Global Quote", {})
+            if not q or not q.get("05. price"):
+                return f"❌ Котировка {symbol} не найдена (проверьте тикер или ключ)"
+            price = q.get("05. price", "?")
+            chg = q.get("09. change", "0") or "0"
+            chg_pct = q.get("10. change percent", "0%")
+            prev = q.get("08. previous close", "?")
+            vol = q.get("06. volume", "")
+            direction = "▲" if float(chg) >= 0 else "▼"
+            result = f"📈 **{symbol}**: ${price}  {direction} {chg} ({chg_pct})\n"
+            result += f"  Закрытие вчера: ${prev}"
+            if vol:
+                vol_m = round(int(vol) / 1_000_000, 1)
+                result += f"  |  Объём: {vol_m}M"
+            return result
+
+    except Exception as e:
+        logger.error(f"[STOCK] Error for {symbol}: {e}")
+        return f"❌ Ошибка получения котировки {symbol}: {str(e)}"
+
+
 async def analyze_situation_and_suggest_tasks(user_id: int = None, session=None) -> str:
     """
     Умный анализ ситуации пользователя и предложение релевантных задач.

@@ -5087,6 +5087,57 @@ try:
 except Exception as e:
     print('Ошибка Тинькофф: ' + str(e))`
             },
+            alphavantage: {
+                name: 'Alpha Vantage (акции/форекс/металлы)',
+                fields: [
+                    {k:'ALPHAVANTAGE_API_KEY', label:'API Key Alpha Vantage', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'AV_SYMBOLS', label:'Тикеры через запятую (акции/форекс/металлы)', ph:'AAPL,GOOGL,MSFT,EUR/USD', t:'text', opt:true}
+                ],
+                hint: 'Бесплатный ключ: alphavantage.co → Get Free API Key. 500 запросов/день. Тикеры акций: AAPL, MSFT, TSLA. Форекс: EUR/USD. Металлы: XAU/USD (золото), XAG/USD (серебро).',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
+SYMBOLS = os.environ.get('AV_SYMBOLS', 'AAPL,MSFT,GOOGL')
+ACTION = os.environ.get('AGENT_ACTION', 'quotes')
+
+def av_get(params):
+    params['apikey'] = API_KEY
+    url = 'https://www.alphavantage.co/query?' + '&'.join(k + '=' + str(v) for k,v in params.items())
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    if not API_KEY:
+        print('Ошибка: ALPHAVANTAGE_API_KEY не задан.')
+    elif ACTION == 'forex':
+        pairs = [s.strip() for s in SYMBOLS.split(',') if '/' in s]
+        if not pairs:
+            pairs = ['EUR/USD', 'USD/RUB', 'GBP/USD']
+        print('Курсы валют (Alpha Vantage):')
+        for pair in pairs[:5]:
+            from_c, to_c = pair.split('/')
+            d = av_get({'function': 'CURRENCY_EXCHANGE_RATE', 'from_currency': from_c, 'to_currency': to_c})
+            info = d.get('Realtime Currency Exchange Rate', {})
+            rate = info.get('5. Exchange Rate', '?')
+            refreshed = info.get('6. Last Refreshed', '')[:16]
+            print(pair + ': ' + str(rate) + '  (' + refreshed + ')')
+    else:
+        symbols_list = [s.strip() for s in SYMBOLS.split(',') if '/' not in s]
+        if not symbols_list:
+            symbols_list = ['AAPL']
+        print('Котировки акций (Alpha Vantage):')
+        for sym in symbols_list[:5]:
+            d = av_get({'function': 'GLOBAL_QUOTE', 'symbol': sym})
+            q = d.get('Global Quote', {})
+            price = q.get('05. price', '?')
+            chg = q.get('09. change', '0')
+            chg_pct = q.get('10. change percent', '0%')
+            prev = q.get('08. previous close', '?')
+            direction = '+' if float(chg or 0) >= 0 else ''
+            print(sym + ': $' + str(price) + '  ' + direction + str(chg) + ' (' + str(chg_pct) + ')  prev.close $' + str(prev))
+except Exception as e:
+    print('Ошибка Alpha Vantage: ' + str(e))`
+            },
             cdek: {
                 name: 'СДЭК (доставка)',
                 fields: [
@@ -5742,6 +5793,7 @@ except Exception as e:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Финансы / Календарь</option>
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>
+                            <option value="alphavantage">Alpha Vantage (акции/форекс)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Мессенджеры / ERP</option>
                             <option value="whatsapp">WhatsApp Business</option>
                             <option value="onec">1С (REST API)</option>
