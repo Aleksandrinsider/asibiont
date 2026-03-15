@@ -326,6 +326,211 @@ _INTEGRATION_TYPE_LABELS = {
 }
 
 
+def _build_goal_tactics(goals_summary: list, caps_lower: list[str],
+                        has_imap: bool, has_github: bool, has_rss: bool,
+                        has_alpha: bool, has_script: bool, has_content: bool,
+                        has_news: bool, has_notion: bool, has_slack: bool,
+                        has_sheets: bool, has_stripe: bool, used_tools: set) -> str:
+    """Генерирует конкретный тактический план для ЭТОЙ цели + ЭТИХ интеграций.
+    Не "выбери что хочешь" — а "для цели X с интеграцией Y делай шаги 1→2→3".
+    """
+    goals_text = ' '.join(
+        (g.get('title', '') + ' ' + (g.get('description', '') or '')).lower()
+        for g in goals_summary
+    )
+
+    # ─── Детектируем тип цели ───
+    _is_outreach  = any(w in goals_text for w in (
+        'тестировщик', 'пользовател', 'бета', 'клиент', 'партнёр', 'партнер',
+        'инвестор', 'рекрутинг', 'найти людей', 'набор', 'аудитор', 'подписчик',
+        'контакт', 'outreach', 'лид', 'охват', 'первые', 'участник', 'спонсор',
+    ))
+    _is_content   = any(w in goals_text for w in (
+        'контент', 'пост', 'публикац', 'smm', 'блог', 'канал', 'медиа',
+        'editorial', 'story', 'статья', 'видео', 'новость', 'дайджест',
+    ))
+    _is_finance   = any(w in goals_text for w in (
+        'нефть', 'акци', 'рынок', 'котировк', 'инвест', 'трейд', 'финанс',
+        'крипт', 'forex', 'биржа', 'commodity', 'нефт', 'gold', 'brent', 'wti',
+        'портфель', 'etf', 'stock', 'oil', 'валют',
+    ))
+    _is_dev       = any(w in goals_text for w in (
+        'разработ', 'программ', 'github', 'developer', 'технолог', 'релиз',
+        'deploy', 'issue', 'pull request', 'open source', 'контрибьют',
+    ))
+    _is_sales     = any(w in goals_text for w in (
+        'продаж', 'выручк', 'crm', 'конверс', 'оборот', 'прибыл', 'дох',
+        'wildberries', 'ozon', 'маркетплейс', 'заказ', 'товар', 'магазин',
+    ))
+    _is_research  = any(w in goals_text for w in (
+        'исследов', 'анализ', 'мониторинг', 'тренд', 'конкурент', 'отчёт',
+        'обзор', 'insight', 'разведк', 'benchmark', 'strategy', 'стратег',
+    ))
+    _is_hr        = any(w in goals_text for w in (
+        'кандидат', 'вакансия', 'найти сотруд', 'нанять', 'рекрутинг',
+        'hh.ru', 'резюме', 'собеседован', 'headhunt', 'developer', 'designer',
+    ))
+
+    tactics = []
+
+    # ─── OUTREACH / поиск людей ───
+    if _is_outreach:
+        t = ["🎯 ТАКТИКА — Outreach и поиск людей:"]
+        if has_github and 'run_agent_action' not in used_tools:
+            t.append("  1. run_agent_action(action='search_users', query='[профиль цели]') → GitHub-разработчики")
+        if has_imap:
+            t.append("  → send_outreach_email каждому найденному (персонально, НЕ шаблон)")
+            t.append("  → check_emails: ответили? → reply_to_outreach_email с продолжением")
+            t.append("  → через 3+ дня: send_follow_up_email если тишина")
+            t.append("  → negotiate_by_email если нужны переговоры")
+        else:
+            t.append("  → find_relevant_contacts_for_task — поиск внутри платформы")
+            t.append("  → find_and_message_relevant_users — прямые сообщения релевантным")
+            t.append("  → DELEGATE[агент с Gmail]: Отправь письмо [email] — [суть]")
+        t.append("  → find_partners — партнёры по цели")
+        t.append("  → start_delegation_campaign — авто-делегирование подходящим людям")
+        t.append("  ⛔ НЕ ДЕЛАЙ: web_search 'как найти тестировщиков' — действуй напрямую!")
+        tactics.append('\n'.join(t))
+
+    # ─── CONTENT / SMM / публикации ───
+    if _is_content:
+        t = ["📢 ТАКТИКА — Контент и публикации:"]
+        if has_rss:
+            t.append("  1. run_agent_action(action='get_latest') → RSS: свежие инфоповоды дня")
+        else:
+            t.append("  1. get_news_trends('[ниша]') → актуальные темы для контента")
+        t.append("  2. generate_marketing_content(topic='[тема]', type='post/article/thread')")
+        if has_content:
+            t.append("  3a. publish_to_telegram(text, image_prompt) → в канал")
+            t.append("  3b. publish_to_discord(text) → альтернатива")
+        else:
+            t.append("  3. create_post(title, content) → в блог платформы")
+            t.append("  ⚠️ Подключи Telegram-канал для авто-публикаций в канал")
+        t.append("  4. start_content_campaign — серия постов по расписанию")
+        t.append("  5. generate_image(prompt='[визуал для поста]') — обложка")
+        t.append("  ⛔ НЕ ДЕЛАЙ: просто 5× web_search без публикации")
+        tactics.append('\n'.join(t))
+
+    # ─── FINANCE / рыночный анализ ───
+    if _is_finance:
+        t = ["📊 ТАКТИКА — Финансовый анализ и котировки:"]
+        if has_alpha:
+            t.append("  1. run_agent_action(action='get_price', symbol='WTI') → реальная котировка нефти")
+            t.append("     run_agent_action(action='get_ohlcv', symbol='BRENT', period='7d') → недельный тренд")
+        elif has_rss:
+            t.append("  1. run_agent_action(action='get_latest') → RSS финансовые новости")
+        else:
+            t.append("  1. research_topic(query='цена нефти Brent 2026', depth='deep') ← НЕ просто web_search!")
+        if has_news:
+            t.append("  2. get_news_trends('[commodity/инструмент]') → рыночный сентимент")
+        else:
+            t.append("  2. get_news_trends('[нефть/акции/крипта]') → контекст и тренды")
+        t.append("  3. Собери сводку: цена + % изменение + 3 главных фактора")
+        t.append("  4. create_post или send_outreach_email — отчёт стейкхолдерам")
+        if has_sheets:
+            t.append("  5. run_agent_action(action='update_sheet') → занести данные в Google Sheets")
+        t.append("  ⛔ НЕ ДЕЛАЙ: web_search 'цена нефти сегодня' если есть API-ключ!")
+        tactics.append('\n'.join(t))
+
+    # ─── DEVELOPMENT / GitHub ───
+    if _is_dev:
+        t = ["💻 ТАКТИКА — Разработка и GitHub:"]
+        if has_github:
+            t.append("  1. run_agent_action(action='search_users', query='[язык/тема]') → контрибьюторы")
+            t.append("  2. run_agent_action(action='get_trending_repos') → тренды репозиториев")
+            t.append("  3. run_agent_action(action='create_issue', title='[задача]') → создать issue")
+        else:
+            t.append("  1. research_topic(query='[технология] developers community', depth='full')")
+            t.append("  2. web_search('[framework] contributors github 2026')")
+        if has_imap:
+            t.append("  3. send_outreach_email → пригласить разработчиков к сотрудничеству")
+        t.append("  4. find_relevant_contacts_for_task('разработчик [технология]')")
+        t.append("  5. find_partners → технические партнёры")
+        t.append("  ⛔ НЕ ДЕЛАЙ: только поиск без конкретных action-шагов")
+        tactics.append('\n'.join(t))
+
+    # ─── SALES / маркетплейсы ───
+    if _is_sales:
+        t = ["💰 ТАКТИКА — Продажи и аналитика:"]
+        if any(w in goals_text for w in ('wildberries', 'вб', 'wb')):
+            t.append("  1. run_agent_action(action='get_stats') → статистика WB")
+            t.append("  2. run_agent_action(action='get_competitor_prices') → конкуренты")
+        elif any(w in goals_text for w in ('ozon', 'озон')):
+            t.append("  1. run_agent_action(action='get_analytics') → аналитика Ozon")
+        else:
+            t.append("  1. research_topic(query='[ниша] рынок конкуренты 2026', depth='deep')")
+            t.append("  2. analyze_situation_and_suggest_tasks → план роста продаж")
+        if has_sheets:
+            t.append("  3. run_agent_action(action='update_sheet') → данные в Google Sheets")
+        if has_imap:
+            t.append("  4. send_outreach_email клиентам/партнёрам с предложением")
+        t.append("  5. start_email_campaign → массовая рассылка целевым клиентам")
+        tactics.append('\n'.join(t))
+
+    # ─── HR / рекрутинг ───
+    if _is_hr:
+        t = ["👥 ТАКТИКА — Подбор персонала:"]
+        t.append("  1. research_topic(query='[должность] hh.ru superjob [город]', depth='full')")
+        t.append("  2. find_relevant_contacts_for_task('[должность, навыки]')")
+        if has_github:
+            t.append("  3. run_agent_action(action='search_users', query='[язык/специализация]') → GitHub")
+        if has_imap:
+            t.append("  4. send_outreach_email найденным кандидатам — персонально!")
+            t.append("  5. check_emails → отслеживай ответы")
+        else:
+            t.append("  4. find_and_message_relevant_users — прямые сообщения")
+        t.append("  6. start_delegation_campaign — делегируй поиск нужным агентам")
+        tactics.append('\n'.join(t))
+
+    # ─── RESEARCH / мониторинг ───
+    if _is_research and not tactics:  # только если не покрыто другими тактиками
+        t = ["🔬 ТАКТИКА — Исследование и мониторинг:"]
+        if has_rss:
+            t.append("  1. run_agent_action(action='get_latest') → RSS: мониторинг источников")
+        t.append("  2. research_and_plan('[тема исследования]') — НЕ просто web_search!")
+        t.append("  3. research_topic(query='[тема]', depth='deep') → глубокий анализ")
+        t.append("  4. get_news_trends('[ниша]') → тренды и инсайты")
+        t.append("  5. analyze_situation_and_suggest_tasks → план действий из анализа")
+        if has_sheets:
+            t.append("  6. run_agent_action(action='update_sheet') → сохранить данные")
+        if has_notion:
+            t.append("  6. run_agent_action(action='create_page') → заметки в Notion")
+        t.append("  ⛔ НЕ ДЕЛАЙ: 5× web_search с похожими запросами — меняй угол каждый раз!")
+        tactics.append('\n'.join(t))
+
+    # ─── Общие тактики для run_agent_action — конкретные примеры ───
+    if has_script:
+        _ra_examples = []
+        if has_github:
+            _ra_examples.append("search_users(query='python testing'), get_trending_repos, create_issue")
+        if has_rss:
+            _ra_examples.append("get_latest (RSS), get_feed_summary")
+        if has_alpha:
+            _ra_examples.append("get_price(symbol='WTI'), get_ohlcv(symbol='BRENT')")
+        if has_notion:
+            _ra_examples.append("create_page, update_page, search_pages")
+        if has_slack:
+            _ra_examples.append("post_message(channel='#team'), get_channels")
+        if has_sheets:
+            _ra_examples.append("read_sheet(id=...), update_sheet(range=...)")
+        if has_stripe:
+            _ra_examples.append("get_charges, get_revenue_stats")
+        if _ra_examples:
+            tactics.append(
+                "⚙️ ТВОИ run_agent_action — конкретные action= для вызова:\n  "
+                + '\n  '.join(_ra_examples)
+            )
+
+    if not tactics:
+        return ''
+
+    return (
+        "\n━━━ КОНКРЕТНАЯ ТАКТИКА ДЛЯ ТВОИХ ЦЕЛЕЙ ━━━\n"
+        + '\n\n'.join(tactics)
+        + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+
+
 def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None) -> str:
     """Строит адаптивный промпт автопилота.
     Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
@@ -686,33 +891,39 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # ── Имена целей для привязки задач ──
     _first_goal_title = goals_summary[0].get('title', '') if goals_summary else ''
 
+    # ── Тактический блок — конкретные цепочки для ЭТОЙ цели + ЭТИХ интеграций ──
+    _tactics_block = _build_goal_tactics(
+        goals_summary, _caps_lower,
+        _has_imap, _has_github, _has_rss,
+        _has_alpha, _has_script, _has_content,
+        _has_news, _has_notion, _has_slack,
+        _has_sheets, _has_stripe, _used_tools,
+    )
+
     return (
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Твои интеграции/специализация: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
         f"{_goal_state_hint}"
+        f"{_tactics_block}"
         f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
         "2. Работай ПО СВОЕЙ РОЛИ и специализации как первый приоритет.\n"
-        "   НО: если в своей нише застрял или нет нужного инструмента — "
-        "выходи за рамки роли и используй ВЕСЬ каталог выше. Результат важнее роли.\n"
-        "3. Задания МОГУТ БЫТЬ КОСВЕННЫМИ: изучи тренды → предложи темы, найди экспертов → сохрани,\n"
-        "   проанализируй конкурентов → сделай вывод. НЕ ОБЯЗАТЕЛЬНО прямые массовые действия.\n"
-        "4. Сам анализируй каталог и выбирай лучшую цепочку под свою цель и интеграции.\n"
-        "5. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress (максимум ОДИН раз за сессию).\n"
-        "6. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
-        "7. Каждый цикл = другие инструменты: если уже делал web_search → пробуй research_topic, "
-        "negotiate_by_email, find_and_message_relevant_users, start_content_campaign и т.д.\n"
-        "8. НЕ пиши одним и тем же людям повторно.\n"
+        "   НО: если в нише застрял — выходи за рамки роли, используй ВЕСЬ каталог. Результат важнее роли.\n"
+        "3. КОНКРЕТНАЯ ТАКТИКА (блок выше) — твои точные шаги для этой цели. Следуй ей!\n"
+        "4. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress (макс ОДИН раз за сессию).\n"
+        "5. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
+        "6. Каждый цикл = ДРУГИЕ инструменты: если уже делал web_search → "
+        "пробуй research_topic, research_and_plan, negotiate_by_email, find_and_message_relevant_users.\n"
+        "7. НЕ пиши одним и тем же людям повторно.\n"
+        "8. Задания МОГУТ БЫТЬ КОСВЕННЫМИ: изучи тренды → предложи темы, найди экспертов → сохрани.\n"
         "9. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
-        "10. ЧЕСТНОСТЬ: если инструмент не дал данных, сервис недоступен или идеи исчерпаны — "
-        "пиши прямо. Если видишь настоящий блокер (нет нужной интеграции, задача невозможна без "
-        "новых данных от пользователя) — начни ответ со слова БЛОКЕР: и опиши суть. "
-        "ASI это прочитает и обратится к пользователю за помощью.\n"
+        "10. ЧЕСТНОСТЬ: если инструмент не дал данных или идеи исчерпаны — "
+        "начни ответ со слова БЛОКЕР: и опиши суть. ASI обратится к пользователю за помощью.\n"
         + ("11. У тебя RSS-лента — после run_agent_action (RSS) ОБЯЗАТЕЛЬНО вызови save_email_contact "
            "для каждого найденного автора/источника. Без сохранения данные потеряются!\n"
            if _has_rss else '')
@@ -720,13 +931,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "вызови send_outreach_email НАПРЯМУЮ конкретным людям из find_relevant_contacts_for_task. "
            "НЕ запускай новую кампанию — пиши персонально!\n"
            if _has_imap else '')
-        + (f"10. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
+        + (f"12. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
            if _first_goal_title else "")
-        + "12. КОМАНДНАЯ ЭСТАФЕТА: если нашёл email-адрес или контакт — "
-          "не держи данные у себя! Сразу делегируй коллеге с email-интеграцией:\n"
-          "   DELEGATE[Имя]: Отправь письмо name@domain.com — [суть предложения в 1-2 предложениях].\n"
-          "   Или укажи адрес в отчёте явно: КОНТАКТ: name@domain.com — ASI передаст его коллеге.\n"
-          "   Коллеги с письмами работают в паре с коллегами-искателями — это командная работа.\n"
+        + "13. КОМАНДНАЯ ЭСТАФЕТА: нашёл контакт — не держи у себя! "
+          "DELEGATE[Имя с email-интеграцией]: Отправь письмо name@domain.com — [суть].\n"
     )
 
 # Группы батчинга
