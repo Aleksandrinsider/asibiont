@@ -3395,18 +3395,20 @@ except Exception as e:
             rss: {
                 name: 'RSS-лента',
                 fields: [
-                    {k:'RSS_URL', label:'URL RSS-ленты', ph:'https://lenta.ru/rss/news', t:'url'}
+                    {k:'RSS_URL',   label:'URL RSS-ленты', ph:'https://lenta.ru/rss/news', t:'url'},
+                    {k:'RSS_COUNT', label:'Кол-во новостей', ph:'5', t:'text', opt:true}
                 ],
-                hint: 'Примеры: lenta.ru/rss/news, habr.com/ru/rss/articles, vc.ru/rss',
+                hint: 'Примеры: lenta.ru/rss/news, habr.com/ru/rss/articles, vc.ru/rss. RSS_COUNT — сколько новостей показывать (по умолч. 5).',
                 code: `import urllib.request, re, html, os
-URL = os.environ.get('RSS_URL', '')
-def _rss_title(item):
-    m = re.search(r'<title[^>]*>(.*?)</title>', item, re.DOTALL)
-    if not m:
-        return '(нет)'
-    raw = m.group(1).strip()
-    cdata = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw, re.DOTALL)
-    return html.unescape((cdata.group(1) if cdata else raw).strip() or '(нет)')
+URL   = os.environ.get('RSS_URL', '')
+COUNT = int(os.environ.get('RSS_COUNT', '5') or '5')
+def _cdata_or_plain(raw):
+    raw = raw.strip()
+    m = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw, re.DOTALL)
+    return html.unescape((m.group(1) if m else raw).strip())
+def _tag(item, tag):
+    m = re.search(r'<' + tag + r'[^>]*>(.*?)</' + tag + r'>', item, re.DOTALL)
+    return _cdata_or_plain(m.group(1)) if m else ''
 try:
     if not URL:
         print('RSS_URL не задан')
@@ -3414,22 +3416,19 @@ try:
         req = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as r:
             content = r.read().decode('utf-8', errors='replace')
-        items = re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:5]
+        items = re.findall(r'<item[^>]*>(.*?)</item>', content, re.DOTALL)[:COUNT]
         if not items:
-            print('Нет новостей')
+            print('Нет новостей в ленте')
         else:
-            print('Последние новости:')
-            for item in items:
-                t = _rss_title(item)
-                lm = re.search(r'<link>\\s*(.*?)\\s*</link>', item, re.DOTALL)
-                if lm:
-                    raw_l = lm.group(1).strip()
-                    cdata_l = re.match(r'<!\\[CDATA\\[(.*?)\\]\\]>', raw_l, re.DOTALL)
-                    l = (cdata_l.group(1) if cdata_l else raw_l).strip().split()[0]
-                else:
-                    l = ''
-                print('- ' + t)
-                if l: print('  ' + l)
+            print('Последние ' + str(len(items)) + ' новостей из ' + URL + ':\\n')
+            for i, item in enumerate(items, 1):
+                title = _tag(item, 'title') or '(без заголовка)'
+                link  = _tag(item, 'link')
+                desc  = re.sub(r'<[^>]+>', '', _tag(item, 'description')).strip()[:200]
+                print(str(i) + '. ' + title)
+                if link: print('   ' + link)
+                if desc: print('   ' + desc)
+                print()
 except Exception as e:
     print('Ошибка RSS: ' + str(e))`
             },
