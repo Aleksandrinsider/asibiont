@@ -4344,7 +4344,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     any(u in (matched.metric_unit or '').lower() for u in _ppl_units_chk)
                     or any(w in _gfull_chk for w in _ppl_kw_chk)
                 )
-                if _is_ppl_chk and (mc - _old_mc) > 5:
+                if _is_ppl_chk and (mc - _old_mc) >= 1:
                     try:
                         from models import EmailContact as _EC_chk, AgentActivityLog as _AAL_chk
                         _rpl_chk = session.query(_EC_chk).filter(_EC_chk.user_id == user.id, _EC_chk.status == 'replied').count()
@@ -4354,15 +4354,15 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                         ).count()
                         if _rpl_chk == 0 and _ibx_chk == 0:
                             return (
-                                f"⛔ Нельзя прибавить {int(mc - _old_mc)} к метрике «{matched.title}» сразу — "
-                                f"нет ни одного подтверждённого ответа от тестировщиков.\n\n"
-                                f"Ты, похоже, считаешь email-контакты в базе (outreach) как тестировщиков — это неверно.\n"
-                                f"Email-контакт ≠ пользователь, подтвердивший тестирование.\n\n"
-                                f"Правильный путь:\n"
-                                f"  1. check_emails — есть ли ответы на outreach?\n"
-                                f"  2. negotiate_by_email — уточни, начали ли они тестировать\n"
-                                f"  3. Обновляй metric_current на +1 только при ответе «да, тестирую»\n"
-                                f"Текущая метрика остаётся: {int(_old_mc)}/{int(matched.metric_target)} {matched.metric_unit or ''}"
+                                f"⛔ Нельзя обновить метрику «{matched.title}» (+{int(mc - _old_mc)}) — "
+                                f"нет подтверждённых ответов от целевых людей.\n\n"
+                                f"Правило: email отправлен / контакт в базе ≠ достигнутая единица цели.\n"
+                                f"Метрика обновляется только когда человек подтвердил участие (ответ «да, тестирую»).\n\n"
+                                f"Что нужно сделать:\n"
+                                f"  1. check_emails — проверь, есть ли ответы\n"
+                                f"  2. negotiate_by_email или reply_to_outreach_email — продолжи диалог\n"
+                                f"  3. Обновляй metric_current на +1 за каждый реальный положительный ответ\n"
+                                f"Текущая метрика: {int(_old_mc)} / {int(matched.metric_target)} {matched.metric_unit or ''}"
                             )
                     except Exception:
                         pass
