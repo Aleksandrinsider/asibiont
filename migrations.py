@@ -283,6 +283,21 @@ def _migrate_anchors(session, inspector):
         except Exception:
             session.rollback()
 
+        # Partial unique index: запрещает дублирующиеся pending-якоря с одинаковым
+        # (user_id, anchor_type, source) при race condition (Railway multi-instance).
+        # Код обрабатывает IntegrityError и молча пропускает дубли.
+        try:
+            session.execute(text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS anchors_pending_unique_src "
+                "ON anchors (user_id, anchor_type, source) "
+                "WHERE delivered_at IS NULL AND source IS NOT NULL"
+            ))
+            session.commit()
+            logger.info("Migration: anchors_pending_unique_src index created")
+        except Exception as _idx_err:
+            session.rollback()
+            logger.debug(f"anchors_pending_unique_src: {_idx_err}")
+
     if inspector.has_table('anchor_delivery_log'):
         cols = [col['name'] for col in inspector.get_columns('anchor_delivery_log')]
         _add_columns(session, 'anchor_delivery_log', cols, {

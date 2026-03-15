@@ -1358,9 +1358,25 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] User {user_id}: scan dedup: {len(new_anchors)-len(_deduped)} skipped (already pending), {len(_deduped)} new")
             new_anchors = _deduped
         if new_anchors:
-            session.add_all(new_anchors)
-            session.commit()
-            logger.info(f"[ANCHOR] User {user_id}: created {len(new_anchors)} new anchors")
+            # Защита от race condition при multi-instance деплое:
+            # если уникальный индекс сработал — откатываемся и вставляем по одному
+            from sqlalchemy.exc import IntegrityError as _IntegrityError
+            try:
+                session.add_all(new_anchors)
+                session.commit()
+                logger.info(f"[ANCHOR] User {user_id}: created {len(new_anchors)} new anchors")
+            except _IntegrityError:
+                session.rollback()
+                _saved = 0
+                for _one_anchor in new_anchors:
+                    try:
+                        session.add(_one_anchor)
+                        session.commit()
+                        _saved += 1
+                    except _IntegrityError:
+                        session.rollback()  # дубль уже есть в БД
+                if _saved:
+                    logger.info(f"[ANCHOR] User {user_id}: created {_saved}/{len(new_anchors)} anchors (race-condition dedup, {len(new_anchors)-_saved} skipped)")
             # 1b. EVENT DISPATCH — новые goal-якоря запускают нужных агентов в фоне
             if not is_night:
                 asyncio.ensure_future(
@@ -7957,6 +7973,43 @@ class AnchorEngine:
             Goal.status == 'active',
             Goal.progress_percentage > 0,
         ).all()
+
+        # ── CLEANUP: если прогресс цели СНИЗИЛСЯ (откат), помечаем стейл milestone якоря ──
+        # Например: goal был на 100%, потом metric скорректировали → goal теперь на 2%.
+        # Старый pending anchor 'goal_milestone:14:100' будет доставлен и скажет
+        # 'цель выполнена на 100%!' — что неверно. Помечаем такие якоря как delivered.
+        try:
+            _goal_ids = [g.id for g in active_goals]
+            _goal_pct = {g.id: (g.progress_percentage or 0) for g in active_goals}
+            _stale_milestones = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.anchor_type == 'goal_milestone',
+                Anchor.delivered_at.is_(None),
+            ).all()
+            _stale_suppressed = 0
+            for _sm in _stale_milestones:
+                if not _sm.source:
+                    continue
+                _parts = (_sm.source or '').split(':')
+                if len(_parts) < 3:
+                    continue
+                try:
+                    _gid = int(_parts[1])
+                    _mpct = int(_parts[2])
+                except (ValueError, IndexError):
+                    continue
+                # Suppress если текущий прогресс цели МЕНЬШЕ milestone И разница > 30%
+                _cur_pct = _goal_pct.get(_gid)
+                if _cur_pct is not None and _cur_pct < _mpct - 30:
+                    _sm.delivered_at = now_utc
+                    _stale_suppressed += 1
+                    logger.info(f"[ANCHOR] User {user.id}: suppressed stale milestone anchor {_sm.id} "
+                                f"(goal {_gid}: milestone={_mpct}% but current={_cur_pct}%)")
+            if _stale_suppressed:
+                session.commit()
+        except Exception as _sm_err:
+            logger.debug(f"[ANCHOR] Stale milestone cleanup error: {_sm_err}")
+            session.rollback()
 
         for goal in active_goals:
             pct = goal.progress_percentage or 0
