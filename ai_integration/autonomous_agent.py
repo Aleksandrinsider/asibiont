@@ -194,8 +194,51 @@ for _fix_k in list(_fix_os.environ.keys()):
 
 
 def _wrap_agent_code(code: str) -> str:
-    """Оборачивает агентский код SSRF-преамбулой."""
-    return _AGENT_CODE_PREAMBLE + code
+    """Оборачивает агентский код SSRF-преамбулой.
+
+    Если код содержит ≥2 секций вида  # === Название ===
+    каждая выполняется в изолированном пространстве имён:
+    - коллизии имён функций/переменных исключены
+    - ошибка в одной секции не прерывает остальные
+    - добавление/удаление любого количества интеграций безопасно
+    """
+    import re as _re
+
+    _SECTION_RUNNER = (
+        'def _run_section(_src):\n'
+        '    _ns = {"__builtins__": __builtins__, "__name__": "__main__"}\n'
+        '    exec(compile(_src, "<section>", "exec"), _ns)\n'
+        '\n'
+    )
+
+    _HDR = _re.compile(r'(?m)^[ \t]*# *=== .+ ===[ \t]*$')
+    matches = list(_HDR.finditer(code))
+
+    if len(matches) < 2:
+        # Одна секция или нет маркеров — запускаем как раньше
+        return _AGENT_CODE_PREAMBLE + code
+
+    # Собираем блоки: что до первого маркера (если есть) + каждая секция
+    blocks = []
+    pre = code[:matches[0].start()].strip()
+    if pre:
+        blocks.append(('# (инициализация)', pre))
+    for i, m in enumerate(matches):
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(code)
+        blocks.append((m.group(0).strip(), code[m.start():end].strip()))
+
+    lines = [_SECTION_RUNNER]
+    for title, block in blocks:
+        lines.append(
+            f'try:\n'
+            f'    _run_section({repr(block)})\n'
+            f'except SystemExit:\n'
+            f'    raise\n'
+            f'except Exception as _e:\n'
+            f'    print({repr(title + ": ошибка")}, str(_e))\n'
+        )
+
+    return _AGENT_CODE_PREAMBLE + '\n'.join(lines)
 
 
 # ── Хелпер: разбивает вывод скрипта по именованным секциям ──────────────────

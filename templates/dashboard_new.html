@@ -5094,8 +5094,7 @@ except Exception as e:
                     {k:'AV_SYMBOLS', label:'Тикеры акций через запятую', ph:'AAPL,GOOGL,MSFT,EUR/USD', t:'text', opt:true}
                 ],
                 hint: 'Бесплатный ключ: alphavantage.co → Get Free API Key. 500 запросов/день. Акции: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Металлы: XAU/USD (золото), XAG/USD (серебро). ⚠️ NEWS_SENTIMENT только в Premium.',
-                code: `# === Alpha Vantage (акции/форекс) ===
-import urllib.request, json, os
+                code: `import urllib.request, json, os
 API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 SYMBOLS = os.environ.get('AV_SYMBOLS', 'AAPL,MSFT,GOOGL')
 ACTION = os.environ.get('AGENT_ACTION', 'quotes')
@@ -5145,8 +5144,7 @@ except Exception as e:
                     {k:'ALPHAVANTAGE_API_KEY', label:'API Key Alpha Vantage', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
                 ],
                 hint: 'Бесплатный ключ: alphavantage.co. Возвращает ежемесячные цены Brent и WTI. ⚠️ Alpha Vantage не предоставляет новости о нефти на бесплатном плане — для новостей используй RSS-ленту (neftegaz.ru/news/rss/ или investing.com/rss/news_14.rss).',
-                code: `# === Нефть Brent/WTI (Alpha Vantage) ===
-import urllib.request, json, os
+                code: `import urllib.request, json, os
 API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 
 def get_oil(name, fn):
@@ -5424,6 +5422,7 @@ except Exception as e:
             if (det) det.open = true;
             mpShowStatus('Сервис «' + tmpl.name + '» добавлен. Для ещё одного — выберите следующий сервис выше.', '#ECFDF5', '#059669');
             mpUpdateServiceHint();
+            mpUpdateSectionsList();
         }
 
         async function mpGenerateAgentCode() {
@@ -5627,6 +5626,7 @@ except Exception as e:
             // Открываем продвинутые настройки если у агента есть код
             const det = document.getElementById('mpa-advanced-details');
             if (det && agent.python_code) det.open = true;
+            mpUpdateSectionsList();
 
             // Меняем кнопку и заголовок формы
             const titleEl = document.querySelector('#mp-create-form [style*="font-weight:600"]');
@@ -5875,7 +5875,8 @@ except Exception as e:
                         <div style="padding:0 12px 12px 12px;border-top:1px solid #F3F4F6;">
                             <div style="padding-top:8px;">
                                 <div style="font-size:12px;color:#6B7280;margin-bottom:4px;">${t('mpa-code-label')}</div>
-                                <textarea id="mpa-pycode" placeholder="${t('mpa-pycode-ph')}" rows="5" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                                <textarea id="mpa-pycode" placeholder="${t('mpa-pycode-ph')}" rows="5" oninput="mpUpdateSectionsList()" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
+                                <div id="mpa-sections-list" style="display:none;margin-top:6px;"></div>
                                 <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
                                 <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mp-test-btn')}</button>
                                 <button type="button" onclick="mpCopyAgentCode(this)" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">
@@ -5919,6 +5920,70 @@ except Exception as e:
                     <button onclick="mpSubmitAgent()" id="mpa-submit-btn" class="mp-action-btn" style="padding:9px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mpa-submit')}</button>
 
                 </div>`;
+        }
+
+        function mpUpdateSectionsList() {
+            const codeEl = document.getElementById('mpa-pycode');
+            const listEl = document.getElementById('mpa-sections-list');
+            if (!codeEl || !listEl) return;
+            const code = codeEl.value;
+            const re = /^[ \t]*# *=== (.+?) ===[ \t]*$/gm;
+            const sections = [];
+            let m;
+            while ((m = re.exec(code)) !== null) sections.push(m[1].trim());
+            if (sections.length < 2) { listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+            let h = '<div style="font-size:11px;color:#6B7280;margin-bottom:4px;">Подключённые интеграции:</div><div style="display:flex;flex-wrap:wrap;gap:5px;">';
+            for (const name of sections) {
+                const safe = name.replace(/'/g, "\\'");
+                h += `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 7px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:20px;font-size:11px;color:#1D4ED8;">` +
+                     `${name}<button type="button" onclick="mpRemoveSection('${safe}')" title="Удалить" ` +
+                     `style="background:none;border:none;cursor:pointer;padding:0;line-height:1;color:#93C5FD;font-size:13px;" ` +
+                     `onmouseover="this.style.color='#DC2626'" onmouseout="this.style.color='#93C5FD'">✕</button></span>`;
+            }
+            h += '</div>';
+            listEl.innerHTML = h;
+            listEl.style.display = 'block';
+        }
+
+        function mpRemoveSection(name) {
+            const codeEl = document.getElementById('mpa-pycode');
+            if (!codeEl) return;
+            const code = codeEl.value;
+            // Удаляем блок от маркера до следующего маркера (или конца)
+            const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp('(?:^|\\n{1,2})[ \\t]*# *=== ' + escaped + ' ===[ \\t]*[\\s\\S]*?(?=\\n{1,2}[ \\t]*# *=== |$)', '');
+            const newCode = code.replace(re, '').replace(/\n{3,}/g, '\n\n').trim();
+            codeEl.value = newCode;
+            codeEl.style.height = 'auto';
+            codeEl.style.height = Math.min(codeEl.scrollHeight, 320) + 'px';
+            // Удаляем ключи этой интеграции из api keys
+            const apiEl = document.getElementById('mpa-apikeys');
+            if (apiEl) {
+                // Найти сервис по названию шаблона
+                const svcEntry = Object.entries(_MPA_SVC).find(([, v]) => v.name === name);
+                if (svcEntry) {
+                    const keysToRemove = new Set((svcEntry[1].fields || []).map(f => f.k));
+                    // только удаляем ключи которые уникальны для этого сервиса
+                    // (не удаляем если тот же ключ используется другим оставшимся сервисом)
+                    const sectionsLeft = [];
+                    const re2 = /^[ \t]*# *=== (.+?) ===[ \t]*$/gm;
+                    let m2;
+                    while ((m2 = re2.exec(newCode)) !== null) sectionsLeft.push(m2[1].trim());
+                    const usedKeys = new Set();
+                    for (const [, v] of Object.entries(_MPA_SVC)) {
+                        if (sectionsLeft.includes(v.name)) {
+                            for (const f of (v.fields || [])) usedKeys.add(f.k);
+                        }
+                    }
+                    const newLines = apiEl.value.split('\n').filter(line => {
+                        const k = line.trim().split('=')[0].trim();
+                        return !(keysToRemove.has(k) && !usedKeys.has(k));
+                    });
+                    apiEl.value = newLines.join('\n').trim();
+                }
+            }
+            mpUpdateSectionsList();
+            mpShowStatus('Интеграция «' + name + '» удалена.', '#FEF3C7', '#92400E');
         }
 
         function mpCopyAgentCode(btn) {
