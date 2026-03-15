@@ -4065,10 +4065,19 @@ class AnchorEngine:
                 if _banned_al:
                     _agent_banned_tools[_p_al['name']] = _banned_al
             _banned_tools_str = ''
+            # Агенты у которых ВСЕ инструменты заблокированы — пропустить в этом цикле, покрыть через ASI
+            _fully_blocked_agents: set = set()
             if _agent_banned_tools:
-                _banned_tools_str = '\n🚫 ЗАБЛОКИРОВАННЫЕ инструменты (2+ раз без прогресса — строго не назначать):\n'
+                _banned_tools_str = '\n🚫 ЗАБЛОКИРОВАННЫЕ инструменты (2+ раз подряд — строго не назначать):\n'
                 for _ag_bt, _tl_bt in _agent_banned_tools.items():
                     _banned_tools_str += f'  {_ag_bt}: НЕ использовать [{", ".join(_tl_bt)}] — дай ДРУГОЙ инструмент из каталога!\n'
+                    # Проверяем: если все инструменты агента заблокированы → пропустить агента полностью
+                    _ag_obj_bt = next((p for p in _profiles if p['name'] == _ag_bt), None)
+                    if _ag_obj_bt:
+                        _ag_all_tools = [t.lower().strip() for t in _ag_obj_bt.get('tools', [])]
+                        if _ag_all_tools and all(t in [x.lower() for x in _tl_bt] for t in _ag_all_tools):
+                            _fully_blocked_agents.add(_ag_bt)
+                            _banned_tools_str += f'  ⛔ {_ag_bt}: все инструменты использованы → НЕ назначать в этом цикле. Используй ASI или другого агента.\n'
 
             # ── Форсированный outreach при стагнации цели ──
             _stagnant_instr = ''
@@ -4375,7 +4384,7 @@ class AnchorEngine:
             except Exception:
                 pass
 
-            # ── Анонс ASI: что команда делает (без имён агентов, без названий инструментов) ──
+            # ── Анонс ASI: что сделали В ПРОШЛОМ ЦИКЛЕ и что КОНКРЕТНО делаем сейчас ──
             _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
             _tasks_preview = '; '.join(
                 (p.get('task') or '')[:60]
@@ -4383,21 +4392,33 @@ class AnchorEngine:
             )
             _coord_announce = f"Работаю над {_brief_goals}."
             try:
+                # Извлекаем конкретику из прошлого цикла для сравнения
+                _prev_result_summary = ''
+                if _prev_cycle_result:
+                    # Убираем технические теги [tools:...]
+                    _pr_clean = _prev_cycle_result
+                    if '[tools:' in _pr_clean:
+                        _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
+                    _prev_result_summary = _pr_clean[:300]
                 _ann_p = (
-                    f"Ты — ASI, координатор. 1-2 предложения: кратко ЧТО команда делает прямо сейчас.\n"
-                    f"Цели: {_brief_goals}.\n"
-                    f"Задачи сейчас: {_tasks_preview}.\n"
+                    f"Ты — ASI, координатор. Напиши 1-2 живых предложения для пользователя.\n"
+                    f"Активные цели: {_brief_goals}.\n"
                     + (
-                        f"Результаты прошлого цикла: {_prev_cycle_result}.\n"
-                        if _prev_cycle_result else ''
+                        f"Что сделали В ПРОШЛОМ ЦИКЛЕ (используй эти ФАКТЫ): {_prev_result_summary}\n"
+                        if _prev_result_summary else
+                        f"Первый запуск — сообщи что начинаем работу.\n"
                     )
-                    + f"Правила: без имён агентов, без названий инструментов, без markdown, без [АВТОПИЛОТ]. "
-                    f"Если есть результаты прошлого цикла — упомяни их естественно (напр.: 'Уже нашли 10 контактов, сейчас будем писать им').\n"
-                    f"Только суть — что ищем/делаем для достижения цели."
+                    + f"Что делаем СЕЙЧАС: {_tasks_preview}.\n\n"
+                    f"Правила:\n"
+                    f"- Называй конкретику из прошлого цикла (статьи найдены, контакты, письма)\n"
+                    f"- Если прошлый раз 'сканировали RSS' → сейчас скажи ЧТО нашли и что делаем дальше\n"
+                    f"- НЕ повторяй фразу 'сканируем' если в прошлом цикле уже сканировали то же самое\n"
+                    f"- Можно называть имена агентов и что они делают\n"
+                    f"- Без markdown. Без [АВТОПИЛОТ]. Только суть."
                 )
                 _ann_gen = await asyncio.wait_for(
-                    _quick_ai_call_raw([{"role": "user", "content": _ann_p}], max_tokens=80),
-                    timeout=10,
+                    _quick_ai_call_raw([{"role": "user", "content": _ann_p}], max_tokens=100),
+                    timeout=12,
                 )
                 if _ann_gen and len(_ann_gen.strip()) > 20:
                     _coord_announce = _ann_gen.strip()
@@ -4957,6 +4978,69 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
+
+            # ── Финальный отчёт пользователю: что РЕАЛЬНО сделано за этот цикл ──
+            if _results_summary:
+                try:
+                    _report_items = '\n'.join(f"• {r}" for r in _results_summary[:5])
+                    _goals_state_now = '\n'.join(
+                        f"  {g['title'][:45]} — {g.get('progress', 0)}%"
+                        + (f" ({int(g.get('metric_current', 0))}/{int(g.get('metric_target', 0))} {g.get('metric_unit', '')})"
+                           if g.get('metric_target') else '')
+                        for g in _goals[:3]
+                    )
+                    _report_prompt = (
+                        f"Ты — ASI, координатор. Напиши ФИНАЛЬНЫЙ ИТОГ рабочего цикла для пользователя.\n\n"
+                        f"Что сделала команда прямо сейчас:\n{_report_items}\n\n"
+                        f"Состояние целей:\n{_goals_state_now}\n\n"
+                        f"Правила:\n"
+                        f"- Называй КОНКРЕТНО: что нашли, кому написали, что получили в ответ\n"
+                        f"- Если ничего реально не продвинулось — честно скажи «Новых подтверждённых результатов нет» и что нужно для прогресса\n"
+                        f"- НЕ преувеличивай, НЕ называй 'поиск в базе' прогрессом\n"
+                        f"- 2-4 предложения. Без markdown. Без [АВТОПИЛОТ]."
+                    )
+                    _report_gen = await asyncio.wait_for(
+                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=150),
+                        timeout=12,
+                    )
+                    if _report_gen and len(_report_gen.strip()) > 20:
+                        _report_text = _report_gen.strip()
+                        try:
+                            session.add(Interaction(
+                                user_id=user.id,
+                                message_type='proactive',
+                                content=json.dumps({
+                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                    'text': _report_text,
+                                    '__anchor_type': 'coordinator_summary',
+                                }, ensure_ascii=False),
+                            ))
+                            # Также логируем в AAL чтобы итог отображался в хронологии
+                            _goals_titles = ', '.join(g['title'][:25] for g in _goals[:2])
+                            session.add(AgentActivityLog(
+                                user_id=user.id,
+                                activity_type='coordinator_summary',
+                                title=f'ASI · итог цикла: {_goals_titles}'[:120],
+                                content=_report_text,
+                                status='completed',
+                                result=_report_text[:800],
+                            ))
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+                        if self.bot:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=f"ASI (итог):\n\n{_report_text}",
+                                )
+                            except Exception:
+                                pass
+                except Exception as _rep_err:
+                    logger.debug("[COORD] final report error: %s", _rep_err)
 
             return True  # coordinator ran
 
@@ -6582,18 +6666,26 @@ class AnchorEngine:
                         _EC_au.user_id == user.id,
                         _EC_au.status.in_(['replied', 'interested']),
                     ).count()
-                    # Авто-апдейт только если есть реальные ответы
-                    # и текущая метрика отстаёт
-                    if _replied_count > (_g_au.metric_current or 0):
-                        # Никогда не ставим 100% автоматически (max 95%)
-                        _safe_pct = min(95, int(_replied_count * 100 / _g_au.metric_target))
+                    _cur_mc = _g_au.metric_current or 0
+                    _mt_au = _g_au.metric_target or 0
+                    # Корректируем ВВЕРХ если реальных ответов больше метрики
+                    # Корректируем ВНИЗ если:
+                    #   а) metric_current > metric_target (явно завышено агентом)
+                    #   б) metric_current > 3x реальных ответов (агент посчитал email-контакты как прогресс)
+                    _needs_correction = (
+                        _replied_count > _cur_mc
+                        or (_cur_mc > _mt_au and _mt_au > 0)
+                        or (_replied_count < _cur_mc * 0.33 and _cur_mc > 3)
+                    )
+                    if _needs_correction:
+                        _safe_pct = min(95, int(_replied_count * 100 / _mt_au)) if _mt_au else 0
                         _g_au.metric_current = float(_replied_count)
                         _g_au.progress_percentage = _safe_pct
                         try:
                             session.commit()
                             logger.info(
-                                f"[AUTOPILOT] Auto-updated goal #{_g_au.id} from replied: "
-                                f"replied={_replied_count}/{int(_g_au.metric_target)} ({_safe_pct}%)"
+                                f"[AUTOPILOT] Corrected goal #{_g_au.id}: "
+                                f"metric {_cur_mc}→{_replied_count}/{int(_mt_au)} ({_safe_pct}%)"
                             )
                         except Exception:
                             session.rollback()

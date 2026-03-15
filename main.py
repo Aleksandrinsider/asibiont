@@ -8199,6 +8199,8 @@ _TIMELINE_VISIBLE_TYPES = {
     'inbox_reply',
     'checkpoint',
     'daily_report',
+    'goal_autopilot_dispatch',
+    'coordinator_summary',
 }
 
 

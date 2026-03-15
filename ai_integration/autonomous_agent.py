@@ -1095,6 +1095,7 @@ class HybridAutonomousAgent:
                             content=(out[:600] if out else (err or 'нет вывода')),
                             target=_svc_a,
                             status='completed' if out else 'failed',
+                            result=(out[:800] if out else (err or '')),
                         ))
                         _al_sa.commit()
                 finally:

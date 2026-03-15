@@ -6667,6 +6667,7 @@ except Exception as e:
                 'inbox_reply': t('act-inbox-reply'),
                 'task_blocked': t('act-task-blocked'),
                 'goal_autopilot_dispatch': t('act-autopilot'),
+                'coordinator_summary': t('act-autopilot'),
                 'agent_event_dispatch': t('act-event-dispatch'),
                 'agent_chain_continue': t('act-chain-continue'),
             };
@@ -6688,8 +6689,9 @@ except Exception as e:
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
             const deleteBtn = a.id ? `<button onclick="event.stopPropagation();activityDeleteGroup([${a.id}],'${a.activity_type||''}')" class="delete-btn" title="${t('act-del-one')||'Удалить'}"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>` : '';
             const cleanTitle = _tlStripEmoji(a.title);
-            // Для autopilot dispatch показываем result (результат), а не content (промпт)
-            const _displayContent = (a.activity_type === 'goal_autopilot_dispatch' && a.result) ? a.result : (a.content || '');
+            // Для autopilot dispatch и coordinator_summary показываем result (результат), а не content (промпт)
+            const _isAutoType = a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary';
+            const _displayContent = (_isAutoType && a.result) ? a.result : (a.content || '');
             const hasDetails = !!(_displayContent && _displayContent.trim());
             const chevron = hasDetails ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
             // Статус-бейдж для autopilot dispatch
