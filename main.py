@@ -7966,6 +7966,72 @@ async def api_activities_clear_all_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_rule_delete_handler(request):
+    """DELETE /api/rules/{index} — delete a user rule by index."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        idx = int(request.match_info['index'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            import json as _json_rd
+            from ai_integration.memory import decrypt_data as _dec_rd, encrypt_data as _enc_rd
+            _mem_rd = _json_rd.loads(_dec_rd(user.memory)) if user.memory else {}
+            _rules_rd = _mem_rd.get('rules', [])
+            if idx < 0 or idx >= len(_rules_rd):
+                return web.json_response({'error': 'Rule not found'}, status=404)
+            _rules_rd.pop(idx)
+            _mem_rd['rules'] = _rules_rd
+            user.memory = _enc_rd(_json_rd.dumps(_mem_rd, ensure_ascii=False))
+            session_db.commit()
+            return web.json_response({'ok': True, 'rules': _rules_rd})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"api_rule_delete_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_rule_edit_handler(request):
+    """PUT /api/rules/{index} — update a user rule by index."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        idx = int(request.match_info['index'])
+        req_data = await request.json()
+        new_text = (req_data.get('rule', '') or '').strip()[:400]
+        if not new_text:
+            return web.json_response({'error': 'rule is required'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            import json as _json_re
+            from ai_integration.memory import decrypt_data as _dec_re, encrypt_data as _enc_re
+            _mem_re = _json_re.loads(_dec_re(user.memory)) if user.memory else {}
+            _rules_re = _mem_re.get('rules', [])
+            if idx < 0 or idx >= len(_rules_re):
+                return web.json_response({'error': 'Rule not found'}, status=404)
+            _rules_re[idx] = new_text
+            _mem_re['rules'] = _rules_re
+            user.memory = _enc_re(_json_re.dumps(_mem_re, ensure_ascii=False))
+            session_db.commit()
+            return web.json_response({'ok': True, 'rules': _rules_re})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"api_rule_edit_handler: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_activity_status_handler(request):
     """PATCH /api/activities/{activity_id}/status — update activity status (pause/resume delegation)."""
     try:
@@ -8659,6 +8725,17 @@ async def api_reports_handler(request):
             except Exception as e:
                 logger.warning(f"[API_REPORTS] Error loading delegation campaigns: {e}")
 
+            # User rules from user.memory["rules"]
+            user_rules_data = []
+            try:
+                from ai_integration.memory import decrypt_data as _dec_rules_rpt
+                import json as _json_rules_rpt
+                _mem_raw_rpt = _dec_rules_rpt(user.memory) if user.memory else '{}'
+                _mem_dict_rpt = _json_rules_rpt.loads(_mem_raw_rpt) if _mem_raw_rpt else {}
+                user_rules_data = _mem_dict_rpt.get('rules', [])
+            except Exception as _e_rpt:
+                logger.warning(f"[API_REPORTS] Error loading user rules: {_e_rpt}")
+
             return web.json_response({
                 'campaigns': campaigns_data,
                 'emails': [],
@@ -8672,6 +8749,7 @@ async def api_reports_handler(request):
                 'token_stats_30d': token_stats_30d,
                 'delegated_to_me': delegated_to_me,
                 'delegated_to_me_today': delegated_to_me_today,
+                'user_rules': user_rules_data,
             })
         finally:
             session_db.close()
@@ -12125,6 +12203,8 @@ app.router.add_delete('/api/outreach/{outreach_id}', api_outreach_delete_handler
 app.router.add_delete('/api/activities/clear-all', api_activities_clear_all_handler)
 app.router.add_delete('/api/activities/{activity_id}', api_activity_delete_handler)
 app.router.add_patch('/api/activities/{activity_id}/status', api_activity_status_handler)
+app.router.add_delete('/api/rules/{index}', api_rule_delete_handler)
+app.router.add_put('/api/rules/{index}', api_rule_edit_handler)
 app.router.add_get('/api/email-contacts', api_email_contacts_handler)
 app.router.add_post('/api/email-contacts', api_email_contacts_handler)
 app.router.add_put('/api/email-contacts/{contact_id}', api_email_contact_edit_handler)

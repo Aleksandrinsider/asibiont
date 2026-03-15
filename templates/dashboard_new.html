@@ -6847,7 +6847,8 @@ except Exception as e:
                 const campaigns = data.campaigns || [];
                 const emails = data.emails || [];
                 const agentActivities = data.agent_activities || [];
-                const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0;
+                const userRules = data.user_rules || [];
+                const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0 || userRules.length > 0;
                 if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
 
                 // === 7-day filter ===
@@ -7706,6 +7707,81 @@ except Exception as e:
                     renderTimeline(agentActivities);
                 }
 
+                // === Пользовательские правила ===
+                {
+                    const rulesKey = 'user-rules-block';
+                    const rulesExpanded = _reportsExpandedSet.has(rulesKey);
+                    const rulesSection = document.createElement('div');
+                    rulesSection.id = 'user-rules-section';
+                    rulesSection.style.cssText = 'padding: 0; margin-bottom: 4px;';
+                    const rulesHeader = document.createElement('div');
+                    rulesHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
+                    const _rcCount = userRules.length;
+                    const _rcLabel = _rcCount > 0 ? `<span style="font-size: 12px; color: #8C959F;">${_rcCount} ${_rcCount===1?t('rule-item-1'):(_rcCount>=2&&_rcCount<=4?t('rule-item-2'):t('rule-item-5'))}</span>` : '';
+                    rulesHeader.innerHTML = `
+                        <div style="display: flex; align-items: baseline; gap: 6px; flex: 1; min-width: 0;">
+                            <span style="font-size: 13px; font-weight: 400; color: #1F2328;">${t('rules-title')}</span>
+                            ${_rcLabel}
+                        </div>
+                        <svg class="rpt-chev" width="16" height="16" viewBox="0 0 16 16" fill="#9CA3AF" style="transition: transform 0.2s; transform: rotate(${rulesExpanded ? '0' : '-90'}deg);">
+                            <path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"></path>
+                        </svg>
+                    `;
+                    const rulesDetails = document.createElement('div');
+                    rulesDetails.id = 'user-rules-details';
+                    rulesDetails.style.cssText = 'overflow: hidden; transition: max-height 0.3s ease;';
+                    if (userRules.length === 0) {
+                        const _rEmp = document.createElement('div');
+                        _rEmp.style.cssText = 'padding: 10px 0; font-size: 13px; color: #8C959F;';
+                        _rEmp.textContent = t('rules-empty');
+                        rulesDetails.appendChild(_rEmp);
+                    } else {
+                        window._userRules = userRules;
+                        userRules.forEach((rule, idx) => {
+                            const ruleRow = document.createElement('div');
+                            ruleRow.id = 'rule-row-' + idx;
+                            ruleRow.style.cssText = 'display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
+                            ruleRow.innerHTML = `
+                                <span style="font-size: 12px; color: #8C959F; flex-shrink: 0; margin-top: 2px; min-width: 14px;">${idx+1}.</span>
+                                <span id="rule-text-${idx}" style="font-size: 13px; color: #1F2328; flex: 1; line-height: 1.5; word-break: break-word;">${escapeHtml(rule)}</span>
+                                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-top: 1px;">
+                                    <button onclick="ruleEdit(${idx})" title="${t('rule-edit')}" style="background:none;border:none;cursor:pointer;padding:2px 4px;display:flex;align-items:center;color:#6C727F;border-radius:4px;" onmouseover="this.style.background='#F0F3F5'" onmouseout="this.style.background='none'">
+                                        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354l-1.086-1.086ZM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.953 1.953-.558a.249.249 0 0 0 .108-.064l6.286-6.286Z"/></svg>
+                                    </button>
+                                    <button class="delete-btn" onclick="ruleDelete(${idx})" title="${t('rule-delete')}" style="background:none;border:none;cursor:pointer;padding:2px 4px;display:flex;align-items:center;border-radius:4px;" onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='none'">
+                                        <svg width="13" height="13" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg>
+                                    </button>
+                                </div>
+                            `;
+                            rulesDetails.appendChild(ruleRow);
+                        });
+                    }
+                    rulesHeader.onclick = () => {
+                        const chev = rulesHeader.querySelector('.rpt-chev');
+                        const isCollapsed = rulesDetails.style.maxHeight === '0px';
+                        if (isCollapsed) {
+                            rulesDetails.style.overflow = 'hidden';
+                            rulesDetails.style.maxHeight = rulesDetails.scrollHeight + 'px';
+                            if (chev) chev.style.transform = 'rotate(0deg)';
+                            _reportsExpandedSet.add(rulesKey);
+                            rulesDetails.addEventListener('transitionend', function h() {
+                                if (_reportsExpandedSet.has(rulesKey)) { rulesDetails.style.maxHeight = 'none'; rulesDetails.style.overflow = 'visible'; }
+                                rulesDetails.removeEventListener('transitionend', h);
+                            });
+                        } else {
+                            rulesDetails.style.overflow = 'hidden';
+                            rulesDetails.style.maxHeight = rulesDetails.scrollHeight + 'px';
+                            requestAnimationFrame(() => { rulesDetails.style.maxHeight = '0px'; });
+                            if (chev) chev.style.transform = 'rotate(-90deg)';
+                            _reportsExpandedSet.delete(rulesKey);
+                        }
+                    };
+                    if (rulesExpanded) { rulesDetails.style.maxHeight = 'none'; } else { rulesDetails.style.maxHeight = '0px'; }
+                    rulesSection.appendChild(rulesHeader);
+                    rulesSection.appendChild(rulesDetails);
+                    list.appendChild(rulesSection);
+                }
+
                 const activityMeta = {
                     'email': {
                         label: t('act-email'),
@@ -8146,6 +8222,58 @@ except Exception as e:
                 console.error('Failed to clear all activities:', err);
                 showNotification(t('act-del-err'), 'error');
             }
+        }
+
+        async function ruleDelete(idx) {
+            if (!confirm(t('rule-delete-confirm'))) return;
+            try {
+                const resp = await fetch('/api/rules/' + idx, { method: 'DELETE', credentials: 'include' });
+                if (resp.ok) { showNotification(t('rule-deleted'), 'success'); loadReports(); }
+                else showNotification(t('act-del-err'), 'error');
+            } catch (err) { console.error('ruleDelete error:', err); }
+        }
+
+        function ruleEdit(idx) {
+            const rule = (window._userRules || [])[idx];
+            if (rule === undefined) return;
+            const textEl = document.getElementById('rule-text-' + idx);
+            const rowEl = document.getElementById('rule-row-' + idx);
+            if (!textEl || !rowEl) return;
+            textEl.style.display = 'none';
+            const actionDiv = rowEl.querySelector('div');
+            if (actionDiv) actionDiv.style.display = 'none';
+            const inputWrap = document.createElement('span');
+            inputWrap.id = 'rule-edit-wrap-' + idx;
+            inputWrap.style.cssText = 'flex: 1; display: flex; align-items: flex-start; gap: 6px;';
+            inputWrap.innerHTML = `
+                <textarea id="rule-edit-input-${idx}" style="flex:1;font-size:13px;border:1px solid #D1D9E0;border-radius:6px;padding:5px 8px;resize:vertical;min-height:38px;line-height:1.5;color:#1F2328;background:#fff;outline:none;">${escapeHtml(rule)}</textarea>
+                <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+                    <button onclick="ruleSave(${idx})" style="font-size:12px;background:#068487;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;white-space:nowrap;">${t('rule-save')}</button>
+                    <button onclick="ruleEditCancel()" style="font-size:12px;background:#F3F4F5;color:#374151;border:none;border-radius:4px;padding:4px 8px;cursor:pointer;">${t('rule-cancel')}</button>
+                </div>
+            `;
+            rowEl.appendChild(inputWrap);
+            const ta = document.getElementById('rule-edit-input-' + idx);
+            if (ta) { ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; }
+        }
+
+        function ruleEditCancel() { loadReports(); }
+
+        async function ruleSave(idx) {
+            const ta = document.getElementById('rule-edit-input-' + idx);
+            if (!ta) return;
+            const newText = ta.value.trim();
+            if (!newText) return;
+            try {
+                const resp = await fetch('/api/rules/' + idx, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rule: newText }),
+                    credentials: 'include'
+                });
+                if (resp.ok) { showNotification(t('rule-saved'), 'success'); loadReports(); }
+                else showNotification(t('act-del-err'), 'error');
+            } catch (err) { console.error('ruleSave error:', err); }
         }
 
         async function activityDeleteGroup(ids, type) {
@@ -15247,7 +15375,7 @@ except Exception as e:
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
       'act-st-pending':'Ожидает','act-st-accepted':'Принято','act-st-rejected':'Отклонено','act-st-cancelled':'Отменено','act-st-published':'Опубликовано','act-st-completed':'Выполнено','act-st-failed':'Ошибка','act-st-deleted':'Удалено',
       'act-del-deleg':'Отменить и удалить это делегирование?','act-del-agent-task':'Удалить это поручение агенту?','act-del-post-feed':'Удалить пост из ленты новостей?','act-del-post-tg':'Удалить запись об этом Telegram-посте?','act-del-default':'Удалить запись об активности?','act-del-group':'Удалить все записи ({n} шт.) из этой группы?',
-      'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка удаления','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование','act-clear-all':'Очистить хронологию','act-clear-all-confirm':'Очистить всю хронологию? Действие нельзя отменить.',
+      'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка удаления','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование','act-clear-all':'Очистить хронологию','act-clear-all-confirm':'Очистить всю хронологию? Действие нельзя отменить.','rules-title':'Пользовательские правила','rules-empty':'Правил пока нет — скажи агенту «запомни, что...»','rule-edit':'Редактировать','rule-delete':'Удалить правило','rule-save':'Сохранить','rule-cancel':'Отмена','rule-delete-confirm':'Удалить это правило?','rule-deleted':'Правило удалено','rule-saved':'Правило сохранено','rule-item-1':'правило','rule-item-2':'правила','rule-item-5':'правил',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contact-notes-ph':'Описание / заметки','contacts-empty-short':'Нет контактов',
       'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
@@ -15542,7 +15670,7 @@ except Exception as e:
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
       'act-st-pending':'Pending','act-st-accepted':'Accepted','act-st-rejected':'Rejected','act-st-cancelled':'Cancelled','act-st-published':'Published','act-st-completed':'Completed','act-st-failed':'Failed','act-st-deleted':'Deleted',
       'act-del-deleg':'Cancel and delete this delegation?','act-del-agent-task':'Delete this agent task?','act-del-post-feed':'Delete this post from news feed?','act-del-post-tg':'Delete this Telegram post record?','act-del-default':'Delete this activity record?','act-del-group':'Delete all records ({n}) from this group?',
-      'act-deleted-ok':'Deleted','act-deleted-n':'{n} records deleted','act-del-failed-n':'Failed to delete {n}','act-del-err':'Error deleting','act-del-all':'Delete all','act-del-one':'Delete','act-cancel-deleg':'Cancel delegation','act-clear-all':'Clear timeline','act-clear-all-confirm':'Clear entire timeline? This cannot be undone.',
+      'act-deleted-ok':'Deleted','act-deleted-n':'{n} records deleted','act-del-failed-n':'Failed to delete {n}','act-del-err':'Error deleting','act-del-all':'Delete all','act-del-one':'Delete','act-cancel-deleg':'Cancel delegation','act-clear-all':'Clear timeline','act-clear-all-confirm':'Clear entire timeline? This cannot be undone.','rules-title':'User Rules','rules-empty':'No rules yet — tell the agent «remember that...»','rule-edit':'Edit','rule-delete':'Delete rule','rule-save':'Save','rule-cancel':'Cancel','rule-delete-confirm':'Delete this rule?','rule-deleted':'Rule deleted','rule-saved':'Rule saved','rule-item-1':'rule','rule-item-2':'rules','rule-item-5':'rules',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contact-notes-ph':'Description / notes','contacts-empty-short':'No contacts',
       'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
