@@ -500,6 +500,21 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                 channel_published = await _publish_post_to_channel(user_id, content, image_url, session)
                 if channel_published:
                     logger.info(f"[AUTO_POST] Published to channel {user.telegram_channel} for user {user_id}, image={'yes' if image_url else 'no'}")
+                    try:
+                        from models import AgentActivityLog
+                        tg_log = AgentActivityLog(
+                            user_id=user.id,
+                            activity_type='post_telegram',
+                            title=content[:80] + ('...' if len(content) > 80 else ''),
+                            content=content,
+                            target=user.telegram_channel or 'Telegram-канал',
+                            status='published',
+                            ref_id=post.id,
+                        )
+                        session.add(tg_log)
+                        session.commit()
+                    except Exception as _tl:
+                        logger.warning(f"[AUTO_POST] Failed to log telegram channel activity: {_tl}")
             except Exception as ch_err:
                 logger.warning(f"[AUTO_POST] Channel publish failed for {user_id}: {ch_err}")
 
