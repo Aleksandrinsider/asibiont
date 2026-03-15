@@ -1115,12 +1115,12 @@ class HybridAutonomousAgent:
                 _kwargs['preexec_fn'] = _resource_limits
             proc = await _aio_ea.create_subprocess_exec(_sys_ea.executable, '-c', py_code, **_kwargs)
             try:
-                stdout, stderr = await _aio_ea.wait_for(proc.communicate(), timeout=float(API_TIMEOUT_NORMAL))
+                stdout, stderr = await _aio_ea.wait_for(proc.communicate(), timeout=float(API_TIMEOUT_SCRIPT))
                 out = stdout.decode('utf-8', errors='replace').strip()[:2000]
                 err = stderr.decode('utf-8', errors='replace').strip()[:500]
             except _aio_ea.TimeoutError:
                 proc.kill()
-                return {"status": "error", "error": f"Timeout ({API_TIMEOUT_NORMAL}s) — скрипт выполнялся слишком долго"}
+                return {"status": "error", "error": f"Timeout ({API_TIMEOUT_SCRIPT}s) — скрипт выполнялся слишком долго"}
             logger.info(f"[ACTION] {action} output={out[:100]} err={err[:100]}")
             # Лог в хронологию агента
             try:

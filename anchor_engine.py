@@ -2042,8 +2042,14 @@ class AnchorEngine:
                 'python', 'javascript', 'typescript', 'backend', 'frontend', 'fullstack',
                 'ai ', 'ml ', 'data science', 'machine learning', 'open source',
             ]
+            # Check agent keys (user_api_keys) AND system env for GitHub token
+            _has_github_agent = any(
+                any(k in (getattr(_ag_i, 'user_api_keys', '') or '').upper()
+                    for k in ('GITHUB_TOKEN', 'GITHUB_ACCESS_TOKEN'))
+                for _ag_i in _real_agents_intg
+            )
             if (any(w in task_text.lower() for w in _tech_kw_anchor)
-                    and not _os_intg.getenv('GITHUB_TOKEN')):
+                    and not _has_github_agent and not _os_intg.getenv('GITHUB_TOKEN')):
                 _missing_intg_notes.append(
                     "⚠️ GitHub-интеграция не настроена — поиск разработчиков ограничен. "
                     "Используй find_relevant_contacts_for_task или web_search. "
@@ -4255,8 +4261,8 @@ class AnchorEngine:
             _DOMAIN_TOOL_MAP = {
                 'finance':  'Используй: research_topic (основной!), get_news_trends, web_search. Если есть RSS с финансовой лентой — run_agent_action первым. НЕ email для анализа.',
                 'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
-                'dev':      'Используй: run_agent_action(action="search_users", params={"query":"language:python topic:ai"}) → save_email_contact → send_outreach_email. GitHub Token есть у агента.',
-                'people':   'Если у агента GITHUB_TOKEN → run_agent_action(action="search_users", params={"query":"language:python topic:ai repos:>10"}) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
+                'dev':      'Используй: run_agent_action(action="search_users", params={"query":"language:python followers:>20"}) → save_email_contact → send_outreach_email. GitHub Token есть у агента.',
+                'people':   'Если у агента GITHUB_TOKEN → run_agent_action(action="search_users", params={"query":"language:python followers:>20"}) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
                 'content':  'Используй: generate_marketing_content, create_post, publish_to_telegram/discord, start_content_campaign.',
                 'sales':    'Используй: find_partners, find_relevant_contacts_for_task, send_outreach_email, start_email_campaign.',
             }
@@ -4864,8 +4870,9 @@ class AnchorEngine:
                 _rap_note = (
                     f"⚠️ run_agent_action запускает ТОЛЬКО твой встроенный скрипт (RSS/GitHub/etc.) — "
                     f"он вернёт данные СВОЕЙ ленты, а не произвольные API.\n"
-                    f"   Если результат run_agent_action не по теме задания → немедленно используй web_search.\n"
-                    if _tool_hint == 'run_agent_action' and (_ag_data.get('python_code') or '').strip() else ''
+                    f"   Если run_agent_action вернул данные НЕ по теме задачи → СРАЗУ вызови research_topic или web_search. "
+                    f"НЕ говори пользователю 'нужны новые ленты/ключи' — сам переключись на web_search.\n"
+                    if (_ag_data.get('python_code') or '').strip() else ''
                 )
                 # Личность агента (специализация + пол для живой речи)
                 _ag_is_fem = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
