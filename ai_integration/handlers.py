@@ -11175,12 +11175,16 @@ async def send_outreach_email(
                     name=(recipient_name or '').strip() or None,
                     company=(recipient_company or '').strip() or None,
                     source='outreach',
+                    status='contacted',
                     last_contacted_at=dt.now(tz.utc),
                 ))
             else:
                 _ec_existing.last_contacted_at = dt.now(tz.utc)
                 if recipient_name and not _ec_existing.name:
                     _ec_existing.name = recipient_name.strip()
+                # Обновляем статус: new → contacted (если ещё не replied/interested)
+                if _ec_existing.status in ('new', None):
+                    _ec_existing.status = 'contacted'
         except Exception as _ec_err:
             logger.warning(f"[EMAIL_OUTREACH] Auto-save contact error: {_ec_err}")
 
@@ -12585,8 +12589,22 @@ async def check_emails(
             import re as _re_ce
             import datetime as _dt_ce
             from models import EmailContact as _EC_ce2, EmailOutreach as _EO_ce2
+            # Фильтруем нотификационные / авто-адреса — они не являются реальными контактами
+            _NOREPLY_PATS = (
+                'no-reply', 'noreply', 'do-not-reply', 'donotreply',
+                'notification', 'notifications', 'mailer-daemon', 'postmaster',
+                'bounce@', 'bounces@', 'automated@', 'reply-to@',
+                '@email.github', '@notifications.github', '@github.com',
+                'support@', 'info@', 'admin@', 'hello@', 'team@',
+                'feedback@', 'newsletter@', 'news@', 'updates@',
+            )
+            def _is_noreply(em: str) -> bool:
+                el = em.lower()
+                return any(p in el for p in _NOREPLY_PATS)
+
             _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result, _re_ce.IGNORECASE))
             _found_em.discard(_my_email)
+            _found_em = {em for em in _found_em if not _is_noreply(em)}
             _new_auto = _found_em - _known_emails
             # 1) Новые контакты → создаём с status=replied
             for _new_em in list(_new_auto)[:5]:

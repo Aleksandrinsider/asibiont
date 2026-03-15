@@ -4124,14 +4124,24 @@ class AnchorEngine:
             _stagnant_goals = [g for g in _goals if g.get('progress', 0) < 15 and g.get('metric_target')]
             if _stagnant_goals and len(_recent) >= 4:
                 _sg = _stagnant_goals[0]
-                _stagnant_instr = (
-                    f"\n⚠️ СРОЧНО: Цель «{_sg['title'][:50]}» стагнирует ({_sg.get('progress',0)}% за {len(_recent)}+ циклов). "
-                    "ПРИНУДИТЕЛЬНЫЙ шаг этого цикла:\n"
-                    "  1. Если нет активных кампаний → email-агент ОБЯЗАН вызвать start_email_campaign прямо сейчас.\n"
-                    "  2. Если кампания есть → email-агент ОБЯЗАН вызвать send_outreach_email (не check_emails!).\n"
-                    "  3. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
-                    "  НЕ назначай check_emails и RSS-поиск как основные задачи в этом цикле!\n"
-                )
+                # Если уже есть отправленные письма — приоритет на check_emails, не на отправку новых
+                if _already_sent and _email_sent > 0:
+                    _stagnant_instr = (
+                        f"\n⚠️ Цель «{_sg['title'][:50]}» стагнирует ({_sg.get('progress',0)}% за {len(_recent)}+ циклов). "
+                        "Отправлены письма, но ответов не видно.\n"
+                        "ОБЯЗАТЕЛЬНЫЙ шаг этого цикла:\n"
+                        "  1. Email-агент ОБЯЗАН вызвать check_emails — проверить, не ответил ли кто-то.\n"
+                        "  2. Если есть ответы → reply/negotiate. Если нет → искать новых через run_agent_action(search_users).\n"
+                        "  3. RSS-агент → save_email_contact для новых авторов из ленты.\n"
+                    )
+                else:
+                    _stagnant_instr = (
+                        f"\n⚠️ СРОЧНО: Цель «{_sg['title'][:50]}» стагнирует ({_sg.get('progress',0)}% за {len(_recent)}+ циклов). "
+                        "ПРИНУДИТЕЛЬНЫЙ шаг этого цикла:\n"
+                        "  1. Если нет активных кампаний → email-агент ОБЯЗАН вызвать start_email_campaign прямо сейчас.\n"
+                        "  2. Если кампания есть → email-агент ОБЯЗАН вызвать send_outreach_email.\n"
+                        "  3. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
+                    )
 
             _email_campaigns_str = '\n'.join(str(e) for e in data.get('email_campaigns', [])) or 'нет'
 
@@ -4245,8 +4255,8 @@ class AnchorEngine:
             _DOMAIN_TOOL_MAP = {
                 'finance':  'Используй: research_topic (основной!), get_news_trends, web_search. Если есть RSS с финансовой лентой — run_agent_action первым. НЕ email для анализа.',
                 'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
-                'dev':      'Используй: run_agent_action (GitHub API: search_users), find_relevant_contacts_for_task. GitHub Token есть у агента.',
-                'people':   'Если у агента GITHUB_TOKEN → сначала run_agent_action (GitHub API: search_users?q=language:python+topic:AI) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
+                'dev':      'Используй: run_agent_action(action="search_users", params={"query":"language:python topic:ai"}) → save_email_contact → send_outreach_email. GitHub Token есть у агента.',
+                'people':   'Если у агента GITHUB_TOKEN → run_agent_action(action="search_users", params={"query":"language:python topic:ai repos:>10"}) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
                 'content':  'Используй: generate_marketing_content, create_post, publish_to_telegram/discord, start_content_campaign.',
                 'sales':    'Используй: find_partners, find_relevant_contacts_for_task, send_outreach_email, start_email_campaign.',
             }
