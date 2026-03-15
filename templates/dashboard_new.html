@@ -2182,6 +2182,8 @@
             // Сразу показываем сообщение пользователя в чате
             if (message) {
                 addMessage(message, 'user');
+                // Запоминаем текст, чтобы checkForNewMessages не дублировал до синка
+                window._pendingUserMsgText = message.trim();
             }
 
             // Show loading animation после сообщения пользователя
@@ -2274,6 +2276,8 @@
                                     }
                                 });
                                 lastMessageCount = syncData.interactions.length;
+                                // Сброс pending-защиты от дублей: синк завершён, ID уже в displayedMessageIds
+                                window._pendingUserMsgText = null;
                                 // Update pending checkpoint separators with real interaction IDs
                                 document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
                                     const rawText = (sep.dataset.pendingText || '').trim();
@@ -10866,9 +10870,16 @@ except Exception as e:
                         // Проверяем по ID, а не по количеству (API лимитирует 100 записей)
                         const sortedInteractions = data.interactions.sort((a, b) => a.id - b.id);
                         let hasNew = false;
+                        const _normMsg = s => (s || '').trim().replace(/\s+/g, ' ');
                         sortedInteractions.forEach((interaction) => {
                             const msgId = interaction.id;
                             if (!displayedMessageIds.has(msgId)) {
+                                // Не дублируем сообщение пользователя, пока post-send синк не завершился
+                                if (interaction.message_type === 'user' && window._pendingUserMsgText &&
+                                    _normMsg(interaction.content) === _normMsg(window._pendingUserMsgText)) {
+                                    displayedMessageIds.add(msgId); // отметить как показанное, не рендерить
+                                    return;
+                                }
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at);
                                 displayedMessageIds.add(msgId);
                                 hasNew = true;
