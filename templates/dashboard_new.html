@@ -4471,6 +4471,55 @@ try:
 except Exception as e:
     print('Ошибка OpenAI: ' + str(e))`
             },
+            replicate: {
+                name: 'Replicate (генерация изображений)',
+                fields: [
+                    {k:'REPLICATE_API_TOKEN', label:'API Token', ph:'r8_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'REPLICATE_STYLE',     label:'Стиль по умолчанию', ph:'watercolor, anime, photorealistic, cinematic...', t:'text', opt:true}
+                ],
+                hint: 'replicate.com → Account Settings → API Tokens. С личным ключом: ваш стиль через REPLICATE_STYLE, без подписи ASI Biont. Агент поддерживает любой стиль генерации.',
+                autodetect: false,
+                code: `import urllib.request, json, os, time
+TOKEN = os.environ.get('REPLICATE_API_TOKEN', '')
+STYLE = os.environ.get('REPLICATE_STYLE', 'photorealistic')
+ACTION = os.environ.get('AGENT_ACTION', '')
+def run_flux(prompt, style=''):
+    full_prompt = (prompt + ', ' + style + ' style') if style else prompt
+    body = json.dumps({'version': 'black-forest-labs/flux-schnell', 'input': {'prompt': full_prompt, 'num_outputs': 1}}).encode()
+    req = urllib.request.Request('https://api.replicate.com/v1/predictions', data=body)
+    req.add_header('Authorization', 'Token ' + TOKEN)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=30) as r:
+        pred = json.loads(r.read().decode())
+    poll_url = pred.get('urls', {}).get('get', '')
+    for _ in range(20):
+        time.sleep(2)
+        req2 = urllib.request.Request(poll_url)
+        req2.add_header('Authorization', 'Token ' + TOKEN)
+        with urllib.request.urlopen(req2, timeout=15) as r2:
+            d = json.loads(r2.read().decode())
+        if d.get('status') == 'succeeded':
+            out = d.get('output', [])
+            return (out[0] if isinstance(out, list) else out) or ''
+        if d.get('status') == 'failed':
+            raise RuntimeError('failed: ' + str(d.get('error', '')))
+    raise RuntimeError('timeout')
+try:
+    if ACTION == 'generate':
+        prompt = os.environ.get('AGENT_PARAM_PROMPT', 'sunset over mountains')
+        style  = os.environ.get('AGENT_PARAM_STYLE', STYLE)
+        url = run_flux(prompt, style)
+        print('Изображение готово: ' + url)
+    else:
+        req = urllib.request.Request('https://api.replicate.com/v1/account')
+        req.add_header('Authorization', 'Token ' + TOKEN)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        print('Replicate подключён. Аккаунт: ' + d.get('username', '?'))
+        print('Стиль по умолчанию: ' + (STYLE or 'не задан'))
+except Exception as e:
+    print('Ошибка Replicate: ' + str(e))`
+            },
             gemini: {
                 name: 'Gemini (Google AI)',
                 fields: [
@@ -5828,6 +5877,7 @@ except Exception as e:
                             <option value="mongodb">MongoDB Atlas</option>
                             <option value="redis_db">Redis</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">AI / Облако</option>
+                            <option value="replicate">Генерация картинок (Replicate / Flux)</option>
                             <option value="openai_api">OpenAI API</option>
                             <option value="gemini">Gemini (Google AI)</option>
                             <option value="firebase">Firebase / Firestore</option>

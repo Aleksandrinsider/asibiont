@@ -13621,9 +13621,14 @@ async def generate_image(
         if not REPLICATE_API_TOKEN:
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
-        # Строим полный промпт — всегда в нарисованном/иллюстративном стиле
-        _drawn_suffix = "hand-drawn illustration, artistic sketch style, colorful painted drawing, digital art, expressive brushwork"
-        full_prompt = f"{prompt}, {style} style, {_drawn_suffix}" if style else f"{prompt}, {_drawn_suffix}"
+        # Строим полный промпт — при платформенном ключе forced drawn-стиль,
+        # при личном ключе пользователь сам управляет стилем
+        _using_personal_key = REPLICATE_API_TOKEN != _platform_replicate_key
+        if _using_personal_key:
+            full_prompt = f"{prompt}, {style} style" if style else prompt
+        else:
+            _drawn_suffix = "hand-drawn illustration, artistic sketch style, colorful painted drawing, digital art, expressive brushwork"
+            full_prompt = f"{prompt}, {style} style, {_drawn_suffix}" if style else f"{prompt}, {_drawn_suffix}"
 
         import aiohttp as _aiohttp
         import asyncio as _asyncio
@@ -13688,13 +13693,13 @@ async def generate_image(
             # Отправляем фото в Telegram (только если send_to_telegram=True)
             send_data = {"ok": False}
             if send_to_telegram:
+                _caption = None if _using_personal_key else "ASI Biont"
+                _photo_payload = {"chat_id": user.telegram_id, "photo": image_url}
+                if _caption:
+                    _photo_payload["caption"] = _caption
                 send_resp = await http.post(
                     f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-                    json={
-                        "chat_id": user.telegram_id,
-                        "photo": image_url,
-                        "caption": "ASI Biont",
-                    },
+                    json=_photo_payload,
                     timeout=_aiohttp.ClientTimeout(total=30),
                 )
                 send_data = await send_resp.json()
