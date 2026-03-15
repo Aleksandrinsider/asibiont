@@ -13693,10 +13693,7 @@ async def generate_image(
             # Отправляем фото в Telegram (только если send_to_telegram=True)
             send_data = {"ok": False}
             if send_to_telegram:
-                _caption = None if _using_personal_key else "ASI BIONT"
-                _photo_payload = {"chat_id": user.telegram_id, "photo": image_url}
-                if _caption:
-                    _photo_payload["caption"] = _caption
+                _photo_payload = {"chat_id": user.telegram_id, "photo": image_url, "caption": "ASI BIONT"}
                 send_resp = await http.post(
                     f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
                     json=_photo_payload,
