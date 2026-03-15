@@ -5445,7 +5445,9 @@ except Exception as e:
             const newKeys = {};
             for (const f of tmpl.fields) {
                 const el = document.getElementById('mpa-svc-' + f.k);
-                const val = el ? el.value.trim() : '';
+                let val = el ? el.value.trim() : '';
+                // textarea: заменяем переносы строк на запятые чтобы значение осталось однострочным
+                if (f.t === 'textarea') val = val.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).join(',');
                 if (val || f.opt) newKeys[f.k] = f.k + '=' + val;
             }
             // ── Merge: сохраняем уже введённые ключи других сервисов ──
@@ -5459,6 +5461,8 @@ except Exception as e:
                     existing[key] = trimmed;
                 }
                 // новые ключи перекрывают одноимённые старые (обновление)
+                // для RSS: удаляем устаревшие ключи RSS_URL / RSS_URL_2 если есть новый RSS_URLS
+                if (newKeys['RSS_URLS'] !== undefined) { delete existing['RSS_URL']; delete existing['RSS_URL_2']; }
                 Object.assign(existing, newKeys);
                 apiEl.value = Object.values(existing).join('\n');
             }
