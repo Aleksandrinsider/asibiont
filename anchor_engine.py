@@ -1406,6 +1406,31 @@ class AnchorEngine:
         # Исключаем background_research из потока доставки — они выполняются тихо
         deliverable = [a for a in deliverable if a.anchor_type != 'background_research']
 
+        # ── AUTO-EXPIRE старых информационных якорей (>72ч) ──
+        # Чтобы очередь не засорялась устаревшими уведомлениями
+        _NON_EXPIRING_TYPES = ALWAYS_DELIVER_TYPES | {
+            'goal_autopilot_review', 'custom_anchor', 'background_research',
+            'email_outreach_send', 'email_follow_up', 'email_need_leads',
+            'content_campaign_publish', 'delegation_campaign_send', 'delegation_campaign_follow_up',
+        }
+        _now_for_expire = datetime.now(timezone.utc)
+        _max_anchor_age = timedelta(hours=72)
+        _auto_expired_ids = []
+        for _a in deliverable:
+            if _a.anchor_type in _NON_EXPIRING_TYPES or _a.expires_at:
+                continue
+            _ca = _a.created_at
+            if _ca:
+                if _ca.tzinfo is None:
+                    _ca = _ca.replace(tzinfo=timezone.utc)
+                if _now_for_expire - _ca > _max_anchor_age:
+                    _a.delivered_at = _now_for_expire
+                    _auto_expired_ids.append(_a.id)
+        if _auto_expired_ids:
+            session.commit()
+            deliverable = [a for a in deliverable if a.id not in _auto_expired_ids]
+            logger.info(f"[ANCHOR] User {user_id}: 🧹 auto-expired {len(_auto_expired_ids)} stale anchors (>72h): ids={_auto_expired_ids}")
+
         logger.info(f"[ANCHOR] User {user_id}: найдено {len(deliverable)} deliverable якорей")
 
         # Фильтруем: не истёкшие + cooldown
@@ -4042,7 +4067,7 @@ class AnchorEngine:
                               ' [только чтение email, НЕ отправляет]' if _has_imap else '')
                 _profiles_lines.append(
                     f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}{_send_note}'
-                    f', инструменты=[{", ".join(p["tools"][:6]) or "базовые"}]'
+                    f', инструменты=[{", ".join(p["tools"][:6]) if p["tools"] else (", ".join(p["caps"][:4]) + " через run_agent_action") if p["caps"] else "web_search, research_topic"}]'
                     f'{_desc_part}'
                 )
             _n_agents = len(_profiles)

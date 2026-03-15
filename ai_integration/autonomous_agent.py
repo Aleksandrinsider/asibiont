@@ -1172,6 +1172,21 @@ class HybridAutonomousAgent:
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
 
+                    # === Универсальная фильтрация неизвестных параметров ===
+                    # AI иногда передаёт параметры которых нет в сигнатуре функции
+                    # (например sender_name в send_outreach_email). Фильтруем чтобы не было TypeError.
+                    _known = set(sig.parameters.keys())
+                    _has_var_keyword = any(
+                        p.kind == inspect.Parameter.VAR_KEYWORD
+                        for p in sig.parameters.values()
+                    )
+                    if not _has_var_keyword:
+                        _unknown = [k for k in list(params.keys()) if k not in _known]
+                        if _unknown:
+                            logger.warning(f"[EXEC] {tool_name}: stripping unknown params {_unknown}")
+                            for _uk in _unknown:
+                                del params[_uk]
+
                     # Списываем токены за инструмент (если стоимость > 0)
                     from token_service import spend_tokens, ACTION_COSTS, DEFAULT_TOOL_COST
                     from config import FREE_ACCESS_MODE
@@ -1272,6 +1287,16 @@ class HybridAutonomousAgent:
                 params['task_description'] = params.pop('description')
             elif 'task_description' not in params:
                 params['task_description'] = 'помощь с задачей'
+
+        elif tool_name in ('send_outreach_email', 'negotiate_by_email', 'send_follow_up_email'):
+            # AI путает send_email (с sender_name) с send_outreach_email (без него)
+            # Просто убираем неправильный параметр; у universal stripping нет этого в белом списке
+            params.pop('sender_name', None)
+            params.pop('from_name', None)
+            params.pop('from_email', None)   # не часть send_outreach_email
+            # Приводим email к нижнему регистру и убираем лишние слэши
+            if 'recipient_email' in params and isinstance(params['recipient_email'], str):
+                params['recipient_email'] = params['recipient_email'].strip().lower().lstrip('/')
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:
