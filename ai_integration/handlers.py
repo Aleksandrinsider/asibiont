@@ -10694,7 +10694,7 @@ async def send_outreach_email(
             _log_rs2.getLogger(__name__).debug(f'[EMAIL_OUTREACH] Personal Resend lookup: {_rs_err}')
 
         if not RESEND_API_KEY:
-            return " Resend API не настроен. Добавьте RESEND_API_KEY в настройки агента (API-ключи) или Railway Variables."
+            return " Resend API не настроен. Добавьте RESEND_API_KEY в настройки агента (API-ключи)."
 
         # Найти кампанию
         campaign = None

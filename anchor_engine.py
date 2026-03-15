@@ -399,15 +399,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if not _has_alpha:
             _intg_missing.append('⚡ Alpha Vantage — котировки нефти/акций/металлов (ALPHAVANTAGE_API_KEY в настройках агента)')
         if not _has_news and not _os_bap.getenv('NEWSAPI_KEY'):
-            _intg_missing.append('⚡ NewsAPI — поток финансовых новостей (NEWSAPI_KEY в Railway Variables)')
+            _intg_missing.append('⚡ NewsAPI — поток финансовых новостей (NEWSAPI_KEY в настройках агента)')
     if any(w in _goals_text_all for w in _news_kw):
         if not _has_news and not _os_bap.getenv('NEWSAPI_KEY'):
-            _intg_missing.append('⚡ NewsAPI — 100+ источников новостей (NEWSAPI_KEY в Railway Variables)')
+            _intg_missing.append('⚡ NewsAPI — 100+ источников новостей (NEWSAPI_KEY в настройках агента)')
         if not _has_rss:
             _intg_missing.append('⚡ RSS — добавь RSS_URL= в API-ключи агента для мониторинга лент')
     if any(w in _goals_text_all for w in _dev_kw):
         if not _has_github and not _os_bap.getenv('GITHUB_TOKEN'):
-            _intg_missing.append('⚡ GitHub Token — поиск разработчиков/контрибьюторов (GITHUB_TOKEN в Railway Variables)')
+            _intg_missing.append('⚡ GitHub Token — поиск разработчиков/контрибьюторов (GITHUB_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _ppl_kw):
         if not _has_imap:
             _intg_missing.append('⚡ Email — добавь GMAIL_USER + пароль приложения в настройки агента для охвата')
@@ -1894,7 +1894,7 @@ class AnchorEngine:
             if anchor.anchor_type in _email_anchor_types and not _os_intg.getenv('RESEND_API_KEY'):
                 _missing_intg_notes.append(
                     "❌ Отправка писем не работает: RESEND_API_KEY не настроен. "
-                    "Попроси пользователя добавить RESEND_API_KEY в Railway Variables — регистрация: resend.com."
+                    "Попроси пользователя добавить RESEND_API_KEY в настройках агента (API-ключи) — регистрация: resend.com."
                 )
             # 3. Поиск разработчиков без GITHUB_TOKEN
             _tech_kw_anchor = [
@@ -1906,7 +1906,7 @@ class AnchorEngine:
                     and not _os_intg.getenv('GITHUB_TOKEN')):
                 _missing_intg_notes.append(
                     "⚠️ GITHUB_TOKEN не настроен — поиск разработчиков работает в ограниченном режиме (60 запросов/час). "
-                    "Предложи пользователю добавить GITHUB_TOKEN в Railway Variables — даёт 5000 запросов/час "
+                    "Предложи пользователю добавить GITHUB_TOKEN в настройках агента — даёт 5000 запросов/час "
                     "(github.com/settings/tokens → Generate new token)."
                 )
             if _missing_intg_notes:
@@ -4003,7 +4003,7 @@ class AnchorEngine:
             if _has_any and not _os_coord.getenv('NEWSAPI_KEY'):
                 _missing_intg_coord.append(
                     "💡 Для финансового/рыночного анализа аналитику полезен NewsAPI (newsapi.org) — "
-                    "NEWSAPI_KEY в Railway Variables даёт доступ к 100+ источникам новостей. "
+                    "NEWSAPI_KEY в настройках агента даёт доступ к 100+ источникам новостей. "
                     "Без него — только web_search."
                 )
             if _has_any and not any('alpha_vantage' in (getattr(a, 'user_api_keys', '') or '').lower() for a in real_agents):
@@ -4024,7 +4024,7 @@ class AnchorEngine:
             # Без GITHUB_TOKEN при поиске разработчиков
             if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _os_coord.getenv('GITHUB_TOKEN'):
                 _missing_intg_coord.append(
-                    "⚠️ GITHUB_TOKEN не настроен. Добавь в Railway Variables для поиска разработчиков (5000 req/h вместо 60)."
+                    "⚠️ GITHUB_TOKEN не настроен. Добавь GITHUB_TOKEN в настройках агента для поиска разработчиков (5000 req/h вместо 60)."
                 )
             # Telegram-канал: цели связанные с контентом/аудиторией, но нет канала
             _content_kw_c = ('контент', 'smm', 'пост', 'публикац', 'канал', 'аудитор', 'подписчик', 'продвижен')
@@ -8997,7 +8997,7 @@ class AnchorEngine:
                                 _notify_text = (
                                     f"⚠️ Не удаётся отправить письма по кампании «{campaign_name}».\n"
                                     f"Причина: {result.strip()[:200]}\n"
-                                    f"\nПроверь настройки Resend в Railway Variables (RESEND_FROM должен быть верифицированным доменом).\n"
+                                    f"\nПроверь настройки Resend (RESEND_FROM должен быть верифицированным доменом — resend.com → Domains).\n"
                                     f"Письма ждут в черновиках — как только исправишь, отправятся автоматически."
                                 )
                                 await self._send_telegram_message(user.telegram_id, _notify_text)

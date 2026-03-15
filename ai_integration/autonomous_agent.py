@@ -61,9 +61,9 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
      "💡 GITHUB_TOKEN не настроен. github.com/settings/tokens → Generate (repo, read:user) → добавь в настройки агента"),
     # NewsAPI
     ("newsapi исчерпала",
-     "💡 NewsAPI исчерпал дневной лимит. Получи бесплатный ключ: newsapi.org → добавь NEWSAPI_KEY в Railway Variables"),
+     "💡 NewsAPI исчерпал дневной лимит. Получи бесплатный ключ: newsapi.org → добавь NEWSAPI_KEY в настройках агента"),
     ("newsapi_key не",
-     "💡 NewsAPI не настроен. newsapi.org → бесплатно 100 запросов/день → добавь NEWSAPI_KEY в Railway Variables"),
+     "💡 NewsAPI не настроен. newsapi.org → бесплатно 100 запросов/день → добавь NEWSAPI_KEY в настройках агента"),
     # Email / Gmail / IMAP
     ("gmail не настроен",
      "💡 Gmail не настроен. Добавь GMAIL_USER + GMAIL_PASS (пароль приложения: myaccount.google.com → Безопасность → Пароли приложений) в настройки агента"),
@@ -71,7 +71,7 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
      "💡 IMAP не настроен — агент не может читать входящие. Добавь IMAP_HOST + IMAP_USER + IMAP_PASS в настройки агента"),
     # OpenWeatherMap
     ("openweathermap_api_key",
-     "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в Railway Variables"),
+     "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в настройках агента"),
     # Alpha Vantage
     ("alphavantage_api_key",
      "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
