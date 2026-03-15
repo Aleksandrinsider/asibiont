@@ -12579,16 +12579,18 @@ async def check_emails(
         else:
             return f"Тип интеграции '{chosen['type']}' не поддерживает чтение входящих."
 
-        # Автоматически сохраняем новые контакты из входящих в EmailContact
+        # Автоматически сохраняем/обновляем контакты из входящих в EmailContact
         _no_new_keywords = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
         if result and not any(kw in result.lower() for kw in _no_new_keywords):
             import re as _re_ce
+            import datetime as _dt_ce
+            from models import EmailContact as _EC_ce2, EmailOutreach as _EO_ce2
             _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result, _re_ce.IGNORECASE))
-            _new_auto = _found_em - _known_emails - {_my_email}
+            _found_em.discard(_my_email)
+            _new_auto = _found_em - _known_emails
+            # 1) Новые контакты → создаём с status=replied
             for _new_em in list(_new_auto)[:5]:
                 try:
-                    import datetime as _dt_ce
-                    from models import EmailContact as _EC_ce2
                     _existing_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_new_em).first()
                     if not _existing_ec:
                         _ec_new = _EC_ce2(
@@ -12605,6 +12607,30 @@ async def check_emails(
                         logger.info(f'[CHECK_EMAILS] Auto-saved contact: {_new_em} for user {user.id}')
                 except Exception as _e_save:
                     logger.debug(f'[CHECK_EMAILS] auto-save contact failed: {_e_save}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+            # 2) Известные контакты, которые ответили → обновляем статус на replied
+            _replied_known = _found_em & _known_emails
+            for _rep_em in list(_replied_known)[:10]:
+                try:
+                    _ec_existing = session.query(_EC_ce2).filter_by(user_id=user.id, email=_rep_em).first()
+                    if _ec_existing and _ec_existing.status in ('contacted', 'new', None):
+                        _ec_existing.status = 'replied'
+                        _ec_existing.last_contacted_at = _dt_ce.datetime.utcnow()
+                        session.commit()
+                        logger.info(f'[CHECK_EMAILS] Updated contact status to replied: {_rep_em}')
+                    # Также обновляем EmailOutreach если есть
+                    _eo = session.query(_EO_ce2).filter_by(
+                        user_id=user.id, recipient_email=_rep_em
+                    ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened'])).first()
+                    if _eo:
+                        _eo.status = 'replied'
+                        session.commit()
+                        logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status to replied: {_rep_em}')
+                except Exception as _e_upd:
+                    logger.debug(f'[CHECK_EMAILS] update replied status failed: {_e_upd}')
                     try:
                         session.rollback()
                     except Exception:

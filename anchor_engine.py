@@ -4072,11 +4072,9 @@ class AnchorEngine:
                 # Gmail без app_password — только чтение IMAP
                 _has_imap = ('gmail_user=' in _keys_lower or 'imap_' in _keys_lower or 'gmail_imap' in _keys_lower)
                 _can_send = any(k in _keys_lower for k in ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_'))
-                # Gmail с app_password — может отправлять
-                if not _can_send and 'gmail_' in _keys_lower:
-                    _can_send = ('gmail_app_password=' in _keys_lower and
-                                 'gmail_app_password=\n' not in _keys_lower and
-                                 'gmail_app_password= ' not in _keys_lower)
+                # Gmail с паролем приложения — может отправлять (GMAIL_PASS или GMAIL_APP_PASSWORD)
+                if not _can_send and 'gmail_' in _keys_lower and 'gmail_user=' in _keys_lower:
+                    _can_send = any(pk in _keys_lower for pk in ('gmail_pass=', 'gmail_app_password=', 'gmail_password='))
                 # Яндекс и Mail.ru поддерживают SMTP нативно — если есть USER, значит умеет отправлять
                 if not _can_send:
                     _can_send = 'yandex_user=' in _keys_lower or 'mailru_user=' in _keys_lower
@@ -4296,7 +4294,7 @@ class AnchorEngine:
                 + f"{_degraded_note}"
                 + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
-                f"уже_написали=[{_already_sent_str[:100]}]\n"
+                f"уже_написали=[{_already_sent_str[:300]}]\n"
                 f"Кампании: {_email_campaigns_str}\n"
                 f"{_banned_tools_str}"
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
@@ -6624,11 +6622,13 @@ class AnchorEngine:
                 f"Кампания «{c.name}»: отправлено={sent}, ответов={replied}, черновиков={drafts}"
             )
 
-        # Email контакты пользователя — кому уже писали
+        # Email контакты пользователя — кому уже писали (replied/interested первыми)
         from models import EmailContact as _EC_scan
-        contacts = session.query(_EC_scan).filter_by(
+        _contacts_raw = session.query(_EC_scan).filter_by(
             user_id=user.id,
-        ).order_by(_EC_scan.created_at.desc()).limit(20).all()
+        ).order_by(_EC_scan.created_at.desc()).limit(30).all()
+        _status_prio = {'replied': 0, 'interested': 1, 'contacted': 2, 'new': 3}
+        contacts = sorted(_contacts_raw, key=lambda c: _status_prio.get(c.status or 'new', 4))[:20]
         contacts_summary = [
             f"{c.name or '?'} <{c.email}> [статус: {c.status or 'new'}] (src={c.source})"
             for c in contacts
