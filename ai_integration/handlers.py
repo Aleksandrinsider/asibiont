@@ -4334,7 +4334,38 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     return f"metric_current ({mc}) не больше текущего ({_old_mc}). Обновляй ТОЛЬКО когда нашёл РЕАЛЬНОГО нового пользователя/контакт."
                 if mc - _old_mc < 1.0:
                     return f"Прирост метрики слишком мал ({mc - _old_mc:.1f}). Увеличивай на целые единицы — 1 единица = 1 реальный найденный пользователь."
-                # RATE LIMIT: максимум 1 обновление метрики за 3 часа
+                # GUARD: для people-целей — запрет крупного прироста без подтверждённых ответов
+                # Агент НЕ должен ставить metric_current = N_contacts_in_db (это не тестировщики!)
+                _ppl_units_chk = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
+                                  'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
+                _ppl_kw_chk = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                _gfull_chk = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
+                _is_ppl_chk = (
+                    any(u in (matched.metric_unit or '').lower() for u in _ppl_units_chk)
+                    or any(w in _gfull_chk for w in _ppl_kw_chk)
+                )
+                if _is_ppl_chk and (mc - _old_mc) > 5:
+                    try:
+                        from models import EmailContact as _EC_chk, AgentActivityLog as _AAL_chk
+                        _rpl_chk = session.query(_EC_chk).filter(_EC_chk.user_id == user.id, _EC_chk.status == 'replied').count()
+                        _ibx_chk = session.query(_AAL_chk).filter(
+                            _AAL_chk.user_id == user.id, _AAL_chk.activity_type == 'inbox_reply',
+                            _AAL_chk.created_at >= datetime.now() - timedelta(days=14),
+                        ).count()
+                        if _rpl_chk == 0 and _ibx_chk == 0:
+                            return (
+                                f"⛔ Нельзя прибавить {int(mc - _old_mc)} к метрике «{matched.title}» сразу — "
+                                f"нет ни одного подтверждённого ответа от тестировщиков.\n\n"
+                                f"Ты, похоже, считаешь email-контакты в базе (outreach) как тестировщиков — это неверно.\n"
+                                f"Email-контакт ≠ пользователь, подтвердивший тестирование.\n\n"
+                                f"Правильный путь:\n"
+                                f"  1. check_emails — есть ли ответы на outreach?\n"
+                                f"  2. negotiate_by_email — уточни, начали ли они тестировать\n"
+                                f"  3. Обновляй metric_current на +1 только при ответе «да, тестирую»\n"
+                                f"Текущая метрика остаётся: {int(_old_mc)}/{int(matched.metric_target)} {matched.metric_unit or ''}"
+                            )
+                    except Exception:
+                        pass
                 # Исключение: если это финальный update (цель достигается) — rate-limit пропускаем
                 _would_complete = (mc >= matched.metric_target)
                 if not _would_complete:
