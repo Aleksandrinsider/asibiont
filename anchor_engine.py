@@ -4453,21 +4453,28 @@ class AnchorEngine:
                     if '[tools:' in _pr_clean:
                         _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
                     _prev_result_summary = _pr_clean[:300]
+                # Строим список агентов с их ролями для анонса
+                _agents_announce_list = ', '.join(
+                    f"{p['name']} ({p.get('job', 'специалист')})"
+                    for p in _profiles[:4]
+                )
                 _ann_p = (
-                    f"Ты — ASI, координатор. Напиши 1-2 живых предложения для пользователя.\n"
+                    f"Ты — ASI, координатор реальной команды. Напиши 2-3 живых предложения для пользователя.\n"
                     f"Активные цели: {_brief_goals}.\n"
+                    f"Команда сейчас: {_agents_announce_list}.\n"
                     + (
                         f"Что сделали В ПРОШЛОМ ЦИКЛЕ (используй эти ФАКТЫ): {_prev_result_summary}\n"
                         if _prev_result_summary else
-                        f"Первый запуск — сообщи что начинаем работу.\n"
+                        f"Первый запуск — представь команду, скажи кто чем займётся.\n"
                     )
                     + f"Что делаем СЕЙЧАС: {_tasks_preview}.\n\n"
                     f"Правила:\n"
-                    f"- Называй конкретику из прошлого цикла (статьи найдены, контакты, письма)\n"
+                    f"- ОБЯЗАТЕЛЬНО называй агентов по именам (у них есть конкретные роли)\n"
+                    f"- Скажи кто конкретно что будет делать в этом цикле\n"
+                    f"- Называй конкретику из прошлого цикла если есть (статьи, контакты, письма)\n"
                     f"- Если прошлый раз 'сканировали RSS' → сейчас скажи ЧТО нашли и что делаем дальше\n"
                     f"- НЕ повторяй фразу 'сканируем' если в прошлом цикле уже сканировали то же самое\n"
-                    f"- Можно называть имена агентов и что они делают\n"
-                    f"- Без markdown. Без [АВТОПИЛОТ]. Только суть."
+                    f"- Живо, как руководитель в начале рабочего дня. Без markdown. Без [АВТОПИЛОТ]."
                 )
                 _ann_gen = await asyncio.wait_for(
                     _quick_ai_call_raw([{"role": "user", "content": _ann_p}], max_tokens=100),
@@ -4678,14 +4685,31 @@ class AnchorEngine:
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), getattr(_target_ag, 'id', 0)) if _target_ag else ''
                 _assign_text = f"{_ag_name}, {_ag_task[:120]}"
                 try:
-                    _assign_prompt = (
-                        f"Ты — ASI, координатор. Напиши ОДНО живое поручение агенту {_ag_name}.\n"
-                        f"Задача: {_ag_task[:200]}\n"
-                        f"Требования: 1 фраза 10-20 слов, обращение по имени. Конкретное действие. Без markdown."
-                    )
+                    if _prev_steps_context and len(_prev_steps_context.strip()) > 30:
+                        # Контекстно-зависимое поручение: ASI ссылается на результаты предыдущих агентов
+                        _assign_prompt = (
+                            f"Ты — ASI, координатор реальной команды агентов. Обратись к агенту {_ag_name} с живым поручением.\n\n"
+                            f"Задача для {_ag_name}: {_ag_task[:250]}\n\n"
+                            f"Что уже сделала команда до этого:\n{_prev_steps_context[:500]}\n\n"
+                            f"Правила написания:\n"
+                            f"- Начни с обращения по имени — {_ag_name}\n"
+                            f"- 2-3 живых предложения, как руководитель говорит сотруднику\n"
+                            f"- ОБЯЗАТЕЛЬНО используй конкретику из результатов предыдущих агентов если она связана с заданием\n"
+                            f"- Объясни ЗАЧЕМ нужно делать именно это — исходя из того что уже узнала команда\n"
+                            f"- Конкретное действие в конце. Без markdown. Без скобок."
+                        )
+                        _assign_max_tok = 130
+                    else:
+                        # Первый шаг: простое поручение
+                        _assign_prompt = (
+                            f"Ты — ASI, координатор. Напиши живое поручение агенту {_ag_name}.\n"
+                            f"Задача: {_ag_task[:200]}\n"
+                            f"Правила: 1-2 фразы, обращение по имени. Конкретное действие. Без markdown."
+                        )
+                        _assign_max_tok = 80
                     _gen_assign = await asyncio.wait_for(
-                        _quick_ai_call_raw([{'role': 'user', 'content': _assign_prompt}], max_tokens=60),
-                        timeout=8,
+                        _quick_ai_call_raw([{'role': 'user', 'content': _assign_prompt}], max_tokens=_assign_max_tok),
+                        timeout=10,
                     )
                     if _gen_assign and len(_gen_assign.strip()) > 10:
                         _assign_text = _gen_assign.strip()
@@ -4835,6 +4859,20 @@ class AnchorEngine:
                     f"   Если результат run_agent_action не по теме задания → немедленно используй web_search.\n"
                     if _tool_hint == 'run_agent_action' and (_ag_data.get('python_code') or '').strip() else ''
                 )
+                # Личность агента (специализация + пол для живой речи)
+                _ag_is_fem = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
+                _ag_role_str = (
+                    f"{_ag_data.get('job_title', '') or _ag_data.get('specialization', 'специалист')}"
+                ).strip()
+                _ag_caps_for_prompt = ', '.join(
+                    p['caps'][:4] for p in _profiles if p['name'].lower() == _ag_name.lower()
+                    for _ in [1]  # trick to get first match
+                ) if False else ', '.join(
+                    p['caps'][:4]
+                    for p in _profiles
+                    if p['name'].lower() == _ag_name.lower()
+                ) or 'нет подключённых интеграций'
+
                 _agent_prompt = (
                     f"Твоё задание:\n{_ag_task}\n"
                     + (f"\n🎯 Работаешь НА ЦЕЛЬ: «{_ag_goal_title}»\n"
@@ -4858,6 +4896,14 @@ class AnchorEngine:
                     + (f"\n\nУже сделано командой (используй):\n{_prev_steps_context}" if _prev_steps_context else '')
                     + (f"\n\nКоманда:\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
+                    + f"\n\n🧠 ТЫ — ЖИВОЙ СПЕЦИАЛИСТ В КОМАНДЕ ({_ag_name}, {_ag_role_str}):"
+                    f"\n  • Твои интеграции: {_ag_caps_for_prompt}"
+                    f"\n  • Если для задачи не хватает доступа/API — НЕ молчи. Скажи прямо:"
+                    f" \"Мне нужен X\" или \"Попросите пользователя подключить Y через Дашборд → Настройки агента\"."
+                    f"\n  • Если нашёл что-то важное КРОМЕ задания — упомяни это как коллега."
+                    f"\n  • Если план нерабочий — предложи другой подход: \"Лучше сделаю Z, потому что...\""
+                    f"\n  • Говори от первого лица. Не шаблонно. Ты {'специалист' if not _ag_is_fem else 'специалистка'} со своим мнением."
+                    f"\n  • Можно сказать \"я бы предложил{'а' if _ag_is_fem else ''}...\", \"заметил{'а' if _ag_is_fem else ''} интересное...\", \"стоит также проверить...\""
                 )
 
                 try:
@@ -4947,6 +4993,63 @@ class AnchorEngine:
                 except Exception:
                     _cleaned = _result.strip()
 
+                # ── Детектор живых реакций агента: запросы интеграций, инициатива, отклонение от сценария ──
+                # Если в ответе агент просит что-то / предлагает альтернативу → ASI озвучивает это пользователю
+                _AGENT_REQUEST_PHRASES = (
+                    'нужен ', 'нужна ', 'нужны ', 'не хватает', 'отсутствует', 'не подключен', 'не настроен',
+                    'попросите пользователя', 'добавить api', 'добавить ключ', 'подключить',
+                    'предлагаю', 'лучше сделать', 'лучше попробовать', 'стоит також', 'стоит также',
+                    'заметил', 'заметила', 'обнаружил', 'обнаружила', 'кстати,', 'важное:', 'важный момент',
+                    'имеет смысл', 'я бы предложил', 'я бы предложила', 'я бы рекомендовал', 'я бы рекомендовала',
+                    'к сожалению, у меня нет', 'к сожалению нет доступа',
+                )
+                _agent_has_initiative = any(
+                    ph in _cleaned.lower() for ph in _AGENT_REQUEST_PHRASES
+                )
+                if _agent_has_initiative:
+                    # Агент проявил инициативу/запросил что-то — ASI ретранслирует это пользователю особо
+                    try:
+                        _relay_p = (
+                            f"Агент {_ag_name} написал:"
+                            f"\n\"{_cleaned[:600]}\""
+                            f"\n\nТы — ASI, координатор. Агент отклонился от сценария или попросил помощь."
+                            f" Напиши 1-2 живых предложения: озвучи просьбу/инициативу агента пользователю."
+                            f" Можно добавить ЧТО нужно сделать (если агент просит интеграцию — скажи где настроить)."
+                            f" Разговорно, без markdown."
+                        )
+                        _relay_txt = await asyncio.wait_for(
+                            _quick_ai_call_raw([{'role': 'user', 'content': _relay_p}], max_tokens=120),
+                            timeout=8,
+                        )
+                        if _relay_txt and len(_relay_txt.strip()) > 15:
+                            try:
+                                _rl_sess = Session()
+                                try:
+                                    _rl_sess.add(Interaction(
+                                        user_id=user.id,
+                                        message_type='proactive',
+                                        content=json.dumps({
+                                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                            'text': _relay_txt.strip(),
+                                            '__anchor_type': 'coordinator_agent_request',
+                                        }, ensure_ascii=False),
+                                    ))
+                                    _rl_sess.commit()
+                                finally:
+                                    _rl_sess.close()
+                            except Exception:
+                                pass
+                            if self.bot:
+                                try:
+                                    await self.bot.send_message(
+                                        chat_id=user.telegram_id,
+                                        text=f"ASI:\n\n{_relay_txt.strip()}",
+                                    )
+                                except Exception:
+                                    pass
+                    except Exception as _rl_err:
+                        logger.debug("[COORD] agent request relay error: %s", _rl_err)
+
                 # ── Помечаем задачу выполненной ──
                 if _step_task_id:
                     try:
@@ -5012,7 +5115,66 @@ class AnchorEngine:
                 )
                 # Накапливаем контекст для следующих агентов в цепочке
                 _prev_steps_context += f"• {_ag_name}: {_cleaned[:300]}\n"
-                await asyncio.sleep(1)  # небольшая пауза между агентами
+
+                # ── ASI bridge-реакция: ASI осмысляет результат и намекает на следующий шаг ──
+                # Генерируем только если есть следующий шаг в очереди (не тратим токены на финальный шаг)
+                _has_next_step = bool(_step_queue) or (_executed < _MAX_DYNAMIC_STEPS - 1 and len(_results_summary) < _MAX_DYNAMIC_STEPS)
+                if _has_next_step and len(_cleaned) > 40:
+                    try:
+                        _other_agents_str = ', '.join(
+                            p['name'] for p in _profiles if p['name'].lower() != _ag_name.lower()
+                        )
+                        _next_step_hint = ''
+                        if _step_queue:
+                            _ns = _step_queue[0]
+                            _next_ag = _ns.get('agent', '')
+                            _next_task = _ns.get('task', '')[:100]
+                            _next_step_hint = f"Следующий шаг: {_next_ag} — {_next_task}"
+                        _bridge_p = (
+                            f"Ты — ASI, координатор команды. Агент {_ag_name} только что отчитался:\n"
+                            f"\"{_cleaned[:400]}\"\n\n"
+                            + (f"Следующий шаг я планирую дать {_next_step_hint}\n\n" if _next_step_hint else '')
+                            + f"Другие агенты в команде: {_other_agents_str or 'нет'}\n\n"
+                            f"Напиши 1 короткую живую реплику от ASI (1-2 предложения):\n"
+                            f"- Отреагируй на ключевую находку {_ag_name}\n"
+                            f"- Можешь сказать что делаем дальше с этой информацией\n"
+                            f"- Разговорно, как руководитель говорит команде. Без markdown."
+                        )
+                        _bridge_txt = await asyncio.wait_for(
+                            _quick_ai_call_raw([{'role': 'user', 'content': _bridge_p}], max_tokens=80),
+                            timeout=8,
+                        )
+                        if _bridge_txt and len(_bridge_txt.strip()) > 15:
+                            _bridge_txt = _bridge_txt.strip()
+                            try:
+                                _br_sess = Session()
+                                try:
+                                    _br_sess.add(Interaction(
+                                        user_id=user.id,
+                                        message_type='proactive',
+                                        content=json.dumps({
+                                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                            'text': _bridge_txt,
+                                            '__anchor_type': 'coordinator_bridge',
+                                        }, ensure_ascii=False),
+                                    ))
+                                    _br_sess.commit()
+                                finally:
+                                    _br_sess.close()
+                            except Exception:
+                                pass
+                            if self.bot:
+                                try:
+                                    await self.bot.send_message(
+                                        chat_id=user.telegram_id,
+                                        text=f"ASI:\n\n{_bridge_txt}",
+                                    )
+                                except Exception:
+                                    pass
+                    except Exception as _br_err:
+                        logger.debug("[COORD] bridge msg error: %s", _br_err)
+
+                await asyncio.sleep(0.5)  # небольшая пауза между агентами
 
             # ── Обновляем AAL ──
             if _aal_id_c:
