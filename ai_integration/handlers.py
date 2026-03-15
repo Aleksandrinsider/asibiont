@@ -12428,23 +12428,24 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                 _gm_em_low = _gm_ems[0].lower() if _gm_ems else ''
                 if my_email and _gm_em_low == my_email.lower():
                     continue
-                # Фильтруем уже-известные контакты
-                if known_emails:
-                    if _gm_em_low and _gm_em_low in known_emails:
-                        skipped_known_g.append(from_hdr)
-                        continue
+                # Помечаем известные контакты — но НЕ скрываем их письма
+                _is_known = known_emails and _gm_em_low and _gm_em_low in known_emails
+                if _is_known:
+                    skipped_known_g.append(from_hdr)
+                _known_badge = "[email-контакт, не зарегистрирован в сервисе] " if _is_known else ""
                 results.append(
-                    f"От: {from_hdr}\n"
+                    f"От: {_known_badge}{from_hdr}\n"
                     f"Тема: {headers.get('Subject', '(без темы)')}\n"
                     f"Дата: {headers.get('Date', '?')}\n"
                     f"Превью: {snippet}\n"
                 )
             if not results:
-                if skipped_known_g:
-                    return (f"Нет новых писем от незнакомых контактов. Уже в базе: {len(skipped_known_g)} контакт(а). "
-                            f"Переключись на задачу: start_email_campaign или send_outreach_email для поиска новых.")
                 return "Входящих писем нет."
-            return f"Новые входящие ({gmail_email}, {len(results)} новых):\n\n" + "\n---\n".join(results)
+            _known_count = len(skipped_known_g)
+            _known_note = (f"\n⚠️ Примечание: {_known_count} из них помечены [email-контакт] — добавлены в базу контактов, "
+                           f"но НЕ зарегистрированы как пользователи сервиса." if _known_count else "")
+            return (f"Новые входящие ({gmail_email}, {len(results)} писем){_known_note}:\n\n"
+                    + "\n---\n".join(results))
 
     result = await _fetch(access_token)
     if result is None:
@@ -12526,10 +12527,10 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                 if my_email and _from_low == my_email.lower():
                     continue
 
-                if known_emails:
-                    if _from_low and _from_low in known_emails:
-                        skipped_known.append(from_addr)
-                        continue
+                # Помечаем известные контакты — но НЕ скрываем их письма
+                _is_known_imap = known_emails and _from_low and _from_low in known_emails
+                if _is_known_imap:
+                    skipped_known.append(from_addr)
 
                 # Snippet: BODY.PEEK[TEXT] первые 200 символов
                 _st, _dt2 = mail.fetch(mid, '(BODY.PEEK[TEXT]<0.500>)')
@@ -12540,20 +12541,21 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                         snippet = raw_body.decode('utf-8', errors='replace')[:200].strip()
                     except Exception:
                         snippet = str(raw_body[:200])
+                _known_badge_imap = "[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else ""
                 results.append(
-                    f"От: {from_addr}\n"
+                    f"От: {_known_badge_imap}{from_addr}\n"
                     f"Тема: {subject}\n"
                     f"Дата: {date}\n"
                     f"Превью: {snippet}\n"
                 )
             mail.logout()
             if not results:
-                if skipped_known:
-                    return (f"Нет новых писем от незнакомых контактов. Уже в базе: {len(skipped_known)} контакт(а) "
-                            f"({', '.join(s[:50] for s in skipped_known[:3])}). "
-                            f"Переключись на задачу: start_email_campaign или send_outreach_email для поиска новых контактов.")
                 return "Входящих писем нет."
-            return f"Новые входящие ({email_user}, {len(results)} новых):\n\n" + "\n---\n".join(results)
+            _known_cnt = len(skipped_known)
+            _known_n = (f"\n⚠️ Примечание: {_known_cnt} из них помечены [email-контакт] — добавлены в базу контактов, "
+                        f"но НЕ зарегистрированы как пользователи сервиса." if _known_cnt else "")
+            return (f"Новые входящие ({email_user}, {len(results)} писем){_known_n}:\n\n"
+                    + "\n---\n".join(results))
         except imaplib.IMAP4.error as e:
             return f"Ошибка IMAP ({label}): {e}. Проверь пароль приложения."
         except Exception as e:
