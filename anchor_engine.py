@@ -4437,53 +4437,38 @@ class AnchorEngine:
             except Exception:
                 pass
 
-            # ── Анонс ASI: что сделали В ПРОШЛОМ ЦИКЛЕ и что КОНКРЕТНО делаем сейчас ──
+            # ── Анонс ASI: шаблон без AI-вызова (экономим 1 вызов на старте) ──
             _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
-            _tasks_preview = '; '.join(
-                (p.get('task') or '')[:60]
-                for p in _plan
+            _agents_announce_list = ', '.join(
+                f"{p['name']} ({p.get('job', 'специалист')})"
+                for p in _profiles[:4]
             )
-            _coord_announce = f"Работаю над {_brief_goals}."
-            try:
-                # Извлекаем конкретику из прошлого цикла для сравнения
-                _prev_result_summary = ''
-                if _prev_cycle_result:
-                    # Убираем технические теги [tools:...]
-                    _pr_clean = _prev_cycle_result
-                    if '[tools:' in _pr_clean:
-                        _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
-                    _prev_result_summary = _pr_clean[:300]
-                # Строим список агентов с их ролями для анонса
-                _agents_announce_list = ', '.join(
-                    f"{p['name']} ({p.get('job', 'специалист')})"
-                    for p in _profiles[:4]
+            # Предыдущий цикл — для контекста в финальном отчёте
+            _prev_result_summary = ''
+            if _prev_cycle_result:
+                _pr_clean = _prev_cycle_result
+                if '[tools:' in _pr_clean:
+                    _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
+                _prev_result_summary = _pr_clean[:300]
+            # Анонс-шаблон: агенты + план этого цикла
+            _step_assigns_preview = ', '.join(
+                f"{s.get('agent','?')} → {(s.get('task') or '')[:50]}"
+                for s in _plan[:3]
+            )
+            if _prev_result_summary:
+                _coord_announce = (
+                    f"Продолжаю работу над {_brief_goals}. "
+                    f"Прошлый цикл: {_prev_result_summary[:180]}. "
+                    f"В работе сейчас: {_agents_announce_list}."
                 )
-                _ann_p = (
-                    f"Ты — ASI, координатор реальной команды. Напиши 2-3 живых предложения для пользователя.\n"
-                    f"Активные цели: {_brief_goals}.\n"
-                    f"Команда сейчас: {_agents_announce_list}.\n"
-                    + (
-                        f"Что сделали В ПРОШЛОМ ЦИКЛЕ (используй эти ФАКТЫ): {_prev_result_summary}\n"
-                        if _prev_result_summary else
-                        f"Первый запуск — представь команду, скажи кто чем займётся.\n"
-                    )
-                    + f"Что делаем СЕЙЧАС: {_tasks_preview}.\n\n"
-                    f"Правила:\n"
-                    f"- ОБЯЗАТЕЛЬНО называй агентов по именам (у них есть конкретные роли)\n"
-                    f"- Скажи кто конкретно что будет делать в этом цикле\n"
-                    f"- Называй конкретику из прошлого цикла если есть (статьи, контакты, письма)\n"
-                    f"- Если прошлый раз 'сканировали RSS' → сейчас скажи ЧТО нашли и что делаем дальше\n"
-                    f"- НЕ повторяй фразу 'сканируем' если в прошлом цикле уже сканировали то же самое\n"
-                    f"- Живо, как руководитель в начале рабочего дня. Без markdown. Без [АВТОПИЛОТ]."
+            else:
+                _coord_announce = (
+                    f"Запускаю команду для {_brief_goals}. "
+                    f"{_agents_announce_list}. "
+                    f"Задачи: {_step_assigns_preview}."
                 )
-                _ann_gen = await asyncio.wait_for(
-                    _quick_ai_call_raw([{"role": "user", "content": _ann_p}], max_tokens=100),
-                    timeout=12,
-                )
-                if _ann_gen and len(_ann_gen.strip()) > 20:
-                    _coord_announce = _ann_gen.strip()
-            except Exception:
-                pass
+            # Накапливаем контекст между шагами — используется в финальном отчёте
+            _bridge_notes: list = []
 
             if self.bot:
                 try:
@@ -5112,63 +5097,13 @@ class AnchorEngine:
                 # Накапливаем контекст для следующих агентов в цепочке
                 _prev_steps_context += f"• {_ag_name}: {_cleaned[:300]}\n"
 
-                # ── ASI bridge-реакция: ASI осмысляет результат и намекает на следующий шаг ──
-                # Генерируем только если есть следующий шаг в очереди (не тратим токены на финальный шаг)
-                _has_next_step = bool(_step_queue) or (_executed < _MAX_DYNAMIC_STEPS - 1 and len(_results_summary) < _MAX_DYNAMIC_STEPS)
-                if _has_next_step and len(_cleaned) > 40:
-                    try:
-                        _other_agents_str = ', '.join(
-                            p['name'] for p in _profiles if p['name'].lower() != _ag_name.lower()
-                        )
-                        _next_step_hint = ''
-                        if _step_queue:
-                            _ns = _step_queue[0]
-                            _next_ag = _ns.get('agent', '')
-                            _next_task = _ns.get('task', '')[:100]
-                            _next_step_hint = f"Следующий шаг: {_next_ag} — {_next_task}"
-                        _bridge_p = (
-                            f"Ты — ASI, координатор команды. Агент {_ag_name} только что отчитался:\n"
-                            f"\"{_cleaned[:400]}\"\n\n"
-                            + (f"Следующий шаг я планирую дать {_next_step_hint}\n\n" if _next_step_hint else '')
-                            + f"Другие агенты в команде: {_other_agents_str or 'нет'}\n\n"
-                            f"Напиши 1 короткую живую реплику от ASI (1-2 предложения):\n"
-                            f"- Отреагируй на ключевую находку {_ag_name}\n"
-                            f"- Можешь сказать что делаем дальше с этой информацией\n"
-                            f"- Разговорно, как руководитель говорит команде. Без markdown."
-                        )
-                        _bridge_txt = await asyncio.wait_for(
-                            _quick_ai_call_raw([{'role': 'user', 'content': _bridge_p}], max_tokens=80),
-                            timeout=8,
-                        )
-                        if _bridge_txt and len(_bridge_txt.strip()) > 15:
-                            _bridge_txt = _bridge_txt.strip()
-                            try:
-                                _br_sess = Session()
-                                try:
-                                    _br_sess.add(Interaction(
-                                        user_id=user.id,
-                                        message_type='proactive',
-                                        content=json.dumps({
-                                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                            'text': _bridge_txt,
-                                            '__anchor_type': 'coordinator_bridge',
-                                        }, ensure_ascii=False),
-                                    ))
-                                    _br_sess.commit()
-                                finally:
-                                    _br_sess.close()
-                            except Exception:
-                                pass
-                            if self.bot:
-                                try:
-                                    await self.bot.send_message(
-                                        chat_id=user.telegram_id,
-                                        text=f"ASI:\n\n{_bridge_txt}",
-                                    )
-                                except Exception:
-                                    pass
-                    except Exception as _br_err:
-                        logger.debug("[COORD] bridge msg error: %s", _br_err)
+                # ── Накапливаем контекст шага для финального отчёта (без лишнего AI-вызова) ──
+                if len(_cleaned) > 40:
+                    _next_hint = ''
+                    if _step_queue:
+                        _ns0 = _step_queue[0]
+                        _next_hint = f" → далее {_ns0.get('agent','?')}: {(_ns0.get('task') or '')[:60]}"
+                    _bridge_notes.append(f"{_ag_name}: {_cleaned[:200]}{_next_hint}")
 
                 await asyncio.sleep(0.5)  # небольшая пауза между агентами
 
@@ -5210,15 +5145,18 @@ class AnchorEngine:
                            if g.get('metric_target') else '')
                         for g in _goals[:3]
                     )
+                    _bridge_flow = '\n'.join(_bridge_notes) if _bridge_notes else ''
                     _report_prompt = (
                         f"Ты — ASI, координатор. Напиши ФИНАЛЬНЫЙ ИТОГ рабочего цикла для пользователя.\n\n"
-                        f"Что сделала команда прямо сейчас:\n{_report_items}\n\n"
-                        f"Состояние целей:\n{_goals_state_now}\n\n"
+                        f"Что сделала команда:\n{_report_items}\n\n"
+                        + (f"Ход работы (для контекста):\n{_bridge_flow}\n\n" if _bridge_flow else '')
+                        + f"Состояние целей:\n{_goals_state_now}\n\n"
                         f"Правила:\n"
                         f"- Называй КОНКРЕТНО: что нашли, кому написали, что получили в ответ\n"
-                        f"- Если ничего реально не продвинулось — честно скажи «Новых подтверждённых результатов нет» и что нужно для прогресса\n"
+                        f"- Используй 'ход работы' чтобы связать действия агентов в одну историю\n"
+                        f"- Если ничего реально не продвинулось — честно скажи «Новых подтверждённых результатов нет»\n"
                         f"- НЕ преувеличивай, НЕ называй 'поиск в базе' прогрессом\n"
-                        f"- 2-4 предложения. Без markdown. Без [АВТОПИЛОТ]."
+                        f"- 3-4 предложения. Без markdown. Без [АВТОПИЛОТ]."
                     )
                     _report_gen = await asyncio.wait_for(
                         _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=150),
