@@ -4356,6 +4356,38 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 matched.progress_percentage = pct
                 changes.append(f"метрика: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''} ({pct}%)")
                 if pct >= 100 and matched.status == 'active':
+                    # GUARD: people-goals требуют подтверждённого участия
+                    _mc_people_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
+                                        'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
+                    _mc_people_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                    _mc_gfull = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
+                    _mc_is_ppl = (
+                        any(u in (matched.metric_unit or '').lower() for u in _mc_people_units)
+                        or any(w in _mc_gfull for w in _mc_people_kw)
+                    )
+                    if _mc_is_ppl:
+                        try:
+                            from models import EmailContact as _EC_mc, AgentActivityLog as _AAL_mc
+                            _rpl_mc = session.query(_EC_mc).filter(_EC_mc.user_id == user.id, _EC_mc.status == 'replied').count()
+                            _ibx_mc = session.query(_AAL_mc).filter(
+                                _AAL_mc.user_id == user.id, _AAL_mc.activity_type == 'inbox_reply',
+                                _AAL_mc.created_at >= datetime.now() - timedelta(days=14),
+                            ).count()
+                            if _rpl_mc == 0 and _ibx_mc == 0:
+                                # Записываем обновление метрики, но НЕ закрываем цель
+                                changes.append(f"⚠️ цель НЕ закрыта — нет подтверждения реального участия (check_emails → проверь ответы)")
+                                session.commit()
+                                return (
+                                    f"⚠️ Метрика обновлена: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''}, "
+                                    f"но цель «{matched.title}» НЕ закрыта.\n\n"
+                                    f"Email-контакты в базе ≠ пользователи, начавшие тестирование.\n"
+                                    f"Следующий шаг:\n"
+                                    f"  1. Вызови check_emails — есть ли ответы на outreach?\n"
+                                    f"  2. Если есть ответ → negotiate_by_email: спроси начали ли они тестировать\n"
+                                    f"  3. При подтверждении → update_goal_progress(status='completed')"
+                                )
+                        except Exception:
+                            pass
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
                     changes.append("статус: завершено! ")
@@ -4374,6 +4406,31 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 matched.progress_percentage = pct
                 changes.append(f"прогресс: {pct}%")
                 if pct == 100 and matched.status == 'active':
+                    # Та же проверка участия для people-целей
+                    _p_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
+                                'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
+                    _p_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                    _g_full = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
+                    _is_ppl = (
+                        any(u in (matched.metric_unit or '').lower() for u in _p_units)
+                        or any(w in _g_full for w in _p_kw)
+                    )
+                    if _is_ppl and matched.metric_target:
+                        try:
+                            from models import EmailContact as _EC_p, AgentActivityLog as _AAL_p
+                            _rpl = session.query(_EC_p).filter(_EC_p.user_id == user.id, _EC_p.status == 'replied').count()
+                            _ibx = session.query(_AAL_p).filter(
+                                _AAL_p.user_id == user.id, _AAL_p.activity_type == 'inbox_reply',
+                                _AAL_p.created_at >= datetime.now() - timedelta(days=14),
+                            ).count()
+                            if _rpl == 0 and _ibx == 0:
+                                return (
+                                    f"⛔ Нельзя выставить 100% для цели «{matched.title}» — "
+                                    f"email-контакты ≠ реальные тестировщики. "
+                                    f"Сначала проверь ответы через check_emails и подтверди реальное участие."
+                                )
+                        except Exception:
+                            pass
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
                     changes.append("статус: завершено! ")
@@ -4383,6 +4440,44 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         if status:
             valid = {'active', 'completed', 'paused', 'cancelled'}
             if status in valid:
+                # ── GUARD: цели по людям (тестировщики/пользователи) нельзя закрывать
+                # без подтверждения реального участия — не просто отправленных писем ──
+                if status == 'completed':
+                    _people_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
+                                     'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
+                    _people_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                    _goal_full = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
+                    _is_people_goal = (
+                        any(u in (matched.metric_unit or '').lower() for u in _people_units)
+                        or any(w in _goal_full for w in _people_kw)
+                    )
+                    if _is_people_goal:
+                        try:
+                            from models import EmailContact as _EC_v
+                            _replied_cnt = session.query(_EC_v).filter(
+                                _EC_v.user_id == user.id,
+                                _EC_v.status == 'replied',
+                            ).count()
+                            # Также проверяем inbox_reply в activity log
+                            from models import AgentActivityLog as _AAL_v
+                            _inbox_evidence = session.query(_AAL_v).filter(
+                                _AAL_v.user_id == user.id,
+                                _AAL_v.activity_type == 'inbox_reply',
+                                _AAL_v.created_at >= datetime.now() - timedelta(days=14),
+                            ).count()
+                            if _replied_cnt == 0 and _inbox_evidence == 0:
+                                return (
+                                    f"⛔ Цель «{matched.title}» нельзя закрыть — нет подтверждения реального участия.\n\n"
+                                    f"Email-контакты в базе ≠ зарегистрированные тестировщики/пользователи.\n"
+                                    f"Сначала убедись в реальном участии:\n"
+                                    f"  1. Вызови check_emails — проверь есть ли ответы на outreach\n"
+                                    f"  2. Если есть ответы с подтверждением — используй negotiate_by_email чтобы уточнить начали ли тестирование\n"
+                                    f"  3. Только после получения подтверждений обнови metric_current реальным числом участников\n\n"
+                                    f"Текущее состояние: {int(matched.metric_current or 0)}/{int(matched.metric_target or 0)} "
+                                    f"{matched.metric_unit or ''} — это только отправленные письма, не подтверждённые пользователи."
+                                )
+                        except Exception:
+                            pass
                 matched.status = status
                 if status == 'completed':
                     matched.completed_at = datetime.now()
@@ -11154,7 +11249,28 @@ async def reply_to_outreach_email(
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
 
-        # Логируем в AgentActivityLog
+        # Помечаем EmailContact как ответившего (replied) — подтверждение реального контакта
+        try:
+            from models import EmailContact as _EC_rply
+            _ec_rply = session.query(_EC_rply).filter_by(
+                user_id=user.id, email=outreach.recipient_email.strip().lower()
+            ).first()
+            if _ec_rply:
+                _ec_rply.status = 'replied'
+                _ec_rply.last_contacted_at = dt.now(tz.utc)
+            else:
+                # Создаём контакт с replied статусом если его ещё нет
+                session.add(_EC_rply(
+                    user_id=user.id,
+                    email=outreach.recipient_email.strip().lower(),
+                    name=outreach.recipient_name or '',
+                    source='outreach_reply',
+                    status='replied',
+                    notes='Ответил на outreach — подтверждён двусторонний контакт',
+                    last_contacted_at=dt.now(tz.utc),
+                ))
+        except Exception as _ec_err:
+            logger.debug(f"[EMAIL_REPLY] EmailContact replied update failed: {_ec_err}")
         try:
             from models import AgentActivityLog
             log_entry = AgentActivityLog(
