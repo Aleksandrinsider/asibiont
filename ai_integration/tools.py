@@ -1432,7 +1432,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_stock_price",
-            "description": "📈 Получить котировку акции, курс валюты или цену криптовалюты через Alpha Vantage. Работает только если у агента настроен ALPHAVANTAGE_API_KEY. Тикеры акций: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Металлы: XAU/USD (золото). Крипто: BTC, ETH.",
+            "description": "📈 Получить котировку акции, цену нефти, курс валюты или криптовалюты через Alpha Vantage. Работает только если у агента настроен ALPHAVANTAGE_API_KEY. Нефть: symbol=BRENT или WTI, data_type=oil. Акции: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Крипто: BTC, ETH.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1442,8 +1442,8 @@ TOOLS = [
                     },
                     "data_type": {
                         "type": "string",
-                        "description": "Тип данных: 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта)",
-                        "enum": ["quote", "forex", "crypto"]
+                        "description": "Тип данных: 'oil' (нефть Brent/WTI), 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта)",
+                        "enum": ["oil", "quote", "forex", "crypto"]
                     }
                 },
                 "required": ["symbol"]
