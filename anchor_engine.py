@@ -4880,7 +4880,11 @@ class AnchorEngine:
                 pass
 
             # ── Анонс ASI: шаблон без AI-вызова (экономим 1 вызов на старте) ──
-            _brief_goals = ', '.join(f'«{g["title"][:40]}»' for g in _goals[:2])
+            def _trunc(s: str, n: int) -> str:
+                return s[:n] + '…' if len(s) > n else s
+            _brief_goals = ', '.join(f'«{_trunc(g["title"], 60)}»' for g in _goals[:2])
+            if len(_goals) > 2:
+                _brief_goals += f' и ещё {len(_goals) - 2}'
             _agents_announce_list = ', '.join(
                 f"{p['name']} ({p.get('job', 'специалист')})"
                 for p in _profiles[:4]
@@ -4892,22 +4896,17 @@ class AnchorEngine:
                 if '[tools:' in _pr_clean:
                     _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
                 _prev_result_summary = _pr_clean[:300]
-            # Анонс-шаблон: агенты + план этого цикла
-            _step_assigns_preview = ', '.join(
-                f"{s.get('agent','?')} → {(s.get('task') or '')[:50]}"
-                for s in _plan[:3]
-            )
+            # Анонс-шаблон: краткий (без превью задач — предварительный план сбивает с толку)
             if _prev_result_summary:
                 _coord_announce = (
                     f"Продолжаю работу над {_brief_goals}. "
-                    f"Прошлый цикл: {_prev_result_summary[:180]}. "
-                    f"В работе сейчас: {_agents_announce_list}."
+                    f"Результат прошлого цикла: {_trunc(_prev_result_summary, 200)}. "
+                    f"Работают: {_agents_announce_list}."
                 )
             else:
                 _coord_announce = (
-                    f"Запускаю команду для {_brief_goals}. "
-                    f"{_agents_announce_list}. "
-                    f"Задачи: {_step_assigns_preview}."
+                    f"Запускаю автопилот для {_brief_goals}. "
+                    f"Команда: {_agents_announce_list}."
                 )
             # Накапливаем контекст между шагами — используется в финальном отчёте
             _bridge_notes: list = []
@@ -5689,7 +5688,7 @@ class AnchorEngine:
                 try:
                     _report_items = '\n'.join(f"• {r}" for r in _results_summary[:5])
                     _goals_state_now = '\n'.join(
-                        f"  {g['title'][:45]} — {g.get('progress', 0)}%"
+                        f"  {g['title'][:60] + '…' if len(g['title']) > 60 else g['title']} — {g.get('progress', 0)}%"
                         + (f" ({int(g.get('metric_current', 0))}/{int(g.get('metric_target', 0))} {g.get('metric_unit', '')})"
                            if g.get('metric_target') else '')
                         for g in _goals[:3]
@@ -5728,7 +5727,10 @@ class AnchorEngine:
                                     }, ensure_ascii=False),
                                 ))
                                 # Также логируем в AAL чтобы итог отображался в хронологии
-                                _goals_titles = ', '.join(g['title'][:25] for g in _goals[:2])
+                                _goals_titles = ', '.join(
+                                    (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
+                                    for g in _goals[:2]
+                                )
                                 _sum_sess.add(AgentActivityLog(
                                     user_id=user.id,
                                     activity_type='coordinator_summary',
