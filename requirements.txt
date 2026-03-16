@@ -6,7 +6,7 @@ aiohttp==3.10.10
 python-dotenv==1.0.1
 yookassa==3.0.0
 apscheduler==3.10.4
-timezonefinder==6.5.7
+timezonefinder==5.2.0
 jinja2==3.1.4
 aiohttp-jinja2==1.6
 aiohttp-session==2.12.0

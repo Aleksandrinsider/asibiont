@@ -1,5 +1,2 @@
-[phases.setup]
-aptPkgs = ["libstdc++6"]
-
 [start]
 cmd = "/opt/venv/bin/python main.py"
