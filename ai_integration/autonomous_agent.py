@@ -4824,12 +4824,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _tools_used: list[str] = []  # трекинг вызванных инструментов
     _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
-    # autopilot: search + action + progress (2 итерации, ~100с worst case)
+    # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
-    _max_iters = 2 if _is_autopilot_task else 3
+    _max_iters = 3
+    # GitHub-агент: определяем заранее для форсирования цепочки
+    _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
     for _iter in range(_max_iters):
-        # 3 tool calls per iteration для всех режимов (снижаем с 5 для автопилота)
-        _max_tool_calls = 3
+        # 4 tool calls суммарно для автопилота (search + save + send + progress)
+        _max_tool_calls = 4 if _is_autopilot_task else 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -4843,11 +4845,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Anti-repeat: на итерациях > 0 сообщаем модели что уже использовалось
         if _is_autopilot_task and _iter > 0 and _tools_used:
             _used_str = ', '.join(_tools_used[-3:])
-            _messages.append({"role": "user", "content": (
-                f"Уже использовал: {_used_str}. "
-                f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
-                f"Если нашёл контакты/email — можно использовать send_outreach_email или start_email_campaign."
-            )})
+            _last_tool_local = _tools_used[-1] if _tools_used else ''
+            # GitHub-агент нашёл людей: ФОРСИРУЕМ save + send
+            _was_github_search = (
+                _agent_has_github_local
+                and _last_tool_local == 'run_agent_action'
+            )
+            if _was_github_search:
+                _messages.append({"role": "user", "content": (
+                    f"Поиск выполнен (использовал: {_used_str}). "
+                    "🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub — ВЫПОЛНИ ПРЯМО СЕЙЧАС:\n"
+                    "1. save_email_contact — сохрани email каждого найденного пользователя\n"
+                    "2. send_outreach_email — отправь письмо каждому сохранённому\n"
+                    "Без save + send этот цикл бесполезен! Действуй немедленно."
+                )})
+            else:
+                _messages.append({"role": "user", "content": (
+                    f"Уже использовал: {_used_str}. "
+                    f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
+                    f"Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
+                )})
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
@@ -5038,23 +5055,44 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                               "content": '{"status":"skipped"}'})
         # Инструкция после tool-call: для автопилота — цепочка действий
         if _is_autopilot_task:
-            if _iter == 0 and _tool_call_count <= 2:
-                # После первого tool-call: ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ, не останавливайся на поиске
-                _messages.append({"role": "user", "content": (
-                    "Данные получены. ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ — используй результаты:\n"
-                    "— Нашёл email/контакт → отправь outreach письмо (send_outreach_email) или сохрани (save_email_contact)\n"
-                    "— Нашёл площадку/сообщество → создай КОНКРЕТНУЮ задачу (add_task) с деталями\n"
-                    "— Нашёл информацию для коллеги → DELEGATE[Имя]: задача с найденными данными\n"
-                    "— Нашёл проблему → создай задачу или реши сам\n"
-                    "НЕ останавливайся на 'нашёл и рассказал'. СДЕЛАЙ что-то с результатами!"
-                )})
+            _last_t_post = _tools_used[-1] if _tools_used else ''
+            _is_search_tool = _last_t_post in (
+                'run_agent_action', 'find_relevant_contacts_for_task',
+                'web_search', 'quick_topic_search', 'research_topic',
+            )
+            if _iter < _max_iters - 1:
+                # Не последняя итерация — продолжаем действовать
+                if _is_search_tool and _agent_has_github_local and _last_t_post == 'run_agent_action':
+                    # GitHub-поиск: ЖЁСТКО требуем save + send
+                    _messages.append({"role": "user", "content": (
+                        "Данные поиска получены. 🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub:\n"
+                        "1. save_email_contact — сохрани каждого найденного пользователя\n"
+                        "2. send_outreach_email — напиши каждому из них письмо\n"
+                        "Если поиск вернул 0 результатов — попробуй другой query в run_agent_action.\n"
+                        "НЕ пиши отчёт — вызови инструмент!"
+                    )})
+                elif _is_search_tool:
+                    # Обычный поиск: мягкое требование
+                    _messages.append({"role": "user", "content": (
+                        "Данные получены. ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ — используй результаты:\n"
+                        "— Нашёл email/контакт → save_email_contact + send_outreach_email\n"
+                        "— Нашёл площадку/сообщество → создай задачу (add_task) с деталями\n"
+                        "— Нашёл информацию для коллеги → DELEGATE[Имя]: задача с данными\n"
+                        "НЕ останавливайся на 'нашёл и рассказал'. СДЕЛАЙ что-то с результатами!"
+                    )})
+                else:
+                    # Не поиск (save, send и др.) — завершай цепочку
+                    _messages.append({"role": "user", "content": (
+                        "Действие выполнено. "
+                        "Если есть ещё контакты для отправки — продолжай. "
+                        "Иначе вызови update_goal_progress."
+                    )})
             else:
-                # После второго+ tool-call: завершай цепочку, обнови прогресс
+                # Последняя итерация: завершаем
                 _messages.append({"role": "user", "content": (
-                    "Действие выполнено. Вызови update_goal_progress, затем расскажи пользователю "
+                    "Финальный шаг. Вызови update_goal_progress, затем расскажи пользователю "
                     "ЧТО КОНКРЕТНО ты СДЕЛАЛ — факты, имена, цифры из результатов. "
-                    "НЕ пиши 'выполнил поиск' — пиши что НАШЁЛ и что С ЭТИМ СДЕЛАЛ. "
-                    "Расскажи РЕЗУЛЬТАТ действия и что планируешь дальше."
+                    "НЕ пиши 'выполнил поиск' — пиши что НАШЁЛ и что С ЭТИМ СДЕЛАЛ."
                 )})
         else:
             _messages.append({"role": "user", "content": (
