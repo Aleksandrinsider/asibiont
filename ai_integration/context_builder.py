@@ -530,9 +530,7 @@ class ContextBuilder:
                 recent_replies = session.query(EmailOutreach).filter(
                     EmailOutreach.user_id == user.id,
                     EmailOutreach.status == 'replied',
-                    EmailOutreach.reply_text != None,
-                    EmailOutreach.reply_text != ''
-                ).order_by(EmailOutreach.reply_at.desc()).limit(5).all()
+                ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(5).all()
 
                 if recent_replies:
                     new_reply_lines = []
@@ -540,6 +538,8 @@ class ContextBuilder:
                     for r in recent_replies:
                         name = r.recipient_name or r.recipient_email
                         reply_preview = (r.reply_text or '')[:120].replace('\n', ' ')
+                        if not reply_preview:
+                            reply_preview = '[текст ответа не получен — вызови check_emails]'
                         if r.ai_reply_sent_at:
                             answered_reply_lines.append(f" {name} ({r.recipient_email}): [ОТВЕТ УЖЕ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}]")
                         else:

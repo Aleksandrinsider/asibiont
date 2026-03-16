@@ -4183,6 +4183,25 @@ class AnchorEngine:
             _per_agent_history = data.get('per_agent_history', {})
             _already_sent = data.get('already_sent_emails', [])
             _already_sent_str = ', '.join(_already_sent[:20]) if _already_sent else 'нет'
+            _pending_replies = data.get('pending_replies', [])
+
+            # Блок приоритетных ответов на входящие — если есть replied без AI-ответа
+            _pending_replies_str = ''
+            if _pending_replies:
+                _pr_lines = []
+                for _pr_item in _pending_replies[:5]:
+                    _pr_txt = _pr_item.get('reply_text', '') or '[текст не получен — нужен check_emails]'
+                    _pr_lines.append(
+                        f"  🆕 {_pr_item.get('name') or _pr_item.get('email')} ({_pr_item.get('email')}): "
+                        f"ответ=\"{_pr_txt[:150]}\" (outreach_id={_pr_item.get('outreach_id')})"
+                    )
+                _pending_replies_str = (
+                    "\n🔴 НАИВЫСШИЙ ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
+                    + '\n'.join(_pr_lines)
+                    + "\n→ Email-агент ОБЯЗАН первым делом вызвать reply_to_outreach_email для этих контактов!\n"
+                    + ("→ Если reply_text='[текст не получен]' → сначала вызови check_emails чтобы получить текст!\n"
+                       if any(not p.get('reply_text') for p in _pending_replies) else '')
+                )
 
             # Строим детальный профиль каждого агента с его личной историей действий
             _profiles_lines = []
@@ -4475,6 +4494,7 @@ class AnchorEngine:
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + f"{_degraded_note}"
+                + _pending_replies_str
                 + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_anti_repeat_str}"
@@ -6866,6 +6886,27 @@ class AnchorEngine:
         except Exception as _ase_err:
             logger.debug("[AUTOPILOT] already_sent_emails: %s", _ase_err)
 
+        # Replied контакты без AI-ответа — наивысший приоритет!
+        _pending_replies: list = []
+        try:
+            _pr_rows = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.status == 'replied',
+                EmailOutreach.ai_reply_sent_at.is_(None),
+            ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(10).all()
+            for _pr in _pr_rows:
+                _pending_replies.append({
+                    'outreach_id': _pr.id,
+                    'email': _pr.recipient_email,
+                    'name': _pr.recipient_name or '',
+                    'reply_text': (_pr.reply_text or '')[:200],
+                    'subject': _pr.subject or '',
+                })
+            if _pending_replies:
+                logger.info("[AUTOPILOT] pending_replies (need AI response): %d", len(_pending_replies))
+        except Exception as _pr_err:
+            logger.debug("[AUTOPILOT] pending_replies: %s", _pr_err)
+
         # Правила пользователя — из user.memory['rules'] (сохраняются AI через save_user_rule)
         user_rules = []
         try:
@@ -7105,6 +7146,7 @@ class AnchorEngine:
             'user_profile': _user_profile_ctx,
             'per_agent_history': _per_agent_history,
             'already_sent_emails': _already_sent_emails,
+            'pending_replies': _pending_replies,
         }
 
         return [Anchor(

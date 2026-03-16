@@ -12647,24 +12647,57 @@ async def check_emails(
                         session.rollback()
                     except Exception:
                         pass
-            # 2) Известные контакты, которые ответили → обновляем статус на replied
+            # Парсим result чтобы вытащить snippet/preview для каждого email
+            _reply_snippets: dict = {}
+            try:
+                import re as _re_snip
+                # Разбиваем по блокам "---", каждый блок = одно письмо
+                _blocks = re.split(r'\n---\n', result)
+                for _blk in _blocks:
+                    _em_in_blk = _re_snip.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _blk, _re_snip.IGNORECASE)
+                    _preview_m = _re_snip.search(r'[Пп]ревью:\s*(.+)', _blk)
+                    if _em_in_blk and _preview_m:
+                        _snip_text = _preview_m.group(1).strip()[:500]
+                        for _em_raw in _em_in_blk:
+                            _reply_snippets[_em_raw.lower()] = _snip_text
+            except Exception:
+                pass
+
+            # 2) Известные контакты, которые ответили → обновляем статус на replied + сохраняем текст
             _replied_known = _found_em & _known_emails
             for _rep_em in list(_replied_known)[:10]:
                 try:
+                    _rep_snippet = _reply_snippets.get(_rep_em, '')
+                    _now_ce = _dt_ce.datetime.utcnow()
                     _ec_existing = session.query(_EC_ce2).filter_by(user_id=user.id, email=_rep_em).first()
                     if _ec_existing and _ec_existing.status in ('contacted', 'new', None):
                         _ec_existing.status = 'replied'
-                        _ec_existing.last_contacted_at = _dt_ce.datetime.utcnow()
+                        _ec_existing.last_contacted_at = _now_ce
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated contact status to replied: {_rep_em}')
-                    # Также обновляем EmailOutreach если есть
+                    # Также обновляем EmailOutreach если есть — сохраняем reply_text и reply_at
                     _eo = session.query(_EO_ce2).filter_by(
                         user_id=user.id, recipient_email=_rep_em
                     ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened'])).first()
                     if _eo:
                         _eo.status = 'replied'
+                        if _rep_snippet and not _eo.reply_text:
+                            _eo.reply_text = _rep_snippet
+                        if not _eo.reply_at:
+                            _eo.reply_at = _now_ce
                         session.commit()
-                        logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status to replied: {_rep_em}')
+                        logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status=replied, reply_text saved: {_rep_em}')
+                    # Если контакт уже replied — обновить reply_text если раньше был пустым
+                    elif _rep_snippet:
+                        _eo_any = session.query(_EO_ce2).filter_by(
+                            user_id=user.id, recipient_email=_rep_em,
+                        ).filter(_EO_ce2.status == 'replied').first()
+                        if _eo_any and not _eo_any.reply_text:
+                            _eo_any.reply_text = _rep_snippet
+                            if not _eo_any.reply_at:
+                                _eo_any.reply_at = _now_ce
+                            session.commit()
+                            logger.info(f'[CHECK_EMAILS] Saved reply_text for already-replied: {_rep_em}')
                 except Exception as _e_upd:
                     logger.debug(f'[CHECK_EMAILS] update replied status failed: {_e_upd}')
                     try:
