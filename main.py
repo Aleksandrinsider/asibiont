@@ -11763,7 +11763,7 @@ async def api_agent_rate_handler(request):
 
 async def api_autopilot_status_handler(request):
     """GET /api/autopilot-status — возвращает статус автопилота: последний запуск, кол-во циклов за 24ч, последнее действие"""
-    user_id = get_user_id_from_request(request)
+    user_id = await get_user_id_from_request(request)
     if not user_id:
         return web.json_response({'error': 'Unauthorized'}, status=401)
     session_db = Session()
