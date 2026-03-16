@@ -4660,6 +4660,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'send_outreach_email', 'save_email_contact',
                     'start_delegation_campaign', 'manage_delegation_campaign',
                 })
+            # GitHub/GitLab — поиск разработчиков → сохранение контактов → outreach
+            # run_agent_action(search_users) уже в core, но без save/send цепочка бессмысленна
+            if any(w in _lbl_ap for w in ('github', 'gitlab')):
+                _autopilot_tools.update({
+                    'save_email_contact', 'find_relevant_contacts_for_task',
+                    'send_outreach_email', 'add_email_leads',
+                    'find_and_message_relevant_users',
+                })
             # CRM/маркетплейс/прочие интеграции — run_agent_action уже в core
             if any(w in _lbl_ap for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'ozon', 'wildberries', 'авито', 'shopify')):
                 _autopilot_tools.update({'find_relevant_contacts_for_task', 'save_email_contact'})
@@ -4710,6 +4718,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Аналитик/исследования
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _inferred_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
+            # GitHub/GitLab — поиск разработчиков → контакты → outreach
+            if any(w in _lbl_ch for w in ('github', 'gitlab')):
+                _inferred_tools.update({
+                    'save_email_contact', 'find_relevant_contacts_for_task',
+                    'send_outreach_email', 'add_email_leads',
+                    'find_and_message_relevant_users', 'web_search',
+                })
             # Задачи всегда доступны
             _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
