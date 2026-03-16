@@ -2480,7 +2480,8 @@ class AnchorEngine:
                             session.rollback()
                         except Exception:
                             pass
-                        return
+                        # Не прерываем — даже без commit продолжаем диспатч агента
+                        logger.warning("[ANCHOR-AUTOPILOT] delivered_at commit failed twice — continuing dispatch anyway")
 
                 # Log dispatch — используем raw SQL через отдельное соединение
                 # ORM-вставка через shared session ненадёжна (session state после token spend)
@@ -5545,6 +5546,11 @@ class AnchorEngine:
 
         except Exception as _coord_main_err:
             logger.warning("[COORD] coordinator dispatch error: %s", _coord_main_err)
+            # Очищаем сессию — иначе round-robin fallback упадёт на commit
+            try:
+                session.rollback()
+            except Exception:
+                pass
             return False
 
     # ═══════════════════════════════════════════════════════
