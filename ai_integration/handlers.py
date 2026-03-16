@@ -8278,7 +8278,7 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
     # Ищем ALPHAVANTAGE_API_KEY в ключах агентов пользователя
     _api_key = None
     try:
-        from models import UserAgent as _UA_av
+        from models import UserAgent as _UA_av, User as _User_av
         _db_sess = session
         _close_sess = False
         if _db_sess is None:
@@ -8286,21 +8286,25 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
             _db_sess = SessionLocal()
             _close_sess = True
         try:
-            _agents = _db_sess.query(_UA_av).filter(
-                _UA_av.user_id == user_id,
-                _UA_av.user_api_keys.isnot(None),
-                _UA_av.user_api_keys.contains('ALPHAVANTAGE_API_KEY='),
-            ).all()
-            for _ag in _agents:
-                for _line in (_ag.user_api_keys or '').splitlines():
-                    _line = _line.strip()
-                    if _line.startswith('ALPHAVANTAGE_API_KEY='):
-                        _val = _line.split('=', 1)[1].strip()
-                        if _val and len(_val) > 4:
-                            _api_key = _val
-                            break
-                if _api_key:
-                    break
+            # user_id — это telegram_id, нужно найти DB user.id
+            _db_user = _db_sess.query(_User_av).filter_by(telegram_id=user_id).first()
+            _db_user_id = _db_user.id if _db_user else None
+            if _db_user_id:
+                _agents = _db_sess.query(_UA_av).filter(
+                    _UA_av.author_id == _db_user_id,
+                    _UA_av.user_api_keys.isnot(None),
+                    _UA_av.user_api_keys.contains('ALPHAVANTAGE_API_KEY='),
+                ).all()
+                for _ag in _agents:
+                    for _line in (_ag.user_api_keys or '').splitlines():
+                        _line = _line.strip()
+                        if _line.startswith('ALPHAVANTAGE_API_KEY='):
+                            _val = _line.split('=', 1)[1].strip()
+                            if _val and len(_val) > 4:
+                                _api_key = _val
+                                break
+                    if _api_key:
+                        break
         finally:
             if _close_sess:
                 _db_sess.close()

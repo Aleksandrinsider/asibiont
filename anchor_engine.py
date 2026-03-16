@@ -5177,20 +5177,41 @@ class AnchorEngine:
                     _task_title_short = (_ag_task.split('\n')[0].split('.')[0])[:100].strip()
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:14])
-                    # Описание = полный текст только если отличается от заголовка
-                    _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
-                    _step_task = _Task_c2(
-                        user_id=user.id,
-                        title=_task_title_short[:200],
-                        description=_task_desc or None,
-                        status='in_progress',
-                        source='agent',
-                        created_by_agent_id=_target_ag.id if _target_ag else None,
-                        delegated_to_username=_ag_name,
-                    )
-                    session.add(_step_task)
-                    session.commit()
-                    _step_task_id = _step_task.id
+
+                    # ── DEDUP: не создавать задачу если аналогичная уже была за последний час ──
+                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+                    _dedup_words = set(_task_title_short.lower().split()[:5])
+                    _recent_similar = session.query(_Task_c2).filter(
+                        _Task_c2.user_id == user.id,
+                        _Task_c2.source == 'agent',
+                        _Task_c2.created_at >= _dedup_cutoff,
+                        _Task_c2.delegated_to_username == _ag_name,
+                    ).all()
+                    _is_dup = False
+                    for _rs in _recent_similar:
+                        _rs_words = set((_rs.title or '').lower().split()[:5])
+                        _overlap = len(_dedup_words & _rs_words)
+                        if _overlap >= 3:
+                            _is_dup = True
+                            logger.info(f"[COORD] dedup: skipping task '{_task_title_short[:50]}' — similar to [{_rs.id}] '{_rs.title[:50]}'")
+                            break
+                    if _is_dup:
+                        _step_task_id = None
+                    else:
+                        # Описание = полный текст только если отличается от заголовка
+                        _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
+                        _step_task = _Task_c2(
+                            user_id=user.id,
+                            title=_task_title_short[:200],
+                            description=_task_desc or None,
+                            status='in_progress',
+                            source='agent',
+                            created_by_agent_id=_target_ag.id if _target_ag else None,
+                            delegated_to_username=_ag_name,
+                        )
+                        session.add(_step_task)
+                        session.commit()
+                        _step_task_id = _step_task.id
                 except Exception as _tc_err:
                     logger.debug("[COORD] task create skipped: %s", _tc_err)
                     try:
@@ -5438,15 +5459,30 @@ class AnchorEngine:
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=85,
+                        timeout=120,
                     )
-                except (asyncio.TimeoutError, Exception) as _ae:
-                    logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
-                    # Помечаем задачу как невыполненную
+                except asyncio.TimeoutError:
+                    _ae_msg = f'Таймаут 120с — агент не успел выполнить задачу'
+                    logger.warning("[COORD] agent %s timeout after 120s", _ag_name)
                     if _step_task_id:
                         try:
                             from sqlalchemy import text as _sql_t_ae
                             session.execute(_sql_t_ae(
+                                "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
+                            ), {'n': _ae_msg, 'id': _step_task_id})
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+                    continue
+                except Exception as _ae:
+                    logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
+                    if _step_task_id:
+                        try:
+                            from sqlalchemy import text as _sql_t_ae2
+                            session.execute(_sql_t_ae2(
                                 "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
                             ), {'n': f'Ошибка выполнения: {str(_ae)[:200]}', 'id': _step_task_id})
                             session.commit()
@@ -5455,7 +5491,6 @@ class AnchorEngine:
                                 session.rollback()
                             except Exception:
                                 pass
-                    # молча пропускаем шаг — не беспокоим пользователя техническими ошибками
                     continue
 
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
@@ -5468,8 +5503,39 @@ class AnchorEngine:
                 _DONE_FB_SET = {"Задачу выполнил.", "Задачу выполнила."}
                 _result_stripped = (_result or '').strip()
                 if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
+                    # ── RETRY: если пустой результат и не было retry — пробуем ещё раз с уточнённым промптом ──
+                    _retry_key = f'{_ag_name}:{_step_i}'
+                    if _result_stripped not in _DONE_FB_SET and not getattr(self, '_retry_done', {}).get(_retry_key):
+                        if not hasattr(self, '_retry_done'):
+                            self._retry_done = {}
+                        self._retry_done[_retry_key] = True
+                        _retry_prompt = (
+                            f"{_agent_prompt}\n\n"
+                            f"⚠️ ПЕРВАЯ ПОПЫТКА вернула пустой результат. "
+                            f"Используй свои инструменты (run_agent_action, web_search, check_emails и т.д.) "
+                            f"для получения КОНКРЕТНЫХ данных. Если задача невыполнима — объясни почему."
+                        )
+                        try:
+                            _raw_retry = await asyncio.wait_for(
+                                _exec_agent_for_director(_ag_data, _retry_prompt, user.telegram_id),
+                                timeout=120,
+                            )
+                            _result_retry = _raw_retry[0] if isinstance(_raw_retry, (tuple, list)) else _raw_retry
+                            _retry_tools = list(_raw_retry[1]) if isinstance(_raw_retry, (tuple, list)) and len(_raw_retry) > 1 else []
+                            _retry_stripped = (_result_retry or '').strip()
+                            if _retry_stripped and len(_retry_stripped) >= 5 and _retry_stripped not in _DONE_FB_SET:
+                                # Retry успешен — используем новый результат
+                                _result = _result_retry
+                                _result_stripped = _retry_stripped
+                                _step_tools.extend(_retry_tools)
+                                _all_tools.extend(_retry_tools)
+                                logger.info(f"[COORD] agent {_ag_name}: retry succeeded ({len(_retry_stripped)} chars)")
+                        except Exception as _retry_err:
+                            logger.debug(f"[COORD] agent {_ag_name}: retry failed: {_retry_err}")
+
+                if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
                     if _result_stripped not in _DONE_FB_SET:
-                        # Реально пустой результат: отменяем задачу и уведомляем пользователя
+                        # Реально пустой результат после retry: отменяем задачу
                         if _step_task_id:
                             try:
                                 from sqlalchemy import text as _sql_t_empty
