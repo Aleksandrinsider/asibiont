@@ -4611,6 +4611,10 @@ class AnchorEngine:
                 )
             _sm_plan_str = '\n'.join(_sm_plan_lines) if _sm_plan_lines else '(цели не определены)'
 
+            # Количество шагов которые просим у LLM-планировщика: min(1 per goal, agents).
+            # Если агентов больше чем целей — добавляем дополнительные шаги для отстающих целей.
+            _n_plan_steps = max(len(_goals[:5]), min(_n_agents, 8))
+
             # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
             _degraded_agents_coord = set()
@@ -4697,14 +4701,17 @@ class AnchorEngine:
                 "ВАЖНО: покрой каждую активную цель хотя бы одним конкретным шагом. "
                 "НЕ отправляй письма адресатам из списка уже_написали.\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
-                f"Верни ТОЛЬКО JSON-массив (по одному объекту на КАЖДУЮ активную цель):\n"
+                f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
+                f"Если агентов больше чем целей — добавь дополнительные шаги для самой отстающей цели: другой агент или другой инструмент.\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл. с опорой на интеграции агента", "tool": "инструмент", "goal": "точное_название"}]'
             )
 
             try:
+                # Больше токенов когда шагов больше (180 на шаг, минимум 500, максимум 1200)
+                _plan_max_tokens = min(max(500, _n_plan_steps * 180), 1200)
                 _plan_json = await asyncio.wait_for(
-                    _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=500),
-                    timeout=25,
+                    _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=_plan_max_tokens),
+                    timeout=30,
                 )
             except Exception as _pe:
                 logger.warning("[COORD] plan generation failed: %s", _pe)
@@ -4971,7 +4978,9 @@ class AnchorEngine:
             _results_summary = []
             _all_tools = []
             _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
-            _MAX_DYNAMIC_STEPS = 6
+            # Масштабируем лимит шагов с размером команды: больше агентов → больше действий за цикл.
+            # Формула: max(6, min(agents + goals, 12)) — но не более 12 чтобы цикл не затягивался.
+            _MAX_DYNAMIC_STEPS = max(6, min(len(real_agents) + len(_goals), 12))
 
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора

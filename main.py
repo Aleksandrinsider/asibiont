@@ -8274,8 +8274,30 @@ async def api_activities_latest_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+def _aal_to_dict(a) -> dict:
+    """Convert AgentActivityLog ORM object to SSE-safe dict with all required fields."""
+    return {
+        'id': a.id,
+        'activity_type': a.activity_type,
+        'title': a.title,
+        'content': a.content,
+        'result': a.result,
+        'status': a.status,
+        'target': a.target,
+        'ref_id': a.ref_id,
+        'created_at': (a.created_at.isoformat() + 'Z') if a.created_at else None,
+        'updated_at': (a.updated_at.isoformat() + 'Z') if getattr(a, 'updated_at', None) else None,
+    }
+
+
 async def sse_activities_handler(request):
-    """Server-Sent Events stream: push new agent activities in real time."""
+    """Server-Sent Events stream: push new and updated agent activities in real time.
+
+    Sends two types of events:
+    - 'activities': new records (id > last_id)
+    - 'updated_activities': existing records updated since last poll
+      (catches in_progress → completed transitions for autopilot dispatches)
+    """
     try:
         session = await get_session(request)
         uid = session.get('user_id')
@@ -8299,27 +8321,38 @@ async def sse_activities_handler(request):
         poll_interval = 5   # seconds between DB polls
         hb_interval = 30    # seconds between heartbeats
         last_hb = asyncio.get_running_loop().time()
+        # Track when we last polled for updates so we catch in_progress→completed transitions
+        last_update_check = datetime.utcnow()
 
         while True:
             try:
                 with Session() as sdb:
+                    # ── New inserts ──
                     new_acts = sdb.query(AgentActivityLog).filter(
                         AgentActivityLog.user_id == uid,
                         AgentActivityLog.id > last_id,
                         AgentActivityLog.activity_type.in_(_TIMELINE_VISIBLE_TYPES),
                     ).order_by(AgentActivityLog.id.asc()).limit(20).all()
 
-                    if new_acts:
-                        last_id = new_acts[-1].id
-                        payload = json.dumps({'activities': [
-                            {
-                                'id': a.id,
-                                'activity_type': a.activity_type,
-                                'title': a.title,
-                                'content': a.content,
-                                'created_at': (a.created_at.isoformat() + 'Z') if a.created_at else None,
-                            } for a in new_acts
-                        ]})
+                    # ── Updates to existing records since last check ──
+                    # Specifically catches autopilot in_progress → completed transitions
+                    now_check = datetime.utcnow()
+                    updated_acts = sdb.query(AgentActivityLog).filter(
+                        AgentActivityLog.user_id == uid,
+                        AgentActivityLog.id <= last_id,  # existing records only
+                        AgentActivityLog.activity_type.in_(_TIMELINE_VISIBLE_TYPES),
+                        AgentActivityLog.updated_at > last_update_check,
+                    ).order_by(AgentActivityLog.updated_at.asc()).limit(20).all()
+                    last_update_check = now_check
+
+                    has_data = bool(new_acts or updated_acts)
+                    if has_data:
+                        if new_acts:
+                            last_id = new_acts[-1].id
+                        payload = json.dumps({
+                            'activities': [_aal_to_dict(a) for a in new_acts],
+                            'updated_activities': [_aal_to_dict(a) for a in updated_acts],
+                        })
                         await response.write(f'data: {payload}\n\n'.encode())
                         last_hb = asyncio.get_running_loop().time()
                     elif asyncio.get_running_loop().time() - last_hb >= hb_interval:
@@ -8468,7 +8501,7 @@ async def api_reports_handler(request):
                 activities = session_db.query(AgentActivityLog).filter(
                     AgentActivityLog.user_id == user.id,
                     AgentActivityLog.activity_type.in_(_TIMELINE_VISIBLE_TYPES),
-                ).order_by(AgentActivityLog.created_at.desc()).limit(100).all()
+                ).order_by(AgentActivityLog.created_at.desc()).limit(300).all()
                 for a in activities:
                     agent_activities_data.append({
                         'id': a.id,

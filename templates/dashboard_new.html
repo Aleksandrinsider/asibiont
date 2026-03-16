@@ -6966,9 +6966,20 @@ except Exception as e:
                     const chev = header.querySelector('.tl-chev');
                     const collapsed = body.style.maxHeight === '0px';
                     if (collapsed) {
+                        // Set to measured height first, then after animation switch to 'none'
+                        // so content is never clipped if text wraps differently at final size
                         body.style.maxHeight = body.scrollHeight + 200 + 'px';
                         if (chev) chev.style.transform = 'rotate(0deg)';
+                        body.addEventListener('transitionend', function _expand() {
+                            body.removeEventListener('transitionend', _expand);
+                            if (body.style.maxHeight !== '0px') {
+                                body.style.maxHeight = 'none';
+                                body.style.overflow = 'visible';
+                            }
+                        }, { once: true });
                     } else {
+                        // Before collapsing: restore overflow:hidden and lock to current height
+                        body.style.overflow = 'hidden';
                         body.style.maxHeight = body.scrollHeight + 'px';
                         requestAnimationFrame(() => { body.style.maxHeight = '0px'; });
                         if (chev) chev.style.transform = 'rotate(-90deg)';
@@ -6986,7 +6997,7 @@ except Exception as e:
             const _HIDDEN_ACT_TYPES = new Set([]);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
-                // Hide failed/empty autopilot dispatches — no useful info for user
+                // Hide failed/empty/in_progress autopilot dispatches — no useful info for user
                 if (a.activity_type === 'goal_autopilot_dispatch' && ['failed', 'empty_result', 'in_progress'].includes(a.status)) return false;
                 return true;
             }).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
@@ -7011,6 +7022,15 @@ except Exception as e:
                 }
                 tl.appendChild(createTimelineItem(a, false));
             });
+            // ── Fix visual truncation after re-render ──
+            // If the parent agentDetails container has a fixed pixel max-height (mid-animation
+            // or after collapse/expand), update it to accommodate the new content height.
+            // This prevents the timeline from being cut off after SSE updates.
+            const agentDetailsEl = tl.parentElement;
+            if (agentDetailsEl && agentDetailsEl.style.maxHeight && agentDetailsEl.style.maxHeight !== '0px' && agentDetailsEl.style.maxHeight !== 'none') {
+                // Container is open but has a pixel constraint — refresh to full scroll height
+                agentDetailsEl.style.maxHeight = agentDetailsEl.scrollHeight + 'px';
+            }
         }
 
         function startActivityPolling() {
@@ -7023,13 +7043,39 @@ except Exception as e:
                     try {
                         const data = JSON.parse(e.data);
                         const newActs = data.activities || [];
-                        if (!newActs.length) return;
-                        if (newActs.length) window._activityLastId = Math.max(...newActs.map(a => a.id || 0));
+                        const updatedActs = data.updated_activities || [];
+
+                        if (!newActs.length && !updatedActs.length) return;
+
+                        if (newActs.length) {
+                            window._activityLastId = Math.max(...newActs.map(a => a.id || 0));
+                        }
+
+                        let needRender = false;
+
+                        // ── Merge updated activities into _allActivities ──
+                        // Catches in_progress → completed transitions for autopilot dispatches
+                        if (updatedActs.length) {
+                            const currentAll = window._allActivities || [];
+                            updatedActs.forEach(upd => {
+                                const idx = currentAll.findIndex(a => a.id === upd.id);
+                                if (idx >= 0) {
+                                    currentAll[idx] = upd;
+                                    needRender = true;
+                                }
+                            });
+                        }
+
+                        // ── Add truly new activities ──
                         const newUniq = newActs.filter(a => !document.querySelector('[data-act-id="' + a.id + '"]'));
                         if (newUniq.length) {
                             const currentAll = window._allActivities || [];
                             window._allActivities = [...newUniq, ...currentAll];
-                            renderTimeline(window._allActivities);
+                            needRender = true;
+                        }
+
+                        if (needRender) {
+                            renderTimeline(window._allActivities || []);
                         }
                     } catch(ex) { /* non-critical */ }
                 };

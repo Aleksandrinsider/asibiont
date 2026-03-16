@@ -511,6 +511,24 @@ def _migrate_marketplace(session, inspector):
                 logger.debug(f"[MIGRATION] run_interval_minutes add skipped: {e}")
 
 
+def _migrate_activity_log_updated_at_index(session, inspector):
+    """Добавляет индекс на agent_activity_log.updated_at для эффективного SSE-отслеживания обновлений."""
+    if not inspector.has_table('agent_activity_log'):
+        return
+    try:
+        existing_indexes = {idx['name'] for idx in inspector.get_indexes('agent_activity_log')}
+        if 'ix_agent_activity_updated_at' not in existing_indexes:
+            session.execute(text(
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_agent_activity_updated_at "
+                "ON agent_activity_log(user_id, updated_at)"
+            ))
+            session.commit()
+            logger.info("[MIGRATION] Created index ix_agent_activity_updated_at")
+    except Exception as e:
+        session.rollback()
+        logger.debug(f"[MIGRATION] ix_agent_activity_updated_at skipped: {e}")
+
+
 def _migrate_activity_log(session, inspector):
     """Создаёт таблицу agent_activity_log (идемпотентно)."""
     from models import Base, engine as _engine
@@ -673,6 +691,7 @@ def run_migrations():
         _migrate_task_agent_source(session, inspector)
         _migrate_fix_agent_python_code(session)
         _migrate_payment_id_unique(session, inspector)
+        _migrate_activity_log_updated_at_index(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")
