@@ -5526,9 +5526,10 @@ class AnchorEngine:
                     if _step_task_id:
                         try:
                             from sqlalchemy import text as _sql_t_ae2
+                            _ae_detail = str(_ae)[:200].strip() or type(_ae).__name__
                             session.execute(_sql_t_ae2(
                                 "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
-                            ), {'n': f'Ошибка выполнения: {str(_ae)[:200]}', 'id': _step_task_id})
+                            ), {'n': f'Ошибка выполнения: {_ae_detail}', 'id': _step_task_id})
                             session.commit()
                         except Exception:
                             try:

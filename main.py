@@ -6846,6 +6846,16 @@ async def api_tasks_handler(request):
                     # Task delegated BY me to someone else
                     title = f"{title} - Делегировано @{delegated_username}"
 
+            # Resolve goal name if goal_id is set
+            _goal_name = None
+            if task.goal_id:
+                try:
+                    _goal = session_db.query(Goal).filter_by(id=task.goal_id).first()
+                    if _goal:
+                        _goal_name = _goal.title
+                except Exception:
+                    pass
+
             task_data = {
                 'id': task.id,
                 'title': title,
@@ -6866,6 +6876,8 @@ async def api_tasks_handler(request):
                 'source': getattr(task, 'source', 'manual') or 'manual',
                 'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
+                'goal_id': task.goal_id,
+                'goal_name': _goal_name,
             }
             
             # Определяем delegated_by и delegated_by_username
@@ -7042,6 +7054,14 @@ async def api_interactions_handler(request):
             if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 60:
                 if any(n in _check_text for n in _NOISE_PATTERNS):
                     continue
+            # Filter out coordinator internal messages from chat — these are autopilot plumbing
+            if i.message_type == 'proactive' and _ct.startswith('{'):
+                try:
+                    _jp2 = __import__('json').loads(_ct)
+                    if isinstance(_jp2, dict) and _jp2.get('__anchor_type') in ('coordinator_plan',):
+                        continue
+                except Exception:
+                    pass
             # Time-window dedup: skip if exact same content appeared in last 5 minutes
             # User messages are NEVER deduplicated (always show what the user wrote)
             if i.message_type != 'user':
