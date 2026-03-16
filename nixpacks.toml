@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["stdenv.cc.cc.lib"]
+aptPkgs = ["libstdc++6"]
 
 [start]
 cmd = "/opt/venv/bin/python main.py"
