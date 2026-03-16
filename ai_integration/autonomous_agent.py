@@ -4745,7 +4745,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             _t_b = _t_b.strip()
                             if _t_b:
                                 _ban_counts[_t_b] = _ban_counts.get(_t_b, 0) + 1
-                _runtime_banned = {t for t, n in _ban_counts.items() if n >= 2}
+                _runtime_banned = {t for t, n in _ban_counts.items() if n >= 3}
                 # Не баним core-инструменты (прогресс, задачи) даже при повторах
                 _runtime_banned -= {'update_goal_progress', 'add_task', 'complete_task',
                                      'edit_task', 'delegate_task'}
