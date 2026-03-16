@@ -425,7 +425,8 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                                has_imap: bool, has_github: bool, has_rss: bool,
                                has_alpha: bool, has_script: bool, has_content: bool,
                                has_news: bool, has_notion: bool, has_slack: bool,
-                               has_sheets: bool, has_stripe: bool, used_tools: set) -> str:
+                               has_sheets: bool, has_stripe: bool, used_tools: set,
+                               goal_type: str = 'general') -> str:
     """Универсальный фрейм рассуждения — НЕ keyword-сценарии.
     Агент сам думает: что значит прогресс по ЭТОЙ цели? какие инструменты дают ПРЯМОЙ результат?
     Работает для любой цели без перебора шаблонов.
@@ -496,14 +497,21 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_stripe:
         avail.append("  💳 Stripe: run_agent_action(action='get_charges') ← реальные данные платежей")
     # Всегда доступно
-    avail.extend([
+    # Добавляем системные инструменты с учётом типа цели — не засориваем аналитические цели email-outreach
+    _sys_always = [
+        "  🔍 research_and_plan('[тема]') ← анализ + конкретный план из реальных данных",
+        "  ↗️ delegate_task / DELEGATE[Имя] ← передать конкретному агенту с нужной интеграцией",
+        "  🤝 start_delegation_campaign ← делегировать по специализации агентов",
+    ]
+    _sys_outreach_only = [
         "  🎯 find_relevant_contacts_for_task ← люди внутри платформы по навыкам/интересам",
         "  💬 find_and_message_relevant_users ← найти + написать за 1 шаг",
-        "  🔍 research_and_plan('[тема]') ← анализ + конкретный план из реальных данных",
-        "  🤝 start_delegation_campaign ← делегировать поиск агентам по их специализации",
         "  📨 start_email_campaign + send_outreach_email ← персональный охват с follow-up",
-        "  ↗️ delegate_task / DELEGATE[Имя] ← передать конкретному агенту с нужной интеграцией",
-    ])
+    ]
+    avail.extend(_sys_always)
+    if goal_type not in ('research', 'dev'):
+        # Для outreach/content/general — добавляем инструменты поиска и рассылки
+        avail.extend(_sys_outreach_only)
 
     return (
         "\n━━━ ДУМАЙ О ЦЕЛИ, А НЕ ОБ АКТИВНОСТИ ━━━\n"
@@ -578,7 +586,28 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_stripe = any(w in c for c in _caps_lower for w in ('stripe', 'юкасс', 'yookassa', 'платеж'))
 
     # ── Блок: что подключено у агента, что доступно для целей ──
-    _goals_text_all = ' '.join(g.get('title', '') for g in goals_summary).lower()
+    _goals_text_all = ' '.join(
+        g.get('title', '') + ' ' + (g.get('description', '') or '') for g in goals_summary
+    ).lower()
+
+    # ── Тип цели: research / outreach / content / dev / general ──
+    # Определяем чтобы показывать ТОЛЬКО релевантные инструменты, не засорять промпт
+    _RESEARCH_KW = ('анализ', 'исследован', 'мониторинг', 'обзор', 'рынок', 'нефт', 'газ',
+                    'биржа', 'котировк', 'тренды', 'данные', 'аналитик', 'прогноз',
+                    'статистик', 'oil', 'stock', 'commodity', 'forex', 'сырьё', 'металл', 'отчёт')
+    _OUTREACH_KW = ('найти клиент', 'привлеч', 'подписчик', 'пользовател',
+                    'набор', 'аудитор', 'лид', 'lead', 'beta', 'бета', 'тестировщик', 'рекрутинг')
+    _CONTENT_KW  = ('контент', 'smm', 'reels', 'видео', 'медиаплан')
+    _DEV_KW      = ('разработ', 'программ', 'github', 'backend', 'frontend', 'developer', 'деплой')
+    _gtype_scores = {
+        'research': sum(1 for w in _RESEARCH_KW if w in _goals_text_all),
+        'outreach': sum(1 for w in _OUTREACH_KW if w in _goals_text_all),
+        'content':  sum(1 for w in _CONTENT_KW  if w in _goals_text_all),
+        'dev':      sum(1 for w in _DEV_KW      if w in _goals_text_all),
+    }
+    _best_gtype = max(_gtype_scores.items(), key=lambda x: x[1])
+    _goal_type = _best_gtype[0] if _best_gtype[1] > 0 else 'general'
+
     _intg_connected = []
     _intg_missing = []
 
@@ -630,7 +659,24 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _intg_missing:
             _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
             _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
-        _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
+        # Goal-type-aware первый шаг
+        if _goal_type == 'research' and _has_alpha:
+            _intg_block += (
+                '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_price", symbol="BRENT") '
+                '— получи реальные котировки, затем обработай и опубликуй итог.\n'
+            )
+        elif _goal_type == 'research' and _has_news:
+            _intg_block += (
+                '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_news", query="[тема цели]") '
+                '— получи свежие данные, затем сформируй аналитический вывод.\n'
+            )
+        elif _goal_type == 'research' and _has_rss:
+            _intg_block += (
+                '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_latest") '
+                '— получи данные из RSS-ленты агента, затем извлеки суть.\n'
+            )
+        else:
+            _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
         _intg_block += (
             '→ Если инструмент вернул "не настроен / нет токена / нет ключа / ошибка авторизации" — '
             'ОБЯЗАТЕЛЬНО сообщи пользователю: (1) что именно не смог сделать, '
@@ -792,10 +838,49 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         return f"  {base}"
 
     _imap_note = '✅ IMAP-ключи есть' if _has_imap else '⛔ IMAP нет (читать входящие может только коллега с Gmail)'
-    _script_note = '✅ python_code есть' if (_has_script or _has_rss or _has_github) else '⚠️ нужен python_code'
+    _script_note = '✅ python_code есть' if (_has_script or _has_rss or _has_github or _has_alpha or _has_news) else '⚠️ нужен python_code'
 
-    _catalog = (
-        "ПОЛНЫЙ КАТАЛОГ ИНСТРУМЕНТОВ — сам выбери лучшую цепочку под цель и свои интеграции:\n"
+    # ── Секции каталога — собираем отдельно, порядок зависит от типа цели ──
+    _sec_integrations = (
+        "\n⚙️ Интеграции агента / run_agent_action:\n"
+        + f"  {_ti('run_agent_action')} [{_script_note}] — вызывает API или Python-скрипт агента\n"
+        + ("  Финансы/биржа: action='get_price' symbol='BRENT'|'WTI'|'GAZP.MCX'|'LKOH.MCX'\n"
+           "                 action='get_news' — рыночные новости из Alpha Vantage\n"
+           if _has_alpha else '')
+        + ("  Новости:       action='get_news' query='oil market 2026' — NewsAPI 100+ источников\n"
+           if _has_news and not _has_alpha else '')
+        + ("  RSS:           action='get_latest' — свежие посты из RSS-ленты агента\n"
+           if _has_rss else '')
+        + ("  GitHub:        action='search_users' query='...' — поиск разработчиков\n"
+           "                action='find_contributors' repo='org/repo'\n"
+           if _has_github else '')
+        + ("  Notion:        action='create_page' / 'update_page'\n" if _has_notion else '')
+        + ("  Sheets:        action='update_sheet' / 'append_row'\n" if _has_sheets else '')
+        + ("  Slack:         action='post_message' channel='#X'\n" if _has_slack else '')
+        + ("  Stripe:        action='get_charges' / 'get_revenue'\n" if _has_stripe else '')
+        + ("  (Нет API-ключей агента — run_agent_action недоступен)\n"
+           if not any([_has_alpha, _has_news, _has_rss, _has_github, _has_notion,
+                       _has_sheets, _has_slack, _has_stripe, _has_script]) else '')
+    )
+    _sec_research = (
+        "\n🔍 Поиск и исследования (LLM + web):\n"
+        + _td('web_search') + '\n'
+        + _td('research_topic') + '\n'
+        + _td('quick_topic_search') + '\n'
+        + _td('get_news_trends') + '\n'
+        + _td('analyze_situation_and_suggest_tasks') + '\n'
+        + _td('research_and_plan') + '\n'
+    )
+    _sec_content = (
+        "\n📢 Публикация результатов:\n"
+        + _td('create_post') + '\n'
+        + _td('publish_to_telegram') + '\n'
+        + _td('publish_to_discord') + '\n'
+        + _td('generate_image') + '\n'
+        + _td('generate_marketing_content') + '\n'
+        + _td('start_content_campaign') + '\n'
+    )
+    _sec_email = (
         "\n📧 Email / Outreach:\n"
         + _td('send_outreach_email') + '\n'
         + _td('start_email_campaign') + '\n'
@@ -805,41 +890,69 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + _td('negotiate_by_email') + '\n'
         + _td('save_email_contact') + '\n'
         + _td('list_email_contacts') + '\n'
-        "\n🔍 Поиск и исследования:\n"
-        + _td('web_search') + '\n'
-        + _td('research_topic') + '\n'
-        + _td('quick_topic_search') + '\n'
         + _td('find_relevant_contacts_for_task') + '\n'
         + _td('find_partners') + '\n'
-        + _td('get_news_trends') + '\n'
-        + _td('analyze_situation_and_suggest_tasks') + '\n'
-        + _td('research_and_plan') + '\n'
-        "\n📢 Контент и публикации:\n"
-        + _td('create_post') + '\n'
-        + _td('publish_to_telegram') + '\n'
-        + _td('publish_to_discord') + '\n'
-        + _td('generate_image') + '\n'
-        + _td('generate_marketing_content') + '\n'
-        + _td('start_content_campaign') + '\n'
         + _td('find_and_message_relevant_users') + '\n'
+    )
+    _sec_tasks = (
+        "\n🎯 Задачи и цели:\n"
+        + _td('add_task') + '\n'
+        + _td('update_goal_progress') + '\n'
+        + _td('schedule_background_task') + '\n'
+        + _td('set_reminder') + '\n'
+    )
+    _sec_delegate = (
         "\n🤝 Делегирование:\n"
         + _td('delegate_task') + '\n'
         + _td('start_delegation_campaign') + '\n'
         + _td('send_message_to_user') + '\n'
-        "\n🎯 Задачи, цели, планирование:\n"
-        + _td('add_task') + '\n'
-        + _td('update_goal_progress') + '\n'
-        + _td('schedule_background_task') + '\n'
-        + _td('set_contact_alert') + '\n'
-        + _td('set_reminder') + '\n'
-        + _td('list_tasks') + '\n'
-        "\n⚙️ Внешние интеграции / кастомный скрипт:\n"
-        + f"  {_ti('run_agent_action')} [{_script_note}] — выполняет твой Python-скрипт\n"
-        + (f"  Примеры action=: get_latest (RSS), search_users (GitHub), post_message (Slack), "
-           f"find_contributors, get_stats, create_listing, get_price...\n"
-           if (_has_script or _has_rss or _has_github) else
-           "  (API-ключи или python_code агента не настроены — инструмент недоступен)\n")
     )
+
+    # ── Порядок секций зависит от типа цели ──
+    if _goal_type == 'research':
+        # Research/analytics: сначала реальные данные (интеграции), потом LLM-поиск,
+        # потом публикация итогов. Email-outreach — только если IMAP есть.
+        _catalog = (
+            "ИНСТРУМЕНТЫ (порядок = приоритет для АНАЛИТИЧЕСКОЙ цели):\n"
+            + _sec_integrations
+            + _sec_research
+            + _sec_content
+            + _sec_tasks
+            + _sec_delegate
+            + (_sec_email if _has_imap else
+               "\n📧 Email не настроен — используй Telegram/Discord для публикации аналитики.\n")
+        )
+    elif _goal_type == 'dev':
+        _catalog = (
+            "ИНСТРУМЕНТЫ (порядок = приоритет для задачи с разработчиками):\n"
+            + _sec_integrations
+            + _sec_research
+            + _sec_email
+            + _sec_tasks
+            + _sec_delegate
+            + _sec_content
+        )
+    elif _goal_type == 'content':
+        _catalog = (
+            "ИНСТРУМЕНТЫ (порядок = приоритет для контентной цели):\n"
+            + _sec_content
+            + _sec_integrations
+            + _sec_research
+            + _sec_tasks
+            + _sec_delegate
+            + _sec_email
+        )
+    else:
+        # outreach / general — стандарт: email первым
+        _catalog = (
+            "ИНСТРУМЕНТЫ (выбери лучшую цепочку под цель):\n"
+            + _sec_email
+            + _sec_research
+            + _sec_integrations
+            + _sec_content
+            + _sec_delegate
+            + _sec_tasks
+        )
 
     # ── Матрица делегирования команды ──
     _team_block = ''
@@ -871,13 +984,19 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + '\n'.join(_mem_lines) + '\n'
         )
         if _force_analyse:
-            # Предлагаем конкретные альтернативы из неиспользованных
-            _alts = [t for t in [
+            # Предлагаем конкретные альтернативы с учётом типа цели
+            _ALTS_RESEARCH = [
+                'run_agent_action', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
+                'get_news_trends', 'create_post', 'publish_to_telegram', 'schedule_background_task',
+            ]
+            _ALTS_OUTREACH = [
                 'find_and_message_relevant_users', 'send_outreach_email', 'negotiate_by_email',
                 'start_content_campaign', 'generate_marketing_content', 'find_partners',
                 'start_delegation_campaign', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
-                'schedule_background_task', 'get_news_trends', 'find_relevant_contacts_for_task',
-            ] if t not in _used_tools][:5]
+                'get_news_trends', 'find_relevant_contacts_for_task',
+            ]
+            _alts_pool = _ALTS_RESEARCH if _goal_type in ('research', 'dev') else _ALTS_OUTREACH
+            _alts = [t for t in _alts_pool if t not in _used_tools][:5]
             _alts_str = ', '.join(_alts) if _alts else 'research_and_plan, analyze_situation_and_suggest_tasks'
             _memory_block += (
                 "🔴 ПЕТЛЯ ОБНАРУЖЕНА: ты повторяешь одни и те же инструменты без прогресса!\n"
@@ -903,6 +1022,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _has_alpha, _has_script, _has_content,
         _has_news, _has_notion, _has_slack,
         _has_sheets, _has_stripe, _used_tools,
+        goal_type=_goal_type,
     )
 
     return (
