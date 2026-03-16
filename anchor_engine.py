@@ -89,8 +89,8 @@ MAX_CHANNEL_PER_DAY = 1
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
 MORNING_START_HOUR = PROACTIVE_SEND_START_HOUR   # Общая настройка: 10
 SCAN_INTERVAL_MINUTES = 5
-AUTOPILOT_DEEP_NIGHT_START = 2  # Глубокая ночь: автопилот не работает даже для включённых (02:00-06:00)
-AUTOPILOT_DEEP_NIGHT_END = 6
+AUTOPILOT_DEEP_NIGHT_START = 0  # Ночная блокировка отключена (автопилот работает 24/7)
+AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
