@@ -11797,8 +11797,16 @@ def get_email_campaign_status(
             )
             if replied > 0:
                 recent_replies = [e for e in emails if e.status == 'replied' and e.reply_text]
-                for r in recent_replies[:3]:
-                    block += f"\n  → {r.recipient_email}: «{r.reply_text[:80]}...»"
+                for r in recent_replies[:5]:
+                    _rt_display = (r.reply_text or '').strip()
+                    _rt_name = r.recipient_name or r.recipient_email
+                    block += f"\n\n  📩 Ответ от {_rt_name} ({r.recipient_email}):"
+                    if r.reply_at:
+                        import pytz as _ptz_r
+                        _rtz = _ptz_r.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+                        _rat = r.reply_at.replace(tzinfo=__import__('datetime').timezone.utc).astimezone(_rtz)
+                        block += f" {_rat.strftime('%d.%m.%Y %H:%M')}"
+                    block += f"\n     {_rt_display}"
             result.append(block)
 
         return "\n\n".join(result)
@@ -12658,15 +12666,15 @@ async def check_emails(
                     _em_in_blk = _re_snip.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _blk, _re_snip.IGNORECASE)
                     _preview_m = _re_snip.search(r'[Пп]ревью:\s*(.+)', _blk, _re_snip.DOTALL)
                     if _em_in_blk and _preview_m:
-                        _snip_raw = _preview_m.group(1).strip()[:500]
+                        _snip_raw = _preview_m.group(1).strip()[:3000]
                         # Очищаем MIME boundary/header артефакты (защита от старых raw-ответов IMAP)
                         _snip_raw = _re_snip.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _snip_raw)
                         _snip_raw = _re_snip.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _snip_raw)
-                        _snip_text = _snip_raw.strip()[:500]
+                        _snip_text = _snip_raw.strip()[:3000]
                         if not _snip_text:
                             continue
                         for _em_raw in _em_in_blk:
-                            _reply_snippets[_em_raw.lower()] = _snip_text
+                            _reply_snippets[_em_raw.lower()] = _snip_text  # до 3000 символов
             except Exception:
                 pass
 
@@ -12688,23 +12696,24 @@ async def check_emails(
                     ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened'])).first()
                     if _eo:
                         _eo.status = 'replied'
-                        if _rep_snippet and not _eo.reply_text:
+                        # Обновляем reply_text если новый текст лучше старого (нет старого или старый короче)
+                        if _rep_snippet and (not _eo.reply_text or len(_rep_snippet) > len(_eo.reply_text or '')):
                             _eo.reply_text = _rep_snippet
                         if not _eo.reply_at:
                             _eo.reply_at = _now_ce
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status=replied, reply_text saved: {_rep_em}')
-                    # Если контакт уже replied — обновить reply_text если раньше был пустым
+                    # Если контакт уже replied — обновить reply_text если новый длиннее
                     elif _rep_snippet:
                         _eo_any = session.query(_EO_ce2).filter_by(
                             user_id=user.id, recipient_email=_rep_em,
                         ).filter(_EO_ce2.status == 'replied').first()
-                        if _eo_any and not _eo_any.reply_text:
+                        if _eo_any and (not _eo_any.reply_text or len(_rep_snippet) > len(_eo_any.reply_text or '')):
                             _eo_any.reply_text = _rep_snippet
                             if not _eo_any.reply_at:
                                 _eo_any.reply_at = _now_ce
                             session.commit()
-                            logger.info(f'[CHECK_EMAILS] Saved reply_text for already-replied: {_rep_em}')
+                            logger.info(f'[CHECK_EMAILS] Saved/updated reply_text for replied: {_rep_em}')
                 except Exception as _e_upd:
                     logger.debug(f'[CHECK_EMAILS] update replied status failed: {_e_upd}')
                     try:
@@ -12784,18 +12793,66 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             results = []
             skipped_known_g = []
             import re as _re_gm
+            import base64 as _b64_gm
+
+            def _gmail_extract_body(payload: dict) -> str:
+                """Рекурсивно извлекает text/plain (или text/html) из Gmail payload."""
+                import re as _re_body
+                mime = payload.get('mimeType', '')
+                parts = payload.get('parts', [])
+                body_data = payload.get('body', {}).get('data', '')
+                if mime == 'text/plain' and body_data:
+                    try:
+                        return _b64_gm.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace').strip()
+                    except Exception:
+                        pass
+                if mime == 'text/html' and body_data:
+                    try:
+                        raw = _b64_gm.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace')
+                        return _re_body.sub(r'<[^>]+>', '', raw).strip()
+                    except Exception:
+                        pass
+                # Рекурсивно искать text/plain среди parts
+                for part in parts:
+                    if part.get('mimeType') == 'text/plain':
+                        _d = part.get('body', {}).get('data', '')
+                        if _d:
+                            try:
+                                return _b64_gm.urlsafe_b64decode(_d + '==').decode('utf-8', errors='replace').strip()
+                            except Exception:
+                                pass
+                # Fallback: text/html
+                for part in parts:
+                    if part.get('mimeType') == 'text/html':
+                        _d = part.get('body', {}).get('data', '')
+                        if _d:
+                            try:
+                                raw = _b64_gm.urlsafe_b64decode(_d + '==').decode('utf-8', errors='replace')
+                                return _re_body.sub(r'<[^>]+>', '', raw).strip()
+                            except Exception:
+                                pass
+                    # multipart вложенные
+                    if part.get('parts'):
+                        _sub = _gmail_extract_body(part)
+                        if _sub:
+                            return _sub
+                return ''
+
             for msg_ref in msgs[:limit]:
+                # format=full чтобы получить полный текст письма
                 msg_resp = await _h.get(
                     f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
                     headers={'Authorization': f'Bearer {tok}'},
-                    params={'format': 'metadata', 'metadataHeaders': 'From,Subject,Date'},
-                    timeout=aiohttp.ClientTimeout(total=10),
+                    params={'format': 'full'},
+                    timeout=aiohttp.ClientTimeout(total=15),
                 )
                 if msg_resp.status != 200:
                     continue
                 msg_data = await msg_resp.json()
                 headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
-                snippet = msg_data.get('snippet', '')[:200]
+                # Извлекаем полный текст тела письма
+                body_text = _gmail_extract_body(msg_data.get('payload', {}))
+                snippet = body_text[:3000] if body_text else msg_data.get('snippet', '')[:200]
                 from_hdr = headers.get('From', '?')
                 # Фильтруем письма от собственного аккаунта (копии исходящих)
                 _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
@@ -12950,11 +13007,10 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                             _raw_s = raw_full.decode('utf-8', errors='replace')
                             _raw_s = _re_mime.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _raw_s)
                             _raw_s = _re_mime.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _raw_s)
-                            snippet = _raw_s.strip()[:400]
+                            snippet = _raw_s.strip()[:3000]
                         except Exception:
                             snippet = ''
-                # Обрезаем до первых 200 символов для компактного отображения
-                snippet = snippet[:200]
+                # Храним полный текст (до 3000 символов) для reply_text в БД
                 _known_badge_imap = "[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else ""
                 results.append(
                     f"От: {_known_badge_imap}{from_addr}\n"

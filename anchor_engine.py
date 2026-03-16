@@ -4198,8 +4198,8 @@ class AnchorEngine:
                 for _pr_item in _pending_replies[:5]:
                     _pr_txt = _pr_item.get('reply_text', '') or '[текст не получен — нужен check_emails]'
                     _pr_lines.append(
-                        f"  🆕 {_pr_item.get('name') or _pr_item.get('email')} ({_pr_item.get('email')}): "
-                        f"ответ=\"{_pr_txt[:200]}\" (outreach_id={_pr_item.get('outreach_id')})" 
+                        f"  🆕 {_pr_item.get('name') or _pr_item.get('email')} ({_pr_item.get('email')}): \n"
+                        f"     ответ=\"{_pr_txt[:1500]}\" (outreach_id={_pr_item.get('outreach_id')})" 
                     )
                 _pending_replies_str = (
                     "\n🔴 НАИВЫСШИЙ ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
@@ -5161,7 +5161,7 @@ class AnchorEngine:
                             _prr_txt = _prr.get('reply_text') or '[текст не получен — вызови check_emails]'
                             _intg_live_lines.append(
                                 f"  🆕 Ждёт ответа: {_prr.get('name') or _prr.get('email')} "
-                                f"({_prr.get('email')}) — \"{_prr_txt[:200]}\" "
+                                f"({_prr.get('email')}) — \"{_prr_txt[:1500]}\" "
                                 f"→ reply_to_outreach_email(outreach_id={_prr.get('outreach_id')}, reply_body=...) "  
                             )
 
@@ -7061,7 +7061,7 @@ class AnchorEngine:
                     'outreach_id': _pr.id,
                     'email': _pr.recipient_email,
                     'name': _pr.recipient_name or '',
-                    'reply_text': _clean_reply_text((_pr.reply_text or '')[:500])[:200],
+                    'reply_text': _clean_reply_text((_pr.reply_text or '')[:4000])[:1500],
                     'subject': _pr.subject or '',
                 })
             if _pending_replies:
