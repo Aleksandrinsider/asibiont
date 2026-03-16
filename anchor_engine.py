@@ -578,7 +578,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_rss    = any(w in c for c in _caps_lower for w in ('rss', 'feed', 'лент'))
     _has_github = any(w in c for c in _caps_lower for w in ('github', 'gitlab'))
     _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'контент', 'smm'))
-    _has_alpha  = any(w in c for c in _caps_lower for w in ('alpha_vantage', 'alphavantage', 'котировк', 'биржа'))
+    _has_alpha  = any(w in c for c in _caps_lower for w in ('alpha_vantage', 'alphavantage', 'alpha vantage', 'котировк', 'биржа', 'биржевые'))
     _has_news   = any(w in c for c in _caps_lower for w in ('newsapi', 'news api', 'news_api'))
     _has_notion = any(w in c for c in _caps_lower for w in ('notion',))
     _has_slack  = any(w in c for c in _caps_lower for w in ('slack',))

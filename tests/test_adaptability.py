@@ -181,15 +181,15 @@ chk_intg("IMAP из api_keys",
     must_contain=("IMAP почта",))
 
 chk_intg("Gmail из api_keys",
-    api_keys="GMAIL_CLIENT_ID=xxx\nGMAIL_SECRET=yyy",
+    api_keys="GMAIL_CLIENT_ID=my_client_id_123\nGMAIL_SECRET=my_secret_key",
     must_contain=("Gmail",))
 
 chk_intg("Telegram + Discord из api_keys",
-    api_keys="TELEGRAM_BOT_TOKEN=xxx\nDISCORD_TOKEN=yyy",
+    api_keys="TELEGRAM_BOT_TOKEN=123456:ABCdef\nDISCORD_TOKEN=my_discord_token",
     must_contain=("Telegram", "Discord"))
 
 chk_intg("Binance + Bybit крипта",
-    api_keys="BINANCE_API_KEY=abc\nBYBIT_API_KEY=def",
+    api_keys="BINANCE_API_KEY=my_binance_api_key\nBYBIT_API_KEY=my_bybit_api_key",
     must_contain=("Binance", "Bybit"))
 
 # Python код
