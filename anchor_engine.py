@@ -4698,6 +4698,9 @@ class AnchorEngine:
                 "• НЕ назначай агенту инструмент которого нет в его колонке 'инструменты' и 'интеграции'.\n"
                 "• web_search и research_topic может делать ASI — реальным агентам давай задачи по их интеграциям.\n"
                 "• Разнообразие: если агент делал одно и то же 2+ цикла — дай ему ДРУГУЮ задачу или инструмент из каталога.\n"
+                "• ⚠️ НЕ СОЗДАВАЙ одинаковые задания каждый цикл ('проверь почту', 'исследуй рынок нефти'). "
+                "Если агент уже проверял почту — скажи 'ответь на письмо X' или 'найди новых контактов'. "
+                "Если уже исследовал тему — скажи 'сделай выводы' или 'обнови прогресс цели'.\n"
                 "ВАЖНО: покрой каждую активную цель хотя бы одним конкретным шагом. "
                 "НЕ отправляй письма адресатам из списка уже_написали.\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
@@ -5178,9 +5181,13 @@ class AnchorEngine:
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:14])
 
-                    # ── DEDUP: не создавать задачу если аналогичная уже была за последний час ──
-                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-                    _dedup_words = set(_task_title_short.lower().split()[:5])
+                    # ── DEDUP: не создавать задачу если аналогичная уже была за 4 часа ──
+                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
+                    # Стоп-слова: не учитывать при сравнении
+                    _DEDUP_STOP = {'на', 'в', 'для', 'и', 'от', 'по', 'через', 'из', 'с', 'о', 'к', 'не',
+                                   'проверить', 'провести', 'использовать', 'используя', 'текущей', 'текущую',
+                                   'наличие', 'ответов', 'ситуации', 'обработки'}
+                    _dedup_words = set(w for w in _task_title_short.lower().split()[:8] if w not in _DEDUP_STOP and len(w) > 2)
                     _recent_similar = session.query(_Task_c2).filter(
                         _Task_c2.user_id == user.id,
                         _Task_c2.source == 'agent',
@@ -5189,11 +5196,12 @@ class AnchorEngine:
                     ).all()
                     _is_dup = False
                     for _rs in _recent_similar:
-                        _rs_words = set((_rs.title or '').lower().split()[:5])
+                        _rs_words = set(w for w in (_rs.title or '').lower().split()[:8] if w not in _DEDUP_STOP and len(w) > 2)
                         _overlap = len(_dedup_words & _rs_words)
-                        if _overlap >= 3:
+                        # 2+ значимых слов совпало = дубль
+                        if _overlap >= 2 and (_overlap / max(len(_dedup_words), 1)) >= 0.4:
                             _is_dup = True
-                            logger.info(f"[COORD] dedup: skipping task '{_task_title_short[:50]}' — similar to [{_rs.id}] '{_rs.title[:50]}'")
+                            logger.info(f"[COORD] dedup: skipping task '{_task_title_short[:50]}' — similar to [{_rs.id}] '{_rs.title[:50]}' (overlap={_overlap})")
                             break
                     if _is_dup:
                         _step_task_id = None
@@ -5535,7 +5543,8 @@ class AnchorEngine:
 
                 if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
                     if _result_stripped not in _DONE_FB_SET:
-                        # Реально пустой результат после retry: отменяем задачу
+                        # Реально пустой результат после retry: отменяем задачу, НЕ беспокоим пользователя
+                        logger.info(f"[COORD] agent {_ag_name}: empty result after retry — silent skip")
                         if _step_task_id:
                             try:
                                 from sqlalchemy import text as _sql_t_empty
@@ -5548,40 +5557,8 @@ class AnchorEngine:
                                     session.rollback()
                                 except Exception:
                                     pass
-                        _empty_txt = (
-                            "Проанализировала ситуацию, но пока не нашла конкретных результатов для отчёта."
-                            if _ag_is_fem else
-                            "Проанализировал ситуацию, но пока не нашёл конкретных результатов для отчёта."
-                        )
-                        try:
-                            session.add(Interaction(
-                                user_id=user.id,
-                                message_type='agent_msg',
-                                content=json.dumps({
-                                    '__agent': {
-                                        'name': _ag_name,
-                                        'id': _ag_data.get('id', 0),
-                                        'avatar_url': _ag_data.get('avatar_url', ''),
-                                    },
-                                    'text': _empty_txt,
-                                    '__tools_used': [],
-                                    '__anchor_type': 'coordinator_result',
-                                }, ensure_ascii=False),
-                            ))
-                            session.commit()
-                        except Exception:
-                            try:
-                                session.rollback()
-                            except Exception:
-                                pass
-                        if self.bot:
-                            try:
-                                await self.bot.send_message(
-                                    chat_id=user.telegram_id,
-                                    text=f"{_ag_name}:\n\n{_empty_txt}",
-                                )
-                            except Exception:
-                                pass
+                        # Тихий пропуск — не создаём interaction и не шлём в Telegram
+                        # Раньше слали "не нашёл конкретных результатов" — это мусор для пользователя
                     # _done_fb: агент выполнил задачу без детального отчёта — тихо пропускаем
                     continue
 
