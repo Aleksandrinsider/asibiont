@@ -1815,7 +1815,15 @@ async def dashboard_handler(request):
         # Get user avatar URL — always use safe proxy URL (no bot token)
         user_avatar_url = safe_avatar_url(user_id) if user else None
 
-        # Avatar refresh moved to background / login — not on every dashboard load
+        # Background avatar refresh: update photo_url cache if missing (non-blocking)
+        if user and not user.photo_url and user.telegram_id > 0:
+            async def _bg_refresh_avatar():
+                try:
+                    await get_user_avatar_url(request.app['bot'], user.telegram_id, force_refresh=True)
+                except Exception as _av_err:
+                    logger.warning(f"[DASHBOARD] Background avatar refresh failed: {_av_err}")
+            import asyncio
+            asyncio.ensure_future(_bg_refresh_avatar())
 
         logger.info(f"Rendering dashboard for user {user.id}")
 
@@ -11871,7 +11879,7 @@ async def api_arena_agent_avatar_handler(request):
                 return web.Response(
                     body=img_bytes,
                     content_type=ct,
-                    headers={'Cache-Control': 'public, max-age=30'}  # short cache so avatar updates are visible quickly
+                    headers={'Cache-Control': 'public, max-age=300'}  # 5 минут кеш для аватаров агентов
                 )
         return web.Response(status=404)
     except Exception as e:

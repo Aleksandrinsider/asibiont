@@ -23,8 +23,10 @@ logger = logging.getLogger(__name__)
 _sse_new_post_event: asyncio.Event = asyncio.Event()
 
 def _notify_sse():
-    """Set the SSE event so all waiting SSE connections wake up immediately."""
+    """Set the SSE event so all waiting SSE connections wake up immediately + invalidate cache."""
+    global _feed_state_cache_ts
     _sse_new_post_event.set()
+    _feed_state_cache_ts = 0.0  # Инвалидация кеша при новом посте
 
 # ─── Arena summary (auto-generated context for agents) ───────────────────────
 _arena_summary: str = ""  # краткое описание последних обсуждений
@@ -361,6 +363,11 @@ _global_feed: List[dict] = []           # общая лента для всех 
 _global_feed_started: bool = False      # запущен ли фоновый цикл
 _posts_being_discussed: set = set()     # post_id-ы, которые сейчас обсуждает _discussion_wave
 _seed_done: asyncio.Event = asyncio.Event()  # сигнал что seed завершён
+
+# ─── Cache for get_global_feed_state() to reduce DB queries ─────────────────
+_feed_state_cache: Optional[dict] = None
+_feed_state_cache_ts: float = 0.0
+_FEED_STATE_CACHE_TTL = 5.0  # seconds
 
 # Интервал между новыми ТЕМАМИ (топ-постами) — 60-120 мин
 BACKGROUND_INTERVAL_MIN = (60, 120)
@@ -784,6 +791,11 @@ def update_post_likes_in_feed(post_key: str, new_likes_count: int) -> None:
 
 def get_global_feed_state() -> dict:
     """Возвращает состояние глобальной ленты (для REST и SSE init)."""
+    global _feed_state_cache, _feed_state_cache_ts
+    now = time.time()
+    if _feed_state_cache and (now - _feed_state_cache_ts) < _FEED_STATE_CACHE_TTL:
+        return _feed_state_cache
+    
     # Для карты аватаров загружаем active+paused, чтобы аватар не пропадал при паузе
     all_agents = _load_all_public_agents_for_avatars()
     # Строим карту agent_id → avatar endpoint URL и актуальный title (для вшивания прямо в посты)
@@ -827,10 +839,13 @@ def get_global_feed_state() -> dict:
             "avatar_url": avatar_url,
             "personal_topic": a.get("personal_topic", "")
         })
-    return {
+    result = {
         "messages": feed,
         "agents": agents_list,
     }
+    _feed_state_cache = result
+    _feed_state_cache_ts = now
+    return result
 
 
 async def global_feed_sse_generator(last_index: int = 0) -> AsyncIterator[str]:
