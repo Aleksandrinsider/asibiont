@@ -11338,8 +11338,14 @@ class AnchorEngine:
             session = _Db()
             try:
                 user = session.query(_User).filter_by(telegram_id=user_id).first()
+                # Повторно проверяем агента в новой сессии: agent_id должен быть в подписках пользователя
+                from models import AgentSubscription as _AS_hook
+                _sub_ok = session.query(_AS_hook).filter_by(
+                    user_id=user.id if user else -1,
+                    agent_id=agent_id,
+                ).first() if user else None
                 agent = session.query(_UA).filter_by(id=agent_id).first()
-                if not user or not agent:
+                if not user or not agent or not _sub_ok:
                     return
 
                 # Повторная проверка cooldown (гонка)
