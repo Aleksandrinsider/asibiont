@@ -4220,11 +4220,12 @@ class AnchorEngine:
                     tool = 'update_goal_progress'
                     task = (
                         f'Цель «{title}» уже на {int(progress)}%. НЕ НУЖНО заново исследовать. '
-                        f'ЗАДАЧА: подведи ФИНАЛЬНЫЙ ИТОГ. Вызови update_goal_progress('
-                        f'goal_title="{title[:50]}", new_progress=100, '
-                        f'notes="Итог: [ключевые выводы за весь период]"). '
-                        f'Если данных недостаточно для завершения — сделай ОДИН финальный web_search '
-                        f'и потом обнови прогресс до 100%.'
+                        f'ЗАДАЧА: подведи ФИНАЛЬНЫЙ ИТОГ. '
+                        f'1) Вызови save_note с подробным структурированным отчётом (заголовок «{title[:50]} — финальный отчёт», '
+                        f'содержимое — минимум 5 пунктов: ключевые факты, тренды, риски, прогнозы, выводы). '
+                        f'2) Вызови update_goal_progress(goal_title="{title[:50]}", new_progress=100, '
+                        f'notes="Итог: [ключевые выводы]"). '
+                        f'Если данных недостаточно — сначала сделай web_search, потом п.1 и п.2.'
                     )
                     directives.append({
                         'goal': title, 'agent_domain': 'research',
@@ -4245,11 +4246,14 @@ class AnchorEngine:
                                 f'Затем вызови update_goal_progress(notes="ключевые данные") для цели «{title}».')
                     else:
                         tool = 'web_search' if _is_tool_failed('research_topic') else 'research_topic'
-                        task = (f'Для цели «{title}» ({int(progress)}%): вызови {tool} с запросом о '
-                                f'{title[:60]}. Получи ключевые данные и сохрани выводы через '
-                                f'update_goal_progress(notes="краткий итог анализа").')
-
-                    directives.append({
+                        task = (
+                            f'Для цели «{title}» ({int(progress)}%): вызови {tool} с запросом о '
+                            f'{title[:60]}. '
+                            f'После получения данных — ОБЯЗАТЕЛЬНО вызови save_note с ПОДРОБНЫМ отчётом '
+                            f'(не менее 5 пунктов: цены, тренды, прогнозы, ключевые игроки, выводы). '
+                            f'Заголовок заметки: «{title[:50]} — отчёт». '
+                            f'Затем вызови update_goal_progress(notes="краткий итог").'
+                        )
                         'goal': title, 'agent_domain': 'research',
                         'tool': tool, 'task': task,
                         'reason': 'финансовый/новостной анализ через research_topic/web_search',
@@ -5782,6 +5786,14 @@ class AnchorEngine:
                         for g in _goals[:3]
                     )
                     _bridge_flow = '\n'.join(_bridge_notes) if _bridge_notes else ''
+                    # Проверяем — кто сохранил заметку в этом цикле
+                    _saved_note_agents = [
+                        n for n, tools in _current_run_agent_tools.items() if 'save_note' in tools
+                    ]
+                    _note_hint = (
+                        f"- Агент(ы) {', '.join(_saved_note_agents)} сохранили подробный отчёт в раздел Заметки — напомни об этом пользователю одной фразой.\n"
+                        if _saved_note_agents else ''
+                    )
                     _report_prompt = (
                         f"Ты — ASI, координатор. Напиши ФИНАЛЬНЫЙ ИТОГ рабочего цикла для пользователя.\n\n"
                         f"Что сделала команда:\n{_report_items}\n\n"
@@ -5793,10 +5805,11 @@ class AnchorEngine:
                         f"- Если агент прочитал нерелевантный RSS — честно скажи 'подходящих данных не нашлось'\n"
                         f"- Если ничего реально не продвинулось — честно скажи «Новых подтверждённых результатов нет»\n"
                         f"- НЕ преувеличивай, НЕ называй 'поиск в базе' или 'чтение RSS' прогрессом\n"
-                        f"- 3-4 предложения. Без markdown. Без [АВТОПИЛОТ]."
+                        + _note_hint
+                        + f"- 3-5 предложений. Без markdown. Без [АВТОПИЛОТ]."
                     )
                     _report_gen = await asyncio.wait_for(
-                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=150),
+                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=200),
                         timeout=12,
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:
