@@ -2860,6 +2860,8 @@ class AnchorEngine:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
 
                 try:
+                    # Пауза перед AI-вызовом — небольшая задержка после объявления координатора
+                    await asyncio.sleep(2)
                     # Ограничиваем task_text для экономии input-токенов DeepSeek
                     _task_trimmed = task_text[:2000] if len(task_text) > 2000 else task_text
                     _raw = await asyncio.wait_for(
@@ -3105,6 +3107,13 @@ class AnchorEngine:
                         _cleaned_result = _ctd(result.strip())
                         if not _cleaned_result or len(_cleaned_result.strip()) < 10:
                             _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
+                        # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
+                        await asyncio.sleep(2)
+                        try:
+                            await self.bot.send_chat_action(chat_id=user.telegram_id, action='typing')
+                            await asyncio.sleep(1)
+                        except Exception:
+                            pass
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
                             text=_cleaned_result,
@@ -3140,6 +3149,7 @@ class AnchorEngine:
                 # ── Цепочка: агент может делегировать через DELEGATE[X]: → запускаем следующего ──
                 # Максимум одно продолжение за цикл чтобы не перегружать Railway.
                 if result and len(result) > 30 and not _is_noise_result and agents:
+                    await asyncio.sleep(4)  # Пауза перед следующим агентом в цепочке
                     try:
                         await self._maybe_continue_chain(
                             user, chosen, anchor, task_text, result, agents, session, max_cont=1,
@@ -3151,6 +3161,7 @@ class AnchorEngine:
                 # Срабатывает только если: реальный агент (не ASI), есть предупреждения, результат доставлен
                 _fw_dir = data.get('feasibility_warnings', [])
                 if not _is_noise_result and result and _chosen_id != 0 and self.bot and _fw_dir:
+                    await asyncio.sleep(3)  # Пауза перед комментарием ASI-директора
                     try:
                         _dir_goals = ', '.join(
                             f"«{g.get('title', '')}» ({g.get('progress', 0)}%)"
