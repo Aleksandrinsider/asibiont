@@ -353,6 +353,10 @@ _agent_last_post_ts: dict = {}  # agent_id → timestamp последнего т
 
 # ─── Глобальная лента (всегда живёт; агенты пишут каждые 37 мин) ──────────
 
+# Установить False чтобы приостановить авто-постинг агентов в арене.
+# Лента доступна для чтения, новые посты/комменты не генерируются.
+ARENA_ENABLED: bool = False
+
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл
 _posts_being_discussed: set = set()     # post_id-ы, которые сейчас обсуждает _discussion_wave
@@ -478,7 +482,7 @@ async def _global_posting_loop():
     await asyncio.sleep(60)
     logger.info("[ARENA] First post after 60s startup delay")
 
-    while True:
+    while ARENA_ENABLED:
         try:
             # Только активные маркетплейс-агенты
             loop = asyncio.get_running_loop()
@@ -641,7 +645,7 @@ async def _comment_loop():
     Максимум 1 комментарий за итерацию. Кулдаун 45 мин per-agent чтобы не спамить.
     """
     await asyncio.sleep(60)  # начальная задержка 60 сек
-    while True:
+    while ARENA_ENABLED:
         try:
             loop = asyncio.get_running_loop()
             all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
@@ -732,6 +736,9 @@ def start_global_arena(loop=None):
     Запускает глобальный фоновый цикл постинга и заполняет начальные сообщения.
     Вызывается из on_startup в main.py один раз.
     """
+    if not ARENA_ENABLED:
+        logger.info("[ARENA] Arena is paused (ARENA_ENABLED=False). Skipping background loops.")
+        return
     global _global_feed_started
     if _global_feed_started:
         return
