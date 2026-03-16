@@ -661,9 +661,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
         # Goal-type-aware первый шаг
         if _goal_type == 'research' and _has_alpha:
+            # Определяем символ на основе ключевых слов цели
+            _goals_text_lower = ' '.join(
+                (g.get('title', '') + ' ' + (g.get('description', '') or '')).lower()
+                for g in goals_summary
+            )
+            _OIL_KW = ('нефт', 'brent', 'wti', 'oil', 'газ', 'gas', 'котировк', 'баррель', 'crude')
+            _CRYPTO_KW = ('биткоин', 'bitcoin', 'btc', 'eth', 'крипто', 'crypto')
+            _STOCK_KW = ('акции', 'лукойл', 'газпром', 'sber', 'lkoh', 'gazp', 'фондов', 'moex')
+            if any(w in _goals_text_lower for w in _OIL_KW):
+                _symbol_hint = '"BRENT" или "WTI"'
+            elif any(w in _goals_text_lower for w in _CRYPTO_KW):
+                _symbol_hint = '"BTC" или "ETH"'
+            elif any(w in _goals_text_lower for w in _STOCK_KW):
+                _symbol_hint = '"LKOH.MCX" или "GAZP.MCX"'
+            else:
+                _symbol_hint = '"[тикер по теме цели]"'
             _intg_block += (
-                '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_price", symbol="BRENT") '
-                '— получи реальные котировки, затем обработай и опубликуй итог.\n'
+                f'⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_price", symbol={_symbol_hint}) '
+                '— получи реальные данные, затем обработай и опубликуй итог.\n'
             )
         elif _goal_type == 'research' and _has_news:
             _intg_block += (
@@ -7003,9 +7019,10 @@ class AnchorEngine:
         from models import AgentActivityLog as _AAL_scan
         recent_actions = session.query(_AAL_scan).filter(
             _AAL_scan.user_id == user.id,
-            _AAL_scan.activity_type.in_(['goal_autopilot_dispatch', 'agent_chain_continue']),
+            _AAL_scan.activity_type.in_(['goal_autopilot_dispatch', 'agent_chain_continue',
+                                          'run_agent_action']),
             _AAL_scan.created_at >= now_utc - timedelta(hours=48),
-        ).order_by(_AAL_scan.created_at.desc()).limit(15).all()
+        ).order_by(_AAL_scan.created_at.desc()).limit(20).all()
 
         actions_history = []
         # Считаем частоту инструментов для блэклиста
@@ -7015,6 +7032,19 @@ class AnchorEngine:
             # Извлекаем инструменты из result (формат: "[tools: web_search, find_and_message_relevant_users] text")
             _tools_tag = ''
             _res = a.result or ''
+            # run_agent_action логи: содержат реальный вывод скрипта (котировки, данные)
+            # Форматируем их явно чтобы агент видел реальные данные из предыдущего цикла
+            if a.activity_type == 'run_agent_action':
+                _action_name = (a.title or '').replace(' — обзор целей', '')
+                actions_history.append(
+                    f"[{a.created_at.strftime('%H:%M')}] [run_agent_action] {_action_name}: {_res[:400]}"
+                )
+                # Считаем partial failure для run_agent_action
+                if _res and 'error' in _res.lower():
+                    _failed_tools['run_agent_action'] = _failed_tools.get('run_agent_action', 0) + 1
+                else:
+                    _tool_freq['run_agent_action'] = _tool_freq.get('run_agent_action', 0) + 1
+                continue
             if _res.startswith('[tools:'):
                 _idx = _res.find(']')
                 if _idx > 0:
