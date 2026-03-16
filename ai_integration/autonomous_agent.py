@@ -5998,7 +5998,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         resp = await _exec_agent_for_director(ag, task, user_id, dialog_context=extra_context)
         _agent_tools_used: list[str] = []
         if isinstance(resp, tuple):
-            resp, _agent_tools_used = resp
+            if len(resp) >= 3:
+                resp, _agent_tools_used, _ap_tokens = resp
+            elif len(resp) == 2:
+                resp, _agent_tools_used = resp
         if isinstance(resp, Exception) or not resp:
             resp = "Данных нет."
 
@@ -6371,7 +6374,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _delegation_task_id = None if _is_q else _create_agent_delegation_task(user_db_id, _ag, _task)
 
         # Запуск агента
-        _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
+        try:
+            _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
+        except Exception as _run_err:
+            logger.warning("[DIRECTOR] agent run error round %d: %s", _round, _run_err)
+            if _delegation_task_id:
+                try:
+                    _update_agent_delegation_task(_delegation_task_id, f'Ошибка: {str(_run_err)[:200]}')
+                except Exception:
+                    pass
+            break
 
         _agent_tools_used_round: list[str] = []
         if isinstance(_resp, tuple):

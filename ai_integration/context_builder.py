@@ -353,10 +353,11 @@ class ContextBuilder:
                 if _missing:
                     hints.append(f"ПРОФИЛЬ НЕПОЛНЫЙ (не заполнено: {', '.join(_missing)}) — спроси у пользователя!")
 
-            # ═══ ЦЕЛИ (все статусы, все проекты) ═══
+            # ═══ ЦЕЛИ (все статусы кроме удалённых) ═══
             from models import Goal
             all_goals = session.query(Goal).filter(
-                Goal.user_id == user.id
+                Goal.user_id == user.id,
+                Goal.status.notin_(['deleted']),
             ).order_by(Goal.priority.desc().nullslast(), Goal.created_at.desc()).all()
 
             status_map_full = {
