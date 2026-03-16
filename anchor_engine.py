@@ -4215,30 +4215,45 @@ class AnchorEngine:
                 # Выбираем аналитика: RSS → research → any
                 research_agent = _agent_for('rss') or _agent_for('research') or _agent_for('any')
 
-                # Проверяем — у RSS-агента лента финансовая или нет
-                rss_is_finance = False
-                for p in profiles:
-                    if p.get('name') == research_agent:
-                        # Проверяем по caps — если в name есть 'rss' но caps не содержит финансового
-                        agent_caps_str = ' '.join(c.lower() for c in p.get('caps', []))
-                        rss_is_finance = any(w in agent_caps_str for w in ('finance', 'rbc', 'tass', 'oil', 'moex', 'finam'))
-
-                if rss_is_finance and not _is_tool_failed('run_agent_action'):
-                    tool = 'run_agent_action'
-                    task = (f'Запусти run_agent_action для получения финансовых данных из RSS-ленты. '
-                            f'Затем вызови update_goal_progress(notes="ключевые данные") для цели «{title}».')
+                # ── HIGH PROGRESS: цель ≥70% → подводим итог, не исследуем заново ──
+                if progress >= 70:
+                    tool = 'update_goal_progress'
+                    task = (
+                        f'Цель «{title}» уже на {int(progress)}%. НЕ НУЖНО заново исследовать. '
+                        f'ЗАДАЧА: подведи ФИНАЛЬНЫЙ ИТОГ. Вызови update_goal_progress('
+                        f'goal_title="{title[:50]}", new_progress=100, '
+                        f'notes="Итог: [ключевые выводы за весь период]"). '
+                        f'Если данных недостаточно для завершения — сделай ОДИН финальный web_search '
+                        f'и потом обнови прогресс до 100%.'
+                    )
+                    directives.append({
+                        'goal': title, 'agent_domain': 'research',
+                        'tool': tool, 'task': task,
+                        'reason': f'прогресс {int(progress)}% — пора завершать цель, не исследовать заново',
+                    })
                 else:
-                    # Нет финансового RSS → web_search/research_topic
-                    tool = 'web_search' if _is_tool_failed('research_topic') else 'research_topic'
-                    task = (f'Для цели «{title}» ({int(progress)}%): вызови {tool} с запросом о '
-                            f'{title[:60]}, марте 2026. Получи ключевые данные и сохрани выводы через '
-                            f'update_goal_progress(notes="краткий итог анализа").')
+                    # Проверяем — у RSS-агента лента финансовая или нет
+                    rss_is_finance = False
+                    for p in profiles:
+                        if p.get('name') == research_agent:
+                            agent_caps_str = ' '.join(c.lower() for c in p.get('caps', []))
+                            rss_is_finance = any(w in agent_caps_str for w in ('finance', 'rbc', 'tass', 'oil', 'moex', 'finam'))
 
-                directives.append({
-                    'goal': title, 'agent_domain': 'research',
-                    'tool': tool, 'task': task,
-                    'reason': 'финансовый/новостной анализ через research_topic/web_search',
-                })
+                    if rss_is_finance and not _is_tool_failed('run_agent_action'):
+                        tool = 'run_agent_action'
+                        task = (f'Запусти run_agent_action для получения финансовых данных из RSS-ленты. '
+                                f'Затем вызови update_goal_progress(notes="ключевые данные") для цели «{title}».')
+                    else:
+                        tool = 'web_search' if _is_tool_failed('research_topic') else 'research_topic'
+                        task = (f'Для цели «{title}» ({int(progress)}%): вызови {tool} с запросом о '
+                                f'{title[:60]}. Получи ключевые данные и сохрани выводы через '
+                                f'update_goal_progress(notes="краткий итог анализа").')
+
+                    directives.append({
+                        'goal': title, 'agent_domain': 'research',
+                        'tool': tool, 'task': task,
+                        'reason': 'финансовый/новостной анализ через research_topic/web_search',
+                    })
 
             # ── CONTENT goals ──
             elif any(w in full_l for w in _CONTENT_KW):
@@ -4701,6 +4716,8 @@ class AnchorEngine:
                 "• ⚠️ НЕ СОЗДАВАЙ одинаковые задания каждый цикл ('проверь почту', 'исследуй рынок нефти'). "
                 "Если агент уже проверял почту — скажи 'ответь на письмо X' или 'найди новых контактов'. "
                 "Если уже исследовал тему — скажи 'сделай выводы' или 'обнови прогресс цели'.\n"
+                "• Если цель на 70%+ — НЕ ИССЛЕДУЙ заново! Подведи итоги, обнови прогресс до 100% через update_goal_progress и ЗАВЕРШИ.\n"
+                "• Если цель на 100% — ПРОПУСТИ её, не назначай задачи.\n"
                 "ВАЖНО: покрой каждую активную цель хотя бы одним конкретным шагом. "
                 "НЕ отправляй письма адресатам из списка уже_написали.\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
@@ -5205,9 +5222,25 @@ class AnchorEngine:
                             break
                     if _is_dup:
                         _step_task_id = None
+                        # Дубль задачи = пропускаем выполнение агента полностью
+                        continue
                     else:
                         # Описание = полный текст только если отличается от заголовка
                         _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
+                        # Резолвим goal_id по названию цели из плана координатора
+                        _resolved_goal_id = None
+                        if _ag_goal_title:
+                            _ag_goal_lower = _ag_goal_title.lower().strip()
+                            for _cg in _goals:
+                                if _cg.get('title', '').lower().strip() == _ag_goal_lower:
+                                    _resolved_goal_id = _cg.get('id')
+                                    break
+                            if not _resolved_goal_id:
+                                # Fuzzy: частичное совпадение
+                                for _cg in _goals:
+                                    if _ag_goal_lower in _cg.get('title', '').lower() or _cg.get('title', '').lower() in _ag_goal_lower:
+                                        _resolved_goal_id = _cg.get('id')
+                                        break
                         _step_task = _Task_c2(
                             user_id=user.id,
                             title=_task_title_short[:200],
@@ -5216,10 +5249,13 @@ class AnchorEngine:
                             source='agent',
                             created_by_agent_id=_target_ag.id if _target_ag else None,
                             delegated_to_username=_ag_name,
+                            goal_id=_resolved_goal_id,
                         )
                         session.add(_step_task)
                         session.commit()
                         _step_task_id = _step_task.id
+                        if _resolved_goal_id:
+                            logger.info(f"[COORD] task [{_step_task_id}] linked to goal [{_resolved_goal_id}]")
                 except Exception as _tc_err:
                     logger.debug("[COORD] task create skipped: %s", _tc_err)
                     try:
