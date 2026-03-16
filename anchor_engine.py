@@ -4494,6 +4494,24 @@ class AnchorEngine:
             _user_profile_str_c = (_user_profile_coord.get('summary', '') or '') if _user_profile_coord else ''
             _user_rules_coord = data.get('user_rules', [])
 
+            # ── Последние сообщения чата — чтобы координатор знал о свежем контексте диалога ──
+            _recent_chat_str = ''
+            try:
+                _chat_ints = session.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type.in_(['user', 'ai']),
+                ).order_by(Interaction.id.desc()).limit(6).all()
+                if _chat_ints:
+                    _chat_lines = []
+                    for _ci in reversed(_chat_ints):
+                        _role = 'Пользователь' if _ci.message_type == 'user' else 'ASI'
+                        _txt = (_ci.content or '')[:200].strip()
+                        if _txt:
+                            _chat_lines.append(f"  {_role}: {_txt}")
+                    _recent_chat_str = '\n'.join(_chat_lines)
+            except Exception as _rce:
+                logger.debug("[COORD] chat history load failed: %s", _rce)
+
             # ── Подсказки по отсутствующим интеграциям (умный детектор) ──
             import os as _os_coord
             _missing_intg_coord = []
@@ -4685,6 +4703,7 @@ class AnchorEngine:
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
+                + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + f"{_degraded_note}"
                 + _pending_replies_str
                 + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"

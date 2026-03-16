@@ -726,6 +726,9 @@ async def auth_handler(request):
                             logger.info(f"Got avatar URL for new user {user_id}: {avatar_url}")
                         except Exception as e:
                             logger.error(f"Error getting avatar for new user {user_id}: {e}")
+                    # Fallback: Telegram Login Widget provides photo_url in auth data
+                    if not avatar_url and data.get('photo_url'):
+                        avatar_url = data['photo_url']
 
                     # Find referrer
                     referrer = None
@@ -780,6 +783,13 @@ async def auth_handler(request):
                                 logger.info(f"Updated avatar for user {user_id}: {avatar_url}")
                         except Exception as e:
                             logger.error(f"Error updating avatar for user {user_id}: {e}")
+                    # Fallback: save widget photo_url if bot couldn't fetch it and DB has none
+                    if not user.photo_url and data.get('photo_url'):
+                        user.photo_url = data['photo_url']
+                        try:
+                            session_db.commit()
+                        except Exception:
+                            pass
 
                 # Increment login count if subscription exists
                 subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
@@ -5607,23 +5617,11 @@ async def get_feed_handler(request):
 
             users_map = {}
             for u, profile in users_data:
-                # Update avatar from Telegram if available
-                photo_url = u.photo_url
-                if u.telegram_id and 'bot' in request.app:
-                    try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id, force_refresh=False)
-                        if updated_avatar and updated_avatar != u.photo_url:
-                            u.photo_url = updated_avatar
-                            session_db.commit()
-                            photo_url = updated_avatar
-                    except Exception as e:
-                        logger.error(f"Error updating avatar in feed for {u.telegram_id}: {e}")
-                
                 users_map[u.id] = {
                     'telegram_id': u.telegram_id,
                     'username': u.username,
                     'first_name': u.first_name,
-                    'photo_url': photo_url,
+                    'photo_url': safe_avatar_url(u.telegram_id),
                     'company': profile.company if profile else None,
                     'position': profile.position if profile else None,
                     'subscription_tier': u.subscription_tier.value if u.subscription_tier else 'LIGHT'
@@ -5995,7 +5993,7 @@ async def get_comments_handler(request):
                         'author': {
                             'username': author.username,
                             'first_name': author.first_name,
-                            'photo_url': author.photo_url,
+                            'photo_url': safe_avatar_url(author.telegram_id),
                             'is_current_user': comment.user_id == current_user_id
                         }
                     })

@@ -12768,8 +12768,8 @@ except Exception as e:
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
             const statusText = document.getElementById('quick-status').value.trim();
-            const bio = document.getElementById('quick-bio').value.trim();
-            const contentStrategy = document.getElementById('quick-content-strategy').value.trim();
+            const bio = document.getElementById('quick-bio')?.value?.trim() || '';
+            const contentStrategy = document.getElementById('quick-content-strategy')?.value?.trim() || '';
             const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
             const discordWebhook = document.getElementById('quick-discord-webhook').value.trim();
             const emailVal = document.getElementById('quick-email').value.trim();
