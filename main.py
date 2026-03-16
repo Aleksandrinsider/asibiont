@@ -9197,11 +9197,8 @@ async def api_profile_handler(request):
             end_local = end_dt.astimezone(user_tz if user.timezone else pytz.timezone('Europe/Moscow'))
             formatted_end_date = f"{end_local.day:02d}.{end_local.month:02d}.{end_local.year}"
 
-        # Get user avatar URL
-        user_avatar_url = user.photo_url if user.photo_url else None
-        if user_avatar_url:
-            import random
-            user_avatar_url += f"?r={random.randint(100000, 999999)}"
+        # Get user avatar URL — use safe proxied URL (no bot token)
+        user_avatar_url = safe_avatar_url(user.telegram_id) if user else None
 
         # Add additional data to response
         response_data = {
