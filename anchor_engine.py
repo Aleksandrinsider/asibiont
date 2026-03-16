@@ -915,6 +915,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
+        "## МЫШЛЕНИЕ ПЕРЕД ДЕЙСТВИЕМ\n"
+        "Перед выбором инструмента — ответь мысленно на 4 вопроса (не пиши их в ответе!):\n"
+        "СУТЬ: что конкретно изменится у пользователя если цель будет достигнута? Что = реальный прогресс?\n"
+        "ВАРИАНТЫ: 3 разных пути к этой цели — прямой контакт / создание контента / поиск/аналитика.\n"
+        "          + что я ЕЩЁ НЕ ПРОБОВАЛ? (см. «Ещё не пробовал» выше)\n"
+        "РЫЧАГ: какое одно действие даст максимальный сдвиг при минимуме усилий?\n"
+        "СЛЕПЫЕ ЗОНЫ: какую аудиторию / площадку / подход я упускаю?\n"
+        "→ После анализа — сразу вызывай ЛУЧШИЙ инструмент, без предисловий.\n\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
         "2. Работай ПО СВОЕЙ РОЛИ и специализации как первый приоритет.\n"
@@ -2850,14 +2858,14 @@ class AnchorEngine:
 
                 # ── Dedup для tool-based результатов: RSS/новости не должны повторяться ──
                 # Даже если агент использовал инструменты, один и тот же материал отсылается многократно.
-                # Проверяем по ВЫСОКОМУ порогу (75%) только за последний час.
+                # Проверяем по порогу 65% за последние 4 часа.
                 if not _is_noise_result and _result_clean and _has_real_actions:
                     try:
                         _recent_tool_msgs = session.query(Interaction.content).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'agent_msg',
-                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
-                        ).order_by(Interaction.created_at.desc()).limit(4).all()
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
+                        ).order_by(Interaction.created_at.desc()).limit(8).all()
                         _new_words_t = set(_result_clean.lower().split())
                         for (_rt_content,) in _recent_tool_msgs:
                             try:
@@ -2870,7 +2878,7 @@ class AnchorEngine:
                             _old_words_t = set(_rt_text.lower().split())
                             _common_t = len(_new_words_t & _old_words_t)
                             _total_t = max(len(_new_words_t | _old_words_t), 1)
-                            if _common_t / _total_t > 0.75:
+                            if _common_t / _total_t > 0.65:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup_tools'
                                 logger.info("[ANCHOR-AUTOPILOT] tools dedup: %.0f%% overlap with recent tool msg from %s",
@@ -4191,7 +4199,7 @@ class AnchorEngine:
                     _pr_txt = _pr_item.get('reply_text', '') or '[текст не получен — нужен check_emails]'
                     _pr_lines.append(
                         f"  🆕 {_pr_item.get('name') or _pr_item.get('email')} ({_pr_item.get('email')}): "
-                        f"ответ=\"{_pr_txt[:150]}\" (outreach_id={_pr_item.get('outreach_id')})"
+                        f"ответ=\"{_pr_txt[:200]}\" (outreach_id={_pr_item.get('outreach_id')})" 
                     )
                 _pending_replies_str = (
                     "\n🔴 НАИВЫСШИЙ ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
@@ -5153,8 +5161,8 @@ class AnchorEngine:
                             _prr_txt = _prr.get('reply_text') or '[текст не получен — вызови check_emails]'
                             _intg_live_lines.append(
                                 f"  🆕 Ждёт ответа: {_prr.get('name') or _prr.get('email')} "
-                                f"({_prr.get('email')}) — \"{_prr_txt[:120]}\" "
-                                f"→ reply_to_outreach_email(outreach_id={_prr.get('outreach_id')}, reply_body=...)"
+                                f"({_prr.get('email')}) — \"{_prr_txt[:200]}\" "
+                                f"→ reply_to_outreach_email(outreach_id={_prr.get('outreach_id')}, reply_body=...) "  
                             )
 
                 # RSS: URL и тематика ленты
@@ -7040,12 +7048,20 @@ class AnchorEngine:
                 EmailOutreach.status == 'replied',
                 EmailOutreach.ai_reply_sent_at.is_(None),
             ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(10).all()
+            import re as _re_pr_clean
+            def _clean_reply_text(txt: str) -> str:
+                """Убирает MIME boundary/header артефакты из текста письма."""
+                if not txt:
+                    return ''
+                txt = _re_pr_clean.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', txt)
+                txt = _re_pr_clean.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', txt)
+                return txt.strip()
             for _pr in _pr_rows:
                 _pending_replies.append({
                     'outreach_id': _pr.id,
                     'email': _pr.recipient_email,
                     'name': _pr.recipient_name or '',
-                    'reply_text': (_pr.reply_text or '')[:200],
+                    'reply_text': _clean_reply_text((_pr.reply_text or '')[:500])[:200],
                     'subject': _pr.subject or '',
                 })
             if _pending_replies:
@@ -7796,7 +7812,7 @@ class AnchorEngine:
                             'recipient_company': email.recipient_company,
                             'original_subject': email.subject,
                             'original_body': email.body[:500] if email.body else '',
-                            'reply_text': email.reply_text[:1000] if email.reply_text else '',
+                            'reply_text': __import__('re').sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', __import__('re').sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', email.reply_text[:2000])).strip()[:1000] if email.reply_text else '',
                         }),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(hours=24),
@@ -7939,7 +7955,7 @@ class AnchorEngine:
                         'recipient_company': email.recipient_company,
                         'original_subject': email.subject,
                         'original_body': email.body[:500] if email.body else '',
-                        'reply_text': email.reply_text[:1000] if email.reply_text else '',
+                        'reply_text': __import__('re').sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', __import__('re').sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', email.reply_text[:2000])).strip()[:1000] if email.reply_text else '',
                         'ai_previous_reply': email.ai_reply_text[:500] if email.ai_reply_text else None,
                     }),
                     triggered_at=now_utc,

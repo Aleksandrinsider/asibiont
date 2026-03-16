@@ -474,7 +474,7 @@ class HybridAutonomousAgent:
         data = {
             "model": chosen_model,
             "messages": messages,
-            "max_tokens": kwargs.pop("max_tokens", 400),
+            "max_tokens": kwargs.pop("max_tokens", 1200),
             "temperature": kwargs.pop("temperature", 0.7),
             **kwargs
         }
@@ -527,16 +527,37 @@ class HybridAutonomousAgent:
 
     # ===== SMART TOOL FILTERING (reduces API tokens) =====
 
-    # Core tools sent with every call (~18 tools instead of 50+)
+    # Core tools sent with every call — all key capabilities ASI needs in normal chat
     CORE_TOOLS = {
+        # Task management
         'add_task', 'complete_task', 'edit_task', 'delete_task', 'list_tasks',
-        'update_profile', 'research_topic', 'web_search',
-        'create_goal', 'delete_goal', 'list_goals', 'update_goal_progress',
-        'find_relevant_contacts_for_task', 'set_contact_alert', 'generate_image',
-        'delegate_task',
-        # Campaign management always available — conversation can span multiple turns
+        'get_task_details', 'reschedule_task', 'restore_task', 'check_time_conflicts',
+        'set_reminder',
+        # Goals
+        'create_goal', 'delete_goal', 'list_goals', 'update_goal', 'update_goal_progress',
+        'complete_goal',
+        # Profile / rules
+        'update_profile', 'save_user_rule',
+        # Research & search — always useful
+        'research_topic', 'web_search', 'quick_topic_search', 'research_and_plan',
+        'get_news_trends', 'analyze_situation_and_suggest_tasks',
+        # Contacts / outreach
+        'find_relevant_contacts_for_task', 'set_contact_alert', 'find_partners',
+        'save_email_contact', 'list_email_contacts',
+        # Content creation
+        'create_post', 'generate_image', 'generate_marketing_content',
+        'publish_to_telegram', 'publish_to_discord',
+        # Email (commonly requested even without keyword)
+        'send_email', 'check_emails',
+        # Delegation & agents
+        'delegate_task', 'run_agent_action',
+        # Campaigns — conversation can span multiple turns
         'start_content_campaign', 'manage_content_campaign',
-        'start_delegation_campaign',
+        'start_delegation_campaign', 'start_email_campaign',
+        # Scheduling & background
+        'schedule_background_task',
+        # System
+        'get_system_status',
     }
 
     # Extended tool groups — activated by keywords in user message
@@ -4078,7 +4099,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Работаем с _intg_hint (уже нормализованные лейблы) — не трогаем сырые api_keys.
     # Новые интеграции из _INTEGRATION_LABELS будут корректно распознаны автоматически.
     _intg_action_hint = ""
-    if _intg_hint and _is_autopilot_task:
+    if _intg_hint:  # строим подсказки для ВСЕХ путей (не только autopilot)
         _hints = []
         _lbl_text = ' '.join(h.lower() for h in _intg_hint)  # всё в одну строку для проверки
         _has_email_h = any(w in _lbl_text for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun'))
@@ -4242,6 +4263,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"  «{_ex_found} 3 TG-группы QA (5к, 12к, 3к чел.), {_ex_added} в задачу.»\n\n"
             "⛔ ЗАПРЕЩЕНО: упоминать названия инструментов в тексте ответа (web_search, send_email, research_topic и т.д.). "
             "Пиши что СДЕЛАЛ и что РЕЗУЛЬТАТ, а не через какой инструмент.\n"
+            "⛔ ДУБЛИ: если инструмент вернул 'уже был отправлен', 'уже выполнено', 'skipped: duplicate' — "
+            "это значит действие ранее УЖЕ было сделано. НЕ сообщай об этом как о новом действии. "
+            "Ищи что ещё можно СДЕЛАТЬ НОВОГО.\n"
             "В письмах и ответах — используй РЕАЛЬНЫЕ данные из базы знаний (URL, описание, инструкции).\n"
             "Не пиши [ссылка на демо] или [добавить ссылку] — если не знаешь URL, не упоминай ссылку.\n"
             "Делегируй коллеге ТОЛЬКО если у него есть нужная интеграция, которой у тебя нет.\n"
@@ -4298,19 +4322,19 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Если можешь выполнить задачу доступными тебе инструментами — делай сам, не делегируй.\n\n"
 
         "САМОАНАЛИЗ ИНТЕГРАЦИЙ:\n"
-        "Если пользователь просит что-то, для чего нужна интеграция — а у тебя её нет — "
-        "скажи ему конкретно: «Для этого мне нужна интеграция с X. Добавь ключи в настройках агента на дашборде.» "
-        "Доступные интеграции: Gmail, Яндекс Почта, Mail.ru, GitHub, Notion, Slack, "
-        "Telegram Bot, Discord, Trello, Jira, Airtable, Bitrix24, AmoCRM, HubSpot, RSS, "
-        "Google Sheets, Ozon, Wildberries, и др.\n\n"
+        "Смотри в раздел «ТВОИ ИНТЕГРАЦИИ» — там перечислено что у тебя РЕАЛЬНО подключено. "
+        "Если что-то перечислено — ты УМЕЕШЬ это делать, используй run_agent_action. "
+        "Если пользователь просит интеграцию, которой НЕТ в «Твои интеграции» — "
+        "скажи конкретно: «Для этого нужна интеграция с X. Добавь ключи в настройках агента.»\n\n"
 
         "EMAIL-АДРЕСА:\n"
         "Копируй email ПОСИМВОЛЬНО из входных данных (IMAP, From, To, заголовки писем). "
         "Если видишь email в данных скрипта или в письме — используй ТОЧНО его, без изменений. "
         "Генерировать email из имени человека = ОШИБКА.\n\n"
 
-        + (f"ТВОИ ИНТЕГРАЦИИ:\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "") +
-        f"ТВОЯ РОЛЬ:\n{_persona}"
+        + (f"ТВОИ ИНТЕГРАЦИИ (активированы и готовы к использованию):\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "")
+        + (_intg_action_hint.strip() + "\n\n" if _intg_action_hint.strip() else "")
+        + f"ТВОЯ РОЛЬ:\n{_persona}"
     )
     # Гендерная инструкция — чтобы агент использовал правильный род
     if _is_fem:
@@ -4777,6 +4801,29 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     except Exception:
         pass
 
+    # ── Блок МЫШЛЕНИЯ: учим агента думать перед действием (по образцу ASI) ─────
+    # Без этого блока агенты выбирают первый попавшийся инструмент по шаблону.
+    # С ним — анализируют вариант, оценивают рычаг, избегают повторов.
+    system_prompt += (
+        "\n\n## МЫШЛЕНИЕ ПЕРЕД ДЕЙСТВИЕМ\n"
+        "Перед каждым tool-вызовом — быстрый анализ (занимает 2 секунды, не текст):\n"
+        "СУТЬ: что РЕАЛЬНО изменится когда цель будет достигнута? Какой измеримый результат?\n"
+        "ВАРИАНТЫ: назови мысленно 3 разных подхода (примеры):\n"
+        "  — прямой контакт (email, сообщение, outreach)\n"
+        "  — через контент (пост, публикация, статья) \n"
+        "  — через данные (исследование, поиск, аналитика)\n"
+        "  — нестандартный (что я ещё НЕ пробовал для ЭТОЙ цели?)\n"
+        "ИСТОРИЯ: что уже делал и какой результат было? Повторять провальное = ошибка.\n"
+        "РЫЧАГ: какое ОДНО действие даст максимальный сдвиг при минимуме усилий прямо сейчас?\n"
+        "СЛЕПЫЕ ЗОНЫ: что я упускаю? Может новый тип контакта, другая площадка, иной подход?\n\n"
+        "ПРИНЦИПЫ:\n"
+        "— 0% прогресса → значит нужен ДРУГОЙ подход, не тот что делал раньше.\n"
+        "— Ищи комбинации: исследование → создание контента → рассылка → follow-up.\n"
+        "— Думай как предприниматель: что принесёт РЕАЛЬНЫЙ результат для этой цели?\n"
+        "— Одно точное действие > три шаблонных. Лучше нестандартно, чем привычно.\n"
+        "— Нашёл что-то интересное при поиске → ИСПОЛЬЗУЙ это как основу для письма/поста.\n"
+    )
+
     # Для autopilot-задач: фокус на конкретное действие, не на анализ истории
     if _is_autopilot_task:
         system_prompt += (
@@ -4875,6 +4922,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
                     f"Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
                 )})
+        # Adaptive tokens: tool-calling iterations only need short JSON output (400),
+        # text-only final summary iterations need full response space (1200)
+        _iter_max_tokens = 400 if _use_tools_now else 1200
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
@@ -4882,7 +4932,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     use_tools=_use_tools_now,
                     tool_choice=_tc_mode,
                     exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=400,
+                    max_tokens=_iter_max_tokens,
                     api_timeout=API_TIMEOUT_LONG,
                 ),
                 timeout=API_TIMEOUT_LONG + 5,
@@ -5170,7 +5220,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 "Только текст, без tool-вызовов. Пиши как живой помощник."
             )})
             _summary_resp = await asyncio.wait_for(
-                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=300, api_timeout=30),
+                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=800, api_timeout=30),
                 timeout=35,
             )
             if _summary_resp and _summary_resp.get('choices'):
@@ -5181,9 +5231,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _sum_err:
             logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
 
-    if _final_text and len(_final_text) > 600 and _final_text != _done_fb:
-        # Обрезаем до последнего завершённого предложения в пределах 600 символов
-        _cut = _final_text[:600]
+    if _final_text and len(_final_text) > 3500 and _final_text != _done_fb:
+        # Обрезаем до последнего завершённого предложения в пределах 3500 символов
+        _cut = _final_text[:3500]
         _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
         if _last_dot > 200:
             _final_text = _cut[:_last_dot + 1]
@@ -5442,7 +5492,7 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
             _GARBAGE_PATS = [
                 r'^\[РОЛЬ\]\s*',
                 r'^ТВОЯ РОЛЬ:\s*',
-                r'^\[АВТОПИЛОТ\][^\n]*\n?',
+                r'^\[АВТОПИЛОТ[^\]]*\]\s*',  # только тег [АВТОПИЛОТ] / [АВТОПИЛОТ ЦЕЛЕЙ], контент не трогаем
                 r'^📌\s*Правила[^\n]*\n?',
                 r'^ПРАВИЛА И ПРЕДПОЧТЕНИЯ[^\n]*\n?',
                 r'^ТЫ[:\s]',
@@ -5967,7 +6017,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 result_summary=str(resp)[:600],
                 cooldown_hours=_cooldown,
             )
-        return str(resp)[:800]
+        return str(resp)[:2000]
 
     # ── Прямое обращение к агенту по имени (без LLM-решения) ────────────────────
     # Если сообщение начинается с имени агента — сразу ему делегируем
@@ -6339,8 +6389,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     except Exception:
                         pass
                     if _fu_final_text:
-                        await _send_visible(_fu_final_text[:500])
-                        _save_interaction_for_director(user_id, _fu_final_text[:500], message_type='ai')
+                        await _send_visible(_fu_final_text)
+                        _save_interaction_for_director(user_id, _fu_final_text, message_type='ai')
             except Exception as _fu_err:
                 logger.warning("[DIRECTOR] followup error: %s", _fu_err)
 
@@ -6366,8 +6416,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             ),
         }], max_tokens=250)
         if _final_report and len(_final_report.strip()) > 10:
-            await _send_visible(_final_report[:500])
-            _save_interaction_for_director(user_id, _final_report[:500], message_type='ai')
+            await _send_visible(_final_report)
+            _save_interaction_for_director(user_id, _final_report, message_type='ai')
 
     # Сохраняем контекст всех раундов делегирования
     _all_results = ' | '.join(r['result'][:200] for r in _round_history)

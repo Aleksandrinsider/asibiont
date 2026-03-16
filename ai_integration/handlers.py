@@ -533,8 +533,9 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             session.close()
         return _t(user_id, 'task_duplicate', title=existing.title)
     
-    # Create new task — время ОБЯЗАТЕЛЬНО
-    if not reminder_time:
+    # Create new task — время обязательно для пользовательских задач,
+    # но агентские задачи (created_by_agent_id) могут быть без времени (отслеживание прогресса)
+    if not reminder_time and not created_by_agent_id:
         logger.warning(f"[ADD_TASK] No reminder_time provided for task '{title}'")
         if close_session:
             session.close()
@@ -12655,9 +12656,15 @@ async def check_emails(
                 _blocks = re.split(r'\n---\n', result)
                 for _blk in _blocks:
                     _em_in_blk = _re_snip.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _blk, _re_snip.IGNORECASE)
-                    _preview_m = _re_snip.search(r'[Пп]ревью:\s*(.+)', _blk)
+                    _preview_m = _re_snip.search(r'[Пп]ревью:\s*(.+)', _blk, _re_snip.DOTALL)
                     if _em_in_blk and _preview_m:
-                        _snip_text = _preview_m.group(1).strip()[:500]
+                        _snip_raw = _preview_m.group(1).strip()[:500]
+                        # Очищаем MIME boundary/header артефакты (защита от старых raw-ответов IMAP)
+                        _snip_raw = _re_snip.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _snip_raw)
+                        _snip_raw = _re_snip.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _snip_raw)
+                        _snip_text = _snip_raw.strip()[:500]
+                        if not _snip_text:
+                            continue
                         for _em_raw in _em_in_blk:
                             _reply_snippets[_em_raw.lower()] = _snip_text
             except Exception:
@@ -12899,15 +12906,55 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                 if _is_known_imap:
                     skipped_known.append(from_addr)
 
-                # Snippet: BODY.PEEK[TEXT] первые 200 символов
-                _st, _dt2 = mail.fetch(mid, '(BODY.PEEK[TEXT]<0.500>)')
+                # Snippet: фетчим начало полного письма и парсим через email-модуль.
+                # BODY.PEEK[TEXT] для multipart возвращает сырой MIME с boundary-строками
+                # вместо текста — поэтому используем BODY.PEEK[] + email.message_from_bytes.
+                _st, _dt2 = mail.fetch(mid, '(BODY.PEEK[]<0.5000>)')
                 snippet = ''
                 if _st == 'OK' and _dt2[0] and len(_dt2[0]) > 1:
-                    raw_body = _dt2[0][1]
+                    raw_full = _dt2[0][1]
                     try:
-                        snippet = raw_body.decode('utf-8', errors='replace')[:200].strip()
+                        _parsed = _email_mod.message_from_bytes(raw_full)
+                        if _parsed.is_multipart():
+                            # Ищем text/plain часть
+                            for _part in _parsed.walk():
+                                if (_part.get_content_type() == 'text/plain'
+                                        and 'attachment' not in str(_part.get('Content-Disposition', ''))):
+                                    _pay = _part.get_payload(decode=True)
+                                    if _pay:
+                                        _cs = _part.get_content_charset() or 'utf-8'
+                                        snippet = _pay.decode(_cs, errors='replace').strip()[:400]
+                                        break
+                            # Fallback: text/html → убираем теги
+                            if not snippet:
+                                import re as _re_htm
+                                for _part in _parsed.walk():
+                                    if _part.get_content_type() == 'text/html':
+                                        _pay = _part.get_payload(decode=True)
+                                        if _pay:
+                                            _cs = _part.get_content_charset() or 'utf-8'
+                                            snippet = _re_htm.sub(
+                                                r'<[^>]+>', '',
+                                                _pay.decode(_cs, errors='replace'),
+                                            ).strip()[:400]
+                                            break
+                        else:
+                            _pay = _parsed.get_payload(decode=True)
+                            if _pay:
+                                _cs = _parsed.get_content_charset() or 'utf-8'
+                                snippet = _pay.decode(_cs, errors='replace').strip()[:400]
                     except Exception:
-                        snippet = str(raw_body[:200])
+                        # Крайний fallback: вырезаем MIME boundary вручную
+                        try:
+                            import re as _re_mime
+                            _raw_s = raw_full.decode('utf-8', errors='replace')
+                            _raw_s = _re_mime.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _raw_s)
+                            _raw_s = _re_mime.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _raw_s)
+                            snippet = _raw_s.strip()[:400]
+                        except Exception:
+                            snippet = ''
+                # Обрезаем до первых 200 символов для компактного отображения
+                snippet = snippet[:200]
                 _known_badge_imap = "[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else ""
                 results.append(
                     f"От: {_known_badge_imap}{from_addr}\n"
