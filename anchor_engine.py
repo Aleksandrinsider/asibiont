@@ -945,6 +945,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            if _first_goal_title else "")
         + "13. КОМАНДНАЯ ЭСТАФЕТА: нашёл контакт — не держи у себя! "
           "DELEGATE[Имя с email-интеграцией]: Отправь письмо name@domain.com — [суть].\n"
+        + "14. ❌ ЗАПРЕЩЕНО создавать задачи через add_task ДЛЯ ПОЛЬЗОВАТЕЛЯ — задачи создаёт "
+          "только сам пользователь. add_task используй ТОЛЬКО для внутренних рабочих шагов своей цепочки "
+          "(например зафиксировать контакт). НИКОГДА не пиши пользователю 'я поставил тебе задачу'.\n"
     )
 
 # Группы батчинга
@@ -2896,7 +2899,7 @@ class AnchorEngine:
                 _blocker_in_result = bool(result and 'БЛОКЕР:' in result.upper())
                 _stag_warn = next((w for w in _fw_esc if 'СТАГНАЦИЯ' in w.upper()), '')
                 _cap_warns = [w for w in _fw_esc if '⚠️' in w or '⚡' in w]
-                if self.bot and (_stag_warn or _blocker_in_result or len(_es_esc) >= 2 or _tot_disp >= 8) \
+                if self.bot and (_stag_warn or _blocker_in_result) \
                         and (_is_noise_result or _blocker_in_result):
                     try:
                         _esc_recent = session.query(Interaction).filter(
@@ -2913,14 +2916,8 @@ class AnchorEngine:
                                     _esc_lines.append(f"🔴 {_bl_line.strip()}")
                             if _stag_warn:
                                 _esc_lines.append(_stag_warn)
-                            elif _tot_disp >= 8:
-                                _esc_lines.append(
-                                    f"ℹ️ Автопилот совершил {_tot_disp}+ действий за 48ч, но метрика целей не выросла."
-                                )
                             if _cap_warns:
                                 _esc_lines.extend(_cap_warns[:2])
-                            if _es_esc:
-                                _esc_lines.append(f"Исчерпаны стратегии: {', '.join(_es_esc)}. Нужна новая точка входа.")
                             _esc_lines.append("💬 Напиши мне — что добавить или попробовать. Я перенастрою агентов.")
                             _esc_text = '\n\n'.join(_esc_lines)
                             await self.bot.send_message(chat_id=user.telegram_id, text=_esc_text)
@@ -4566,6 +4563,50 @@ class AnchorEngine:
                 elif _ak[0]:
                     logger.info("[COORD] dedup: skip dup step %s/%s", _p.get('agent'), _p.get('tool'))
             _plan = _plan_deduped if _plan_deduped else _plan
+
+            # ── Force-reply: если есть входящие без AI-ответа — email-агент ОБЯЗАН ответить ПЕРВЫМ ──
+            # Это жёсткий пост-фильтр: LLM-план может игнорировать pending_replies → override
+            if _pending_replies:
+                _force_reply_agent = None
+                for _a_fr in real_agents:
+                    _keys_fr = (getattr(_a_fr, 'user_api_keys', '') or '').lower()
+                    _can_send_fr = (
+                        any(k in _keys_fr for k in ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_'))
+                        or ('gmail_user=' in _keys_fr and any(pk in _keys_fr for pk in ('gmail_pass=', 'gmail_app_password=', 'gmail_password=')))
+                        or 'yandex_user=' in _keys_fr or 'mailru_user=' in _keys_fr
+                    )
+                    if _can_send_fr:
+                        _force_reply_agent = _a_fr.name
+                        break
+                if _force_reply_agent:
+                    # Проверяем: есть ли уже reply_to_outreach_email в плане для этого агента
+                    _already_has_reply = any(
+                        p.get('agent', '').strip() == _force_reply_agent
+                        and p.get('tool', '') in ('reply_to_outreach_email', 'check_emails')
+                        for p in _plan
+                    )
+                    if not _already_has_reply:
+                        _pr0 = _pending_replies[0]
+                        _pr0_txt = _pr0.get('reply_text') or ''
+                        _reply_task = (
+                            f"Ответь на входящее письмо от {_pr0.get('name') or _pr0.get('email')}"
+                            f" (outreach_id={_pr0.get('outreach_id')})"
+                        )
+                        if _pr0_txt:
+                            _reply_task += f': «{_pr0_txt[:120]}»'
+                        else:
+                            _reply_task += '. Сначала вызови check_emails чтобы получить текст ответа.'
+                        _reply_tool = 'reply_to_outreach_email' if _pr0_txt else 'check_emails'
+                        # Удаляем текущий шаг email-агента — заменяем на reply
+                        _plan = [p for p in _plan if p.get('agent', '').strip() != _force_reply_agent]
+                        _plan.insert(0, {
+                            'agent': _force_reply_agent,
+                            'tool': _reply_tool,
+                            'task': _reply_task,
+                            'goal': _pr0.get('goal') or (_goals[0]['title'] if _goals else 'ответить на входящие'),
+                        })
+                        logger.info("[COORD] force-reply prepended: %s → %s (outreach_id=%s)",
+                                    _force_reply_agent, _reply_tool, _pr0.get('outreach_id'))
 
             # ── Пост-фильтр: нет принудительных коррекций — агенты сами выбирают инструменты ──
             # Координатор (LLM) назначил план зная интеграции агентов — доверяем его решению.
