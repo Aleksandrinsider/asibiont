@@ -5136,18 +5136,20 @@ except Exception as e:
     print('Ошибка Тинькофф: ' + str(e))`
             },
             alphavantage: {
-                name: 'Alpha Vantage (акции / форекс / нефть)',
+                name: 'Alpha Vantage',
                 fields: [
                     {k:'ALPHAVANTAGE_API_KEY', label:'API Key Alpha Vantage', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
-                    {k:'AV_SYMBOLS', label:'Тикеры акций/форекса через запятую', ph:'AAPL,GOOGL,MSFT,EUR/USD', t:'text', opt:true},
-                    {k:'AV_OIL', label:'Нефтяные котировки Brent/WTI', ph:'yes', t:'text', opt:true}
+                    {k:'AV_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,GOOGL,EUR/USD,BRENT', t:'text', opt:true}
                 ],
-                hint: 'Бесплатный ключ: alphavantage.co → Get Free API Key. 500 запросов/день. Акции: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Металлы: XAU/USD (золото). Нефть: укажи AV_OIL=yes — возвращает ежемесячные цены Brent и WTI (нефтяные новости только через RSS). ⚠️ NEWS_SENTIMENT только в Premium.',
+                hint: 'Бесплатный ключ: alphavantage.co → Get Free API Key. 500 запросов/день. Все типы в одном поле AV_SYMBOLS: акции (AAPL, MSFT, TSLA), форекс (EUR/USD, USD/RUB), металлы (XAU/USD — золото), нефть (BRENT, WTI), природный газ (NATURAL_GAS), медь (COPPER). ⚠️ NEWS_SENTIMENT только в Premium.',
                 code: `import urllib.request, json, os
 API_KEY = os.environ.get('ALPHAVANTAGE_API_KEY', '')
 SYMBOLS = os.environ.get('AV_SYMBOLS', 'AAPL,MSFT,GOOGL')
-AV_OIL = os.environ.get('AV_OIL', '')
-ACTION = os.environ.get('AGENT_ACTION', 'quotes')
+
+# Сырьевые товары с отдельным API-эндпоинтом (не GLOBAL_QUOTE)
+COMMODITIES = {'BRENT': 'BRENT', 'WTI': 'WTI', 'NATURAL_GAS': 'NATURAL_GAS',
+               'COPPER': 'COPPER', 'WHEAT': 'WHEAT', 'CORN': 'CORN', 'COTTON': 'COTTON',
+               'SUGAR': 'SUGAR', 'COFFEE': 'COFFEE', 'ALL_COMMODITIES': 'ALL_COMMODITIES'}
 
 def av_get(params):
     params['apikey'] = API_KEY
@@ -5156,49 +5158,43 @@ def av_get(params):
     with urllib.request.urlopen(req, timeout=15) as r:
         return json.loads(r.read().decode())
 
-def get_oil(name, fn):
-    url = 'https://www.alphavantage.co/query?function=' + fn + '&interval=monthly&apikey=' + API_KEY
+def fetch_commodity(sym):
+    url = 'https://www.alphavantage.co/query?function=' + COMMODITIES[sym] + '&interval=monthly&apikey=' + API_KEY
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=15) as r:
         d = json.loads(r.read().decode())
     if 'Information' in d:
-        print(name + ': требует Premium-ключ Alpha Vantage'); return
+        print(sym + ': требует Premium-ключ'); return
     data = d.get('data', [])
     if not data:
-        print(name + ': нет данных'); return
+        print(sym + ': нет данных'); return
     last = data[0]; prev = data[1] if len(data) > 1 else last
     price = last.get('value', '?'); date = last.get('date', '')[:10]
     try:
         chg = round(float(price) - float(prev.get('value', price)), 2)
         sign = '+' if chg >= 0 else ''
-        print(name + ': $' + str(price) + '/барр.  ' + sign + str(chg) + '  (' + date + ')')
+        print(sym + ': $' + str(price) + '  ' + sign + str(chg) + '  (' + date + ')')
     except Exception:
-        print(name + ': $' + str(price) + '/барр.  (' + date + ')')
+        print(sym + ': $' + str(price) + '  (' + date + ')')
 
 try:
     if not API_KEY:
         print('Ошибка: ALPHAVANTAGE_API_KEY не задан.')
     else:
-        if AV_OIL:
-            print('Нефтяные котировки:')
-            get_oil('Brent (ICE)', 'BRENT')
-            get_oil('WTI (NYMEX)', 'WTI')
-        if ACTION == 'forex':
-            pairs = [s.strip() for s in SYMBOLS.split(',') if '/' in s]
-            if not pairs: pairs = ['EUR/USD', 'USD/RUB', 'GBP/USD']
-            print('Курсы валют (Alpha Vantage):')
-            for pair in pairs[:5]:
-                from_c, to_c = pair.split('/')
+        symbols = [s.strip().upper() for s in SYMBOLS.split(',') if s.strip()]
+        if not symbols:
+            symbols = ['AAPL']
+        for sym in symbols[:8]:
+            if sym in COMMODITIES:
+                fetch_commodity(sym)
+            elif '/' in sym:
+                from_c, to_c = sym.split('/', 1)
                 d = av_get({'function': 'CURRENCY_EXCHANGE_RATE', 'from_currency': from_c, 'to_currency': to_c})
                 info = d.get('Realtime Currency Exchange Rate', {})
                 rate = info.get('5. Exchange Rate', '?')
                 refreshed = info.get('6. Last Refreshed', '')[:16]
-                print(pair + ': ' + str(rate) + '  (' + refreshed + ')')
-        elif not AV_OIL:
-            symbols_list = [s.strip() for s in SYMBOLS.split(',') if '/' not in s]
-            if not symbols_list: symbols_list = ['AAPL']
-            print('Котировки акций (Alpha Vantage):')
-            for sym in symbols_list[:5]:
+                print(sym + ': ' + str(rate) + '  (' + refreshed + ')')
+            else:
                 d = av_get({'function': 'GLOBAL_QUOTE', 'symbol': sym})
                 q = d.get('Global Quote', {})
                 price = q.get('05. price', '?')
@@ -5206,7 +5202,7 @@ try:
                 chg_pct = q.get('10. change percent', '0%')
                 prev_c = q.get('08. previous close', '?')
                 direction = '+' if float(chg or 0) >= 0 else ''
-                print(sym + ': $' + str(price) + '  ' + direction + str(chg) + ' (' + str(chg_pct) + ')  prev.close $' + str(prev_c))
+                print(sym + ': $' + str(price) + '  ' + direction + str(chg) + ' (' + str(chg_pct) + ')  prev $' + str(prev_c))
 except Exception as e:
     print('Ошибка Alpha Vantage: ' + str(e))`
             },
@@ -5888,7 +5884,7 @@ except Exception as e:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Финансы / Календарь</option>
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>
-                            <option value="alphavantage">Alpha Vantage (акции / форекс / нефть)</option>
+                            <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Мессенджеры / ERP</option>
                             <option value="whatsapp">WhatsApp Business</option>
                             <option value="onec">1С (REST API)</option>
