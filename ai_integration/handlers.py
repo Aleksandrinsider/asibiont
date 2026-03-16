@@ -10906,11 +10906,29 @@ async def send_outreach_email(
         if not user:
             return " Пользователь не найден"
 
-        # ── GUARD: не отправлять email на адрес самого пользователя ──
+        # ── GUARD: не отправлять email на адрес самого пользователя ИЛИ IMAP-аккаунт агента ──
         _rcpt = (recipient_email or '').strip().lower()
         _user_email = (getattr(user, 'email', '') or '').strip().lower()
-        if _rcpt and _user_email and _rcpt == _user_email:
-            return f" Нельзя отправлять outreach на собственный email ({_rcpt}). Найди другого получателя."
+        _own_emails_oe = set()
+        if _user_email:
+            _own_emails_oe.add(_user_email)
+        try:
+            from models import UserAgent as _UA_oe
+            for _ag_oe in session.query(_UA_oe).filter(
+                _UA_oe.author_id == user.id,
+                _UA_oe.user_api_keys.isnot(None),
+            ).all():
+                for _ln_oe in (_ag_oe.user_api_keys or '').splitlines():
+                    _ln_oe = _ln_oe.strip()
+                    if _ln_oe.upper().startswith('GMAIL_USER=') or _ln_oe.upper().startswith('IMAP_USER='):
+                        _imap_val_oe = _ln_oe.split('=', 1)[1].strip().lower()
+                        if _imap_val_oe and '@' in _imap_val_oe:
+                            _own_emails_oe.add(_imap_val_oe)
+        except Exception:
+            pass
+        if _rcpt and _rcpt in _own_emails_oe:
+            return (f" Нельзя отправлять outreach на {_rcpt} — это ваша почта или IMAP-аккаунт агента. "
+                    f"Найди email реального внешнего получателя.")
 
         # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
         RESEND_API_KEY = _platform_resend_key
@@ -13435,6 +13453,29 @@ async def save_email_contact(
         # Блокируем generic/корпоративные адреса
         if _is_generic_email(email_clean):
             return f" {email_clean} — это корпоративный/generic адрес. Сохраняй только личные email конкретных людей."
+
+        # ── GUARD: не сохранять свой собственный email или IMAP-аккаунт агента ──
+        _user_email_own = (getattr(user, 'email', '') or '').strip().lower()
+        _own_emails = set()
+        if _user_email_own:
+            _own_emails.add(_user_email_own)
+        try:
+            from models import UserAgent as _UA_sec
+            for _ag_sec in session.query(_UA_sec).filter(
+                _UA_sec.author_id == user.id,
+                _UA_sec.user_api_keys.isnot(None),
+            ).all():
+                for _ln_sec in (_ag_sec.user_api_keys or '').splitlines():
+                    _ln_sec = _ln_sec.strip()
+                    if _ln_sec.upper().startswith('GMAIL_USER=') or _ln_sec.upper().startswith('IMAP_USER='):
+                        _imap_val = _ln_sec.split('=', 1)[1].strip().lower()
+                        if _imap_val and '@' in _imap_val:
+                            _own_emails.add(_imap_val)
+        except Exception:
+            pass
+        if email_clean in _own_emails:
+            return (f" Нельзя сохранять собственный адрес ({email_clean}) как контакт — "
+                    f"это ваша почта или почта агента. Найди внешний email реального человека.")
 
         # Check duplicate
         existing = session.query(EmailContact).filter_by(
