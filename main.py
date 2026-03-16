@@ -7183,17 +7183,7 @@ async def api_search_contacts_handler(request):
 
                 profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
 
-                # Обляем аатар если нуж
-                photo_url = user.photo_url
-                if user.telegram_id and 'bot' in request.app:
-                    try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], user.telegram_id, force_refresh=False)
-                        if updated_avatar and updated_avatar != user.photo_url:
-                            user.photo_url = updated_avatar
-                            session_db.commit()
-                            photo_url = updated_avatar
-                    except Exception as e:
-                        logger.error(f"Error updating avatar for {user.telegram_id}: {e}")
+                photo_url = safe_avatar_url(user.telegram_id)
 
                 # Auto-renormalize profile if EN viewer and translated fields are missing
                 if _search_lang == 'en' and profile:
