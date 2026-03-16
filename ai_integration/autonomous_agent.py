@@ -4826,12 +4826,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
-    _max_iters = 3
+    _max_iters = 4 if _is_autopilot_task else 3  # autopilot: search0 + search1 + save + send
     # GitHub-агент: определяем заранее для форсирования цепочки
     _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
     for _iter in range(_max_iters):
-        # 4 tool calls суммарно для автопилота (search + save + send + progress)
-        _max_tool_calls = 4 if _is_autopilot_task else 3
+        # 5 tool calls суммарно для автопилота (search + search + save + send + progress)
+        _max_tool_calls = 5 if _is_autopilot_task else 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -4851,7 +4851,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _agent_has_github_local
                 and _last_tool_local == 'run_agent_action'
             )
-            if _was_github_search:
+            _was_save_contact = _last_tool_local == 'save_email_contact'
+            if _was_save_contact:
+                _messages.append({"role": "user", "content": (
+                    f"Контакт(ы) сохранены (использовал: {_used_str}). "
+                    "🚨 СЛЕДУЮЩИЙ ШАГ — ТОЛЬКО send_outreach_email:\n"
+                    "Отправь персональное письмо каждому сохранённому пользователю. "
+                    "Используй его имя и GitHub-профиль. Действуй немедленно — вызови send_outreach_email!"
+                )})
+            elif _was_github_search:
                 _messages.append({"role": "user", "content": (
                     f"Поиск выполнен (использовал: {_used_str}). "
                     "🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub — ВЫПОЛНИ ПРЯМО СЕЙЧАС:\n"
@@ -5062,7 +5070,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
             if _iter < _max_iters - 1:
                 # Не последняя итерация — продолжаем действовать
-                if _is_search_tool and _agent_has_github_local and _last_t_post == 'run_agent_action':
+                if _last_t_post == 'save_email_contact':
+                    # Только что сохранили контакт — ОБЯЗАТЕЛЬНО отправить письмо
+                    _messages.append({"role": "user", "content": (
+                        "Контакт сохранён. 🚨 НЕМЕДЛЕННО вызови send_outreach_email:\n"
+                        "Напиши персональное письмо сохранённому пользователю — "
+                        "используй его имя из GitHub, предложи протестировать ASI Biont. "
+                        "НЕ пиши отчёт — вызови send_outreach_email прямо сейчас!"
+                    )})
+                elif _is_search_tool and _agent_has_github_local and _last_t_post == 'run_agent_action':
                     # GitHub-поиск: ЖЁСТКО требуем save + send
                     _messages.append({"role": "user", "content": (
                         "Данные поиска получены. 🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub:\n"
@@ -5081,10 +5097,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "НЕ останавливайся на 'нашёл и рассказал'. СДЕЛАЙ что-то с результатами!"
                     )})
                 else:
-                    # Не поиск (save, send и др.) — завершай цепочку
+                    # Не поиск (send, update и др.) — завершай цепочку
                     _messages.append({"role": "user", "content": (
                         "Действие выполнено. "
-                        "Если есть ещё контакты для отправки — продолжай. "
+                        "Если есть ещё контакты для отправки — продолжай send_outreach_email. "
                         "Иначе вызови update_goal_progress."
                     )})
             else:
