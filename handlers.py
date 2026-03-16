@@ -140,7 +140,11 @@ from token_service import (
     grant_signup_tokens, get_balance_info, insufficient_balance_message,
     TOKEN_PACKAGES, FREE_TOKENS_ON_SIGNUP
 )
-from timezonefinder import TimezoneFinder
+try:
+    from timezonefinder import TimezoneFinder as _TimezoneFinder
+    _tf_available = True
+except Exception:
+    _tf_available = False
 from i18n import get_user_lang, set_user_lang, detect_lang_from_telegram, t
 
 logger = logging.getLogger(__name__)
@@ -1129,8 +1133,15 @@ async def process_other_message(user_id, message, state):
         lon = message.location.longitude
         
         # 1. Определяем часовой пояс
-        tf = TimezoneFinder()
-        timezone_str = tf.timezone_at(lng=lon, lat=lat)
+        timezone_str = None
+        if _tf_available:
+            try:
+                _tf = _TimezoneFinder()
+                timezone_str = _tf.timezone_at(lng=lon, lat=lat)
+            except Exception:
+                pass
+        if not timezone_str:
+            timezone_str = "UTC"
         
         # 2. Обратный геокодинг: координаты → город (Nominatim, бесплатно)
         city_name = None
