@@ -5156,7 +5156,7 @@ class AnchorEngine:
                     if _gh_actions:
                         _intg_live_lines.append(
                             f"💻 GitHub-интеграция активна. "
-                            f"run_agent_action поддерживает action: {', '.join(dict.fromkeys(_gh_actions)[:4])}"
+                            f"run_agent_action поддерживает action: {', '.join(list(dict.fromkeys(_gh_actions))[:4])}"
                         )
                     else:
                         _intg_live_lines.append(
