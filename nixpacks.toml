@@ -1,2 +1,5 @@
+[phases.setup]
+nixPkgs = ["stdenv.cc.cc.lib"]
+
 [start]
 cmd = "/opt/venv/bin/python main.py"
