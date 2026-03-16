@@ -358,7 +358,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_imap:
         avail.append("  📧 Email: check_emails ← здесь реальные ответы живых людей; reply_to/negotiate — продолжение диалога")
     if has_github:
-        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='...') ← контакты с профилями и email")
+        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='...') → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)")
     if has_rss:
         avail.append("  📰 RSS: run_agent_action(action='get_latest') ← свежие данные и инфоповоды из источника")
     if has_alpha:
@@ -460,7 +460,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _intg_missing = []
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
-    if _has_github:  _intg_connected.append('✅ GitHub — поиск разработчиков, репозитории, issues')
+    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(search_users, query=...) → save_email_contact → send_outreach_email [цепочка ОБЯЗАТЕЛЬНА — без отправки шаг не засчитан]')
     if _has_rss:     _intg_connected.append('✅ RSS — мониторинг лент новостей')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
@@ -536,6 +536,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         'find_relevant_contacts_for_task', 'update_goal_progress', 'add_task',
         # web_search специально удалён — должен баниться после 2 раз чтобы не зацикливаться
     }
+    # GitHub-агенты: run_agent_action не банить — каждый query уникален (search_users, find_contributors...)
+    if _has_github:
+        _MULTI_USE_OK.add('run_agent_action')
     _banned = {t for t, n in _tool_cnt.items() if n >= 2 and t not in _MULTI_USE_OK}
     _warn   = {t for t, n in _tool_cnt.items() if n == 1}
 
@@ -803,9 +806,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "9. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
         "10. ЧЕСТНОСТЬ: если инструмент не дал данных или идеи исчерпаны — "
         "начни ответ со слова БЛОКЕР: и опиши суть. ASI обратится к пользователю за помощью.\n"
+        + ("11. У тебя GitHub — после run_agent_action(search_users) ОБЯЗАТЕЛЬНО: "
+           "1) save_email_contact для каждого найденного, "
+           "2) send_outreach_email или find_and_message_relevant_users. "
+           "Нашёл людей но не написал — цикл впустую!\n"
+           if _has_github else '')
         + ("11. У тебя RSS-лента — после run_agent_action (RSS) ОБЯЗАТЕЛЬНО вызови save_email_contact "
            "для каждого найденного автора/источника. Без сохранения данные потеряются!\n"
-           if _has_rss else '')
+           if _has_rss and not _has_github else '')
         + ("11. Если активная email-кампания уже существует И в базе есть контакты — "
            "вызови send_outreach_email НАПРЯМУЮ конкретным людям из find_relevant_contacts_for_task. "
            "НЕ запускай новую кампанию — пиши персонально!\n"
