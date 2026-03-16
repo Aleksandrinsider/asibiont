@@ -6897,110 +6897,85 @@ except Exception as e:
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
             const deleteBtn = a.id ? `<button onclick="event.stopPropagation();activityDeleteGroup([${a.id}],'${a.activity_type||''}')" class="delete-btn" title="${t('act-del-one')||'Удалить'}"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>` : '';
 
-            // Безопасное экранирование HTML (без удаления эмодзи — они помогают читать)
-            const _esc = (s) => { const d = document.createElement('span'); d.textContent = s||''; return d.innerHTML; };
-
-            // Заголовок — оставляем эмодзи для читаемости
-            const displayTitle = _esc(a.title || '');
+            const cleanTitle = _tlStripEmoji(a.title);
 
             // Для autopilot/coordinator показываем result (итог), а не content (промпт)
             const _isAutoType = a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary';
             const _rawDisplay = (_isAutoType && a.result) ? a.result : (a.content || a.result || '');
 
-            // Чистим контент: убираем код, картинки, HTML-теги, нормализуем пробелы
+            // Чистим контент: убираем код, картинки, HTML-теги, эмодзи, нормализуем пробелы
             let cleanContent = (_rawDisplay || '')
                 .replace(/```[\s\S]*?```/g, '')
                 .replace(/`[^`\n]+`/g, '')
                 .replace(/!\[.*?\]\([^)]*\)/g, '')
                 .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '')
                 .replace(/<[^>]+>/g, ' ')
+                .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE0F}\u{200D}]/gu, '')
+                .replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '')
+                .replace(/[\u23E9-\u23FA\u2B05-\u2B55]/g, '')
                 .replace(/[ \t]+/g, ' ')
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
 
-            const PREVIEW_LEN = 300; // символов всегда видимого превью
+            const PREVIEW_LEN = 300;
             const hasContent = cleanContent.length > 0;
             const hasMore = cleanContent.length > PREVIEW_LEN;
             const previewText = hasContent ? cleanContent.slice(0, PREVIEW_LEN) : '';
             const restText = hasMore ? cleanContent.slice(PREVIEW_LEN) : '';
 
-            // Статус-бейдж
+            // Статус-бейдж (только для autopilot/coordinator — как было)
             let _statusBadge = '';
-            if (a.status) {
+            if ((a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary') && a.status) {
                 const _statusColors = {
                     'completed': '#1a7f37', 'in_progress': '#bf8700', 'failed': '#cf222e',
                     'noise_filtered': '#6e7781', 'dedup_filtered': '#6e7781',
                     'empty_result': '#6e7781', 'no_action': '#6e7781',
                 };
                 const _statusLabels = {
-                    'completed': '✓', 'in_progress': '⏳', 'failed': '✗',
+                    'completed': 'OK', 'in_progress': '...', 'failed': 'ERR',
                     'noise_filtered': 'skip', 'dedup_filtered': 'skip',
                     'empty_result': 'skip', 'no_action': 'skip',
                 };
-                const _sc = _statusColors[a.status];
-                const _sl = _statusLabels[a.status];
-                if (_sc && _sl) {
-                    _statusBadge = `<span style="font-size:11px;font-weight:600;color:${_sc};flex-shrink:0;">${_sl}</span>`;
-                }
+                const _sc = _statusColors[a.status] || '#6e7781';
+                const _sl = _statusLabels[a.status] || a.status;
+                _statusBadge = `<span style="font-size:11px;color:${_sc};flex-shrink:0;">${_sl}</span>`;
             }
 
-            // Тип+агент: пытаемся вытащить имя агента из заголовка (формат "Агент Марк: ...")
-            let agentBadge = '';
-            const _agentMatch = (a.title || '').match(/^(?:Агент\s+)?([А-ЯЁA-Z][а-яёa-z]+)[\s:]/);
-            if (_agentMatch && a.activity_type !== 'goal_created' && a.activity_type !== 'task_completed') {
-                agentBadge = `<span style="font-size:11px;color:#6366f1;background:#ede9fe;border-radius:4px;padding:1px 5px;flex-shrink:0;">${_esc(_agentMatch[1])}</span>`;
-            }
-
-            const chevron = hasMore ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);cursor:pointer;"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '';
+            const chevron = hasContent ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
 
             const header = document.createElement('div');
-            header.style.cssText = 'display:flex;align-items:flex-start;gap:6px;padding:10px 0 4px 0;';
+            header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasContent ? 'cursor:pointer;user-select:none;' : '');
             header.innerHTML = `
-                <div style="flex:1;min-width:0;">
-                    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:2px;">
-                        ${agentBadge}
-                        <span style="font-size:12px;color:#6C727F;white-space:nowrap;">${typeLabel}</span>
-                        ${_statusBadge}
-                        <span style="font-size:12px;color:#9CA3AF;white-space:nowrap;margin-left:auto;">${timeStr}</span>
-                    </div>
-                    <div style="font-size:13px;font-weight:500;color:#1F2328;word-break:break-word;line-height:1.4;">${displayTitle}</div>
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:13px;font-weight:500;color:#1F2328;flex:1;min-width:0;word-break:break-word;">${cleanTitle}</span>
+                    ${_statusBadge}
+                    <span style="font-size:12px;color:#6C727F;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>
                 </div>
-                <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:2px;">
-                    ${deleteBtn}
-                    ${chevron}
-                </div>
+                <span style="font-size:12px;color:#9CA3AF;flex-shrink:0;white-space:nowrap;">${timeStr}</span>
+                ${deleteBtn}
+                ${chevron}
             `;
             wrap.appendChild(header);
 
-            // Превью — всегда видимый текст (первые PREVIEW_LEN символов)
             if (hasContent) {
-                const preview = document.createElement('div');
-                preview.style.cssText = 'font-size:13px;color:#374151;line-height:1.6;padding:2px 0 8px 0;white-space:pre-wrap;word-break:break-word;';
-                preview.textContent = previewText + (hasMore ? '…' : '');
-                wrap.appendChild(preview);
-            }
-
-            // Остаток текста — сворачиваемый блок (только если контент длиннее превью)
-            if (hasMore) {
                 const body = document.createElement('div');
                 // coordinator_summary и completed autopilot авто-разворачиваются
                 const _autoOpen = a.activity_type === 'coordinator_summary' ||
                     (a.activity_type === 'goal_autopilot_dispatch' && a.status === 'completed');
                 body.style.cssText = 'overflow:hidden;transition:max-height 0.25s ease;max-height:' + (_autoOpen ? 'none' : '0px') + ';';
                 const inner = document.createElement('div');
-                inner.style.cssText = 'font-size:13px;color:#374151;line-height:1.6;padding:0 0 10px 0;white-space:pre-wrap;word-break:break-word;';
-                inner.textContent = restText;
+                inner.style.cssText = 'font-size:13px;color:#374151;line-height:1.5;padding:0 0 10px 0;white-space:pre-wrap;word-break:break-word;';
+                inner.textContent = cleanContent;
                 body.appendChild(inner);
                 wrap.appendChild(body);
 
                 const chev = header.querySelector('.tl-chev');
                 if (_autoOpen && chev) chev.style.transform = 'rotate(0deg)';
 
-                const _toggleBody = (e) => {
-                    if (e) e.stopPropagation();
+                header.onclick = () => {
                     const collapsed = body.style.maxHeight === '0px';
                     if (collapsed) {
-                        body.style.maxHeight = body.scrollHeight + 400 + 'px';
+                        body.style.maxHeight = body.scrollHeight + 200 + 'px';
                         if (chev) chev.style.transform = 'rotate(0deg)';
                         body.addEventListener('transitionend', function _exp() {
                             body.removeEventListener('transitionend', _exp);
@@ -7013,10 +6988,6 @@ except Exception as e:
                         if (chev) chev.style.transform = 'rotate(-90deg)';
                     }
                 };
-                if (chev) chev.onclick = _toggleBody;
-                // Клик по превью тоже разворачивает остаток
-                wrap.querySelector('div[style*="pre-wrap"]').style.cursor = 'pointer';
-                wrap.querySelector('div[style*="pre-wrap"]').onclick = _toggleBody;
             }
 
             return wrap;
