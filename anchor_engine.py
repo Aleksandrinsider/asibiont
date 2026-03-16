@@ -5560,7 +5560,7 @@ class AnchorEngine:
                                 _sum_sess.add(AgentActivityLog(
                                     user_id=user.id,
                                     activity_type='coordinator_summary',
-                                    title=f'ASI · итог цикла: {_goals_titles}'[:120],
+                                    title=f'Итог цикла: {_goals_titles}'[:120],
                                     content=_report_text,
                                     status='completed',
                                     result=_report_text[:800],

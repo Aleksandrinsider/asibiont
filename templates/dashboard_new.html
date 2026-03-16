@@ -6875,7 +6875,7 @@ except Exception as e:
                 'inbox_reply': t('act-inbox-reply'),
                 'task_blocked': t('act-task-blocked'),
                 'goal_autopilot_dispatch': t('act-autopilot'),
-                'coordinator_summary': t('act-autopilot'),
+                'coordinator_summary': t('act-coordinator-summary'),
                 'agent_event_dispatch': t('act-event-dispatch'),
                 'agent_chain_continue': t('act-chain-continue'),
             };
@@ -6902,9 +6902,9 @@ except Exception as e:
             const _displayContent = (_isAutoType && a.result) ? a.result : (a.content || '');
             const hasDetails = !!(_displayContent && _displayContent.trim());
             const chevron = hasDetails ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
-            // Статус-бейдж для autopilot dispatch
+            // Статус-бейдж для autopilot dispatch и coordinator_summary
             let _statusBadge = '';
-            if (a.activity_type === 'goal_autopilot_dispatch' && a.status) {
+            if ((a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary') && a.status) {
                 const _statusColors = {
                     'completed': '#1a7f37', 'in_progress': '#bf8700', 'failed': '#cf222e',
                     'noise_filtered': '#6e7781', 'dedup_filtered': '#6e7781',
@@ -11552,9 +11552,9 @@ except Exception as e:
                 }
             }
             
-            // Для агентских задач показываем "Поручено @agent_name"
+            // Для агентских задач (автопилот → агент) показываем "Автопилот → @agent_name"
             if (task.source === 'agent' && task.agent_name && !delegationInfo) {
-                delegationInfo = t('delegated-to') + ' @' + task.agent_name;
+                delegationInfo = (t('autopilot-label') || 'Автопилот') + ' → @' + task.agent_name;
             }
             
             // Если есть делегирование — показываем ВЫШЕ названия задачи
@@ -11587,9 +11587,10 @@ except Exception as e:
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
-            } else if (task.source === 'agent') {
-                // Агентские задачи могут не иметь фиксированного времени
-                html += '<span class="task-meta" style="color:#068487;">' + (t('agent-task-label') || 'Поручено агенту') + '</span>';
+            }
+            if (task.source === 'agent') {
+                // Всегда показываем бейдж для задач, созданных агентом/автопилотом
+                html += '<span class="task-meta" style="color:#068487;">' + (t('agent-created-label') || 'Создано агентом') + '</span>';
             }
             
             let statusText = t('status-in-progress');
@@ -15589,7 +15590,7 @@ except Exception as e:
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
       'act-email':'Email','act-delegation':'Делегирование','act-agent-task':'Поручение агенту','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Аутрич-кампания','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента','agent-task-label':'Поручено агенту',
       'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
-      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Агент застрял','act-autopilot':'Автопилот цели','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов',
+      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Агент застрял','act-autopilot':'Автопилот цели','act-coordinator-summary':'Итог координатора','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов','agent-created-label':'Создано агентом','autopilot-label':'Автопилот',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
       'dc-title':'Аутрич-кампания','dc-audience':'Аудитория:','dc-sent':'Отпр.','dc-accepted':'Прин.','dc-del-confirm':'Удалить аутрич-кампанию?',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',
@@ -15884,7 +15885,7 @@ except Exception as e:
       'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
       'act-email':'Email','act-delegation':'Delegation','act-agent-task':'Agent task','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-content-campaign':'Content campaign','act-deleg-campaign':'Outreach campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline','act-integration':'Integration','act-run-action':'Agent action','agent-task-label':'Assigned to agent',
       'act-task-added':'Task created','act-task-completed':'Task completed','act-goal-created':'Goal created','act-goal-updated':'Goal updated','act-goal-completed':'Goal achieved','act-goal-deleted':'Goal deleted','act-profile-updated':'Profile',
-      'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked','act-autopilot':'Goal autopilot','act-event-dispatch':'Agent reaction','act-chain-continue':'Agent chain',
+      'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked','act-autopilot':'Goal autopilot','act-coordinator-summary':'Coordinator summary','act-event-dispatch':'Agent reaction','act-chain-continue':'Agent chain','agent-created-label':'Created by agent','autopilot-label':'Autopilot',
       'cc-title':'Content campaign','cc-goal':'Goal:','cc-topics':'Topics:','cc-freq':'Frequency:','cc-last':'Last post:','cc-posts':'p.','cc-freq-daily':'Daily','cc-freq-weekly':'Weekly','cc-del-confirm':'Delete content campaign?','plat-feed':'Feed',
       'dc-title':'Outreach campaign','dc-audience':'Audience:','dc-sent':'Sent','dc-accepted':'Accepted','dc-del-confirm':'Delete outreach campaign?',
       'act-item-1':'action','act-item-2':'actions','act-item-5':'actions','act-pending':'pend.',
