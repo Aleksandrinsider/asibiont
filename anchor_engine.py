@@ -326,6 +326,101 @@ _INTEGRATION_TYPE_LABELS = {
 }
 
 
+def _match_best_integration(goal_title: str,
+                             has_imap: bool, has_github: bool, has_rss: bool,
+                             has_alpha: bool, has_content: bool, has_news: bool,
+                             has_notion: bool, has_slack: bool, has_sheets: bool,
+                             has_stripe: bool) -> list[tuple[int, str, str]]:
+    """Для конкретной цели возвращает список (score, emoji+name, цепочка инструментов)
+    отсортированный по убыванию релевантности.  Только те интеграции, что реально есть у агента."""
+    t = goal_title.lower()
+
+    _SCORE: dict[str, int] = {}
+
+    # ── GitHub: разработчики, тестировщики, пользователи, beta, participants ──
+    _gh_kw_hi = ('разработчик', 'программист', 'developer', 'github', 'gitlab',
+                 'тестировщик', 'пользовател', 'user', 'тестов', 'бета',
+                 'beta', 'участник', 'кандидат', 'contributor', 'open source')
+    _gh_kw_lo = ('контрибьют', 'репозитор', 'code', 'opensource', 'найти люд',
+                 'набор', 'recruit', 'рекрутинг')
+    if has_github:
+        _SCORE['github'] = (sum(3 if w in t else 0 for w in _gh_kw_hi)
+                            + sum(1 if w in t else 0 for w in _gh_kw_lo))
+
+    # ── Email/IMAP: клиенты, партнёры, подписчики, рассылка ──
+    _em_kw = ('клиент', 'партнёр', 'подписчик', 'рассылк', 'аудитор', 'покупател',
+              'лид', 'lead', 'outreach', 'email', 'почт', 'сотрудник', 'заказчик')
+    if has_imap:
+        _SCORE['imap'] = sum(2 if w in t else 0 for w in _em_kw)
+
+    # ── Alpha Vantage: финансы, нефть, рынок, биржа ──
+    _av_kw = ('нефт', 'газ', 'акц', 'биржа', 'котировк', 'рынок нефт', 'oil', 'stock', 'forex',
+              'инвест', 'трейд', 'финанс', 'commodity', 'сырьё', 'металл', 'валют')
+    if has_alpha:
+        _SCORE['alpha'] = sum(3 if w in t else 0 for w in _av_kw[:4]) + sum(1 if w in t else 0 for w in _av_kw[4:])
+
+    # ── RSS: новости, мониторинг, тренды, статьи ──
+    _rss_kw = ('новост', 'мониторинг', 'тренды', 'медиа', 'сми', 'статья', 'обзор', 'лент',
+               'рss', 'фид', 'блог', 'публикац контент')
+    if has_rss:
+        _SCORE['rss'] = sum(2 if w in t else 0 for w in _rss_kw)
+
+    # ── Telegram/Discord: аудитория, канал, контент ──
+    _cnt_kw = ('канал', 'аудитория', 'подписчик', 'пост', 'smm', 'telegram', 'discord',
+               'контент', 'охват', 'трафик', 'публикац')
+    if has_content:
+        _SCORE['content'] = sum(2 if w in t else 0 for w in _cnt_kw)
+
+    # ── Notion: база знаний, документация ──
+    _not_kw = ('база знаний', 'документ', 'notion', 'вики', 'wiki', 'заметк', 'запис')
+    if has_notion:
+        _SCORE['notion'] = sum(2 if w in t else 0 for w in _not_kw)
+
+    # ── Slack: команда, коммуникация ──
+    _slk_kw = ('команд', 'коммуникац', 'slack', 'уведомлен', 'отчёт команд')
+    if has_slack:
+        _SCORE['slack'] = sum(2 if w in t else 0 for w in _slk_kw)
+
+    # ── Google Sheets: данные, таблицы, аналитика ──
+    _gsh_kw = ('таблиц', 'данные', 'аналитик', 'sheets', 'excel', 'csv', 'метрик', 'отчёт')
+    if has_sheets:
+        _SCORE['sheets'] = sum(2 if w in t else 0 for w in _gsh_kw)
+
+    # ── Stripe: платежи, выручка ──
+    _str_kw = ('платёж', 'выручк', 'revenue', 'оплат', 'stripe', 'юкасса', 'транзакц')
+    if has_stripe:
+        _SCORE['stripe'] = sum(2 if w in t else 0 for w in _str_kw)
+
+    _CHAINS = {
+        'github': ("🐙 GitHub",
+                   "run_agent_action(search_users, query='…') → save_email_contact → send_outreach_email"),
+        'imap':   ("📧 Email",
+                   "check_emails (ответы) → reply_to_outreach_email / negotiate_by_email"),
+        'alpha':  ("📈 Alpha Vantage",
+                   "run_agent_action(get_price, symbol='BRENT') → анализ → update_goal_progress"),
+        'rss':    ("📰 RSS",
+                   "run_agent_action(get_latest) → save_email_contact (автора) → send_outreach_email"),
+        'content':("📢 Telegram/Discord",
+                   "create_post → publish_to_telegram / publish_to_discord"),
+        'notion': ("📝 Notion",
+                   "run_agent_action(create_page) → зафиксируй данные/план"),
+        'slack':  ("💬 Slack",
+                   "run_agent_action(post_message, channel='#X') → уведомление команды"),
+        'sheets': ("📊 Google Sheets",
+                   "run_agent_action(update_sheet) → актуализируй данные/метрики"),
+        'stripe': ("💳 Stripe",
+                   "run_agent_action(get_charges) → анализ выручки → update_goal_progress"),
+    }
+
+    result = []
+    for key, score in _SCORE.items():
+        if score > 0 and key in _CHAINS:
+            emoji_name, chain = _CHAINS[key]
+            result.append((score, emoji_name, chain))
+    result.sort(key=lambda x: -x[0])
+    return result
+
+
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                                has_imap: bool, has_github: bool, has_rss: bool,
                                has_alpha: bool, has_script: bool, has_content: bool,
@@ -352,6 +447,33 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
             )
         else:
             goal_lines.append(f"  • «{title}» ({prog}%)")
+
+    # ── Авто-приоритизация: лучшая интеграция под каждую цель ──
+    _priority_lines = []
+    _medals = ['🥇', '🥈', '🥉']
+    for g in goals_summary[:3]:
+        _gtitle = (g.get('title', '') or '')[:70]
+        _ranked = _match_best_integration(
+            _gtitle, has_imap, has_github, has_rss, has_alpha,
+            has_content, has_news, has_notion, has_slack, has_sheets, has_stripe
+        )
+        if _ranked:
+            # Показываем топ-2 интеграции для цели
+            _best_parts = []
+            for _rank, (_score, _ename, _chain) in enumerate((_ranked[:2])):
+                _medal = _medals[_rank] if _rank < len(_medals) else '  '
+                _best_parts.append(f"    {_medal} {_ename}: {_chain}")
+            _priority_lines.append(
+                f"  «{_gtitle}»\n" + '\n'.join(_best_parts)
+            )
+
+    _priority_block = ''
+    if _priority_lines:
+        _priority_block = (
+            "\n🧠 ЛУЧШИЕ ИНСТРУМЕНТЫ ПОД ТВОИ ЦЕЛИ (выбрано автоматически по теме):\n"
+            + '\n'.join(_priority_lines)
+            + "\n  └ Начни с 🥇, при необходимости подключай 🥈. Всё остальное — вспомогательное.\n"
+        )
 
     # ── Карта: что РЕАЛЬНО даёт каждая интеграция ──
     avail = []
@@ -387,6 +509,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         "\n━━━ ДУМАЙ О ЦЕЛИ, А НЕ ОБ АКТИВНОСТИ ━━━\n"
         "Цели и что реально в них засчитывается:\n"
         + '\n'.join(goal_lines)
+        + _priority_block
         + "\n\n"
         "⚠️ ВАЖНО — перед каждым действием ответь мысленно:\n"
         "  1) Что РЕАЛЬНО = +1 к метрике этой цели?\n"
