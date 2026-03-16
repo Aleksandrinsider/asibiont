@@ -5069,7 +5069,6 @@ class AnchorEngine:
                     f"     → НЕ обновляй update_goal_progress если данные нерелевантны теме цели!\n"
                     if (_ag_data.get('python_code') or '').strip() else ''
                 )
-                # Личность агента (специализация + пол для живой речи)
                 _ag_is_fem = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
                 _ag_role_str = (
                     f"{_ag_data.get('job_title', '') or _ag_data.get('specialization', 'специалист')}"
@@ -5079,6 +5078,105 @@ class AnchorEngine:
                     ', '.join(_ag_profile_match['caps'][:4])
                     if _ag_profile_match and _ag_profile_match.get('caps')
                     else 'нет подключённых интеграций'
+                )
+
+                # ── Живой контекст интеграций агента ─────────────────────────────────────────
+                # Извлекаем конкретные данные из настроек агента, а не абстрактные названия.
+                _intg_live_lines: list = []
+                _ag_api_keys_raw = _ag_data.get('user_api_keys', '') or ''
+                _ag_py_code_raw  = _ag_data.get('python_code', '') or ''
+                import re as _re_live
+
+                # Email/Почта: какой аккаунт, что уже открыто в inbox
+                _ag_email_user = ''
+                for _kl in _ag_api_keys_raw.splitlines():
+                    _kl = _kl.strip()
+                    if '=' in _kl and any(
+                        _kl.upper().startswith(p) for p in (
+                            'GMAIL_USER=', 'YANDEX_USER=', 'MAILRU_USER=', 'IMAP_USER=', 'EMAIL_USER='
+                        )
+                    ):
+                        _ag_email_user = _kl.split('=', 1)[1].strip()
+                        break
+                if _ag_email_user:
+                    _intg_live_lines.append(f"📧 Твой email-аккаунт: {_ag_email_user}")
+                    # Pending replies для этого агента
+                    _pr_for_agent = [
+                        p for p in _pending_replies
+                        if not p.get('reply_text')  # без текста → нужен check_emails сначала
+                        or p.get('reply_text')
+                    ]
+                    if _pr_for_agent:
+                        for _prr in _pr_for_agent[:3]:
+                            _prr_txt = _prr.get('reply_text') or '[текст не получен — вызови check_emails]'
+                            _intg_live_lines.append(
+                                f"  🆕 Ждёт ответа: {_prr.get('name') or _prr.get('email')} "
+                                f"({_prr.get('email')}) — \"{_prr_txt[:120]}\" "
+                                f"→ reply_to_outreach_email(outreach_id={_prr.get('outreach_id')}, reply_body=...)"
+                            )
+
+                # RSS: URL и тематика ленты
+                _rss_url_live = ''
+                for _kl in _ag_api_keys_raw.splitlines():
+                    if _kl.strip().upper().startswith('RSS_URL='):
+                        _rss_url_live = _kl.split('=', 1)[1].strip()
+                        break
+                if _rss_url_live:
+                    # Определяем тематику по URL
+                    _rss_topics = []
+                    _rss_domain_map = [
+                        (('habr', 'habrahabr'), 'IT/технологии/разработка (Хабр)'),
+                        (('tass', 'ria.ru', 'rbc.ru', 'kommersant'), 'новости России (деловые СМИ)'),
+                        (('investing.com', 'moex', 'finam', 'rbc.ru/finance'), 'финансы и рынки'),
+                        (('github.com/explore', 'github.blog'), 'GitHub (разработка, open source)'),
+                        (('ai.googleblog', 'openai.com', 'deepmind'), 'AI/ML исследования'),
+                        (('hh.ru', 'superjob', 'linkedin'), 'вакансии/рекрутинг'),
+                        (('vc.ru', 'spark.ru', 'rb.ru'), 'стартапы и предпринимательство'),
+                    ]
+                    _rss_lower = _rss_url_live.lower()
+                    for _patterns, _topic in _rss_domain_map:
+                        if any(p in _rss_lower for p in _patterns):
+                            _rss_topics.append(_topic)
+                    _rss_topic_str = ', '.join(_rss_topics) if _rss_topics else 'тематика определяется по контенту'
+                    _intg_live_lines.append(
+                        f"📰 RSS-лента: {_rss_url_live} (тематика: {_rss_topic_str})"
+                    )
+                    _intg_live_lines.append(
+                        "  ⚠️ run_agent_action читает ТОЛЬКО ЭТУ ленту. "
+                        "Если тема задачи не совпадает с тематикой ленты → "
+                        "используй research_topic(query=...) или web_search(query=...) вместо run_agent_action."
+                    )
+
+                # GitHub: токен есть — подсказываем action-имена из скрипта
+                _has_github_live = any(
+                    k in _ag_api_keys_raw.upper() for k in ('GITHUB_TOKEN=', 'GITHUB_ACCESS_TOKEN=')
+                )
+                if _has_github_live:
+                    _gh_actions = _re_live.findall(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _ag_py_code_raw)
+                    if _gh_actions:
+                        _intg_live_lines.append(
+                            f"💻 GitHub-интеграция активна. "
+                            f"run_agent_action поддерживает action: {', '.join(dict.fromkeys(_gh_actions)[:4])}"
+                        )
+                    else:
+                        _intg_live_lines.append(
+                            "💻 GitHub-интеграция активна → run_agent_action(action='search_users', params={...})"
+                        )
+
+                # Прочие скрипт-action из python_code (не GitHub, не RSS)
+                elif _ag_py_code_raw and not _rss_url_live:
+                    _other_actions = list(dict.fromkeys(
+                        _re_live.findall(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _ag_py_code_raw)
+                    ))
+                    if _other_actions:
+                        _intg_live_lines.append(
+                            f"🔧 Скрипт поддерживает action: {', '.join(_other_actions[:5])} "
+                            f"→ используй run_agent_action(action='...')"
+                        )
+
+                _intg_live_block = (
+                    "\n\n🔌 ТВОИ ИНТЕГРАЦИИ (конкретно):\n" + '\n'.join(_intg_live_lines) + '\n'
+                    if _intg_live_lines else ''
                 )
 
                 _agent_prompt = (
@@ -5096,6 +5194,7 @@ class AnchorEngine:
                     + (f"🚫 СТРОГО ПЕРВЫЙ инструмент (обязательно, не игнорировать): {_tool_hint}\n" if _tool_hint else '')
                     + _rap_note
                     + _dedup_hint
+                    + _intg_live_block
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
