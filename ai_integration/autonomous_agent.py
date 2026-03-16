@@ -4745,7 +4745,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             _t_b = _t_b.strip()
                             if _t_b:
                                 _ban_counts[_t_b] = _ban_counts.get(_t_b, 0) + 1
-                _runtime_banned = {t for t, n in _ban_counts.items() if n >= 3}
+                # Email/outreach инструменты законно вызываются много раз (каждый раз разный адресат)
+                # → баним только после 5 сессий подряд, поисковые — после 3
+                _EMAIL_OUTREACH = {
+                    'send_outreach_email', 'send_email', 'negotiate_by_email',
+                    'start_email_campaign', 'find_and_message_relevant_users',
+                    'find_relevant_contacts_for_task', 'send_follow_up_email',
+                    'reply_to_outreach_email',
+                }
+                _runtime_banned = {
+                    t for t, n in _ban_counts.items()
+                    if (n >= 5 if t in _EMAIL_OUTREACH else n >= 3)
+                }
                 # Не баним core-инструменты (прогресс, задачи) даже при повторах
                 _runtime_banned -= {'update_goal_progress', 'add_task', 'complete_task',
                                      'edit_task', 'delegate_task'}

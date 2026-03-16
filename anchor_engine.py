@@ -732,7 +732,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if len(_last_tools) >= 3 and len(set(_last_tools[-3:])) == 1:
         _force_analyse = True
     # Детектор типичных унылых петель:
-    _SEARCH_ONLY = {'web_search', 'quick_topic_search', 'research_topic', 'get_news_trends'}
+    # Расширенный набор «только поиск» — включает LLM-исследование и анализ
+    _SEARCH_ONLY = {
+        'web_search', 'quick_topic_search', 'research_topic', 'get_news_trends',
+        'research_and_plan', 'analyze_situation_and_suggest_tasks',
+    }
     _SAVE_ONLY   = {'save_email_contact', 'add_email_leads', 'add_task'}
     _PROGRESS_ONLY = {'update_goal_progress'}
     _last4 = _last_tools[-4:]
@@ -2290,10 +2294,18 @@ class AnchorEngine:
                     'delegation': 'Делегирование (delegate_task)',
                 }
                 _exh_labels = [_STRATEGY_LABELS.get(s, s) for s in _exhausted]
+                _STRATEGY_RECOVERY = {
+                    'search': 'перейди к прямому контакту: find_relevant_contacts_for_task → send_outreach_email',
+                    'email': 'переключись на соцсети: find_and_message_relevant_users / publish_to_telegram',
+                    'content': 'контент создан → теперь привлекай людей: send_outreach_email / find_relevant_contacts_for_task',
+                    'delegation': 'делегирование не помогло → действуй сам: send_outreach_email / run_agent_action',
+                }
                 task_text += (
-                    f"\n\nИсчерпанные стратегии (>50% провалов за 48ч — переключись):\n"
-                    + '\n'.join(f"  {l}" for l in _exh_labels)
-                    + "\n  Используй другую категорию."
+                    f"\n\n🔴 ИСЧЕРПАННЫЕ СТРАТЕГИИ (>50% провалов — СМЕНИ МЕТОД):\n"
+                    + '\n'.join(
+                        f"  ✗ {_STRATEGY_LABELS.get(s, s)}: {_STRATEGY_RECOVERY.get(s, 'используй другую категорию')}"
+                        for s in _exhausted
+                    )
                 )
 
             # ══ Блок отсутствующих интеграций: только если реально мешает текущей задаче ══
@@ -3739,17 +3751,19 @@ class AnchorEngine:
                 _analysis = await _quick_ai_call_raw([{
                     "role": "user",
                     "content": (
-                        f"Задача: {task_text[:200]}\n"
-                        f"{prev_agent.name} сделал: {result[:400]}\n\n"
-                        f"Команда: {_agents_desc}\n\n"
-                        "Результат достаточен или нужен другой агент для следующего шага?\n"
-                        "Примеры цепочек: исследование → задачи; поиск контактов → письма; анализ → контент.\n"
-                        "Если задача решена — {\"continue\": false}\n"
-                        "Если нужен агент — {\"continue\": true, \"agent_name\": \"имя\", "
-                        "\"task\": \"конкретное задание на основе результата\"}\n"
+                        f"Задача: {task_text[:300]}\n"
+                        f"Агент {prev_agent.name} выполнил: {result[:600]}\n\n"
+                        f"Команда (имена и роли): {_agents_desc}\n\n"
+                        "Оцени: задача завершена или нужен следующий агент?\n"
+                        "Цепочки: поиск людей → отправка письма; анализ → создание задач; данные → публикация.\n"
+                        "Признаки завершения: update_goal_progress выполнен, цель достигнута, БЛОКЕР без решения.\n"
+                        "Признаки продолжения: найдены email/контакты но не написали; данные получены но не опубликованы.\n"
+                        "Если завершено — {\"continue\": false}\n"
+                        "Если нужен следующий агент — {\"continue\": true, \"agent_name\": \"точное имя из команды\", "
+                        "\"task\": \"конкретное задание с данными из результата (email, имена, числа)\"}\n"
                         "JSON:"
                     ),
-                }], max_tokens=120)
+                }], max_tokens=300)
 
                 if not _analysis:
                     return
@@ -7173,7 +7187,7 @@ class AnchorEngine:
                     _tl_s = f"[{', '.join(_tl)}] " if _tl else ''
                     _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:200]}"
                     _per_agent_history.setdefault(_ag_nm, [])
-                    if len(_per_agent_history[_ag_nm]) < 6:
+                    if len(_per_agent_history[_ag_nm]) < 12:
                         _per_agent_history[_ag_nm].append(_entry)
                 except Exception:
                     pass
