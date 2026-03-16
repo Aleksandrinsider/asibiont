@@ -4617,11 +4617,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         if _is_autopilot_task:
             # Адаптивный автопилот: core tools + smart filter по специализации/интеграциям агента
             logger.info('[DIRECTOR] Autopilot task → adaptive toolset for %s', agent.get('name'))
-            # Core: минимальный набор для любого автопилота
+            # Core: минимальный набор для любого автопилота (включая поиск — нужен всегда)
             _autopilot_tools = {
                 'add_task', 'complete_task', 'edit_task',
                 'update_goal_progress', 'update_goal', 'complete_goal',
                 'delegate_task', 'run_agent_action',
+                # Поиск/исследование — базово доступны всем, даже если есть спец.интеграция.
+                # Агент с RSS/Github/Telegram всё равно дополняет данные через web/research.
+                'research_topic', 'web_search', 'quick_topic_search',
+                # Планирование — полезно для любого автопилота
+                'schedule_background_task', 'set_reminder',
             }
             # Smart extend: добавляем инструменты по специализации и интеграциям агента.
             # Используем _intg_hint (лейблы из _parse_agent_integrations) — универсально
@@ -4635,6 +4640,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'send_email', 'check_emails', 'send_outreach_email', 'reply_to_outreach_email',
                     'start_email_campaign', 'list_email_contacts', 'save_email_contact',
                     'find_relevant_contacts_for_task', 'add_email_leads',
+                    # Follow-up цепочка — без них email-автопилот обрывается на первом письме
+                    'negotiate_by_email', 'send_follow_up_email', 'set_contact_alert',
                 })
             # Контент/маркетинг — по специализации или мессенджер-интеграции
             if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr ', 'пиар', 'копирайт', 'редактор')) or
@@ -4643,15 +4650,31 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'create_post', 'publish_to_telegram', 'publish_to_discord',
                     'generate_image', 'start_content_campaign', 'manage_content_campaign',
                     'set_content_strategy', 'get_news_trends',
+                    # Исследование тем для постов — контент-агент должен уметь искать
+                    'research_topic', 'web_search',
                 })
-            # Аналитика/исследования
+            # Аналитика/исследования — по специализации
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
-                _autopilot_tools.update({'get_news_trends', 'find_and_message_relevant_users'})
+                _autopilot_tools.update({
+                    'get_news_trends', 'find_and_message_relevant_users',
+                    'research_topic', 'web_search', 'get_stock_price', 'save_note',
+                    'create_post',  # публиковать аналитику
+                })
+            # Alpha Vantage / NewsAPI / Биржевые данные — по ключу интеграции (не только по специализации)
+            if any(w in _lbl_ap for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
+                _autopilot_tools.update({
+                    'get_stock_price', 'get_news_trends', 'research_topic',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                })
             # RSS/мониторинг — по лейблу интеграции
             if any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')):
                 _autopilot_tools.update({
-                    'get_news_trends', 'save_email_contact',
-                    'find_relevant_contacts_for_task',
+                    'get_news_trends', 'save_email_contact', 'find_relevant_contacts_for_task',
+                    # RSS-агент суммирует и публикует → нужны эти инструменты
+                    'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    # Outreach авторов/источников из RSS-ленты
+                    'send_outreach_email',
                 })
             # Продажи/HR/нетворкинг
             if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b')):
@@ -4659,6 +4682,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'find_and_message_relevant_users', 'find_relevant_contacts_for_task',
                     'send_outreach_email', 'save_email_contact',
                     'start_delegation_campaign', 'manage_delegation_campaign',
+                    # Follow-up важен для продаж/HR
+                    'check_emails', 'negotiate_by_email', 'send_follow_up_email',
                 })
             # GitHub/GitLab — поиск разработчиков → сохранение контактов → outreach
             # run_agent_action(search_users) уже в core, но без save/send цепочка бессмысленна
@@ -4667,16 +4692,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'save_email_contact', 'find_relevant_contacts_for_task',
                     'send_outreach_email', 'add_email_leads',
                     'find_and_message_relevant_users',
+                    # Поиск репозиториев/тем для GitHub-агентов
+                    'research_topic', 'web_search',
                 })
             # CRM/маркетплейс/прочие интеграции — run_agent_action уже в core
             if any(w in _lbl_ap for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'ozon', 'wildberries', 'авито', 'shopify')):
                 _autopilot_tools.update({'find_relevant_contacts_for_task', 'save_email_contact'})
-            # web_search / research_topic — только если нет специализированных интеграций
-            # (у агента с RSS, email, TG и т.д. сначала должны идти run_agent_action)
-            _has_specialized_intg = bool(_intg_hint)  # True если у агента есть хоть одна интеграция
-            if not _has_specialized_intg:
-                _autopilot_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
-            # Если у агента есть python_code или user_api_keys — run_agent_action уже в core
             logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
             try:
                 from .tools import get_available_tools as _gat_ap
@@ -4717,13 +4738,36 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                         'create_goal', 'update_goal_progress'})
             # Аналитик/исследования
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
-                _inferred_tools.update({'research_topic', 'web_search', 'quick_topic_search'})
+                _inferred_tools.update({
+                    'research_topic', 'web_search', 'quick_topic_search',
+                    'get_news_trends', 'get_stock_price', 'save_note', 'create_post',
+                })
+            # Alpha Vantage / NewsAPI / Finance — по ключу интеграции
+            if any(w in _lbl_ch for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
+                _inferred_tools.update({
+                    'get_stock_price', 'get_news_trends', 'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'save_note',
+                })
+            # RSS — по ключу интеграции (часто нет в _spec, только в api_keys)
+            if any(w in _lbl_ch for w in ('rss', 'лент', 'feed', 'новост')):
+                _inferred_tools.update({
+                    'get_news_trends', 'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    'save_email_contact', 'find_relevant_contacts_for_task', 'send_outreach_email',
+                })
+            # Telegram/Discord интеграция — контент-инструменты по ключу
+            if any(w in _lbl_ch for w in ('telegram', 'discord', 'slack')):
+                _inferred_tools.update({
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    'get_news_trends', 'research_topic', 'web_search',
+                    'start_content_campaign', 'manage_content_campaign', 'set_content_strategy',
+                })
             # GitHub/GitLab — поиск разработчиков → контакты → outreach
             if any(w in _lbl_ch for w in ('github', 'gitlab')):
                 _inferred_tools.update({
                     'save_email_contact', 'find_relevant_contacts_for_task',
                     'send_outreach_email', 'add_email_leads',
-                    'find_and_message_relevant_users', 'web_search',
+                    'find_and_message_relevant_users', 'web_search', 'research_topic',
                 })
             # Задачи всегда доступны
             _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
