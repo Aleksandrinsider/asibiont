@@ -4435,11 +4435,49 @@ class AnchorEngine:
                              f"  → Попробуй назначить им другой инструмент или задачу — они могут справиться.\n"
                              if _degraded_agents_coord else '')
 
+            # ── Anti-repeat: извлекаем инструменты ПОСЛЕДНЕГО цикла для каждого агента ──
+            _last_cycle_tools: dict = {}
+            for _pn_lr, _hn_lr in _per_agent_history.items():
+                if _hn_lr:
+                    _last_entry = list(_hn_lr)[-1]
+                    _tm_lr = _re_al.search(r'\[tools?:\s*([^\]]+)\]', _last_entry)
+                    if _tm_lr:
+                        _last_cycle_tools[_pn_lr] = [t.strip() for t in _tm_lr.group(1).split(',') if t.strip()]
+            _TOOL_ALTERNATIVES = {
+                'run_agent_action': ['research_topic', 'web_search', 'get_news_trends', 'find_relevant_contacts_for_task'],
+                'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action'],
+                'web_search':       ['research_topic', 'get_news_trends', 'find_relevant_contacts_for_task'],
+                'get_news_trends':  ['research_topic', 'web_search', 'run_agent_action'],
+                'find_relevant_contacts_for_task': ['web_search', 'research_topic', 'run_agent_action'],
+                'check_emails':     ['send_outreach_email', 'find_relevant_contacts_for_task'],
+                'send_outreach_email': ['check_emails', 'reply_to_outreach_email', 'find_relevant_contacts_for_task'],
+            }
+            _anti_repeat_lines = []
+            for _pn_ar, _tl_ar in _last_cycle_tools.items():
+                _banned_for_ar = _agent_banned_tools.get(_pn_ar, [])
+                _alts_ar = []
+                for _t_ar in _tl_ar:
+                    if _t_ar in _banned_for_ar or _t_ar in (_banned_for_ar or []):
+                        _t_alts = [a for a in _TOOL_ALTERNATIVES.get(_t_ar, []) if a not in _banned_for_ar]
+                        if _t_alts:
+                            _alts_ar.append(f"{_t_ar}→{_t_alts[0]}")
+                if _alts_ar:
+                    _anti_repeat_lines.append(f"  {_pn_ar}: прошлый цикл=[{', '.join(_tl_ar[:3])}] →  замены: [{', '.join(_alts_ar)}]")
+                elif _tl_ar:
+                    _anti_repeat_lines.append(f"  {_pn_ar}: прошлый цикл=[{', '.join(_tl_ar[:3])}] → выбери ДРУГОЙ инструмент или задачу!")
+            _anti_repeat_str = (
+                "\n🔄 ПРОШЛЫЙ ЦИКЛ (выбери другой подход — не повторяй буквально то же самое!):\n"
+                + '\n'.join(_anti_repeat_lines)
+                + '\n'
+            ) if _anti_repeat_lines else ''
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + f"{_degraded_note}"
                 + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
+                + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
+                + f"{_anti_repeat_str}"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
                 f"Кампании: {_email_campaigns_str}\n"
@@ -4459,12 +4497,14 @@ class AnchorEngine:
                 )
                 + f"\nЗАДАЧА: Назначь каждому агенту задание исходя из его РЕАЛЬНЫХ интеграций и АКТИВНЫХ ЦЕЛЕЙ.\n"
                 "ПРИНЦИП: Каждый агент работает ТОЛЬКО от своих уникальных интеграций.\n"
-                "• Агент с RSS → ПЕРВЫЙ инструмент run_agent_action (читает ленту). research_topic/web_search — только если RSS не по теме задачи.\n"
+                "• Агент с RSS → run_agent_action (читает ленту), НО только если run_agent_action НЕ в 🚫 ЗАБЛОКИРОВАННЫХ. "
+                "Если заблокирован → research_topic(тема по RSS-ленте) или web_search или get_news_trends.\n"
                 "• Агент с IMAP+SMTP или Gmail (GMAIL_USER+GMAIL_PASS) → может и отправлять (send_outreach_email) И читать (check_emails).\n"
                 "• Агент с только IMAP без пароля отправки → check_emails, find_relevant_contacts_for_task. НЕ send_outreach_email!\n"
                 "• ASI (нет интеграций) → web_search, research_topic, find_relevant_contacts_for_task, send_outreach_email (через платформу).\n"
                 "• НЕ назначай агенту инструмент которого нет в его колонке 'инструменты' и 'интеграции'.\n"
                 "• web_search и research_topic может делать ASI — реальным агентам давай задачи по их интеграциям.\n"
+                "• Разнообразие: если агент делал одно и то же 2+ цикла — дай ему ДРУГУЮ задачу или инструмент из каталога.\n"
                 "ВАЖНО: покрой каждую активную цель хотя бы одним конкретным шагом. "
                 "НЕ отправляй письма адресатам из списка уже_написали.\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
