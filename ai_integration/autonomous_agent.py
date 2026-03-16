@@ -5964,16 +5964,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
         # Отправляем живое обращение директора к агенту и сохраняем в DB
         if director_message:
-            # Форматируем: "📋 Кристина, подготовь отчёт" — пользователь видит что это поручение агенту
+            # Форматируем без emoji-шаблонов — текст поручения должен быть естественным
             _ag_n = ag.get('name', 'Агент')
             if _ag_n.lower() in director_message.lower()[:len(_ag_n)+3]:
-                _dm_display = f"📋 {director_message}"
+                _dm_display = director_message
             else:
-                _dm_display = f"📋 {_ag_n}, {director_message}"
+                _dm_display = f"{_ag_n}, {director_message}"
             # Нормализуем: после "Имя, " первая буква должна быть строчной
             import re as _re_dm
             _dm_display = _re_dm.sub(
-                r'(📋 [А-ЯЁA-Z][а-яёa-z]+, )([А-ЯЁA-Z])',
+                r'([А-ЯЁA-Z][а-яёa-z]+, )([А-ЯЁA-Z])',
                 lambda m: m.group(1) + m.group(2).lower(),
                 _dm_display,
             )

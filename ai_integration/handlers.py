@@ -12579,9 +12579,9 @@ async def check_emails(
 
         _integrations = _get_user_email_integrations(user, session)
         if not _integrations:
-            return ("У тебя не подключена почта. Попроси пользователя добавить почтовые ключи "
-                    "(GMAIL_USER, YANDEX_USER/YANDEX_PASS или MAILRU_USER/MAILRU_PASS) "
-                    "в настройках агента на дашборде.")
+            return ("Почта не подключена. Чтобы я мог проверять входящие письма, "
+                    "подключи почтовый ящик в настройках дашборда: Профиль → Настройки агента → API-ключи → "
+                    "добавь GMAIL_USER (для Gmail OAuth) или YANDEX_USER/YANDEX_PASS (для Яндекс/Mail.ru).")
 
         # Выбираем интеграцию
         chosen = None
@@ -12854,9 +12854,9 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                     continue
                 msg_data = await msg_resp.json()
                 headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
-                # Извлекаем полный текст тела письма
+                # Извлекаем полный текст тела письма (приоритет: body_text > snippet)
                 body_text = _gmail_extract_body(msg_data.get('payload', {}))
-                snippet = body_text[:3000] if body_text else msg_data.get('snippet', '')[:200]
+                snippet = body_text[:3000] if body_text else msg_data.get('snippet', '')[:500]
                 from_hdr = headers.get('From', '?')
                 # Фильтруем письма от собственного аккаунта (копии исходящих)
                 _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
