@@ -11715,6 +11715,51 @@ async def api_agent_rate_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
+async def api_autopilot_status_handler(request):
+    """GET /api/autopilot-status — возвращает статус автопилота: последний запуск, кол-во циклов за 24ч, последнее действие"""
+    user_id = get_user_id_from_request(request)
+    if not user_id:
+        return web.json_response({'error': 'Unauthorized'}, status=401)
+    session_db = Session()
+    try:
+        user = session_db.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return web.json_response({'error': 'Not found'}, status=404)
+        from datetime import datetime, timedelta, timezone
+        now_utc = datetime.now(timezone.utc)
+        cutoff_24h = now_utc - timedelta(hours=24)
+        # Последний dispatch
+        last_run_row = session_db.query(AgentActivityLog).filter(
+            AgentActivityLog.user_id == user.id,
+            AgentActivityLog.activity_type == 'goal_autopilot_dispatch',
+        ).order_by(AgentActivityLog.created_at.desc()).first()
+        # Количество циклов за 24ч
+        cycles_24h = session_db.query(AgentActivityLog).filter(
+            AgentActivityLog.user_id == user.id,
+            AgentActivityLog.activity_type == 'goal_autopilot_dispatch',
+            AgentActivityLog.created_at >= cutoff_24h,
+        ).count()
+        last_run_iso = None
+        last_action = None
+        if last_run_row:
+            lr_dt = last_run_row.created_at
+            if lr_dt.tzinfo is None:
+                lr_dt = lr_dt.replace(tzinfo=timezone.utc)
+            last_run_iso = lr_dt.isoformat()
+            last_action = (last_run_row.title or '')[:120]
+        return web.json_response({
+            'last_run': last_run_iso,
+            'cycles_24h': cycles_24h,
+            'last_action': last_action,
+        })
+    except Exception as e:
+        logger.error(f"[AUTOPILOT-STATUS] {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        session_db.close()
+
+app.router.add_get('/api/autopilot-status', api_autopilot_status_handler)
+
 # Routes
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)

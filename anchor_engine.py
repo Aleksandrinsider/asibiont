@@ -953,9 +953,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            if _first_goal_title else "")
         + "13. КОМАНДНАЯ ЭСТАФЕТА: нашёл контакт — не держи у себя! "
           "DELEGATE[Имя с email-интеграцией]: Отправь письмо name@domain.com — [суть].\n"
-        + "14. ❌ ЗАПРЕЩЕНО создавать задачи через add_task ДЛЯ ПОЛЬЗОВАТЕЛЯ — задачи создаёт "
-          "только сам пользователь. add_task используй ТОЛЬКО для внутренних рабочих шагов своей цепочки "
-          "(например зафиксировать контакт). НИКОГДА не пиши пользователю 'я поставил тебе задачу'.\n"
+        + "14. add_task создаёт рабочую задачу (source=agent) — видна в списке задач как «Создано агентом». "
+          "Используй умеренно: только конкретные шаги с чёткой датой/действием. "
+          "НЕ создавай абстрактных задач ('изучить', 'подумать') — если можешь действовать сам, действуй.\n"
     )
 
 # Группы батчинга
@@ -1927,13 +1927,15 @@ class AnchorEngine:
             # Проверяем: нет ли ЛЮБОГО dispatch (любой target) в in_progress < 5 мин.
             # Один пользователь — один активный dispatch в момент времени.
             try:
-                from sqlalchemy import text as _guard_text
-                _recent = session.execute(_guard_text(
-                    "SELECT id, target FROM agent_activity_log "
-                    "WHERE user_id=:uid AND activity_type='goal_autopilot_dispatch' "
-                    "AND status='in_progress' "
-                    "AND created_at > NOW() - INTERVAL '5 minutes'"
-                ), {'uid': user.id}).fetchone()
+                # Используем ORM вместо raw SQL для совместимости SQLite/PostgreSQL
+                _guard_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+                from models import AgentActivityLog as _AAL_guard
+                _recent = session.query(_AAL_guard.id, _AAL_guard.target).filter(
+                    _AAL_guard.user_id == user.id,
+                    _AAL_guard.activity_type == 'goal_autopilot_dispatch',
+                    _AAL_guard.status == 'in_progress',
+                    _AAL_guard.created_at > _guard_cutoff,
+                ).first()
                 if _recent:
                     logger.info(
                         "[DISPATCH-GUARD] Skip dispatch for %s — already running AAL id=%s (target=%s)",
@@ -7111,12 +7113,10 @@ class AnchorEngine:
         ).order_by(Task.created_at.desc()).limit(10).all()
         agent_tasks_history = [f"{t.title[:80]} [{t.status}]" for t in _recent_agent_tasks]
 
-        # Всего отправлено email/outreach — для автообновления метрики цели
-        from models import AgentActivityLog as _AAL_email
-        _total_emails_sent = session.query(_AAL_email).filter(
-            _AAL_email.user_id == user.id,
-            _AAL_email.activity_type == 'email',
-            _AAL_email.status == 'sent',
+        # Всего отправлено email/outreach — авторитетный источник: таблица EmailOutreach
+        _total_emails_sent = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
         ).count()
 
         # ── Определяем исчерпанные стратегии (все инструменты категории провалились) ──
@@ -7197,14 +7197,65 @@ class AnchorEngine:
                         f"💡 Для '{g['title']}' ({_gap} осталось) полезен Telegram-канал или Discord для массового охвата."
                     )
 
-            # Стагнация: >12ч без реального прогресса
+            # Стагнация: >12ч без реального прогресса → уведомляем пользователя в Telegram
             if actions_history and _mt:
                 _action_count = len(actions_history)
                 if _action_count >= 6 and _mc <= 1:
-                    _feasibility_warnings.append(
+                    _stagnation_warn = (
                         f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, но реальный прогресс = {int(_mc)}/{int(_mt)}. "
                         f"Текущая стратегия не работает. Сообщи пользователю что нужно сменить подход или добавить интеграции."
                     )
+                    _feasibility_warnings.append(_stagnation_warn)
+                    # Отправляем Telegram-уведомление пользователю если прошло >24ч с последнего стагнации-алёрта
+                    try:
+                        _last_stag_warn = session.query(Interaction).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'stagnation_alert',
+                        ).order_by(Interaction.created_at.desc()).first()
+                        _stag_cutoff = now_utc - timedelta(hours=24)
+                        _should_notify = (
+                            not _last_stag_warn
+                            or (_last_stag_warn.created_at.replace(tzinfo=timezone.utc)
+                                if _last_stag_warn.created_at.tzinfo is None
+                                else _last_stag_warn.created_at) < _stag_cutoff
+                        )
+                        if _should_notify and self.bot and user.telegram_id:
+                            _stag_goal_title = g.get('title', '')[:60]
+                            _miss_intg = []
+                            if not _has_email_cap:
+                                _miss_intg.append("Email (SMTP/IMAP/Gmail) — для отправки outreach-писем")
+                            if not _has_github_cap and any(w in _stag_goal_title.lower() for w in ('разработ', 'тестировщик', 'github')):
+                                _miss_intg.append("GitHub Token — для поиска разработчиков")
+                            _miss_str = '\n'.join(f"  • {m}" for m in _miss_intg) if _miss_intg else ''
+                            _stag_msg = (
+                                f"⚠️ Автопилот застрял на цели «{_stag_goal_title}»\n\n"
+                                f"Запусков: {_action_count} за 48ч, но прогресс = {int(_mc)}/{int(_mt)}.\n"
+                                + (f"Нужны интеграции:\n{_miss_str}\n\n" if _miss_str else
+                                   "Попробуй скорректировать цель или взять паузу в автопилоте.\n\n")
+                                + "Настройки → Агенты → API-ключи для подключения."
+                            )
+                            try:
+                                import asyncio as _asyncio_stag
+                                _asyncio_stag.ensure_future(
+                                    self.bot.send_message(chat_id=user.telegram_id, text=_stag_msg)
+                                )
+                            except Exception:
+                                pass
+                            # Записываем факт отправки алерта
+                            try:
+                                session.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='stagnation_alert',
+                                    content=_stag_goal_title,
+                                ))
+                                session.commit()
+                            except Exception:
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
+                    except Exception as _stag_tg_err:
+                        logger.debug("[AUTOPILOT] stagnation alert: %s", _stag_tg_err)
 
         # ── Профиль пользователя: агенты должны знать кому служат ──
         _user_profile_ctx = {}
@@ -7256,24 +7307,22 @@ class AnchorEngine:
                     ).count()
                     _cur_mc = _g_au.metric_current or 0
                     _mt_au = _g_au.metric_target or 0
-                    # Корректируем ВВЕРХ если реальных ответов больше метрики
-                    # Корректируем ВНИЗ если:
-                    #   а) metric_current > metric_target (явно завышено агентом)
-                    #   б) metric_current > 3x реальных ответов (агент посчитал email-контакты как прогресс)
-                    _needs_correction = (
-                        _replied_count > _cur_mc
-                        or (_cur_mc > _mt_au and _mt_au > 0)
-                        or (_replied_count < _cur_mc * 0.33 and _cur_mc > 3)
-                    )
-                    if _needs_correction:
-                        _safe_pct = min(95, int(_replied_count * 100 / _mt_au)) if _mt_au else 0
-                        _g_au.metric_current = float(_replied_count)
+                    # Корректируем ТОЛЬКО ВВЕРХ: если реальных ответов больше метрики.
+                    # Исключение: metric_current > metric_target (невозможное значение — сбрасываем к 95%).
+                    # НЕ корректируем вниз: снижение прогресса расстраивает пользователя
+                    # и ненадёжно (агент мог считать другие типы контактов).
+                    _needs_upward_correction = _replied_count > _cur_mc
+                    _needs_cap_correction = _mt_au > 0 and _cur_mc > _mt_au
+                    if _needs_upward_correction or _needs_cap_correction:
+                        _new_mc = max(float(_replied_count), _cur_mc) if not _needs_cap_correction else float(_replied_count)
+                        _safe_pct = min(95, int(_new_mc * 100 / _mt_au)) if _mt_au else 0
+                        _g_au.metric_current = _new_mc
                         _g_au.progress_percentage = _safe_pct
                         try:
                             session.commit()
                             logger.info(
                                 f"[AUTOPILOT] Corrected goal #{_g_au.id}: "
-                                f"metric {_cur_mc}→{_replied_count}/{int(_mt_au)} ({_safe_pct}%)"
+                                f"metric {_cur_mc}→{_new_mc}/{int(_mt_au)} ({_safe_pct}%)"
                             )
                         except Exception:
                             session.rollback()

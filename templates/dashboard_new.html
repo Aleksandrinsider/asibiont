@@ -14869,6 +14869,31 @@ except Exception as e:
             }).catch(function(e){ console.error('Autopilot toggle error:', e); });
         }
 
+        function loadAutopilotStatus() {
+            fetch('/api/autopilot-status').then(function(r){ return r.json(); }).then(function(d){
+                if (d.error) return;
+                var lines = [];
+                if (d.last_run) {
+                    var dt = new Date(d.last_run);
+                    var diffMin = Math.round((Date.now() - dt.getTime()) / 60000);
+                    var timeStr = diffMin < 60 ? diffMin + ' мин. назад' : Math.round(diffMin/60) + ' ч. назад';
+                    lines.push('Последний запуск: ' + timeStr);
+                } else {
+                    lines.push('Ещё не запускался');
+                }
+                if (d.cycles_24h > 0) lines.push('Циклов за 24ч: ' + d.cycles_24h);
+                if (d.last_action) lines.push('Итог: ' + d.last_action.substring(0, 80));
+                var tip = 'Автопилот целей\n' + lines.join('\n');
+                var btns = [document.getElementById('header-autopilot-btn'), document.getElementById('mobile-autopilot-btn')];
+                btns.forEach(function(btn){ if (btn) btn.title = tip; });
+            }).catch(function(){});
+        }
+        document.addEventListener('DOMContentLoaded', function(){
+            if (document.getElementById('header-autopilot-btn') || document.getElementById('mobile-autopilot-btn')) {
+                loadAutopilotStatus();
+            }
+        });
+
         function copyReferralLink(link) {
             navigator.clipboard.writeText(link).then(function() {
                 // Показываем уведомление об успешном копировании
