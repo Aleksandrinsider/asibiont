@@ -4816,9 +4816,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     t for t, n in _ban_counts.items()
                     if (n >= 5 if t in _EMAIL_OUTREACH else n >= 3)
                 }
-                # Не баним core-инструменты (прогресс, задачи) даже при повторах
-                _runtime_banned -= {'update_goal_progress', 'add_task', 'complete_task',
-                                     'edit_task', 'delegate_task'}
+                # Не баним core-инструменты и базовые поисковые — всегда нужны
+                _runtime_banned -= {
+                    'update_goal_progress', 'add_task', 'complete_task',
+                    'edit_task', 'delegate_task',
+                    # Поисковые/базовые — каждый раз новый запрос, бан бессмысленен
+                    'web_search', 'research_topic', 'quick_topic_search',
+                    'check_emails', 'run_agent_action',
+                    'get_news_trends', 'get_stock_price',
+                }
                 if _runtime_banned:
                     logger.info('[DIRECTOR] cross-session banned for %s: %s', agent.get('name'), _runtime_banned)
                     if _exclude_for_agent is not None:
@@ -5273,7 +5279,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     # ── Обрезка длинных ответов (без доп. LLM-вызова — экономит ~5с) ──
     # Если текст слишком короткий после tool-вызовов (для автопилота) — доп. вызов для итога
-    if _is_autopilot_task and _tools_used and len(_final_text) < 100 and _final_text != _done_fb:
+    # Включаем _done_fb: агент вызвал инструменты но не написал отчёт — форсируем summary
+    if _is_autopilot_task and _tools_used and (len(_final_text) < 100 or _final_text == _done_fb):
         try:
             # Собираем результаты инструментов для контекста
             _tool_data_ctx = []

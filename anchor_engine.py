@@ -5465,50 +5465,58 @@ class AnchorEngine:
                 if _step_tools and _ag_name:
                     _current_run_agent_tools.setdefault(_ag_name, set()).update(_step_tools)
 
-                if not _result or not _result.strip() or len(_result.strip()) < 20:
-                    if _step_task_id:
+                _DONE_FB_SET = {"Задачу выполнил.", "Задачу выполнила."}
+                _result_stripped = (_result or '').strip()
+                if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
+                    if _result_stripped not in _DONE_FB_SET:
+                        # Реально пустой результат: отменяем задачу и уведомляем пользователя
+                        if _step_task_id:
+                            try:
+                                from sqlalchemy import text as _sql_t_empty
+                                session.execute(_sql_t_empty(
+                                    "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
+                                ), {'n': 'Агент вернул пустой результат', 'id': _step_task_id})
+                                session.commit()
+                            except Exception:
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
+                        _empty_txt = (
+                            "Проанализировала ситуацию, но пока не нашла конкретных результатов для отчёта."
+                            if _ag_is_fem else
+                            "Проанализировал ситуацию, но пока не нашёл конкретных результатов для отчёта."
+                        )
                         try:
-                            from sqlalchemy import text as _sql_t_empty
-                            session.execute(_sql_t_empty(
-                                "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
-                            ), {'n': 'Агент вернул пустой результат', 'id': _step_task_id})
+                            session.add(Interaction(
+                                user_id=user.id,
+                                message_type='agent_msg',
+                                content=json.dumps({
+                                    '__agent': {
+                                        'name': _ag_name,
+                                        'id': _ag_data.get('id', 0),
+                                        'avatar_url': _ag_data.get('avatar_url', ''),
+                                    },
+                                    'text': _empty_txt,
+                                    '__tools_used': [],
+                                    '__anchor_type': 'coordinator_result',
+                                }, ensure_ascii=False),
+                            ))
                             session.commit()
                         except Exception:
                             try:
                                 session.rollback()
                             except Exception:
                                 pass
-                    # Сообщаем пользователю — агент ничего не нашёл/не сделал
-                    _empty_txt = "Проанализировал ситуацию, но пока не нашёл конкретных результатов для отчёта."
-                    try:
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type='agent_msg',
-                            content=json.dumps({
-                                '__agent': {
-                                    'name': _ag_name,
-                                    'id': _ag_data.get('id', 0),
-                                    'avatar_url': _ag_data.get('avatar_url', ''),
-                                },
-                                'text': _empty_txt,
-                                '__tools_used': [],
-                                '__anchor_type': 'coordinator_result',
-                            }, ensure_ascii=False),
-                        ))
-                        session.commit()
-                    except Exception:
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                    if self.bot:
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=f"{_ag_name}:\n\n{_empty_txt}",
-                            )
-                        except Exception:
-                            pass
+                        if self.bot:
+                            try:
+                                await self.bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=f"{_ag_name}:\n\n{_empty_txt}",
+                                )
+                            except Exception:
+                                pass
+                    # _done_fb: агент выполнил задачу без детального отчёта — тихо пропускаем
                     continue
 
                 # Очистка и отправка результата пользователю
