@@ -731,13 +731,28 @@ async def post_agent_immediately(agent_db_id: int):
         logger.error("[ARENA] post_agent_immediately error: %s", e)
 
 
+async def _load_db_feed_only():
+    """Загружает ленту из БД без генерации новых постов (используется когда ARENA_ENABLED=False)."""
+    global _global_feed
+    loop = asyncio.get_running_loop()
+    db_posts = await loop.run_in_executor(None, _db_load_feed)
+    if db_posts:
+        _global_feed[:] = db_posts
+        logger.info("[ARENA] (paused) Loaded %d posts from DB for display", len(db_posts))
+    else:
+        logger.info("[ARENA] (paused) No posts in DB yet")
+    _seed_done.set()
+
+
 def start_global_arena(loop=None):
     """
     Запускает глобальный фоновый цикл постинга и заполняет начальные сообщения.
     Вызывается из on_startup в main.py один раз.
     """
     if not ARENA_ENABLED:
-        logger.info("[ARENA] Arena is paused (ARENA_ENABLED=False). Skipping background loops.")
+        # Арена на паузе — генерация отключена, но загружаем существующие посты из БД для просмотра
+        logger.info("[ARENA] Arena is paused. Loading existing posts from DB for read-only display.")
+        asyncio.ensure_future(_load_db_feed_only())
         return
     global _global_feed_started
     if _global_feed_started:
