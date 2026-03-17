@@ -858,6 +858,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         return f"  {base}"
 
     _imap_note = '✅ IMAP-ключи есть' if _has_imap else '⛔ IMAP нет (читать входящие может только коллега с Gmail)'
+
+    _check_emails_line = (
+        f"  {_ti('check_emails')} — входящие [{_imap_note}]\n"
+        if _has_imap else
+        f"  ⛔ check_emails — НЕДОСТУПНО (нет IMAP/Gmail ключей у этого агента). НЕ ВЫЗЫВАТЬ.\n"
+    )
     _script_note = '✅ python_code есть' if (_has_script or _has_rss or _has_github or _has_alpha or _has_news) else '⚠️ нужен python_code'
 
     # ── Секции каталога — собираем отдельно, порядок зависит от типа цели ──
@@ -904,7 +910,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "\n📧 Email / Outreach:\n"
         + _td('send_outreach_email') + '\n'
         + _td('start_email_campaign') + '\n'
-        + f"  {_ti('check_emails')} — входящие [{_imap_note}]\n"
+        + _check_emails_line
         + _td('reply_to_outreach_email') + '\n'
         + _td('send_follow_up_email') + '\n'
         + _td('negotiate_by_email') + '\n'
@@ -1077,6 +1083,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "9. Отчёт = ФАКТЫ: что нашёл, кому отправил, что ответили, цифры.\n"
         "10. ЧЕСТНОСТЬ: если инструмент не дал данных или идеи исчерпаны — "
         "начни ответ со слова БЛОКЕР: и опиши суть. ASI обратится к пользователю за помощью.\n"
+        + ("⛔ АБСОЛЮТНЫЙ ЗАПРЕТ: НЕ вызывай check_emails — у тебя нет IMAP/Gmail ключей. "
+           "Почту читает только Кристина (агент с Gmail). Если нужно проверить входящие — "
+           "используй DELEGATE[Кристина]: проверь входящие и сообщи мне ответы.\n"
+           if not _has_imap else '')
         + ("11. У тебя GitHub — после run_agent_action(search_users) ОБЯЗАТЕЛЬНО: "
            "1) save_email_contact для каждого найденного, "
            "2) send_outreach_email или find_and_message_relevant_users. "
@@ -2108,7 +2118,7 @@ class AnchorEngine:
                 'web_search', 'research_topic', 'find_relevant_contacts_for_task',
                 'save_email_contact', 'add_task', 'complete_task', 'edit_task',
                 'delegate_task', 'send_outreach_email', 'send_email',
-                'start_email_campaign', 'add_email_leads', 'check_emails',
+                'start_email_campaign', 'add_email_leads',
                 'update_goal_progress', 'update_goal', 'create_goal',
                 'quick_topic_search', 'get_news_trends',
             ]
@@ -3650,9 +3660,22 @@ class AnchorEngine:
             # Принципиально: IMAP (Gmail read-only) ≠ отправка.
             # Приоритеты: 1) агент с ключами SMTP/Resend/Sendgrid, 2) агент с send_outreach_email в tools,
             #             3) ASI через платформу Resend (всегда доступно).
-            _found_emails = _re2.findall(
+            # GUARD: email-relay только если агент нашёл реальные контакты (GitHub/search),
+            # а НЕ RSS-ленты, статьи или произвольный веб-контент.
+            _prev_code_lower = (getattr(prev_agent, 'python_code', '') or '').lower()
+            _prev_is_rss_only = (
+                ('rss' in _prev_code_lower or 'feedparser' in _prev_code_lower or
+                 'urllib.request' in _prev_code_lower)
+                and not ('github' in _prev_code_lower or 'imaplib' in _prev_code_lower)
+            )
+            _found_emails = [] if _prev_is_rss_only else _re2.findall(
                 r'[a-zA-Z0-9_.+\-]+@[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-.]{2,}', result
             )
+            # Дополнительный фильтр: utm_source / noreply / tracking emails — не реальные контакты
+            _NOREPLY_SKIP = ('utm_', 'noreply', 'no-reply', 'notification', 'do-not-reply',
+                             'habrahabr', 'habr.com', '@github.com', 'bounce', 'postmaster')
+            _found_emails = [e for e in _found_emails
+                             if not any(s in e.lower() for s in _NOREPLY_SKIP)]
             _email_agent_relay = None
             if _found_emails:
                 _SEND_KEY_CAPS = ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_', 'sparkpost_')
@@ -3704,8 +3727,20 @@ class AnchorEngine:
             # ── Детектор входящих писем (результат check_emails) ──
             # Формат "Новые входящие (...): От: / Тема: / Превью:" от обоих IMAP/Gmail-бэкендов.
             # Email-адреса отправителей ≠ outreach-цели! Нужно передать ASI для решения.
+            # GUARD: только для агентов с реальными IMAP/Gmail ключами — RSS-агенты не могут проверять почту!
+            _prev_keys_lower = (getattr(prev_agent, 'user_api_keys', '') or '').lower()
+            _prev_has_imap = (
+                'gmail_user=' in _prev_keys_lower or
+                'imap_' in _prev_keys_lower or
+                'gmail_imap' in _prev_keys_lower or
+                'yandex_user=' in _prev_keys_lower or
+                'mailru_user=' in _prev_keys_lower
+            )
             _INBOX_MARKERS = ('Новые входящие', 'От: ', 'Тема: ', 'Превью: ')
-            _is_inbox_result = sum(1 for p in _INBOX_MARKERS if p in result) >= 3
+            _is_inbox_result = (
+                _prev_has_imap  # только IMAP-агент может вернуть реальные входящие
+                and sum(1 for p in _INBOX_MARKERS if p in result) >= 3
+            )
             if _is_inbox_result:
                 _found_emails = []       # не рассылать письма людям из входящих
                 _email_agent_relay = None
