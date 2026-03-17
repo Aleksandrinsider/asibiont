@@ -10123,6 +10123,32 @@ async def resend_webhook_handler(request):
     try:
         raw_body = await request.text()
         logger.info(f"[RESEND_WEBHOOK] Raw body (first 2000): {raw_body[:2000]}")
+
+        # --- Verify Svix/Resend webhook signature (if secret is configured) ---
+        from config import RESEND_WEBHOOK_SECRET as _RWS
+        if _RWS:
+            import hmac as _hmac, hashlib as _hashlib, base64 as _b64
+            _svix_id = request.headers.get('svix-id', '')
+            _svix_ts = request.headers.get('svix-timestamp', '')
+            _svix_sig = request.headers.get('svix-signature', '')
+            if not _svix_id or not _svix_ts or not _svix_sig:
+                logger.warning("[RESEND_WEBHOOK] Missing Svix signature headers — rejected")
+                return web.json_response({'ok': False}, status=401)
+            try:
+                _secret_b64 = _RWS.split('whsec_')[-1] if 'whsec_' in _RWS else _RWS
+                _secret_bytes = _b64.b64decode(_secret_b64 + '==')  # pad for b64
+                _signed = f"{_svix_id}.{_svix_ts}.{raw_body}".encode('utf-8')
+                _computed_sig = 'v1,' + _b64.b64encode(
+                    _hmac.new(_secret_bytes, _signed, _hashlib.sha256).digest()
+                ).decode()
+                _incoming_sigs = [s.strip() for s in _svix_sig.split(' ') if s.strip()]
+                if not any(_hmac.compare_digest(s, _computed_sig) for s in _incoming_sigs):
+                    logger.warning("[RESEND_WEBHOOK] Signature mismatch — rejected")
+                    return web.json_response({'ok': False}, status=401)
+            except Exception as _sig_err:
+                logger.warning(f"[RESEND_WEBHOOK] Signature verification error: {_sig_err} — rejected")
+                return web.json_response({'ok': False}, status=401)
+
         import json as _json
         data = _json.loads(raw_body)
         event_type = data.get('type', '')
@@ -10245,23 +10271,42 @@ async def resend_webhook_handler(request):
                 if from_email:
                     from models import EmailOutreach, EmailCampaign
                     from sqlalchemy import func
-                    
-                    # Проверим все outreach для этого email
-                    all_outreach = session_db.query(EmailOutreach).filter(
-                        func.lower(EmailOutreach.recipient_email) == from_email,
-                    ).order_by(EmailOutreach.sent_at.desc()).all()
-                    logger.info(f"[RESEND_WEBHOOK] Found {len(all_outreach)} total outreach records for {from_email}: {[(o.id, o.status, o.recipient_email) for o in all_outreach[:5]]}")
-                    
-                    outreach = session_db.query(EmailOutreach).filter(
+
+                    # Resolve owner user_id from to_email (the agent's sender address)
+                    # This prevents cross-user data modification when multiple users send to same recipient
+                    _owner_user_ids = None
+                    if to_email:
+                        _camp_users = session_db.query(EmailCampaign.user_id).filter(
+                            func.lower(EmailCampaign.sender_email) == to_email
+                        ).distinct().all()
+                        if _camp_users:
+                            _owner_user_ids = [r[0] for r in _camp_users]
+
+                    # Debug: count matching outreach for this sender (scoped to resolved user if possible)
+                    _dbg_filter = [func.lower(EmailOutreach.recipient_email) == from_email]
+                    if _owner_user_ids:
+                        _dbg_filter.append(EmailOutreach.user_id.in_(_owner_user_ids))
+                    _dbg_count = session_db.query(EmailOutreach).filter(*_dbg_filter).count()
+                    logger.info(f"[RESEND_WEBHOOK] Found {_dbg_count} outreach records for {from_email} (user_ids={_owner_user_ids})")
+
+                    _q_filter = [
                         func.lower(EmailOutreach.recipient_email) == from_email,
                         EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
-                    ).order_by(EmailOutreach.sent_at.desc()).first()
+                    ]
+                    if _owner_user_ids:
+                        _q_filter.append(EmailOutreach.user_id.in_(_owner_user_ids))
+                    outreach = session_db.query(EmailOutreach).filter(*_q_filter).order_by(
+                        EmailOutreach.sent_at.desc()
+                    ).first()
 
                     if not outreach:
                         logger.warning(f"[RESEND_WEBHOOK] No outreach found for {from_email}, trying broader search...")
-                        outreach = session_db.query(EmailOutreach).filter(
-                            func.lower(EmailOutreach.recipient_email) == from_email,
-                        ).order_by(EmailOutreach.sent_at.desc()).first()
+                        _broad_filter = [func.lower(EmailOutreach.recipient_email) == from_email]
+                        if _owner_user_ids:
+                            _broad_filter.append(EmailOutreach.user_id.in_(_owner_user_ids))
+                        outreach = session_db.query(EmailOutreach).filter(*_broad_filter).order_by(
+                            EmailOutreach.sent_at.desc()
+                        ).first()
                         if outreach:
                             logger.info(f"[RESEND_WEBHOOK] Found outreach #{outreach.id} with status={outreach.status} via broader search")
 

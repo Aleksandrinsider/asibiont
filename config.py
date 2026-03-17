@@ -184,6 +184,9 @@ RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_FROM = os.getenv("RESEND_FROM", "")
 # Full-access key for reading inbound/received emails (Resend Receiving API)
 RESEND_RECEIVING_API_KEY = os.getenv("RESEND_RECEIVING_API_KEY", "") or RESEND_API_KEY
+# Webhook signing secret from Resend dashboard → Webhooks → Signing Secret (whsec_...)
+# Without this, inbound webhook requests are not verified (anyone could spoof them)
+RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
 
 # Google OAuth2 — для Gmail API (отправка писем напрямую с Gmail пользователя)
 # Создать на console.cloud.google.com → OAuth 2.0 Client IDs → Web application
