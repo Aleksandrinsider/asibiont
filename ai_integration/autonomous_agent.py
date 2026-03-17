@@ -2419,6 +2419,33 @@ class HybridAutonomousAgent:
                         if _r.get('success'):
                             _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)
                             _rc = CognitiveEngine.compress_tool_result(_rc)
+
+                            # ── Авто-заметка: длинный результат research → save_note ─────────
+                            # Пользователю не нужно говорить "запиши" — длинное исследование
+                            # автоматически сохраняется в заметки чтобы не терялось в чате.
+                            _RESEARCH_AUTO_SAVE = {'research_topic', 'web_search', 'quick_topic_search'}
+                            _raw_result_str = _r['result'] if isinstance(_r['result'], str) else _rc
+                            if _name in _RESEARCH_AUTO_SAVE and len(_raw_result_str) > 800:
+                                try:
+                                    from .handlers import save_note as _auto_save_note
+                                    _note_q = (
+                                        _args.get('query') or _args.get('topic') or
+                                        _args.get('prompt') or _name
+                                    )
+                                    _note_title = str(_note_q)[:80]
+                                    _note_content = _raw_result_str
+                                    asyncio.ensure_future(
+                                        _auto_save_note(
+                                            content=_note_content,
+                                            title=_note_title,
+                                            user_id=user_id,
+                                        )
+                                    )
+                                    logger.info(f"[AUTO_NOTE] Saved research note: '{_note_title[:50]}'")
+                                except Exception as _auto_ne:
+                                    logger.warning(f"[AUTO_NOTE] Failed to save: {_auto_ne}")
+                            # ─────────────────────────────────────────────────────────────────
+
                             # ── Промежуточное сообщение для ключевых действий ──
                             if _cb and _name in ('delegate_task', 'research_topic', 'run_agent_action',
                                                   'create_post', 'get_delegation_progress', 'add_task'):
