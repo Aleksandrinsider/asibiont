@@ -6884,6 +6884,8 @@ except Exception as e:
         function _tlCleanText(text, isTitle = false) {
             // Универсальная очистка текста от кода, HTML, markdown, эмодзи
             let cleaned = (text || '')
+                .replace(/^\[filtered:[^\]]*\]\s*/g, '')  // strip internal [filtered:noise] tags
+                .replace(/^\[tools:[^\]]*\]\s*/g, '')  // strip internal [tools: ...] prefix
                 .replace(/```[\s\S]*?```/g, '')  // code blocks
                 .replace(/`([^`\n]+)`/g, isTitle ? '' : '$1')  // inline code: убираем полностью в title, оставляем содержимое в content
                 .replace(/!\[.*?\]\([^)]*\)/g, '')  // markdown images
@@ -6995,8 +6997,8 @@ except Exception as e:
             const _HIDDEN_ACT_TYPES = new Set([]);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
-                // Hide failed/empty/in_progress autopilot dispatches — no useful info for user
-                if (a.activity_type === 'goal_autopilot_dispatch' && ['failed', 'empty_result', 'in_progress'].includes(a.status)) return false;
+                // Hide failed/empty/in_progress/noise/dedup autopilot dispatches — no useful info for user
+                if (a.activity_type === 'goal_autopilot_dispatch' && ['failed', 'empty_result', 'in_progress', 'noise_filtered', 'dedup_filtered'].includes(a.status)) return false;
                 return true;
             }).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
