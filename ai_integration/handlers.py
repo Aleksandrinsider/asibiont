@@ -449,7 +449,16 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
 
     # САНИТИЗАЦИЯ: убираем утечки system prompt из title
     import re as _re_san
-    # Паттерны утечек: [РОЛЬ], [АВТОПИЛОТ], ТВОЯ РОЛЬ:, etc.
+    # Жёсткий reject: явные маркеры системного промпта
+    _SYSPROMPT_HARD = (
+        r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН|SYSTEM|ROLE|CONTEXT)\]?\s*:',
+        r'^(Твоя роль|Ты агент|Ты являешься|Ты специалист)',
+        r'^[📌🎯✅]\s*(Правила|Цели|Инструкц)',
+    )
+    if any(_re_san.match(p, title, _re_san.IGNORECASE | _re_san.UNICODE) for p in _SYSPROMPT_HARD):
+        logger.warning(f"[ADD_TASK] System-prompt leak in title, rejecting: '{title[:80]}'")
+        return 'Задача не создана: название содержит системный промпт (агент ошибся).'
+    # Мягкая очистка: убираем префиксы типа [РОЛЬ] Ты: ...
     if _re_san.match(r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН)\]?', title, _re_san.IGNORECASE):
         title = _re_san.sub(r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН)\]?\s*:?\s*(Ты:?\s*)?', '', title, flags=_re_san.IGNORECASE).strip()
     # Если после санитизации title стал > 80 символов или содержит personality-текст — берём первые 8 слов

@@ -3291,7 +3291,7 @@ class AnchorEngine:
                         _aal_status = 'no_action'
                     else:
                         _aal_status = 'empty_result'
-                    _aal_result_text = _full_result[:800] if _full_result.strip() else 'empty'
+                    _aal_result_text = _full_result[:2000] if _full_result.strip() else 'empty'
                     from sqlalchemy import text as _aal_upd_text
                     session.execute(_aal_upd_text(
                         "UPDATE agent_activity_log SET status=:st, result=:res, updated_at=NOW() WHERE id=:aid"
@@ -3747,6 +3747,22 @@ class AnchorEngine:
 
             _decision: dict = {}
             if _is_inbox_result:
+                # Дедупликация: не передавать ASI те же входящие что уже обрабатывались в последние 2ч
+                import hashlib as _hashlib
+                _inbox_hash = _hashlib.md5(result[:1000].encode('utf-8', 'ignore')).hexdigest()[:12]
+                try:
+                    from sqlalchemy import text as _sql_chk
+                    _prev_inbox = session.execute(_sql_chk(
+                        "SELECT COUNT(*) FROM agent_activity_log "
+                        "WHERE user_id=:uid AND activity_type='inbox_reply' "
+                        "AND title LIKE :hpat "
+                        "AND created_at > NOW() - INTERVAL '2 hours'"
+                    ), {'uid': user.id, 'hpat': f'%[h:{_inbox_hash}]%'}).scalar()
+                except Exception:
+                    _prev_inbox = 0
+                if _prev_inbox:
+                    logger.info('[ANCHOR-CHAIN] inbox-relay: dedup skip (same inbox relayed in 2h, hash=%s)', _inbox_hash)
+                    return
                 # Агент нашёл входящие → логируем activity + передаём ASI для решения
                 _inbox_count = len(_re2.findall(r'^От:', result, _re2.MULTILINE)) or 1
                 try:
@@ -3757,8 +3773,8 @@ class AnchorEngine:
                         activity_type='inbox_reply',
                         status='new',
                         target=f'agent:{prev_agent.name}',
-                        title=f'{prev_agent.name}: {_inbox_count} новых письма',
-                        content=result[:500],
+                        title=f'{prev_agent.name}: {_inbox_count} новых письма [h:{_inbox_hash}]',
+                        content=result[:2000],
                     ))
                     _si_ibox.commit()
                     _si_ibox.close()
@@ -3773,7 +3789,7 @@ class AnchorEngine:
                         f"{prev_agent.name} проверил почту и нашёл {_inbox_count} новых письма. "
                         f"Реши что делать: ответить (reply_to_outreach_email), "
                         f"сохранить контакт (save_email_contact), создать задачу (add_task) или другое.\n\n"
-                        f"Входящие письма:\n{result[:600]}"
+                        f"Входящие письма:\n{result[:2000]}"
                     ),
                 }
                 logger.info('[ANCHOR-CHAIN] inbox-relay: %s → ASI (%d inbox msgs)',
@@ -3798,7 +3814,7 @@ class AnchorEngine:
                     "role": "user",
                     "content": (
                         f"Задача: {task_text[:300]}\n"
-                        f"Агент {prev_agent.name} выполнил: {result[:600]}\n\n"
+                        f"Агент {prev_agent.name} выполнил: {result[:1500]}\n\n"
                         f"Команда (имена и роли): {_agents_desc}\n\n"
                         "Оцени: задача завершена или нужен следующий агент?\n"
                         "Цепочки: поиск людей → отправка письма; анализ → создание задач; данные → публикация.\n"

@@ -1231,39 +1231,47 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
         )
         system = "Ты переводчик. Верни только валидный JSON с переведёнными полями. Не переводи названия компаний и брендов. Без markdown, без пояснений."
 
+    import aiohttp as _aio_tr
+    connector = None
+    session_tr = None
     try:
-        import aiohttp
-        timeout = aiohttp.ClientTimeout(total=15, connect=5)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.1,
-                    "max_tokens": 800
-                }
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    content = data['choices'][0]['message']['content'].strip()
-                    start = content.find('{')
-                    end = content.rfind('}') + 1
-                    if start != -1 and end > start:
-                        return json.loads(content[start:end])
-                    else:
-                        logger.warning(f"[TRANSLATE] No JSON in response for {target_lang}: {content[:200]}")
+        timeout = _aio_tr.ClientTimeout(total=25, connect=5)
+        connector = _aio_tr.TCPConnector(force_close=True)
+        session_tr = _aio_tr.ClientSession(timeout=timeout, connector=connector)
+        async with session_tr.post(
+            'https://api.deepseek.com/chat/completions',
+            headers={
+                'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                "model": DEEPSEEK_MODEL,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.1,
+                "max_tokens": 800
+            }
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                content = data['choices'][0]['message']['content'].strip()
+                start = content.find('{')
+                end = content.rfind('}') + 1
+                if start != -1 and end > start:
+                    return json.loads(content[start:end])
                 else:
-                    logger.warning(f"[TRANSLATE] API returned {response.status} for {target_lang}")
+                    logger.warning(f"[TRANSLATE] No JSON in response for {target_lang}: {content[:200]}")
+            else:
+                logger.warning(f"[TRANSLATE] API returned {response.status} for {target_lang}")
     except Exception as e:
         logger.error(f"[TRANSLATE] Error translating to {target_lang}: {type(e).__name__}: {e!r}")
+    finally:
+        if session_tr and not session_tr.closed:
+            await session_tr.close()
+        if connector and not connector.closed:
+            await connector.close()
     return None
 
 
