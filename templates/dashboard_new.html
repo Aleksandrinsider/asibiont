@@ -6881,11 +6881,21 @@ except Exception as e:
             };
         }
 
-        function _tlStripEmoji(s) {
-            return (s||'').replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE0F}\u{200D}]/gu, '')
-                         .replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '')
-                         .replace(/[\u23E9-\u23FA\u2B05-\u2B55]/g, '')
-                         .replace(/^[\s]+/, '').trim();
+        function _tlCleanText(text, isTitle = false) {
+            // Универсальная очистка текста от кода, HTML, markdown, эмодзи
+            let cleaned = (text || '')
+                .replace(/```[\s\S]*?```/g, '')  // code blocks
+                .replace(/`([^`\n]+)`/g, isTitle ? '' : '$1')  // inline code: убираем полностью в title, оставляем содержимое в content
+                .replace(/!\[.*?\]\([^)]*\)/g, '')  // markdown images
+                .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '')  // image URLs
+                .replace(/<[^>]+>/g, ' ')  // HTML tags
+                .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE0F}\u{200D}]/gu, '')  // emojis
+                .replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '')
+                .replace(/[\u23E9-\u23FA\u2B05-\u2B55]/g, '')
+                .replace(/[ \t]+/g, ' ')  // normalize spaces
+                .replace(/\n{3,}/g, '\n\n')  // max 2 consecutive newlines
+                .trim();
+            return cleaned;
         }
 
         function createTimelineItem(a, isNew) {
@@ -6897,31 +6907,16 @@ except Exception as e:
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
             const deleteBtn = a.id ? `<button onclick="event.stopPropagation();activityDeleteGroup([${a.id}],'${a.activity_type||''}')" class="delete-btn" title="${t('act-del-one')||'Удалить'}"><svg width="14" height="14" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"/></svg></button>` : '';
 
-            const cleanTitle = _tlStripEmoji(a.title);
+            const cleanTitle = _tlCleanText(a.title, true);
 
             // Для autopilot/coordinator показываем result (итог), а не content (промпт)
             const _isAutoType = a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary';
             const _rawDisplay = (_isAutoType && a.result) ? a.result : (a.content || a.result || '');
 
-            // Чистим контент: убираем код, картинки, HTML-теги, эмодзи, нормализуем пробелы
-            let cleanContent = (_rawDisplay || '')
-                .replace(/```[\s\S]*?```/g, '')
-                .replace(/`[^`\n]+`/g, '')
-                .replace(/!\[.*?\]\([^)]*\)/g, '')
-                .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|gif|webp|svg|bmp|tiff|avif)\S*/gi, '')
-                .replace(/<[^>]+>/g, ' ')
-                .replace(/[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{27BF}]|[\u{FE0F}\u{200D}]/gu, '')
-                .replace(/[\u2702\u2705\u2708-\u270D\u270F\u2712\u2714\u2716\u271D\u2721\u2728\u2733\u2734\u2744\u2747\u274C\u274E\u2753-\u2755\u2757\u2763\u2764\u2795-\u2797\u27A1\u27B0\u27BF]/g, '')
-                .replace(/[\u23E9-\u23FA\u2B05-\u2B55]/g, '')
-                .replace(/[ \t]+/g, ' ')
-                .replace(/\n{3,}/g, '\n\n')
-                .trim();
+            // Чистим контент через универсальную функцию
+            const cleanContent = _tlCleanText(_rawDisplay, false);
 
-            const PREVIEW_LEN = 300;
             const hasContent = cleanContent.length > 0;
-            const hasMore = cleanContent.length > PREVIEW_LEN;
-            const previewText = hasContent ? cleanContent.slice(0, PREVIEW_LEN) : '';
-            const restText = hasMore ? cleanContent.slice(PREVIEW_LEN) : '';
 
             // Статус-бейдж (только для autopilot/coordinator — как было)
             let _statusBadge = '';
@@ -8832,12 +8827,33 @@ except Exception as e:
         }
 
         function renderNoteContent(raw) {
+            // Сначала преобразуем markdown-ссылки [text](url) в обычные URL с меткой
+            // Используем специальный маркер чтобы защитить их от escapeHtml
+            const MD_LINK_MARKER = '\u0001';  // Control character as marker
+            const mdLinksMap = [];
+            let processedText = raw.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, text, url) => {
+                const idx = mdLinksMap.length;
+                mdLinksMap.push({ text: text.trim(), url: url.trim() });
+                return MD_LINK_MARKER + idx + MD_LINK_MARKER;
+            });
+
             // Разбиваем по [IMAGE:URL], чётные части — текст, нечётные — URL картинки
-            const parts = raw.split(/\[IMAGE:(https?:\/\/[^\]]+)\]/g);
+            const parts = processedText.split(/\[IMAGE:(https?:\/\/[^\]]+)\]/g);
             let html = '';
             for (let i = 0; i < parts.length; i++) {
                 if (i % 2 === 0) {
-                    html += linkify(escapeHtml(parts[i]));
+                    // Текстовая часть: escape HTML, затем linkify простые URL, затем восстанавливаем markdown-ссылки
+                    let textPart = escapeHtml(parts[i]);
+                    textPart = linkify(textPart);
+                    // Восстанавливаем markdown-ссылки из маркеров
+                    textPart = textPart.replace(new RegExp(MD_LINK_MARKER + '(\\d+)' + MD_LINK_MARKER, 'g'), (m, idx) => {
+                        const link = mdLinksMap[parseInt(idx)];
+                        if (!link) return m;
+                        const safeUrl = escapeHtml(link.url);
+                        const safeText = escapeHtml(link.text);
+                        return '<a href="' + safeUrl + '" target="_blank" rel="noopener noreferrer" style="color: #068487; text-decoration: underline;">' + safeText + '</a>';
+                    });
+                    html += textPart;
                 } else {
                     const safeUrl = escapeHtml(parts[i]);
                     html += '<br><img src="' + safeUrl + '" style="max-width:100%;border-radius:6px;margin:4px 0;display:block;" alt=""><br>';
@@ -11810,7 +11826,7 @@ except Exception as e:
                 const overdue = showTask;
                 if (headerDotEl) { headerDotEl.className = 'overdue-pulse'; }
                 if (headerLabelEl) { headerLabelEl.textContent = t('overdue-stat') || 'С отставанием:'; }
-                let displayTitle = overdue.title.replace(/(@\w+)/g, (match, p1) => {
+                let displayTitle = escapeHtml(overdue.title).replace(/(@\w+)/g, (match, p1) => {
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #d73a49; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
@@ -11852,7 +11868,7 @@ except Exception as e:
                 
                 if (headerDotEl) { headerDotEl.className = 'reminder-pulse'; }
                 if (headerLabelEl) { headerLabelEl.textContent = t('next-up') || 'На очереди:'; }
-                let displayTitle = next.title.replace(/(@\w+)/g, (match, p1) => {
+                let displayTitle = escapeHtml(next.title).replace(/(@\w+)/g, (match, p1) => {
                     const usernameWithoutAt = p1.substring(1);
                     return '<a href="#" onclick="openContactProfileModal(\'' + usernameWithoutAt + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">' + p1 + '</a>';
                 });
