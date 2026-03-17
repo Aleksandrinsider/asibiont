@@ -2284,6 +2284,8 @@ class HybridAutonomousAgent:
                 return self._finalize_response(
                     _fc_content, user_message, user_id, [])
 
+            _auto_saved_notes = []  # заголовки исследований, сохранённых в заметки в этом turn
+
             for iteration in range(MAX_ITERATIONS):
                 # Первая итерация может быть "required", остальные "auto"
                 tc = initial_tool_choice if iteration == 0 else "auto"
@@ -2303,15 +2305,33 @@ class HybridAutonomousAgent:
                 # Последняя итерация: инжектируем краткую инструкцию для финального ответа
                 # → меньше max_tokens → быстрее генерация
                 if _is_last_iter and all_execution_results:
+                    _note_hint_ru = ''
+                    _note_hint_en = ''
+                    if _auto_saved_notes:
+                        _titles_str = '», «'.join(n[:40] for n in _auto_saved_notes[:3])
+                        _note_hint_ru = (
+                            f" Результаты исследования уже сохранены в заметки («{_titles_str}»)."
+                            f" Напиши краткое резюме (3-5 предложений): что нашёл и что это значит."
+                            f" Упомяни одной фразой что подробный отчёт в разделе 'Заметки'."
+                            f" НЕ копируй и НЕ пересказывай полный текст исследования."
+                        )
+                        _note_hint_en = (
+                            f" Research results already saved to notes («{_titles_str}»)."
+                            f" Write a brief summary (3-5 sentences): what you found and what it means."
+                            f" Mention in one phrase that the full report is in 'Notes'."
+                            f" Do NOT copy or repeat the full research text."
+                        )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
                             "Summarize results briefly (2-3 sentences, max 400 chars). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses."
+                            + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
                             "Кратко подытожь (2-3 предложения, до 400 символов). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task."
+                            + _note_hint_ru
                         )})
 
                 # Text-only call (no tools) uses shorter timeout + fewer tokens
@@ -2441,7 +2461,19 @@ class HybridAutonomousAgent:
                                             user_id=user_id,
                                         )
                                     )
+                                    _auto_saved_notes.append(_note_title)
                                     logger.info(f"[AUTO_NOTE] Saved research note: '{_note_title[:50]}'")
+                                    # Уведомляем пользователя в чат — кратко, без дампа текста
+                                    if _cb:
+                                        _nl = (f"\U0001f4ce Сохранил в заметки: \u00ab{_note_title[:60]}\u00bb"
+                                               if user_lang != 'en'
+                                               else f"\U0001f4ce Saved to notes: \u00ab{_note_title[:60]}\u00bb")
+                                        try:
+                                            await _cb(_nl, persist=True)
+                                        except TypeError:
+                                            try: await _cb(_nl)
+                                            except Exception: pass
+                                        except Exception: pass
                                 except Exception as _auto_ne:
                                     logger.warning(f"[AUTO_NOTE] Failed to save: {_auto_ne}")
                             # ─────────────────────────────────────────────────────────────────
