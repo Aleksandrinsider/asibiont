@@ -5922,7 +5922,7 @@ except Exception as e:
                             <div style="padding-top:8px;">
                                 <div style="font-size:12px;color:#6B7280;margin-bottom:4px;">${t('mpa-code-label')}</div>
                                 <textarea id="mpa-pycode" placeholder="${t('mpa-pycode-ph')}" rows="5" oninput="mpUpdateSectionsList()" style="width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:monospace;outline:none;resize:vertical;color:#374151;background:white;"></textarea>
-                                <div id="mpa-sections-list" style="display:none;margin-top:6px;"></div>
+                                <div id="mpa-sections-list" style="display:none;"></div>
                                 <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
                                 <button type="button" id="mpa-test-btn" onclick="mpTestAgentCode()" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">${t('mp-test-btn')}</button>
                                 <button type="button" onclick="mpCopyAgentCode(this)" class="mp-action-btn" style="display:flex;align-items:center;gap:5px;" onmouseover="this.style.background='#F6F8FA';this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF';this.style.borderColor='#D1D9E0';">
@@ -5988,7 +5988,7 @@ except Exception as e:
             }
             h += '</div>';
             listEl.innerHTML = h;
-            listEl.style.display = 'block';
+            // Блок скрыт — секции кода дублируют "Подключённые сервисы" из API-ключей
         }
 
         function mpRemoveSection(name) {
@@ -13096,8 +13096,13 @@ except Exception as e:
                     html += '</div>';
                     
                     // Action buttons
+                    const _isFav = await isFavoriteContact(cleanUsername || (userId ? String(userId) : ''));
+                    const _favLabel = _isFav ? t('remove-fav') : t('add-fav');
+                    const _favStyle = _isFav
+                        ? 'padding:8px 14px;background:#FFF1F2;border:1px solid #FECACA;border-radius:6px;cursor:pointer;font-size:13px;color:#DC2626;font-family:inherit;transition:all 0.2s;'
+                        : 'padding:8px 14px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;font-family:inherit;transition:all 0.2s;';
                     html += '<div class="rating-modal-actions">';
-                    html += `<button onclick="closeContactProfileModal()" class="rating-cancel-btn">${t('close')}</button>`;
+                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}');closeContactProfileModal();" style="${_favStyle}" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='${_isFav ? '#FECACA' : '#D1D9E0'}'">&#9829; ${_favLabel}</button>`;
                     if (partner.contact_info) {
                         html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">${t('write-msg')}</button>`;
                     }
