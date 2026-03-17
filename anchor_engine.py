@@ -2725,26 +2725,33 @@ class AnchorEngine:
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
                     _intg_list = ', '.join(str(d).split('(')[0].strip() for d in _detected[:4]) if _detected else ''
                     _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
-                    # Fallback на случай если AI-вызов не удастся
-                    _coord_text = (
-                        f"{_chosen_name}, займись: {_brief_task}."
-                        + (f" [{_intg_list}]" if _intg_list else '')
-                        + " Жду отчёт."
-                    )
+                    # Контекст пользователя для живого поручения
+                    _user_prof_c = data.get('user_profile', {})
+                    _project_c = (_user_prof_c.get('company') or '').strip()
+                    _goals_progress_c = ', '.join(
+                        f"«{g.get('title','')[:30]}» {g.get('progress', 0)}%"
+                        for g in data.get('goals', [])[:2]
+                    ) if data.get('goals') else ''
+                    # Fallback без шаблонных скобок и «Жду отчёт»
+                    _coord_text = f"{_chosen_name}, займись текущими задачами."
                     try:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
                         _coord_prompt = (
-                            f"Ты — ASI, координатор команды. Напиши ОДНО короткое живое поручение агенту."
-                            f"\n\nАгент: {_chosen_name}"
-                            + (f" ({_agent_role})" if _agent_role else '')
-                            + (f"\nИнтеграции агента: {_intg_list}" if _intg_list else '')
-                            + f"\nЗадача (цели пользователя): {_brief_task}"
-                            f"\n\nТребования: 1 предложение, 15-25 слов. Обращение по имени. "
-                            f"Конкретно — ЧТО делать. "
-                            f"Живо, по-человечески, без формальностей и markdown. "
-                            f"⛔ НЕ упоминай названия инструментов (web_search, save_email_contact и т.д.)."
+                            f"Ты — ASI, координатор команды"
+                            + (f" проекта «{_project_c}»" if _project_c else '')
+                            + f". Пишешь коллеге {_chosen_name} как живой человек — коротко и по делу.\n\n"
+                            f"Агент: {_chosen_name}" + (f" ({_agent_role})" if _agent_role else '') + "\n"
+                            + (f"Роль: {_agent_role}\n" if _agent_role else '')
+                            + (f"Прогресс целей: {_goals_progress_c}\n" if _goals_progress_c else '')
+                            + (f"Активные направления: {_brief_task}\n" if _brief_task else '')
+                            + "\nНапиши 1 предложение как скажешь живому коллеге в рабочем чате. "
+                            "Обращение по имени, конкретно что делать прямо сейчас, без квадратных скобок, "
+                            "без 'Жду отчёт', без формальностей. "
+                            "Примеры: «Кристина, загляни в почту — там могут быть ответы.» "
+                            "«Марк, поищи свежую аналитику.» "
+                            "⛔ НЕ упоминай названия инструментов (web_search, send_email и т.д.)."
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=70)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=80)
                         if _gen and len(_gen.strip()) > 15:
                             _coord_text = _gen.strip()
                     except Exception as _cgen_err:
@@ -2855,12 +2862,9 @@ class AnchorEngine:
                             _gl_titles_s = [g.title[:60] for g in _db_goals if g.title and g.title.strip()]
                         except Exception:
                             pass
-                    if not _gl_titles_s:
-                        # Последний fallback: специализация агента (НИКОГДА anchor.topic)
-                        _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
-                        _ap_task_title = f"[Автопилот] {agent_name}: {_agent_spec}"[:200] if _agent_spec else f"[Автопилот] {agent_name}"
-                    else:
-                        _ap_task_title = f"[Автопилот] {agent_name}: {', '.join(_gl_titles_s)}"[:200]
+                    # Заголовок задачи = роль агента, не цели пользователя
+                    _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
+                    _ap_task_title = f"[Автопилот] {agent_name}: {_agent_spec}"[:100] if _agent_spec else f"[Автопилот] {agent_name}"
                     # Dedup: пропускаем создание задачи если в последние 4ч уже была задача этого агента
                     _skip_ap_task = False
                     try:
@@ -5233,9 +5237,11 @@ class AnchorEngine:
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), getattr(_target_ag, 'id', 0)) if _target_ag else ''
                 _assign_text = f"{_ag_name}, {_ag_task[:120]}"
                 try:
+                    _proj_ctx_a = (_user_profile_coord or {}).get('company', '')
+                    _proj_pfx_a = f" проекта «{_proj_ctx_a}»" if _proj_ctx_a else ''
                     if _prev_steps_context and len(_prev_steps_context.strip()) > 30:
                         _assign_prompt = (
-                            f"Ты руководитель, говоришь с коллегой {_ag_name} как живой человек.\n"
+                            f"Ты руководитель{_proj_pfx_a}, говоришь с коллегой {_ag_name} как живой человек.\n"
                             f"Нужно: {_ag_task[:250]}\n"
                             f"Команда уже сделала: {_prev_steps_context[:400]}\n\n"
                             f"Напиши 2-3 предложения — обычная живая речь, как скажешь коллеге в офисе. "
@@ -5246,7 +5252,7 @@ class AnchorEngine:
                         _assign_max_tok = 130
                     else:
                         _assign_prompt = (
-                            f"Ты руководитель, говоришь с коллегой {_ag_name} как живой человек.\n"
+                            f"Ты руководитель{_proj_pfx_a}, говоришь с коллегой {_ag_name} как живой человек.\n"
                             f"Нужно: {_ag_task[:200]}\n\n"
                             f"Напиши 1-2 предложения — обычная живая речь. "
                             f"Например: «{_ag_name}, проверь почту — есть ли что-то новое по проекту.» "
