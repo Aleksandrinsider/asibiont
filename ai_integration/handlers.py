@@ -4382,18 +4382,20 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     except Exception:
                         pass
                 # Исключение: если это финальный update (цель достигается) — rate-limit пропускаем
+                # Исключение 2: если новая метрика > старой (реальный рост) — тоже пропускаем rate-limit
                 _would_complete = (mc >= matched.metric_target)
-                if not _would_complete:
+                _real_growth = mc > (matched.metric_current or 0)
+                if not _would_complete and not _real_growth:
                     try:
                         from models import AgentActivityLog as _AAL_rl
                         _recent_updates = session.query(_AAL_rl).filter(
                             _AAL_rl.user_id == user.id,
                             _AAL_rl.activity_type == 'goal_updated',
                             _AAL_rl.ref_id == matched.id,
-                            _AAL_rl.created_at >= datetime.now() - timedelta(hours=3),
+                            _AAL_rl.created_at >= datetime.now() - timedelta(hours=1),
                         ).count()
                         if _recent_updates >= 1:
-                            return f"Метрика цели '{matched.title}' уже обновлялась менее 3ч назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
+                            return f"Метрика цели '{matched.title}' уже обновлялась менее часа назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
                     except Exception:
                         pass
                 matched.metric_current = mc
@@ -12754,6 +12756,32 @@ async def check_emails(
                         session.rollback()
                     except Exception:
                         pass
+
+            # Авто-обновление метрики если появились новые replied контакты
+            if _new_auto or _replied_known:
+                try:
+                    from models import Goal as _Goal_ce
+                    _total_replied_ce = session.query(_EC_ce2).filter_by(user_id=user.id, status='replied').count()
+                    _ppl_kw_ce = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт')
+                    _ppl_goals_ce = session.query(_Goal_ce).filter(
+                        _Goal_ce.user_id == user.id,
+                        _Goal_ce.status == 'active',
+                        _Goal_ce.metric_target.isnot(None),
+                    ).all()
+                    for _g_ce2 in _ppl_goals_ce:
+                        _g_text_ce = (_g_ce2.title + ' ' + (_g_ce2.description or '') + ' ' + (_g_ce2.metric_unit or '')).lower()
+                        if any(w in _g_text_ce for w in _ppl_kw_ce):
+                            if _total_replied_ce > (_g_ce2.metric_current or 0):
+                                update_goal_progress(
+                                    goal_title=_g_ce2.title,
+                                    metric_current=_total_replied_ce,
+                                    notes=f'check_emails: {_total_replied_ce} ответивших контактов',
+                                    user_id=user_id,
+                                )
+                                logger.info(f'[CHECK_EMAILS] Auto-updated goal metric: {_g_ce2.title} → {_total_replied_ce}')
+                                break
+                except Exception as _e_auto_gp:
+                    logger.debug(f'[CHECK_EMAILS] auto update_goal_progress failed: {_e_auto_gp}')
 
         return result
     except Exception as e:
