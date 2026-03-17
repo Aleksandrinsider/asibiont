@@ -7442,6 +7442,19 @@ class AnchorEngine:
                 EmailOutreach.status == 'replied',
                 EmailOutreach.ai_reply_sent_at.is_(None),
             ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(10).all()
+            # Дедупликация по email: если на этот адрес уже отвечали через другую запись — пропуск
+            try:
+                from models import EmailOutreach as _EO_dedup
+                _already_ai_replied_emails = {
+                    r.recipient_email.lower()
+                    for r in session.query(_EO_dedup.recipient_email).filter(
+                        _EO_dedup.user_id == user.id,
+                        _EO_dedup.ai_reply_sent_at.isnot(None),
+                    ).all()
+                    if r.recipient_email
+                }
+            except Exception:
+                _already_ai_replied_emails = set()
             import re as _re_pr_clean
             def _clean_reply_text(txt: str) -> str:
                 """Убирает MIME boundary/header артефакты из текста письма."""
@@ -7450,7 +7463,14 @@ class AnchorEngine:
                 txt = _re_pr_clean.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', txt)
                 txt = _re_pr_clean.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', txt)
                 return txt.strip()
+            _seen_pr_emails: set = set()
             for _pr in _pr_rows:
+                _pr_email_lower = (_pr.recipient_email or '').lower()
+                if _pr_email_lower in _already_ai_replied_emails:
+                    continue  # уже отвечали через другую outreach-запись
+                if _pr_email_lower in _seen_pr_emails:
+                    continue  # дубль в текущей выборке
+                _seen_pr_emails.add(_pr_email_lower)
                 _pending_replies.append({
                     'outreach_id': _pr.id,
                     'email': _pr.recipient_email,
