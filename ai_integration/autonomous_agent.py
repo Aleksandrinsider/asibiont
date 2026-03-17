@@ -1095,6 +1095,45 @@ class HybridAutonomousAgent:
             action_params = {}
         if not action:
             return {"error": "Параметр action не указан"}
+
+        # ── Валидация query для GitHub search_users ──
+        # AI иногда передаёт email-адреса или названия задач как query → 0 результатов.
+        # Перехватываем здесь и заменяем на валидный дефолт.
+        if action == 'search_users':
+            import re as _re_ghv
+            _raw_query = str(action_params.get('query', '')).strip()
+            _is_bad_query = False
+            # Признаки плохого query:
+            # 1. Содержит email-адрес
+            if _re_ghv.search(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}', _raw_query):
+                _is_bad_query = True
+            # 2. Не содержит ни одного GitHub-квалификатора (language:, repos:, followers:, location:, type:)
+            elif not _re_ghv.search(r'\b(language|repos|followers|location|type)\s*:', _raw_query, _re_ghv.IGNORECASE):
+                # Если содержит 3+ слова без квалификаторов — может быть свободным поиском (допускаем)
+                # Но если похоже на название задачи (email_analysis etc.) — заменяем
+                _word_count = len(_raw_query.split())
+                if _word_count <= 3 and not any(c.isdigit() for c in _raw_query):
+                    _is_bad_query = True
+            if _is_bad_query:
+                _safe_default = 'autonomous agent language:python repos:>10 followers:>5'
+                logger.warning(
+                    "[ACTION] search_users bad query=%r → replacing with safe default=%r",
+                    _raw_query, _safe_default,
+                )
+                action_params = dict(action_params)
+                action_params['query'] = _safe_default
+                # Оповещаем через output что заменили запрос
+                _fix_note = (
+                    f"⚠️ Запрос '{_raw_query}' некорректен для GitHub Users Search "
+                    f"(email-адреса и случайные слова не поддерживаются). "
+                    f"Автоматически использован: '{_safe_default}'\n"
+                    f"Допустимые квалификаторы: language:, repos:, followers:, location:\n"
+                )
+            else:
+                _fix_note = ''
+        else:
+            _fix_note = ''
+
         py_code = _wrap_agent_code(agent_data['python_code'].strip())
         api_keys_raw = agent_data.get('user_api_keys', '') or ''
         _is_linux_ea = _sys_ea.platform != 'win32'
@@ -1142,6 +1181,11 @@ class HybridAutonomousAgent:
             except _aio_ea.TimeoutError:
                 proc.kill()
                 return {"status": "error", "error": f"Timeout ({API_TIMEOUT_SCRIPT}s) — скрипт выполнялся слишком долго"}
+            # Prepend fix note if query was replaced
+            if _fix_note and out:
+                out = _fix_note + out
+            elif _fix_note:
+                out = _fix_note
             logger.info(f"[ACTION] {action} output={out[:100]} err={err[:100]}")
             # Лог в хронологию агента
             try:
@@ -5051,12 +5095,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
-    _max_iters = 4 if _is_autopilot_task else 3  # autopilot: search0 + search1 + save + send
+    _max_iters = 5 if _is_autopilot_task else 3  # autopilot: search + save + send + update + summary
     # GitHub-агент: определяем заранее для форсирования цепочки
     _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
     for _iter in range(_max_iters):
-        # 5 tool calls суммарно для автопилота (search + search + save + send + progress)
-        _max_tool_calls = 5 if _is_autopilot_task else 3
+        # 6 tool calls суммарно для автопилота (search + save×N + send×N + progress)
+        _max_tool_calls = 6 if _is_autopilot_task else 3
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -5077,20 +5121,32 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 and _last_tool_local == 'run_agent_action'
             )
             _was_save_contact = _last_tool_local == 'save_email_contact'
-            if _was_save_contact:
+            # Проверяем: был ли send_outreach_email уже после save
+            _was_send = 'send_outreach_email' in _tools_used
+            _was_save = 'save_email_contact' in _tools_used
+            if _was_send and not ('update_goal_progress' in _tools_used):
+                _messages.append({"role": "user", "content": (
+                    f"Письма отправлены ({_used_str}). "
+                    "ФИНАЛЬНЫЙ ШАГ — update_goal_progress:\n"
+                    "Обнови прогресс цели: сколько новых контактов/писем получилось. "
+                    "Вызови update_goal_progress(goal_title='...', notes='краткий итог')."
+                )})
+            elif _was_save and not _was_send:
                 _messages.append({"role": "user", "content": (
                     f"Контакт(ы) сохранены (использовал: {_used_str}). "
                     "🚨 СЛЕДУЮЩИЙ ШАГ — ТОЛЬКО send_outreach_email:\n"
                     "Отправь персональное письмо каждому сохранённому пользователю. "
                     "Используй его имя и GitHub-профиль. Действуй немедленно — вызови send_outreach_email!"
                 )})
-            elif _was_github_search:
+            elif _was_github_search and not _was_save:
                 _messages.append({"role": "user", "content": (
-                    f"Поиск выполнен (использовал: {_used_str}). "
-                    "🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub — ВЫПОЛНИ ПРЯМО СЕЙЧАС:\n"
-                    "1. save_email_contact — сохрани email каждого найденного пользователя\n"
-                    "2. send_outreach_email — отправь письмо каждому сохранённому\n"
-                    "Без save + send этот цикл бесполезен! Действуй немедленно."
+                    f"GitHub-поиск выполнен (использовал: {_used_str}). "
+                    "🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА — ВЫПОЛНИ ПРЯМО СЕЙЧАС:\n"
+                    "1. save_email_contact — для КАЖДОГО найденного у кого есть email\n"
+                    "   Параметры: name='Имя', email='адрес@домен', source='GitHub'\n"
+                    "2. После save → send_outreach_email каждому из сохранённых\n"
+                    "⚠️ Если у найденных НЕТ email на GitHub — напиши БЛОКЕР: нет email у контактов. "
+                    "Это нормально — попробуй другой query или find_relevant_contacts_for_task."
                 )})
             else:
                 _messages.append({"role": "user", "content": (

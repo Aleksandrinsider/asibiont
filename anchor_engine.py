@@ -1062,10 +1062,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_team_block}"
         f"{_memory_block}\n"
         "## МЫШЛЕНИЕ ПЕРЕД ДЕЙСТВИЕМ\n"
-        "Перед выбором инструмента — ответь мысленно на 4 вопроса (не пиши их в ответе!):\n"
+        "Перед выбором инструмента — ответь мысленно на 5 вопросов (не пиши их в ответе!):\n"
         "СУТЬ: что конкретно изменится у пользователя если цель будет достигнута? Что = реальный прогресс?\n"
+        "ИСТОРИЯ: что уже делалось и с каким результатом? (см. «Твоя история» выше) Не повторяй провальное!\n"
         "ВАРИАНТЫ: 3 разных пути к этой цели — прямой контакт / создание контента / поиск/аналитика.\n"
-        "          + что я ЕЩЁ НЕ ПРОБОВАЛ? (см. «Ещё не пробовал» выше)\n"
+        "          + что я ЕЩЁ НЕ ПРОБОВАЛ? (альтернативная площадка, другой тип людей?)\n"
         "РЫЧАГ: какое одно действие даст максимальный сдвиг при минимуме усилий?\n"
         "СЛЕПЫЕ ЗОНЫ: какую аудиторию / площадку / подход я упускаю?\n"
         "→ После анализа — сразу вызывай ЛУЧШИЙ инструмент, без предисловий.\n\n"
@@ -1075,6 +1076,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "   НО: если в нише застрял — выходи за рамки роли, используй ВЕСЬ каталог. Результат важнее роли.\n"
         "3. РАССУЖДАЙ через вопрос: что РЕАЛЬНО = +1 к метрике этой цели? Затем выбирай инструмент.\n"
         "4. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress (макс ОДИН раз за сессию).\n"
+        "   GitHub цепочка ОБЯЗАТЕЛЬНАЯ: run_agent_action(search_users) → save_email_contact × N → send_outreach_email × N.\n"
         "5. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
         "6. Каждый цикл = ДРУГИЕ инструменты: если уже делал web_search → "
         "пробуй research_topic, research_and_plan, negotiate_by_email, find_and_message_relevant_users.\n"
@@ -1087,10 +1089,21 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "Почту читает только Кристина (агент с Gmail). Если нужно проверить входящие — "
            "используй DELEGATE[Кристина]: проверь входящие и сообщи мне ответы.\n"
            if not _has_imap else '')
-        + ("11. У тебя GitHub — после run_agent_action(search_users) ОБЯЗАТЕЛЬНО: "
-           "1) save_email_contact для каждого найденного, "
-           "2) send_outreach_email или find_and_message_relevant_users. "
-           "Нашёл людей но не написал — цикл впустую!\n"
+        + ("11. У тебя GitHub — правила работы с GitHub СТРОГИЕ:\n"
+           "    ПРАВИЛЬНЫЙ запрос: run_agent_action(action='search_users', params={'query': 'language:python followers:>10'}\n"
+           "    ЗАПРЕЩЁННЫЕ запросы (дадут 0 результатов):\n"
+           "      ❌ email-адреса: 'user@gmail.com repos:>5' → вернёт 0\n"
+           "      ❌ названия задач: 'email_analysis repos:>5' → вернёт 0\n"
+           "      ❌ случайные слова из контекста → вернёт 0\n"
+           "    ПРАВИЛЬНЫЕ query-примеры для поиска пользователей ПОО:\n"
+           "      ✅ 'language:python repos:>10 followers:>5' — Python-разработчики\n"
+           "      ✅ 'autonomous agent language:python followers:>20' — AI-энтузиасты\n"
+           "      ✅ 'machine learning location:Russia repos:>5' — ML в РФ\n"
+           "      ✅ 'indie hacker saas repos:>15 followers:>30' — инди-разработчики\n"
+           "    ПОСЛЕ ПОЛУЧЕНИЯ РЕЗУЛЬТАТОВ ОБЯЗАТЕЛЬНО:\n"
+           "      1) save_email_contact для КАЖДОГО найденного с email\n"
+           "      2) send_outreach_email каждому из них ← без этого шага весь цикл впустую!\n"
+           "   Нашёл людей но не написал — провал!\n"
            if _has_github else '')
         + ("11. У тебя RSS-лента — после run_agent_action (RSS) ОБЯЗАТЕЛЬНО вызови save_email_contact "
            "для каждого найденного автора/источника. Без сохранения данные потеряются!\n"
@@ -4196,13 +4209,34 @@ class AnchorEngine:
                     continue
 
                 # Есть GitHub-capable агент → приоритет GitHub search
-                if _domain_agents.get('github') and email_agent in _domain_agents.get('github', []):
+                # Check if ANY GitHub agent exists (not necessarily the email_agent itself)
+                _has_github_agent = bool(_domain_agents.get('github'))
+                _github_agent_name = (_domain_agents.get('github') or [''])[0]
+                if _has_github_agent:
+                    # Формируем query под реальную тематику цели
+                    _gh_title_kw = title_l + ' ' + desc_l[:80]
+                    if any(w in _gh_title_kw for w in ('ai', 'бот', 'bot', 'автоном', 'нейро', 'ml', 'machine')):
+                        _gh_query = 'autonomous agent language:python repos:>10 followers:>10'
+                    elif any(w in _gh_title_kw for w in ('тест', 'test', 'qa', 'beta', 'пользовател')):
+                        _gh_query = 'software tester language:python repos:>5 followers:>5'
+                    elif any(w in _gh_title_kw for w in ('разработ', 'developer', 'engineer', 'программ')):
+                        _gh_query = 'indie developer language:python repos:>20 followers:>15'
+                    elif any(w in _gh_title_kw for w in ('saas', 'стартап', 'startup', 'product')):
+                        _gh_query = 'saas builder language:python repos:>10 followers:>20'
+                    else:
+                        _gh_query = 'language:python repos:>10 followers:>10'
                     directives.append({
                         'goal': title, 'agent_domain': 'github',
                         'tool': 'run_agent_action',
-                        'task': (f'Через GitHub API найди разработчиков/тестировщиков для цели «{title}». '
-                                 f'Используй run_agent_action с поиском по GitHub, сохрани каждого через save_email_contact.'),
-                        'reason': f'GitHub доступен, прогресс {int(mc)}/{int(mt) if mt else "?"}',
+                        'task': (
+                            f'GitHub-поиск новых контактов для цели «{title}» ({int(mc)}/{int(mt) if mt else "?"}).\n'
+                            f'ШАГ 1: run_agent_action(action="search_users", params={{"query": "{_gh_query}"}}\n'
+                            f'ШАГ 2: для КАЖДОГО найденного WITH EMAIL → save_email_contact(name=..., email=..., source="GitHub")\n'
+                            f'ШАГ 3: send_outreach_email для каждого сохранённого контакта\n'
+                            f'ВАЖНО: query должен содержать ТОЛЬКО GitHub-квалификаторы (language:, repos:, followers:, location:)\n'
+                            f'ЗАПРЕЩЕНО передавать в query: email-адреса, имена людей из переписки, названия задач!'
+                        ),
+                        'reason': f'GitHub доступен ({_github_agent_name}), прогресс {int(mc)}/{int(mt) if mt else "?"}',
                     })
                     continue
 
@@ -4822,7 +4856,13 @@ class AnchorEngine:
                 "4. Задача должна быть ДЕЙСТВИЕМ (найти, написать, отправить, проанализировать, ответить), а не 'изучить' или 'исследовать'.\n"
                 "5. Если у пользователя другие цели чем исследование или outreach (например контент, разработка, продажи) — адаптируй план под РЕАЛЬНЫЕ цели.\n"
                 "6. Покрой каждую активную цель. НЕ пиши письма тем кто уже в списке уже_написали.\n"
-                "7. Если у агента есть [отправка+чтение email] И кол-во отправленных писем > 5 — ПЕРВЫЙ шаг для этого агента: tool='check_emails', task='Проверь почту — есть ли ответы от контактов, которым мы писали. Обнови статус ответивших.'\n\n"
+                "7. Если у агента есть [отправка+чтение email] И кол-во отправленных писем > 5 — ПЕРВЫЙ шаг для этого агента: tool='check_emails', task='Проверь почту — есть ли ответы от контактов, которым мы писали. Обнови статус ответивших.'\n"
+                "8. GitHub-агент: при task с run_agent_action — ОБЯЗАТЕЛЬНО укажи КОНКРЕТНЫЙ query.\n"
+                "   ПРАВИЛЬНО: params={'query': 'language:python autonomous agent repos:>10'}\n"
+                "   НЕПРАВИЛЬНО: query с email-адресами, именами людей, названиями задач.\n"
+                "   GitHub Users Search принимает ТОЛЬКО: language:X, repos:>N, followers:>N, location:X\n"
+                "9. НЕ назначай анализ/обсуждение уже известных заблокированных контактов (получили max ответов).\n"
+                "   Заблокированы (>= 2 ответа): тех кто в уже_написали более 2 раз — ПРОПУСТИ их, найди НОВЫХ.\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название"}]'
@@ -5534,10 +5574,17 @@ class AnchorEngine:
                             f"💻 GitHub-интеграция активна. "
                             f"run_agent_action поддерживает action: {', '.join(list(dict.fromkeys(_gh_actions))[:4])}"
                         )
-                    else:
-                        _intg_live_lines.append(
-                            "💻 GitHub-интеграция активна → run_agent_action(action='search_users', params={...})"
-                        )
+                    _intg_live_lines.append(
+                        "⚠️ КРИТИЧНО — правила GitHub search query:\n"
+                        "  ✅ ПРАВИЛЬНО: 'language:python autonomous agent repos:>10'\n"
+                        "  ✅ ПРАВИЛЬНО: 'machine learning language:python followers:>15'\n"
+                        "  ✅ ПРАВИЛЬНО: 'indie hacker saas repos:>20 followers:>30'\n"
+                        "  ❌ ЗАПРЕЩЕНО: email-адреса ('user@gmail.com') → вернёт 0 результатов\n"
+                        "  ❌ ЗАПРЕЩЕНО: имена из переписки ('Georgiou Feng repos:>5') → вернёт 0\n"
+                        "  ❌ ЗАПРЕЩЕНО: название задачи ('email_analysis repos:>5') → вернёт 0\n"
+                        "  Допустимые квалификаторы: language:, repos:, followers:, location:, type:user\n"
+                        "  ПОСЛЕ поиска → для КАЖДОГО с email: save_email_contact → send_outreach_email"
+                    )
 
                 # Прочие скрипт-action из python_code (не GitHub, не RSS)
                 elif _ag_py_code_raw and not _rss_url_live:
