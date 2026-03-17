@@ -12747,12 +12747,22 @@ async def check_emails(
                         user_id=user.id, recipient_email=_rep_em
                     ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened'])).first()
                     if _eo:
+                        _was_replied_ce = (_eo.status == 'replied')
                         _eo.status = 'replied'
                         # Обновляем reply_text если новый текст лучше старого (нет старого или старый короче)
                         if _rep_snippet and (not _eo.reply_text or len(_rep_snippet) > len(_eo.reply_text or '')):
                             _eo.reply_text = _rep_snippet
                         if not _eo.reply_at:
                             _eo.reply_at = _now_ce
+                        # Инкрементируем счётчик ответов на кампании (только если статус изменился)
+                        if not _was_replied_ce and _eo.campaign_id:
+                            try:
+                                from models import EmailCampaign as _EC_camp_ce
+                                _camp_ce = session.query(_EC_camp_ce).filter_by(id=_eo.campaign_id).first()
+                                if _camp_ce:
+                                    _camp_ce.emails_replied = (_camp_ce.emails_replied or 0) + 1
+                            except Exception as _e_camp:
+                                logger.debug(f'[CHECK_EMAILS] campaign replies counter update failed: {_e_camp}')
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status=replied, reply_text saved: {_rep_em}')
                     # Если контакт уже replied — обновить reply_text если новый длиннее
