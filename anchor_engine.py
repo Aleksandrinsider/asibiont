@@ -4523,6 +4523,8 @@ class AnchorEngine:
             _already_sent_str = ', '.join(_already_sent[:20]) if _already_sent else 'нет'
             _pending_replies = data.get('pending_replies', [])
             _unsent_contacts_data = data.get('unsent_contacts', [])
+            _overworked_goals = data.get('overworked_goals', [])
+            _neglected_goals = data.get('neglected_goals', [])
 
             # Блок несотправленных контактов — критический приоритет
             _unsent_contacts_str = ''
@@ -4864,6 +4866,19 @@ class AnchorEngine:
                 + '\n'
             ) if _anti_repeat_lines else ''
 
+            # ── Блок ротации целей: если одна цель доминирует — переключайся ──
+            _goal_rotation_str = ''
+            if _overworked_goals:
+                _ow_str = ', '.join(_overworked_goals)
+                _ng_str = ', '.join(f'«{g}»' for g in _neglected_goals[:4]) if _neglected_goals else 'нет'
+                _goal_rotation_str = (
+                    f"\n🔄 РОТАЦИЯ ЦЕЛЕЙ:\n"
+                    f"  Перегруженные (команда зациклилась): {_ow_str}\n"
+                    f"  Заброшенные (давно не работали): {_ng_str}\n"
+                    f"  ⚠️ В ЭТОМ цикле — ОБЯЗАТЕЛЬНО включи хотя бы 1 заброшенную цель."
+                    f" Каждый агент должен работать над РАЗНЫМИ целями.\n"
+                )
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -4873,6 +4888,7 @@ class AnchorEngine:
                 + _unsent_contacts_str
                 + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
+                + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
@@ -4899,14 +4915,19 @@ class AnchorEngine:
                 "3. Смотри на прогресс цели: если цель близка к завершению — финализируй; если стагнирует — меняй подход; если 100% — пропусти.\n"
                 "4. Задача должна быть ДЕЙСТВИЕМ (найти, написать, отправить, проанализировать, ответить), а не 'изучить' или 'исследовать'.\n"
                 "5. Если у пользователя другие цели чем исследование или outreach (например контент, разработка, продажи) — адаптируй план под РЕАЛЬНЫЕ цели.\n"
-                "6. Покрой каждую активную цель. НЕ пиши письма тем кто уже в списке уже_написали.\n"
+                "6. Покрой КАЖДУЮ активную цель — в первую очередь ЗАБРОШЕННЫЕ (которые в блоке РОТАЦИЯ ЦЕЛЕЙ). НЕ пиши письма тем кто уже в списке уже_написали.\n"
                 "7. Если у агента есть [отправка+чтение email] И кол-во отправленных писем > 5 — ПЕРВЫЙ шаг для этого агента: tool='check_emails', task='Проверь почту — есть ли ответы от контактов, которым мы писали. Обнови статус ответивших.'\n"
                 "8. GitHub-агент: при task с run_agent_action — ОБЯЗАТЕЛЬНО укажи КОНКРЕТНЫЙ query.\n"
                 "   ПРАВИЛЬНО: params={'query': 'language:python autonomous agent repos:>10'}\n"
                 "   НЕПРАВИЛЬНО: query с email-адресами, именами людей, названиями задач.\n"
                 "   GitHub Users Search принимает ТОЛЬКО: language:X, repos:>N, followers:>N, location:X\n"
                 "9. НЕ назначай анализ/обсуждение уже известных заблокированных контактов (получили max ответов).\n"
-                "   Заблокированы (>= 2 ответа): тех кто в уже_написали более 2 раз — ПРОПУСТИ их, найди НОВЫХ.\n\n"
+                "   Заблокированы (>= 2 ответа): тех кто в уже_написали более 2 раз — ПРОПУСТИ их, найди НОВЫХ.\n"
+                "10. ДЕЛЕГИРОВАНИЕ — ключ к командной работе:\n"
+                "    • Если агент НАШЁЛ данные/контакты пригодные для другого агента → делегируй через delegate_task с КОНКРЕТНЫМИ данными.\n"
+                "    • RSS/аналитик нашёл статью с контактами → делегирует email-агенту с именем и email.\n"
+                "    • Email-агент получил ответ с техническим вопросом → делегирует аналитику/Research-агенту.\n"
+                "    • Делегирование = синергия: 2 агента + координация > 2 агента работающие параллельно.\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название"}]'
@@ -7324,7 +7345,7 @@ class AnchorEngine:
         active_goals = session.query(Goal).filter(
             Goal.user_id == user.id,
             Goal.status == 'active',
-        ).all()
+        ).order_by(Goal.updated_at.asc().nullsfirst()).all()
         if not active_goals:
             return []
 
@@ -7599,8 +7620,13 @@ class AnchorEngine:
         except Exception as _e_rules:
             logger.debug(f"[AUTOPILOT] Failed to load user rules: {_e_rules}")
 
+        # Умная выборка целей: сначала заброшенные (already sorted by updated_at ASC),
+        # но ВСЕГДА включаем цели с прогрессом >=70% (почти завершены → нужно финализировать)
+        _near_done = [g for g in active_goals if (g.progress_percentage or 0) >= 70]
+        _other = [g for g in active_goals if (g.progress_percentage or 0) < 70]
+        _goals_pool = _near_done + _other  # почти-завершённые всегда первыми
         goals_summary = []
-        for g in active_goals[:5]:
+        for g in _goals_pool[:5]:
             # Задачи этой цели — полный status breakdown
             goal_tasks = _tasks_by_goal.get(g.id, [])
             tasks_detail = []
@@ -7856,6 +7882,21 @@ class AnchorEngine:
                     _gs_item['metric_current'] = _g_sync.metric_current
                     break
 
+        # Трекинг: какие цели доминируют в recent_actions (для ротации)
+        _goal_freq_in_history: dict = {}
+        for _gs_item in goals_summary:
+            _gt_fq = (_gs_item.get('title') or '').lower()[:30]
+            _hits = sum(1 for _ah in actions_history if _gt_fq and _gt_fq[:15] in _ah.lower())
+            if _hits:
+                _goal_freq_in_history[_gs_item.get('title', '')] = _hits
+        _overworked_goals = [
+            f"«{t}» ({n}x)" for t, n in _goal_freq_in_history.items() if n >= 3
+        ]
+        _neglected_goals = [
+            g.get('title', '') for g in goals_summary
+            if not _goal_freq_in_history.get(g.get('title', ''))
+        ]
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -7876,6 +7917,8 @@ class AnchorEngine:
             'per_agent_history': _per_agent_history,
             'already_sent_emails': _already_sent_emails,
             'pending_replies': _pending_replies,
+            'overworked_goals': _overworked_goals,
+            'neglected_goals': _neglected_goals,
             'unsent_contacts': [
                 c for c in contacts_summary[:10]
                 if '<' in c and '>' in c and
