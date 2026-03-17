@@ -1103,9 +1103,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            if _first_goal_title else "")
         + "13. КОМАНДНАЯ ЭСТАФЕТА: нашёл контакт — не держи у себя! "
           "DELEGATE[Имя с email-интеграцией]: Отправь письмо name@domain.com — [суть].\n"
-        + "14. add_task создаёт рабочую задачу (source=agent) — видна в списке задач как «Создано агентом». "
-          "Используй умеренно: только конкретные шаги с чёткой датой/действием. "
-          "НЕ создавай абстрактных задач ('изучить', 'подумать') — если можешь действовать сам, действуй.\n"
+        + "14. add_task — ЗАПРЕЩЕНО создавать задачи вместо пользователя. "
+          "Только внутренние шаги агента (source=agent) с конкретным действием и датой. "
+          "НЕ создавай абстрактных задач ('изучить', 'подумать') — если можешь действовать сам, действуй. "
+          "Запрещено добавлять задачи в список пользователя без его явного запроса.\n"
     )
 
 # Группы батчинга
@@ -3476,7 +3477,7 @@ class AnchorEngine:
                                 .filter_by(
                                     user_id=user.id,
                                     activity_type='agent_event_dispatch',
-                                    target=anchor.source,
+                                    target=_get(anchor, 'source'),
                                 )
                                 .order_by(_AAL.id.desc()).first()
                             )
@@ -3489,7 +3490,7 @@ class AnchorEngine:
 
                         logger.info(
                             "[ANCHOR-DISPATCH] user %d: %s triggered by %s → %d chars",
-                            user.id, chosen.name, anchor.anchor_type, len(result or ''),
+                            user.id, chosen.name, _get(anchor, 'anchor_type'), len(result or ''),
                         )
 
                         # Отправляем результат агента пользователю в Telegram
@@ -3507,7 +3508,7 @@ class AnchorEngine:
                                     },
                                     'text': _strip_html(result.strip()),
                                     '__tools_used': _ev_tools_used,
-                                    '__anchor_type': anchor.anchor_type,
+                                    '__anchor_type': _get(anchor, 'anchor_type'),
                                 }, ensure_ascii=False)
                                 _s.add(Interaction(
                                     user_id=user.id,
@@ -3525,7 +3526,7 @@ class AnchorEngine:
 
                         # ── ASI-продолжение: анализ результата → следующий агент ──
                         if result and len(result) > 30:
-                            _chain_max_ev = 1 if anchor.anchor_type == 'goal_autopilot_review' else 3
+                            _chain_max_ev = 1 if _get(anchor, 'anchor_type') == 'goal_autopilot_review' else 3
                             await self._maybe_continue_chain(
                                 user, chosen, anchor, task_text, result, agents, _s,
                                 max_cont=_chain_max_ev,
@@ -3541,7 +3542,7 @@ class AnchorEngine:
                                 .filter_by(
                                     user_id=user.id,
                                     activity_type='agent_event_dispatch',
-                                    target=anchor.source,
+                                    target=_get(anchor, 'source'),
                                     status='in_progress',
                                 )
                                 .order_by(_AAL.id.desc()).first()
@@ -3623,6 +3624,12 @@ class AnchorEngine:
         запускает следующего агента напрямую.
         max_cont: максимум продолжений (3 для event-якорей, 1 для autopilot).
         """
+        # Поддерживаем как dict (из _dispatch_agents_for_new_anchors), так и ORM-объекты
+        def _get_anc(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
         try:
             # Guard: не создаём цепочку длиннее max_cont продолжений
             from models import AgentActivityLog as _AAL2
@@ -3631,7 +3638,7 @@ class AnchorEngine:
                 .filter(
                     _AAL2.user_id == user.id,
                     _AAL2.activity_type == 'agent_chain_continue',
-                    _AAL2.target == anchor.source,
+                    _AAL2.target == _get_anc(anchor, 'source'),
                     _AAL2.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
                 )
                 .count()
@@ -3890,7 +3897,7 @@ class AnchorEngine:
                 activity_type='agent_chain_continue',
                 title=f'[chain] {prev_agent.name} → {_next_ag.name}',
                 content=_next_task[:500],
-                target=anchor.source,
+                target=_get_anc(anchor, 'source'),
                 status='in_progress',
                 ref_id=_next_ag.id,
             ))
