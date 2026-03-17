@@ -812,7 +812,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _metric_hints:
             _goal_state_hint = (
                 f"\n📊 РЕАЛЬНЫЙ ПРОГРЕСС: {'; '.join(_metric_hints)}\n"
-                "→ Каждый сохранённый контакт и отправленное письмо засчитываются в метрику.\n"
+                "→ Метрика растёт ТОЛЬКО при реальном ответе/подтверждении интереса от человека снаружи.\n"
             )
 
         if _zero_progress and not _has_outreach_done and _has_search_done:
@@ -2403,11 +2403,14 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
+                            # timeout = 120s per agent × number of agents + 40s overhead
+                            _n_coord_agents = len(_coord_real)
+                            _coord_timeout = max(220, _n_coord_agents * 120 + 40)
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
                                 ),
-                                timeout=55,  # coordinator must finish within 55s
+                                timeout=_coord_timeout,
                             )
                             if _coord_ok:
                                 return
@@ -4819,7 +4822,8 @@ class AnchorEngine:
                 "3. Смотри на прогресс цели: если цель близка к завершению — финализируй; если стагнирует — меняй подход; если 100% — пропусти.\n"
                 "4. Задача должна быть ДЕЙСТВИЕМ (найти, написать, отправить, проанализировать, ответить), а не 'изучить' или 'исследовать'.\n"
                 "5. Если у пользователя другие цели чем исследование или outreach (например контент, разработка, продажи) — адаптируй план под РЕАЛЬНЫЕ цели.\n"
-                "6. Покрой каждую активную цель. НЕ пиши письма тем кто уже в списке уже_написали.\n\n"
+                "6. Покрой каждую активную цель. НЕ пиши письма тем кто уже в списке уже_написали.\n"
+                "7. Если у агента есть [отправка+чтение email] И кол-во отправленных писем > 5 — ПЕРВЫЙ шаг для этого агента: tool='check_emails', task='Проверь почту — есть ли ответы от контактов, которым мы писали. Обнови статус ответивших.'\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название"}]'
