@@ -13177,19 +13177,7 @@ async def send_email(
                 logger.warning(f'[SEND_EMAIL] Campaign log (gmail_oauth) error: {_log_err_goa}')
                 try: session.rollback()
                 except Exception: pass
-            try:
-                from models import AgentActivityLog as _AAL_goa
-                session.add(_AAL_goa(
-                    user_id=user.id, activity_type='email',
-                    title=f"Email → {to_clean}",
-                    content=f"Тема: {subject}\n\n{body[:500]}",
-                    target=to_clean, status='sent',
-                ))
-                session.commit()
-            except Exception as _aal_goa_e:
-                logger.warning(f'[SEND_EMAIL] Activity log (gmail_oauth) error: {_aal_goa_e}')
-                try: session.rollback()
-                except Exception: pass
+            # Не создаем AgentActivityLog - письмо уже залогировано в EmailOutreach кампании
             return f" Письмо отправлено с {_gmail_from} на {to_clean} через Gmail"
 
         # ── Gmail server (пароль приложения) → серверный Resend + Reply-To ───
@@ -13271,24 +13259,7 @@ async def send_email(
                     session.rollback()
                 except Exception:
                     pass
-            # Логируем в AgentActivityLog для хронологии
-            try:
-                from models import AgentActivityLog as _AAL_gm
-                session.add(_AAL_gm(
-                    user_id=user.id,
-                    activity_type='email',
-                    title=f"Email → {to_clean}",
-                    content=f"Тема: {subject}\n\n{body[:500]}",
-                    target=to_clean,
-                    status='sent',
-                ))
-                session.commit()
-            except Exception as _aal_gm_e:
-                logger.warning(f'[SEND_EMAIL] Activity log (gmail) error: {_aal_gm_e}')
-                try:
-                    session.rollback()
-                except Exception:
-                    pass
+            # Не создаем AgentActivityLog - письмо уже залогировано в EmailOutreach кампании
             _reply_hint = f" (ответы придут на {_gmail_reply_to})" if _gmail_reply_to and '@' in _gmail_reply_to else ''
             return f" Письмо отправлено на {to_clean} (Gmail){_reply_hint}"
 
@@ -13529,25 +13500,8 @@ async def send_email(
             logger.warning(f"[SEND_EMAIL] Failed to save outreach record: {_e}")
             session.rollback()
 
-        # Логируем в AgentActivityLog для хронологии активности
-        try:
-            from models import AgentActivityLog as _AAL_se
-            _aal = _AAL_se(
-                user_id=user.id,
-                activity_type='email',
-                title=f"Email → {to_clean}",
-                content=f"Тема: {subject}\n\n{body[:500]}",
-                target=to_clean,
-                status='sent',
-            )
-            session.add(_aal)
-            session.commit()
-        except Exception as _aal_e:
-            logger.warning(f"[SEND_EMAIL] Activity log error: {_aal_e}")
-            try:
-                session.rollback()
-            except Exception:
-                pass
+        # Не создаем AgentActivityLog - письмо уже залогировано в EmailOutreach кампании со status='personal'
+        # Кампании отображаются отдельно в интерфейсе, не загромождая хронологию каждым письмом
 
         lang = _get_lang(user_id)
         _from_info = f' (от {sender_email})' if _chosen_integration else ''
