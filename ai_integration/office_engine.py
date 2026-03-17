@@ -1062,7 +1062,8 @@ class OfficeEngine:
                     )
                     result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
                 except asyncio.TimeoutError:
-                    result = f"Задача передана {target_agent['name']}, результат будет позже."
+                    logger.warning("[AUTONOMY] agent %s timeout at step %d — skip silently", target_name, _step + 1)
+                    continue  # не сохраняем placeholder в чат, продолжаем цепочку
                 except Exception as _e:
                     logger.debug("[AUTONOMY] exec error step %d: %s", _step + 1, _e)
                     break

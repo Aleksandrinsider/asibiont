@@ -7057,6 +7057,8 @@ async def api_interactions_handler(request):
             'Принял в работу.',
             'Задачу принял.',
             'анализирует цели...',   # intro "X анализирует цели..." — only noise, result follows
+            'Задача передана',       # таймаут-placeholder из office_engine
+            'результат будет позже', # то же
         )
         filtered_interactions = []
         # Dedup window: (message_type, content[:200]) → last seen timestamp
