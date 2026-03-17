@@ -4208,11 +4208,40 @@ class AnchorEngine:
                     })
                     continue
 
-                # Есть GitHub-capable агент → приоритет GitHub search
+                # Есть GitHub-capable агент
                 # Check if ANY GitHub agent exists (not necessarily the email_agent itself)
                 _has_github_agent = bool(_domain_agents.get('github'))
                 _github_agent_name = (_domain_agents.get('github') or [''])[0]
                 if _has_github_agent:
+                    # ПРИОРИТЕТ 0: если есть уже сохранённые контакты без отправленных писем →
+                    # сначала отправить им письма, не тратить цикл на новый поиск
+                    _sent_set = {e.lower() for e in data.get('already_sent_emails', [])}
+                    _unsent_contacts = []
+                    for _c_str in contacts_list:
+                        if '<' in _c_str and '>' in _c_str:
+                            _c_email = _c_str.split('<')[1].split('>')[0].strip().lower()
+                            if _c_email and _c_email not in _sent_set:
+                                _unsent_contacts.append(_c_str)
+                    if _unsent_contacts:
+                        _unsent_names = ', '.join(
+                            _c.split('<')[0].strip() for _c in _unsent_contacts[:3]
+                        )
+                        directives.append({
+                            'goal': title, 'agent_domain': 'email',
+                            'tool': 'send_outreach_email',
+                            'task': (
+                                f'В базе есть {len(_unsent_contacts)} контактов БЕЗ отправленных писем: {_unsent_names}...\n'
+                                f'🚨 НЕМЕДЛЕННО отправь им письма — НЕ делай новый GitHub-поиск!\n'
+                                f'ШАГ 1: list_email_contacts(status="new") — увидишь список\n'
+                                f'ШАГ 2: send_outreach_email(goal="{title[:50]}", limit={min(len(_unsent_contacts), 5)}) '
+                                f'— это отправит персональные письма всем новым контактам\n'
+                                f'ШАГ 3: update_goal_progress после отправки'
+                            ),
+                            'reason': f'{len(_unsent_contacts)} контактов без писем (src=GitHub/другой)',
+                        })
+                        continue
+
+                    # Нет несотправленных → ищем новых через GitHub
                     # Формируем query под реальную тематику цели
                     _gh_title_kw = title_l + ' ' + desc_l[:80]
                     if any(w in _gh_title_kw for w in ('ai', 'бот', 'bot', 'автоном', 'нейро', 'ml', 'machine')):
@@ -4493,6 +4522,20 @@ class AnchorEngine:
             _already_sent = data.get('already_sent_emails', [])
             _already_sent_str = ', '.join(_already_sent[:20]) if _already_sent else 'нет'
             _pending_replies = data.get('pending_replies', [])
+            _unsent_contacts_data = data.get('unsent_contacts', [])
+
+            # Блок несотправленных контактов — критический приоритет
+            _unsent_contacts_str = ''
+            if _unsent_contacts_data:
+                _uc_names = [
+                    _c.split('<')[0].strip() if '<' in _c else _c[:40]
+                    for _c in _unsent_contacts_data[:5]
+                ]
+                _unsent_contacts_str = (
+                    f"\n🟠 КОНТАКТЫ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.): "
+                    + ', '.join(_uc_names)
+                    + "\n→ Email-агент ОБЯЗАН вызвать send_outreach_email — НЕ делать новый поиск!\n"
+                )
 
             # Блок приоритетных ответов на входящие — если есть replied без AI-ответа
             _pending_replies_str = ''
@@ -4827,6 +4870,7 @@ class AnchorEngine:
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + f"{_degraded_note}"
                 + _pending_replies_str
+                + _unsent_contacts_str
                 + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_anti_repeat_str}"
@@ -7832,6 +7876,12 @@ class AnchorEngine:
             'per_agent_history': _per_agent_history,
             'already_sent_emails': _already_sent_emails,
             'pending_replies': _pending_replies,
+            'unsent_contacts': [
+                c for c in contacts_summary[:10]
+                if '<' in c and '>' in c and
+                c.split('<')[1].split('>')[0].strip().lower() not in
+                {e.lower() for e in _already_sent_emails}
+            ],
         }
 
         return [Anchor(
