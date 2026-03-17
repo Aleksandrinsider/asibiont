@@ -5009,13 +5009,6 @@ class AnchorEngine:
             # Накапливаем контекст между шагами — используется в финальном отчёте
             _bridge_notes: list = []
 
-            if self.bot:
-                try:
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id, text=f"ASI:\n\n{_coord_announce}",
-                    )
-                except Exception:
-                    pass
             try:
                 session.add(Interaction(
                     user_id=user.id, message_type='proactive',
@@ -5255,14 +5248,6 @@ class AnchorEngine:
                         _assign_cs.commit()
                     finally:
                         _assign_cs.close()
-                    if self.bot:
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=_assign_text,
-                            )
-                        except Exception:
-                            pass
                 except Exception as _assign_save_err:
                     logger.debug("[COORD] per-agent assign save failed: %s", _assign_save_err)
 
@@ -5739,14 +5724,6 @@ class AnchorEngine:
                                     _rl_sess.close()
                             except Exception:
                                 pass
-                            if self.bot:
-                                try:
-                                    await self.bot.send_message(
-                                        chat_id=user.telegram_id,
-                                        text=f"ASI:\n\n{_relay_txt.strip()}",
-                                    )
-                                except Exception:
-                                    pass
                     except Exception as _rl_err:
                         logger.debug("[COORD] agent request relay error: %s", _rl_err)
 
@@ -5770,26 +5747,6 @@ class AnchorEngine:
                             session.rollback()
                         except Exception:
                             pass
-
-                if self.bot and len(_cleaned) > 30:
-                    # Фильтр технических ошибок — не отправляем в чат пользователя
-                    _error_phrases = [
-                        'при обработке запроса произошла ошибка',
-                        'таймаут', 'timeout', 'tool timeout',
-                        'инструмент завершил работу',
-                        'traceback', 'exception:', 'error:',
-                    ]
-                    _is_tech_error = any(p in _cleaned.lower() for p in _error_phrases)
-                    if not _is_tech_error:
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=f"{_ag_name}:\n\n{_cleaned}",
-                            )
-                        except Exception:
-                            pass
-                    else:
-                        logger.info("[COORD] Suppressed tech error from user chat: %s", _cleaned[:100])
 
                 try:
                     _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
@@ -5898,8 +5855,30 @@ class AnchorEngine:
                         _report_text = _report_gen.strip()
                         try:
                             from models import Session as _Sum_Sess_cls
+                            import datetime as _dt_sumchk
                             _sum_sess = _Sum_Sess_cls()
                             try:
+                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 20 мин назад
+                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(minutes=20)
+                                from sqlalchemy import text as _sql_sumchk
+                                _recent_summary = _sum_sess.execute(_sql_sumchk(
+                                    "SELECT id FROM interactions WHERE user_id=:uid "
+                                    "AND message_type='proactive' "
+                                    "AND content LIKE '%coordinator_summary%' "
+                                    "AND created_at >= :cutoff LIMIT 1"
+                                ), {'uid': user.id, 'cutoff': _sum_cutoff}).fetchone()
+                                if _recent_summary:
+                                    logger.info("[COORD] coordinator_summary deduped — recent exists (id=%s)", _recent_summary[0])
+                                    _sum_sess.close()
+                                    if self.bot:
+                                        try:
+                                            await self.bot.send_message(
+                                                chat_id=user.telegram_id,
+                                                text=f"ASI (итог):\n\n{_report_text}",
+                                            )
+                                        except Exception:
+                                            pass
+                                    return True
                                 _sum_sess.add(Interaction(
                                     user_id=user.id,
                                     message_type='proactive',
