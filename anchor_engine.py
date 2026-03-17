@@ -4403,11 +4403,11 @@ class AnchorEngine:
                             f'Заголовок заметки: «{title[:50]} — отчёт». '
                             f'Затем вызови update_goal_progress(notes="краткий итог").'
                         )
-                        directives.append({
-                            'goal': title, 'agent_domain': 'research',
-                            'tool': tool, 'task': task,
-                            'reason': 'финансовый/новостной анализ через research_topic/web_search',
-                        })
+                    directives.append({
+                        'goal': title, 'agent_domain': 'research',
+                        'tool': tool, 'task': task,
+                        'reason': 'финансовый/новостной анализ через research_topic/web_search',
+                    })
 
             # ── CONTENT goals ──
             elif any(w in full_l for w in _CONTENT_KW):
