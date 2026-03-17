@@ -6441,13 +6441,6 @@ async def api_avatar_handler(request):
 
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=False)
 
-        # Телеграм file URL-ы истекают через ~1ч — если в кэше url со старым путём,
-        # сразу делаем refresh вместо попытки проксировать (экономим 1 RTT)
-        if avatar_url and 'api.telegram.org/file/' in avatar_url:
-            fresh = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
-            if fresh:
-                avatar_url = fresh
-
         async def _proxy_tg_avatar(url):
             """Proxy a Telegram file URL, return web.Response or None on failure."""
             try:
