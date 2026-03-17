@@ -7081,12 +7081,25 @@ async def api_interactions_handler(request):
             if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 60:
                 if any(n in _check_text for n in _NOISE_PATTERNS):
                     continue
-            # Filter out coordinator internal messages from chat — these are autopilot plumbing
-            if i.message_type == 'proactive' and _ct.startswith('{'):
+            # Filter out coordinator internal plumbing from main chat
+            # Only coordinator_result, coordinator_summary, goal_autopilot_review remain visible
+            if i.message_type in ('proactive', 'agent_msg') and _ct.startswith('{'):
                 try:
                     _jp2 = __import__('json').loads(_ct)
-                    if isinstance(_jp2, dict) and _jp2.get('__anchor_type') in ('coordinator_plan',):
-                        continue
+                    if isinstance(_jp2, dict):
+                        _atype = _jp2.get('__anchor_type', '')
+                        # Internal: ASI→agent assignments (user does not need to see these)
+                        _INTERNAL_TYPES = {
+                            'coordinator_plan',
+                            'coordinator_assignment',
+                            'goal_autopilot_assignment',
+                            'coordinator_agent_request',
+                            'agent_chain_transfer',
+                            'agent_chain_continue',
+                            'asi_self_analysis',
+                        }
+                        if _atype in _INTERNAL_TYPES:
+                            continue
                 except Exception:
                     pass
             # Time-window dedup: skip if exact same content appeared in last 5 minutes
