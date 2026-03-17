@@ -2252,6 +2252,38 @@ class HybridAutonomousAgent:
                 except Exception:
                     pass
 
+            # ── Fast path: чисто разговорное сообщение → без инструментов (~3-5s) ────
+            # При tool_choice="auto" и отсутствии action-слов DeepSeek всё равно
+            # читает ~37K токенов инструментов, решает их не вызывать и возвращает текст.
+            # Пропускаем тулы сразу → экономия ~12-15 сек.
+            _ml = (user_message or '').lower()
+            _CONVO_STARTS = ('привет', 'здравствуй', 'добрый', 'привет!', 'хеллоу',
+                             'hello', 'hi ', 'hi!', 'hola', 'bonjour', 'hey ')
+            _CONVO_CONTAINS = ('как дела', 'как ты', 'что умеешь', 'что ты умеешь',
+                               'кто ты', 'расскажи о себе', 'ты кто', 'что ты такое',
+                               'how are you', 'what can you do', 'who are you',
+                               'what are you', 'tell me about yourself')
+            _ACTION_HINTS = ('задач', 'цел', 'напомн', 'созда', 'добавь', 'удали',
+                             'измени', 'сделай', 'найди', 'найти', 'research',
+                             'email', 'пост', 'опубли', 'делегир', 'исследу',
+                             'task', 'goal', 'remind', 'create', 'delete', 'search',
+                             'расписани', 'план', 'schedule', 'plan', 'campaign')
+            _is_fast_convo = (
+                initial_tool_choice == 'auto'
+                and not _agent_tools_allowed  # агент может требовать инструменты
+                and (any(_ml.startswith(p) for p in _CONVO_STARTS)
+                     or any(p in _ml for p in _CONVO_CONTAINS))
+                and not any(p in _ml for p in _ACTION_HINTS)
+            )
+            if _is_fast_convo:
+                logger.info(f"[FAST_CONVO] Skipping tools for conversational message")
+                _fc_resp = await self.call_ai(
+                    messages, use_tools=False, max_tokens=500,
+                    api_timeout=API_TIMEOUT_NORMAL)
+                _fc_content = _fc_resp['choices'][0]['message'].get('content', '')
+                return self._finalize_response(
+                    _fc_content, user_message, user_id, [])
+
             for iteration in range(MAX_ITERATIONS):
                 # Первая итерация может быть "required", остальные "auto"
                 tc = initial_tool_choice if iteration == 0 else "auto"
