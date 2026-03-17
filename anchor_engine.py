@@ -421,14 +421,186 @@ def _match_best_integration(goal_title: str,
     return result
 
 
+# ── Тактические семейства инструментов ──
+# Каждое семейство = одна концептуальная стратегия. Использовал инструмент → семейство отмечено.
+_TACTIC_FAMILIES: dict = {
+    'direct_outreach':    {'send_outreach_email', 'run_agent_action', 'find_relevant_contacts_for_task',
+                           'save_email_contact', 'start_email_campaign', 'add_email_leads'},
+    'community_reach':    {'find_and_message_relevant_users', 'find_partners', 'start_delegation_campaign',
+                           'web_search', 'quick_topic_search'},
+    'content_inbound':    {'create_post', 'publish_to_telegram', 'publish_to_discord',
+                           'generate_marketing_content', 'start_content_campaign', 'generate_image'},
+    'referral_deepen':    {'reply_to_outreach_email', 'negotiate_by_email', 'send_follow_up_email',
+                           'check_emails', 'list_email_contacts'},
+    'research_pivot':     {'research_topic', 'research_and_plan', 'get_news_trends',
+                           'analyze_situation_and_suggest_tasks'},
+}
+
+# Названия и примеры тактик под разные типы целей
+_TACTIC_MATRIX: dict = {
+    'outreach': {
+        'direct_outreach': (
+            '🎯 Прямой поиск → письмо',
+            'GitHub search_users→save_email_contact→send_outreach_email; '
+            'или find_relevant_contacts_for_task("Python AI разработчики") → send_outreach_email',
+        ),
+        'community_reach': (
+            '🌐 Сообщества и площадки',
+            'find_and_message_relevant_users("AI beta testers Telegram/Discord") '
+            'или web_search("site:reddit.com/r/MachineLearning beta tester wanted") → send_outreach_email',
+        ),
+        'content_inbound': (
+            '📢 Контент-приманка (люди приходят сами)',
+            'generate_marketing_content("пост Ищем AI-тестировщиков") → publish_to_telegram/discord; '
+            'или create_post("Почему мы строим X — зови нас тестировщиков")',
+        ),
+        'referral_deepen': (
+            '🔁 Реферал от тех кто уже ответил',
+            'check_emails → reply_to_outreach_email/negotiate_by_email тем кто ответил: '
+            '"Знаешь ещё 2-3 человека кому это интересно?"; send_follow_up_email',
+        ),
+        'research_pivot': (
+            '🔍 Смена сегмента / площадки',
+            'research_and_plan("Где ещё обитают AI-тестировщики кроме GitHub? Хакатоны? ProductHunt?") '
+            '→ уточнить целевую аудиторию → новый прямой поиск в другом месте',
+        ),
+    },
+    'research': {
+        'direct_outreach': (
+            '📩 Опрос экспертов',
+            'find_relevant_contacts_for_task("нефтяные аналитики") → send_outreach_email '
+            'с конкретным вопросом → check_emails для ответов',
+        ),
+        'community_reach': (
+            '🌐 Тематические форумы и сообщества',
+            'web_search("site:habr.com OR Reddit нефть 2026 прогноз") → '
+            'собрать мнения → обработать через research_and_plan',
+        ),
+        'content_inbound': (
+            '📢 Опубликовать промежуточный анализ',
+            'create_post с промежуточными данными → publish_to_telegram → '
+            'получить комментарии/уточнения от подписчиков',
+        ),
+        'referral_deepen': (
+            '🔁 Углубить источники (ответы и комментарии)',
+            'check_emails → reply_to_outreach_email с уточняющим вопросом; '
+            'negotiate_by_email для продолжения диалога с экспертом',
+        ),
+        'research_pivot': (
+            '🔍 Первичные данные через API/RSS',
+            'run_agent_action(get_price/get_news/get_latest) → числовые данные → '
+            'get_news_trends → сформировать вывод',
+        ),
+    },
+    'content': {
+        'direct_outreach': (
+            '📩 Аутрич к авторам / редакторам',
+            'find_relevant_contacts_for_task("SMM-специалисты") → send_outreach_email: '
+            '"Хочу разместить гостевой пост / сотрудничество"',
+        ),
+        'community_reach': (
+            '🌐 Разместить в тематических сообществах',
+            'find_and_message_relevant_users("AI Telegram чаты") → опубликовать объявление; '
+            'web_search("топ Telegram каналы AI") → publish',
+        ),
+        'content_inbound': (
+            '📢 Создать и опубликовать контент',
+            'generate_marketing_content(тема_из_цели) → create_post → '
+            'publish_to_telegram + publish_to_discord одновременно',
+        ),
+        'referral_deepen': (
+            '🔁 Вовлечь существующую аудиторию',
+            'check_emails/list_email_contacts → reply_to_outreach_email "что было полезным?"; '
+            'send_follow_up_email с новым контентом тем кто открыл прошлое',
+        ),
+        'research_pivot': (
+            '🔍 Изучить что работает у конкурентов',
+            'research_and_plan("Какие форматы контента дают охват в AI нише 2026?") → '
+            'get_news_trends → адаптировать под свою аудиторию',
+        ),
+    },
+    'general': {
+        'direct_outreach': (
+            '🎯 Прямое действие с конкретными людьми',
+            'find_relevant_contacts_for_task → send_outreach_email персонально каждому',
+        ),
+        'community_reach': (
+            '🌐 Через сообщества и площадки',
+            'find_and_message_relevant_users + web_search(релевантные форумы/сообщества)',
+        ),
+        'content_inbound': (
+            '📢 Создать что-то ценное — они придут сами',
+            'generate_marketing_content → create_post → publish_to_telegram/discord',
+        ),
+        'referral_deepen': (
+            '🔁 Углубить уже начатые контакты',
+            'check_emails → reply/negotiate/follow_up с теми кто уже в диалоге',
+        ),
+        'research_pivot': (
+            '🔍 Переосмыслить подход',
+            'research_and_plan("Что мы упускаем?") → analyze_situation_and_suggest_tasks',
+        ),
+    },
+}
+
+
+def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) -> str:
+    """Тактическое колесо: 5 концептуально разных подходов к цели.
+    Отмечает что уже пробовалось, явно указывает не-попробованное.
+    """
+    ttype = goal_type if goal_type in _TACTIC_MATRIX else 'general'
+    matrix = _TACTIC_MATRIX[ttype]
+
+    # Определяем использованные семейства по инструментам + ключевым словам истории
+    h_text = ' '.join(agent_history or []).lower()
+    used_families: set = set()
+    for family, tools in _TACTIC_FAMILIES.items():
+        if tools & used_tools:
+            used_families.add(family)
+    # Доп. сигналы из текстовой истории (инструменты могут быть в тексте)
+    if any(w in h_text for w in ('send_outreach', 'search_users', 'save_email_contact', 'email_contact')):
+        used_families.add('direct_outreach')
+    if any(w in h_text for w in ('find_and_message', 'find_partners', 'community', 'reddit', 'forum')):
+        used_families.add('community_reach')
+    if any(w in h_text for w in ('create_post', 'publish_to', 'marketing_content', 'generate_image')):
+        used_families.add('content_inbound')
+    if any(w in h_text for w in ('reply_to_outreach', 'negotiate_by_email', 'follow_up', 'check_email')):
+        used_families.add('referral_deepen')
+    if any(w in h_text for w in ('research_and_plan', 'research_topic', 'get_news_trends', 'analyze_situation')):
+        used_families.add('research_pivot')
+
+    untried = [k for k in matrix if k not in used_families]
+    tried = [k for k in matrix if k in used_families]
+    lines = ["\n━━━ ТАКТИЧЕСКАЯ МАТРИЦА (5 путей к цели) ━━━"]
+    lines.append("Разные подходы — не разные инструменты, а разные СТРАТЕГИИ:")
+    for key, (name, example) in matrix.items():
+        if key in used_families:
+            lines.append(f"  ✅ {name}")
+        else:
+            lines.append(f"  ◻️ {name}  ← НЕ ПРОБОВАЛ")
+            lines.append(f"     → {example}")
+
+    if untried:
+        first_untried_name = matrix[untried[0]][0]
+        lines.append(f"\n🔴 СЛЕДУЮЩИЙ ШАГ = одна из непопробованных тактик выше.")
+        lines.append(f"   Рекомендую начать с: {first_untried_name}")
+    elif tried:
+        lines.append("\n✅ Все 5 тактик опробованы! Масштабируй самую эффективную")
+        lines.append("   или делай analyze_situation_and_suggest_tasks для нового фокуса.")
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    return '\n'.join(lines) + '\n'
+
+
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                                has_imap: bool, has_github: bool, has_rss: bool,
                                has_alpha: bool, has_script: bool, has_content: bool,
                                has_news: bool, has_notion: bool, has_slack: bool,
                                has_sheets: bool, has_stripe: bool, used_tools: set,
-                               goal_type: str = 'general') -> str:
+                               goal_type: str = 'general',
+                               agent_history: list | None = None) -> str:
     """Универсальный фрейм рассуждения — НЕ keyword-сценарии.
     Агент сам думает: что значит прогресс по ЭТОЙ цели? какие инструменты дают ПРЯМОЙ результат?
+    Включает тактическую матрицу 5 подходов с трекингом что уже пробовалось.
     Работает для любой цели без перебора шаблонов.
     """
     if not goals_summary:
@@ -536,8 +708,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         "🔧 МОИ РЕАЛЬНЫЕ ВОЗМОЖНОСТИ (выбирай то, что подходит к ситуации):\n"
         + '\n'.join(avail)
         + "\n└ Нет шаблона — есть цель и логика. Используй то что приближает к РЕАЛЬНОМУ результату.\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    )
+    ) + _build_tactic_wheel(goal_type, used_tools, agent_history or [])
 
 
 
@@ -1042,6 +1213,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _first_goal_title = goals_summary[0].get('title', '') if goals_summary else ''
 
     # ── Фрейм рассуждения — универсальный, без keyword-сценариев ──
+    # Передаём историю агента для тактического трекинга (что уже пробовалось)
+    _agent_hist_for_scaffold = agent_history or []
     _tactics_block = _build_reasoning_scaffold(
         goals_summary, _caps_lower,
         _has_imap, _has_github, _has_rss,
@@ -1049,6 +1222,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _has_news, _has_notion, _has_slack,
         _has_sheets, _has_stripe, _used_tools,
         goal_type=_goal_type,
+        agent_history=_agent_hist_for_scaffold,
     )
 
     return (
@@ -1061,15 +1235,19 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
-        "## МЫШЛЕНИЕ ПЕРЕД ДЕЙСТВИЕМ\n"
-        "Перед выбором инструмента — ответь мысленно на 5 вопросов (не пиши их в ответе!):\n"
-        "СУТЬ: что конкретно изменится у пользователя если цель будет достигнута? Что = реальный прогресс?\n"
-        "ИСТОРИЯ: что уже делалось и с каким результатом? (см. «Твоя история» выше) Не повторяй провальное!\n"
-        "ВАРИАНТЫ: 3 разных пути к этой цели — прямой контакт / создание контента / поиск/аналитика.\n"
-        "          + что я ЕЩЁ НЕ ПРОБОВАЛ? (альтернативная площадка, другой тип людей?)\n"
-        "РЫЧАГ: какое одно действие даст максимальный сдвиг при минимуме усилий?\n"
-        "СЛЕПЫЕ ЗОНЫ: какую аудиторию / площадку / подход я упускаю?\n"
-        "→ После анализа — сразу вызывай ЛУЧШИЙ инструмент, без предисловий.\n\n"
+        "## МЫШЛЕНИЕ ПЕРЕД ДЕЙСТВИЕМ (7 вопросов — не пиши их вслух, думай молча)\n"
+        "1. СУТЬ: что конкретно изменится если цель достигнута? Что = +1 к метрике?\n"
+        "2. ИСТОРИЯ: что уже делалось? Какая тактика сработала? (см. «Твоя история»)\n"
+        "3. ТАКТИКА (КЛЮЧЕВОЙ ВОПРОС): см. ТАКТИЧЕСКУЮ МАТРИЦУ выше — какие 5 подходов\n"
+        "   есть к этой цели? Какой из НЕпопробованных дал бы лучший результат сейчас?\n"
+        "   Прямой поиск → сообщества → контент-приманка → реферал → смена сегмента.\n"
+        "   Выбирай тактически, а не механически!\n"
+        "4. АУДИТОРИЯ: каких людей/источников я ЕЩЁ НЕ рассматривал?\n"
+        "   (другой язык? другая платформа? другой сегмент? другая должность?)\n"
+        "5. РЫЧАГ: одно действие с максимальным эффектом при минимуме усилий?\n"
+        "6. СИНЕРГИЯ: что коллеги по команде уже делают? Что можно делегировать, передать данные?\n"
+        "7. СЛЕПЫЕ ЗОНЫ: что я системно упускаю? Когда в последний раз менял подход?\n"
+        "→ После анализа — сразу вызывай ЛУЧШИЙ инструмент (вызов, а не текст). Без предисловий.\n\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
         "2. Работай ПО СВОЕЙ РОЛИ и специализации как первый приоритет.\n"
@@ -4927,7 +5105,15 @@ class AnchorEngine:
                 "    • Если агент НАШЁЛ данные/контакты пригодные для другого агента → делегируй через delegate_task с КОНКРЕТНЫМИ данными.\n"
                 "    • RSS/аналитик нашёл статью с контактами → делегирует email-агенту с именем и email.\n"
                 "    • Email-агент получил ответ с техническим вопросом → делегирует аналитику/Research-агенту.\n"
-                "    • Делегирование = синергия: 2 агента + координация > 2 агента работающие параллельно.\n\n"
+                "    • Делегирование = синергия: 2 агента + координация > 2 агента работающие параллельно.\n"
+                "11. ТАКТИЧЕСКОЕ РАЗНООБРАЗИЕ — для одной и той же цели есть 5 разных стратегий:\n"
+                "    • Прямой поиск → письмо (GitHub/email)\n"
+                "    • Сообщества и площадки (форумы, Telegram-группы, Discord, Reddit)\n"
+                "    • Контент-приманка (публикуешь полезное — люди приходят сами)\n"
+                "    • Реферал (просишь уже ответивших порекомендовать 2-3 человека)\n"
+                "    • Смена сегмента (другая аудитория, другая площадка, другой запрос)\n"
+                "    → Если агент последние 2+ цикла делал одно и то же (например только email) —\n"
+                "      ОБЯЗАТЕЛЬНО назначь ему тактику из другой категории. Не инструмент, а стратегию!\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название"}]'
