@@ -119,6 +119,18 @@ local.db
 # Logs
 *.log
 
+# Debug / audit / temp scripts (one-off tools)
+_autopilot_audit*.py
+_chk_*.py
+_check_*.py
+_mon_*.py
+_backfill_*.py
+_out*.txt
+_pytest_out.txt
+_autonomy_out.txt
+_agent_audit*.py
+
+
 # OS
 .DS_Store
 Thumbs.db
