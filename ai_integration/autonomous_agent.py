@@ -5227,7 +5227,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         logger.debug("[DIRECTOR-EXEC] autopilot retry failed: %s", _retry_err)
 
             # Сохраняем результат и выходим из цикла — субделегирования обработаются ниже
-            _early_text = _content or _done_fb
+            _early_text = _content  # use as-is (empty → empty_result, not noise_filtered)
             break
 
         # Агент вызвал инструменты — выполняем
@@ -5353,7 +5353,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _final_text = _m_back['content']
                 break
         if not _final_text:
-            _final_text = _done_fb
+            _final_text = ''  # return empty on timeout/no-result → anchor_engine marks as empty_result, not noise_filtered
         # Парсим DELEGATE из финального ответа
         if _final_text:
             import re as _re_fin
@@ -5367,9 +5367,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
             _final_text = _re_fin.sub(
                 r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _final_text,
-            ).strip() or _done_fb
-        else:
-            _final_text = _done_fb
+            ).strip()  # if only DELEGATE patterns, return empty (subdelegations handled separately)
+        # keep _final_text = '' if both branches left it empty (timeout/no-result)
 
     # ── Обрезка длинных ответов (без доп. LLM-вызова — экономит ~5с) ──
     # Если текст слишком короткий после tool-вызовов (для автопилота) — доп. вызов для итога

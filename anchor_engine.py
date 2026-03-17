@@ -2403,13 +2403,16 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
-                            _coord_ok = await self._run_coordinator_dispatch(
-                                user, data, _coord_real, task_text, anchor, session,
+                            _coord_ok = await asyncio.wait_for(
+                                self._run_coordinator_dispatch(
+                                    user, data, _coord_real, task_text, anchor, session,
+                                ),
+                                timeout=55,  # coordinator must finish within 55s
                             )
                             if _coord_ok:
                                 return
-                        except Exception as _coord_exc:
-                            logger.warning("[COORD] failed, fallback to round-robin: %s", _coord_exc)
+                        except (asyncio.TimeoutError, Exception) as _coord_exc:
+                            logger.warning("[COORD] failed/timeout, fallback to round-robin: %s", _coord_exc)
                     # ── FALLBACK / SINGLE-AGENT: оригинальный round-robin ──
                     _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
