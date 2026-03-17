@@ -11654,7 +11654,7 @@ except Exception as e:
                 // Всегда показываем бейдж для задач, созданных агентом/автопилотом
                 html += '<span class="task-meta" style="color:#068487;">' + (t('agent-created-label') || 'Создано агентом') + '</span>';
             }
-            if (task.goal_name) {
+            if (task.goal_name && task.source !== 'agent') {
                 html += '<span class="task-meta" style="color:#6f42c1;">🎯 ' + escapeHtml(task.goal_name) + '</span>';
             }
             
