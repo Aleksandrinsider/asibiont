@@ -6920,22 +6920,22 @@ except Exception as e:
 
             const hasContent = cleanContent.length > 0;
 
-            // Статус-бейдж (только для autopilot/coordinator — как было)
+            // Статус-бейдж (только для autopilot — ошибки и пропуски)
             let _statusBadge = '';
-            if ((a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary') && a.status) {
+            if (a.activity_type === 'goal_autopilot_dispatch' && a.status) {
                 const _statusColors = {
-                    'completed': '#1a7f37', 'in_progress': '#bf8700', 'failed': '#cf222e',
+                    'failed': '#cf222e',
                     'noise_filtered': '#6e7781', 'dedup_filtered': '#6e7781',
                     'empty_result': '#6e7781', 'no_action': '#6e7781',
                 };
                 const _statusLabels = {
-                    'completed': 'OK', 'in_progress': '...', 'failed': 'ERR',
+                    'failed': 'ERR',
                     'noise_filtered': 'skip', 'dedup_filtered': 'skip',
                     'empty_result': 'skip', 'no_action': 'skip',
                 };
-                const _sc = _statusColors[a.status] || '#6e7781';
-                const _sl = _statusLabels[a.status] || a.status;
-                _statusBadge = `<span style="font-size:11px;color:${_sc};flex-shrink:0;">${_sl}</span>`;
+                const _sc = _statusColors[a.status];
+                const _sl = _statusLabels[a.status];
+                if (_sc && _sl) _statusBadge = `<span style="font-size:11px;color:${_sc};flex-shrink:0;">${_sl}</span>`;
             }
 
             const chevron = hasContent ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
@@ -6956,18 +6956,13 @@ except Exception as e:
 
             if (hasContent) {
                 const body = document.createElement('div');
-                // coordinator_summary и completed autopilot авто-разворачиваются
-                const _autoOpen = a.activity_type === 'coordinator_summary' ||
-                    (a.activity_type === 'goal_autopilot_dispatch' && a.status === 'completed');
-                body.style.cssText = 'overflow:hidden;transition:max-height 0.25s ease;max-height:' + (_autoOpen ? 'none' : '0px') + ';';
+                // Все элементы свёрнуты по умолчанию
+                body.style.cssText = 'overflow:hidden;transition:max-height 0.25s ease;max-height:0px;';
                 const inner = document.createElement('div');
                 inner.style.cssText = 'font-size:13px;color:#374151;line-height:1.5;padding:0 0 10px 0;white-space:pre-wrap;word-break:break-word;';
                 inner.textContent = cleanContent;
                 body.appendChild(inner);
                 wrap.appendChild(body);
-
-                const chev = header.querySelector('.tl-chev');
-                if (_autoOpen && chev) chev.style.transform = 'rotate(0deg)';
 
                 header.onclick = () => {
                     const collapsed = body.style.maxHeight === '0px';
@@ -6994,7 +6989,7 @@ except Exception as e:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set([]);
+            const _HIDDEN_ACT_TYPES = new Set(['coordinator_summary']);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
                 // Hide failed/empty/in_progress/noise/dedup autopilot dispatches — no useful info for user
