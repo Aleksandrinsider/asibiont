@@ -1827,7 +1827,7 @@ async def dashboard_handler(request):
             tasks_dict.append(task_dict)
 
         # Get user avatar URL — always use safe proxy URL (no bot token)
-        user_avatar_url = safe_avatar_url(user_id) if user else None
+        user_avatar_url = safe_avatar_url(user.telegram_id) if user and user.telegram_id else None
 
         # Background avatar refresh: update photo_url cache if missing (non-blocking)
         if user and not user.photo_url and user.telegram_id > 0:
