@@ -395,9 +395,19 @@ async def start_handler(message: Message):
                     logger.info(f"Referrer found: telegram_id={referrer_id}, internal_id={referrer.id}")
                 else:
                     logger.warning(f"Referrer not found for telegram_id: {referrer_id}")
+            
+            # Get avatar from Telegram
+            avatar_url = None
+            try:
+                from main import get_user_avatar_url
+                avatar_url = await get_user_avatar_url(message.bot, user_id, force_refresh=True)
+                logger.info(f"Got avatar for new user {user_id}: {avatar_url}")
+            except Exception as av_err:
+                logger.warning(f"Failed to get avatar for new user {user_id}: {av_err}")
+            
             user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0,
                         referrer_id=referrer.id if referrer else None,
-                        language=detected_lang)
+                        language=detected_lang, photo_url=avatar_url)
             session.add(user)
             session.commit()
             logger.info(f"Created new user {user_id}, referrer={referrer_id}, lang={detected_lang}")
@@ -405,8 +415,19 @@ async def start_handler(message: Message):
             # Начисляем бесплатные токены
             grant_signup_tokens(user_id, session=session)
         else:
-            # Existing user — use their saved language
+            # Existing user — use their saved language + update avatar
             detected_lang = getattr(user, 'language', None) or detected_lang
+            # Update avatar if missing
+            if not user.photo_url:
+                try:
+                    from main import get_user_avatar_url
+                    avatar_url = await get_user_avatar_url(message.bot, user_id, force_refresh=True)
+                    if avatar_url:
+                        user.photo_url = avatar_url
+                        session.commit()
+                        logger.info(f"Updated avatar for existing user {user_id}: {avatar_url}")
+                except Exception as av_err:
+                    logger.warning(f"Failed to update avatar for user {user_id}: {av_err}")
         
         # Set language in cache
         set_user_lang(user_id, detected_lang)

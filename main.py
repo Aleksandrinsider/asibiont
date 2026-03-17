@@ -11771,8 +11771,8 @@ async def api_autopilot_status_handler(request):
         user = session_db.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return web.json_response({'error': 'Not found'}, status=404)
-        from datetime import datetime, timedelta, timezone
-        now_utc = datetime.now(timezone.utc)
+        from datetime import datetime as dt, timedelta, timezone
+        now_utc = dt.now(timezone.utc)
         cutoff_24h = now_utc - timedelta(hours=24)
         # Последний dispatch
         last_run_row = session_db.query(AgentActivityLog).filter(
