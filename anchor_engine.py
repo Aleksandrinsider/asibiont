@@ -1099,8 +1099,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "вызови send_outreach_email НАПРЯМУЮ конкретным людям из find_relevant_contacts_for_task. "
            "НЕ запускай новую кампанию — пиши персонально!\n"
            if _has_imap else '')
-        + (f"12. add_task → всегда передавай goal_title='{_first_goal_title}'.\n"
-           if _first_goal_title else "")
+        + ""
         + "13. КОМАНДНАЯ ЭСТАФЕТА: нашёл контакт — не держи у себя! "
           "DELEGATE[Имя с email-интеграцией]: Отправь письмо name@domain.com — [суть].\n"
         + "14. add_task — ЗАПРЕЩЕНО создавать задачи вместо пользователя. "
@@ -5339,13 +5338,11 @@ class AnchorEngine:
                             source='agent',
                             created_by_agent_id=_target_ag.id if _target_ag else None,
                             delegated_to_username=_ag_name,
-                            goal_id=_resolved_goal_id,
+                            goal_id=None,
                         )
                         session.add(_step_task)
                         session.commit()
                         _step_task_id = _step_task.id
-                        if _resolved_goal_id:
-                            logger.info(f"[COORD] task [{_step_task_id}] linked to goal [{_resolved_goal_id}]")
                 except Exception as _tc_err:
                     logger.debug("[COORD] task create skipped: %s", _tc_err)
                     try:
