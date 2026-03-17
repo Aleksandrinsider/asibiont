@@ -475,7 +475,12 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             title = ' '.join(words)
             logger.info(f"[ADD_TASK] Title cleaned: '{original_title}' -> '{title}'")
 
-    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 200 символов
+    # Агентские задачи — всегда без описания (вся суть уже в названии)
+    if created_by_agent_id and description:
+        logger.info(f"[ADD_TASK] Agent task: clearing description (was {len(description)} chars)")
+        description = ''
+
+    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 200 символов (только для пользовательских задач)
     if description and len(description) > 200:
         original_desc = description
         description = description[:197] + "..."
@@ -10730,6 +10735,22 @@ async def start_email_campaign(
         )
         session.add(campaign)
         session.commit()
+
+        # Логируем создание кампании в хронологию
+        try:
+            from models import AgentActivityLog as _AAL
+            _camp_log = _AAL(
+                user_id=user.id,
+                activity_type='content_campaign',
+                title=f'Email-кампания: {name[:150]}',
+                content=f'Цель: {goal[:200]}' + (f'\nАудитория: {target_audience[:100]}' if target_audience else ''),
+                status='active',
+                ref_id=campaign.id,
+            )
+            session.add(_camp_log)
+            session.commit()
+        except Exception as _le:
+            logger.warning(f"[EMAIL_CAMPAIGN] Failed to log activity: {_le}")
 
         # ═══════════════════════════════════════════════════════
         # АВТОПОИСК ЛИДОВ — только для ПРИВЛЕЧЕНИЯ (сценарий 3)

@@ -8220,15 +8220,13 @@ async def api_delegation_campaign_delete_handler(request):
 
 # Типы событий, отображаемые в хронологии (только существенные)
 _TIMELINE_VISIBLE_TYPES = {
-    'task_completed', 'task_blocked',
+    'task_added', 'task_completed', 'task_blocked',
     'delegation', 'delegation_accepted', 'delegation_rejected',
     'goal_created', 'goal_completed', 'goal_updated',
     'post_newsfeed', 'post_telegram', 'post_discord',
     'content_campaign', 'delegation_campaign',
     'background_research_ready',
     'agent_task',
-    'run_agent_action',
-    'email',
     'inbox_reply',
     'checkpoint',
     'daily_report',

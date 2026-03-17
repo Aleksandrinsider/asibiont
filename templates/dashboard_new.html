@@ -13672,7 +13672,7 @@ except Exception as e:
                                     type: 'favorite',
                                     is_favorite: true,
                                     first_name: '',
-                                    photo_url: null,
+                                    photo_url: isId ? ('/api/avatar/' + favItem) : null,
                                     can_access: true
                                 };
                             });
