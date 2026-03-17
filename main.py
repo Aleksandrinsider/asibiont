@@ -378,6 +378,20 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                             logger.info(f"Updated avatar for user {user_id} (force_refresh={force_refresh})")
                         
                         return avatar_url
+                    else:
+                        # Fallback: пробуем get_chat — ChatPhoto может быть доступен
+                        # даже когда get_user_profile_photos возвращает пустой список
+                        try:
+                            chat = await bot.get_chat(user_id)
+                            if chat.photo and chat.photo.small_file_id:
+                                file = await bot.get_file(chat.photo.small_file_id)
+                                avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                                if user:
+                                    user.photo_url = avatar_url
+                                    db.commit()
+                                return avatar_url
+                        except Exception:
+                            pass
                 except Exception as e:
                     logger.debug(f"Could not fetch avatar from Telegram for user {user_id}: {e}")
             
@@ -6426,6 +6440,13 @@ async def api_avatar_handler(request):
             return _default_avatar_response()
 
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=False)
+
+        # Телеграм file URL-ы истекают через ~1ч — если в кэше url со старым путём,
+        # сразу делаем refresh вместо попытки проксировать (экономим 1 RTT)
+        if avatar_url and 'api.telegram.org/file/' in avatar_url:
+            fresh = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
+            if fresh:
+                avatar_url = fresh
 
         async def _proxy_tg_avatar(url):
             """Proxy a Telegram file URL, return web.Response or None on failure."""

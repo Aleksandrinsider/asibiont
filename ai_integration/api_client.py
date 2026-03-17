@@ -916,7 +916,12 @@ class ExternalAPIClient:
 
         except Exception as e:
             _rec_err('ddg', f"DDG news failed: {e}")
-            logger.warning(f"[DDG_NEWS] Error: {e}")
+            _ddg_err_str = str(e)
+            _is_transient_ddg = 'DecodeError' in _ddg_err_str or 'No results' in _ddg_err_str or 'body' in _ddg_err_str.lower()
+            if _is_transient_ddg:
+                logger.debug(f"[DDG_NEWS] Transient error (suppressed): {e}")
+            else:
+                logger.warning(f"[DDG_NEWS] Error: {e}")
             return None
 
     async def get_news(

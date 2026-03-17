@@ -42,7 +42,7 @@ if REDIS_ENABLED:
         redis_client.ping()
         logger.info("[REDIS] Connected successfully")
     except Exception as e:
-        logger.warning(f"[REDIS] Failed to connect: {e}. Falling back to in-memory cache")
+        logger.debug(f"[REDIS] Failed to connect: {e}. Falling back to in-memory cache")
         redis_client = None
 else:
     logger.info("[CACHE] Redis disabled, using in-memory cache")

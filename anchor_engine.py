@@ -1670,9 +1670,19 @@ class AnchorEngine:
                 if _saved:
                     logger.info(f"[ANCHOR] User {user_id}: created {_saved}/{len(new_anchors)} anchors (race-condition dedup, {len(new_anchors)-_saved} skipped)")
             # 1b. EVENT DISPATCH — новые goal-якоря запускают нужных агентов в фоне
+            # Сериализуем данные ДО закрытия сессии чтобы избежать DetachedInstanceError
             if not is_night:
+                _anchor_dicts = [
+                    {
+                        'anchor_type': a.anchor_type,
+                        'source': a.source,
+                        'topic': a.topic,
+                        'data': a.data or {},
+                    }
+                    for a in new_anchors
+                ]
                 asyncio.ensure_future(
-                    self._dispatch_agents_for_new_anchors(user, new_anchors)
+                    self._dispatch_agents_for_new_anchors(user, _anchor_dicts)
                 )
 
         # 2. EVALUATE — собрать доставляемые якоря
@@ -3342,9 +3352,16 @@ class AnchorEngine:
 
         Это заменяет «polling каждые 2-4ч» реакцией на конкретное событие.
         Fire-and-forget: не блокирует основной цикл доставки якорей.
+        new_anchors: список dict с ключами anchor_type/source/topic/data
         """
-        trigger_anchors = [a for a in new_anchors if a.anchor_type in _AGENT_DISPATCH_TRIGGERS
-                          and a.anchor_type != 'goal_autopilot_review']
+        # Поддерживаем как dict (новый формат), так и ORM-объекты (обратная совместимость)
+        def _get(obj, key, default=None):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        trigger_anchors = [a for a in new_anchors if _get(a, 'anchor_type') in _AGENT_DISPATCH_TRIGGERS
+                          and _get(a, 'anchor_type') != 'goal_autopilot_review']
         if not trigger_anchors:
             return
 
@@ -3374,7 +3391,7 @@ class AnchorEngine:
                         .filter(
                             _AAL.user_id == user.id,
                             _AAL.activity_type == 'agent_event_dispatch',
-                            _AAL.target == anchor.source,
+                            _AAL.target == _get(anchor, 'source'),
                             _AAL.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
                         )
                         .first()
@@ -3384,34 +3401,36 @@ class AnchorEngine:
 
                     # Строим задачу из шаблона
                     try:
-                        data = anchor.data or {}
-                        task_text = _AGENT_DISPATCH_TRIGGERS[anchor.anchor_type].format(
-                            goal=data.get('title', anchor.topic or 'без названия'),
+                        data = _get(anchor, 'data') or {}
+                        _a_topic = _get(anchor, 'topic')
+                        _a_type = _get(anchor, 'anchor_type')
+                        task_text = _AGENT_DISPATCH_TRIGGERS[_a_type].format(
+                            goal=data.get('title', _a_topic or 'без названия'),
                             progress=data.get('progress', 0),
-                            task=data.get('title', anchor.topic or 'без названия'),
+                            task=data.get('title', _a_topic or 'без названия'),
                         )
                     except Exception:
-                        task_text = anchor.topic or anchor.anchor_type
+                        task_text = _get(anchor, 'topic') or _get(anchor, 'anchor_type')
 
                     # Выбираем агента: AI решает кто лучше подходит (fallback → keywords)
-                    chosen = await self._pick_best_agent(agents, task_text, anchor.anchor_type)
+                    chosen = await self._pick_best_agent(agents, task_text, _a_type)
 
                     # ── Проверяем и списываем токены за event-dispatch ──
                     from token_service import has_enough_tokens as _het_ev, spend_tokens as _sp_ev
                     from config import FREE_ACCESS_MODE as _FAM_ev
                     if not _FAM_ev:
                         if not _het_ev(user.telegram_id, 'proactive_message', session=_s):
-                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — not enough tokens", user.id, anchor.anchor_type)
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — not enough tokens", user.id, _a_type)
                             continue
-                        _sp_ev(user.telegram_id, 'proactive_message', description=f'event_dispatch_{anchor.anchor_type}', session=_s, auto_commit=False)
+                        _sp_ev(user.telegram_id, 'proactive_message', description=f'event_dispatch_{_a_type}', session=_s, auto_commit=False)
 
                     # Логируем dispatch (cooldown guard)
                     _s.add(_AAL(
                         user_id=user.id,
                         activity_type='agent_event_dispatch',
-                        title=f'{chosen.name} → {anchor.anchor_type}',
+                        title=f'{chosen.name} → {_a_type}',
                         content=task_text[:500],
-                        target=anchor.source,
+                        target=_get(anchor, 'source'),
                         status='in_progress',
                         ref_id=chosen.id,
                     ))
@@ -11311,8 +11330,27 @@ class AnchorEngine:
                     session.commit()
                     logger.info(f"[ANCHOR] ✅ Delivered to {user.telegram_id}: {message[:80]}...")
                 except Exception as send_err:
+                    _send_err_str = str(send_err).lower()
                     logger.error(f"[ANCHOR] Send failed to {user.telegram_id}: {send_err}")
                     session.rollback()
+                    # ── Если бот заблокирован или чат не найден — ставим DND на 7 дней ──
+                    _is_blocked = ('forbidden' in _send_err_str and 'blocked' in _send_err_str) or \
+                                  'chat not found' in _send_err_str or \
+                                  'user is deactivated' in _send_err_str
+                    if _is_blocked:
+                        try:
+                            _blk_sess = Session()
+                            try:
+                                _blk_sess.query(User).filter_by(telegram_id=user.telegram_id).update(
+                                    {'do_not_disturb_until': datetime.now(timezone.utc) + timedelta(days=7)},
+                                    synchronize_session=False,
+                                )
+                                _blk_sess.commit()
+                                logger.info(f"[ANCHOR] User {user.telegram_id} blocked bot → DND set for 7 days")
+                            finally:
+                                _blk_sess.close()
+                        except Exception as _blk_err:
+                            logger.warning(f"[ANCHOR] Failed to set DND for blocked user {user.telegram_id}: {_blk_err}")
                     # ── ANTI-DRAIN: пометить якоря delivered в отдельной сессии ──
                     # Если send_message провалился — anchor остаётся undelivered и
                     # цикл повторяется каждые 5 мин, тратя токены на AI-вызов.
