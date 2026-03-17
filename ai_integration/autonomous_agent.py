@@ -2310,16 +2310,16 @@ class HybridAutonomousAgent:
                     if _auto_saved_notes:
                         _titles_str = '», «'.join(n[:40] for n in _auto_saved_notes[:3])
                         _note_hint_ru = (
-                            f" Результаты исследования уже сохранены в заметки («{_titles_str}»)."
-                            f" Напиши краткое резюме (3-5 предложений): что нашёл и что это значит."
-                            f" Упомяни одной фразой что подробный отчёт в разделе 'Заметки'."
-                            f" НЕ копируй и НЕ пересказывай полный текст исследования."
+                            f" Полные данные исследования сохранены в заметки («{_titles_str}»)."
+                            f" Ответь живо и коротко: скажи что нашёл (2-4 предложения) и в конце"
+                            f" одной фразой как бы между делом упомяни что сохранил подробности в заметки."
+                            f" Говори от себя, без шаблонов. НЕ перечисляй и НЕ копируй весь текст."
                         )
                         _note_hint_en = (
-                            f" Research results already saved to notes («{_titles_str}»)."
-                            f" Write a brief summary (3-5 sentences): what you found and what it means."
-                            f" Mention in one phrase that the full report is in 'Notes'."
-                            f" Do NOT copy or repeat the full research text."
+                            f" Full research saved to notes («{_titles_str}»)."
+                            f" Reply naturally and briefly: share what you found (2-4 sentences) and at the end"
+                            f" casually mention you saved the details to notes — as part of your own words."
+                            f" No templates. Do NOT list or copy the full text."
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
@@ -2463,17 +2463,7 @@ class HybridAutonomousAgent:
                                     )
                                     _auto_saved_notes.append(_note_title)
                                     logger.info(f"[AUTO_NOTE] Saved research note: '{_note_title[:50]}'")
-                                    # Уведомляем пользователя в чат — кратко, без дампа текста
-                                    if _cb:
-                                        _nl = (f"\U0001f4ce Сохранил в заметки: \u00ab{_note_title[:60]}\u00bb"
-                                               if user_lang != 'en'
-                                               else f"\U0001f4ce Saved to notes: \u00ab{_note_title[:60]}\u00bb")
-                                        try:
-                                            await _cb(_nl, persist=True)
-                                        except TypeError:
-                                            try: await _cb(_nl)
-                                            except Exception: pass
-                                        except Exception: pass
+                                    # Уведомление — НЕ через отдельный _cb, AI сам вплетёт в ответ
                                 except Exception as _auto_ne:
                                     logger.warning(f"[AUTO_NOTE] Failed to save: {_auto_ne}")
                             # ─────────────────────────────────────────────────────────────────
