@@ -5792,6 +5792,17 @@ class AnchorEngine:
                             '__anchor_type': 'coordinator_result',
                         }, ensure_ascii=False),
                     ))
+                    # Также логируем agent_task в AAL — для контекста ASI (context_builder читает AAL)
+                    _tools_tag_aal = f'[{", ".join(_step_tools[:3])}] ' if _step_tools else ''
+                    session.add(AgentActivityLog(
+                        user_id=user.id,
+                        activity_type='agent_task',
+                        title=f'{_ag_name}: {(_step.get("task") or "задача")[:80]}',
+                        target=f'agent:{_ag_name}',
+                        content=_tools_tag_aal + _cleaned[:600],
+                        result=_cleaned[:600],
+                        status='completed',
+                    ))
                     session.commit()
                 except Exception:
                     try:
@@ -7443,15 +7454,22 @@ class AnchorEngine:
                 EmailOutreach.ai_reply_sent_at.is_(None),
             ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(10).all()
             # Дедупликация по email: если на этот адрес уже отвечали через другую запись — пропуск
+            # Спам-лимит: не более 2 AI-ответов на контакт
+            _MAX_AI_REPLIES_COORD = 2
             try:
                 from models import EmailOutreach as _EO_dedup
+                from sqlalchemy import func as _func_dedup
+                _reply_counts_rows = session.query(
+                    _EO_dedup.recipient_email,
+                    _func_dedup.count(_EO_dedup.id).label('cnt'),
+                ).filter(
+                    _EO_dedup.user_id == user.id,
+                    _EO_dedup.ai_reply_sent_at.isnot(None),
+                ).group_by(_EO_dedup.recipient_email).all()
                 _already_ai_replied_emails = {
-                    r.recipient_email.lower()
-                    for r in session.query(_EO_dedup.recipient_email).filter(
-                        _EO_dedup.user_id == user.id,
-                        _EO_dedup.ai_reply_sent_at.isnot(None),
-                    ).all()
-                    if r.recipient_email
+                    (r.recipient_email or '').lower()
+                    for r in _reply_counts_rows
+                    if (r.cnt or 0) >= _MAX_AI_REPLIES_COORD
                 }
             except Exception:
                 _already_ai_replied_emails = set()

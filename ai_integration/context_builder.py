@@ -1017,23 +1017,26 @@ class ContextBuilder:
                 logger.debug(f"[MATCH_CTX] goal-agent matching error: {_me}")
 
             # ═══ СВЕЖИЕ ОТЧЁТЫ АГЕНТОВ (последние 24ч) ═══
-            # Агенты сохраняются как message_type='ai' с __agent JSON — ASI читает их как внутренний контекст
+            # Агенты сохраняются как message_type='agent_msg' (координатор) с __agent JSON
             try:
                 from models import Interaction as _ItrRep
+                from sqlalchemy import or_ as _or_rep
                 _rep_since = datetime.now(timezone.utc) - timedelta(hours=24)
                 _candidates = (
                     session.query(_ItrRep)
                     .filter(
                         _ItrRep.user_id == user.id,
-                        _ItrRep.message_type == 'ai',
+                        _or_rep(
+                            _ItrRep.message_type == 'agent_msg',
+                            _ItrRep.message_type == 'ai',
+                        ),
                         _ItrRep.content.contains('"__agent"'),
-                        # Исключаем ASI Biont сразу на уровне SQL — не тянем лишние строки
                         ~_ItrRep.content.contains('"ASI Biont"'),
-                        ~_ItrRep.content.contains('"ASI"'),
+                        ~_ItrRep.content.contains('"name": "ASI"'),
                         _ItrRep.created_at >= _rep_since,
                     )
                     .order_by(_ItrRep.created_at.desc())
-                    .limit(20)
+                    .limit(30)
                     .all()
                 )
                 _reports = []
@@ -1043,36 +1046,46 @@ class ContextBuilder:
                         _rd = _rj.loads(_r.content or '{}')
                         _rname = _rd.get('__agent', {}).get('name', '') if isinstance(_rd, dict) else ''
                         if _rname and _rname not in ('ASI Biont', 'ASI'):
-                            _reports.append(_r)
+                            _reports.append((_r, _rd, _rname))
                     except Exception:
                         pass
-                _reports = _reports[:8]
-                if _reports:
+                # Дедуп: один агент — последний результат по инструменту
+                _seen_agent_tool_rep: dict = {}
+                _reports_deduped = []
+                for _r, _rd, _rname in _reports:
+                    _tools_used = _rd.get('__tools_used', [])
+                    _anchor = _rd.get('__anchor_type', '')
+                    _dedup_key = (_rname, tuple(sorted(_tools_used[:2])))
+                    if _dedup_key not in _seen_agent_tool_rep:
+                        _seen_agent_tool_rep[_dedup_key] = True
+                        _reports_deduped.append((_r, _rd, _rname))
+                _reports_deduped = list(reversed(_reports_deduped[:10]))
+                if _reports_deduped:
                     _rep_lines = []
-                    for _r in reversed(_reports):
-                        try:
-                            import json as _rj
-                            _rd = _rj.loads(_r.content or '{}')
-                            _rname = _rd.get('__agent', {}).get('name', 'Агент') if isinstance(_rd, dict) else 'Агент'
-                            _rtext = _rd.get('text', '') if isinstance(_rd, dict) else str(_rd)
-                            if _rtext:
-                                _ts = _r.created_at.strftime('%H:%M') if _r.created_at else ''
-                                _rep_lines.append(f"  [{_rname}{' ' + _ts if _ts else ''}]: {_rtext[:200]}")
-                        except Exception:
-                            pass
+                    for _r, _rd, _rname in _reports_deduped:
+                        _rtext = _rd.get('text', '') if isinstance(_rd, dict) else str(_rd)
+                        _tools_u = _rd.get('__tools_used', [])
+                        _anchor = _rd.get('__anchor_type', '')
+                        if _rtext:
+                            _ts = _r.created_at.strftime('%H:%M') if _r.created_at else ''
+                            _tools_tag = f' [{", ".join(_tools_u[:3])}]' if _tools_u else ''
+                            _type_tag = ' [итог цикла]' if _anchor == 'coordinator_summary' else ''
+                            _rep_lines.append(
+                                f"  [{_rname}{_tools_tag}{_type_tag} {_ts}]: {_rtext[:350]}"
+                            )
                     if _rep_lines:
                         hints.append(
-                            "ОТЧЁТЫ АГЕНТОВ (последние 24ч):\n" +
+                            "ОТЧЁТЫ АГЕНТОВ (последние 24ч — реальные результаты с интеграциями):\n" +
                             "\n".join(_rep_lines) +
-                            "\n(это внутренние данные — упоминай только если релевантно теме разговора)"
+                            "\n(используй эти данные чтобы точно отвечать что сделали агенты, какие инструменты применяли, кому писали)"
                         )
             except Exception as _re:
                 logger.debug(f"[PROACTIVE] agent_reports load error: {_re}")
 
-            # ═══ ПОСЛЕДНИЕ ДАННЫЕ АГЕНТОВ (inbox, интеграции) ═══
+            # ═══ ПОСЛЕДНИЕ ДАННЫЕ АГЕНТОВ (inbox, интеграции, email, coordinator) ═══
             try:
                 from models import AgentActivityLog as _AAL_ctx
-                _aal_since = datetime.now(timezone.utc) - timedelta(hours=12)
+                _aal_since = datetime.now(timezone.utc) - timedelta(hours=24)
                 _aal_recs = (
                     session.query(_AAL_ctx)
                     .filter(
@@ -1080,11 +1093,13 @@ class ContextBuilder:
                         _AAL_ctx.activity_type.in_([
                             'inbox_reply', 'script_run',
                             'goal_autopilot_dispatch', 'agent_event_dispatch',
+                            'email', 'agent_task', 'coordinator_summary',
+                            'goal_updated',
                         ]),
                         _AAL_ctx.created_at >= _aal_since,
                     )
                     .order_by(_AAL_ctx.created_at.desc())
-                    .limit(8)
+                    .limit(20)
                     .all()
                 )
                 if _aal_recs:
@@ -1092,20 +1107,62 @@ class ContextBuilder:
                     for _ar in reversed(_aal_recs):
                         _aname = (_ar.target or _ar.title or '').replace('agent:', '')
                         _ts_ar = _ar.created_at.strftime('%H:%M') if _ar.created_at else ''
-                        # autopilot/event dispatch: show result, not content (content is prompt)
-                        if _ar.activity_type in ('goal_autopilot_dispatch', 'agent_event_dispatch'):
-                            _preview = (_ar.result or '')[:300]
+                        if _ar.activity_type == 'coordinator_summary':
+                            # Итоговый отчёт координатора — самый важный
+                            _preview = (_ar.result or '')[:500]
+                            if _preview:
+                                _aal_lines.append(f"  [Координатор {_ts_ar}] {_preview}")
+                        elif _ar.activity_type == 'agent_task':
+                            # Что каждый агент сделал
+                            _agent_who = (_ar.target or '').replace('agent:', '')
+                            _preview = (_ar.result or _ar.content or '')[:400]
+                            if _preview:
+                                _aal_lines.append(f"  [{_agent_who} {_ts_ar}] {_preview}")
+                        elif _ar.activity_type == 'email':
+                            # Письма — кому и что
+                            _preview = (_ar.title or '')  # "Reply → email@..." or "Outreach → email@..."
+                            _detail = (_ar.result or '')[:200]
+                            _aal_lines.append(f"  [Email {_ts_ar}] {_preview}" + (f" — {_detail}" if _detail else ''))
+                        elif _ar.activity_type == 'goal_updated':
+                            _preview = (_ar.result or _ar.content or '')[:200]
+                            if _preview:
+                                _aal_lines.append(f"  [Цель обновлена {_ts_ar}] {_preview}")
+                        elif _ar.activity_type in ('goal_autopilot_dispatch', 'agent_event_dispatch'):
+                            _preview = (_ar.result or '')[:400]
                             _status = f' [{_ar.status}]' if _ar.status and _ar.status != 'completed' else ''
+                            if _preview:
+                                _aal_lines.append(f"  [{_aname}{_status} {_ts_ar}] {_preview}")
                         else:
                             _preview = (_ar.content or '')[:300]
-                            _status = ''
-                        if _preview:
-                            _aal_lines.append(f"  [{_aname}{_status} {_ts_ar}] {_preview}")
+                            if _preview:
+                                _aal_lines.append(f"  [{_aname} {_ts_ar}] {_preview}")
+                    # Email-контакты: replied со свежими данными
+                    try:
+                        from models import EmailOutreach as _EO_ctx, EmailContact as _EC_ctx
+                        _replied_ctx = session.query(_EO_ctx).filter(
+                            _EO_ctx.user_id == user.id,
+                            _EO_ctx.status == 'replied',
+                            _EO_ctx.reply_text.isnot(None),
+                        ).order_by(_EO_ctx.reply_at.desc().nullslast()).limit(5).all()
+                        if _replied_ctx:
+                            _reply_lines = []
+                            for _ro in _replied_ctx:
+                                _ai_replied = '✅ ответили' if _ro.ai_reply_sent_at else '⏳ ждёт ответа'
+                                _reply_preview = (_ro.reply_text or '')[:200].replace('\n', ' ')
+                                _reply_lines.append(
+                                    f"  {_ro.recipient_name or _ro.recipient_email} ({_ro.recipient_email}): "
+                                    f"{_ai_replied} | «{_reply_preview}»"
+                                )
+                            _aal_lines.append(
+                                f"\nВХОДЯЩИЕ ПИСЬМА от контактов:\n" + "\n".join(_reply_lines)
+                            )
+                    except Exception:
+                        pass
                     if _aal_lines:
                         hints.append(
-                            "ДЕЙСТВИЯ АГЕНТОВ (результаты за 12ч):\n" +
+                            "ДЕЙСТВИЯ АГЕНТОВ ЗА 24Ч (интеграции, email, результаты):\n" +
                             "\n".join(_aal_lines) +
-                            "\n(это реальные результаты работы агентов — используй как контекст)"
+                            "\n(используй как контекст — отвечай на вопросы пользователя по этим данным без переспроса)"
                         )
             except Exception as _aal_e:
                 logger.debug(f"[PROACTIVE] agent activity log error: {_aal_e}")

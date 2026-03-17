@@ -11298,21 +11298,26 @@ async def reply_to_outreach_email(
         if not outreach:
             return " Не найдено письмо для ответа."
 
-        # Защита от дублей: если уже отвечали — не отправлять повторно
-        # Проверяем ВСЕ записи этого контакта — вдруг другая запись уже содержит ai_reply_sent_at
-        if outreach.ai_reply_sent_at:
-            sent_str = outreach.ai_reply_sent_at.strftime('%d.%m %H:%M')
-            return f"ℹ️ Ответ этому контакту уже был отправлен {sent_str}. Повторная отправка пропущена."
+        # Защита от спама: не более 2 AI-ответов одному контакту суммарно по всем записям
+        _MAX_AI_REPLIES = 2
         _email_to_check = (recipient_email or outreach.recipient_email or '').strip().lower()
+        _ai_reply_count = 0
+        _last_ai_reply_at = outreach.ai_reply_sent_at
         if _email_to_check:
-            _any_replied = session.query(EmailOutreach).filter(
+            _all_replied_rows = session.query(EmailOutreach).filter(
                 EmailOutreach.user_id == user.id,
                 EmailOutreach.recipient_email == _email_to_check,
                 EmailOutreach.ai_reply_sent_at.isnot(None),
-            ).order_by(EmailOutreach.ai_reply_sent_at.desc()).first()
-            if _any_replied:
-                sent_str = _any_replied.ai_reply_sent_at.strftime('%d.%m %H:%M')
-                return f"ℹ️ Ответ {_email_to_check} уже отправлялся {sent_str}. Повторная отправка пропущена."
+            ).order_by(EmailOutreach.ai_reply_sent_at.desc()).all()
+            _ai_reply_count = len(_all_replied_rows)
+            if _all_replied_rows:
+                _last_ai_reply_at = _all_replied_rows[0].ai_reply_sent_at
+        elif outreach.ai_reply_sent_at:
+            _ai_reply_count = 1
+        if _ai_reply_count >= _MAX_AI_REPLIES:
+            sent_str = _last_ai_reply_at.strftime('%d.%m %H:%M') if _last_ai_reply_at else '?'
+            return (f"🛑 Стоп-спам: {_email_to_check or outreach.recipient_email} уже получил {_ai_reply_count} AI-ответа "
+                    f"(последний: {sent_str}). Максимум {_MAX_AI_REPLIES} ответа на контакт — дальше спам.")
 
         campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
         if not campaign:
