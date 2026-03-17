@@ -1352,6 +1352,15 @@ class HybridAutonomousAgent:
             elif 'task_description' not in params:
                 params['task_description'] = 'помощь с задачей'
 
+        elif tool_name == 'send_email':
+            # Автоподстановка sender_name из активного агента
+            # Если AI не передал sender_name, берём имя активного агента
+            if not params.get('sender_name'):
+                _agent = self._active_agent_data.get(params.get('user_id'))
+                if _agent and _agent.get('name'):
+                    params['sender_name'] = _agent['name']
+                    logger.info(f"[FIX_PARAMS] send_email: set sender_name='{_agent['name']}' from active agent")
+
         elif tool_name in ('send_outreach_email', 'negotiate_by_email', 'send_follow_up_email'):
             # AI путает send_email (с sender_name) с send_outreach_email (без него)
             # Просто убираем неправильный параметр; у universal stripping нет этого в белом списке
@@ -4271,6 +4280,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "Ищи что ещё можно СДЕЛАТЬ НОВОГО.\n"
             "В письмах и ответах — используй РЕАЛЬНЫЕ данные из базы знаний (URL, описание, инструкции).\n"
             "Не пиши [ссылка на демо] или [добавить ссылку] — если не знаешь URL, не упоминай ссылку.\n"
+            "⚠️ ГОЛОС ПИСЕМ: пиши ОТ СВОЕГО ИМЕНИ (sender_name=своё имя), НЕ от имени пользователя. "
+            "В теме и теле ВСЕГДА упоминай проект/компанию/цель из контекста. "
+            "Получатель должен понять кто пишет, откуда и зачем — без доп. информации.\n"
             "Делегируй коллеге ТОЛЬКО если у него есть нужная интеграция, которой у тебя нет.\n"
             + (f"Формат: {_delegate_example}\n" if _delegate_example else "Формат: DELEGATE[Имя]: задача с данными.\n") +
             "Если инструмент вернул ошибку или нет данных — НЕ пиши пустую строку. "
