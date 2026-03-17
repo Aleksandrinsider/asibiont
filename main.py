@@ -7005,6 +7005,16 @@ async def api_interactions_handler(request):
             'Задача передана',       # таймаут-placeholder из office_engine
             'результат будет позже', # то же
         )
+        # Internal coordinator/assignment anchor types — saved for AI context, hidden from user
+        _HIDDEN_ANCHOR_TYPES = {
+            'coordinator_plan',         # «Запускаю автопилот…»
+            'coordinator_assignment',   # ассигнование агента
+            'coordinator_agent_request',
+            'goal_autopilot_assignment', # ASI назначает задачу
+            'asi_self_analysis',        # «Анализирую цели…»
+            'agent_chain_transfer',     # внутренная передача
+            'agent_chain_continue',
+        }
         filtered_interactions = []
         # Dedup window: (message_type, content[:200]) → last seen timestamp
         _dedup_recent: dict = {}  # key → timestamp of last occurrence
@@ -7020,8 +7030,12 @@ async def api_interactions_handler(request):
             if _ct.startswith('{'):
                 try:
                     _jp = __import__('json').loads(_ct)
-                    if isinstance(_jp, dict) and _jp.get('text'):
-                        _check_text = _jp['text'].strip()
+                    if isinstance(_jp, dict):
+                        if _jp.get('text'):
+                            _check_text = _jp['text'].strip()
+                        # Hide internal coordinator/assignment messages from user
+                        if _jp.get('__anchor_type') in _HIDDEN_ANCHOR_TYPES:
+                            continue
                 except Exception:
                     pass
             # Skip noise messages (very short AI/agent messages with template text)
@@ -7052,9 +7066,14 @@ async def api_interactions_handler(request):
 
         import re as _re_int
 
+        # Regex to strip [Действия: ...] tool annotations from message text
+        _tool_ann_re = _re_int.compile(r'^\[\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f:[^\]]*\]\n?', _re_int.MULTILINE)
+        # Also strip [tools: ...] English variant
+        _tool_ann_re2 = _re_int.compile(r'^\[tools?:[^\]]*\]\n?', _re_int.MULTILINE | _re_int.IGNORECASE)
+
         def _sanitize_avatar_in_content(content: str) -> str:
             """Replace base64 data URIs or empty avatar_url in __agent JSON with proxy URLs.
-            Also normalizes agent name 'ASI' → 'ASI Biont'."""
+            Normalizes 'ASI' → 'ASI Biont', strips tool annotations and leading whitespace."""
             if not content or ('__agent' not in content and 'data:image' not in content):
                 return content
             try:
@@ -7069,9 +7088,25 @@ async def api_interactions_handler(request):
                     _aid = _ag.get('id')
                     if _aid and (_av.startswith('data:') or not _av):
                         _jp['__agent']['avatar_url'] = f'/api/arena/agent_avatar/{_aid}'
+                    # Strip [Действия: ...] tool annotations and leading whitespace from text
+                    _txt = _jp.get('text', '')
+                    if _txt:
+                        _txt = _tool_ann_re.sub('', _txt)
+                        _txt = _tool_ann_re2.sub('', _txt)
+                        _jp['text'] = _txt.lstrip('\n').strip()
                     return json.dumps(_jp, ensure_ascii=False)
             except Exception:
                 pass
+            return content
+
+        def _clean_content(content: str) -> str:
+            """Apply avatar sanitize + strip tool annotations from any content string."""
+            content = _sanitize_avatar_in_content(content)
+            # Also strip [Действия: ...] from plain-text (non-JSON) messages
+            if content and not content.lstrip().startswith('{'):
+                content = _tool_ann_re.sub('', content)
+                content = _tool_ann_re2.sub('', content)
+                content = content.lstrip('\n').strip()
             return content
 
         interactions_data = []
@@ -7088,7 +7123,7 @@ async def api_interactions_handler(request):
 
             interactions_data.append({
                 'id': interaction.id,
-                'content': _sanitize_avatar_in_content(interaction.content),
+                'content': _clean_content(interaction.content),
                 'message_type': interaction.message_type,
                 'created_at': created_at_local.isoformat()
             })
