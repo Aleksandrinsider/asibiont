@@ -417,15 +417,11 @@ async def start_handler(message: Message):
         else:
             # Existing user — use their saved language + update avatar
             detected_lang = getattr(user, 'language', None) or detected_lang
-            # Update avatar if missing
+            # Refresh avatar file_id in DB if missing (get_user_avatar_url stores file_id itself)
             if not user.photo_url:
                 try:
                     from main import get_user_avatar_url
-                    avatar_url = await get_user_avatar_url(message.bot, user_id, force_refresh=True)
-                    if avatar_url:
-                        user.photo_url = avatar_url
-                        session.commit()
-                        logger.info(f"Updated avatar for existing user {user_id}: {avatar_url}")
+                    await get_user_avatar_url(message.bot, user_id, force_refresh=True)
                 except Exception as av_err:
                     logger.warning(f"Failed to update avatar for user {user_id}: {av_err}")
         

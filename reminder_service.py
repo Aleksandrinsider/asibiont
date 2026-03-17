@@ -1330,12 +1330,11 @@ class ReminderService:
             updated_count = 0
             for user in users:
                 try:
-                    updated_avatar_url = await get_user_avatar_url(self.bot, user.telegram_id)
-                    if updated_avatar_url and updated_avatar_url != user.photo_url:
-                        user.photo_url = updated_avatar_url
-                        db.commit()
+                    # get_user_avatar_url stores file_id via its own session — no overwrite here
+                    result = await get_user_avatar_url(self.bot, user.telegram_id, force_refresh=True)
+                    if result:
                         updated_count += 1
-                        logger.info(f"Updated avatar for user {user.telegram_id}")
+                        logger.info(f"Refreshed avatar file_id for user {user.telegram_id}")
                 except Exception as e:
                     logger.error(f"Error updating avatar for user {user.telegram_id}: {e}")
 

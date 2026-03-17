@@ -339,7 +339,13 @@ async def get_timezone_from_ip(ip_address):
 
 
 async def get_user_avatar_url(bot, user_id, force_refresh=False):
-    """Получает URL аватара пользователя из Telegram (или кэша для Discord-юзеров)
+    """Получает URL аватара пользователя из Telegram (или кэша для Discord-юзеров).
+
+    Хранит в photo_url либо file_id (новый формат, не начинается с http),
+    либо прямой https-URL (старый/виджетный формат).
+    При cache-hit с file_id вызывает bot.get_file(file_id) для получения свежего download URL.
+    Это позволяет избежать проблемы истечения TG file URL (~1 ч) без повторного
+    вызова get_user_profile_photos (который блокируется настройками приватности).
     
     Args:
         bot: Telegram bot instance
@@ -357,47 +363,58 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 if user and user.photo_url:
                     return user.photo_url
                 return None
-            
-            # Если не требуется принудительное обновление и есть кэшированный аватар, возвращаем его
+
+            # Cache hit — try to return without hitting get_user_profile_photos
             if not force_refresh and user and user.photo_url:
-                logger.debug(f"Returning cached avatar for user {user_id}")
-                return user.photo_url
-            
-            # Загружаем свежий аватар из Telegram
+                cached = user.photo_url
+                if not cached.startswith('http'):
+                    # New format: file_id stored — get_file() always returns a fresh URL
+                    # and is NOT blocked by privacy settings (we already have the file_id)
+                    if bot:
+                        try:
+                            file = await bot.get_file(cached)
+                            return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                        except Exception as e:
+                            logger.info(f"get_file({cached[:20]}…) failed for {user_id}: {e}, re-fetching")
+                            # fall through to full refresh below
+                else:
+                    # Old format / widget URL: return as-is (proxy will handle 404)
+                    logger.debug(f"Returning cached URL for user {user_id}")
+                    return cached
+
+            # Fetch fresh from Telegram (enumerate photos)
             if bot:
                 try:
                     photos = await bot.get_user_profile_photos(user_id, limit=1)
                     if photos.total_count > 0:
-                        file = await bot.get_file(photos.photos[0][-1].file_id)
+                        file_id = photos.photos[0][-1].file_id
+                        file = await bot.get_file(file_id)
                         avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-                        
-                        # Сохраняем в БД для кэширования
                         if user:
-                            user.photo_url = avatar_url
+                            user.photo_url = file_id  # store file_id, not the expiring URL
                             db.commit()
-                            logger.info(f"Updated avatar for user {user_id} (force_refresh={force_refresh})")
-                        
+                            logger.info(f"Saved avatar file_id for user {user_id}")
                         return avatar_url
                     else:
-                        # Fallback: пробуем get_chat — ChatPhoto может быть доступен
-                        # даже когда get_user_profile_photos возвращает пустой список
+                        # Fallback: get_chat may expose photo even when profile list is private
                         try:
                             chat = await bot.get_chat(user_id)
                             if chat.photo and chat.photo.small_file_id:
-                                file = await bot.get_file(chat.photo.small_file_id)
+                                file_id = chat.photo.small_file_id
+                                file = await bot.get_file(file_id)
                                 avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                                 if user:
-                                    user.photo_url = avatar_url
+                                    user.photo_url = file_id  # store file_id
                                     db.commit()
                                 return avatar_url
                         except Exception:
                             pass
                 except Exception as e:
                     logger.debug(f"Could not fetch avatar from Telegram for user {user_id}: {e}")
-            
-            # Fallback: если Telegram API не вернул фото — используем кешированный photo_url из БД
+
+            # Last-resort: cached value (old URL format) — better than nothing
             if user and user.photo_url:
-                logger.debug(f"Using cached photo_url for user {user_id} after failed force_refresh")
+                logger.debug(f"Using stale photo_url for user {user_id} after failed refresh")
                 return user.photo_url
 
             logger.debug(f"No avatar available for user {user_id}")
@@ -788,13 +805,10 @@ async def auth_handler(request):
                 else:
                     logger.info(f"Found existing user: {user.id}")
                     # Update avatar from Telegram API on every login to ensure it's always fresh
+                    # get_user_avatar_url stores file_id via its own session — no need to overwrite here
                     if 'bot' in request.app:
                         try:
-                            avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
-                            if avatar_url:
-                                user.photo_url = avatar_url
-                                session_db.commit()
-                                logger.info(f"Updated avatar for user {user_id}: {avatar_url}")
+                            await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
                         except Exception as e:
                             logger.error(f"Error updating avatar for user {user_id}: {e}")
                     # Fallback: save widget photo_url if bot couldn't fetch it and DB has none
@@ -3840,14 +3854,7 @@ async def api_partners_handler(request):
 
             # Use safe proxy URL for avatar (no bot token leak)
             photo_url = safe_avatar_url(delegator.telegram_id) if delegator and delegator.telegram_id else None
-            if delegator and delegator.telegram_id and 'bot' in request.app:
-                try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id, force_refresh=False)
-                    if updated_avatar and updated_avatar != delegator.photo_url:
-                        delegator.photo_url = updated_avatar
-                        session_db.commit()
-                except Exception as e:
-                    logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
+            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
 
             #   \" \"     \n            #         \n            # \u0422\u0430\u0440\u0438\u0444\u044b \u0443\u0431\u0440\u0430\u043d\u044b, \u0432\u0441\u0435 \u043a\u043e\u043d\u0442\u0430\u043a\u0442\u044b \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\n            \n            logger.info(f\"Adding delegating contact {contact['username']} for user {user.username}\")
             delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first() if delegator else None
@@ -3961,14 +3968,7 @@ async def api_partners_handler(request):
 
             # Use safe proxy URL for avatar (no bot token leak)
             photo_url = safe_avatar_url(delegatee.telegram_id) if delegatee and delegatee.telegram_id else None
-            if delegatee and delegatee.telegram_id and 'bot' in request.app:
-                try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id, force_refresh=False)
-                    if updated_avatar and updated_avatar != delegatee.photo_url:
-                        delegatee.photo_url = updated_avatar
-                        session_db.commit()
-                except Exception as e:
-                    logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
+            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
 
             # Все контакты доступны (токенная модель)
             can_access = True
@@ -4056,14 +4056,7 @@ async def api_partners_handler(request):
 
                     # Use safe proxy URL for avatar (no bot token leak)
                     photo_url = safe_avatar_url(favorite_user.telegram_id) if favorite_user.telegram_id else None
-                    if favorite_user.telegram_id and 'bot' in request.app:
-                        try:
-                            updated_avatar = await get_user_avatar_url(request.app['bot'], favorite_user.telegram_id, force_refresh=False)
-                            if updated_avatar and updated_avatar != favorite_user.photo_url:
-                                favorite_user.photo_url = updated_avatar
-                                session_db.commit()
-                        except Exception as e:
-                            logger.error(f"Error updating favorite avatar for {favorite_user.telegram_id}: {e}")
+                    # get_user_avatar_url stores file_id in its own session — no overwrite needed here
 
                     partners_data.append({
                         'contact_info': favorite_user.username,
@@ -4276,17 +4269,9 @@ async def api_elite_partners_handler(request):
                 
                 logger.info(f"Adding Premium user to elite partners: {premium_user.username}")
 
-                # Update avatar from Telegram if available
-                photo_url = premium_user.photo_url if premium_user.photo_url else None
-                if premium_user.telegram_id and 'bot' in request.app:
-                    try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], premium_user.telegram_id, force_refresh=False)
-                        if updated_avatar and updated_avatar != premium_user.photo_url:
-                            premium_user.photo_url = updated_avatar
-                            session_db.commit()
-                            photo_url = updated_avatar
-                    except Exception as e:
-                        logger.error(f"Error updating Premium user avatar for {premium_user.telegram_id}: {e}")
+                # Use safe proxy URL for avatar (no bot token leak)
+                photo_url = safe_avatar_url(premium_user.telegram_id) if premium_user.telegram_id else None
+                # get_user_avatar_url stores file_id in its own session — no overwrite needed here
 
                 # Calculate common interests/skills/goals/tasks
                 common_interests = None
@@ -4404,17 +4389,9 @@ async def api_elite_partners_handler(request):
                                 task_titles = [t.title for t in delegated_tasks if t.user_id == delegator.id and 
                                              t.delegated_to_username.replace('@', '').lower() == user_username_clean]
                                 
-                                # Update avatar from Telegram if available
-                                photo_url = delegator.photo_url if delegator.photo_url else None
-                                if delegator.telegram_id and 'bot' in request.app:
-                                    try:
-                                        updated_avatar = await get_user_avatar_url(request.app['bot'], delegator.telegram_id, force_refresh=False)
-                                        if updated_avatar and updated_avatar != delegator.photo_url:
-                                            delegator.photo_url = updated_avatar
-                                            session_db.commit()
-                                            photo_url = updated_avatar
-                                    except Exception as e:
-                                        logger.error(f"Error updating delegator avatar for {delegator.telegram_id}: {e}")
+                                # Use safe proxy URL for avatar (no bot token leak)
+                                photo_url = safe_avatar_url(delegator.telegram_id) if delegator.telegram_id else None
+                                # get_user_avatar_url stores file_id in its own session — no overwrite needed here
                                 
                                 delegating_to_me.append({
                                     'contact_info': delegator.username,
@@ -4478,17 +4455,9 @@ async def api_elite_partners_handler(request):
                             task_titles = [
                                 t.title for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
                             
-                            # Update avatar from Telegram if available
-                            photo_url = delegatee.photo_url if delegatee.photo_url else None
-                            if delegatee.telegram_id and 'bot' in request.app:
-                                try:
-                                    updated_avatar = await get_user_avatar_url(request.app['bot'], delegatee.telegram_id, force_refresh=False)
-                                    if updated_avatar and updated_avatar != delegatee.photo_url:
-                                        delegatee.photo_url = updated_avatar
-                                        session_db.commit()
-                                        photo_url = updated_avatar
-                                except Exception as e:
-                                    logger.error(f"Error updating delegatee avatar for {delegatee.telegram_id}: {e}")
+                            # Use safe proxy URL for avatar (no bot token leak)
+                            photo_url = safe_avatar_url(delegatee.telegram_id) if delegatee.telegram_id else None
+                            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
                             
                             delegating_by_me.append({
                                 'contact_info': delegatee.username,
@@ -4663,15 +4632,7 @@ async def api_contact_profile_handler(request):
             if not contact_user:
                 return web.json_response({'error': 'Contact not found'}, status=404)
 
-            # Update avatar from Telegram if available
-            if contact_user.telegram_id and 'bot' in request.app:
-                try:
-                    updated_avatar = await get_user_avatar_url(request.app['bot'], contact_user.telegram_id, force_refresh=False)
-                    if updated_avatar and updated_avatar != contact_user.photo_url:
-                        contact_user.photo_url = updated_avatar
-                        session_db.commit()
-                except Exception as e:
-                    logger.error(f"Error updating contact avatar for {contact_user.telegram_id}: {e}")
+            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
 
             # Get contact profile (if doesn't exist, use defaults)
             profile = session_db.query(UserProfile).filter_by(user_id=contact_user.id).first()
@@ -5982,16 +5943,7 @@ async def get_comments_handler(request):
             
             users_data = session_db.query(User).filter(User.id.in_(user_ids)).all()
             
-            # Update avatars from Telegram
-            for u in users_data:
-                if u.telegram_id and 'bot' in request.app:
-                    try:
-                        updated_avatar = await get_user_avatar_url(request.app['bot'], u.telegram_id, force_refresh=False)
-                        if updated_avatar and updated_avatar != u.photo_url:
-                            u.photo_url = updated_avatar
-                            session_db.commit()
-                    except Exception as e:
-                        logger.error(f"Error updating avatar in comments for {u.telegram_id}: {e}")
+            # Avatars are served via /api/avatar/{id} proxy — no DB overwrite needed here
             
             users_map = {u.id: u for u in users_data}
 
