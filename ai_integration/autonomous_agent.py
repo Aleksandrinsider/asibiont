@@ -4343,9 +4343,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _ex_checked = 'Проверила' if _is_fem else 'Проверил'
         _ex_added   = 'добавила' if _is_fem else 'добавил'
         _ex_wrote   = 'написала' if _is_fem else 'написал'
+        # Название проекта/компании из профиля агента (передаётся из контекста пользователя)
+        _company_ctx = (agent.get('company') or '').strip()
+        _team_ctx = f"команде {_company_ctx}" if _company_ctx else 'команде'
         system_prompt = (
             f"Ты — {agent['name']}, {agent.get('job_title') or agent.get('specialization', 'специалист')}. "
-            f"Работаешь в команде ASI Biont. Сейчас: {_now_str}.\n"
+            f"Работаешь в {_team_ctx}. Сейчас: {_now_str}.\n"
             f"{_intg_line}\n"
             f"{_kb_block}\n"
             "Оцени задачу и свои интеграции — выбери лучший из доступных инструментов для продвижения к цели.\n"
