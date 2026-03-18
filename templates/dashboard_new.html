@@ -13152,6 +13152,10 @@ except Exception as e:
                 modal.style.display = 'flex';
                 try {
                     const r = await fetch('/api/marketplace/agents/' + agentId);
+                    if (!r.ok) {
+                        content.innerHTML = '<div style="color:#6B7280;padding:24px;text-align:center;">&#1040;&#1075;&#1077;&#1085;&#1090; &#1085;&#1077;&#1076;&#1086;&#1089;&#1090;&#1091;&#1087;&#1077;&#1085;</div>';
+                        return;
+                    }
                     const data = await r.json();
                     if (data.agent) {
                         _mpAgentsCache[agentId] = data.agent;
