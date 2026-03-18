@@ -8447,9 +8447,15 @@ async def api_reports_handler(request):
                 _today_start_api = _user_now_api.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_api.utc)
 
                 for c in campaigns:
+                    from sqlalchemy import case as _sa_case
+                    _replied_first = _sa_case(
+                        {'replied': 0, 'opened': 1, 'delivered': 2, 'sent': 3},
+                        value=EmailOutreach.status,
+                        else_=4,
+                    )
                     outreach = session_db.query(EmailOutreach).filter_by(
                         campaign_id=c.id
-                    ).order_by(EmailOutreach.sent_at.desc()).limit(50).all()
+                    ).order_by(_replied_first, EmailOutreach.sent_at.desc()).limit(300).all()
                     opened_count = sum(1 for o in outreach if o.status in ('opened', 'replied'))
                     # Сколько отправлено сегодня
                     _sent_today = session_db.query(EmailOutreach).filter(

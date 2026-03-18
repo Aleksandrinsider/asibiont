@@ -7722,7 +7722,7 @@ except Exception as e:
                                 bodyHtml += `</div>`;
                             }
                             // Reply
-                            if (o.reply_text) {
+                            if (o.status === 'replied') {
                                 const replyFrom = o.recipient_name ? `${o.recipient_name} <${o.recipient_email}>` : (o.recipient_email || '');
                                 bodyHtml += `<div style="margin-top: 10px; padding: 10px 0; border-top: 1px solid #F0F3F5;">`;
                                 bodyHtml += `<div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;">`;
@@ -7730,7 +7730,11 @@ except Exception as e:
                                 if (replyDate) bodyHtml += `<span style="font-size: 13px; color: #1F2328; font-weight: 600;">${replyDate}</span>`;
                                 bodyHtml += `</div>`;
                                 if (replyFrom) bodyHtml += `<div style="font-size: 12px; color: #8C959F; margin-bottom: 8px;">${t('from-label')} ${replyFrom}</div>`;
-                                bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.reply_text}</div>`;
+                                if (o.reply_text) {
+                                    bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.reply_text}</div>`;
+                                } else {
+                                    bodyHtml += `<div style="font-size: 13px; color: #9CA3AF; font-style: italic;">Ответ получен, текст не сохранён — запусти check_emails чтобы получить содержимое</div>`;
+                                }
                                 bodyHtml += `</div>`;
                             }
                             // Agent's reply to the contact
