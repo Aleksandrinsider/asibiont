@@ -12783,6 +12783,62 @@ async def check_emails(
                     except Exception:
                         pass
 
+            # ── Извлекаем предпочтения по общению из входящих писем ─────────
+            # Сканируем snippets ответных писем: если контакт написал что хочет
+            # общаться на определённом языке или в определённом стиле — сохраняем
+            # это в EmailContact.notes и показываем агенту при ответе.
+            _contact_prefs_found: dict = {}
+            if _reply_snippets:
+                import re as _re_pref_ce
+                _PREF_TRIGGER_CE = _re_pref_ce.compile(
+                    r'prefer|would like|please (?:use|write|respond|reply)|'
+                    r'write in|respond in|reply in|communicate in|'
+                    r'хочу использовать|хочу общаться|хотел.{0,10}бы|'
+                    r'предпочитаю|пожалуйста пишите|пишите на|прошу писать|'
+                    r'давайте (?:общаться|переписываться)|want to (?:use|communicate|write)',
+                    _re_pref_ce.IGNORECASE,
+                )
+                _LANG_PREF_CE = [
+                    (r'greek|греческ',                       'язык: греческий'),
+                    (r'\brussian\b|по-?русски|на\s+русском', 'язык: русский'),
+                    (r'\benglish\b|по-?английски|на\s+английском', 'язык: английский'),
+                    (r'spanish|по-?испански|на\s+испанском|español', 'язык: испанский'),
+                    (r'german|по-?немецки|на\s+немецком|deutsch', 'язык: немецкий'),
+                    (r'french|по-?французски|на\s+французском|français', 'язык: французский'),
+                    (r'chinese|по-?китайски|на\s+китайском|中文',  'язык: китайский'),
+                    (r'japanese|по-?японски|на\s+японском|日本語',  'язык: японский'),
+                    (r'ukrainian|по-?украински|на\s+украинском',  'язык: украинский'),
+                    (r'portuguese|по-?португальски|на\s+португальском', 'язык: португальский'),
+                    (r'italian|по-?итальянски|на\s+итальянском',  'язык: итальянский'),
+                    (r'arabic|по-?арабски|на\s+арабском',         'язык: арабский'),
+                    (r'formal|официальн|деловой стиль',            'стиль: официальный'),
+                    (r'informal|неформальн|casual|дружеск',        'стиль: неформальный'),
+                ]
+                for _pref_em, _pref_snip in _reply_snippets.items():
+                    if not _PREF_TRIGGER_CE.search(_pref_snip):
+                        continue
+                    _pref_low = _pref_snip.lower()
+                    for _lpat, _llabel in _LANG_PREF_CE:
+                        if _re_pref_ce.search(_lpat, _pref_low):
+                            _contact_prefs_found[_pref_em] = _llabel
+                            try:
+                                _ec_pref = session.query(_EC_ce2).filter_by(user_id=user.id, email=_pref_em).first()
+                                if _ec_pref:
+                                    _old_notes_pref = _ec_pref.notes or ''
+                                    _pref_tag = f'[предпочтение: {_llabel}]'
+                                    if _llabel not in _old_notes_pref:
+                                        _clean_pref = _re_pref_ce.sub(r'\[предпочтение:[^\]]*\]', '', _old_notes_pref).strip()
+                                        _ec_pref.notes = ((_clean_pref + '\n') if _clean_pref else '') + _pref_tag
+                                        session.commit()
+                                        logger.info(f'[CHECK_EMAILS] Saved preference for {_pref_em}: {_pref_tag}')
+                            except Exception as _e_pref:
+                                logger.debug(f'[CHECK_EMAILS] pref save failed: {_e_pref}')
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
+                            break  # одно предпочтение на контакт
+
             # Авто-обновление метрики если появились новые replied контакты
             if _new_auto or _replied_known:
                 try:
@@ -12808,6 +12864,26 @@ async def check_emails(
                                 break
                 except Exception as _e_auto_gp:
                     logger.debug(f'[CHECK_EMAILS] auto update_goal_progress failed: {_e_auto_gp}')
+
+            # Аннотируем результат: показываем агенту предпочтения контактов
+            # (только что найденные + ранее сохранённые в EmailContact.notes)
+            try:
+                _all_prefs_ann: dict = dict(_contact_prefs_found)
+                import re as _re_pref_ann
+                for _ann_em in _found_em:
+                    if _ann_em not in _all_prefs_ann:
+                        _ann_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_ann_em).first()
+                        if _ann_ec and 'предпочтение' in (_ann_ec.notes or ''):
+                            _saved = _re_pref_ann.findall(r'\[предпочтение: ([^\]]+)\]', _ann_ec.notes)
+                            if _saved:
+                                _all_prefs_ann[_ann_em] = ', '.join(_saved)
+                if _all_prefs_ann:
+                    _pref_ann = '\n\n⚠ ПРЕДПОЧТЕНИЯ КОНТАКТОВ (обязательно учитывай при ответе):\n'
+                    _pref_ann += '\n'.join(f'• {_em}: {_pref}' for _em, _pref in _all_prefs_ann.items())
+                    _pref_ann += '\n→ Пиши reply_body на указанном языке и в указанном стиле!'
+                    result += _pref_ann
+            except Exception:
+                pass
 
         return result
     except Exception as e:
