@@ -375,14 +375,24 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                             file = await bot.get_file(cached)
                             return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         except Exception as e:
-                            logger.info(f"get_file({cached[:20]}…) failed for {user_id}: {e}, clearing stale file_id and re-fetching")
-                            # Clear stale file_id so fresh fetch can overwrite it
-                            try:
-                                user.photo_url = None
-                                db.commit()
-                            except Exception:
-                                pass
-                            # fall through to full refresh below
+                            err_str = str(e).lower()
+                            # Only clear stale file_id on TG API errors (bad file_id),
+                            # NOT on transient network errors (timeout, connection reset)
+                            is_tg_api_error = ('bad request' in err_str or 'not found' in err_str
+                                               or 'wrong file' in err_str or 'file_id' in err_str
+                                               or 'invalid' in err_str)
+                            if is_tg_api_error:
+                                logger.info(f"get_file({cached[:20]}…) stale file_id for {user_id}: {e}, clearing")
+                                try:
+                                    user.photo_url = None
+                                    db.commit()
+                                except Exception:
+                                    pass
+                            else:
+                                logger.debug(f"get_file({cached[:20]}…) transient error for {user_id}: {e}, keeping cached file_id")
+                                # Return None but DO NOT clear the cached file_id — it may still be valid
+                                return None
+                            # fall through to full refresh below (only for TG API errors)
                 elif cached.startswith('https://api.telegram.org/file/bot'):
                     # Old bot-file URL format: expires after ~1h — always force fresh fetch to update DB
                     logger.debug(f"Expiring bot-file URL detected for {user_id}, re-fetching")
