@@ -377,10 +377,13 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                         except Exception as e:
                             logger.info(f"get_file({cached[:20]}…) failed for {user_id}: {e}, re-fetching")
                             # fall through to full refresh below
-                else:
-                    # Old format URL (expiring) — always force a fresh fetch to update DB
-                    logger.debug(f"Old URL detected in cache for {user_id}, re-fetching")
+                elif cached.startswith('https://api.telegram.org/file/bot'):
+                    # Old bot-file URL format: expires after ~1h — always force fresh fetch to update DB
+                    logger.debug(f"Expiring bot-file URL detected for {user_id}, re-fetching")
                     # Do NOT return here: fall through to fetch fresh below
+                else:
+                    # Non-bot URL (e.g. t.me CDN from Telegram Login Widget) — return directly
+                    return cached
 
             # Fetch fresh from Telegram — two independent attempts
             if bot:
@@ -425,6 +428,11 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                         return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                 except Exception:
                     pass
+
+            # Final fallback: any cached https URL (e.g. CDN URL from Telegram Login Widget)
+            if user and user.photo_url and user.photo_url.startswith('http'):
+                logger.debug(f"Using cached https photo_url for user {user_id}: {user.photo_url[:40]}")
+                return user.photo_url
 
             logger.debug(f"No avatar available for user {user_id}")
             return None

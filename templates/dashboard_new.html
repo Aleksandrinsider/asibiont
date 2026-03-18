@@ -11647,7 +11647,18 @@ except Exception as e:
                 }
                 // Всегда рендерим div с id для возможности редактирования
                 const escapedFull = (task.description || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;');
-                html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069; white-space: pre-wrap; word-break: break-word;' + (descText ? '' : ' display: none;') + '">' + escapeHtml(descText) + '</div>';
+                // Агентские задачи: если описание длиннее 90 символов — показываем свёрнутым
+                if (task.source === 'agent' && descText && descText.length > 90) {
+                    const shortPreview = escapeHtml(descText.substring(0, 88)) + '…';
+                    const fullEscaped = escapeHtml(descText);
+                    html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069; white-space: pre-wrap; word-break: break-word;">';
+                    html += '<span class="agent-desc-preview-' + task.id + '">' + shortPreview + '</span>';
+                    html += '<span class="agent-desc-full-' + task.id + '" style="display:none;">' + fullEscaped + '</span>';
+                    html += ' <a href="#" onclick="(function(e){e.preventDefault();var p=document.querySelector(\'.agent-desc-preview-' + task.id + '\');var f=document.querySelector(\'.agent-desc-full-' + task.id + '\');var a=e.target;if(f.style.display===\'none\'){f.style.display=\'inline\';p.style.display=\'none\';a.textContent=\'↑\';}else{f.style.display=\'none\';p.style.display=\'inline\';a.textContent=\'…ещё\';}})(event);" style="color:#068487;font-size:12px;text-decoration:none;white-space:nowrap;">…ещё</a>';
+                    html += '</div>';
+                } else {
+                    html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069; white-space: pre-wrap; word-break: break-word;' + (descText ? '' : ' display: none;') + '">' + escapeHtml(descText) + '</div>';
+                }
             }
             
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
