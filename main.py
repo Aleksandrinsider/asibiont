@@ -375,7 +375,13 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                             file = await bot.get_file(cached)
                             return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         except Exception as e:
-                            logger.info(f"get_file({cached[:20]}…) failed for {user_id}: {e}, re-fetching")
+                            logger.info(f"get_file({cached[:20]}…) failed for {user_id}: {e}, clearing stale file_id and re-fetching")
+                            # Clear stale file_id so fresh fetch can overwrite it
+                            try:
+                                user.photo_url = None
+                                db.commit()
+                            except Exception:
+                                pass
                             # fall through to full refresh below
                 elif cached.startswith('https://api.telegram.org/file/bot'):
                     # Old bot-file URL format: expires after ~1h — always force fresh fetch to update DB
@@ -457,6 +463,20 @@ def avatar_url_if_photo(user):
     if user and user.telegram_id and getattr(user, 'photo_url', None):
         return f"/api/avatar/{user.telegram_id}"
     return None
+
+
+async def _refresh_avatars_background(bot, telegram_ids):
+    """Background task: fetch & cache TG avatars for users with null photo_url.
+    Safe to fire-and-forget via asyncio.create_task()."""
+    seen = set()
+    for tg_id in telegram_ids:
+        if not tg_id or tg_id <= 0 or tg_id in seen:
+            continue
+        seen.add(tg_id)
+        try:
+            await get_user_avatar_url(bot, tg_id, force_refresh=True)
+        except Exception as e:
+            logger.debug(f"Background avatar refresh failed for {tg_id}: {e}")
 
 
 def check_telegram_authentication(data):
@@ -4197,10 +4217,19 @@ async def api_partners_handler(request):
             partner['my_rating'] = my_ratings_map.get(contact_username, None)
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
+
+        # Trigger background avatar refresh for partners missing photo_url
+        if 'bot' in request.app and request.app['bot']:
+            null_ids = [p.get('telegram_id') for p in partners_data
+                        if p.get('telegram_id') and not p.get('photo_url')
+                        and isinstance(p.get('telegram_id'), int) and p['telegram_id'] > 0]
+            if null_ids:
+                asyncio.create_task(_refresh_avatars_background(request.app['bot'], null_ids))
+
         return web.json_response({
             'partners': partners_data,
-            'blocked_partners_info': blocked_partners_data,  # Добавляем информацию о заблокированных
-            'my_ratings': my_ratings_map  # Карта всех оценок текущего пользователя (username → rating)
+            'blocked_partners_info': blocked_partners_data,
+            'my_ratings': my_ratings_map
         })
     except Exception as e:
         logger.error(f"Unexpected error in api_partners_handler: {e}", exc_info=True)
@@ -4615,6 +4644,15 @@ async def api_elite_partners_handler(request):
                 partner['my_rating'] = my_ratings_map.get(contact_username, None)
 
             logger.info(f"Returning {len(partners_data)} elite (Premium) partners for user {user_id}")
+
+            # Trigger background avatar refresh for partners missing photo_url
+            if 'bot' in request.app and request.app['bot']:
+                null_ids = [p.get('telegram_id') for p in partners_data
+                            if p.get('telegram_id') and not p.get('photo_url')
+                            and isinstance(p.get('telegram_id'), int) and p['telegram_id'] > 0]
+                if null_ids:
+                    asyncio.create_task(_refresh_avatars_background(request.app['bot'], null_ids))
+
             return web.json_response({'partners': partners_data})
 
         finally:
