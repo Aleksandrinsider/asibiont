@@ -5009,13 +5009,27 @@ class AnchorEngine:
                              if _degraded_agents_coord else '')
 
             # ── Anti-repeat: извлекаем инструменты ПОСЛЕДНЕГО цикла для каждого агента ──
+            # Формат истории: "19.03 00:34 [web_search, research_topic] текст..."
             _last_cycle_tools: dict = {}
             for _pn_lr, _hn_lr in _per_agent_history.items():
                 if _hn_lr:
                     _last_entry = list(_hn_lr)[-1]
-                    _tm_lr = _re_al.search(r'\[tools?:\s*([^\]]+)\]', _last_entry)
+                    # Ищем первый блок [tool1, tool2, ...] сразу после метки времени
+                    _tm_lr = _re_al.search(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s+\[([^\]]+)\]', _last_entry)
+                    if not _tm_lr:
+                        # Fallback: первый [..] в строке (может быть tools-блоком)
+                        _tm_lr = _re_al.search(r'\[([^\]]+)\]', _last_entry)
                     if _tm_lr:
-                        _last_cycle_tools[_pn_lr] = [t.strip() for t in _tm_lr.group(1).split(',') if t.strip()]
+                        _tl_candidates = [t.strip() for t in _tm_lr.group(1).split(',') if t.strip()]
+                        # Фильтруем: инструменты содержат _ или camelCase, не просто тексты
+                        _known_tool_words = {'web_search', 'research_topic', 'run_agent_action',
+                                             'check_emails', 'find_relevant_contacts_for_task',
+                                             'save_email_contact', 'send_outreach_email',
+                                             'get_news_trends', 'update_goal_progress', 'save_note',
+                                             'add_task', 'create_post', 'add_email_leads'}
+                        _tl_filtered = [t for t in _tl_candidates if '_' in t or t in _known_tool_words]
+                        if _tl_filtered:
+                            _last_cycle_tools[_pn_lr] = _tl_filtered
             _TOOL_ALTERNATIVES = {
                 'run_agent_action': ['research_topic', 'web_search', 'get_news_trends', 'find_relevant_contacts_for_task'],
                 'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action'],
@@ -5324,9 +5338,6 @@ class AnchorEngine:
                         logger.info("[COORD] force-reply prepended: %s → %s (outreach_id=%s)",
                                     _force_reply_agent, _reply_tool, _pr0.get('outreach_id'))
 
-            # ── Пост-фильтр: нет принудительных коррекций — агенты сами выбирают инструменты ──
-            # Координатор (LLM) назначил план зная интеграции агентов — доверяем его решению.
-            # Логируем что сделал план для диагностики.
             logger.info("[COORD] plan accepted as-is (no corrections): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
 
             # ── ASI fallback: цели без исполнителя в плане ──
