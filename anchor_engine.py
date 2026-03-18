@@ -6162,13 +6162,12 @@ class AnchorEngine:
                         }, ensure_ascii=False),
                     ))
                     # Также логируем agent_task в AAL — для контекста ASI (context_builder читает AAL)
-                    _tools_tag_aal = f'[{", ".join(_step_tools[:3])}] ' if _step_tools else ''
                     session.add(AgentActivityLog(
                         user_id=user.id,
                         activity_type='agent_task',
-                        title=f'{_ag_name}: {(_step.get("task") or "задача")[:80]}',
+                        title=f'{_ag_name}: {(_step.get("task") or "задача")[:150]}',
                         target=f'agent:{_ag_name}',
-                        content=_tools_tag_aal + _cleaned[:600],
+                        content=_cleaned[:600],
                         result=_cleaned[:600],
                         status='completed',
                     ))
@@ -6180,7 +6179,7 @@ class AnchorEngine:
                         pass
 
                 _results_summary.append(
-                    f"{_ag_name}[{','.join(_step_tools[:2])}]: {_cleaned[:150]}"
+                    f"{_ag_name}: {_cleaned[:150]}"
                 )
                 # Накапливаем контекст для следующих агентов в цепочке
                 _prev_steps_context += f"• {_ag_name}: {_cleaned[:300]}\n"

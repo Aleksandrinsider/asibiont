@@ -6886,6 +6886,8 @@ except Exception as e:
             let cleaned = (text || '')
                 .replace(/^\[filtered:[^\]]*\]\s*/g, '')  // strip internal [filtered:noise] tags
                 .replace(/^\[tools:[^\]]*\]\s*/g, '')  // strip internal [tools: ...] prefix
+                .replace(/^\[[^\]]*\]\s*/, '')  // strip bare [tool1, tool2] prefix at start
+                .replace(/([а-яёА-ЯЁa-zA-Z][а-яёА-ЯЁa-zA-Z\s]*)\[[a-z_,\s]+\]:/g, '$1:')  // strip AgentName[tool1, tool2]: → AgentName:
                 .replace(/```[\s\S]*?```/g, '')  // code blocks
                 .replace(/`([^`\n]+)`/g, isTitle ? '' : '$1')  // inline code: убираем полностью в title, оставляем содержимое в content
                 .replace(/!\[.*?\]\([^)]*\)/g, '')  // markdown images
