@@ -1280,6 +1280,42 @@ class HybridAutonomousAgent:
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
 
+                    # === Дедупликация add_task: не создаём задачи с очень похожим названием ===
+                    if tool_name == 'add_task':
+                        _new_title = (params.get('title') or '').strip().lower()
+                        if _new_title and len(_new_title) >= 5:
+                            try:
+                                from models import Task as _TaskDedup
+                                _pending = session.query(_TaskDedup).filter(
+                                    _TaskDedup.user_id == user_id,
+                                    _TaskDedup.status.in_(['pending', 'active', 'in_progress']),
+                                ).all()
+                                for _pt in _pending:
+                                    _pt_title = (_pt.title or '').strip().lower()
+                                    # Проверяем: один является подстрокой другого или Жаккар-сходство
+                                    _is_dup = (
+                                        _new_title == _pt_title or
+                                        (_new_title in _pt_title and len(_new_title) > 10) or
+                                        (_pt_title in _new_title and len(_pt_title) > 10)
+                                    )
+                                    if _is_dup:
+                                        logger.warning(
+                                            "[EXEC] add_task DEDUP: '%s' similar to existing pending [%d] '%s' — skipping",
+                                            _new_title[:50], _pt.id, _pt_title[:50]
+                                        )
+                                        results.append({
+                                            "tool": tool_name, "success": True,
+                                            "result": {"task_id": _pt.id, "title": _pt.title,
+                                                       "note": f"Задача уже существует (id={_pt.id}): «{_pt.title}» — дубликат не создан"},
+                                            "reason": reason
+                                        })
+                                        # Пропускаем создание
+                                        raise StopIteration(f"dup:{_pt.id}")
+                            except StopIteration as _si:
+                                continue
+                            except Exception as _dd_err:
+                                logger.debug("[EXEC] add_task dedup check error: %s", _dd_err)
+
                     # === Универсальная фильтрация неизвестных параметров ===
                     # AI иногда передаёт параметры которых нет в сигнатуре функции
                     # (например sender_name в send_outreach_email). Фильтруем чтобы не было TypeError.
@@ -2894,6 +2930,12 @@ class HybridAutonomousAgent:
                         "Do NOT call research_topic in proactive messages — use get_news_trends.\n"
                         "Don't invent data. End with a thought-provoking question or a specific actionable suggestion.\n"
                         "IMPORTANT: Do NOT auto-publish posts. Do NOT use /dashboard — only https://asibiont.com/dashboard.\n\n"
+                        "⚡ STRATEGIC FLEXIBILITY:\n"
+                        "Check the 'AGENT DIRECTIVES' section — it shows what you already delegated recently. "
+                        "If a goal shows no progress and recent directives are repetitive (research, find contacts) — SWITCH APPROACH. "
+                        "Email limit hit → try direct messages / community posts / partnerships. "
+                        "Do NOT create a 'Research X' task if a similar pending task already exists. "
+                        "Pick the next concrete step that is DIFFERENT from previous attempts.\n\n"
                         "STYLE (STRICT — same rules as regular chat):\n"
                         "• 300–500 characters, flowing text, 2–3 paragraphs\n"
                         "• FORBIDDEN: bullet lists (• – – 1.), numbered lists, headers (##), double newlines\n"
@@ -2961,6 +3003,12 @@ class HybridAutonomousAgent:
                         "НЕ вызывай research_topic — используй get_news_trends.\n"
                         "Не выдумывай данные. Закончи вопросом или конкретным предложением действия.\n"
                         "ВАЖНО: НЕ публикуй посты автоматически. НЕ используй /dashboard — только https://asibiont.com/dashboard.\n\n"
+                        "⚡ СТРАТЕГИЧЕСКАЯ ГИБКОСТЬ:\n"
+                        "В секции 'ДИРЕКТИВЫ АГЕНТАМ' видны поручения которые ты УЖЕ давал. "
+                        "Если цель давно не двигается и в последних директивах одни и те же задачи (исследовать, найти контакты) — "
+                        "СМЕНИ ПОДХОД. Пример: email-лимит исчерпан → предложи прямые сообщения / партнёрства / форумы / публикации. "
+                        "Не создавай задачи 'Исследовать X' если такая задача уже есть в pending. "
+                        "Выбери следующий конкретный шаг который отличается от предыдущих.\n\n"
                         "СТИЛЬ (СТРОГО — те же правила что и в обычном чате):\n"
                         "• 300–500 символов, сплошной текст, 2–3 абзаца\n"
                         "• ЗАПРЕЩЕНО: списки (• – – 1.), нумерация, заголовки (##), двойные переносы строк\n"
@@ -3377,31 +3425,64 @@ def _strip_agent_html(text: str) -> str:
     return _t
 
 
-def _save_interaction_for_director(telegram_id: int, content: str, message_type: str = 'agent_msg'):
-    """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата."""
+def _save_interaction_for_director(telegram_id: int, content: str, message_type: str = 'agent_msg') -> bool:
+    """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата.
+    
+    Возвращает True если сохранено, False если обнаружен дубль (поручение уже
+    давалось за последние 30 минут — идентичный текст начала директивы).
+    """
     if not content or not content.strip():
-        return
+        return False
     try:
         from models import Session as _Db, User as _User, Interaction as _Intr
+        from datetime import timezone as _tz_dir, timedelta as _td_dir, datetime as _dt_dir
         _s = _Db()
         try:
             _u = _s.query(_User).filter_by(telegram_id=telegram_id).first()
-            if _u:
-                _s.add(_Intr(user_id=_u.id, message_type=message_type, content=content))
-                _s.commit()
-                logger.info("[DIRECTOR] saved interaction type=%s for tg=%s, len=%d", message_type, telegram_id, len(content))
-            else:
+            if not _u:
                 logger.warning("[DIRECTOR] user not found for tg=%s", telegram_id)
+                return False
+            # ── Дедупликация директив (только для agent_msg без __agent) ────────────
+            # Сравниваем первые 80 символов — достаточно чтобы убедиться что поручение то же самое
+            _dedup_prefix = content.strip()[:80]
+            # Проверяем только если это директива (не отчёт агента с __agent)
+            _is_directive = '"__agent"' not in content
+            if _is_directive:
+                _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=30)
+                _existing = (
+                    _s.query(_Intr)
+                    .filter(
+                        _Intr.user_id == _u.id,
+                        _Intr.message_type == 'agent_msg',
+                        _Intr.created_at >= _since,
+                        _Intr.content.like(_dedup_prefix + '%'),
+                    )
+                    .first()
+                )
+                if _existing:
+                    logger.warning(
+                        "[DIRECTOR] DEDUP: identical directive already sent %s ago for tg=%s, skipping: %s...",
+                        str(_dt_dir.now(_tz_dir.utc) - _existing.created_at.replace(tzinfo=_tz_dir.utc))[:7],
+                        telegram_id, _dedup_prefix[:40]
+                    )
+                    return False
+            # ────────────────────────────────────────────────────────────────────────
+            _s.add(_Intr(user_id=_u.id, message_type=message_type, content=content))
+            _s.commit()
+            logger.info("[DIRECTOR] saved interaction type=%s for tg=%s, len=%d", message_type, telegram_id, len(content))
+            return True
         except Exception as _db_err:
             logger.error("[DIRECTOR] DB commit error: %s", _db_err)
             try:
                 _s.rollback()
             except Exception:
                 pass
+            return False
         finally:
             _s.close()
     except Exception as e:
         logger.error("[DIRECTOR] save interaction error: %s", e)
+        return False
 
 
 # ══ Универсальный контекст пользователя и агента ══════════════════════════════
@@ -6128,9 +6209,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 lambda m: m.group(1) + m.group(2).lower(),
                 _dm_display,
             )
-            # Только логируем в БД (agent_msg не показывается как основной ответ чата),
-            # не отправляем _send_visible — директорское обращение к агенту внутреннее
-            _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
+            # Только логируем в БД — если дубль (то же поручение <30 мин), пропускаем запуск агента
+            _saved = _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
+            if not _saved:
+                logger.info("[DIRECTOR] skipping duplicate agent task for %s: %s...", ag.get('name'), director_message[:60])
+                return f"(поручение '{director_message[:40]}...' уже было дано недавно — пропускаю дубль)"
 
         # Списываем токены за запуск агента директором
         try:

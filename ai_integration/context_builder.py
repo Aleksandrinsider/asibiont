@@ -1167,6 +1167,50 @@ class ContextBuilder:
             except Exception as _aal_e:
                 logger.debug(f"[PROACTIVE] agent activity log error: {_aal_e}")
 
+            # ═══ НЕДАВНИЕ ДИРЕКТИВЫ (что ASI уже поручил агентам за последние 2ч) ═══
+            # Цель: ASI видит собственные недавние поручения → НЕ повторяет их
+            try:
+                from models import Interaction as _ItrDir
+                _dir_since = datetime.now(timezone.utc) - timedelta(hours=2)
+                _dir_msgs = (
+                    session.query(_ItrDir)
+                    .filter(
+                        _ItrDir.user_id == user.id,
+                        _ItrDir.message_type == 'agent_msg',
+                        _ItrDir.created_at >= _dir_since,
+                    )
+                    .order_by(_ItrDir.created_at.asc())
+                    .limit(10)
+                    .all()
+                )
+                # Директивы — это agent_msg БЕЗ поля __agent (отчёты агентов имеют __agent)
+                _directive_lines = []
+                import json as _jdir
+                for _dm in _dir_msgs:
+                    try:
+                        _dj = _jdir.loads(_dm.content or '{}')
+                        # Пропускаем отчёты агентов (имеют __agent)
+                        if isinstance(_dj, dict) and '__agent' in _dj and _dj['__agent']:
+                            continue
+                        # Это директива: либо plain text, либо JSON без __agent
+                        if isinstance(_dj, dict):
+                            _dtxt = (_dj.get('text','') or _dj.get('message','') or '')[:200]
+                        else:
+                            _dtxt = str(_dj)[:200]
+                    except Exception:
+                        _dtxt = (_dm.content or '')[:200]
+                    _dts = _dm.created_at.strftime('%H:%M') if _dm.created_at else ''
+                    if _dtxt.strip():
+                        _directive_lines.append(f"  [{_dts}] {_dtxt}")
+                if _directive_lines:
+                    hints.append(
+                        "ДИРЕКТИВЫ АГЕНТАМ ЗА ПОСЛЕДНИЕ 2Ч (ты уже давал эти поручения — НЕ повторяй их, выбери НОВЫЙ следующий шаг):\n"
+                        + "\n".join(_directive_lines)
+                        + "\nЕСЛИ агент уже получил поручение → считай его в работе, не дублируй."
+                    )
+            except Exception as _dir_e:
+                logger.debug(f"[PROACTIVE] directives load error: {_dir_e}")
+
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)
             if similar_hints:
