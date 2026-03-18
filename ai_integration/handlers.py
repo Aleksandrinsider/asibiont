@@ -9902,6 +9902,13 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         # Общие IT-маркеры
         'it-', 'it специал', 'ит специал', 'технолог', 'startup', 'стартап',
         'saas', 'app ', 'приложен', 'платформ', 'сервис для',
+        # Дополнительные маркеры AI/automation платформ (для продуктов вроде ASI Biont)
+        'автоматизация', 'автопилот', 'интеграц', 'integration', 'workflow',
+        'automat', 'no-code', 'low-code', 'webhook', 'zapier', 'make.com',
+        'openai', 'gpt', 'chatgpt', 'langchain', 'llm', 'prompt',
+        'notion', 'airtable', 'crm', 'erp', 'bi ', 'analytics',
+        'founder', 'инди', 'indie', 'соло.разраб', 'соло разраб',
+        'npm', 'pypi', 'open-source', 'contributor', 'maintainer',
     ]
     _is_tech_audience = any(t in _all_text for t in _tech_markers)
 

@@ -8553,9 +8553,9 @@ async def api_reports_handler(request):
                             'body': o.body,
                             'status': o.status,
                             'sent_at': (o.sent_at.isoformat() + 'Z') if o.sent_at else None,
-                            'reply_text': (o.reply_text[:200] + '...') if o.reply_text and len(o.reply_text) > 200 else o.reply_text,
+                            'reply_text': o.reply_text,
                             'reply_at': (o.reply_at.isoformat() + 'Z') if o.reply_at else None,
-                            'ai_reply_text': (o.ai_reply_text[:200] + '...') if o.ai_reply_text and len(o.ai_reply_text) > 200 else (o.ai_reply_text or None),
+                            'ai_reply_text': o.ai_reply_text or None,
                             'ai_reply_sent_at': (o.ai_reply_sent_at.isoformat() + 'Z') if o.ai_reply_sent_at else None,
                         } for o in outreach],
                     })

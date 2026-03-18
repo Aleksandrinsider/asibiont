@@ -10939,15 +10939,48 @@ class AnchorEngine:
                         _age_h = 999
                     if _age_h >= 1.5:  # Кампания существует > 1.5ч и всё ещё без лидов
                         _camp_goal_short = (campaign.goal or campaign.name or '')[:120]
+                        _camp_audience = (campaign.target_audience or '')[:100]
+                        # Определяем тип аудитории для умных подсказок
+                        _aud_lower = f"{_camp_audience} {_camp_goal_short}".lower()
+                        _is_tech = any(w in _aud_lower for w in ('python', 'developer', 'разработ', 'programmer', 'github', 'saas', 'startup', 'ai ', 'ml ', 'bot', 'api', 'engineer', 'инженер', 'frontend', 'backend', 'fullstack'))
+                        _is_biz = any(w in _aud_lower for w in ('b2b', 'компан', 'бизнес', 'предприн', 'hr', 'cto', 'ceo', 'founder', 'director'))
+                        _has_github_tok = bool(anchor_data.get('github_token', ''))
+
+                        if _is_tech and not _has_github_tok:
+                            _suggestions = (
+                                f"💡 Вижу что цель связана с tech-аудиторией.\n"
+                                f"Чтобы найти разработчиков через GitHub — добавь в настройки агента:\n"
+                                f"  GITHUB_TOKEN=ghp_xxx (создай на github.com → Settings → Developer settings → Tokens)\n"
+                                f"Это даёт 5000 запросов/час вместо 60 — агент найдёт сотни email.\n\n"
+                                f"Или напиши: \"Кристина, найди мне 10 Python-разработчиков с GitHub\""
+                            )
+                        elif _is_tech:
+                            _suggestions = (
+                                f"💡 Tech-аудитория: GitHub ищем активно, но может лимит исчерпан.\n"
+                                f"Скажи точнее: кого именно ищем?\n"
+                                f"  а) \"разработчики Python фолловеры >50\" — конкретный GitHub-запрос\n"
+                                f"  б) \"indie hacker с SaaS продуктом\" — другой сегмент\n"
+                                f"  в) \"авторы open-source telegram ботов\" — конкретная ниша"
+                            )
+                        elif _is_biz:
+                            _suggestions = (
+                                f"💡 B2B-аудитория: hh.ru ищем HR/CTO компаний, но email редко публичные.\n"
+                                f"Что поможет лучше:\n"
+                                f"  а) Укажи конкретные компании или домены (example.com)\n"
+                                f"  б) Добавь LinkedIn URL нужных людей\n"
+                                f"  в) Напиши кому именно хочешь написать — помогу найти"
+                            )
+                        else:
+                            _suggestions = (
+                                f"💡 Помогут уточнения:\n"
+                                f"  а) Какие площадки/сайты посещает твоя аудитория?\n"
+                                f"  б) Есть ли Telegram-группы или форумы по теме?\n"
+                                f"  в) Можешь накинуть 2-3 известных тебе email для старта?"
+                            )
                         _notify_text = (
-                            f"📧 Кампания «{campaign.name}» не может найти контакты автоматически\n\n"
+                            f"📧 Кампания «{campaign.name}» пока не нашла контакты\n\n"
                             f"Цель: {_camp_goal_short}\n\n"
-                            f"Автопоиск не нашёл email-адресов тестировщиков/специалистов на открытых платформах — "
-                            f"большинство людей не публикуют личный email в публичном доступе.\n\n"
-                            f"Что сделать:\n"
-                            f"• Попроси меня найти контакты через веб-поиск: \"найди email QA тестировщиков\"\n"
-                            f"• Добавь контакты вручную: укажи email людей которым хочешь написать\n"
-                            f"• Используй LinkedIn/hh.ru/Telegram-группы чтобы найти нужных людей и взять их email"
+                            f"{_suggestions}"
                         )
                         try:
                             await self.bot.send_message(
