@@ -1211,6 +1211,112 @@ class ContextBuilder:
             except Exception as _dir_e:
                 logger.debug(f"[PROACTIVE] directives load error: {_dir_e}")
 
+            # ═══ ПЕРСОНАЛИЗАЦИЯ: ПРИОРИТЕТЫ ЦЕЛЕЙ И ДОСТУПНЫЕ ИНСТРУМЕНТЫ ═══
+            # Компактный план который помогает агенту думать с учётом конкретного пользователя
+            try:
+                _p_active = [g for g in all_goals if g.status == 'active']
+                _priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+                _p_active.sort(key=lambda g: (_priority_order.get(g.priority, 4), -(g.progress_percentage or 0)))
+
+                if _p_active:
+                    _prio_map = {
+                        'critical': '🔴 КРИТИЧНО', 'high': '🟠 ВЫСОКИЙ',
+                        'medium': '🟡 СРЕДНИЙ',   'low':  '🟢 НИЗКИЙ',
+                    }
+                    # Какие инструменты реально доступны (через агентов или аккаунт)
+                    _avail_caps: list[str] = []
+                    try:
+                        from models import UserAgent as _UA_plan, AgentSubscription as _AS_plan
+                        from sqlalchemy import or_ as _or_plan
+                        _sub_ids_plan = [
+                            r[0] for r in session.query(_AS_plan.agent_id)
+                            .filter(_AS_plan.user_id == user.id).all()
+                        ]
+                        _plan_filt = (
+                            _or_plan(_UA_plan.id.in_(_sub_ids_plan), _UA_plan.author_id == user.id)
+                            if _sub_ids_plan else (_UA_plan.author_id == user.id)
+                        )
+                        _plan_team = session.query(_UA_plan).filter(
+                            _plan_filt, _UA_plan.status == 'active'
+                        ).all()
+                        for _pa in _plan_team:
+                            _pa_kup = (_pa.user_api_keys or '').upper()
+                            _pa_code = (_pa.python_code or '').lower()
+                            _pa_caps: list[str] = []
+                            if ('GMAIL' in _pa_kup or 'YANDEX_USER' in _pa_kup
+                                    or 'MAILRU_USER' in _pa_kup or 'RESEND_API_KEY' in _pa_kup
+                                    or getattr(user, 'google_oauth_token', None)):
+                                _pa_caps.append('email outreach')
+                            if 'GITHUB' in _pa_kup or 'github' in _pa_code:
+                                _pa_caps.append('GitHub')
+                            if 'NOTION' in _pa_kup:
+                                _pa_caps.append('Notion')
+                            if 'SLACK' in _pa_kup:
+                                _pa_caps.append('Slack')
+                            if 'STRIPE' in _pa_kup:
+                                _pa_caps.append('Stripe/платежи')
+                            if 'BITRIX' in _pa_kup or 'AMOCRM' in _pa_kup or 'HUBSPOT' in _pa_kup:
+                                _pa_caps.append('CRM')
+                            if 'feedparser' in _pa_code or 'RSS' in _pa_kup:
+                                _pa_caps.append('RSS мониторинг')
+                            if 'imaplib' in _pa_code or 'IMAP' in _pa_kup:
+                                _pa_caps.append('чтение inbox')
+                            if 'TWITTER' in _pa_kup or 'X_API' in _pa_kup or 'tweepy' in _pa_code:
+                                _pa_caps.append('Twitter/X')
+                            if 'VK_' in _pa_kup or 'vk_api' in _pa_code:
+                                _pa_caps.append('VK')
+                            if 'GOOGLE_SHEETS' in _pa_kup or 'gspread' in _pa_code:
+                                _pa_caps.append('Google Sheets')
+                            if 'BINANCE' in _pa_kup or 'BYBIT' in _pa_kup or 'binance' in _pa_code:
+                                _pa_caps.append('крипто-API')
+                            if 'OPENAI' in _pa_kup or 'ANTHROPIC' in _pa_kup:
+                                _pa_caps.append('внешний AI')
+                            if _pa_caps:
+                                _avail_caps.append(f"{_pa.name}: {', '.join(_pa_caps)}")
+                        # Платформенные возможности (без агента)
+                        if getattr(user, 'telegram_channel', None):
+                            _avail_caps.append(f"TG-канал @{user.telegram_channel}: посты/контент")
+                        if getattr(user, 'discord_webhook', None):
+                            _avail_caps.append("Discord канал: публикации")
+                    except Exception as _cap_e:
+                        logger.debug(f"[PERSONALIZATION_CAPS] {_cap_e}")
+
+                    _goal_lines = []
+                    for _pg in _p_active[:4]:
+                        _pr_label = _prio_map.get(_pg.priority, '⚪')
+                        _pct = _pg.progress_percentage or 0
+                        _days_left = ''
+                        if _pg.target_date:
+                            _dl = _pg.days_until_target()
+                            if _dl is not None and _dl < 0:
+                                _days_left = ' ⚠️ ПРОСРОЧЕНО'
+                            elif _dl is not None and _dl <= 14:
+                                _days_left = f' ⏰ {_dl}дн до дедлайна'
+                        _goal_lines.append(
+                            f"  {_pr_label} «{_pg.title}» ({_pct}%"
+                            + (f", категория: {_pg.category}" if _pg.category else "")
+                            + f"){_days_left}"
+                        )
+
+                    _section = (
+                        "ПЕРСОНАЛИЗАЦИЯ (адаптируй ВСЕ решения под этого пользователя):\n"
+                        "Активные цели по приоритету:\n"
+                    )
+                    _section += "\n".join(_goal_lines)
+                    if _avail_caps:
+                        _section += "\nДоступные инструменты команды:\n"
+                        _section += "\n".join(f"  • {c}" for c in _avail_caps)
+                    else:
+                        _section += "\nИнтеграций нет — действуй через задачи, советы, вопросы пользователю."
+                    _section += (
+                        "\n→ ПРАВИЛО: предлагай именно те действия, которые возможны с этими инструментами "
+                        "и продвигают именно эти цели. Не говори о GitHub если цель — здоровье. "
+                        "Не предлагай email если нет email-агента. Один фокус — одна цель — один инструмент."
+                    )
+                    hints.append(_section)
+            except Exception as _pe:
+                logger.debug(f"[PERSONALIZATION] {_pe}")
+
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)
             if similar_hints:
