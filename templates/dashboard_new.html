@@ -13099,9 +13099,10 @@ except Exception as e:
                     const _isFav = await isFavoriteContact(cleanUsername || (userId ? String(userId) : ''));
                     const _favLabel = _isFav ? t('remove-fav') : t('add-fav');
                     html += '<div class="rating-modal-actions">';
-                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}');closeContactProfileModal();" class="rating-submit-btn" style="${_isFav ? 'background:#FFF1F2;border-color:#FECACA;color:#DC2626;' : ''}">${_favLabel}</button>`;
-                    if (partner.contact_info) {
-                        html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">${t('write-msg')}</button>`;
+                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}');closeContactProfileModal();" class="rating-submit-btn">${_favLabel}</button>`;
+                    if (partner.contact_info && partner.contact_info !== 'null') {
+                        const _writeTarget = partner.contact_info.replace(/'/g, "\\'");
+                        html += `<button onclick="writeToContact('${_writeTarget}')" class="rating-submit-btn">${t('write-msg')}</button>`;
                     }
                     html += '</div>';
                     
