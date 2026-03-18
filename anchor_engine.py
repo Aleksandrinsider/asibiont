@@ -424,169 +424,92 @@ def _match_best_integration(goal_title: str,
 # ── Тактические семейства инструментов ──
 # Каждое семейство = одна концептуальная стратегия. Использовал инструмент → семейство отмечено.
 _TACTIC_FAMILIES: dict = {
-    'direct_outreach':    {'send_outreach_email', 'run_agent_action', 'find_relevant_contacts_for_task',
-                           'save_email_contact', 'start_email_campaign', 'add_email_leads'},
-    'community_reach':    {'find_and_message_relevant_users', 'find_partners', 'start_delegation_campaign',
-                           'web_search', 'quick_topic_search'},
-    'content_inbound':    {'create_post', 'publish_to_telegram', 'publish_to_discord',
-                           'generate_marketing_content', 'start_content_campaign', 'generate_image'},
-    'referral_deepen':    {'reply_to_outreach_email', 'negotiate_by_email', 'send_follow_up_email',
-                           'check_emails', 'list_email_contacts'},
-    'research_pivot':     {'research_topic', 'research_and_plan', 'get_news_trends',
-                           'analyze_situation_and_suggest_tasks'},
+    'direct_action':      {'send_outreach_email', 'run_agent_action', 'find_relevant_contacts_for_task',
+                           'save_email_contact', 'start_email_campaign', 'add_email_leads',
+                           'find_and_message_relevant_users', 'create_post', 'publish_to_telegram',
+                           'publish_to_discord', 'web_search', 'quick_topic_search'},
+    'infrastructure':     {'research_and_plan', 'analyze_situation_and_suggest_tasks', 'add_task',
+                           'delegate_task', 'start_delegation_campaign', 'schedule_background_task'},
+    'relationship':       {'reply_to_outreach_email', 'negotiate_by_email', 'send_follow_up_email',
+                           'check_emails', 'list_email_contacts', 'find_partners'},
+    'content_attract':    {'generate_marketing_content', 'start_content_campaign', 'generate_image'},
+    'research_discover':  {'research_topic', 'get_news_trends'},
 }
 
-# Названия и примеры тактик под разные типы целей
-_TACTIC_MATRIX: dict = {
-    'outreach': {
-        'direct_outreach': (
-            '🎯 Прямой поиск → письмо',
-            'GitHub search_users→save_email_contact→send_outreach_email; '
-            'или find_relevant_contacts_for_task("Python AI разработчики") → send_outreach_email',
-        ),
-        'community_reach': (
-            '🌐 Сообщества и площадки',
-            'find_and_message_relevant_users("AI beta testers Telegram/Discord") '
-            'или web_search("site:reddit.com/r/MachineLearning beta tester wanted") → send_outreach_email',
-        ),
-        'content_inbound': (
-            '📢 Контент-приманка (люди приходят сами)',
-            'generate_marketing_content("пост Ищем AI-тестировщиков") → publish_to_telegram/discord; '
-            'или create_post("Почему мы строим X — зови нас тестировщиков")',
-        ),
-        'referral_deepen': (
-            '🔁 Реферал от тех кто уже ответил',
-            'check_emails → reply_to_outreach_email/negotiate_by_email тем кто ответил: '
-            '"Знаешь ещё 2-3 человека кому это интересно?"; send_follow_up_email',
-        ),
-        'research_pivot': (
-            '🔍 Смена сегмента / площадки',
-            'research_and_plan("Где ещё обитают AI-тестировщики кроме GitHub? Хакатоны? ProductHunt?") '
-            '→ уточнить целевую аудиторию → новый прямой поиск в другом месте',
-        ),
-    },
-    'research': {
-        'direct_outreach': (
-            '📩 Опрос экспертов',
-            'find_relevant_contacts_for_task("нефтяные аналитики") → send_outreach_email '
-            'с конкретным вопросом → check_emails для ответов',
-        ),
-        'community_reach': (
-            '🌐 Тематические форумы и сообщества',
-            'web_search("site:habr.com OR Reddit нефть 2026 прогноз") → '
-            'собрать мнения → обработать через research_and_plan',
-        ),
-        'content_inbound': (
-            '📢 Опубликовать промежуточный анализ',
-            'create_post с промежуточными данными → publish_to_telegram → '
-            'получить комментарии/уточнения от подписчиков',
-        ),
-        'referral_deepen': (
-            '🔁 Углубить источники (ответы и комментарии)',
-            'check_emails → reply_to_outreach_email с уточняющим вопросом; '
-            'negotiate_by_email для продолжения диалога с экспертом',
-        ),
-        'research_pivot': (
-            '🔍 Первичные данные через API/RSS',
-            'run_agent_action(get_price/get_news/get_latest) → числовые данные → '
-            'get_news_trends → сформировать вывод',
-        ),
-    },
-    'content': {
-        'direct_outreach': (
-            '📩 Аутрич к авторам / редакторам',
-            'find_relevant_contacts_for_task("SMM-специалисты") → send_outreach_email: '
-            '"Хочу разместить гостевой пост / сотрудничество"',
-        ),
-        'community_reach': (
-            '🌐 Разместить в тематических сообществах',
-            'find_and_message_relevant_users("AI Telegram чаты") → опубликовать объявление; '
-            'web_search("топ Telegram каналы AI") → publish',
-        ),
-        'content_inbound': (
-            '📢 Создать и опубликовать контент',
-            'generate_marketing_content(тема_из_цели) → create_post → '
-            'publish_to_telegram + publish_to_discord одновременно',
-        ),
-        'referral_deepen': (
-            '🔁 Вовлечь существующую аудиторию',
-            'check_emails/list_email_contacts → reply_to_outreach_email "что было полезным?"; '
-            'send_follow_up_email с новым контентом тем кто открыл прошлое',
-        ),
-        'research_pivot': (
-            '🔍 Изучить что работает у конкурентов',
-            'research_and_plan("Какие форматы контента дают охват в AI нише 2026?") → '
-            'get_news_trends → адаптировать под свою аудиторию',
-        ),
-    },
-    'general': {
-        'direct_outreach': (
-            '🎯 Прямое действие с конкретными людьми',
-            'find_relevant_contacts_for_task → send_outreach_email персонально каждому',
-        ),
-        'community_reach': (
-            '🌐 Через сообщества и площадки',
-            'find_and_message_relevant_users + web_search(релевантные форумы/сообщества)',
-        ),
-        'content_inbound': (
-            '📢 Создать что-то ценное — они придут сами',
-            'generate_marketing_content → create_post → publish_to_telegram/discord',
-        ),
-        'referral_deepen': (
-            '🔁 Углубить уже начатые контакты',
-            'check_emails → reply/negotiate/follow_up с теми кто уже в диалоге',
-        ),
-        'research_pivot': (
-            '🔍 Переосмыслить подход',
-            'research_and_plan("Что мы упускаем?") → analyze_situation_and_suggest_tasks',
-        ),
-    },
+# Универсальные паттерны мышления (работают для ЛЮБОЙ цели)
+_UNIVERSAL_PATTERNS: dict = {
+    'direct_action': (
+        '🎯 ПРЯМОЕ ДЕЙСТВИЕ',
+        'Делаю сам прямо сейчас — send_outreach_email, run_agent_action, find_and_message, '
+        'create_post, web_search. Результат зависит от моего действия.',
+    ),
+    'infrastructure': (
+        '🏗️ СОЗДАТЬ УСЛОВИЯ (косвенный путь)',
+        'Вместо повторения прямых действий — создаю систему/материалы чтобы цель достигалась легче. '
+        'research_and_plan("Что подготовить для [цель]?") → add_task/delegate_task. '
+        'Примеры: landing page, FAQ, demo-видео, автосбор данных, документация, referral-система.',
+    ),
+    'relationship': (
+        '🔁 УГЛУБИТЬ СВЯЗИ',
+        'Работаю с теми кто УЖЕ в контакте — check_emails → reply/negotiate/follow_up. '
+        'Реферал: "Знаешь ещё кого заинтересует?" Партнёрства через find_partners.',
+    ),
+    'content_attract': (
+        '🧲 КОНТЕНТ-МАГНИТ',
+        'Создаю ценный контент чтобы аудитория пришла сама — generate_marketing_content, '
+        'start_content_campaign. Вместо "я ищу людей" → "люди находят меня".',
+    ),
+    'research_discover': (
+        '🔍 ПЕРЕОСМЫСЛИТЬ',
+        'Ищу новый подход/сегмент/платформу — research_topic, get_news_trends, '
+        'research_and_plan("Где ещё [целевая аудитория]?"). Смена стратегии.',
+    ),
 }
+
 
 
 def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) -> str:
-    """Тактическое колесо: 5 концептуально разных подходов к цели.
-    Отмечает что уже пробовалось, явно указывает не-попробованное.
+    """Универсальное тактическое колесо — 5 паттернов мышления для ЛЮБОЙ цели.
+    Не зависит от keywords, работает через понимание прямых vs косвенных путей.
     """
-    ttype = goal_type if goal_type in _TACTIC_MATRIX else 'general'
-    matrix = _TACTIC_MATRIX[ttype]
-
-    # Определяем использованные семейства по инструментам + ключевым словам истории
+    # Определяем использованные паттерны по инструментам + текстовой истории
     h_text = ' '.join(agent_history or []).lower()
-    used_families: set = set()
-    for family, tools in _TACTIC_FAMILIES.items():
+    used_patterns: set = set()
+    
+    for pattern, tools in _TACTIC_FAMILIES.items():
         if tools & used_tools:
-            used_families.add(family)
-    # Доп. сигналы из текстовой истории (инструменты могут быть в тексте)
-    if any(w in h_text for w in ('send_outreach', 'search_users', 'save_email_contact', 'email_contact')):
-        used_families.add('direct_outreach')
-    if any(w in h_text for w in ('find_and_message', 'find_partners', 'community', 'reddit', 'forum')):
-        used_families.add('community_reach')
-    if any(w in h_text for w in ('create_post', 'publish_to', 'marketing_content', 'generate_image')):
-        used_families.add('content_inbound')
-    if any(w in h_text for w in ('reply_to_outreach', 'negotiate_by_email', 'follow_up', 'check_email')):
-        used_families.add('referral_deepen')
-    if any(w in h_text for w in ('research_and_plan', 'research_topic', 'get_news_trends', 'analyze_situation')):
-        used_families.add('research_pivot')
+            used_patterns.add(pattern)
+    
+    # Дополнительные сигналы из текста истории
+    if any(w in h_text for w in ('send_outreach', 'search_users', 'find_and_message', 'email', 'web_search', 'create_post')):
+        used_patterns.add('direct_action')
+    if any(w in h_text for w in ('landing', 'faq', 'demo', 'подготов', 'инфраструктур', 'материал', 'документац')):
+        used_patterns.add('infrastructure')
+    if any(w in h_text for w in ('check_email', 'reply', 'negotiate', 'follow_up', 'partner')):
+        used_patterns.add('relationship')
+    if any(w in h_text for w in ('marketing_content', 'content_campaign', 'generate_image', 'контент')):
+        used_patterns.add('content_attract')
+    if any(w in h_text for w in ('research_and_plan', 'research_topic', 'get_news', 'переосмысл')):
+        used_patterns.add('research_discover')
 
-    untried = [k for k in matrix if k not in used_families]
-    tried = [k for k in matrix if k in used_families]
-    lines = ["\n━━━ ТАКТИЧЕСКАЯ МАТРИЦА (5 путей к цели) ━━━"]
-    lines.append("Разные подходы — не разные инструменты, а разные СТРАТЕГИИ:")
-    for key, (name, example) in matrix.items():
-        if key in used_families:
+    untried = [k for k in _UNIVERSAL_PATTERNS if k not in used_patterns]
+    tried = [k for k in _UNIVERSAL_PATTERNS if k in used_patterns]
+    
+    lines = ["\n━━━ 5 УНИВЕРСАЛЬНЫХ ПАТТЕРНОВ (работают для ЛЮБОЙ цели) ━━━"]
+    for key, (name, explanation) in _UNIVERSAL_PATTERNS.items():
+        if key in used_patterns:
             lines.append(f"  ✅ {name}")
         else:
             lines.append(f"  ◻️ {name}  ← НЕ ПРОБОВАЛ")
-            lines.append(f"     → {example}")
+            lines.append(f"     {explanation}")
 
     if untried:
-        first_untried_name = matrix[untried[0]][0]
-        lines.append(f"\n🔴 СЛЕДУЮЩИЙ ШАГ = одна из непопробованных тактик выше.")
-        lines.append(f"   Рекомендую начать с: {first_untried_name}")
-    elif tried:
-        lines.append("\n✅ Все 5 тактик опробованы! Масштабируй самую эффективную")
-        lines.append("   или делай analyze_situation_and_suggest_tasks для нового фокуса.")
+        first_untried_name = _UNIVERSAL_PATTERNS[untried[0]][0]
+        lines.append(f"\n🔴 Попробуй непопробованный паттерн: {first_untried_name}")
+        lines.append("   Особенно важно: если 'direct_action' опробован 2+ раза → переключись на 'infrastructure'")
+    elif len(tried) == len(_UNIVERSAL_PATTERNS):
+        lines.append("\n✅ Все паттерны опробованы! Масштабируй самый эффективный.")
+    
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     return '\n'.join(lines) + '\n'
 
@@ -1235,19 +1158,39 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"\n{_catalog}"
         f"{_team_block}"
         f"{_memory_block}\n"
-        "## МЫШЛЕНИЕ ПЕРЕД ДЕЙСТВИЕМ (7 вопросов — не пиши их вслух, думай молча)\n"
-        "1. СУТЬ: что конкретно изменится если цель достигнута? Что = +1 к метрике?\n"
-        "2. ИСТОРИЯ: что уже делалось? Какая тактика сработала? (см. «Твоя история»)\n"
-        "3. ТАКТИКА (КЛЮЧЕВОЙ ВОПРОС): см. ТАКТИЧЕСКУЮ МАТРИЦУ выше — какие 5 подходов\n"
-        "   есть к этой цели? Какой из НЕпопробованных дал бы лучший результат сейчас?\n"
-        "   Прямой поиск → сообщества → контент-приманка → реферал → смена сегмента.\n"
-        "   Выбирай тактически, а не механически!\n"
-        "4. АУДИТОРИЯ: каких людей/источников я ЕЩЁ НЕ рассматривал?\n"
-        "   (другой язык? другая платформа? другой сегмент? другая должность?)\n"
-        "5. РЫЧАГ: одно действие с максимальным эффектом при минимуме усилий?\n"
-        "6. СИНЕРГИЯ: что коллеги по команде уже делают? Что можно делегировать, передать данные?\n"
-        "7. СЛЕПЫЕ ЗОНЫ: что я системно упускаю? Когда в последний раз менял подход?\n"
-        "→ После анализа — сразу вызывай ЛУЧШИЙ инструмент (вызов, а не текст). Без предисловий.\n\n"
+        "## УНИВЕРСАЛЬНЫЙ ФРЕЙМВОРК МЫШЛЕНИЯ (5 вопросов для ЛЮБОЙ цели — думай молча)\n\n"
+        "1️⃣ ЧТО = РЕЗУЛЬТАТ?\n"
+        "   • Что конкретно изменится когда цель достигнута?\n"
+        "   • Что = +1 к метрике? (не 'письмо отправлено', а 'человек ответил/зарегистрировался')\n"
+        "   • История: что уже пробовалось? Что сработало/не сработало?\n\n"
+        "2️⃣ ПРЯМОЙ или КОСВЕННЫЙ путь?\n"
+        "   ПРЯМОЙ: действие → результат немедленно\n"
+        "     └ send_outreach_email, run_agent_action, find_and_message, create_post\n"
+        "   КОСВЕННЫЙ: создать условия → результат появится сам (легче/масштабнее)\n"
+        "     └ Примеры косвенных подходов под разные цели:\n"
+        "       • Цель 'найти пользователей' → создай landing page / FAQ / демо-видео → люди регистрируются сами\n"
+        "       • Цель 'анализ рынка' → настрой RSS/API автосбор → данные приходят регулярно\n"
+        "       • Цель 'привлечь подписчиков' → напиши вирусную статью → охват органический\n"
+        "       • Цель 'найти экспертов' → опубликуй кейс-стади → эксперты сами откликнутся\n"
+        "   🔴 ПРАВИЛО: если прямой путь опробован 2+ раза без прогресса → переключись на косвенный!\n"
+        "       Косвенный = research_and_plan('Что подготовить для [цель]?') + add_task/delegate_task\n\n"
+        "3️⃣ ЧТО МЕШАЕТ достижению?\n"
+        "   • Технический блокер? (нет API ключа → попроси пользователя подключить)\n"
+        "   • Информационный? (не знаем где искать → research_and_plan / analyze_situation)\n"
+        "   • Процессный? (нет инфраструктуры → создай: landing, FAQ, onboarding, demo)\n"
+        "   • Масштабный? (делаем вручную → автоматизируй: schedule_background_task, RSS)\n"
+        "   → Устраняй самый критичный блокер ПЕРЕД продолжением прямых действий\n\n"
+        "4️⃣ ЧТО можно ИСПОЛЬЗОВАТЬ?\n"
+        "   • Интеграции: какие API/данные уже подключены? (см. 'ИНТЕГРАЦИИ АГЕНТА' выше)\n"
+        "   • Команда: кто работает над похожим? Что делегировать? Какие данные получить?\n"
+        "   • Прошлое: check_emails / list_email_contacts — кто уже ответил?\n"
+        "   • Инструменты: research_and_plan вместо web_search (комплексная работа за 1 вызов)\n\n"
+        "5️⃣ СЛЕПЫЕ ЗОНЫ — что я НЕ рассматриваю?\n"
+        "   • Другой сегмент? (если искал на GitHub → попробуй Reddit/Discord/Habr)\n"
+        "   • Другой язык? (если EN → попробуй RU, или наоборот)\n"
+        "   • Другой подход? (если прямой → косвенный; если поиск → контент-приманка)\n"
+        "   • НЕпопробованные инструменты? (см. 'ЕЩЁ НЕ ПРОБОВАЛ' в истории выше)\n\n"
+        "→ После анализа — СРАЗУ вызывай ЛУЧШИЙ инструмент. Без предисловий, без текста.\n\n"
         "ПРАВИЛА АВТОПИЛОТА:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст — иначе провал задачи).\n"
         "2. Работай ПО СВОЕЙ РОЛИ и специализации как первый приоритет.\n"
@@ -2415,6 +2358,15 @@ class AnchorEngine:
                     "\n\nУже сделано (для контекста, не повторяй):\n"
                     + '\n'.join(f"  {a}" for a in recent_actions[:8])
                 )
+            
+            # Темы последних проактивных сообщений — НЕ ПОВТОРЯЙ
+            recent_proactive_topics = data.get('recent_proactive_topics', [])
+            if recent_proactive_topics:
+                task_text += (
+                    "\n\n❌ О ЧЁМ УЖЕ ПИСАЛ (не повторяй эти темы и факты):\n"
+                    + '\n'.join(f"  • {t}" for t in recent_proactive_topics[:5])
+                    + "\n🔴 ЗАПРЕЩЕНО повторять факты/цифры/ссылки из этого списка. Ищи НОВУЮ информацию."
+                )
 
             # Добавляем информацию о команде с их способностями
             _team_profiles = data.get('team_profiles', [])
@@ -2978,19 +2930,23 @@ class AnchorEngine:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
 
                             if not _skip_coord:
-                                _coord_content = json.dumps({
-                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                    'text': _coord_text,
-                                    '__to_agent': _chosen_name,
-                                    '__anchor_type': 'goal_autopilot_assignment',
-                                }, ensure_ascii=False)
-                                _cs.add(Interaction(
-                                    user_id=user.id,
-                                    message_type='agent_msg',
-                                    content=_coord_content,
-                                ))
-                                _cs.commit()
-                                logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
+                                # Coordinator assignment больше не сохраняется в хронологию
+                                # from ai_integration.utils import clean_technical_details as _ctd_coord_save
+                                # _coord_text_clean_save = _ctd_coord_save(_coord_text) if _coord_text else _coord_text
+                                # _coord_content = json.dumps({
+                                #     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                #     'text': _coord_text_clean_save,
+                                #     '__to_agent': _chosen_name,
+                                #     '__anchor_type': 'goal_autopilot_assignment',
+                                # }, ensure_ascii=False)
+                                # _cs.add(Interaction(
+                                #     user_id=user.id,
+                                #     message_type='agent_msg',
+                                #     content=_coord_content,
+                                # ))
+                                # _cs.commit()
+                                # logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
+                                pass
                         finally:
                             _cs.close()
                         if not _skip_coord and self.bot:
@@ -3012,16 +2968,17 @@ class AnchorEngine:
                         _asi_gl = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
                         _asi_ann = f"Анализирую цели: {', '.join(_asi_gl)}. Подбираю следующий шаг."
                         await self.bot.send_message(chat_id=user.telegram_id, text=_asi_ann)
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type='agent_msg',
-                            content=json.dumps({
-                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                'text': _asi_ann,
-                                '__anchor_type': 'asi_self_analysis',
-                            }, ensure_ascii=False),
-                        ))
-                        session.commit()
+                        # ASI self-analysis больше не сохраняется в хронологию
+                        # session.add(Interaction(
+                        #     user_id=user.id,
+                        #     message_type='agent_msg',
+                        #     content=json.dumps({
+                        #         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                        #         'text': _asi_ann,
+                        #         '__anchor_type': 'asi_self_analysis',
+                        #     }, ensure_ascii=False),
+                        # ))
+                        # session.commit()
                     except Exception as _asi_ann_err:
                         logger.debug("[ANCHOR-AUTOPILOT] ASI self-announce failed: %s", _asi_ann_err)
                         try:
@@ -8200,6 +8157,30 @@ class AnchorEngine:
             if not _goal_freq_in_history.get(g.get('title', ''))
         ]
 
+        # ── Извлекаем темы из последних проактивных сообщений (deduplication) ──
+        recent_proactive_topics = []
+        try:
+            _recent_proact = session.query(Interaction).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == 'proactive',
+                Interaction.created_at >= now_utc - timedelta(hours=48),
+            ).order_by(Interaction.created_at.desc()).limit(10).all()
+            
+            for _rp in _recent_proact:
+                try:
+                    _cnt = json.loads(_rp.content) if isinstance(_rp.content, str) else _rp.content
+                    _txt = _cnt.get('text', '') if isinstance(_cnt, dict) else ''
+                    if _txt:
+                        # Извлекаем ключевые темы из текста (первые 2 предложения)
+                        _sentences = _txt.split('.')[:2]
+                        _topic = '.'.join(_sentences).strip()[:150]
+                        if _topic and len(_topic) > 20:
+                            recent_proactive_topics.append(_topic)
+                except Exception:
+                    pass
+        except Exception as _rpt_err:
+            logger.debug(f"[AUTOPILOT] recent_proactive_topics extraction: {_rpt_err}")
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -8207,6 +8188,7 @@ class AnchorEngine:
             'team_profiles': _team_profiles,
             'recent_actions': actions_history[:10],
             'recent_messages': recent_messages[:6],
+            'recent_proactive_topics': recent_proactive_topics[:8],  # Последние 8 тем для deduplication
             'email_campaigns': email_summary,
             'known_contacts': contacts_summary[:10],
             'user_rules': user_rules[:10],

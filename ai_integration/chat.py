@@ -1111,6 +1111,36 @@ async def _build_proactive_context(user_id, lang='ru'):
         ).order_by(Interaction.created_at.desc()).limit(5).all()
         ctx['last_responses'] = [m.content[:80] for m in last_ai_msgs if m.content and len(m.content) > 10]
         
+        # Последние проактивные сообщения — для предотвращения повторений тем
+        last_proactive_msgs = db_session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type == 'proactive',
+            Interaction.created_at >= base_now - timedelta(hours=48),
+        ).order_by(Interaction.created_at.desc()).limit(10).all()
+        
+        proactive_topics = []
+        recent_topics_set = set()
+        for inter in last_proactive_msgs:
+            try:
+                c = json.loads(inter.content) if isinstance(inter.content, str) else inter.content
+                text = c.get('text', '') if isinstance(c, dict) else ''
+                if text:
+                    # Извлекаем первые 2 предложения как тему
+                    sentences = text.split('.')[:2]
+                    topic_summary = '.'.join(sentences).strip()[:120]
+                    if topic_summary and len(topic_summary) > 20:
+                        proactive_topics.append(topic_summary)
+                        # Ключевые слова для контекста
+                        words = topic_summary.lower().split()
+                        for w in words:
+                            if len(w) > 5 and w.isalpha():
+                                recent_topics_set.add(w[:15])
+            except Exception as e:
+                logger.debug(f"Failed to parse proactive message {inter.id}: {e}")
+        
+        ctx['proactive_topics_recent'] = proactive_topics[:8]
+        ctx['recent_topics'] = recent_topics_set
+        
         # Активное обучение: анализ реакций на проактивные сообщения
         ctx['proactive_engagement'] = _analyze_proactive_engagement(user.id, db_session)
         engagement = ctx['proactive_engagement']
@@ -1359,9 +1389,14 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
         # 3. Формируем ситуационный промпт (красные флаги, доступные данные, правила)
         situation_prompt, selected_type = _build_situation_prompt(ctx, intent=intent, tasks_list=tasks_list)
         
-        # 4. Антиповтор — запрещаем повторять последние ответы
+        # 4. Антиповтор — запрещаем повторять последние ответы и темы
         anti_repeat = ""
-        if ctx.get('last_responses'):
+        # Проактивные темы имеют приоритет (они более релевантны)
+        if ctx.get('proactive_topics_recent'):
+            anti_repeat = _t('anti_repeat_intro', lang)
+            anti_repeat += "\n".join(f"- {r}" for r in ctx['proactive_topics_recent'])
+            anti_repeat += "\n🔴 НЕ ПОВТОРЯЙ факты/цифры/ссылки из этих тем. Ищи НОВУЮ информацию.\n"
+        elif ctx.get('last_responses'):
             anti_repeat = _t('anti_repeat_intro', lang)
             anti_repeat += "\n".join(f"- {r}" for r in ctx['last_responses'])
             anti_repeat += _t('anti_repeat_suffix', lang)

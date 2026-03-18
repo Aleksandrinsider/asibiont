@@ -13098,11 +13098,8 @@ except Exception as e:
                     // Action buttons
                     const _isFav = await isFavoriteContact(cleanUsername || (userId ? String(userId) : ''));
                     const _favLabel = _isFav ? t('remove-fav') : t('add-fav');
-                    const _favStyle = _isFav
-                        ? 'padding:8px 14px;background:#FFF1F2;border:1px solid #FECACA;border-radius:6px;cursor:pointer;font-size:13px;color:#DC2626;font-family:inherit;transition:all 0.2s;'
-                        : 'padding:8px 14px;background:#FFFFFF;border:1px solid #D1D9E0;border-radius:6px;cursor:pointer;font-size:13px;color:#374151;font-family:inherit;transition:all 0.2s;';
                     html += '<div class="rating-modal-actions">';
-                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}');closeContactProfileModal();" style="${_favStyle}" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='${_isFav ? '#FECACA' : '#D1D9E0'}'">&#9829; ${_favLabel}</button>`;
+                    html += `<button onclick="toggleFavoriteContactFromModal('${contactInfoEscaped}');closeContactProfileModal();" class="rating-submit-btn" style="${_isFav ? 'background:#FFF1F2;border-color:#FECACA;color:#DC2626;' : ''}">${_favLabel}</button>`;
                     if (partner.contact_info) {
                         html += `<button onclick="writeToContact('${contactInfoEscaped}')" class="rating-submit-btn">${t('write-msg')}</button>`;
                     }

@@ -6391,7 +6391,25 @@ async def api_avatar_handler(request):
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
             return _default_avatar_response()
 
-        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=False)
+        # FIXME: Force refresh if cached URL is old Telegram file URL (likely expired after ~1h)
+        # Check if user has old-format URL in DB and force refresh
+        _needs_refresh = False
+        try:
+            _db_check = Session()
+            try:
+                _u_check = _db_check.query(_User).filter_by(telegram_id=telegram_id).first()
+                if _u_check and _u_check.photo_url:
+                    # Old format: https://api.telegram.org/file/bot... (expires ~1hr)
+                    # New format: AgACAgIAAxUAAWm... (file_id, permanent)
+                    if _u_check.photo_url.startswith('https://api.telegram.org/file/bot'):
+                        _needs_refresh = True
+                        logger.info(f"[AVATAR] Old expiring URL detected for {telegram_id}, forcing refresh")
+            finally:
+                _db_check.close()
+        except Exception:
+            pass
+
+        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=_needs_refresh)
 
         async def _proxy_tg_avatar(url):
             """Proxy a Telegram file URL, return web.Response or None on failure."""
