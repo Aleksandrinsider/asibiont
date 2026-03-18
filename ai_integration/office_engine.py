@@ -123,10 +123,13 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
     """Сохраняет сообщение агента в Interaction.
     internal=True  → message_type='agent_report' (скрыто из чата, только для внутреннего контекста).
     internal=False → message_type='ai' (показывается в чате как реплика ASI).
+    Race-condition guard: если этот агент уже записал сообщение для пользователя менее 2 минут назад
+    с похожим текстом (первые 60 символов совпадают) — пропускаем (дубль из параллельных тиков).
     """
     try:
         import json as _json
         from models import Session as _Db, Interaction
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         content = _json.dumps({
             '__agent': {
                 'name': agent_name,
@@ -137,6 +140,31 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
         }, ensure_ascii=False)
         _s = _Db()
         try:
+            if not internal:
+                # Дедупликация по первым 60 символам текста в окне 2 минут
+                _cutoff = _dt.now(_tz.utc) - _td(minutes=2)
+                _prefix = text.strip()[:60]
+                _recent = (
+                    _s.query(Interaction)
+                    .filter(
+                        Interaction.user_id == user_id,
+                        Interaction.message_type == 'ai',
+                        Interaction.created_at >= _cutoff,
+                        Interaction.content.like(f'%{agent_name}%'),
+                    )
+                    .order_by(Interaction.created_at.desc())
+                    .limit(5)
+                    .all()
+                )
+                for _r in _recent:
+                    try:
+                        _d = _json.loads(_r.content)
+                        if _d.get('__agent', {}).get('name') == agent_name:
+                            if (_d.get('text') or '').strip()[:60] == _prefix:
+                                logger.warning('[OFFICE] dedup: skip duplicate msg from %s for user %d', agent_name, user_id)
+                                return
+                    except Exception:
+                        pass
             _s.add(Interaction(
                 user_id=user_id,
                 message_type='agent_report' if internal else 'ai',
@@ -639,6 +667,9 @@ class OfficeEngine:
         self.running = False
         self._script_sem = asyncio.Semaphore(4)
         self._ai_sem = asyncio.Semaphore(6)
+        # Per-agent inflight guard: предотвращает параллельный запуск одного агента двумя тиками.
+        # asyncio однопоточный → set достаточен (add/check атомарны между await-точками).
+        self._agent_inflight: set[int] = set()
 
     async def start(self):
         self.running = True
@@ -738,6 +769,18 @@ class OfficeEngine:
         if not py_code:
             return
 
+        # Per-agent inflight guard: если другой тик уже обрабатывает этот агент — пропускаем.
+        if agent.id in self._agent_inflight:
+            logger.debug("[OFFICE-L1] [%s] already running in another tick — skip", agent.name)
+            return
+        self._agent_inflight.add(agent.id)
+        try:
+            await self._run_one_agent_script_inner(agent, user)
+        finally:
+            self._agent_inflight.discard(agent.id)
+
+    async def _run_one_agent_script_inner(self, agent, user):
+        """Внутренняя логика запуска агента (вызывается под inflight guard)."""
         # Per-agent cooldown: каждый агент имеет свой интервал run_interval_minutes.
         # L1 тикает каждые 15 мин и проверяет, пора ли конкретному агенту запускаться.
         _agent_interval_sec = (agent.run_interval_minutes or 0) * 60 or L1_DEFAULT_INTERVAL_SEC
