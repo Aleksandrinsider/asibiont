@@ -450,6 +450,15 @@ def safe_avatar_url(telegram_id):
     return None
 
 
+def avatar_url_if_photo(user):
+    """Return proxied avatar URL ONLY if user has a photo stored in DB.
+    Avoids returning a URL that would resolve to a generic SVG placeholder
+    when the user has no Telegram avatar — frontend shows initials instead."""
+    if user and user.telegram_id and getattr(user, 'photo_url', None):
+        return f"/api/avatar/{user.telegram_id}"
+    return None
+
+
 def check_telegram_authentication(data):
     # Проерка аторизации от Telegram
     token = TELEGRAM_TOKEN
@@ -1568,7 +1577,7 @@ async def dashboard_handler(request):
                             'common_skills': partner.common_skills if hasattr(partner, 'common_skills') else None,
                             'common_goals': partner.common_goals if hasattr(partner, 'common_goals') else None,
                             'contact_info': partner_user.username if partner_user.username else None,
-                            'photo_url': safe_avatar_url(partner_user.telegram_id),
+                            'photo_url': avatar_url_if_photo(partner_user),
                             'city': _pick_dash(partner, 'city'),
                             'average_rating': partner.average_rating if hasattr(partner, 'average_rating') else 0
                         })
@@ -1590,7 +1599,7 @@ async def dashboard_handler(request):
                                 'id': blocked_user.id,
                                 'username': blocked_user.username,
                                 'first_name': blocked_user.first_name,
-                                'photo_url': safe_avatar_url(blocked_user.telegram_id),
+                                'photo_url': avatar_url_if_photo(blocked_user),
                                 'reason': 'заблокироаый контакт'
                             })
             except Exception as e:
@@ -1716,7 +1725,7 @@ async def dashboard_handler(request):
                 for p in partners:
                     partner_user = session_db.query(User).filter_by(id=p.user_id).first()
                     if partner_user:
-                        p.photo_url = safe_avatar_url(partner_user.telegram_id)
+                        p.photo_url = avatar_url_if_photo(partner_user)
                     else:
                         p.photo_url = None
             finally:
@@ -3736,8 +3745,8 @@ async def api_partners_handler(request):
                     logger.warning(f"Partner user not found for profile user_id: {p.user_id}")
                     continue
 
-                # Use safe proxied avatar URL (no bot token)
-                photo_url = safe_avatar_url(partner_user.telegram_id) if partner_user else None
+                # Only return avatar URL if partner actually has a photo in DB
+                photo_url = avatar_url_if_photo(partner_user)
 
                 # Все контакты доступны всем (токенная модель)
                 can_access = True
@@ -3869,9 +3878,8 @@ async def api_partners_handler(request):
             # Get delegator user object
             delegator = session_db.query(User).filter_by(id=contact['id']).first() if 'id' in contact else None
 
-            # Use safe proxy URL for avatar (no bot token leak)
-            photo_url = safe_avatar_url(delegator.telegram_id) if delegator and delegator.telegram_id else None
-            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
+            # Only return avatar URL if delegator actually has a photo in DB
+            photo_url = avatar_url_if_photo(delegator)
 
             #   \" \"     \n            #         \n            # \u0422\u0430\u0440\u0438\u0444\u044b \u0443\u0431\u0440\u0430\u043d\u044b, \u0432\u0441\u0435 \u043a\u043e\u043d\u0442\u0430\u043a\u0442\u044b \u0434\u043e\u0441\u0442\u0443\u043f\u043d\u044b\n            \n            logger.info(f\"Adding delegating contact {contact['username']} for user {user.username}\")
             delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first() if delegator else None
@@ -3983,9 +3991,8 @@ async def api_partners_handler(request):
                         list(common_task_titles)[
                             :5]) if common_task_titles else None  # Limit to 5 common tasks
 
-            # Use safe proxy URL for avatar (no bot token leak)
-            photo_url = safe_avatar_url(delegatee.telegram_id) if delegatee and delegatee.telegram_id else None
-            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
+            # Only return avatar URL if delegatee actually has a photo in DB
+            photo_url = avatar_url_if_photo(delegatee)
 
             # Все контакты доступны (токенная модель)
             can_access = True
@@ -4071,9 +4078,8 @@ async def api_partners_handler(request):
                     
                     favorite_profile = session_db.query(UserProfile).filter_by(user_id=favorite_user.id).first()
 
-                    # Use safe proxy URL for avatar (no bot token leak)
-                    photo_url = safe_avatar_url(favorite_user.telegram_id) if favorite_user.telegram_id else None
-                    # get_user_avatar_url stores file_id in its own session — no overwrite needed here
+                    # Only return avatar URL if user actually has a photo in DB
+                    photo_url = avatar_url_if_photo(favorite_user)
 
                     partners_data.append({
                         'contact_info': favorite_user.username,
@@ -4286,9 +4292,8 @@ async def api_elite_partners_handler(request):
                 
                 logger.info(f"Adding Premium user to elite partners: {premium_user.username}")
 
-                # Use safe proxy URL for avatar (no bot token leak)
-                photo_url = safe_avatar_url(premium_user.telegram_id) if premium_user.telegram_id else None
-                # get_user_avatar_url stores file_id in its own session — no overwrite needed here
+                # Only return avatar URL if premium_user actually has a photo in DB
+                photo_url = avatar_url_if_photo(premium_user)
 
                 # Calculate common interests/skills/goals/tasks
                 common_interests = None
@@ -4406,9 +4411,8 @@ async def api_elite_partners_handler(request):
                                 task_titles = [t.title for t in delegated_tasks if t.user_id == delegator.id and 
                                              t.delegated_to_username.replace('@', '').lower() == user_username_clean]
                                 
-                                # Use safe proxy URL for avatar (no bot token leak)
-                                photo_url = safe_avatar_url(delegator.telegram_id) if delegator.telegram_id else None
-                                # get_user_avatar_url stores file_id in its own session — no overwrite needed here
+                                # Only return avatar URL if delegator actually has a photo in DB
+                                photo_url = avatar_url_if_photo(delegator)
                                 
                                 delegating_to_me.append({
                                     'contact_info': delegator.username,
@@ -4472,9 +4476,8 @@ async def api_elite_partners_handler(request):
                             task_titles = [
                                 t.title for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
                             
-                            # Use safe proxy URL for avatar (no bot token leak)
-                            photo_url = safe_avatar_url(delegatee.telegram_id) if delegatee.telegram_id else None
-                            # get_user_avatar_url stores file_id in its own session — no overwrite needed here
+                            # Only return avatar URL if delegatee actually has a photo in DB
+                            photo_url = avatar_url_if_photo(delegatee)
                             
                             delegating_by_me.append({
                                 'contact_info': delegatee.username,
@@ -4728,7 +4731,7 @@ async def api_contact_profile_handler(request):
                     'contact_info': contact_user.username if hasattr(contact_user, 'username') else None,
                     'first_name': getattr(contact_user, 'first_name', None),
                     'last_name': getattr(contact_user, 'last_name', None),
-                    'photo_url': safe_avatar_url(contact_user.telegram_id) if hasattr(contact_user, 'telegram_id') else None,
+                    'photo_url': avatar_url_if_photo(contact_user) if hasattr(contact_user, 'telegram_id') else None,
                     'city': _pick('city'),
                     'country': _pick('country') if profile and hasattr(profile, 'country') else None,
                     'company': _pick('company'),
@@ -5621,7 +5624,7 @@ async def get_feed_handler(request):
                     'telegram_id': u.telegram_id,
                     'username': u.username,
                     'first_name': u.first_name,
-                    'photo_url': safe_avatar_url(u.telegram_id),
+                    'photo_url': avatar_url_if_photo(u),
                     'company': profile.company if profile else None,
                     'position': profile.position if profile else None,
                     'subscription_tier': u.subscription_tier.value if u.subscription_tier else 'LIGHT'
@@ -5984,7 +5987,7 @@ async def get_comments_handler(request):
                         'author': {
                             'username': author.username,
                             'first_name': author.first_name,
-                            'photo_url': safe_avatar_url(author.telegram_id),
+                            'photo_url': avatar_url_if_photo(author),
                             'is_current_user': comment.user_id == current_user_id
                         }
                     })
@@ -7228,7 +7231,7 @@ async def api_search_contacts_handler(request):
 
                 profile = session_db.query(UserProfile).filter_by(user_id=user.id).first()
 
-                photo_url = safe_avatar_url(user.telegram_id)
+                photo_url = avatar_url_if_photo(user)
 
                 # Auto-renormalize profile if EN viewer and translated fields are missing
                 if _search_lang == 'en' and profile:
