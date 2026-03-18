@@ -5318,6 +5318,381 @@ try:
         print('1С ответ: ' + json.dumps(d, ensure_ascii=False)[:500])
 except Exception as e:
     print('Ошибка 1С: ' + str(e))`
+            },
+            google_drive: {
+                name: 'Google Drive',
+                fields: [
+                    {k:'GOOGLE_DRIVE_TOKEN', label:'Access Token (OAuth2)', ph:'ya29.xxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Получить токен: developers.google.com/oauthplayground → выбери Drive API v3 → Authorize APIs → Exchange authorization code for tokens → скопируй Access token. Действует ~1 час.',
+                code: `import urllib.request, json, os, urllib.parse
+TOKEN = os.environ.get('GOOGLE_DRIVE_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+hdrs = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}
+try:
+    if ACTION == 'upload':
+        name = os.environ.get('AGENT_PARAM_NAME', 'file.txt')
+        content = os.environ.get('AGENT_PARAM_CONTENT', '').encode('utf-8')
+        boundary = 'gc_api_bound_x7'
+        meta = json.dumps({'name': name}).encode()
+        body = (('--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n').encode()
+                + meta
+                + ('\r\n--' + boundary + '\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n').encode()
+                + content
+                + ('\r\n--' + boundary + '--').encode())
+        uh = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'multipart/related; boundary=' + boundary}
+        req = urllib.request.Request('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+            data=body, headers=uh, method='POST')
+        with urllib.request.urlopen(req, timeout=30) as r:
+            d = json.loads(r.read().decode())
+        print('OK: файл «' + d.get('name', name) + '» загружен в Google Drive (id=' + d.get('id', '?') + ')')
+    elif ACTION == 'download':
+        file_id = os.environ.get('AGENT_PARAM_FILE_ID', '')
+        req = urllib.request.Request('https://www.googleapis.com/drive/v3/files/' + file_id + '?alt=media', headers=hdrs)
+        with urllib.request.urlopen(req, timeout=30) as r:
+            print(r.read().decode('utf-8', errors='replace')[:2000])
+    else:
+        q = os.environ.get('AGENT_PARAM_QUERY', 'trashed=false')
+        url = 'https://www.googleapis.com/drive/v3/files?pageSize=15&fields=files(id,name,mimeType,modifiedTime,size)&q=' + urllib.parse.quote(q)
+        req = urllib.request.Request(url, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        files = d.get('files', [])
+        print('Google Drive: ' + str(len(files)) + ' файлов')
+        for f in files:
+            size = int(f.get('size', 0))
+            sz = ((str(size // 1024) + ' KB') if size > 1024 else (str(size) + ' B')) if size else 'папка'
+            print('• ' + f.get('name', '?') + '  [' + sz + ']  изм. ' + f.get('modifiedTime', '')[:10])
+except Exception as e:
+    print('Ошибка Google Drive: ' + str(e))`
+            },
+            ms_teams: {
+                name: 'Microsoft Teams',
+                fields: [
+                    {k:'MS_TENANT_ID', label:'Tenant ID (Azure Active Directory)', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'},
+                    {k:'MS_CLIENT_ID', label:'Application (Client) ID', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'},
+                    {k:'MS_CLIENT_SECRET', label:'Client Secret Value', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx~x', t:'password'},
+                    {k:'MS_TEAMS_TEAM_ID', label:'Team ID (из URL Teams или Graph API)', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'},
+                    {k:'MS_TEAMS_CHANNEL_ID', label:'Channel ID', ph:'19:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx@thread.tacv2', t:'text'}
+                ],
+                hint: 'Azure Portal → App registrations → New → API permissions (Application): ChannelMessage.Read.All, ChannelMessage.Send, TeamSettings.Read.All → Grant admin consent → Certificates & Secrets → New secret. Team/Channel ID скопируй из ··· → Get link to channel, или через Graph Explorer.',
+                code: `import urllib.request, json, os, urllib.parse
+TENANT = os.environ.get('MS_TENANT_ID', '')
+CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
+SECRET = os.environ.get('MS_CLIENT_SECRET', '')
+TEAM = os.environ.get('MS_TEAMS_TEAM_ID', '')
+CHANNEL = os.environ.get('MS_TEAMS_CHANNEL_ID', '')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+try:
+    td = urllib.parse.urlencode({'grant_type': 'client_credentials', 'client_id': CLIENT_ID,
+        'client_secret': SECRET, 'scope': 'https://graph.microsoft.com/.default'}).encode()
+    req = urllib.request.Request('https://login.microsoftonline.com/' + TENANT + '/oauth2/v2.0/token',
+        data=td, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        token = json.loads(r.read().decode())['access_token']
+    hdrs = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}
+    if ACTION == 'send_message':
+        msg = os.environ.get('AGENT_PARAM_MESSAGE', '')
+        body = json.dumps({'body': {'content': msg}}).encode()
+        req = urllib.request.Request(
+            'https://graph.microsoft.com/v1.0/teams/' + TEAM + '/channels/' + CHANNEL + '/messages',
+            data=body, headers=hdrs, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        print('OK: сообщение отправлено в Teams, id=' + d.get('id', '?'))
+    else:
+        req = urllib.request.Request(
+            'https://graph.microsoft.com/v1.0/teams/' + TEAM + '/channels/' + CHANNEL + '/messages?$top=10',
+            headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        msgs = d.get('value', [])
+        print('Teams: ' + str(len(msgs)) + ' последних сообщений')
+        for m in msgs[:8]:
+            sender = ((m.get('from') or {}).get('user') or {}).get('displayName', 'User')
+            text = (((m.get('body') or {}).get('content') or '')
+                .replace('<p>', '').replace('</p>', '').replace('<at>', '@').replace('</at>', ''))[:100]
+            print('- [' + sender + '] ' + text)
+except Exception as e:
+    print('Ошибка Microsoft Teams: ' + str(e))`
+            },
+            outlook: {
+                name: 'Microsoft Outlook',
+                fields: [
+                    {k:'MS_TENANT_ID', label:'Tenant ID (Azure Active Directory)', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'},
+                    {k:'MS_CLIENT_ID', label:'Application (Client) ID', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'},
+                    {k:'MS_CLIENT_SECRET', label:'Client Secret Value', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx~x', t:'password'},
+                    {k:'MS_OUTLOOK_USER', label:'Email пользователя Outlook', ph:'user@company.onmicrosoft.com', t:'email'}
+                ],
+                hint: 'Тот же Azure App что и для Teams. API permissions: Mail.Read, Mail.Send (Application-тип) → Grant admin consent. MS_TENANT_ID/CLIENT_ID/SECRET те же самые.',
+                code: `import urllib.request, json, os, urllib.parse
+TENANT = os.environ.get('MS_TENANT_ID', '')
+CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
+SECRET = os.environ.get('MS_CLIENT_SECRET', '')
+USER = os.environ.get('MS_OUTLOOK_USER', '')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+try:
+    td = urllib.parse.urlencode({'grant_type': 'client_credentials', 'client_id': CLIENT_ID,
+        'client_secret': SECRET, 'scope': 'https://graph.microsoft.com/.default'}).encode()
+    req = urllib.request.Request('https://login.microsoftonline.com/' + TENANT + '/oauth2/v2.0/token',
+        data=td, headers={'Content-Type': 'application/x-www-form-urlencoded'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        token = json.loads(r.read().decode())['access_token']
+    hdrs = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}
+    if ACTION == 'send_email':
+        to = os.environ.get('AGENT_PARAM_TO', '')
+        subj = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
+        text = os.environ.get('AGENT_PARAM_BODY', '')
+        mail = json.dumps({'message': {'subject': subj,
+            'body': {'contentType': 'Text', 'content': text},
+            'toRecipients': [{'emailAddress': {'address': to}}]}}).encode()
+        req = urllib.request.Request(
+            'https://graph.microsoft.com/v1.0/users/' + USER + '/sendMail',
+            data=mail, headers=hdrs, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            pass
+        print('OK: письмо отправлено на ' + to)
+    else:
+        req = urllib.request.Request(
+            'https://graph.microsoft.com/v1.0/users/' + USER + '/messages?$top=10&$select=subject,from,receivedDateTime,isRead',
+            headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        msgs = d.get('value', [])
+        print('Outlook ' + USER + ': ' + str(len(msgs)) + ' писем')
+        for m in msgs[:10]:
+            sender = ((m.get('from') or {}).get('emailAddress') or {}).get('address', '?')
+            subj = m.get('subject', '(без темы)')[:70]
+            date = m.get('receivedDateTime', '')[:10]
+            unread = '[!] ' if not m.get('isRead') else ''
+            print('  [' + date + '] ' + unread + sender + ' — ' + subj)
+except Exception as e:
+    print('Ошибка Outlook: ' + str(e))`
+            },
+            clickup: {
+                name: 'ClickUp',
+                fields: [
+                    {k:'CLICKUP_TOKEN', label:'Personal API Token', ph:'pk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'CLICKUP_LIST_ID', label:'List ID (из URL задачи: /list/XXXXXXX)', ph:'901234567890', t:'text'}
+                ],
+                hint: 'ClickUp → Settings (левый нижний угол) → Apps → API token → Generate. List ID — числовой ID из URL открытого листа/спринта.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('CLICKUP_TOKEN', '')
+LIST_ID = os.environ.get('CLICKUP_LIST_ID', '')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+hdrs = {'Authorization': TOKEN, 'Content-Type': 'application/json'}
+try:
+    if ACTION == 'create_task':
+        name = os.environ.get('AGENT_PARAM_NAME', 'Новая задача')
+        desc = os.environ.get('AGENT_PARAM_DESCRIPTION', '')
+        priority = int(os.environ.get('AGENT_PARAM_PRIORITY', '3'))
+        data = json.dumps({'name': name, 'description': desc, 'priority': priority}).encode()
+        req = urllib.request.Request(
+            'https://api.clickup.com/api/v2/list/' + LIST_ID + '/task',
+            data=data, headers=hdrs, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        print('OK: задача «' + d.get('name', name) + '» создана в ClickUp, id=' + d.get('id', '?'))
+    else:
+        req = urllib.request.Request(
+            'https://api.clickup.com/api/v2/list/' + LIST_ID + '/task?archived=false&subtasks=false',
+            headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        tasks = d.get('tasks', [])
+        print('ClickUp: ' + str(len(tasks)) + ' задач')
+        for task in tasks[:12]:
+            status = (task.get('status') or {}).get('status', '?')
+            due = task.get('due_date', '')
+            due_str = (' до ' + due[:10]) if due else ''
+            assignees = ', '.join(a.get('username', '?') for a in (task.get('assignees') or []))
+            asgn = (' → ' + assignees) if assignees else ''
+            print('• [' + status + '] ' + task.get('name', '?')[:65] + due_str + asgn)
+except Exception as e:
+    print('Ошибка ClickUp: ' + str(e))`
+            },
+            yandex_disk: {
+                name: 'Яндекс.Диск',
+                fields: [
+                    {k:'YADISK_TOKEN', label:'OAuth-токен Яндекс.Диска', ph:'y0_AgAAAA...', t:'text'}
+                ],
+                hint: 'Получить токен: oauth.yandex.ru → Создать приложение → Права: cloud_api:disk.read + cloud_api:disk.write → авторизация → скопируй токен. Или используй Яндекс.OAuth (Дебаг режим).',
+                code: `import urllib.request, json, os, urllib.parse
+TOKEN = os.environ.get('YADISK_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+hdrs = {'Authorization': 'OAuth ' + TOKEN, 'Accept': 'application/json'}
+try:
+    if ACTION == 'upload':
+        path = os.environ.get('AGENT_PARAM_PATH', '/upload.txt')
+        content = os.environ.get('AGENT_PARAM_CONTENT', '').encode('utf-8')
+        url = 'https://cloud-api.yandex.net/v1/disk/resources/upload?path=' + urllib.parse.quote(path) + '&overwrite=true'
+        req = urllib.request.Request(url, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            href = json.loads(r.read().decode()).get('href', '')
+        req2 = urllib.request.Request(href, data=content, method='PUT')
+        req2.add_header('Content-Type', 'text/plain; charset=utf-8')
+        with urllib.request.urlopen(req2, timeout=30):
+            pass
+        print('OK: файл загружен на Яндекс.Диск → ' + path)
+    elif ACTION == 'download':
+        path = os.environ.get('AGENT_PARAM_PATH', '')
+        url = 'https://cloud-api.yandex.net/v1/disk/resources/download?path=' + urllib.parse.quote(path)
+        req = urllib.request.Request(url, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            href = json.loads(r.read().decode()).get('href', '')
+        with urllib.request.urlopen(href, timeout=30) as r2:
+            print(r2.read().decode('utf-8', errors='replace')[:2000])
+    else:
+        path = os.environ.get('AGENT_PARAM_PATH', '/')
+        url = 'https://cloud-api.yandex.net/v1/disk/resources?path=' + urllib.parse.quote(path) + '&limit=20'
+        req = urllib.request.Request(url, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        emb = d.get('_embedded') or {}
+        items = emb.get('items', [])
+        total = emb.get('total', 0)
+        if path == '/':
+            used = d.get('used_space', 0)
+            total_sp = d.get('total_space', 0)
+            print('Яндекс.Диск: ' + str(round(used/1073741824,1)) + ' ГБ занято из ' + str(round(total_sp/1073741824,1)) + ' ГБ')
+        print('Папка «' + path + '»: ' + str(total) + ' элементов')
+        for item in items[:15]:
+            icon = '[папка]' if item.get('type') == 'dir' else '[файл]'
+            size = item.get('size', 0)
+            sz = (' ' + str(size // 1024) + ' KB') if size > 1024 else ''
+            print(icon + ' ' + item.get('name', '?') + sz)
+except Exception as e:
+    print('Ошибка Яндекс.Диск: ' + str(e))`
+            },
+            ga4: {
+                name: 'Google Analytics 4 (GA4)',
+                fields: [
+                    {k:'GA4_PROPERTY_ID', label:'GA4 Property ID (числовой)', ph:'123456789', t:'text'},
+                    {k:'GA4_ACCESS_TOKEN', label:'Access Token (OAuth2)', ph:'ya29.xxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Property ID: analytics.google.com → Admin → Property Settings → Property ID. Token: developers.google.com/oauthplayground → Google Analytics Data API v1 → analyticsdata.googleapis.com/v1beta → Authorize & Exchange. Обновляется каждый час.',
+                code: `import urllib.request, json, os, datetime
+PROP_ID = os.environ.get('GA4_PROPERTY_ID', '')
+TOKEN = os.environ.get('GA4_ACCESS_TOKEN', '')
+try:
+    today = datetime.date.today().isoformat()
+    week_ago = (datetime.date.today() - datetime.timedelta(days=7)).isoformat()
+    body = json.dumps({
+        'dateRanges': [{'startDate': week_ago, 'endDate': today}],
+        'dimensions': [{'name': 'sessionDefaultChannelGroup'}],
+        'metrics': [{'name': 'sessions'}, {'name': 'activeUsers'}, {'name': 'bounceRate'}],
+        'limit': 10
+    }).encode()
+    req = urllib.request.Request(
+        'https://analyticsdata.googleapis.com/v1beta/properties/' + PROP_ID + ':runReport',
+        data=body, headers={'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        d = json.loads(r.read().decode())
+    rows = d.get('rows', [])
+    totals = (d.get('totals') or [{}])[0]
+    tv = totals.get('metricValues', [{}, {}, {}])
+    total_sess = tv[0].get('value', '?') if tv else '?'
+    total_users = tv[1].get('value', '?') if len(tv) > 1 else '?'
+    print('GA4 за 7 дней: сессий=' + total_sess + ', пользователей=' + total_users)
+    print()
+    print('По каналам:')
+    for row in rows:
+        ch = (row.get('dimensionValues') or [{}])[0].get('value', '?')
+        mv = row.get('metricValues', [{}, {}, {}])
+        sessions = mv[0].get('value', '0') if mv else '0'
+        users = mv[1].get('value', '0') if len(mv) > 1 else '0'
+        bounce = round(float(mv[2].get('value', '0')) * 100, 1) if len(mv) > 2 else 0
+        print('  ' + ch + ': ' + sessions + ' сессий, ' + users + ' польз., отказы ' + str(bounce) + '%')
+except Exception as e:
+    print('Ошибка GA4: ' + str(e))`
+            },
+            linear: {
+                name: 'Linear',
+                fields: [
+                    {k:'LINEAR_API_KEY', label:'Personal API Key', ph:'lin_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'LINEAR_TEAM_ID', label:'Team ID (UUID из настроек команды)', ph:'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'Linear → Settings → API → Personal API keys → Create key. Team ID: Settings → Teams → выбери команду → General → скопируй Team ID (UUID).',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('LINEAR_API_KEY', '')
+TEAM_ID = os.environ.get('LINEAR_TEAM_ID', '')
+ACTION = os.environ.get('AGENT_ACTION', 'list')
+hdrs = {'Authorization': TOKEN, 'Content-Type': 'application/json'}
+try:
+    if ACTION == 'create_issue':
+        title = os.environ.get('AGENT_PARAM_TITLE', 'Новый issue')
+        desc = os.environ.get('AGENT_PARAM_DESCRIPTION', '')
+        q = json.dumps({
+            'query': 'mutation($t:String!,$tid:String!,$d:String){issueCreate(input:{title:$t,teamId:$tid,description:$d}){success issue{id title url}}}',
+            'variables': {'t': title, 'tid': TEAM_ID, 'd': desc}
+        }).encode()
+        req = urllib.request.Request('https://api.linear.app/graphql', data=q, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        issue = ((d.get('data') or {}).get('issueCreate') or {}).get('issue', {})
+        print('OK: issue «' + issue.get('title', title) + '» создан — ' + issue.get('url', ''))
+    else:
+        q = json.dumps({'query': '{issues(filter:{team:{id:{eq:"' + TEAM_ID + '"}}},orderBy:updatedAt,first:15){nodes{id title state{name}priority assignee{name}}}}'}).encode()
+        req = urllib.request.Request('https://api.linear.app/graphql', data=q, headers=hdrs)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            d = json.loads(r.read().decode())
+        issues = ((d.get('data') or {}).get('issues') or {}).get('nodes', [])
+        pri_map = {0: '', 1: '[!!! urgent] ', 2: '[high] ', 3: '[normal] ', 4: '[low] '}
+        print('Linear: ' + str(len(issues)) + ' задач')
+        for iss in issues[:12]:
+            state = (iss.get('state') or {}).get('name', '?')
+            pri = pri_map.get(iss.get('priority', 0), '')
+            assignee = (iss.get('assignee') or {}).get('name', '')
+            asgn = (' → ' + assignee) if assignee else ''
+            print(pri + '[' + state + '] ' + iss.get('title', '?')[:65] + asgn)
+except Exception as e:
+    print('Ошибка Linear: ' + str(e))`
+            },
+            webhook: {
+                name: 'Webhook (n8n / Zapier / Make)',
+                fields: [
+                    {k:'WEBHOOK_URL', label:'URL вебхука', ph:'https://n8n.myserver.com/webhook/xxxxxxxx', t:'url'},
+                    {k:'WEBHOOK_METHOD', label:'HTTP метод (POST или GET)', ph:'POST', t:'text'},
+                    {k:'WEBHOOK_HEADER', label:'Заголовок авторизации (опционально)', ph:'X-Secret: my-secret-key', t:'text'}
+                ],
+                hint: 'n8n: добавь Webhook node → Test URL для тестирования, Production URL для боевого. Zapier: Trigger → Webhooks by Zapier → Catch Hook. Make/Integromat: Webhooks → Custom webhook → Copy address.',
+                code: `import urllib.request, json, os, urllib.parse, datetime
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')
+METHOD = os.environ.get('WEBHOOK_METHOD', 'POST').strip().upper()
+HEADER = os.environ.get('WEBHOOK_HEADER', '')
+ACTION = os.environ.get('AGENT_ACTION', 'trigger')
+if not WEBHOOK_URL:
+    print('Укажите WEBHOOK_URL в настройках интеграции агента')
+else:
+    try:
+        payload = {k[len('AGENT_PARAM_'):].lower(): v for k, v in os.environ.items() if k.startswith('AGENT_PARAM_')}
+        payload['action'] = ACTION
+        payload['triggered_at'] = datetime.datetime.utcnow().isoformat() + 'Z'
+        task_text = os.environ.get('AGENT_TASK', '')
+        if task_text:
+            payload['task'] = task_text
+        if METHOD == 'GET':
+            url = WEBHOOK_URL + ('&' if '?' in WEBHOOK_URL else '?') + urllib.parse.urlencode(payload)
+            req = urllib.request.Request(url)
+        else:
+            body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+            req = urllib.request.Request(WEBHOOK_URL, data=body, method=METHOD)
+            req.add_header('Content-Type', 'application/json')
+        if ':' in HEADER:
+            hk, hv = HEADER.split(':', 1)
+            req.add_header(hk.strip(), hv.strip())
+        with urllib.request.urlopen(req, timeout=20) as r:
+            status = r.status
+            resp = r.read().decode('utf-8', errors='replace')[:500]
+        print('OK: вебхук сработал, HTTP ' + str(status))
+        if resp.strip():
+            try:
+                rd = json.loads(resp)
+                print('Ответ: ' + json.dumps(rd, ensure_ascii=False)[:400])
+            except:
+                print('Ответ: ' + resp)
+    except Exception as e:
+        print('Ошибка вебхука: ' + str(e))`
             }
         };
 
@@ -5843,6 +6218,7 @@ except Exception as e:
                             <option value="yandex_market">Яндекс.Маркет</option>
                             <option value="yandex_direct">Яндекс.Директ</option>
                             <option value="yandex_metrika">Яндекс.Метрика</option>
+                            <option value="yandex_disk">Яндекс.Диск</option>
                             <option value="moysklad">МойСклад</option>
                             <option value="google_sheets">Google Sheets</option>
                             <option value="github">GitHub</option>
@@ -5861,6 +6237,12 @@ except Exception as e:
                             <option value="jira">Jira</option>
                             <option value="calendly">Calendly</option>
                             <option value="http_api">HTTP API</option>
+                            <option value="google_drive">Google Drive</option>
+                            <option value="ms_teams">Microsoft Teams</option>
+                            <option value="outlook">Microsoft Outlook</option>
+                            <option value="clickup">ClickUp</option>
+                            <option value="linear">Linear</option>
+                            <option value="webhook">Webhook (n8n / Zapier / Make)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">CRM</option>
                             <option value="bitrix24">Битрикс24 (CRM)</option>
                             <option value="amocrm">AmoCRM</option>
@@ -5884,6 +6266,7 @@ except Exception as e:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Финансы / Календарь</option>
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>
+                            <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Мессенджеры / ERP</option>
                             <option value="whatsapp">WhatsApp Business</option>

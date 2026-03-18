@@ -3577,6 +3577,17 @@ _INTEGRATION_LABELS: dict = {
     'GOOGLE_CALENDAR': 'Google Calendar',
     'SUPERJOB': 'SuperJob',
     'HH_': 'hh.ru',
+    'GOOGLE_DRIVE': 'Google Drive',
+    'MS_TEAMS': 'Microsoft Teams',
+    'MS_GRAPH': 'Microsoft Graph',
+    'MS_CLIENT': 'Microsoft Azure App',
+    'OUTLOOK_': 'Microsoft Outlook',
+    'MS_OUTLOOK': 'Microsoft Outlook',
+    'CLICKUP': 'ClickUp',
+    'YADISK': 'Яндекс.Диск',
+    'GA4_': 'Google Analytics 4',
+    'LINEAR': 'Linear',
+    'WEBHOOK_URL': 'Webhook (n8n/Zapier/Make)',
 }
 
 
