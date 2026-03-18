@@ -4983,7 +4983,7 @@ class AnchorEngine:
 
             # ── Pre-computed State Machine: вычисляем директивы из реального состояния БД ──
             _sm_directives = self._compute_state_directives(_goals, data, _profiles)
-            # _sm_plan_str строится НИЖЕ — после _last_cycle_tools, чтобы применить ротацию инструментов
+            # _situation_str и _strategy_map_str строятся НИЖЕ — после multi-cycle analysis
 
             # Количество шагов которые просим у LLM-планировщика: min(1 per goal, agents).
             # Если агентов больше чем целей — добавляем дополнительные шаги для отстающих целей.
@@ -5001,28 +5001,101 @@ class AnchorEngine:
                              f"  → Попробуй назначить им другой инструмент или задачу — они могут справиться.\n"
                              if _degraded_agents_coord else '')
 
-            # ── Anti-repeat: извлекаем инструменты ПОСЛЕДНЕГО цикла для каждого агента ──
+            # ── Multi-cycle strategy analysis: извлекаем ВСЕ инструменты из ВСЕХ циклов ──
             # Формат истории: "19.03 00:34 [web_search, research_topic] текст..."
+            _known_tool_words = {'web_search', 'research_topic', 'run_agent_action',
+                                 'check_emails', 'find_relevant_contacts_for_task',
+                                 'save_email_contact', 'send_outreach_email',
+                                 'get_news_trends', 'update_goal_progress', 'save_note',
+                                 'add_task', 'create_post', 'add_email_leads',
+                                 'reply_to_outreach_email', 'generate_marketing_content',
+                                 'delegate_task', 'start_email_campaign', 'quick_topic_search',
+                                 'publish_to_telegram', 'list_email_contacts'}
+            _all_cycles_tools: dict = {}  # {agent: [[cycle1_tools], [cycle2_tools], ...]}
+            _all_cycles_summaries: dict = {}  # {agent: [(tools, text_summary), ...]}
+            for _pn_mc, _hn_mc in _per_agent_history.items():
+                _cycles = []
+                _summaries = []
+                for _entry_mc in _hn_mc:
+                    _tm_mc = _re_al.search(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s+\[([^\]]+)\]', _entry_mc)
+                    if not _tm_mc:
+                        _tm_mc = _re_al.search(r'\[([^\]]+)\]', _entry_mc)
+                    if _tm_mc:
+                        _tl_mc = [t.strip() for t in _tm_mc.group(1).split(',') if t.strip()]
+                        _tl_mc = [t for t in _tl_mc if '_' in t or t in _known_tool_words]
+                        if _tl_mc:
+                            _cycles.append(_tl_mc)
+                            # Извлекаем краткое описание действия (после [tools])
+                            _txt_part = _entry_mc[_tm_mc.end():].strip()[:120]
+                            _summaries.append((_tl_mc, _txt_part))
+                if _cycles:
+                    _all_cycles_tools[_pn_mc] = _cycles
+                    _all_cycles_summaries[_pn_mc] = _summaries
+
+            # Классификация стратегий высокого уровня
+            _STRATEGY_MAP = {
+                'direct_search': {'find_relevant_contacts_for_task', 'web_search'},
+                'github_search': {'run_agent_action'},
+                'rss_analysis': {'run_agent_action', 'get_news_trends'},
+                'email_outreach': {'send_outreach_email', 'start_email_campaign'},
+                'email_check': {'check_emails', 'reply_to_outreach_email'},
+                'research': {'research_topic', 'quick_topic_search'},
+                'content': {'create_post', 'generate_marketing_content', 'publish_to_telegram'},
+                'data_save': {'save_note', 'save_email_contact', 'add_email_leads'},
+                'task_mgmt': {'add_task', 'delegate_task', 'update_goal_progress'},
+            }
+            # Подсчитываем сколько раз каждая стратегия использовалась ВСЕМИ агентами
+            _strategy_usage: dict = {}  # {strategy_name: count}
+            _strategy_never_tried: list = []
+            _all_used_tools_ever: set = set()
+            for _cycles_list in _all_cycles_tools.values():
+                for _cycle_tools in _cycles_list:
+                    _all_used_tools_ever.update(_cycle_tools)
+                    for _strat_name, _strat_tools in _STRATEGY_MAP.items():
+                        if _strat_tools & set(_cycle_tools):
+                            _strategy_usage[_strat_name] = _strategy_usage.get(_strat_name, 0) + 1
+            for _sn in _STRATEGY_MAP:
+                if _sn not in _strategy_usage:
+                    _strategy_never_tried.append(_sn)
+
+            # Строим блок "СТРАТЕГИЧЕСКАЯ КАРТА" вместо жёсткого плана
+            _strategy_lines = []
+            if _strategy_usage or _all_cycles_summaries:
+                _strategy_lines.append("📋 СТРАТЕГИЧЕСКАЯ КАРТА (что команда УЖЕ делала за последние циклы):")
+                # Перечисляем что делал каждый агент во ВСЕХ циклах
+                for _ag_s, _summs in _all_cycles_summaries.items():
+                    _strategy_lines.append(f"  {_ag_s}:")
+                    for _idx_s, (_tools_s, _txt_s) in enumerate(_summs[-4:], 1):  # последние 4
+                        _strategy_lines.append(f"    цикл -{len(_summs)-_idx_s-len(_summs)+4}: [{', '.join(_tools_s[:3])}] {_txt_s}")
+                # Какие стратегии перегружены
+                _overused = [f"{s} ({n}x)" for s, n in sorted(_strategy_usage.items(), key=lambda x: -x[1]) if n >= 2]
+                if _overused:
+                    _strategy_lines.append(f"\n  ⚠️ ПЕРЕГРУЖЕННЫЕ подходы (повторяются циклами): {', '.join(_overused)}")
+                    _strategy_lines.append(f"     → Эти подходы УЖЕ испробованы многократно. Результата явно недостаточно.")
+                    _strategy_lines.append(f"     → ЗАПРЕЩЕНО назначать то же самое. Придумай принципиально другой путь.")
+                if _strategy_never_tried:
+                    _nice_names = {
+                        'direct_search': 'прямой поиск контактов',
+                        'github_search': 'поиск через GitHub',
+                        'rss_analysis': 'анализ RSS/новостных лент',
+                        'email_outreach': 'email-рассылка',
+                        'email_check': 'проверка входящей почты',
+                        'research': 'глубокое исследование темы',
+                        'content': 'создание контента (посты, статьи)',
+                        'data_save': 'сохранение данных/контактов',
+                        'task_mgmt': 'управление задачами/делегирование',
+                    }
+                    _nt_nice = [_nice_names.get(s, s) for s in _strategy_never_tried]
+                    _strategy_lines.append(f"\n  💡 ЕЩЁ НЕ ПРОБОВАЛИ: {', '.join(_nt_nice)}")
+                    _strategy_lines.append(f"     → Приоритет: попробуй один из этих подходов в этом цикле!")
+            _strategy_map_str = '\n'.join(_strategy_lines) + '\n' if _strategy_lines else ''
+
+            # Last cycle tools (для базовой anti-repeat совместимости)
             _last_cycle_tools: dict = {}
-            for _pn_lr, _hn_lr in _per_agent_history.items():
-                if _hn_lr:
-                    _last_entry = list(_hn_lr)[-1]
-                    # Ищем первый блок [tool1, tool2, ...] сразу после метки времени
-                    _tm_lr = _re_al.search(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s+\[([^\]]+)\]', _last_entry)
-                    if not _tm_lr:
-                        # Fallback: первый [..] в строке (может быть tools-блоком)
-                        _tm_lr = _re_al.search(r'\[([^\]]+)\]', _last_entry)
-                    if _tm_lr:
-                        _tl_candidates = [t.strip() for t in _tm_lr.group(1).split(',') if t.strip()]
-                        # Фильтруем: инструменты содержат _ или camelCase, не просто тексты
-                        _known_tool_words = {'web_search', 'research_topic', 'run_agent_action',
-                                             'check_emails', 'find_relevant_contacts_for_task',
-                                             'save_email_contact', 'send_outreach_email',
-                                             'get_news_trends', 'update_goal_progress', 'save_note',
-                                             'add_task', 'create_post', 'add_email_leads'}
-                        _tl_filtered = [t for t in _tl_candidates if '_' in t or t in _known_tool_words]
-                        if _tl_filtered:
-                            _last_cycle_tools[_pn_lr] = _tl_filtered
+            for _pn_lr, _cycles_lr in _all_cycles_tools.items():
+                if _cycles_lr:
+                    _last_cycle_tools[_pn_lr] = _cycles_lr[-1]
+
             _TOOL_ALTERNATIVES = {
                 'run_agent_action': ['research_topic', 'web_search', 'get_news_trends', 'find_relevant_contacts_for_task'],
                 'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action'],
@@ -5032,53 +5105,27 @@ class AnchorEngine:
                 'check_emails':     ['send_outreach_email', 'find_relevant_contacts_for_task'],
                 'send_outreach_email': ['check_emails', 'reply_to_outreach_email', 'find_relevant_contacts_for_task'],
             }
-            _anti_repeat_lines = []
-            for _pn_ar, _tl_ar in _last_cycle_tools.items():
-                _banned_for_ar = _agent_banned_tools.get(_pn_ar, [])
-                _alts_ar = []
-                for _t_ar in _tl_ar:
-                    if _t_ar in _banned_for_ar or _t_ar in (_banned_for_ar or []):
-                        _t_alts = [a for a in _TOOL_ALTERNATIVES.get(_t_ar, []) if a not in _banned_for_ar]
-                        if _t_alts:
-                            _alts_ar.append(f"{_t_ar}→{_t_alts[0]}")
-                if _alts_ar:
-                    _anti_repeat_lines.append(f"  {_pn_ar}: прошлый цикл=[{', '.join(_tl_ar[:3])}] →  замены: [{', '.join(_alts_ar)}]")
-                elif _tl_ar:
-                    _anti_repeat_lines.append(f"  {_pn_ar}: прошлый цикл=[{', '.join(_tl_ar[:3])}] → выбери ДРУГОЙ инструмент или задачу!")
 
-            # ── Строим _sm_plan_str ЗДЕСЬ (после _last_cycle_tools) с принудительной ротацией ──
-            # Инструменты поиска/исследования, которые можно ротировать (не меняют данные)
-            _SEARCH_ROTATE_TOOLS = {'run_agent_action', 'research_topic', 'web_search',
-                                    'find_relevant_contacts_for_task', 'get_news_trends'}
-            # Все инструменты использованные в последнем цикле (любым агентом)
-            _all_last_tools: set = {t for _tl_x in _last_cycle_tools.values() for t in _tl_x}
-            _sm_plan_lines = []
-            for _d in _sm_directives:
-                _dt = _d['tool']
-                # Если инструмент повторяется из прошлого цикла — принудительно ротируем
-                if _dt in _all_last_tools and _dt in _SEARCH_ROTATE_TOOLS:
-                    _alts_d = [a for a in _TOOL_ALTERNATIVES.get(_dt, []) if a not in _all_last_tools]
-                    if _alts_d:
-                        _new_t = _alts_d[0]
-                        _sm_plan_lines.append(
-                            f"  Цель «{_d['goal'][:50]}» → инструмент={_new_t} "
-                            f"(домен={_d['agent_domain']}, причина: {_d['reason']}; "
-                            f"⚠️ {_dt} уже использован в пред. цикле → ротация на {_new_t})\n"
-                            f"    Задача: Прошлый цикл использовал {_dt} без результата — "
-                            f"используй {_new_t}: {_d['task'][:150]}"
-                        )
-                        continue
-                _sm_plan_lines.append(
-                    f"  Цель «{_d['goal'][:50]}» → инструмент={_d['tool']} "
-                    f"(домен={_d['agent_domain']}, причина: {_d['reason']})\n"
-                    f"    Задача: {_d['task'][:200]}"
+            # ── Строим контекст ситуации (вместо жёсткого SM-плана) ──
+            # SM-директивы → мягкие подсказки о состоянии БД, а не команды
+            _situation_lines = []
+            if _sm_directives:
+                _situation_lines.append("📊 ТЕКУЩАЯ СИТУАЦИЯ (факты из БД — используй для принятия решений):")
+                for _d in _sm_directives:
+                    _situation_lines.append(
+                        f"  • Цель «{_d['goal'][:50]}»: {_d['reason']}."
+                    )
+            _situation_str = '\n'.join(_situation_lines) + '\n' if _situation_lines else ''
+
+            _anti_repeat_str = ''
+            if _last_cycle_tools:
+                _ar_lines = []
+                for _pn_ar, _tl_ar in _last_cycle_tools.items():
+                    _ar_lines.append(f"  {_pn_ar}: [{', '.join(_tl_ar[:4])}]")
+                _anti_repeat_str = (
+                    "\n🔄 ПОСЛЕДНИЙ ЦИКЛ (для справки — НЕ повторять буквально):\n"
+                    + '\n'.join(_ar_lines) + '\n'
                 )
-            _sm_plan_str = '\n'.join(_sm_plan_lines) if _sm_plan_lines else '(цели не определены)'
-            _anti_repeat_str = (
-                "\n🔄 ПРОШЛЫЙ ЦИКЛ (выбери другой подход — не повторяй буквально то же самое!):\n"
-                + '\n'.join(_anti_repeat_lines)
-                + '\n'
-            ) if _anti_repeat_lines else ''
 
             # ── Блок ротации целей: если одна цель доминирует — переключайся ──
             _goal_rotation_str = ''
@@ -5203,11 +5250,12 @@ class AnchorEngine:
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
-                + _effectiveness_str  # НОВЫЙ БЛОК: анализ что сработало / не сработало
+                + _effectiveness_str
                 + f"{_degraded_note}"
                 + _pending_replies_str
                 + _unsent_contacts_str
-                + f"РЕКОМЕНДУЕМЫЙ ПЛАН (отправная точка — адаптируй под реальные возможности агентов):\n{_sm_plan_str}\n\n"
+                + f"{_strategy_map_str}\n"
+                + f"{_situation_str}\n"
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
@@ -5218,63 +5266,37 @@ class AnchorEngine:
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + (
-                    # Если есть отправленные письма и агент с IMAP — нужно сначала проверить ответы
-                    "⚡ ПРИОРИТЕТ: Есть отправленные письма (уже_написали не пустой) — "
+                    "⚡ ПРИОРИТЕТ: Есть отправленные письма — "
                     "агент с IMAP должен ПЕРВЫМ делом вызвать check_emails! "
-                    "Ответившие контакты уже в системе (статус replied/interested) — "
-                    "им НЕ нужно новое outreach-письмо, нужен reply/negotiate.\n"
+                    "Ответившие контакты (replied/interested) — нужен reply/negotiate, не новое outreach.\n"
                     if _already_sent and _email_sent > 0 and
                     any(any(kw in (getattr(a, 'user_api_keys', '') or '').lower()
                             for kw in ('gmail_user=', 'imap_')) for a in real_agents)
                     else ''
                 )
-                + f"\nЗАДАЧА: Реши, что каждому агенту ДЕЙСТВИТЕЛЬНО нужно сделать прямо сейчас для продвижения к целям пользователя.\n"
-                "Думай как опытный руководитель — смотри на реальное состояние: прогресс целей, историю агентов, их интеграции, что уже сделано.\n\n"
-                "ПРИНЦИПЫ:\n"
-                "1. Каждый агент работает своими реальными инструментами. Посмотри что у него подключено — назначай задачи ПОД ЭТО, не под абстрактный шаблон.\n"
-                "2. НЕ повторяй одни и те же действия — история агентов показывает что уже делалось. Следующий шаг должен двигать вперёд.\n"
-                "3. Смотри на прогресс цели: если цель близка к завершению — финализируй; если стагнирует — меняй подход; если 100% — пропусти.\n"
-                "4. Задача должна быть ДЕЙСТВИЕМ (найти, написать, отправить, проанализировать, ответить), а не 'изучить' или 'исследовать'.\n"
-                "5. Если у пользователя другие цели чем исследование или outreach (например контент, разработка, продажи) — адаптируй план под РЕАЛЬНЫЕ цели.\n"
-                "6. Покрой КАЖДУЮ активную цель — в первую очередь ЗАБРОШЕННЫЕ (которые в блоке РОТАЦИЯ ЦЕЛЕЙ). НЕ пиши письма тем кто уже в списке уже_написали.\n"
-                "7. Если у агента есть [отправка+чтение email] И кол-во отправленных писем > 5 — ПЕРВЫЙ шаг для этого агента: tool='check_emails', task='Проверь почту — есть ли ответы от контактов, которым мы писали. Обнови статус ответивших.'\n"
-                "8. УЧИСЬ НА РЕЗУЛЬТАТАХ (блок 'АНАЛИЗ ЭФФЕКТИВНОСТИ' выше):\n"
-                "   • Если действие отмечено ✅ (дало прогресс) — ПОВТОРИ эту тактику с вариацией (другой запрос, другой сегмент).\n"
-                "   • Если действие отмечено ⚠️ (не дало прогресса) — СМЕНИ инструмент или подход. НЕ назначай то же самое.\n"
-                "   • Если видишь СИНЕРГИЮ (агент А → агент B) — используй: один ищет данные, другой применяет.\n"
-                "9. GitHub-агент: при task с run_agent_action — ОБЯЗАТЕЛЬНО укажи КОНКРЕТНЫЙ query.\n"
-                "   ПРАВИЛЬНО: params={'query': 'language:python autonomous agent repos:>10'}\n"
-                "   НЕПРАВИЛЬНО: query с email-адресами, именами людей, названиями задач.\n"
-                "   GitHub Users Search принимает ТОЛЬКО: language:X, repos:>N, followers:>N, location:X\n"
-                "10. НЕ назначай анализ/обсуждение уже известных заблокированных контактов (получили max ответов).\n"
-                "   Заблокированы (>= 2 ответа): тех кто в уже_написали более 2 раз — ПРОПУСТИ их, найди НОВЫХ.\n"
-                "11. ДЕЛЕГИРОВАНИЕ — ключ к командной работе:\n"
-                "    • Если агент НАШЁЛ данные/контакты пригодные для другого агента → делегируй через delegate_task с КОНКРЕТНЫМИ данными.\n"
-                "    • RSS/аналитик нашёл статью с контактами → делегирует email-агенту с именем и email.\n"
-                "    • Email-агент получил ответ с техническим вопросом → делегирует аналитику/Research-агенту.\n"
-                "    • Делегирование = синергия: 2 агента + координация > 2 агента работающие параллельно.\n"
-                "    • КОМПЛЕКСНЫЙ ПОДХОД: разбивай сложную цель на подзадачи — каждый агент берёт свою часть (используя свои сильные стороны), итоговый результат = сумма вкладов.\n"
-                "12. СТРАТЕГИИ — ТЫ ГЕНЕРИРУЕШЬ САМИ, А НЕ ВЫБИРАЕШЬ ИЗ СПИСКА:\n"
-                "    Перед тем как назначить задачу агенту — ответь:\n"
-                "    • Кто конкретно нужен для этой цели? Какова их настоящая мотивация участвовать?\n"
-                "    • Где они находятся — не 'в интернете', а конкретно?\n"
-                "    • Что команда уже пробовала (блок ПРОШЛЫЙ ЦИКЛ выше)? Почему не сработало?\n"
-                "    • Какой подход ещё НЕ пробовали и соответствует возможностям этого агента?\n"
-                "    Вариантов бесконечно — прямой контакт, участие в чужом разговоре, контент, партнёрства,\n"
-                "    реферал, событие, нестандартное ценностное предложение, смена сегмента... Выбери сам.\n"
-                "    Жёсткое правило одно: если агент повторяет тот же подход что в прошлом цикле — стоп, придумай другой.\n"
-                "13. НЕПРЯМЫЕ ПУТИ — часто эффективнее прямых:\n"
-                "    Вместо 'агент А ищет → агент Б пишет' (линейно, истощается) — думай:\n"
-                "    Что нужно СОЗДАТЬ чтобы нужные люди сами появились? (контент, инструмент, событие, репутация)\n"
-                "    Что нужно ПОНЯТЬ прежде чем действовать? (почему не откликаются, какая реальная боль ЦА)\n"
-                "    Как использовать тех кто УЖЕ заинтересован? (реферал, персонализация, углубление)\n"
-                "    → ВОПРОС перед каждым планом: 'Что изменится в реальном мире от этих действий?'\n"
-                "14. АГЕНТЫ БЕЗ ИНТЕГРАЦИЙ (интеграции=[нет]):\n"
-                "    ⛔ НЕ назначать: check_emails, run_agent_action (требует внешних API).\n"
-                "    Такой агент — думающий аналитик без спецоборудования. Он может:\n"
-                "    research_topic, web_search, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
-                "    Задача ему — думающая, а не исполнительская: понять ситуацию, найти неочевидный путь,\n"
-                "    подготовить почву для агентов с интеграциями. Он ценен своим анализом, не вызовами API.\n\n"
+                + f"\n=== ТВОЯ ЗАДАЧА ===\n"
+                "Ты — стратег. НЕ следуй шаблону. Думай САМОСТОЯТЕЛЬНО.\n\n"
+                "Посмотри на СТРАТЕГИЧЕСКУЮ КАРТУ выше: там видно, что команда делала в прошлых циклах.\n"
+                "Если подход повторялся 2+ раз и не дал прогресса — он НЕ РАБОТАЕТ. Придумай другой.\n\n"
+                "ПЕРЕД генерацией плана ответь себе (мысленно):\n"
+                "  1. Какие подходы команда уже пробовала? (см. СТРАТЕГИЧЕСКАЯ КАРТА)\n"
+                "  2. Какие подходы ЕЩЁ НЕ пробовали? (см. 'ЕЩЁ НЕ ПРОБОВАЛИ')\n"
+                "  3. Почему прошлые действия не дали результата? Что пошло не так?\n"
+                "  4. Какой ПРИНЦИПИАЛЬНО ДРУГОЙ путь к цели существует?\n\n"
+                "КЛЮЧЕВЫЕ ПРАВИЛА:\n"
+                "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его реальные возможности.\n"
+                "• Задача = конкретное ДЕЙСТВИЕ (найти X, написать Y, проанализировать Z), не 'изучить' или 'исследовать в целом'.\n"
+                "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
+                "• Если у агента [отправка+чтение email] и писем > 5 — сначала check_emails.\n"
+                "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N, location:X. Без email/имён.\n"
+                "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post. НЕ check_emails, НЕ run_agent_action.\n\n"
+                "СТРАТЕГИЧЕСКОЕ МЫШЛЕНИЕ:\n"
+                "• Если прямой поиск+рассылка не работает → создай контент-магнит (пост, статья), чтобы люди САМИ откликнулись.\n"
+                "• Если рассылка игнорируется → проблема в ценностном предложении. Пусть агент исследует: что РЕАЛЬНО нужно этим людям?\n"
+                "• Если поиск в одном месте истощён → смени площадку: Telegram группы, Discord, Reddit, HN, LinkedIn, конференции.\n"
+                "• Используй делегирование: один агент находит данные → передаёт другому для действия.\n"
+                "• Непрямые пути: что СОЗДАТЬ чтобы нужные люди появились? Что ПОНЯТЬ прежде чем действовать?\n"
+                "• Ты не ограничен списком подходов — генерируй СВОИ стратегии исходя из контекста цели.\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
                 '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название"}]'
@@ -5547,6 +5569,7 @@ class AnchorEngine:
 
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
+            _retry_done: dict = {}  # retry-флаги локальны для цикла (не persist между циклами)
 
             _executed = 0
             while _executed < _MAX_DYNAMIC_STEPS:
@@ -5787,7 +5810,7 @@ class AnchorEngine:
                             source='agent',
                             created_by_agent_id=_target_ag.id if _target_ag else None,
                             delegated_to_username=_ag_name,
-                            goal_id=None,
+                            goal_id=_resolved_goal_id,
                         )
                         session.add(_step_task)
                         session.commit()
@@ -6102,11 +6125,9 @@ class AnchorEngine:
                 _result_stripped = (_result or '').strip()
                 if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
                     # ── RETRY: если пустой результат и не было retry — пробуем ещё раз с уточнённым промптом ──
-                    _retry_key = f'{_ag_name}:{_step_i}'
-                    if _result_stripped not in _DONE_FB_SET and not getattr(self, '_retry_done', {}).get(_retry_key):
-                        if not hasattr(self, '_retry_done'):
-                            self._retry_done = {}
-                        self._retry_done[_retry_key] = True
+                    _retry_key = f'{_ag_name}:{_executed}'
+                    if _result_stripped not in _DONE_FB_SET and not _retry_done.get(_retry_key):
+                        _retry_done[_retry_key] = True
                         _retry_prompt = (
                             f"{_agent_prompt}\n\n"
                             f"⚠️ ПЕРВАЯ ПОПЫТКА вернула пустой результат. "
