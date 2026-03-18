@@ -11642,7 +11642,8 @@ except Exception as e:
                     const isOldDelegationText = cleanDesc.match(/^(Задача|Task)\s+(от|для|на|from|for|to)\s+@?[\wА-Яа-яЁё]+$/i);
                     if (!isOldDelegationText) {
                         let shortDesc = cleanDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
-                        descText = shortDesc;
+                        // Если intro-часть пустая (описание начинается сразу с заголовка шагов) — показываем весь текст
+                        descText = shortDesc || cleanDesc;
                     }
                 }
                 // Всегда рендерим div с id для возможности редактирования
