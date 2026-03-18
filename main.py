@@ -378,44 +378,53 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                             logger.info(f"get_file({cached[:20]}…) failed for {user_id}: {e}, re-fetching")
                             # fall through to full refresh below
                 else:
-                    # Old format / widget URL: return as-is (proxy will handle 404)
-                    logger.debug(f"Returning cached URL for user {user_id}")
-                    return cached
+                    # Old format URL (expiring) — always force a fresh fetch to update DB
+                    logger.debug(f"Old URL detected in cache for {user_id}, re-fetching")
+                    # Do NOT return here: fall through to fetch fresh below
 
-            # Fetch fresh from Telegram (enumerate photos)
+            # Fetch fresh from Telegram — two independent attempts
             if bot:
+                _fetched_file_id = None
+
+                # Attempt 1: getUserProfilePhotos (may be blocked by TG privacy)
                 try:
                     photos = await bot.get_user_profile_photos(user_id, limit=1)
                     if photos.total_count > 0:
-                        file_id = photos.photos[0][-1].file_id
-                        file = await bot.get_file(file_id)
+                        _fetched_file_id = photos.photos[0][-1].file_id
+                except Exception as e:
+                    logger.debug(f"get_user_profile_photos failed for {user_id}: {e}")
+
+                # Attempt 2: getChat — works even when profile photos are private
+                # (accessible because user has chatted with the bot)
+                if not _fetched_file_id:
+                    try:
+                        chat = await bot.get_chat(user_id)
+                        if chat.photo and chat.photo.small_file_id:
+                            _fetched_file_id = chat.photo.small_file_id
+                    except Exception as e:
+                        logger.debug(f"get_chat failed for {user_id}: {e}")
+
+                if _fetched_file_id:
+                    try:
+                        file = await bot.get_file(_fetched_file_id)
                         avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         if user:
-                            user.photo_url = file_id  # store file_id, not the expiring URL
+                            user.photo_url = _fetched_file_id  # store permanent file_id
                             db.commit()
                             logger.info(f"Saved avatar file_id for user {user_id}")
                         return avatar_url
-                    else:
-                        # Fallback: get_chat may expose photo even when profile list is private
-                        try:
-                            chat = await bot.get_chat(user_id)
-                            if chat.photo and chat.photo.small_file_id:
-                                file_id = chat.photo.small_file_id
-                                file = await bot.get_file(file_id)
-                                avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-                                if user:
-                                    user.photo_url = file_id  # store file_id
-                                    db.commit()
-                                return avatar_url
-                        except Exception:
-                            pass
-                except Exception as e:
-                    logger.debug(f"Could not fetch avatar from Telegram for user {user_id}: {e}")
+                    except Exception as e:
+                        logger.debug(f"get_file failed for {user_id}: {e}")
 
-            # Last-resort: cached value (old URL format) — better than nothing
-            if user and user.photo_url:
-                logger.debug(f"Using stale photo_url for user {user_id} after failed refresh")
-                return user.photo_url
+            # Last-resort: cached file_id (permanent, not an expiring URL)
+            if user and user.photo_url and not user.photo_url.startswith('http'):
+                logger.debug(f"Using cached file_id for user {user_id} after failed refresh")
+                try:
+                    if bot:
+                        file = await bot.get_file(user.photo_url)
+                        return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                except Exception:
+                    pass
 
             logger.debug(f"No avatar available for user {user_id}")
             return None
