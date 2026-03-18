@@ -4983,14 +4983,7 @@ class AnchorEngine:
 
             # ── Pre-computed State Machine: вычисляем директивы из реального состояния БД ──
             _sm_directives = self._compute_state_directives(_goals, data, _profiles)
-            _sm_plan_lines = []
-            for _d in _sm_directives:
-                _sm_plan_lines.append(
-                    f"  Цель «{_d['goal'][:50]}» → инструмент={_d['tool']} "
-                    f"(домен={_d['agent_domain']}, причина: {_d['reason']})\n"
-                    f"    Задача: {_d['task'][:200]}"
-                )
-            _sm_plan_str = '\n'.join(_sm_plan_lines) if _sm_plan_lines else '(цели не определены)'
+            # _sm_plan_str строится НИЖЕ — после _last_cycle_tools, чтобы применить ротацию инструментов
 
             # Количество шагов которые просим у LLM-планировщика: min(1 per goal, agents).
             # Если агентов больше чем целей — добавляем дополнительные шаги для отстающих целей.
@@ -5052,6 +5045,35 @@ class AnchorEngine:
                     _anti_repeat_lines.append(f"  {_pn_ar}: прошлый цикл=[{', '.join(_tl_ar[:3])}] →  замены: [{', '.join(_alts_ar)}]")
                 elif _tl_ar:
                     _anti_repeat_lines.append(f"  {_pn_ar}: прошлый цикл=[{', '.join(_tl_ar[:3])}] → выбери ДРУГОЙ инструмент или задачу!")
+
+            # ── Строим _sm_plan_str ЗДЕСЬ (после _last_cycle_tools) с принудительной ротацией ──
+            # Инструменты поиска/исследования, которые можно ротировать (не меняют данные)
+            _SEARCH_ROTATE_TOOLS = {'run_agent_action', 'research_topic', 'web_search',
+                                    'find_relevant_contacts_for_task', 'get_news_trends'}
+            # Все инструменты использованные в последнем цикле (любым агентом)
+            _all_last_tools: set = {t for _tl_x in _last_cycle_tools.values() for t in _tl_x}
+            _sm_plan_lines = []
+            for _d in _sm_directives:
+                _dt = _d['tool']
+                # Если инструмент повторяется из прошлого цикла — принудительно ротируем
+                if _dt in _all_last_tools and _dt in _SEARCH_ROTATE_TOOLS:
+                    _alts_d = [a for a in _TOOL_ALTERNATIVES.get(_dt, []) if a not in _all_last_tools]
+                    if _alts_d:
+                        _new_t = _alts_d[0]
+                        _sm_plan_lines.append(
+                            f"  Цель «{_d['goal'][:50]}» → инструмент={_new_t} "
+                            f"(домен={_d['agent_domain']}, причина: {_d['reason']}; "
+                            f"⚠️ {_dt} уже использован в пред. цикле → ротация на {_new_t})\n"
+                            f"    Задача: Прошлый цикл использовал {_dt} без результата — "
+                            f"используй {_new_t}: {_d['task'][:150]}"
+                        )
+                        continue
+                _sm_plan_lines.append(
+                    f"  Цель «{_d['goal'][:50]}» → инструмент={_d['tool']} "
+                    f"(домен={_d['agent_domain']}, причина: {_d['reason']})\n"
+                    f"    Задача: {_d['task'][:200]}"
+                )
+            _sm_plan_str = '\n'.join(_sm_plan_lines) if _sm_plan_lines else '(цели не определены)'
             _anti_repeat_str = (
                 "\n🔄 ПРОШЛЫЙ ЦИКЛ (выбери другой подход — не повторяй буквально то же самое!):\n"
                 + '\n'.join(_anti_repeat_lines)
