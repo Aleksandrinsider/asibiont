@@ -3580,6 +3580,134 @@ _INTEGRATION_LABELS: dict = {
 }
 
 
+def _agent_tools_from_intg(agent: dict, intg_labels: list) -> str:
+    """Возвращает строку рекомендованных инструментов для агента на основе его интеграций и роли.
+    Используется в директорском промпте для понятного отображения возможностей агента.
+    """
+    _tools_raw = (agent.get('tools_allowed') or '').strip()
+    try:
+        import json as _j2
+        _explicit = _j2.loads(_tools_raw or '[]')
+    except Exception:
+        _explicit = []
+
+    if _explicit:
+        # Есть явный список — показываем его с аннотацией
+        return ', '.join(_explicit[:10])
+
+    # tools_allowed пустой → выводим рекомендации из интеграций + роли
+    recommended: list = []
+    _lbl_text = ' '.join(l.lower() for l in intg_labels)
+
+    # Интеграции → конкретные инструменты
+    _INTG_TOOL_MAP = [
+        # Email / почта
+        (('почт', 'mail', 'imap', 'smtp', 'gmail', 'яндекс почт', 'resend', 'sendgrid', 'mailgun'),
+         ['send_outreach_email', 'check_emails', 'reply_to_outreach_email', 'send_follow_up_email',
+          'save_email_contact', 'list_email_contacts', 'find_relevant_contacts_for_task']),
+        # GitHub / GitLab
+        (('github', 'gitlab', 'bitbucket'),
+         ['run_agent_action', 'find_relevant_contacts_for_task', 'save_email_contact', 'web_search']),
+        # RSS / новости / NewsAPI
+        (('rss', 'лент', 'feed', 'newsapi', 'новост', 'тасс', 'habr'),
+         ['run_agent_action', 'get_news_trends', 'research_topic', 'web_search', 'add_task']),
+        # Биржа / крипта / Alpha Vantage
+        (('биржевые', 'alpha vantage', 'binance', 'bybit', 'coinbase', 'крипт'),
+         ['run_agent_action', 'web_search', 'research_topic', 'add_task', 'update_goal_progress']),
+        # Мессенджеры / Slack / Discord / Telegram
+        (('slack', 'discord'),
+         ['run_agent_action', 'find_and_message_relevant_users', 'send_message_to_user']),
+        (('telegram',),
+         ['publish_to_telegram', 'create_post', 'run_agent_action']),
+        # CRM
+        (('crm', 'amocrm', 'битрикс', 'hubspot', 'pipedrive', 'salesforce', 'zoho'),
+         ['run_agent_action', 'save_email_contact', 'find_relevant_contacts_for_task', 'delegate_task']),
+        # Маркетплейсы
+        (('ozon', 'wildberries', 'авито', 'shopify', 'wb'),
+         ['run_agent_action', 'research_topic', 'web_search', 'add_task']),
+        # Таблицы / Notion / Airtable
+        (('sheets', 'airtable', 'notion', 'таблиц', 'gspread'),
+         ['run_agent_action', 'add_task', 'update_goal_progress', 'research_topic']),
+        # Платежи
+        (('stripe', 'юкасса', 'платёж', 'payment'),
+         ['run_agent_action', 'web_search', 'add_task']),
+        # OpenWeather / погода
+        (('погода', 'openweather', 'weather'),
+         ['run_agent_action', 'get_weather_info', 'add_task']),
+        # Генерация изображений
+        (('генерац', 'replicate', 'изображен', 'image'),
+         ['generate_image', 'create_post', 'publish_to_telegram']),
+        # VK / соцсети
+        (('вконтакт', 'vk', 'instagram', 'twitter'),
+         ['run_agent_action', 'create_post', 'generate_marketing_content', 'web_search']),
+        # Google Calendar
+        (('calendar', 'календар'),
+         ['run_agent_action', 'set_reminder', 'add_task', 'check_time_conflicts']),
+        # LinkedIn / найм / HR
+        (('linkedin', 'superjob', 'hh.ru', 'headhunter'),
+         ['run_agent_action', 'find_relevant_contacts_for_task', 'save_email_contact', 'web_search']),
+        # Яндекс.Директ / реклама
+        (('директ', 'яндекс.директ', 'adwords', 'mytarget'),
+         ['run_agent_action', 'web_search', 'research_topic', 'generate_marketing_content']),
+    ]
+    seen: set = set()
+    for _kws, _tools in _INTG_TOOL_MAP:
+        if any(w in _lbl_text for w in _kws):
+            for _t in _tools:
+                if _t not in seen:
+                    seen.add(_t)
+                    recommended.append(_t)
+
+    # Роль → добавляем характерные инструменты если ещё не добавлены
+    _role_text = (
+        (agent.get('job_title') or '') + ' ' +
+        (agent.get('specialization') or '') + ' ' +
+        (agent.get('description') or '')
+    ).lower()
+
+    _ROLE_TOOL_MAP = [
+        (('аналитик', 'analyst', 'исследован', 'research', 'data', 'данн'),
+         ['web_search', 'research_topic', 'quick_topic_search', 'analyze_situation_and_suggest_tasks',
+          'add_task', 'update_goal_progress']),
+        (('маркетолог', 'marketing', 'smm', 'контент', 'content', 'продвиж', 'promo', 'реклам'),
+         ['web_search', 'generate_marketing_content', 'create_post', 'research_topic',
+          'start_content_campaign', 'publish_to_telegram']),
+        (('менеджер', 'manager', 'project', 'проект', 'pm', 'руковод', 'координат'),
+         ['add_task', 'delegate_task', 'update_goal_progress', 'analyze_situation_and_suggest_tasks',
+          'list_tasks', 'set_reminder']),
+        (('разработчик', 'developer', 'engineer', 'программист', 'backend', 'frontend', 'fullstack'),
+         ['run_agent_action', 'web_search', 'research_topic', 'add_task']),
+        (('продаж', 'sales', 'outreach', 'лидоген', 'lead'),
+         ['send_outreach_email', 'find_relevant_contacts_for_task', 'save_email_contact',
+          'start_delegation_campaign', 'web_search']),
+        (('hr', 'рекрутер', 'recruiter', 'найм', 'подбор'),
+         ['find_relevant_contacts_for_task', 'save_email_contact', 'send_outreach_email',
+          'run_agent_action', 'web_search']),
+        (('финанс', 'finance', 'бухгалт', 'accountant', 'инвест', 'invest'),
+         ['run_agent_action', 'web_search', 'research_topic', 'add_task', 'update_goal_progress']),
+        (('копирайт', 'copywriter', 'журналист', 'писател', 'редактор'),
+         ['generate_marketing_content', 'web_search', 'research_topic', 'create_post']),
+        (('ассистент', 'assistant', 'помощник', 'secretary', 'секретар'),
+         ['add_task', 'set_reminder', 'check_time_conflicts', 'send_email', 'list_tasks',
+          'delegate_task', 'update_goal_progress']),
+    ]
+    for _kws, _tools in _ROLE_TOOL_MAP:
+        if any(w in _role_text for w in _kws):
+            for _t in _tools:
+                if _t not in seen:
+                    seen.add(_t)
+                    recommended.append(_t)
+
+    # Всегда базовые инструменты если ещё ничего нет
+    _base = ['web_search', 'research_topic', 'add_task', 'update_goal_progress']
+    for _t in _base:
+        if _t not in seen:
+            seen.add(_t)
+            recommended.append(_t)
+
+    return ', '.join(recommended[:10])
+
+
 def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
                                tools_allowed: str = '', search_scope: str = '') -> list[str]:
     """Универсально определяет что агент реально умеет по его настройкам.
@@ -4386,19 +4514,98 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
         if _has_msg_h:
             _hints.append(
-                "\n\n💬 Мессенджер. Рассылка / мониторинг каналов через run_agent_action."
+                "\n\n💬 Мессенджер. Рассылка / мониторинг каналов, постинг: "
+                "run_agent_action (Slack/Discord/WhatsApp), "
+                "publish_to_telegram / create_post (Telegram-канал), "
+                "send_message_to_user (внутренние сообщения). "
+                "Выбирай исходя из платформы."
             )
         if _has_crm_h:
             _hints.append(
-                "\n\n🤝 CRM. Обнови статус сделок, проверь новые лиды через run_agent_action."
+                "\n\n🤝 CRM. Обнови статус сделок, проверь новые лиды, сохрани контакты: "
+                "run_agent_action (AmoCRM/Битрикс/HubSpot), "
+                "save_email_contact, find_relevant_contacts_for_task, "
+                "send_outreach_email (выход на клиентов). "
+                "Выбирай исходя из задачи."
             )
         if _has_shop_h:
             _hints.append(
-                "\n\n🛒 Маркетплейс. Проверь заказы / аналитику продаж через run_agent_action."
+                "\n\n🛒 Маркетплейс. Проверь заказы / аналитику / остатки: "
+                "run_agent_action (Ozon/WB/Авито), "
+                "web_search (конкуренты/цены), "
+                "research_topic (рыночная аналитика), add_task. "
+                "Выбирай исходя из задачи."
             )
         if _has_sheets_h:
             _hints.append(
-                "\n\n📊 Таблицы/Notion. Обнови данные или выгрузи отчёт через run_agent_action."
+                "\n\n📊 Таблицы/Notion. Обнови данные, выгрузи отчёт, создай запись: "
+                "run_agent_action (Google Sheets/Notion/Airtable), "
+                "research_topic (собрать данные для таблицы), "
+                "add_task, update_goal_progress. "
+                "Выбирай исходя из задачи."
+            )
+        # Биржевые / крипта
+        _has_stock_h = any(w in _lbl_text for w in ('биржевые', 'alpha vantage', 'binance', 'bybit', 'coinbase', 'крипт'))
+        if _has_stock_h:
+            _hints.append(
+                "\n\n📈 Биржа/Крипта. Твои возможности: "
+                "run_agent_action (котировки, сигналы, статистика), "
+                "web_search (новости рынка), "
+                "research_topic (анализ актива), "
+                "add_task, update_goal_progress (фиксировать выводы). "
+                "Выбирай исходя из задачи."
+            )
+        # Реклама / маркетинг
+        _has_ad_h = any(w in _lbl_text for w in ('директ', 'яндекс.директ', 'adwords', 'mytarget', 'яндекс.метрика'))
+        if _has_ad_h:
+            _hints.append(
+                "\n\n📣 Реклама/Аналитика. Твои возможности: "
+                "run_agent_action (кампании, метрики, ставки), "
+                "web_search (конкуренты, тренды), "
+                "generate_marketing_content (тексты объявлений), "
+                "research_topic (анализ аудитории), add_task. "
+                "Выбирай исходя из задачи."
+            )
+        # VK / Instagram / соцсети
+        _has_social_h = any(w in _lbl_text for w in ('вконтакт', 'vk', 'instagram', 'twitter', 'youtube'))
+        if _has_social_h:
+            _hints.append(
+                "\n\n🌐 Соцсети. Твои возможности: "
+                "run_agent_action (публикация/парсинг/аналитика), "
+                "create_post (подготовить контент), "
+                "generate_marketing_content (текст+идеи), "
+                "web_search, research_topic. "
+                "Выбирай исходя из платформы."
+            )
+        # Google Calendar / планировщик
+        _has_cal_h = any(w in _lbl_text for w in ('calendar', 'google calendar', 'календар'))
+        if _has_cal_h:
+            _hints.append(
+                "\n\n📅 Календарь. Твои возможности: "
+                "run_agent_action (создание/проверка событий), "
+                "set_reminder, add_task, check_time_conflicts. "
+                "Выбирай исходя из задачи."
+            )
+        # Генерация изображений
+        _has_img_h = any(w in _lbl_text for w in ('генерац', 'replicate', 'изображен'))
+        if _has_img_h:
+            _hints.append(
+                "\n\n🎨 Генерация изображений. Твои возможности: "
+                "generate_image (создать картинку), "
+                "create_post (опубликовать с изображением), "
+                "publish_to_telegram. "
+                "Выбирай исходя из задачи."
+            )
+        # LinkedIn / HR / hh.ru
+        _has_hr_h = any(w in _lbl_text for w in ('linkedin', 'superjob', 'hh.ru', 'headhunter'))
+        if _has_hr_h:
+            _hints.append(
+                "\n\n👔 HR/Рекрутинг. Твои возможности: "
+                "run_agent_action (LinkedIn/hh.ru/SuperJob), "
+                "find_relevant_contacts_for_task (найти кандидатов), "
+                "save_email_contact (база кандидатов), "
+                "send_outreach_email (первое письмо), web_search. "
+                "Выбирай исходя из задачи."
             )
         if not _hints and _other_h:
             # Неизвестная интеграция — даём общую инструкцию с её названием
@@ -6415,14 +6622,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _ac_intg = _agent_caps_cache.get(_ac_a['name'], [])
             _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
             _ac_desc = (_ac_a.get('description') or '')[:60]
-            _ac_tools = (_ac_a.get('tools_allowed') or '').strip()
+            # Строим читаемый список инструментов — с маппингом из интеграций
+            _ac_tools_str = _agent_tools_from_intg(_ac_a, _ac_intg)
+            _tools_raw = (_ac_a.get('tools_allowed') or '').strip()
+            _tools_is_explicit = bool(_tools_raw and _tools_raw != '[]')
+            _tools_label = 'Инструменты (явные)' if _tools_is_explicit else 'Инструменты (из роли/интеграций)'
             _line = (
                 f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
                 f" | {_ac_a.get('specialization','')}"
                 f"\n  Умеет: {_ac_caps}"
+                f"\n  {_tools_label}: {_ac_tools_str}"
             )
-            if _ac_tools:
-                _line += f"\n  Инструменты: {_ac_tools[:80]}"
             if _ac_desc:
                 _line += f"\n  О себе: {_ac_desc}"
             _agent_caps_lines.append(_line)
@@ -6447,8 +6657,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "  • привет/пока, вопрос-ответ, советы, любые разговоры\n\n"
             "поручить агенту — ТОЛЬКО если:\n"
             "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
-            "  2) у агента ЕСТЬ нужный инструмент (см. 'Инструменты' агента выше)\n"
+            "  2) у агента есть нужный инструмент (см. 'Инструменты' в профиле агента выше)\n"
             "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
+            "СОВЕТ: 'Инструменты (явные)' — агент настроен на эти инструменты явно.\n"
+            "       'Инструменты (из роли/интеграций)' — рекомендации на основе роли/API-ключей.\n"
             "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
             "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
             "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
