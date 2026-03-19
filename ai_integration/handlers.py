@@ -14078,7 +14078,8 @@ async def update_email_contact_status(
         # При unsubscribed — отменяем все follow-up
         if status == 'unsubscribed':
             outreaches = session.query(EmailOutreach).filter(
-                EmailOutreach.contact_id == contact.id,
+                EmailOutreach.recipient_email == email_clean,
+                EmailOutreach.user_id == user.id,
                 EmailOutreach.next_follow_up_at.isnot(None),
             ).all()
             for o in outreaches:
