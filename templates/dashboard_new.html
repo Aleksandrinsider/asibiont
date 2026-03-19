@@ -1784,6 +1784,31 @@
             }
         }
 
+        // TG avatar lazy-retry: если сервер вернул SVG-заглушку (X-Avatar-Placeholder),
+        // через 2.5с пробуем снова с нонсом ?r= (фоновый refresh к этому моменту завершится)
+        (function() {
+            try {
+                const _tgId = {{ user.telegram_id if user and user.telegram_id else 0 }};
+                if (!_tgId || _tgId <= 0) return;
+                setTimeout(function() {
+                    fetch('/api/avatar/' + _tgId + '?r=' + Date.now(), {
+                        credentials: 'include', cache: 'no-store'
+                    }).then(function(resp) {
+                        if (resp.headers.get('X-Avatar-Placeholder')) return; // снова заглушка
+                        resp.blob().then(function(blob) {
+                            const imgEl = document.getElementById('profile-avatar-img');
+                            if (!imgEl) return;
+                            const blobUrl = URL.createObjectURL(blob);
+                            imgEl.src = blobUrl;
+                            imgEl.style.display = 'block';
+                            const fb = document.getElementById('profile-avatar-fallback');
+                            if (fb) fb.style.display = 'none';
+                        });
+                    }).catch(function() {});
+                }, 2500);
+            } catch(e) {}
+        })();
+
         // Upload custom avatar
         async function uploadAvatar(input) {
             const file = input.files[0];

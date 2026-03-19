@@ -1934,14 +1934,23 @@ async def dashboard_handler(request):
         # Get user avatar URL — always use safe proxy URL (no bot token)
         user_avatar_url = safe_avatar_url(user.telegram_id) if user and user.telegram_id else None
 
-        # Background avatar refresh: update photo_url cache if missing or negative-cached (non-blocking)
-        if user and user.telegram_id > 0 and (not user.photo_url or user.photo_url == '__no_avatar__'):
+        # Clear stale __no_avatar__ negative cache synchronously so the upcoming img request
+        # from the browser hits api_avatar_handler fresh (not the fast-reject path).
+        # This fixes the race: background async task would start AFTER browser requests the img.
+        if user and user.telegram_id > 0 and user.photo_url == '__no_avatar__':
+            user.photo_url = None
+            try:
+                session_db.commit()
+            except Exception:
+                session_db.rollback()
+
+        # Background avatar refresh: fetch & cache file_id if not yet cached
+        if user and user.telegram_id > 0 and not user.photo_url:
             async def _bg_refresh_avatar():
                 try:
                     await get_user_avatar_url(request.app['bot'], user.telegram_id, force_refresh=True)
                 except Exception as _av_err:
                     logger.warning(f"[DASHBOARD] Background avatar refresh failed: {_av_err}")
-            import asyncio
             asyncio.ensure_future(_bg_refresh_avatar())
 
         logger.info(f"Rendering dashboard for user {user.id}")
@@ -6437,7 +6446,10 @@ def _default_avatar_response():
     return web.Response(
         body=svg.encode(),
         content_type='image/svg+xml',
-        headers={'Cache-Control': 'public, max-age=3600'}
+        headers={
+            'Cache-Control': 'no-store, no-cache',
+            'X-Avatar-Placeholder': '1',
+        }
     )
 
 
@@ -6495,7 +6507,9 @@ async def api_avatar_handler(request):
             return _default_avatar_response()
 
         # Fast path: negative cache — user confirmed to have no TG avatar
-        if _user and getattr(_user, 'photo_url', None) == '__no_avatar__':
+        # Bypass when ?r= nonce is present (JS retry after background refresh completes)
+        _r_nonce = request.rel_url.query.get('r')
+        if _user and getattr(_user, 'photo_url', None) == '__no_avatar__' and not _r_nonce:
             return _default_avatar_response()
 
         # get_user_avatar_url handles old-format URL detection and cleanup internally
