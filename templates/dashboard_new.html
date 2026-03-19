@@ -177,11 +177,12 @@
         /* ─── Markdown rendering in AI messages ─────────────────────────── */
         .message-text p { margin: 0 0 6px 0; }
         .message-text p:last-child { margin-bottom: 0; }
+        .message-text p:empty { display: none; margin: 0; }
         .message-text ul, .message-text ol { margin: 4px 0 8px 0; padding-left: 20px; }
         .message-text li { margin-bottom: 3px; line-height: 1.5; }
         .message-text h1, .message-text h2, .message-text h3,
         .message-text h4, .message-text h5 {
-            font-size: 1em; font-weight: 600; margin: 8px 0 4px 0; color: #1a1a1a;
+            font-size: 1em; font-weight: 600; margin: 4px 0 2px 0; color: #1a1a1a;
         }
         .message-text code {
             background: #F3F4F6; border-radius: 3px; padding: 1px 5px;
@@ -1932,6 +1933,10 @@
                     // Очистка email-артефактов из IMAP перед markdown-рендером
                     text = text.replace(/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
                     text = text.replace(/mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
+                    // Схлопываем 3+ пустых строк в максимум 2 (убираем большие зазоры)
+                    text = text.replace(/\n{3,}/g, '\n\n');
+                    // Убираем строки из одних пробелов/tab (они тоже дают пустые <p>)
+                    text = text.replace(/\n[ \t]+\n/g, '\n\n');
                     marked.setOptions({ breaks: true, gfm: true });
                     // Отключаем raw HTML из AI-ответа (безопасность)
                     const renderer = new marked.Renderer();
