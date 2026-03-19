@@ -447,55 +447,25 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     
     title = title.strip()
 
-    # САНИТИЗАЦИЯ: убираем утечки system prompt из title
-    import re as _re_san
-    # Жёсткий reject: явные маркеры системного промпта
-    _SYSPROMPT_HARD = (
-        r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН|SYSTEM|ROLE|CONTEXT)\]?\s*:',
-        r'^(Твоя роль|Ты агент|Ты являешься|Ты специалист)',
-        r'^[📌🎯✅]\s*(Правила|Цели|Инструкц)',
-    )
-    if any(_re_san.match(p, title, _re_san.IGNORECASE | _re_san.UNICODE) for p in _SYSPROMPT_HARD):
-        logger.warning(f"[ADD_TASK] System-prompt leak in title, rejecting: '{title[:80]}'")
-        return 'Задача не создана: название содержит системный промпт (агент ошибся).'
-    # Мягкая очистка: убираем префиксы типа [РОЛЬ] Ты: ...
-    if _re_san.match(r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН)\]?', title, _re_san.IGNORECASE):
-        title = _re_san.sub(r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН)\]?\s*:?\s*(Ты:?\s*)?', '', title, flags=_re_san.IGNORECASE).strip()
-    # Если после санитизации title стал > 80 символов или содержит personality-текст — берём первые 8 слов
-    if len(title) > 80 or any(p in title.lower() for p in ('специалист в команде', 'циник,', 'pr служба', 'координатор команды')):
-        _words = [w for w in title.split() if len(w) > 2][:8]
-        title = ' '.join(_words) if _words else title[:80]
+    # Единая нормализация title через централизованный нормализатор
+    from .utils import normalize_task_title
+    original_title = title
+    title, _overflow = normalize_task_title(title, max_len=100)
     if not title:
         return 'Название задачи пустое после очистки.'
+    if title != original_title:
+        logger.info(f"[ADD_TASK] Title normalized: '{original_title[:80]}' -> '{title}'")
+    # Overflow (остаток длинного названия) добавляем в description если пустое
+    if _overflow and not description:
+        description = _overflow[:500]
 
-    # УМНОЕ СОКРАЩЕНИЕ НАЗВАНИЯ: если слишком длинное, пытаемся извлечь суть
-    original_title = title
-    word_count = len(title.split())
-    if len(title) > 120 or word_count > 15:
-        logger.warning(f"[ADD_TASK] Title too long ({len(title)} chars, {word_count} words), attempting smart extraction")
-        # Попытка извлечь ключевые слова (простая эвристика)
-        # Убираем стоп-слова и берём первые 8 значимых слов
-        stop_words = ['нужно', 'надо', 'необходимо', 'давай', 'создай', 'добавь', 'напомни', 'поставь', 'я', 'мне', 'для', 'чтобы', 'как']
-        words = [w for w in title.split() if w.lower() not in stop_words and len(w) > 2]
-        if len(words) > 8:
-            title = ' '.join(words[:8])
-            logger.info(f"[ADD_TASK] Title shortened: '{original_title}' -> '{title}'")
-        else:
-            title = ' '.join(words)
-            logger.info(f"[ADD_TASK] Title cleaned: '{original_title}' -> '{title}'")
-
-    # Агентские задачи — всегда без описания (вся суть уже в названии)
     # Агентские задачи: описание СОХРАНЯЕМ (AI объясняет зачем создал задачу)
-    # Очищаем только если это точная копия title
     if created_by_agent_id and description:
         logger.info(f"[ADD_TASK] Agent task: keeping description ({len(description)} chars)")
 
-    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 200 символов
-    if description and len(description) > 200:
-        original_desc = description
-        description = description[:197] + "..."
-        logger.warning(f"[ADD_TASK] Description truncated from {len(original_desc)} to 200 chars")
-    # Если description дублирует title — очищаем (AI часто копирует название в описание)
+    # Описание: максимум 500 символов, очищаем дубликаты title
+    if description and len(description) > 500:
+        description = description[:497] + "..."
     if description and title:
         _desc_norm = description.strip().lower()
         _title_norm = title.strip().lower()
@@ -1779,10 +1749,12 @@ async def delegate_task(
 
                     if not _skip_task_creation:
                         try:
+                            _norm_title, _norm_overflow = normalize_task_title(title, agent_name=_agent_name)
+                            _norm_desc = description[:500] if description else _norm_overflow[:500]
                             _agent_task = Task(
                                 user_id=delegator.id,
-                                title=title[:255],
-                                description=encrypt_data(description[:500] if description else ''),
+                                title=_norm_title,
+                                description=encrypt_data(_norm_desc),
                                 source='agent',
                                 created_by_agent_id=_agent_recipient.id,
                                 delegated_to_username=_agent_name,

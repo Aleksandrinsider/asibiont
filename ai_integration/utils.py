@@ -253,6 +253,111 @@ def replace_placeholders(content, user_now=None, current_time_str=None):
     content = content.replace("{{tomorrow}}", (user_now + timedelta(days=1)).strftime("%Y-%m-%d"))
     content = content.replace("{{day_after}}", (user_now + timedelta(days=2)).strftime("%Y-%m-%d"))
     return content
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Единый нормализатор title/description для задач (агентских и пользовательских)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_TASK_GARBAGE_PATS = [
+    r'^\[РОЛЬ\]\s*',
+    r'^ТВОЯ РОЛЬ:\s*',
+    r'^\[АВТОПИЛОТ[^\]]*\]\s*',
+    r'^📌\s*Правила[^\n]*\n?',
+    r'^ПРАВИЛА И ПРЕДПОЧТЕНИЯ[^\n]*\n?',
+    r'^ТЫ[:\s]',
+    r'^\[?(РОЛЬ|АВТОПИЛОТ|ЦЕЛИ|КОНКРЕТНЫЙ ПЛАН|SYSTEM|ROLE|CONTEXT)\]?\s*:?\s*',
+    r'^(Твоя роль|Ты агент|Ты являешься|Ты специалист)[^\n]*\n?',
+    r'^[📌🎯✅]\s*(Правила|Цели|Инструкц)[^\n]*\n?',
+    r'^ОТВЕТЬ НА ВОПРОС[^:]*:\s*',
+    r'^Твои интеграции:[^\n]*\n?',
+]
+_TASK_PERSONALITY_MARKERS = (
+    'специалист в команде', 'циник,', 'pr служба', 'координатор команды',
+    'выгоревший', 'любит читать', 'агент пишет первым', 'пишет первым',
+    'Твои интеграции:', 'твои интеграции:',
+)
+
+
+def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 100) -> tuple:
+    """Нормализует заголовок задачи. Возвращает (short_title, overflow_for_description).
+
+    - Удаляет мусор (system prompt, [АВТОПИЛОТ], имя агента)
+    - Берёт первое предложение
+    - Сокращает до max_len на границе слов
+    - Остаток текста возвращает для description
+
+    Args:
+        raw_title: исходный текст задачи
+        agent_name: имя агента для удаления из начала
+        max_len: максимальная длина title (по умолчанию 100)
+
+    Returns:
+        (title, overflow) — title: str до max_len, overflow: str остаток (может быть пустым)
+    """
+    if not raw_title or not raw_title.strip():
+        return (f"Задача агента {agent_name}" if agent_name else 'Задача'), ''
+
+    text = raw_title.strip()
+
+    # 1. Удаляем мусорные системные префиксы (повторяем до стабилизации)
+    for _pass in range(3):
+        prev = text
+        for pat in _TASK_GARBAGE_PATS:
+            m = re.match(pat, text, re.IGNORECASE)
+            if m:
+                text = text[m.end():].lstrip()
+        if text == prev:
+            break
+
+    # 2. Удаляем имя агента из начала ("Кристина: Кристина, ..." → "...")
+    if agent_name:
+        for _ in range(2):
+            cleaned = re.sub(
+                r'^' + re.escape(agent_name) + r'[\s,:.!]*',
+                '', text, flags=re.IGNORECASE,
+            ).strip()
+            if cleaned:
+                text = cleaned
+
+    # 3. Убираем personality-маркеры (если AI утёк описание характера)
+    text_lower = text.lower()
+    if any(m in text_lower for m in _TASK_PERSONALITY_MARKERS):
+        # Берём первое предложение БЕЗ маркера
+        sentences = re.split(r'[.!]\s+', text)
+        clean_sentences = [s.strip() for s in sentences
+                           if s.strip() and not any(m in s.lower() for m in _TASK_PERSONALITY_MARKERS)]
+        text = clean_sentences[0] if clean_sentences else ''
+
+    if len(text.strip()) < 5:
+        fallback = f"Задача агента {agent_name}" if agent_name else 'Задача'
+        return fallback, ''
+
+    # 4. Берём первое предложение (до первой точки, ;, или перевода строки)
+    first_sentence = text
+    overflow = ''
+    split_match = re.search(r'[.;]\s|\n', text)
+    if split_match and split_match.start() > 10:
+        first_sentence = text[:split_match.start()].strip()
+        overflow = text[split_match.end():].strip()
+
+    # 5. Сокращаем если длиннее max_len — обрезаем на границе слов
+    if len(first_sentence) > max_len:
+        if not overflow:
+            overflow = first_sentence
+        # Обрезаем на границе слов, сохраняя читаемость
+        words = first_sentence.split()
+        short = ''
+        for w in words:
+            candidate = (short + ' ' + w).strip() if short else w
+            if len(candidate) > max_len:
+                break
+            short = candidate
+        first_sentence = short or first_sentence[:max_len]
+
+    return first_sentence.strip(), overflow.strip()
+
+
 def clean_technical_details(text):
     if text is None:
         return ""

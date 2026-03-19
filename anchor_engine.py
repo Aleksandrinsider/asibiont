@@ -3060,10 +3060,9 @@ class AnchorEngine:
                 _ap_task_id = None
                 try:
                     from ai_integration.autonomous_agent import _create_agent_delegation_task as _cadt
-                    # Используем краткий заголовок активной цели, никогда не используем anchor.topic
+                    # Составляем осмысленный заголовок из цели + специализации агента
                     _gl_titles_s = [g.get('title', '')[:60] for g in data.get('goals', [])[:2] if g.get('title', '').strip()]
                     if not _gl_titles_s:
-                        # Fallback: берём активные цели напрямую из БД
                         try:
                             from models import Goal as _Goal_ap
                             _db_goals = session.query(_Goal_ap).filter(
@@ -3073,9 +3072,14 @@ class AnchorEngine:
                             _gl_titles_s = [g.title[:60] for g in _db_goals if g.title and g.title.strip()]
                         except Exception as _e:
                             logger.debug("suppressed: %s", _e)
-                    # Заголовок задачи = роль агента, не цели пользователя
+                    # Формируем task_text для передачи в _cadt (нормализатор сделает title)
                     _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
-                    _ap_task_title = f"[Автопилот] {agent_name}: {_agent_spec}"[:100] if _agent_spec else f"[Автопилот] {agent_name}"
+                    if _gl_titles_s:
+                        _ap_task_text = _gl_titles_s[0]
+                    elif _agent_spec:
+                        _ap_task_text = _agent_spec
+                    else:
+                        _ap_task_text = f"Автопилот: задача {agent_name}"
                     # Dedup: пропускаем создание задачи если в последние 4ч уже была задача этого агента
                     _skip_ap_task = False
                     try:
@@ -3094,7 +3098,7 @@ class AnchorEngine:
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
                     if not _skip_ap_task:
-                        _ap_task_id = _cadt(user.id, agent_data, _ap_task_title)
+                        _ap_task_id = _cadt(user.id, agent_data, _ap_task_text)
                 except Exception as _cadt_err:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
 
@@ -10497,7 +10501,7 @@ class AnchorEngine:
 
             task = Task(
                 user_id=user.id,
-                title=task_title[:500],
+                title=task_title[:255],
                 description=task_description[:2000] if task_description else None,
                 status='pending',
                 priority='medium',

@@ -6038,40 +6038,13 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
         return None
     try:
         from models import Session as _Db, Task as _Task
+        from ai_integration.utils import normalize_task_title
         _s = _Db()
         try:
             _aname = agent.get('name', 'Агент')
-            # Убираем дубликат имени агента в начале task_text ("Кристина: Кристина, ...")
-            _clean_task = task_text.strip()
-            import re as _re_title
-            # Удаляем мусорные системные префиксы (роль, правила, автопилот-контекст)
-            _GARBAGE_PATS = [
-                r'^\[РОЛЬ\]\s*',
-                r'^ТВОЯ РОЛЬ:\s*',
-                r'^\[АВТОПИЛОТ[^\]]*\]\s*',  # только тег [АВТОПИЛОТ] / [АВТОПИЛОТ ЦЕЛЕЙ], контент не трогаем
-                r'^📌\s*Правила[^\n]*\n?',
-                r'^ПРАВИЛА И ПРЕДПОЧТЕНИЯ[^\n]*\n?',
-                r'^ТЫ[:\s]',
-            ]
-            for _gp in _GARBAGE_PATS:
-                _m = _re_title.match(_gp, _clean_task, flags=_re_title.IGNORECASE)
-                if _m:
-                    _clean_task = _clean_task[_m.end():].lstrip()
-            # Если после очистки получился мусор или пустышка — ставим дефолт
-            if len(_clean_task.strip()) < 5:
-                _clean_task = f"Задача агента {_aname}"
-            # Удаляем имя агента из начала (любые вариации: запятая, двоеточие, пробел)
-            _clean_task = _re_title.sub(
-                r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',
-                '', _clean_task, flags=_re_title.IGNORECASE,
-            ).strip()
-            # Вторая итерация — удаляем повторное имя если осталось ("Кристина, Кристина, ...")
-            _clean_task = _re_title.sub(
-                r'^' + _re_title.escape(_aname) + r'[\s,:.!]*',
-                '', _clean_task, flags=_re_title.IGNORECASE,
-            ).strip() or task_text.strip()
-            _title = _clean_task[:200]
-            _desc = result_summary[:500] if result_summary else ''
+            _title, _overflow = normalize_task_title(task_text, agent_name=_aname)
+            # description = результат агента; если пусто — остаток из title
+            _desc = result_summary[:500] if result_summary else _overflow[:500]
             _t = _Task(
                 user_id=user_db_id,
                 title=_title,
@@ -6079,12 +6052,12 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
                 status='completed' if result_summary else 'in_progress',
                 source='agent',
                 created_by_agent_id=agent.get('id'),
-                delegated_to_username=agent.get('name'),
+                delegated_to_username=_aname,
             )
             _s.add(_t)
             _s.commit()
             _tid = _t.id
-            logger.info("[DIRECTOR] created delegation task id=%s for agent=%s status=%s", _tid, agent.get('name'), _t.status)
+            logger.info("[DIRECTOR] created delegation task id=%s for agent=%s status=%s title='%s'", _tid, _aname, _t.status, _title[:60])
             return _tid
         except Exception as _e:
             logger.warning("[DIRECTOR] delegation task create error: %s", _e)
