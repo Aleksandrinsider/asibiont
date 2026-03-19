@@ -10958,6 +10958,22 @@ async def send_outreach_email(
             return (f" Нельзя отправлять outreach на {_rcpt} — это ваша почта или IMAP-аккаунт агента. "
                     f"Найди email реального внешнего получателя.")
 
+        # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
+        # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"
+        if _rcpt:
+            try:
+                from sqlalchemy import func as _func_reg
+                _registered = session.query(User).filter(
+                    User.email.isnot(None),
+                    _func_reg.lower(User.email) == _rcpt,
+                    User.id != user.id,
+                ).first()
+                if _registered:
+                    return (f"⛔ {_rcpt} уже зарегистрирован в ASI Biont. "
+                            f"Пишем только новым внешним пользователям — этот контакт пропускаем.")
+            except Exception as _e_reg:
+                logger.debug("suppressed registered-user check: %s", _e_reg)
+
         # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
         RESEND_API_KEY = _platform_resend_key
         _personal_resend_from = ''
@@ -11643,7 +11659,18 @@ async def add_email_leads(
         added = 0
         skipped = 0
         skipped_generic = 0
+        skipped_registered = 0
         _user_email_lower = (getattr(user, 'email', '') or '').strip().lower()
+        # Предвыбираем emails зарегистрированных пользователей для быстрой проверки
+        from sqlalchemy import func as _func_leads
+        _registered_emails_set: set = set()
+        try:
+            _reg_rows = session.query(_func_leads.lower(User.email)).filter(
+                User.email.isnot(None)
+            ).all()
+            _registered_emails_set = {r[0] for r in _reg_rows if r[0]}
+        except Exception as _e_re:
+            logger.debug("suppressed registered-emails prefetch: %s", _e_re)
         for lead in parsed:
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
@@ -11651,6 +11678,10 @@ async def add_email_leads(
             # ── GUARD: не добавлять email самого пользователя как лид ──
             if _user_email_lower and email == _user_email_lower:
                 skipped += 1
+                continue
+            # ── GUARD: не добавлять уже зарегистрированных пользователей платформы ──
+            if email in _registered_emails_set:
+                skipped_registered += 1
                 continue
             # Отклоняем generic-адреса через полный фильтр
             if _is_generic_email(email):
@@ -11726,6 +11757,8 @@ async def add_email_leads(
             parts.append(f"пропущено {skipped} дублей/cooldown")
         if skipped_generic:
             parts.append(f"отклонено {skipped_generic} generic-адресов (info@/contact@/hello@ — нужны ЛИЧНЫЕ email людей)")
+        if skipped_registered:
+            parts.append(f"пропущено {skipped_registered} уже зарегистрированных в системе — ищем новых")
         return parts[0] + (f" ({', '.join(parts[1:])})" if len(parts) > 1 else "")
     except Exception as e:
         logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
