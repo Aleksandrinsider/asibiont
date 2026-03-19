@@ -8125,9 +8125,8 @@ else:
                                 if (o.reply_text) {
                                     bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.reply_text}</div>`;
                                 } else {
-                                    bodyHtml += `<div id="reply-placeholder-${o.id}" style="font-size: 13px; color: #9CA3AF; font-style: italic;">
-                                        <button onclick="loadOutreachReply(${o.id}, this)" style="background: #068487; color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;">Загрузить ответ</button>
-                                    </div>`;
+                                    bodyHtml += `<div id="reply-placeholder-${o.id}" style="font-size: 13px; color: #9CA3AF; font-style: italic;">Загрузка ответа...</div>`;
+                                    setTimeout(() => loadOutreachReply(o.id), 300);
                                 }
                                 bodyHtml += `</div>`;
                             }
@@ -8742,11 +8741,8 @@ else:
             }
         }
 
-        async function loadOutreachReply(outreachId, btn) {
+        async function loadOutreachReply(outreachId) {
             if (!outreachId) return;
-            const origText = btn.textContent;
-            btn.textContent = 'Загрузка...';
-            btn.disabled = true;
             try {
                 const resp = await fetch('/api/outreach/' + outreachId + '/load-reply', {
                     method: 'POST',
@@ -8754,18 +8750,20 @@ else:
                 });
                 const data = await resp.json();
                 const container = document.getElementById('reply-placeholder-' + outreachId);
+                if (!container) return;
                 if (resp.ok && data.reply_text) {
-                    if (container) {
-                        container.innerHTML = '<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">' + escapeHtml(data.reply_text) + '</div>';
-                    }
+                    container.style.fontStyle = 'normal';
+                    container.style.color = '#374151';
+                    container.style.whiteSpace = 'pre-wrap';
+                    container.style.wordBreak = 'break-word';
+                    container.style.lineHeight = '1.6';
+                    container.textContent = data.reply_text;
                 } else {
-                    btn.textContent = data.error || 'Не найдено';
-                    btn.style.background = '#9CA3AF';
-                    setTimeout(() => { btn.textContent = origText; btn.disabled = false; btn.style.background = '#068487'; }, 3000);
+                    container.textContent = data.error || 'Ответ не найден в почте';
                 }
             } catch(e) {
-                btn.textContent = 'Ошибка';
-                setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 3000);
+                const container = document.getElementById('reply-placeholder-' + outreachId);
+                if (container) container.textContent = 'Не удалось загрузить';
             }
         }
 

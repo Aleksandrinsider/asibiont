@@ -485,15 +485,11 @@ def safe_avatar_url(telegram_id):
 def avatar_url_if_photo(user):
     """Return proxied avatar URL for users who may have a Telegram avatar.
     For TG users (positive ID): always returns URL so endpoint can fetch on demand.
-    Skips users with negative-cache sentinel (confirmed no avatar).
     For Discord users (negative ID): only if photo_url is cached."""
     if not user or not user.telegram_id:
         return None
     _photo = getattr(user, 'photo_url', None)
     if user.telegram_id > 0:
-        # Skip if negative cache confirms no avatar
-        if _photo == '__no_avatar__':
-            return None
         return f"/api/avatar/{user.telegram_id}"
     # Discord: only if cached
     if _photo and _photo != '__no_avatar__':
