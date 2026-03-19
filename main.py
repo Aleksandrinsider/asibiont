@@ -483,18 +483,18 @@ def safe_avatar_url(telegram_id):
 
 
 def avatar_url_if_photo(user):
-    """Return proxied avatar URL for users who may have a Telegram avatar.
-    For TG users (positive ID): always returns URL so endpoint can fetch on demand.
-    For Discord users (negative ID): only if photo_url is cached."""
+    """Return proxied avatar URL only for users who actually have an avatar.
+    Returns None for users without photo — frontend shows initial-letter fallback."""
     if not user or not user.telegram_id:
         return None
+    # Custom avatar always available
+    if getattr(user, 'custom_avatar', None):
+        return f"/api/avatar/{user.telegram_id}"
     _photo = getattr(user, 'photo_url', None)
-    if user.telegram_id > 0:
-        return f"/api/avatar/{user.telegram_id}"
-    # Discord: only if cached
-    if _photo and _photo != '__no_avatar__':
-        return f"/api/avatar/{user.telegram_id}"
-    return None
+    if not _photo or _photo == '__no_avatar__':
+        return None
+    # Has cached photo_url (file_id or URL) — return proxy URL
+    return f"/api/avatar/{user.telegram_id}"
 
 
 async def _refresh_avatars_background(bot, telegram_ids):
@@ -4248,7 +4248,7 @@ async def api_partners_handler(request):
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
 
-        # Trigger background avatar refresh for partners missing photo_url
+        # Trigger background avatar refresh for partners missing cached photo in DB
         if 'bot' in request.app and request.app['bot']:
             null_ids = [p.get('telegram_id') for p in partners_data
                         if p.get('telegram_id') and not p.get('photo_url')
@@ -9090,9 +9090,22 @@ async def api_outreach_load_reply_handler(request):
                     try:
                         M = imaplib.IMAP4_SSL(imap_host, timeout=15)
                         M.login(email_user, email_pass)
-                        M.select('INBOX', readonly=True)
-                        _, nums = M.search(None, 'FROM', f'"{email}"')
-                        ids = nums[0].split() if nums[0] else []
+                        # Search multiple folders: INBOX, All Mail, Trash
+                        ids = []
+                        _folders = ['INBOX', '"[Gmail]/All Mail"', '"[Gmail]/Trash"']
+                        _sel_folder = 'INBOX'
+                        for _folder in _folders:
+                            try:
+                                st, _ = M.select(_folder, readonly=True)
+                                if st != 'OK':
+                                    continue
+                                _, nums = M.search(None, 'FROM', f'"{email}"')
+                                ids = nums[0].split() if nums[0] else []
+                                if ids:
+                                    _sel_folder = _folder
+                                    break
+                            except Exception:
+                                continue
                         if not ids:
                             M.logout()
                             return ''
