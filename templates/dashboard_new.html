@@ -1784,31 +1784,6 @@
             }
         }
 
-        // TG avatar lazy-retry: если сервер вернул SVG-заглушку (X-Avatar-Placeholder),
-        // через 2.5с пробуем снова с нонсом ?r= (фоновый refresh к этому моменту завершится)
-        (function() {
-            try {
-                const _tgId = {{ user.telegram_id if user and user.telegram_id else 0 }};
-                if (!_tgId || _tgId <= 0) return;
-                setTimeout(function() {
-                    fetch('/api/avatar/' + _tgId + '?r=' + Date.now(), {
-                        credentials: 'include', cache: 'no-store'
-                    }).then(function(resp) {
-                        if (resp.headers.get('X-Avatar-Placeholder')) return; // снова заглушка
-                        resp.blob().then(function(blob) {
-                            const imgEl = document.getElementById('profile-avatar-img');
-                            if (!imgEl) return;
-                            const blobUrl = URL.createObjectURL(blob);
-                            imgEl.src = blobUrl;
-                            imgEl.style.display = 'block';
-                            const fb = document.getElementById('profile-avatar-fallback');
-                            if (fb) fb.style.display = 'none';
-                        });
-                    }).catch(function() {});
-                }, 2500);
-            } catch(e) {}
-        })();
-
         // Upload custom avatar
         async function uploadAvatar(input) {
             const file = input.files[0];
@@ -8150,7 +8125,9 @@ else:
                                 if (o.reply_text) {
                                     bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.reply_text}</div>`;
                                 } else {
-                                    bodyHtml += `<div style="font-size: 13px; color: #9CA3AF; font-style: italic;">Ответ получен, текст не сохранён — запусти check_emails чтобы получить содержимое</div>`;
+                                    bodyHtml += `<div id="reply-placeholder-${o.id}" style="font-size: 13px; color: #9CA3AF; font-style: italic;">
+                                        <button onclick="loadOutreachReply(${o.id}, this)" style="background: #068487; color: white; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer;">Загрузить ответ</button>
+                                    </div>`;
                                 }
                                 bodyHtml += `</div>`;
                             }
@@ -8762,6 +8739,33 @@ else:
                 loadContacts();
             } catch (err) {
                 showNotification(t('err-prefix') + ' ' + err.message, 'error');
+            }
+        }
+
+        async function loadOutreachReply(outreachId, btn) {
+            if (!outreachId) return;
+            const origText = btn.textContent;
+            btn.textContent = 'Загрузка...';
+            btn.disabled = true;
+            try {
+                const resp = await fetch('/api/outreach/' + outreachId + '/load-reply', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await resp.json();
+                const container = document.getElementById('reply-placeholder-' + outreachId);
+                if (resp.ok && data.reply_text) {
+                    if (container) {
+                        container.innerHTML = '<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">' + escapeHtml(data.reply_text) + '</div>';
+                    }
+                } else {
+                    btn.textContent = data.error || 'Не найдено';
+                    btn.style.background = '#9CA3AF';
+                    setTimeout(() => { btn.textContent = origText; btn.disabled = false; btn.style.background = '#068487'; }, 3000);
+                }
+            } catch(e) {
+                btn.textContent = 'Ошибка';
+                setTimeout(() => { btn.textContent = origText; btn.disabled = false; }, 3000);
             }
         }
 

@@ -367,10 +367,8 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
             _NO_AVATAR = '__no_avatar__'
             _had_real_photo = user and user.photo_url and user.photo_url != _NO_AVATAR
 
-            # Negative cache: user confirmed to have no TG avatar
-            if not force_refresh and user and user.photo_url == _NO_AVATAR:
-                return None
-            if force_refresh and user and user.photo_url == _NO_AVATAR:
+            # Clear legacy __no_avatar__ marker — we no longer set it
+            if user and user.photo_url == _NO_AVATAR:
                 user.photo_url = None
                 try:
                     db.commit()
@@ -468,15 +466,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 logger.debug(f"Using cached https photo_url for user {user_id}: {user.photo_url[:40]}")
                 return user.photo_url
 
-            # Negative cache: remember that this user has no avatar
-            # Only set if user had no valid photo before (don't overwrite on transient TG API errors)
-            if user and not _had_real_photo:
-                try:
-                    user.photo_url = _NO_AVATAR
-                    db.commit()
-                    logger.debug(f"Stored negative avatar cache for user {user_id}")
-                except Exception:
-                    pass
+            # No avatar found — dashboard background refresh will retry each visit
             return None
         finally:
             db.close()
@@ -1934,18 +1924,8 @@ async def dashboard_handler(request):
         # Get user avatar URL — always use safe proxy URL (no bot token)
         user_avatar_url = safe_avatar_url(user.telegram_id) if user and user.telegram_id else None
 
-        # Clear stale __no_avatar__ negative cache synchronously so the upcoming img request
-        # from the browser hits api_avatar_handler fresh (not the fast-reject path).
-        # This fixes the race: background async task would start AFTER browser requests the img.
-        if user and user.telegram_id > 0 and user.photo_url == '__no_avatar__':
-            user.photo_url = None
-            try:
-                session_db.commit()
-            except Exception:
-                session_db.rollback()
-
-        # Background avatar refresh: fetch & cache file_id if not yet cached
-        if user and user.telegram_id > 0 and not user.photo_url:
+        # Background avatar refresh: update photo_url cache if missing or negative-cached (non-blocking)
+        if user and user.telegram_id > 0 and (not user.photo_url or user.photo_url == '__no_avatar__'):
             async def _bg_refresh_avatar():
                 try:
                     await get_user_avatar_url(request.app['bot'], user.telegram_id, force_refresh=True)
@@ -6446,10 +6426,7 @@ def _default_avatar_response():
     return web.Response(
         body=svg.encode(),
         content_type='image/svg+xml',
-        headers={
-            'Cache-Control': 'no-store, no-cache',
-            'X-Avatar-Placeholder': '1',
-        }
+        headers={'Cache-Control': 'public, max-age=3600'}
     )
 
 
@@ -6504,12 +6481,6 @@ async def api_avatar_handler(request):
         # Telegram users: proxy through server
         if 'bot' not in request.app or not request.app['bot']:
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
-            return _default_avatar_response()
-
-        # Fast path: negative cache — user confirmed to have no TG avatar
-        # Bypass when ?r= nonce is present (JS retry after background refresh completes)
-        _r_nonce = request.rel_url.query.get('r')
-        if _user and getattr(_user, 'photo_url', None) == '__no_avatar__' and not _r_nonce:
             return _default_avatar_response()
 
         # get_user_avatar_url handles old-format URL detection and cleanup internally
@@ -8985,6 +8956,148 @@ async def api_outreach_reply_handler(request):
             session_db.close()
     except Exception as e:
         logger.error(f"Error in api_outreach_reply: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
+async def api_outreach_load_reply_handler(request):
+    """Fetch reply text from Gmail API for a specific outreach with missing reply_text."""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        outreach_id = int(request.match_info['outreach_id'])
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            from models import EmailOutreach
+            outreach = session_db.query(EmailOutreach).filter_by(id=outreach_id, user_id=user.id).first()
+            if not outreach:
+                return web.json_response({'error': 'Outreach not found'}, status=404)
+            if outreach.reply_text:
+                return web.json_response({'reply_text': outreach.reply_text})
+            email = (outreach.recipient_email or '').strip().lower()
+            if not email:
+                return web.json_response({'error': 'No recipient email'}, status=400)
+
+            # Get Gmail OAuth token
+            from config import decrypt_token, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+            import json as _json_lr
+            if not getattr(user, 'google_oauth_token', None):
+                return web.json_response({'error': 'Gmail не подключён'}, status=400)
+            token_data = _json_lr.loads(decrypt_token(user.google_oauth_token))
+            access_token = token_data.get('access_token', '')
+            refresh_token = token_data.get('refresh_token', '')
+
+            async def _refresh_tok():
+                nonlocal access_token
+                if not refresh_token or not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+                    return False
+                async with aiohttp.ClientSession() as h:
+                    r = await h.post('https://oauth2.googleapis.com/token', data={
+                        'client_id': GOOGLE_CLIENT_ID,
+                        'client_secret': GOOGLE_CLIENT_SECRET,
+                        'refresh_token': refresh_token,
+                        'grant_type': 'refresh_token',
+                    }, timeout=aiohttp.ClientTimeout(total=10))
+                    if r.status == 200:
+                        d = await r.json()
+                        access_token = d.get('access_token', access_token)
+                        new_tok = {**token_data, 'access_token': access_token}
+                        from config import encrypt_token
+                        user.google_oauth_token = encrypt_token(_json_lr.dumps(new_tok))
+                        session_db.commit()
+                        return True
+                return False
+
+            import base64 as _b64_lr, re as _re_lr
+            def _extract_body(payload):
+                mime = payload.get('mimeType', '')
+                parts = payload.get('parts', [])
+                body_data = payload.get('body', {}).get('data', '')
+                if mime == 'text/plain' and body_data:
+                    try:
+                        return _b64_lr.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace').strip()
+                    except Exception:
+                        pass
+                if mime == 'text/html' and body_data:
+                    try:
+                        raw = _b64_lr.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace')
+                        return _re_lr.sub(r'<[^>]+>', '', raw).strip()
+                    except Exception:
+                        pass
+                for part in parts:
+                    if part.get('mimeType') == 'text/plain':
+                        d = part.get('body', {}).get('data', '')
+                        if d:
+                            try:
+                                return _b64_lr.urlsafe_b64decode(d + '==').decode('utf-8', errors='replace').strip()
+                            except Exception:
+                                pass
+                for part in parts:
+                    if part.get('mimeType') == 'text/html':
+                        d = part.get('body', {}).get('data', '')
+                        if d:
+                            try:
+                                raw = _b64_lr.urlsafe_b64decode(d + '==').decode('utf-8', errors='replace')
+                                return _re_lr.sub(r'<[^>]+>', '', raw).strip()
+                            except Exception:
+                                pass
+                    if part.get('parts'):
+                        sub = _extract_body(part)
+                        if sub:
+                            return sub
+                return ''
+
+            async def _fetch_reply():
+                async with aiohttp.ClientSession() as h:
+                    r = await h.get(
+                        'https://gmail.googleapis.com/gmail/v1/users/me/messages',
+                        headers={'Authorization': f'Bearer {access_token}'},
+                        params={'maxResults': '5', 'q': f'from:{email}'},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    )
+                    if r.status == 401:
+                        return None  # need refresh
+                    if r.status != 200:
+                        return ''
+                    d = await r.json()
+                    msgs = d.get('messages', [])
+                    if not msgs:
+                        return ''
+                    mr = await h.get(
+                        f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msgs[0]["id"]}',
+                        headers={'Authorization': f'Bearer {access_token}'},
+                        params={'format': 'full'},
+                        timeout=aiohttp.ClientTimeout(total=15),
+                    )
+                    if mr.status != 200:
+                        return ''
+                    md = await mr.json()
+                    body = _extract_body(md.get('payload', {}))
+                    if not body:
+                        body = md.get('snippet', '')
+                    return body
+
+            reply_body = await _fetch_reply()
+            if reply_body is None:
+                if await _refresh_tok():
+                    reply_body = await _fetch_reply()
+            if not reply_body:
+                return web.json_response({'error': 'Ответ не найден в Gmail'}, status=404)
+
+            outreach.reply_text = reply_body[:5000]
+            if not outreach.reply_at:
+                outreach.reply_at = datetime.now(dt_timezone.utc)
+            session_db.commit()
+            logger.info(f"[LOAD_REPLY] Fetched reply for outreach #{outreach_id} from {email}")
+            return web.json_response({'reply_text': outreach.reply_text})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_outreach_load_reply: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
@@ -12544,6 +12657,7 @@ app.router.add_delete('/api/content-campaigns/{campaign_id}', api_content_campai
 app.router.add_patch('/api/delegation-campaigns/{campaign_id}/status', api_delegation_campaign_status_handler)
 app.router.add_delete('/api/delegation-campaigns/{campaign_id}', api_delegation_campaign_delete_handler)
 app.router.add_post('/api/outreach/{outreach_id}/reply', api_outreach_reply_handler)
+app.router.add_post('/api/outreach/{outreach_id}/load-reply', api_outreach_load_reply_handler)
 app.router.add_delete('/api/outreach/{outreach_id}', api_outreach_delete_handler)
 app.router.add_delete('/api/activities/clear-all', api_activities_clear_all_handler)
 app.router.add_delete('/api/activities/{activity_id}', api_activity_delete_handler)
