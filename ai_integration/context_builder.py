@@ -1707,7 +1707,7 @@ class ContextBuilder:
         now = datetime.now(timezone.utc)
 
         last = self._integration_rec_cache.get(uid)
-        if last and (now - last).total_seconds() < 72 * 3600:
+        if last and (now - last).total_seconds() < 24 * 3600:
             return None
 
         # --- что подключено ---
@@ -1894,12 +1894,56 @@ class ContextBuilder:
             ))
 
         available_integrations = [(n, b, h) for flag, n, b, h in _integrations if flag]
+        connected_integrations = [(n, b) for flag, n, b, h in _integrations if not flag]
         all_items = []
 
+        # ── Подключённые интеграции (краткая сводка) ──
+        if connected_integrations:
+            _conn_names = [n for n, _ in connected_integrations]
+            all_items.append("ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ: " + ', '.join(_conn_names))
+
+        # ── Неподключённые интеграции ──
         if available_integrations:
-            all_items.append("ДОСТУПНЫЕ ИНТЕГРАЦИИ (не подключены у пользователя):")
+            # Ранжируем по релевантности целям пользователя
+            _goal_text = ' '.join(
+                (g.title + ' ' + (g.description or '')).lower()
+                for g in (all_goals or []) if g.status == 'active'
+            )
+            _INTG_KEYWORDS = {
+                'GitHub': ['github', 'код', 'разработ', 'програм', 'репозитор', 'issue', 'pr', 'ci', 'деплой'],
+                'Notion': ['notion', 'знани', 'база', 'документ', 'вики', 'заметк'],
+                'Slack': ['slack', 'команд', 'чат', 'коммуник', 'team'],
+                'Trello': ['trello', 'канбан', 'доск', 'карточк'],
+                'Jira / Atlassian': ['jira', 'atlassian', 'спринт', 'бэклог', 'agile'],
+                'Google Sheets': ['таблиц', 'excel', 'sheets', 'отчёт', 'данн', 'аналитик'],
+                'Stripe': ['stripe', 'оплат', 'плат', 'подписк', 'выручк', 'billing'],
+                'Shopify': ['shopify', 'магазин', 'товар', 'заказ', 'e-commerce'],
+                'CRM (Bitrix24 / AmoCRM / HubSpot)': ['crm', 'bitrix', 'amo', 'hubspot', 'воронк', 'продаж', 'лид', 'клиент'],
+                'Личная почта (Gmail/Яндекс/Mail.ru)': ['почт', 'email', 'gmail', 'письм', 'аутрич', 'рассылк'],
+                'Telegram-канал': ['telegram', 'канал', 'подписчик', 'контент', 'пост', 'публикац'],
+                'Google Calendar': ['календар', 'расписан', 'встреч', 'событи'],
+                'RSS-мониторинг': ['rss', 'новост', 'мониторинг', 'дайджест'],
+            }
+            _scored = []
             for name, benefit, how in available_integrations:
-                all_items.append(f"• {name} — {benefit}. Подключить: {how}")
+                _kws = _INTG_KEYWORDS.get(name, [])
+                _score = sum(1 for kw in _kws if kw in _goal_text) if _goal_text else 0
+                _scored.append((_score, name, benefit, how))
+            _scored.sort(key=lambda x: -x[0])
+
+            # Показываем рекомендованные (матч с целями) отдельно
+            _recommended = [(n, b, h) for s, n, b, h in _scored if s > 0]
+            _others = [(n, b, h) for s, n, b, h in _scored if s == 0]
+
+            if _recommended:
+                all_items.append("РЕКОМЕНДУЕМЫЕ ИНТЕГРАЦИИ (полезны для текущих целей):")
+                for name, benefit, how in _recommended[:5]:
+                    all_items.append(f"• {name} — {benefit}. Подключить: {how}")
+
+            if _others:
+                all_items.append("ДРУГИЕ ДОСТУПНЫЕ ИНТЕГРАЦИИ:")
+                for name, benefit, how in _others[:8]:
+                    all_items.append(f"• {name} — {benefit}")
 
         if _features:
             all_items.append("НЕИСПОЛЬЗУЕМЫЕ ВОЗМОЖНОСТИ ПЛАТФОРМЫ:")
@@ -1910,7 +1954,7 @@ class ContextBuilder:
             return None
 
         all_items.append(
-            "Упомяни 1-2 из них ТОЛЬКО если релевантно текущему разговору. "
+            "Рекомендуй интеграции ТОЛЬКО если релевантно текущему разговору или целям. "
             "Предлагай конкретно: «для этой задачи подойдёт X — подключить?». "
             "Не перечисляй все. Если ничего не релевантно — промолчи."
         )
