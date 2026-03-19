@@ -11424,6 +11424,26 @@ async def reply_to_outreach_email(
         if not reply_body:
             return " Нужен текст ответа (reply_body)."
 
+        # ── GUARD: язык reply_body должен совпадать с языком оригинального outreach ──
+        # Если оригинальное письмо отправлено на EN, а AI сгенерировал ответ на RU — блокируем
+        _orig_body = (outreach.body or '')
+        if _orig_body and reply_body:
+            import re as _re_lang
+            _cyr_orig = len(_re_lang.findall(r'[а-яёА-ЯЁ]', _orig_body))
+            _lat_orig = len(_re_lang.findall(r'[a-zA-Z]', _orig_body))
+            _cyr_reply = len(_re_lang.findall(r'[а-яёА-ЯЁ]', reply_body))
+            _lat_reply = len(_re_lang.findall(r'[a-zA-Z]', reply_body))
+            _orig_is_en = _lat_orig > _cyr_orig * 3 and _lat_orig > 30
+            _reply_is_ru = _cyr_reply > _lat_reply * 2 and _cyr_reply > 20
+            _orig_is_ru = _cyr_orig > _lat_orig * 3 and _cyr_orig > 30
+            _reply_is_en = _lat_reply > _cyr_reply * 2 and _lat_reply > 20
+            if _orig_is_en and _reply_is_ru:
+                return ("⚠ Язык reply_body (русский) не совпадает с языком оригинального письма (английский). "
+                        "ПЕРЕПИШИ reply_body НА АНГЛИЙСКОМ — контакт получил письмо на EN, ответ тоже должен быть на EN!")
+            if _orig_is_ru and _reply_is_en:
+                return ("⚠ Язык reply_body (английский) не совпадает с языком оригинального письма (русский). "
+                        "ПЕРЕПИШИ reply_body НА РУССКОМ — контакт получил письмо на RU, ответ тоже должен быть на RU!")
+
         # MX-проверка (на всякий — получатель мог сменить домен)
         mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
         if not mx_valid:

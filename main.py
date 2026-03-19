@@ -499,6 +499,7 @@ def avatar_url_if_photo(user):
 
 async def _refresh_avatars_background(bot, telegram_ids):
     """Background task: fetch & cache TG avatars for users with null photo_url.
+    Also fills in first_name from Telegram if missing in DB.
     Safe to fire-and-forget via asyncio.create_task()."""
     seen = set()
     for tg_id in telegram_ids:
@@ -509,6 +510,22 @@ async def _refresh_avatars_background(bot, telegram_ids):
             await get_user_avatar_url(bot, tg_id, force_refresh=True)
         except Exception as e:
             logger.debug(f"Background avatar refresh failed for {tg_id}: {e}")
+        # Fill first_name from TG if missing
+        try:
+            from models import User as _URefr
+            _db_r = Session()
+            try:
+                _u_r = _db_r.query(_URefr).filter_by(telegram_id=tg_id).first()
+                if _u_r and not _u_r.first_name:
+                    _chat = await bot.get_chat(tg_id)
+                    if _chat and _chat.first_name:
+                        _u_r.first_name = _chat.first_name
+                        _db_r.commit()
+                        logger.info(f"Updated first_name for {tg_id}: {_chat.first_name}")
+            finally:
+                _db_r.close()
+        except Exception as _e_fn:
+            logger.debug(f"first_name refresh failed for {tg_id}: {_e_fn}")
 
 
 def check_telegram_authentication(data):
