@@ -2257,7 +2257,7 @@
                                 const sorted = syncData.interactions.sort((a, b) => a.id - b.id);
                                 sorted.forEach(i => {
                                     if (!displayedMessageIds.has(i.id)) {
-                                        if (i.message_type === 'ai' || i.message_type === 'agent_msg') {
+                                        if (i.message_type === 'ai' || i.message_type === 'agent_msg' || i.message_type === 'proactive') {
                                             // Пропускаем финальный синтез — он будет показан отдельно
                                             // Если content — JSON с __agent, сравниваем по вложенному text
                                             const iRaw = i.content || '';
