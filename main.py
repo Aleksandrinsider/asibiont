@@ -10418,6 +10418,75 @@ async def resend_webhook_handler(request):
                         session_db.commit()
                         logger.info(f"[RESEND_WEBHOOK] Reply saved for outreach #{outreach.id} from {from_email} (was_replied={was_replied})")
 
+                        # ── AUTO-UNSUBSCRIBE: detect opt-out in reply body ──
+                        if text_body:
+                            import re as _re_unsub_wh
+                            _UNSUB_RE_WH = _re_unsub_wh.compile(
+                                r'\bunsubscribe\b|\bopt[\s\-]?out\b|'
+                                r'\bstop\s+(?:emailing|contacting|writing|sending)\b|'
+                                r'\bremove\s+(?:me|my\s+email)\b|'
+                                r'\bdo\s+not\s+(?:contact|email|write|send)\b|'
+                                r'\bdon\'?t\s+(?:contact|email|write|send)\b|'
+                                r'\bnot\s+interested\b|\bno\s+thanks?\b|\bleave\s+me\s+alone\b|'
+                                r'не\s*пиши(?:те)?|'
+                                r'(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
+                                r'отпис(?:ать|ка|аться)|'
+                                r'(?:больше\s+)?не\s+(?:нужно|надо|хочу)\s*(?:писать|получать|ваших?\s+пис)|'
+                                r'(?:уберите|удалите)\s+(?:меня|мой\s+(?:email|адрес))|'
+                                r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
+                                r'(?:не\s+)?интересно|спам|spam|'
+                                # Greek
+                                r'μη\s*(?:μου)?\s*(?:στ[εέ]λν|γρ[αά]φ)|σταματ[ήη]στε|'
+                                r'(?:δεν|δε)\s+(?:με\s+)?ενδιαφ[εέ]ρ|(?:δεν|δε)\s+θ[εέ]λω|'
+                                r'αφ[ήη]στ[εέ]\s+(?:με|μου)|διαγρ[αά]ψτε\s+(?:με|μου)|'
+                                # Spanish
+                                r'(?:no\s+me\s+(?:escriba|contacte|envíe))|'
+                                r'(?:darse\s+de\s+baja|cancelar\s+suscripci[oó]n)|'
+                                r'(?:no\s+(?:estoy\s+)?interesad[oa])|'
+                                # German
+                                r'(?:ab(?:bestellen|melden))|(?:(?:nicht|kein)\s+(?:mehr\s+)?(?:schreiben|kontaktieren|senden))|'
+                                r'(?:kein\s+interesse)|'
+                                # French
+                                r'(?:(?:ne\s+)?(?:m\'|me\s+)?(?:[ée]crivez|contactez|envoyez)\s+(?:plus|pas))|'
+                                r'(?:d[eé]sabonner|d[eé]sinscri)|(?:pas\s+int[eé]ress[eé])|'
+                                # Italian
+                                r'(?:(?:non\s+)?(?:mi\s+)?(?:scriva|contatti|invii)\s+più)|'
+                                r'(?:non\s+(?:sono\s+)?interessat[oa])|'
+                                # Portuguese
+                                r'(?:(?:não|nao)\s+me\s+(?:escreva|contacte|envie))|'
+                                r'(?:(?:não|nao)\s+(?:estou\s+)?interessad[oa])|'
+                                # Turkish
+                                r'(?:yazma(?:yın|yin))|(?:abonelikten\s+çık)|(?:ilgilenmiyorum)',
+                                _re_unsub_wh.IGNORECASE,
+                            )
+                            if _UNSUB_RE_WH.search(text_body):
+                                try:
+                                    from models import EmailContact as _EC_wh
+                                    _ec_wh = session_db.query(_EC_wh).filter_by(
+                                        user_id=outreach.user_id, email=from_email
+                                    ).first()
+                                    if _ec_wh:
+                                        _ec_wh.status = 'unsubscribed'
+                                        _old_notes_wh = _ec_wh.notes or ''
+                                        if 'отписка' not in _old_notes_wh.lower():
+                                            _ec_wh.notes = ((_old_notes_wh + '\n') if _old_notes_wh else '') + '[отписка: контакт попросил не писать]'
+                                    else:
+                                        session_db.add(_EC_wh(
+                                            user_id=outreach.user_id, email=from_email,
+                                            source='imap_reply', status='unsubscribed',
+                                            notes='[отписка: контакт попросил не писать]',
+                                        ))
+                                    outreach.status = 'unsubscribed'
+                                    outreach.next_follow_up_at = None
+                                    session_db.commit()
+                                    logger.info(f"[RESEND_WEBHOOK] AUTO-UNSUBSCRIBE: {from_email} marked as unsubscribed")
+                                except Exception as _e_unsub_wh:
+                                    logger.warning(f"[RESEND_WEBHOOK] auto-unsubscribe failed: {_e_unsub_wh}")
+                                    try:
+                                        session_db.rollback()
+                                    except Exception:
+                                        pass
+
                         # Уведомим пользователя через TG если возможно
                         _reply_user = None
                         try:

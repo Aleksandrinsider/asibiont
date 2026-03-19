@@ -1047,6 +1047,32 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "update_email_contact_status",
+            "description": "🔄 Обновить статус email-контакта. Используй когда контакт ответил негативно, попросил не писать (unsubscribed), или проявил интерес (interested). Автоматически отменяет follow-up при unsubscribed.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "description": "Email контакта"
+                    },
+                    "status": {
+                        "type": "string",
+                        "description": "Новый статус: new / contacted / replied / interested / unsubscribed / bounced",
+                        "enum": ["new", "contacted", "replied", "interested", "unsubscribed", "bounced"]
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Причина смены статуса (например: 'контакт попросил не писать на греческом')"
+                    }
+                },
+                "required": ["email", "status"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_email_contacts",
             "description": "📋 СПИСОК email-контактов пользователя из справочника. Показывает все сохранённые контакты с их статусами.",
             "parameters": {

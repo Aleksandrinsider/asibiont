@@ -11346,6 +11346,56 @@ async def reply_to_outreach_email(
             except Exception as _e_reply_chk:
                 logger.debug("suppressed unsubscribed check in reply: %s", _e_reply_chk)
 
+        # ── GUARD: сканируем reply_text на opt-out сигналы (на случай если check_emails ещё не обработал) ──
+        _contact_reply_text = (outreach.reply_text or '').lower()
+        if _contact_reply_text:
+            import re as _re_unsub_guard
+            _UNSUB_GUARD_RE = _re_unsub_guard.compile(
+                r'\bunsubscribe\b|\bopt[\s\-]?out\b|'
+                r'\bstop\s+(?:emailing|contacting|writing|sending)\b|'
+                r'\bdo\s+not\s+(?:contact|email|write|send)\b|'
+                r'\bdon\'?t\s+(?:contact|email|write|send)\b|'
+                r'\bnot\s+interested\b|\bleave\s+me\s+alone\b|'
+                r'не\s*пиши(?:те)?|(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
+                r'отпис(?:ать|ка|аться)|'
+                r'(?:больше\s+)?не\s+(?:нужно|надо|хочу)\s*(?:писать|получать)|'
+                r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
+                # Greek
+                r'μη\s*(?:μου)?\s*(?:στ[εέ]λν|γρ[αά]φ)|σταματ[ήη]στε|'
+                r'(?:δεν|δε)\s+(?:με\s+)?ενδιαφ[εέ]ρ|(?:δεν|δε)\s+θ[εέ]λω|'
+                r'αφ[ήη]στ[εέ]\s+(?:με|μου)|'
+                # Spanish / German / French / Italian / Portuguese / Turkish
+                r'(?:no\s+me\s+(?:escriba|contacte))|(?:darse\s+de\s+baja)|'
+                r'(?:ab(?:bestellen|melden))|(?:kein\s+interesse)|'
+                r'(?:d[eé]sabonner|d[eé]sinscri)|(?:pas\s+int[eé]ress[eé])|'
+                r'(?:non\s+(?:sono\s+)?interessat[oa])|'
+                r'(?:(?:não|nao)\s+(?:estou\s+)?interessad[oa])|'
+                r'(?:yazma(?:yın|yin))|(?:ilgilenmiyorum)',
+                _re_unsub_guard.IGNORECASE,
+            )
+            if _UNSUB_GUARD_RE.search(_contact_reply_text):
+                # Auto-unsubscribe the contact
+                try:
+                    _ec_auto = session.query(EmailContact).filter_by(
+                        user_id=user.id, email=_reply_rcpt
+                    ).first()
+                    if _ec_auto:
+                        _ec_auto.status = 'unsubscribed'
+                        _old_n = _ec_auto.notes or ''
+                        if 'отписка' not in _old_n.lower():
+                            _ec_auto.notes = ((_old_n + '\n') if _old_n else '') + '[отписка: контакт попросил не писать]'
+                    outreach.status = 'unsubscribed'
+                    outreach.next_follow_up_at = None
+                    session.commit()
+                    logger.info(f'[EMAIL_REPLY] AUTO-UNSUBSCRIBE on reply guard: {_reply_rcpt}')
+                except Exception as _e_auto_unsub:
+                    logger.debug(f'[EMAIL_REPLY] auto-unsubscribe failed: {_e_auto_unsub}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                return f"⛔ {_reply_rcpt} просил не писать — ответ заблокирован. Контакт отмечен как отписавшийся."
+
         # Защита от спама: не более 2 AI-ответов одному контакту суммарно по всем записям
         _MAX_AI_REPLIES = 2
         _email_to_check = (recipient_email or outreach.recipient_email or '').strip().lower()
@@ -12282,6 +12332,17 @@ async def negotiate_by_email(
         if not user:
             return " Пользователь не найден."
 
+        # ── GUARD: не начинать переговоры с отписавшимся контактом ──
+        _neg_rcpt = contact_email.strip().lower()
+        try:
+            _ec_neg = session.query(EmailContact).filter_by(
+                user_id=user.id, email=_neg_rcpt, status='unsubscribed'
+            ).first()
+            if _ec_neg:
+                return f"⛔ {_neg_rcpt} отписался — переговоры заблокированы."
+        except Exception as _e_neg:
+            logger.debug("suppressed unsubscribed check in negotiate: %s", _e_neg)
+
         # MX-проверка
         mx_valid, mx_err = _validate_email_domain(contact_email.strip().lower())
         if not mx_valid:
@@ -12848,12 +12909,14 @@ async def check_emails(
                                 logger.debug(f'[CHECK_EMAILS] campaign replies counter update failed: {_e_camp}')
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status=replied, reply_text saved: {_rep_em}')
-                    # Если контакт уже replied — обновить reply_text если новый длиннее
-                    elif _rep_snippet:
+                    else:
+                        # Если контакт уже replied/unsubscribed (напр. через webhook) — обновить reply_text если snippet лучше
                         _eo_any = session.query(_EO_ce2).filter_by(
                             user_id=user.id, recipient_email=_rep_em,
-                        ).filter(_EO_ce2.status == 'replied').first()
-                        if _eo_any and (not _eo_any.reply_text or len(_rep_snippet) > len(_eo_any.reply_text or '')):
+                        ).filter(_EO_ce2.status.in_(['replied', 'unsubscribed'])).order_by(
+                            _EO_ce2.reply_at.desc()
+                        ).first()
+                        if _eo_any and _rep_snippet and (not _eo_any.reply_text or len(_rep_snippet) > len(_eo_any.reply_text or '')):
                             _eo_any.reply_text = _rep_snippet
                             if not _eo_any.reply_at:
                                 _eo_any.reply_at = _now_ce
@@ -12886,6 +12949,7 @@ async def check_emails(
                     r'\bnot\s+interested\b|'
                     r'\bno\s+thanks?\b|'
                     r'\bleave\s+me\s+alone\b|'
+                    # Russian
                     r'не\s*пиши(?:те)?|'
                     r'(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
                     r'отпис(?:ать|ка|аться)|'
@@ -12893,7 +12957,36 @@ async def check_emails(
                     r'(?:уберите|удалите)\s+(?:меня|мой\s+(?:email|адрес))|'
                     r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
                     r'(?:не\s+)?интересно|'
-                    r'спам|spam',
+                    r'спам|spam|'
+                    # Greek
+                    r'μη\s*(?:μου)?\s*(?:στ[εέ]λν|γρ[αά]φ)|'
+                    r'σταματ[ήη]στε|'
+                    r'(?:δεν|δε)\s+(?:με\s+)?ενδιαφ[εέ]ρ|'
+                    r'(?:δεν|δε)\s+θ[εέ]λω|'
+                    r'αφ[ήη]στ[εέ]\s+(?:με|μου)|'
+                    r'διαγρ[αά]ψτε\s+(?:με|μου)|'
+                    # Spanish
+                    r'(?:no\s+me\s+(?:escriba|contacte|envíe))|'
+                    r'(?:darse\s+de\s+baja|cancelar\s+suscripci[oó]n)|'
+                    r'(?:no\s+(?:estoy\s+)?interesad[oa])|'
+                    # German
+                    r'(?:ab(?:bestellen|melden))|'
+                    r'(?:(?:nicht|kein)\s+(?:mehr\s+)?(?:schreiben|kontaktieren|senden))|'
+                    r'(?:kein\s+interesse)|'
+                    # French
+                    r'(?:(?:ne\s+)?(?:m\'|me\s+)?(?:[ée]crivez|contactez|envoyez)\s+(?:plus|pas))|'
+                    r'(?:d[eé]sabonner|d[eé]sinscri)|'
+                    r'(?:pas\s+int[eé]ress[eé])|'
+                    # Italian
+                    r'(?:(?:non\s+)?(?:mi\s+)?(?:scriva|contatti|invii)\s+più)|'
+                    r'(?:non\s+(?:sono\s+)?interessat[oa])|'
+                    r'(?:cancellar[emsit]+\s+(?:la\s+)?iscrizion)|'
+                    # Portuguese
+                    r'(?:(?:não|nao)\s+me\s+(?:escreva|contacte|envie))|'
+                    r'(?:(?:não|nao)\s+(?:estou\s+)?interessad[oa])|'
+                    r'(?:cancelar\s+inscri[çc][ãa]o)|'
+                    # Turkish
+                    r'(?:yazma(?:yın|yin))|(?:abonelikten\s+çık)|(?:ilgilenmiyorum)',
                     _re_unsub_ce.IGNORECASE,
                 )
                 for _unsub_em, _unsub_snip in _reply_snippets.items():
@@ -12941,14 +13034,24 @@ async def check_emails(
                     r'write in|respond in|reply in|communicate in|'
                     r'хочу использовать|хочу общаться|хотел.{0,10}бы|'
                     r'предпочитаю|пожалуйста пишите|пишите на|прошу писать|'
-                    r'давайте (?:общаться|переписываться)|want to (?:use|communicate|write)',
+                    r'давайте (?:общаться|переписываться)|want to (?:use|communicate|write)|'
+                    # Greek preference triggers
+                    r'(?:παρακαλ[ώω]|θ[αά]\s+[ήη]θελα)\s+(?:γρ[αά]ψτε|απαντ[ήη]στε)|'
+                    r'(?:γρ[αά]ψτε|στ[εέ]λνετε)\s+(?:στα?|σε)\s+(?:ελληνικ[αά]|αγγλικ[αά])|'
+                    r'προτιμ[ώω]|'
+                    # Spanish
+                    r'(?:por\s+favor\s+(?:escrib|respond))|(?:prefer[ií]a)|'
+                    # German
+                    r'(?:bitte\s+(?:schreiben|antworten)\s+(?:auf|in))|'
+                    # French
+                    r'(?:veuillez\s+(?:[ée]crire|r[ée]pondre))|(?:je\s+pr[eé]f[eè]re)',
                     _re_pref_ce.IGNORECASE,
                 )
                 _LANG_PREF_CE = [
-                    (r'greek|греческ',                       'язык: греческий'),
-                    (r'\brussian\b|по-?русски|на\s+русском', 'язык: русский'),
-                    (r'\benglish\b|по-?английски|на\s+английском', 'язык: английский'),
-                    (r'spanish|по-?испански|на\s+испанском|español', 'язык: испанский'),
+                    (r'greek|греческ|ελληνικ[αά]|στα\s+ελληνικ', 'язык: греческий'),
+                    (r'\brussian\b|по-?русски|на\s+русском|ρωσικ[αά]', 'язык: русский'),
+                    (r'\benglish\b|по-?английски|на\s+английском|αγγλικ[αά]', 'язык: английский'),
+                    (r'spanish|по-?испански|на\s+испанском|español|ισπανικ[αά]', 'язык: испанский'),
                     (r'german|по-?немецки|на\s+немецком|deutsch', 'язык: немецкий'),
                     (r'french|по-?французски|на\s+французском|français', 'язык: французский'),
                     (r'chinese|по-?китайски|на\s+китайском|中文',  'язык: китайский'),
@@ -12957,6 +13060,7 @@ async def check_emails(
                     (r'portuguese|по-?португальски|на\s+португальском', 'язык: португальский'),
                     (r'italian|по-?итальянски|на\s+итальянском',  'язык: итальянский'),
                     (r'arabic|по-?арабски|на\s+арабском',         'язык: арабский'),
+                    (r'turkish|по-?турецки|на\s+турецком',        'язык: турецкий'),
                     (r'formal|официальн|деловой стиль',            'стиль: официальный'),
                     (r'informal|неформальн|casual|дружеск',        'стиль: неформальный'),
                 ]
@@ -13035,6 +13139,17 @@ async def check_emails(
             if _unsubscribed_emails:
                 result += '\n\n⛔ ОТПИСАЛИСЬ (НЕ отправляй им больше ни одного письма):\n'
                 result += '\n'.join(f'• {_ue}' for _ue in _unsubscribed_emails)
+
+            # ── Аннотация: инструкция AI по анализу намерения ──
+            _has_replies = bool(_reply_snippets)
+            if _has_replies:
+                result += (
+                    '\n\n🛡️ ОБЯЗАТЕЛЬНО перед ответом — проанализируй НАМЕРЕНИЕ каждого контакта по тексту выше:'
+                    '\n• ПОЗИТИВНОЕ (интерес, вопросы, согласие) → отвечай на языке контакта'
+                    '\n• НЕЙТРАЛЬНОЕ (уточнения) → отвечай вежливо'
+                    '\n• НЕГАТИВНОЕ (не интересно, не пишите, отписка — на ЛЮБОМ языке) → НЕ ОТВЕЧАЙ, помечай unsubscribed'
+                    '\n→ Определяй язык из текста ответа контакта и пиши reply_body на том же языке!'
+                )
 
         return result
     except Exception as e:
@@ -13896,6 +14011,8 @@ async def save_email_contact(
                 existing.position = position.strip()
             if notes:
                 existing.notes = notes.strip()
+            if status:
+                existing.status = status
             session.commit()
             return f" Контакт {email_clean} обновлён"
 
@@ -13916,6 +14033,67 @@ async def save_email_contact(
         logger.error(f"[SAVE_EMAIL_CONTACT] Error: {e}", exc_info=True)
         session.rollback()
         return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def update_email_contact_status(
+    email: str = None,
+    status: str = None,
+    reason: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Обновить статус email-контакта (напр. unsubscribed) и почистить follow-up."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import User, EmailContact, EmailOutreach
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        email_clean = (email or '').strip().lower()
+        if not email_clean or '@' not in email_clean:
+            return "Некорректный email"
+        valid_statuses = ('new', 'contacted', 'replied', 'interested', 'unsubscribed', 'bounced')
+        if status not in valid_statuses:
+            return f"Некорректный статус. Допустимые: {', '.join(valid_statuses)}"
+
+        contact = session.query(EmailContact).filter_by(
+            user_id=user.id, email=email_clean
+        ).first()
+        if not contact:
+            return f"Контакт {email_clean} не найден"
+
+        old_status = contact.status
+        contact.status = status
+        if reason:
+            existing_notes = (contact.notes or '').strip()
+            contact.notes = f"{existing_notes}\n[{status}] {reason}".strip()
+
+        # При unsubscribed — отменяем все follow-up
+        if status == 'unsubscribed':
+            outreaches = session.query(EmailOutreach).filter(
+                EmailOutreach.contact_id == contact.id,
+                EmailOutreach.next_follow_up_at.isnot(None),
+            ).all()
+            for o in outreaches:
+                o.next_follow_up_at = None
+                o.status = 'unsubscribed'
+
+        session.commit()
+        msg = f"Контакт {email_clean}: {old_status} → {status}"
+        if status == 'unsubscribed':
+            msg += ". Follow-up отменены. Больше не пишем этому контакту."
+        return msg
+    except Exception as e:
+        logger.error(f"[UPDATE_EMAIL_CONTACT_STATUS] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"Ошибка: {str(e)}"
     finally:
         if close_session:
             session.close()
