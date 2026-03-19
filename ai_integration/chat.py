@@ -635,8 +635,8 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
                             f"если задача связана с этим сервисом, предложи конкретное действие через него "
                             f"вместо общего совета."
                         )
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             instruction = (
                 f"Напоминание о задаче «{task_title}»"
                 f"{f' (ID: {task_id})' if task_id else ''}.\n"
@@ -1483,8 +1483,8 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                         _r.setrlimit(_r.RLIMIT_AS,     (64*1024*1024, 64*1024*1024))
                         _r.setrlimit(_r.RLIMIT_CPU,    (12, 12))
                         _r.setrlimit(_r.RLIMIT_NOFILE, (32, 32))
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 from ai_integration.autonomous_agent import _wrap_agent_code as _pm_wac
                 _proc_pm = await _aio_pm.create_subprocess_exec(
                     _sys_pm.executable, '-c', _pm_wac(_a_py),

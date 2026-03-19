@@ -176,8 +176,8 @@ try:
         return _ssrf_orig_hcs_init(self, host, *_a3, **_kw3)
     _ssrf_hc.HTTPConnection.__init__ = _ssrf_safe_hc_init
     _ssrf_hc.HTTPSConnection.__init__ = _ssrf_safe_hcs_init
-except Exception:
-    pass
+except Exception as _e:
+    logger.debug("suppressed: %s", _e)
 # Patch socket.create_connection (blocks raw socket SSRF)
 _ssrf_orig_connect = _ssrf_sk.create_connection
 def _ssrf_safe_connect(address, *_a4, **_kw4):
@@ -190,6 +190,20 @@ import os as _fix_os
 for _fix_k in list(_fix_os.environ.keys()):
     if "PASS" in _fix_k:
         _fix_os.environ[_fix_k] = _fix_os.environ[_fix_k].replace(" ", "")
+# Block dangerous modules — prevent agent code from spawning processes or accessing FS unsafely
+import builtins as _sec_b
+_sec_orig_import = _sec_b.__import__
+_SEC_BLOCKED = frozenset({
+    'subprocess', 'shutil', 'ctypes', 'importlib', 'code', 'codeop',
+    'multiprocessing', 'threading', 'signal', 'pty', 'fcntl', 'termios',
+    'resource', 'gc', 'sys', 'pickle', 'shelve', 'marshal',
+})
+def _sec_safe_import(name, *_a, **_kw):
+    _top = name.split('.')[0]
+    if _top in _SEC_BLOCKED:
+        raise ImportError(f'Module {name!r} is not available in agent sandbox')
+    return _sec_orig_import(name, *_a, **_kw)
+_sec_b.__import__ = _sec_safe_import
 '''
 
 
@@ -630,8 +644,8 @@ class HybridAutonomousAgent:
                     _group_uses = sum(_th.get(t, 0) for t in _gi['tools'])
                     if _group_uses >= 5:
                         selected |= _gi['tools']
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         # Always include save_user_rule (behavioral rules) + run_agent_action
         selected.add('save_user_rule')
@@ -1031,8 +1045,8 @@ class HybridAutonomousAgent:
                         _r = _m.get('rules', [])
                         if _r:
                             _rules_only = _json_mem.dumps({'rules': _r}, ensure_ascii=False)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 effective_memory = _rules_only  # Только правила, без исторического мусора
 
             # Текущая задача
@@ -1180,8 +1194,8 @@ class HybridAutonomousAgent:
                 _res.setrlimit(_res.RLIMIT_CPU, (_cpu, _cpu))
                 _files = 32                # не более 32 open file descriptors
                 _res.setrlimit(_res.RLIMIT_NOFILE, (_files, _files))
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
         try:
             _kwargs = dict(stdout=_aio_ea.subprocess.PIPE, stderr=_aio_ea.subprocess.PIPE, env=env)
             if _is_linux:
@@ -1379,8 +1393,8 @@ class HybridAutonomousAgent:
                     try:
                         self.tool_discovery.learn_from_failure(
                             func_name=tool_name, error=str(e))
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     results.append({"tool": tool_name, "success": False,
                                     "error": str(e), "reason": reason})
         finally:
@@ -1946,8 +1960,8 @@ class HybridAutonomousAgent:
                             _stripped_prefix_end = _mention_match.end()
                             try:
                                 set_user_focused_agent(user_id, _cid)
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                             logger.info(f"[AGENT] @mention routed to '{_cdata['name']}' (id={_cid})")
                             break
                     # Fallback: ищем среди собственных офисных агентов пользователя (status active/paused)
@@ -1969,8 +1983,8 @@ class HybridAutonomousAgent:
                                             # Добавляем в активные чтобы следующий раз нашёлся сразу
                                             try:
                                                 set_user_focused_agent(user_id, _oa.id)
-                                            except Exception:
-                                                pass
+                                            except Exception as _e:
+                                                logger.debug("suppressed: %s", _e)
                                             logger.info(f"[AGENT] @mention own-agent '{_oa.name}' (id={_oa.id})")
                                             break
                             finally:
@@ -1992,8 +2006,8 @@ class HybridAutonomousAgent:
                                 _stripped_prefix_end = _first_word.end()
                                 try:
                                     set_user_focused_agent(user_id, _cid)
-                                except Exception:
-                                    pass
+                                except Exception as _e:
+                                    logger.debug("suppressed: %s", _e)
                                 logger.info(f"[AGENT] name-prefix routed to '{_cdata['name']}' (id={_cid})")
                                 break
                         # Fallback: собственные офисные агенты
@@ -2014,8 +2028,8 @@ class HybridAutonomousAgent:
                                                 _stripped_prefix_end = _first_word.end()
                                                 try:
                                                     set_user_focused_agent(user_id, _oa_np.id)
-                                                except Exception:
-                                                    pass
+                                                except Exception as _e:
+                                                    logger.debug("suppressed: %s", _e)
                                                 logger.info(f"[AGENT] name-prefix own-agent '{_oa_np.name}' (id={_oa_np.id})")
                                                 break
                                 finally:
@@ -2056,8 +2070,8 @@ class HybridAutonomousAgent:
                         # Агент удалён/деактивирован — убираем только его из списка
                         try:
                             remove_user_active_agent(user_id, _active_agent_id)
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
             except Exception as _ae:
                 logger.warning(f"[AGENT] process_request personality inject error: {_ae}")
 
@@ -2121,8 +2135,8 @@ class HybridAutonomousAgent:
                             import resource as _res
                             _limit = 64 * 1024 * 1024  # 64 MB
                             _res.setrlimit(_res.RLIMIT_AS, (_limit, _limit))
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
 
                     async def _run_agent_code():
                         _kwargs = dict(
@@ -2347,8 +2361,8 @@ class HybridAutonomousAgent:
             if _cb:
                 try:
                     await _cb(random.choice(self._get_thinking_phrases(user_lang)))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             # ── Fast path: чисто разговорное сообщение → без инструментов (~3-5s) ────
             # При tool_choice="auto" и отсутствии action-слов DeepSeek всё равно
@@ -2392,8 +2406,8 @@ class HybridAutonomousAgent:
                 if _cb and iteration > 0:
                     try:
                         await _cb(random.choice(self._get_deep_thinking_phrases(user_lang)))
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # Если уже есть результаты инструментов — финальный ответ без tools
                 # (убирает ~40 определений инструментов из запроса → значительно быстрее)
@@ -2463,8 +2477,8 @@ class HybridAutonomousAgent:
                         if len(content.strip()) > 200:
                             _preview += '...'
                         await _cb(_preview)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # ── Pass 1: валидация (последовательно — dedup/limits — shared state) ──
                 _ready_calls = []   # (tc_item, name, args, reason)
@@ -2526,8 +2540,8 @@ class HybridAutonomousAgent:
                     elif _cb:
                         try:
                             await _cb(self._tool_progress_text(_name, iteration + 1, lang=user_lang))
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     try:
                         _results = await self.execute_actions(
                             [{"tool": _name, "params": _args, "reason": _reason}],
@@ -2600,8 +2614,8 @@ class HybridAutonomousAgent:
                                         if _vis:
                                             await _cb(_vis)
                                     except Exception: pass
-                                except Exception:
-                                    pass
+                                except Exception as _e:
+                                    logger.debug("suppressed: %s", _e)
                         else:
                             _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
                             try: get_learner().record_tool_result(user_id, _name, False)
@@ -2879,8 +2893,8 @@ class HybridAutonomousAgent:
                 logger.warning(f"[SELF-LEARN] Record failed: {e}")
         try:
             asyncio.get_running_loop().create_task(_self_learn_bg())
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         # === Долгосрочная память — только значимые факты ===
         # НЕ сохраняем CRUD-результаты (задачи/цели уже в БД — дубли вызывают галлюцинации)
@@ -3882,8 +3896,8 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         for t in tools:
             if t in _tool_labels:
                 found.add(_tool_labels[t])
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     # 4. Из search_scope
     if search_scope and search_scope.strip():
@@ -3894,8 +3908,8 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         _tj = (tools_allowed or '').strip()
         if not _tj or _tj == '[]':
             found.add('все инструменты платформы')
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     return sorted(found)
 
@@ -4146,8 +4160,8 @@ def _save_agent_delegation_anchor(user_db_id: int, agent_id: int, agent_name: st
                     _ex_task = (_ex_data.get('task', '') or '').lower()
                     if _task_key[:30] in _ex_task:
                         return
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             # expires_at минимум 4ч — чтобы AnchorEngine успел увидеть и доставить якорь
             _effective_expires = max(cooldown_hours, 4.0)
             _s.add(_Anch(
@@ -4198,8 +4212,8 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         if not _FAM_ch:
             if not _het(user_id, 'agent_chime'):
                 return
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     # Задержка для реализма — агент «думает» 8–25 сек
     await asyncio.sleep(_rnd.uniform(8, 25))
@@ -4257,8 +4271,8 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
                         _aid = _rd['__agent'].get('id')
                         if _aid:
                             _recently_chimed.add(int(_aid))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
         finally:
             _cs.close()
         _agents = [a for a in _agents if a.get('id') not in _recently_chimed]
@@ -4365,8 +4379,8 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         from token_service import spend_tokens as _st_ch2
         if not _FAM_ch2:
             _st_ch2(user_id, 'agent_chime', description=f'chime:{_agent["name"]}')
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     # Сохраняем в Interaction
     try:
@@ -4441,8 +4455,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             agent.get('python_code', '') or '',
             agent.get('tools_allowed', '') or '',
         )
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
     # Строим чёткую строку о том что подключено и КАКОЙ инструмент использовать
     # ── Универсальный _intg_line из лейблов _parse_agent_integrations ──────────
     # Не проверяем сырые api_keys — работаем с нормализованными лейблами.
@@ -4885,8 +4899,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _res.setrlimit(_res.RLIMIT_CPU, (_cpu, _cpu))
                         _files = 32                # max 32 file descriptors
                         _res.setrlimit(_res.RLIMIT_NOFILE, (_files, _files))
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 try:
                     _kwargs_sc = dict(
                         capture_output=True, text=True, timeout=API_TIMEOUT_SCRIPT, env=_exec_env,
@@ -5154,8 +5168,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _all_names = {t['function']['name'] for t in _gat3()}
                     _exclude_for_agent = _all_names - _inferred_tools
                     logger.info('[DIRECTOR] Smart filter for %s: inferred %d tools from spec', agent.get('name'), len(_inferred_tools))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
     # ── Кросс-сессионный бан инструментов: агент использовал одно и то же 2+ раз за 24ч
     # → исключаем из видимых, чтобы AI искал новые подходы (а не повторял провальную стратегию)
@@ -5210,8 +5224,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             from .tools import get_available_tools as _gat_ban
                             _all_ban_names = {t['function']['name'] for t in _gat_ban()}
                             _exclude_for_agent = _runtime_banned & _all_ban_names
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
             finally:
                 _db_ban.close()
         except Exception as _ban_err:
@@ -5252,8 +5266,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 "исследования, email, публикации, делегирование и многое другое. ",
                 "ТВОИ ИНСТРУМЕНТЫ: " + ", ".join(_labeled) + ". ",
             )
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     # ── Блок МЫШЛЕНИЯ: учим агента думать перед действием (по образцу ASI) ─────
     # Без этого блока агенты выбирают первый попавшийся инструмент по шаблону.
@@ -5287,8 +5301,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _user_pref = _learner_ap.get_user_preferences(user_id)
         if _user_pref:
             system_prompt += _user_pref + "\n"
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     # Для autopilot-задач: фокус на конкретное действие, не на анализ истории
     if _is_autopilot_task:
@@ -5868,8 +5882,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                     logger.info("[SUBDELEGATE] skip %s — not enough tokens", _target_agent.name)
                                     continue
                                 _sp_sub(user_id, 'agent_task', description=f'subdelegate:{_target_agent.name}')
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         try:
                             _sub_raw_sd = await asyncio.wait_for(
                                 _exec_agent_for_director(_ta_dict, _sd['task'], user_id, dialog_context, _depth=_depth + 1),
@@ -5946,8 +5960,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     try:
         from .utils import clean_technical_details as _ctd_exec
         _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     # Для автопилота: если текст шаблонный но инструменты вызывались — принудительно расширяем через LLM
     if _is_autopilot_task and _tools_used and (_final_text == _done_fb or len((_final_text or '').strip()) < 60):
@@ -6210,8 +6224,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             try:
                 from .user_agents import get_user_active_agents
                 _session_ids = get_user_active_agents(user_id) or []
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             # Источник 2: собственные агенты пользователя с активной подпиской (AgentSubscription).
             # Activate/Deactivate в UI управляет именно этой таблицей.
@@ -6242,8 +6256,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         try:
                             from .user_agents import set_user_active_agent as _sua_dir
                             _sua_dir(user_id, _oa.id)
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     _s.commit()
                     _existing_subs = {a.id for a in _own_all}
 
@@ -6276,8 +6290,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _tools = []
                 try:
                     _tools = json.loads(_dba.tools_allowed or '[]')
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 _agents.append({
                     'id': _dba.id,
                     'name': _dba.name or 'Агент',
@@ -6416,10 +6430,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             except TypeError:
                 try:
                     await progress_callback(text)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
     # ── Вспомогательная функция сохранения результата агента ──────────────────
     async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
@@ -6453,8 +6467,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     logger.info("[DIRECTOR] user %d: skip agent_task — not enough tokens", user_id)
                     return "Недостаточно токенов для запуска агента."
                 _st(user_id, 'agent_task', description=f'{ag["name"]}: {task[:60]}')
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         # Агентские поручения логируются только в AgentActivityLog (не в Task)
         _task_id = None
@@ -6510,8 +6524,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _cleaned_ag = _ctd_ag(resp)
             if _cleaned_ag and _cleaned_ag.strip():
                 resp = _cleaned_ag
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         _ag_id = ag.get('id')
         _av_url = f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''
         _ac = _json.dumps({
@@ -6715,8 +6729,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         _md = _ma.get('data', {})
                         _mission_context = _md.get('result_summary') or _md.get('task', '')
                         break
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             if not _has_active_mission:
                 return None  # Нет активной миссии — ASI ответит сам через process_request
@@ -6850,8 +6864,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             if _delegation_task_id:
                 try:
                     _update_agent_delegation_task(_delegation_task_id, f'Ошибка: {str(_run_err)[:200]}')
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             break
 
         _agent_tools_used_round: list[str] = []
@@ -6922,8 +6936,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             if _rj:
                 try:
                     _review_decision = _json.loads(_rj.group(1))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             _review_action = _review_decision.get('action', '') if _review_decision else ''
             _accept_summary = (_review_decision.get('summary', '') if _review_decision else '')
@@ -6947,8 +6961,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     try:
                         from .utils import clean_technical_details as _ctd_fu
                         _fu_final_text = _ctd_fu(_fu_final_text).strip()
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     if _fu_final_text:
                         await _send_visible(_fu_final_text)
                         _save_interaction_for_director(user_id, _fu_final_text, message_type='ai')
@@ -7041,8 +7055,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                     _cleaned_dir = _ctd_dir(_director_response)
                     if _cleaned_dir and _cleaned_dir.strip():
                         _director_response = _cleaned_dir
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 import re as _re_dir
                 _director_response = _re_dir.sub(r'\n{2,}', '\n', _director_response)
                 _director_response = _re_dir.sub(r'  +', ' ', _director_response).strip()
@@ -7074,8 +7088,8 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 _cleaned = _ctd_final(response_text)
                 if _cleaned and _cleaned.strip():
                     response_text = _cleaned
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             import re as _re
             # Удаляем оставшиеся snake_case tool names (word_word pattern) из текста
             response_text = _re.sub(

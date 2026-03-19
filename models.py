@@ -30,9 +30,6 @@ class EncryptedText(TypeDecorator):
             return value
         return decrypt_token(value)
 
-logger = logging.getLogger(__name__)
-Base = declarative_base()
-
 
 class SubscriptionTier(enum.Enum):
     LIGHT = 'LIGHT'      # 3000 RUB/month

@@ -1245,8 +1245,8 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                             dc = session.query(DelegationCampaign).filter_by(id=task.delegation_campaign_id).first()
                             if dc:
                                 dc.delegations_completed = (dc.delegations_completed or 0) + 1
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
 
                     session.commit()
                     
@@ -1710,8 +1710,8 @@ async def delegate_task(
                     _tools_parsed = []
                     try:
                         _tools_parsed = _jj.loads(_agent_recipient.tools_allowed or '[]')
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     _agent_dict = {
                         'id': _agent_recipient.id,
                         'name': _agent_name,
@@ -1881,15 +1881,15 @@ async def delegate_task(
                             _result2 = _raw_result2[0] if isinstance(_raw_result2, (tuple, list)) else _raw_result2
                             if _result2 and _result2.strip() and len(_result2.strip()) > len(_result.strip()):
                                 _result = _result2
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
 
                     # Очищаем DSML-теги из ответа
                     try:
                         from .utils import clean_technical_details as _ctd_r
                         _result = _ctd_r(_result).strip() or _result
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                     # Очищаем чрезмерное форматирование (bullet-списки, лишние пробелы)
                     _result = _ren.sub(r'\n{3,}', '\n\n', _result)  # не более 2 переносов подряд
@@ -2182,8 +2182,8 @@ def accept_delegated_task(task_id=None, task_title=None, user_id=None):
                 dc = session.query(DelegationCampaign).filter_by(id=task.delegation_campaign_id).first()
                 if dc:
                     dc.delegations_accepted = (dc.delegations_accepted or 0) + 1
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         session.commit()
 
@@ -2312,8 +2312,8 @@ def reject_delegated_task(task_id=None, task_title=None, reason=None, user_id=No
                 dc = session.query(DelegationCampaign).filter_by(id=task.delegation_campaign_id).first()
                 if dc:
                     dc.delegations_rejected = (dc.delegations_rejected or 0) + 1
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         session.commit()
 
@@ -4380,8 +4380,8 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                                 f"  3. Обновляй metric_current на +1 за каждый реальный положительный ответ\n"
                                 f"Текущая метрика: {int(_old_mc)} / {int(matched.metric_target)} {matched.metric_unit or ''}"
                             )
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 # Исключение: если это финальный update (цель достигается) — rate-limit пропускаем
                 # Исключение 2: если новая метрика > старой (реальный рост) — тоже пропускаем rate-limit
                 _would_complete = (mc >= matched.metric_target)
@@ -4397,8 +4397,8 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                         ).count()
                         if _recent_updates >= 1:
                             return f"Метрика цели '{matched.title}' уже обновлялась менее часа назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 matched.metric_current = mc
                 pct = int(mc / matched.metric_target * 100)
                 pct = max(0, min(100, pct))
@@ -4435,8 +4435,8 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                                     f"  2. Если есть ответ → negotiate_by_email: спроси начали ли они тестировать\n"
                                     f"  3. При подтверждении → update_goal_progress(status='completed')"
                                 )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
                     changes.append("статус: завершено! ")
@@ -4478,8 +4478,8 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                                     f"email-контакты ≠ реальные тестировщики. "
                                     f"Сначала проверь ответы через check_emails и подтверди реальное участие."
                                 )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
                     changes.append("статус: завершено! ")
@@ -4525,8 +4525,8 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                                     f"Текущее состояние: {int(matched.metric_current or 0)}/{int(matched.metric_target or 0)} "
                                     f"{matched.metric_unit or ''} — это только отправленные письма, не подтверждённые пользователи."
                                 )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                 matched.status = status
                 if status == 'completed':
                     matched.completed_at = datetime.now()
@@ -4722,14 +4722,14 @@ def delete_goal(goal_title=None, user_id=None, session=None):
                 profile = session.query(UserProfile).filter_by(user_id=user.id).first()
                 if profile:
                     profile.goals = ''
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             # Очистить conversation_history чтобы бот не цитировал старые цели
             try:
                 from .conversation_history import clear_conversation_history
                 clear_conversation_history(user_id)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             session.commit()
             # === Лог активности ===
             try:
@@ -4780,15 +4780,15 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             if profile and profile.goals:
                 parts = [p.strip() for p in profile.goals.split(';') if title.lower() not in p.strip().lower()]
                 profile.goals = '; '.join(parts) if parts else ''
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         
         # Очистить conversation_history чтобы бот не цитировал удалённую цель
         try:
             from .conversation_history import clear_conversation_history
             clear_conversation_history(user_id)
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         
         session.commit()
         # === Лог активности ===
@@ -5023,8 +5023,8 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
                     import asyncio
                     from .utils import normalize_profile_background
                     asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 return f" Добавлен интерес: {content}"
             return f"Интерес '{content}' уже есть в профиле."
 
@@ -5038,8 +5038,8 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
                     import asyncio
                     from .utils import normalize_profile_background
                     asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 return f" Добавлен навык: {content}"
             return f"Навык '{content}' уже есть в профиле."
 
@@ -5053,8 +5053,8 @@ def update_user_memory(memory_type=None, content=None, user_id=None, session=Non
                     import asyncio
                     from .utils import normalize_profile_background
                     asyncio.get_running_loop().create_task(normalize_profile_background(profile.user_id))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 return f" Добавлена цель: {content}"
             return f"Цель '{content}' уже есть в профиле."
 
@@ -6034,8 +6034,8 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
                         if REMINDER_SERVICE.scheduler.get_job(prefix):
                             REMINDER_SERVICE.scheduler.remove_job(prefix)
                             logger.info(f"[DELETE_TASK] Removed job {prefix}")
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 # Чекпоинты
                 for ctype in ["overdue_1_3", "overdue_2_3", "overdue_3_3", "pre_deadline"]:
                     cjob = f"task_overdue_{task_db_id}_{ctype}_{user_id}"
@@ -6043,14 +6043,14 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
                         if REMINDER_SERVICE.scheduler.get_job(cjob):
                             REMINDER_SERVICE.scheduler.remove_job(cjob)
                             logger.info(f"[DELETE_TASK] Removed checkpoint job {cjob}")
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 cp13 = f"task_checkpoint_{task_db_id}_1_3_{user_id}"
                 try:
                     if REMINDER_SERVICE.scheduler.get_job(cp13):
                         REMINDER_SERVICE.scheduler.remove_job(cp13)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
         except ImportError:
             pass
         
@@ -7724,8 +7724,8 @@ async def delete_post(user_id: int, post_id: int = None, session=None):
         try:
             session.query(PostLike).filter_by(post_id=post.id).delete()
             session.query(PostView).filter_by(post_id=post.id).delete()
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         
         session.delete(post)
         session.commit()
@@ -9814,8 +9814,8 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
                                 urls.append(u)
                         elif isinstance(item, str) and item.startswith('http'):
                             urls.append(item.strip())
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
         _NICHE_PLATFORM_CACHE[cache_key] = (urls, _time_np.time())
         logger.info(f"[AUTO_LEADS] AI-niche platforms [{_lang_key}] ({len(urls)}): {urls[:5]}")
         return urls
@@ -10029,8 +10029,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                     _hh_use = bool(_hh_parsed.get('use_hh', False))
                     _hh_queries = [str(q) for q in (_hh_parsed.get('queries') or []) if q][:2]
                     logger.info(f"[AUTO_LEADS] hh.ru decision: use={_hh_use}, reason={_hh_parsed.get('reason','')[:100]}")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             if not _hh_use:
                 logger.info(f"[AUTO_LEADS] hh.ru Pass 0b: skipped (AI decided not relevant for this campaign type)")
@@ -10092,8 +10092,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                                     vid = str(item.get('id', ''))
                                     if vid and vid not in _vacancy_ids:
                                         _vacancy_ids.append(vid)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # Параллельно запрашиваем детали (макс 30 вакансий)
                 _vacancy_ids = _vacancy_ids[:30]
@@ -10163,8 +10163,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                 if resp.status == 200 and 'text' in (resp.content_type or ''):
                     html = await resp.text(errors='replace')
                     return (url, html[:30000])
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         return (url, "")
 
     # Параллельная загрузка всех платформ
@@ -10260,8 +10260,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                     _pq = _json_q.loads(_qt)
                     if isinstance(_pq, list):
                         _ddg_queries = [str(q).strip() for q in _pq if q][:6]
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             # Fallback-запросы если AI не вернул список
             if not _ddg_queries:
                 _ddg_queries = [f"{core_kw} email contact", f"{core_kw} личный сайт"]
@@ -10290,8 +10290,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                             'snippet': _r.get('snippet', ''),
                             'url': _r_url,
                         })
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
         logger.info(f"[AUTO_LEADS] PASS 1b DDG: {_ddg_hits} results → "
                     f"{len(all_results)} URLs in pool, {len(all_emails_raw)} emails total")
@@ -10365,8 +10365,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                 if resp.status == 200 and 'text' in resp.content_type:
                     raw = await resp.text(errors='replace')
                     return raw[:15000]
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         return ""
 
     import asyncio as _asyncio_al
@@ -10540,8 +10540,8 @@ If no relevant emails found return []"""
                                         f"{em} (score={relevance})")
                             continue
                         parsed_leads.append(item)
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
     # Fallback: если AI не отфильтровал, но есть GitHub/hh.ru leads с контекстом
     if not parsed_leads and (github_leads or hh_leads):
@@ -10644,8 +10644,8 @@ If no relevant emails found return []"""
                 _UA_rh.user_api_keys.isnot(None),
                 _UA_rh.user_api_keys.contains('RESEND_API_KEY='),
             ).first() is not None
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         if not _os_leads.getenv('RESEND_API_KEY') and not _has_personal_resend_h:
             _intg_hints.append(
                 "💡 Для отправки писем нужен RESEND_API_KEY "
@@ -10969,8 +10969,8 @@ async def send_outreach_email(
                         _imap_val_oe = _ln_oe.split('=', 1)[1].strip().lower()
                         if _imap_val_oe and '@' in _imap_val_oe:
                             _own_emails_oe.add(_imap_val_oe)
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         if _rcpt and _rcpt in _own_emails_oe:
             return (f" Нельзя отправлять outreach на {_rcpt} — это ваша почта или IMAP-аккаунт агента. "
                     f"Найди email реального внешнего получателя.")
@@ -11161,16 +11161,16 @@ async def send_outreach_email(
                     try:
                         from .service_health import clear_error as _clr_svc
                         _clr_svc('resend')
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 else:
                     err = resp_data.get('message', str(resp_data))
                     logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
                     try:
                         from .service_health import record_error as _rec_svc
                         _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     return f" Ошибка Resend API: {err}"
         except Exception as e:
             logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
@@ -11379,8 +11379,8 @@ async def reply_to_outreach_email(
                           'to': [to_clean], 'subject': subject, 'text': reply_body}
             try:
                 _gm_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             if _rt_gm_r and '@' in _rt_gm_r:
                 _gm_r_json['reply_to'] = [_rt_gm_r]
             try:
@@ -11418,8 +11418,8 @@ async def reply_to_outreach_email(
                 try:
                     _reply_html = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
                     msg.attach(_MimeSmtp(_reply_html, 'html', 'utf-8'))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 _ctx = _ssl_smtp.create_default_context()
                 with _smtplib.SMTP(_smtp_host, _smtp_port, timeout=30) as s:
                     s.ehlo(); s.starttls(context=_ctx); s.ehlo()
@@ -11466,8 +11466,8 @@ async def reply_to_outreach_email(
                                   'to': [to_clean], 'subject': subject, 'text': reply_body}
                     try:
                         _fb_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     if sender_addr and '@' in sender_addr:
                         _fb_r_json['reply_to'] = [sender_addr]
                     resp = await http.post(
@@ -11629,8 +11629,8 @@ async def add_email_leads(
                                     _seen_emails_fp.add(_em)
                                     parsed.append({k: v for k, v in _obj.items()})
                                 continue
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         # Fallback: вытащить email regex из фрагмента JSON
                         _match = _email_re.search(line)
                         if _match:
@@ -12029,8 +12029,8 @@ async def send_follow_up_email(
                           'to': [to_clean], 'subject': subject, 'text': body}
             try:
                 _gm_f_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             if _rt_gm_f and '@' in _rt_gm_f:
                 _gm_f_json['reply_to'] = [_rt_gm_f]
             try:
@@ -12063,8 +12063,8 @@ async def send_follow_up_email(
                 try:
                     _fu_html = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
                     msg2.attach(_MimeSmtp2(_fu_html, 'html', 'utf-8'))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 _ctx2 = _ssl2.create_default_context()
                 with _smtplib2.SMTP(_sh2, _sp2, timeout=30) as s2:
                     s2.ehlo(); s2.starttls(context=_ctx2); s2.ehlo()
@@ -12107,8 +12107,8 @@ async def send_follow_up_email(
                                  'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}}
                     try:
                         _fbu_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     if sender_addr and '@' in sender_addr:
                         _fbu_json['reply_to'] = [sender_addr]
                     resp = await http.post('https://api.resend.com/emails',
@@ -12395,8 +12395,8 @@ async def _send_via_gmail_oauth(
             user_obj.google_oauth_token = encrypt_token(_jsn_go.dumps({**token_data, 'access_token': _new_access}))
             try:
                 session_obj.commit()
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             _gs2, _gd2 = await _gmail_post(_new_access)
             if _gs2 in (200, 201):
                 return True, ''
@@ -12434,8 +12434,8 @@ def _get_user_email_integrations(user, session) -> list:
                         'email_user': _go_email_i,
                         'token_data': _go_data_i,
                     })
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         from models import UserAgent as _UA
         agents = session.query(_UA).filter(
@@ -12658,8 +12658,8 @@ async def check_emails(
         try:
             from models import EmailContact as _EC_ce
             _known_emails = {r.email.lower() for r in session.query(_EC_ce.email).filter_by(user_id=user.id).all() if r.email}
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         if chosen['type'] == 'gmail_oauth':
             result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_email)
@@ -12735,8 +12735,8 @@ async def check_emails(
                             continue
                         for _em_raw in _em_in_blk:
                             _reply_snippets[_em_raw.lower()] = _snip_text  # до 3000 символов
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             # 2) Известные контакты, которые ответили → обновляем статус на replied + сохраняем текст
             _replied_known = _found_em & _known_emails
@@ -12890,8 +12890,8 @@ async def check_emails(
                     _pref_ann += '\n'.join(f'• {_em}: {_pref}' for _em, _pref in _all_prefs_ann.items())
                     _pref_ann += '\n→ Пиши reply_body на указанном языке и в указанном стиле!'
                     result += _pref_ann
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         return result
     except Exception as e:
@@ -12976,14 +12976,14 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                 if mime == 'text/plain' and body_data:
                     try:
                         return _b64_gm.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace').strip()
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 if mime == 'text/html' and body_data:
                     try:
                         raw = _b64_gm.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace')
                         return _re_body.sub(r'<[^>]+>', '', raw).strip()
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 # Рекурсивно искать text/plain среди parts
                 for part in parts:
                     if part.get('mimeType') == 'text/plain':
@@ -12991,8 +12991,8 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                         if _d:
                             try:
                                 return _b64_gm.urlsafe_b64decode(_d + '==').decode('utf-8', errors='replace').strip()
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                 # Fallback: text/html
                 for part in parts:
                     if part.get('mimeType') == 'text/html':
@@ -13001,8 +13001,8 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                             try:
                                 raw = _b64_gm.urlsafe_b64decode(_d + '==').decode('utf-8', errors='replace')
                                 return _re_body.sub(r'<[^>]+>', '', raw).strip()
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                     # multipart вложенные
                     if part.get('parts'):
                         _sub = _gmail_extract_body(part)
@@ -13365,8 +13365,8 @@ async def send_email(
             }
             try:
                 _gmail_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             if _gmail_reply_to and '@' in _gmail_reply_to:
                 _gmail_json['reply_to'] = [_gmail_reply_to]
             try:
@@ -13490,8 +13490,8 @@ async def send_email(
                     try:
                         _html_smtp = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
                         msg.attach(_MIMEText(_html_smtp, 'html', 'utf-8'))
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     _ssl_ctx = _ssl.create_default_context()
                     # STARTTLS (порт 587) — работает на Railway.
                     # Порт 465 (SMTP_SSL) блокируется хостингом на уровне сети.
@@ -13733,8 +13733,8 @@ async def save_email_contact(
                         _imap_val = _ln_sec.split('=', 1)[1].strip().lower()
                         if _imap_val and '@' in _imap_val:
                             _own_emails.add(_imap_val)
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         if email_clean in _own_emails:
             return (f" Нельзя сохранять собственный адрес ({email_clean}) как контакт — "
                     f"это ваша почта или почта агента. Найди внешний email реального человека.")
@@ -14863,8 +14863,8 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
                 adata = load_agent_personality(aid)
                 if adata:
                     agent._active_agent_data[user_id] = adata
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
     if user_id not in agent._active_agent_data:
         return " Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."

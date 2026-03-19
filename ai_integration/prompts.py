@@ -45,8 +45,8 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
                     token_balance_info += " Токены на исходе — при случае естественно упомяни /buy."
                 else:
                     token_balance_info += " НЕ упоминай баланс токенов в ответе, если пользователь не спрашивает."
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
     # Динамическая стоимость из token_service
     try:
@@ -165,8 +165,8 @@ If balance is low — warn and suggest /buy."""
                 if _stripped.startswith('{'):
                     try:
                         _mem_json = json.loads(_stripped)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # ── ПРАВИЛА ПОЛЬЗОВАТЕЛЯ — выносим отдельно и приоритетно ──
                 _rules = []

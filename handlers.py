@@ -355,8 +355,8 @@ async def transcribe_audio(audio_file_path: str) -> str | None:
             if wav_path and os.path.exists(wav_path):
                 try:
                     os.unlink(wav_path)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
     logging.error("[VOICE] All transcription backends failed")
     return None
@@ -968,8 +968,8 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             ae = get_anchor_engine()
             if ae:
                 asyncio.create_task(ae.record_user_response(user_id))
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         
         context = []  # Simplified: no context in bot
         
@@ -994,8 +994,8 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                         _name_tg = _p_tg['__agent'].get('name', 'Агент')
                         _txt_tg = _p_tg['text'][:1000].strip()
                         display_text = f"\U0001f4ac {_name_tg}:\n{_txt_tg}"
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             try:
                 if persist:
                     # Директорский диалог: отправляем новое сообщение, НЕ удаляем
@@ -1035,16 +1035,16 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                     _cleaned = _ctd_final(response_text)
                     if _cleaned and _cleaned.strip():
                         response_text = _cleaned
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             logger.info(f"[PTM] Step 3a: got response, len={len(response_text)}")
             
             # Удаляем прогресс-сообщение перед финальным ответом
             if _progress_state['last_msg_id']:
                 try:
                     await bot.delete_message(chat_id, _progress_state['last_msg_id'])
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             
             # Защита от пустого ответа
             if not _agent_handled and (not response_text or not response_text.strip()):
@@ -1122,8 +1122,8 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                 _ae_hook = get_anchor_engine()
                 if _ae_hook:
                     asyncio.create_task(_ae_hook.trigger_chat_hook(user_id, text, response_text))
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
     except Exception as e:
         logger.error(f"Error in process_text_message for user {user_id}: {e}", exc_info=True)
         import traceback
@@ -1135,8 +1135,8 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             else:
                 err_text = "Сбой на моей стороне, не у тебя. Напиши ещё раз."
             await message.bot.send_message(message.chat.id, err_text)
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
     finally:
         user_lock.release()
 
@@ -1153,8 +1153,8 @@ async def process_other_message(user_id, message, state):
             try:
                 _tf = _TimezoneFinder()
                 timezone_str = _tf.timezone_at(lng=lon, lat=lat)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
         if not timezone_str:
             timezone_str = "UTC"
         

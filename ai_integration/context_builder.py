@@ -156,8 +156,8 @@ class ContextBuilder:
             if hints:
                 try:
                     session.flush()
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
         except Exception as e:
             logger.error(f"[PREMIUM_ALERTS] Error: {e}")
@@ -331,8 +331,8 @@ class ContextBuilder:
                         try:
                             from .memory import decrypt_data
                             reason = f" — причина: {decrypt_data(st.skipped_reason)[:60]}"
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     skipped_lines.append(f"{st.title}{reason}")
                 hints.append("НЕДАВНО ПРОПУЩЕНО:\n" + "\n".join(f"  {s}" for s in skipped_lines))
 
@@ -432,8 +432,8 @@ class ContextBuilder:
                                     details.append(" нет Telegram")
                                 detail_str = " | ".join(details) if details else "профиль заполнен"
                                 real_contacts.append(f"@{partner_user.username} ({detail_str})")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             if real_contacts:
                 hints.append("ПАРТНЁРЫ НА ПЛАТФОРМЕ (совпадают интересы, НЕ связаны с email-перепиской):\n" + "\n".join(f"  {c}" for c in real_contacts))
@@ -682,8 +682,8 @@ class ContextBuilder:
                     ).count()
                     if _discord_today >= 1:
                         hints.append("ПОСТ СЕГОДНЯ (Discord): уже опубликован — НЕ публикуй повторно (лимит 1/день).")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 # TG-канал пост сегодня
                 try:
                     from models import AnchorDeliveryLog as _ADL
@@ -694,8 +694,8 @@ class ContextBuilder:
                     ).count()
                     if _tg_today >= 1:
                         hints.append("ПОСТ СЕГОДНЯ (Telegram-канал): уже опубликован — НЕ публикуй повторно (лимит 1/день).")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             except Exception as e:
                 logger.warning(f"[POST_CTX] Error: {e}")
 
@@ -917,8 +917,8 @@ class ContextBuilder:
                                 _tool_list = _ta_json.loads(_ta.tools_allowed)
                                 if _tool_list:
                                     _tools = f' |инстр: {", ".join(_tool_list[:4])}'
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                         _parts = []
                         if _role: _parts.append(_role)
                         if _intg_str: _parts.append(_intg_str)
@@ -965,8 +965,8 @@ class ContextBuilder:
                                 _tool_names = [_TOOL_LABELS.get(t, t) for t in _tlist[:4]]
                                 if _tool_names:
                                     _caps_parts.append(', '.join(_tool_names))
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                             # Интеграции из user_api_keys
                             _kls_upper = (_ta.user_api_keys or '').upper()
                             _code_lc = (_ta.python_code or '').lower()
@@ -1047,8 +1047,8 @@ class ContextBuilder:
                         _rname = _rd.get('__agent', {}).get('name', '') if isinstance(_rd, dict) else ''
                         if _rname and _rname not in ('ASI Biont', 'ASI'):
                             _reports.append((_r, _rd, _rname))
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 # Дедуп: один агент — последний результат по инструменту
                 _seen_agent_tool_rep: dict = {}
                 _reports_deduped = []
@@ -1156,8 +1156,8 @@ class ContextBuilder:
                             _aal_lines.append(
                                 f"\nВХОДЯЩИЕ ПИСЬМА от контактов:\n" + "\n".join(_reply_lines)
                             )
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     if _aal_lines:
                         hints.append(
                             "ДЕЙСТВИЯ АГЕНТОВ ЗА 24Ч (интеграции, email, результаты):\n" +
@@ -1546,8 +1546,8 @@ class ContextBuilder:
                     from .handlers import get_partners_list
                     partners = get_partners_list(user.id, session)
                 contact_count = len(partners) if partners else 0
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             # ─── Делегирование ───
             deleg_given = session.query(Task).filter(
@@ -1671,8 +1671,8 @@ class ContextBuilder:
                                 hints.append("СЕГОДНЯ ДЕНЬ РОЖДЕНИЯ!")
                             elif 1 <= days_until <= 7:
                                 hints.append(f"День рождения через {days_until} дн!")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             # === Дедлайны целей на этой неделе ===
             week_end = user_now + timedelta(days=7)
@@ -1757,10 +1757,10 @@ class ContextBuilder:
             _has_email_campaign = session.query(_EC_r).filter_by(user_id=user.id).first() is not None
             try:
                 _has_delegation_campaign = session.query(_DC_r).filter_by(user_id=user.id).first() is not None
-            except Exception:
-                pass
-        except Exception:
-            pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         from models import AgentSubscription as _AS_r
         _has_marketplace_agents = session.query(_AS_r).filter_by(user_id=user.id).first() is not None

@@ -163,8 +163,8 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
                             if (_d.get('text') or '').strip()[:60] == _prefix:
                                 logger.warning('[OFFICE] dedup: skip duplicate msg from %s for user %d', agent_name, user_id)
                                 return
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
             _s.add(Interaction(
                 user_id=user_id,
                 message_type='agent_report' if internal else 'ai',
@@ -805,8 +805,8 @@ class OfficeEngine:
                         agent.name, _elapsed / 60, _agent_interval_sec / 60,
                     )
                     return
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         async with self._script_sem:
             try:
@@ -915,8 +915,8 @@ class OfficeEngine:
                                 user.id, agent.name or 'Агент', report,
                                 agent.run_interval_minutes,
                             )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         # Создаём задачу-делегирование в дашборд (видна как делегирование агенту)
                         try:
                             _task_title = (report.splitlines()[0].strip()[:120]
@@ -957,24 +957,24 @@ class OfficeEngine:
                                 user.id, agent.name or 'Агент', 'фоновый мониторинг',
                                 report[:400], True,
                             )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         # Детектируем входящие письма в stdout (IMAP agents)
                         try:
                             await loop.run_in_executor(
                                 None, _save_inbox_reply_sync,
                                 user.id, agent.name or 'Агент', stdout,
                             )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         # Детектируем BLOCKED-маркер в отчёте агента
                         try:
                             await loop.run_in_executor(
                                 None, _save_task_blocked_sync,
                                 user.id, agent.name or 'Агент', report,
                             )
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         # ── Автономный следующий шаг ──────────────────────────
                         # ASI анализирует результат и решает: передать другому
                         # агенту (безопасный шаг) или спросить пользователя.
@@ -1037,8 +1037,8 @@ class OfficeEngine:
             try:
                 loop = asyncio.get_running_loop()
                 _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user.id)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         # Цепочка: до 3 автономных шагов (агент → агент → агент → ask/done)
         _MAX_CHAIN = 3
@@ -1100,8 +1100,8 @@ class OfficeEngine:
                 try:
                     from ai_integration.autonomous_agent import _save_interaction_for_director
                     _save_interaction_for_director(user.telegram_id, _director_msg)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 # Уведомление в Telegram
                 await _send_tg(user.telegram_id, _director_msg)
 
@@ -1163,8 +1163,8 @@ class OfficeEngine:
                 try:
                     from ai_integration.autonomous_agent import _save_interaction_for_director
                     _save_interaction_for_director(user.telegram_id, ask_msg)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 logger.info("[AUTONOMY] ASK user %d at step %d: %s",
                           user.telegram_id, _step + 1, question[:80])
                 break  # ждём ответа пользователя
@@ -1194,8 +1194,8 @@ class OfficeEngine:
             try:
                 loop = asyncio.get_running_loop()
                 _user_ctx = await loop.run_in_executor(None, _build_user_context_sync, user_db_id)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
         _ctx_block = f"\n\nКонтекст о пользователе:\n{_user_ctx[:400]}" if _user_ctx else ''
 
         prompt = (

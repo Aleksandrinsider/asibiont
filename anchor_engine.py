@@ -967,8 +967,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             # Берём первое предложение (до первой точки/переноса) — кратко
             _short = _desc.split('.')[0].split('\n')[0][:80]
             _tool_descs[_name] = _short
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
     def _td(name: str) -> str:
         desc = _tool_descs.get(name, '')
@@ -2125,8 +2125,8 @@ class AnchorEngine:
                         if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
                             _ap_gap_ok = False
                             logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
                 if _ap_gap_ok:
                     logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
@@ -2985,8 +2985,8 @@ class AnchorEngine:
                                                     _skip_coord = True
                                                     logger.info("[ANCHOR-AUTOPILOT] coord-assign DEDUP: %.0f%% overlap with recent, skip sending", _overlap * 100)
                                                     break
-                                    except Exception:
-                                        pass
+                                    except Exception as _e:
+                                        logger.debug("suppressed: %s", _e)
                             except Exception as _dc_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
 
@@ -3018,8 +3018,8 @@ class AnchorEngine:
                                     chat_id=user.telegram_id,
                                     text=_coord_text_clean or _coord_text,
                                 )
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
@@ -3071,8 +3071,8 @@ class AnchorEngine:
                                 _Goal_ap.status == 'active',
                             ).order_by(_Goal_ap.created_at.desc()).limit(2).all()
                             _gl_titles_s = [g.title[:60] for g in _db_goals if g.title and g.title.strip()]
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     # Заголовок задачи = роль агента, не цели пользователя
                     _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
                     _ap_task_title = f"[Автопилот] {agent_name}: {_agent_spec}"[:100] if _agent_spec else f"[Автопилот] {agent_name}"
@@ -3091,8 +3091,8 @@ class AnchorEngine:
                         if _ap_recent:
                             _skip_ap_task = True
                             logger.debug("[ANCHOR-AUTOPILOT] dedup: skip task for agent %s, recent task id=%s", agent_name, _ap_recent.id)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     if not _skip_ap_task:
                         _ap_task_id = _cadt(user.id, agent_data, _ap_task_title)
                 except Exception as _cadt_err:
@@ -3179,8 +3179,8 @@ class AnchorEngine:
                             logger.info("[ANCHOR-AUTOPILOT] watchdog: last autopilot delivered %.1fh ago → force delivery", _ap_age_h)
                     else:
                         _force_delivery = True  # Ни одной доставки — первый раз
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
                 # Контекстный noise-фильтр: не блокируем по префиксам,
                 # а оцениваем реальную ценность ответа
@@ -3244,8 +3244,8 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] dedup: %.0f%% overlap with recent msg from %s",
                                             _common / _total * 100, agent_name)
                                 break
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # ── Dedup для tool-based результатов: RSS/новости не должны повторяться ──
                 # Даже если агент использовал инструменты, один и тот же материал отсылается многократно.
@@ -3275,8 +3275,8 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] tools dedup: %.0f%% overlap with recent tool msg from %s",
                                             _common_t / _total_t * 100, agent_name)
                                 break
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # ── Watchdog: если >3ч без AP-сообщения — форсировать доставку ──
                 # Работает ПОСЛЕ noise + dedup фильтров — обходит оба
@@ -3351,8 +3351,8 @@ class AnchorEngine:
                         try:
                             await self.bot.send_chat_action(chat_id=user.telegram_id, action='typing')
                             await asyncio.sleep(1)
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
                             text=_cleaned_result,
@@ -3385,8 +3385,8 @@ class AnchorEngine:
                         try:
                             from ai_integration.conversation_history import save_message_to_history as _smh_r
                             _smh_r(user.telegram_id, 'assistant', result.strip(), session=session)
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
@@ -3742,8 +3742,8 @@ class AnchorEngine:
                                 try:
                                     from ai_integration.conversation_history import save_message_to_history as _smh_ev
                                     _smh_ev(user.telegram_id, 'assistant', result.strip(), session=_s)
-                                except Exception:
-                                    pass
+                                except Exception as _e:
+                                    logger.debug("suppressed: %s", _e)
                             except Exception as _e_ev_send:
                                 logger.warning("[ANCHOR-DISPATCH] result send failed: %s", _e_ev_send)
 
@@ -3827,8 +3827,8 @@ class AnchorEngine:
                     idx = int(_m.group()) - 1
                     if 0 <= idx < len(agents):
                         return agents[idx]
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         # Fallback: keyword matching
         ANALYTIC_KW = {'аналит', 'страте', 'исследо', 'план', 'маркет', 'консульт'}
@@ -4180,16 +4180,16 @@ class AnchorEngine:
                 )
                 if _tr_gen and len(_tr_gen.strip()) > 15:
                     _transfer_text = _tr_gen.strip()
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             if self.bot:
                 try:
                     await self.bot.send_message(
                         chat_id=user.telegram_id,
                         text=f"{prev_agent.name}:\n\n{_transfer_text}",
                     )
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             # Сохраняем в interaction для web-чата (от имени передающего агента)
             _transfer_content = json.dumps({
                 '__agent': {
@@ -4252,8 +4252,8 @@ class AnchorEngine:
                     _chain_log.result = (_next_result or '')[:400]
                     _chain_log.status = 'completed'
                     session.commit()
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             # Отправляем результат следующего агента пользователю (с noise-фильтром)
             _chain_clean = (_next_result or '').strip()
@@ -4302,8 +4302,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh_c
                         _smh_c(user.telegram_id, 'assistant', _next_result.strip(), session=session)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 except Exception as _e_chain_send:
                     logger.warning("[ANCHOR-CHAIN] result send failed: %s", _e_chain_send)
 
@@ -5535,8 +5535,8 @@ class AnchorEngine:
                 ).order_by(_AAL_prev_c.id.desc()).first()
                 if _prev_aal and _prev_aal.result:
                     _prev_cycle_result = _prev_aal.result[:400]
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             # ── Анонс ASI: шаблон без AI-вызова (экономим 1 вызов на старте) ──
             def _trunc(s: str, n: int) -> str:
@@ -6470,8 +6470,8 @@ class AnchorEngine:
                                                 chat_id=user.telegram_id,
                                                 text=f"ASI (итог):\n\n{_report_text}",
                                             )
-                                        except Exception:
-                                            pass
+                                        except Exception as _e:
+                                            logger.debug("suppressed: %s", _e)
                                     return True
                                 _sum_sess.add(Interaction(
                                     user_id=user.id,
@@ -6516,8 +6516,8 @@ class AnchorEngine:
                                     chat_id=user.telegram_id,
                                     text=f"ASI (итог):\n\n{_report_text}",
                                 )
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                 except Exception as _rep_err:
                     logger.debug("[COORD] final report error: %s", _rep_err)
 
@@ -6710,8 +6710,8 @@ class AnchorEngine:
             ).all()
             for a in _recent_delivered:
                 existing_keys.add((a.anchor_type, a.source))
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
         # Singleton types: only one undelivered anchor per type (regardless of source)
         _SINGLETON_TYPES = {
             'service_degraded', 'token_low_balance', 'weather_extreme',
@@ -7369,8 +7369,8 @@ class AnchorEngine:
                             _ld_dlg_t = _ld_dlg_t.replace(tzinfo=timezone.utc)
                         if (now_utc - _ld_dlg_t).total_seconds() / 3600 < 24:
                             return anchors
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='dialog_followup',
@@ -7794,8 +7794,8 @@ class AnchorEngine:
                 _gap = (now_utc - _ap_time).total_seconds() / 60
                 if _gap < MIN_AUTOPILOT_GAP_MINUTES:
                     return []
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
 
         # Собираем задачи к целям — не только count, а полный список
         goal_ids = [g.id for g in active_goals]
@@ -7894,8 +7894,8 @@ class AnchorEngine:
                         _tool_freq[_tn] = _tool_freq.get(_tn, 0) + 1
                         if 'не наш' in _txt.lower() or 'не нашла' in _txt.lower():
                             _failed_tools[_tn] = _failed_tools.get(_tn, 0) + 1
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
         # Последние proactive/agent_msg сообщения за 12 часов — что реально было сказано
         # (расширенное окно чтобы агенты видели всю историю, включая ранние попытки)
@@ -7967,8 +7967,8 @@ class AnchorEngine:
                     _per_agent_history.setdefault(_ag_nm, [])
                     if len(_per_agent_history[_ag_nm]) < 12:
                         _per_agent_history[_ag_nm].append(_entry)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
         except Exception as _pah_err:
             logger.debug("[AUTOPILOT] per_agent_history: %s", _pah_err)
 
@@ -8135,8 +8135,8 @@ class AnchorEngine:
                         _ta.specialization or '',
                         _ta.description or '',
                     )[:6]
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             _team_profiles.append({
                 'name': _ta.name,
                 'job_title': _ta.job_title or '',
@@ -8213,8 +8213,8 @@ class AnchorEngine:
                                 _asyncio_stag.ensure_future(
                                     self.bot.send_message(chat_id=user.telegram_id, text=_stag_msg)
                                 )
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                             # Записываем факт отправки алерта
                             try:
                                 session.add(Interaction(
@@ -8346,8 +8346,8 @@ class AnchorEngine:
                         _topic = '.'.join(_sentences).strip()[:150]
                         if _topic and len(_topic) > 20:
                             recent_proactive_topics.append(_topic)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
         except Exception as _rpt_err:
             logger.debug(f"[AUTOPILOT] recent_proactive_topics extraction: {_rpt_err}")
 
@@ -9125,8 +9125,8 @@ class AnchorEngine:
                         if 'gmail_user=' in _keys_r or 'resend_api_key=' in _keys_r or 'send_outreach_email' in _code_r:
                             _email_agent_name_r = _ua_r.name
                             break
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_campaign_report',
@@ -10325,8 +10325,8 @@ class AnchorEngine:
                                 fresh_data.append(f"  — {title}: {r.get('snippet', '')[:120]}")
                     # Ограничиваем до 6 самых релевантных
                     fresh_data = fresh_data[:6]
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             system_msg = (
                 f"Ты — SMM-специалист, продвигающий конкретный продукт или идею в социальных сетях.\n\n"
@@ -10570,8 +10570,8 @@ class AnchorEngine:
                     f"{f'/{campaign.max_delegations}' if campaign.max_delegations else ''}",
                     parse_mode='HTML',
                 )
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_delegation_campaign_anchor error: {e}\n{traceback.format_exc()}")
@@ -11405,8 +11405,8 @@ class AnchorEngine:
                         rt = t.reminder_time if t.reminder_time.tzinfo else t.reminder_time.replace(tzinfo=timezone.utc)
                         rt_local = rt.astimezone(user_tz)
                         time_str = f" (→ {rt_local.strftime('%d.%m %H:%M')})"
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 desc = f" — {t.description[:80]}" if t.description else ""
                 task_lines.append(f"• {t.title}{time_str}{desc}")
 
@@ -11427,8 +11427,8 @@ class AnchorEngine:
                         act = ct.actual_completion_time if ct.actual_completion_time.tzinfo else ct.actual_completion_time.replace(tzinfo=timezone.utc)
                         act_local = act.astimezone(user_tz)
                         ct_time = f" (выполнено {act_local.strftime('%d.%m %H:%M')})"
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 completed_lines.append(f"{ct.title}{ct_time}")
 
             # Пропущенные задачи — AI знает проблемные паттерны
@@ -11444,8 +11444,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.memory import decrypt_data
                         reason = f" — {decrypt_data(st.skipped_reason)[:60]}"
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 skipped_lines.append(f"{st.title}{reason}")
 
             # Общая статистика
@@ -11760,8 +11760,8 @@ class AnchorEngine:
                             "НЕ предлагай пользователю сделать то же самое. Верни SKIP."
                         )
                     prompt_parts.extend(_act_lines)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
 
             full_prompt = "\n".join(prompt_parts)
 
@@ -11937,8 +11937,8 @@ class AnchorEngine:
                         src_task = session.query(Task).filter_by(id=tid).first()
                         if src_task and not src_task.reminder_sent:
                             src_task.reminder_sent = True
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
             # Определяем, связаны ли якоря с конкретным агентом
             # Проверяем ЛЮБОЙ якорь с agent_name/agent в data (не только AGENT_ANCHOR_TYPES)
@@ -11953,8 +11953,8 @@ class AnchorEngine:
                         if _candidate and (anchor.anchor_type in AGENT_ANCHOR_TYPES or _ad.get('agent_name')):
                             _agent_name = _candidate
                             break
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
             # Оборачиваем контент в __agent JSON, если есть агент
             interaction_content = message
@@ -11974,8 +11974,8 @@ class AnchorEngine:
                             },
                             'text': message,
                         }, ensure_ascii=False)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             # Создаём запись в interactions
             # Если нет конкретного агента — атрибутируем как ASI (проактивные сообщения системы)
@@ -12131,8 +12131,8 @@ class AnchorEngine:
                             if anchor:
                                 anchor.user_reaction = 'responded'
                                 anchor.reaction_at = now_utc
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
                 session.commit()
                 logger.debug(f"[ANCHOR] Recorded response from {user_id} ({int(response_time)}s)")
@@ -12339,8 +12339,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh_ch
                         _smh_ch(user.telegram_id, 'assistant', _strip_html(result), session=session)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 session.commit()
                 logger.info('[CHAT_HOOK] %s contributed to chat for user %d', agent.name, user_id)
@@ -12372,8 +12372,8 @@ class AnchorEngine:
                     ids = json.loads(log.anchor_ids)
                     _log_ids_map[log.id] = ids
                     _all_aids.update(ids)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             _ignored_anchor_map = {}
             if _all_aids:
@@ -12387,8 +12387,8 @@ class AnchorEngine:
                         if anchor and not anchor.user_reaction:
                             anchor.user_reaction = 'ignored'
                             anchor.reaction_at = now_utc
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             if unresolved:
                 session.commit()
@@ -12569,8 +12569,8 @@ class AnchorEngine:
                             _gap_h = (now_utc - _ld_time).total_seconds() / 3600
                             if _gap_h < cooldown_h:
                                 continue  # ещё рано — кулдаун не прошёл
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                     extra_data = {'agent_name': agent.name, 'agent_id': agent.id, 'entry_id': entry_id}
                     if isinstance(entry.get('data'), dict):
@@ -12634,8 +12634,8 @@ class AnchorEngine:
                         if _da_data.get('preview', '')[:100] == _preview[:100] and _preview:
                             _is_dup = True
                             break
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 if _is_dup:
                     rec.status = 'anchored'  # помечаем как обработанный, но якорь не создаём
                     continue
@@ -12942,8 +12942,8 @@ class AnchorEngine:
                         if 'gmail_user=' in _keys_s or 'resend_api_key=' in _keys_s or 'send_outreach_email' in _code_s:
                             _email_agent_name_s = _ua_s.name
                             break
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_campaign_report',

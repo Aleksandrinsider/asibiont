@@ -188,8 +188,8 @@ def get_context_from_db(user_id, limit=10):
                 if isinstance(_jp, dict) and isinstance(_jp.get('__agent'), dict):
                     _jp['__agent']['avatar_url'] = ''
                     return __import__('json').dumps(_jp, ensure_ascii=False)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             return content
 
         # Convert to context format, handling reminders (standalone 'ai' messages)
@@ -386,8 +386,8 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                                 try:
                                     user.photo_url = None
                                     db.commit()
-                                except Exception:
-                                    pass
+                                except Exception as _e:
+                                    logger.debug("suppressed: %s", _e)
                             else:
                                 logger.debug(f"get_file({cached[:20]}…) transient error for {user_id}: {e}, keeping cached file_id")
                                 # Return None but DO NOT clear the cached file_id — it may still be valid
@@ -399,8 +399,8 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                     try:
                         user.photo_url = None
                         db.commit()
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     # fall through to fetch fresh below
                 else:
                     # Non-bot URL (e.g. t.me CDN from Telegram Login Widget) — return directly
@@ -447,8 +447,8 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                     if bot:
                         file = await bot.get_file(user.photo_url)
                         return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             # Final fallback: any cached https URL (e.g. CDN URL from Telegram Login Widget)
             if user and user.photo_url and user.photo_url.startswith('http'):
@@ -776,8 +776,8 @@ async def auth_handler(request):
                                 if 'bot' in request.app:
                                     try:
                                         await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
-                                    except Exception:
-                                        pass
+                                    except Exception as _e:
+                                        logger.debug("suppressed: %s", _e)
                                 link_db.commit()
                                 logger.info(f"Linked TG {user_id} to Discord user (id={discord_user.id})")
                             existing_session['user_id'] = user_id
@@ -876,8 +876,8 @@ async def auth_handler(request):
                         user.photo_url = data['photo_url']
                         try:
                             session_db.commit()
-                        except Exception:
-                            pass
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
 
                 # Increment login count if subscription exists
                 subscription = session_db.query(Subscription).filter_by(user_id=user.id).first()
@@ -6818,8 +6818,8 @@ async def on_shutdown(app):
         from discord_bot import stop_discord_bot
         await stop_discord_bot()
         logger.info("✅ Discord bot stopped")
-    except Exception:
-        pass
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
 
 
 async def api_tasks_handler(request):
@@ -6897,8 +6897,8 @@ async def api_tasks_handler(request):
                     _goal = session_db.query(Goal).filter_by(id=task.goal_id).first()
                     if _goal:
                         _goal_name = _goal.title
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             task_data = {
                 'id': task.id,
@@ -7108,8 +7108,8 @@ async def api_interactions_handler(request):
                         # Hide internal coordinator/assignment messages from user
                         if _jp.get('__anchor_type') in _HIDDEN_ANCHOR_TYPES:
                             continue
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             # Skip noise messages (very short AI/agent messages with template text)
             if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 60:
                 if any(n in _check_text for n in _NOISE_PATTERNS):
@@ -7167,8 +7167,8 @@ async def api_interactions_handler(request):
                         _txt = _tool_ann_re2.sub('', _txt)
                         _jp['text'] = _txt.lstrip('\n').strip()
                     return json.dumps(_jp, ensure_ascii=False)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             return content
 
         def _clean_content(content: str) -> str:
@@ -8026,8 +8026,8 @@ async def api_activity_delete_handler(request):
                         session_db.query(PostLike).filter_by(post_id=post.id).delete(synchronize_session=False)
                         session_db.query(Comment).filter_by(post_id=post.id).delete(synchronize_session=False)
                         session_db.query(PostView).filter_by(post_id=post.id).delete(synchronize_session=False)
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                     session_db.delete(post)
             # For content campaign posts: also cascade
             elif activity.activity_type in ('post_telegram', 'post_discord') and activity.ref_id:
@@ -8330,8 +8330,8 @@ async def api_activities_latest_handler(request):
                     # strip tz for naive datetime comparison
                     since_naive = since_dt.replace(tzinfo=None) if since_dt.tzinfo else since_dt
                     query = query.filter(AgentActivityLog.created_at > since_naive)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
 
             activities = query.order_by(AgentActivityLog.created_at.desc()).limit(50).all()
             data = []
@@ -8575,8 +8575,8 @@ async def api_reports_handler(request):
                                                         outreach_obj.status = last_event
                                                         o_data['status'] = last_event
                                                         synced += 1
-                                    except Exception:
-                                        pass
+                                    except Exception as _e:
+                                        logger.debug("suppressed: %s", _e)
                     if synced > 0:
                         session_db.commit()
                         logger.info(f"[API_REPORTS] Synced {synced} outreach statuses from Resend")
@@ -9384,8 +9384,8 @@ async def api_agent_team_pulse_handler(request):
                         if _cn and _cn not in ('ASI Biont', 'ASI'):
                             last_rep = _c
                             break
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
                 ran_recently = False
                 last_report_at = None
                 last_report_text = None
@@ -9893,8 +9893,8 @@ async def nowpayments_webhook(request):
                                     int(referrer.telegram_id),
                                     f"💰 Ваш реферал пополнил баланс криптой! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {referrer.token_balance} токенов."
                                 )
-                            except Exception:
-                                pass
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                 except Exception as e:
                     logger.error(f'[NOWPAYMENTS] Referral commission error: {e}')
         except Exception as e:
@@ -10907,8 +10907,8 @@ async def api_agent_test_code_handler(request):
                     _res.setrlimit(_res.RLIMIT_AS, (_mem, _mem))
                     _res.setrlimit(_res.RLIMIT_CPU, (12, 12))
                     _res.setrlimit(_res.RLIMIT_NOFILE, (32, 32))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             _kwargs_t = dict(
                 stdout=_aio_t.subprocess.PIPE,
                 stderr=_aio_t.subprocess.PIPE,
@@ -10978,8 +10978,8 @@ async def api_office_activity_handler(request):
                 try:
                     since_dt = _dt.datetime.fromisoformat(since_ts.replace('Z', '+00:00'))
                     q = q.filter(Anchor.created_at > since_dt)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             else:
                 since7 = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=7)
                 q = q.filter(Anchor.created_at >= since7)
@@ -11117,8 +11117,8 @@ async def api_marketplace_my_handler(request):
                     for e in lst:
                         if e.get('id') == 'auto-notify':
                             return float(e.get('cooldown_hours', 0))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 return 0
             # Подписанные агенты других пользователей (активированные чужие агенты)
             ext_subs = session_db.query(AgentSubscription).filter_by(user_id=user_obj.id).all()
@@ -12056,14 +12056,14 @@ async def api_arena_post_like_handler(request):
                     _like_dn = (data.get('display_name') or client_ip[:16] or 'Аноним').strip()[:50]
                     from ai_integration.agent_arena import track_arena_user as _tau_l
                     _tau_l(_like_dn, 'like')
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             # Синхронизируем in-memory _global_feed чтобы SSE init не отдавал устаревший счётчик
             try:
                 from ai_integration.agent_arena import update_post_likes_in_feed
                 update_post_likes_in_feed(post_key, new_count)
-            except Exception:
-                pass
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
             return web.json_response({'ok': True, 'likes_count': new_count})
         finally:
             session_db.close()
@@ -12097,8 +12097,8 @@ async def api_arena_delete_entry_handler(request):
                         agent_obj = db_s.query(UserAgent).filter_by(id=agent_num_id, author_id=user_obj.id).first()
                         if agent_obj:
                             allowed = True
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
             if not allowed:
                 return web.json_response({'error': 'forbidden'}, status=403)
             db_s.delete(row)
@@ -12232,16 +12232,16 @@ async def api_arena_clear_all_handler(request):
                 # Also clear comments if table exists
                 try:
                     cur.execute("DELETE FROM arena_comments")
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 # Reset agent arena counters
                 try:
                     cur.execute(
                         "UPDATE user_agents SET messages_count = 0, "
                         "arena_likes_count = 0, arena_views_count = 0"
                     )
-                except Exception:
-                    pass
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
                 conn.commit()
                 cur.close(); conn.close()
                 return deleted
