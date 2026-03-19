@@ -2004,6 +2004,29 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ после _apply_cooldowns — 0 ready")
             return
 
+        # ── Проверяем user_rules: запрет на email ──
+        _email_blocked_by_rule = False
+        try:
+            from ai_integration.memory import decrypt_data as _dec_rules_pu
+            _mem_raw_pu = _dec_rules_pu(user.memory) if user.memory else '{}'
+            _mem_dict_pu = json.loads(_mem_raw_pu) if _mem_raw_pu else {}
+            _user_rules_pu = _mem_dict_pu.get('rules', [])
+            _EMAIL_STOP_KW = ('не писать', 'не отправлять', 'не слать', 'стоп email',
+                              'stop email', 'без email', 'без рассылк', 'запрет email',
+                              'не рассыл', 'прекрати email', 'прекрати рассыл',
+                              'отключить email', 'отключи email', 'не использовать email',
+                              'не отправляй email', 'не отправляй письм',
+                              'не пиши по email', 'не пиши email', 'не пиши по почте',
+                              'не писать по email', 'не писать email', 'не писать по почте')
+            for _r_pu in _user_rules_pu:
+                _r_low = _r_pu.lower()
+                if any(kw in _r_low for kw in _EMAIL_STOP_KW):
+                    _email_blocked_by_rule = True
+                    logger.info(f"[ANCHOR] User {user_id}: ⛔ email blocked by user rule: {_r_pu[:80]}")
+                    break
+        except Exception as _e_rules_pu:
+            logger.debug("suppressed user_rules email check: %s", _e_rules_pu)
+
         # ── Разделяем потоки ──
         EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
         CONTENT_SILENT_TYPES = {'content_campaign_publish'}
@@ -2168,6 +2191,12 @@ class AnchorEngine:
 
         # ── 3e. EMAIL SILENT — автономная отправка/follow-up (ВСЕГДА, без сообщений юзеру) ──
         # Email outreach/follow-up — тихие операции, не будят пользователя → работают 24/7
+        if email_silent_anchors and _email_blocked_by_rule:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ {len(email_silent_anchors)} email anchors BLOCKED by user rule (запрет email)")
+            for _ea_blocked in email_silent_anchors:
+                _ea_blocked.delivered_at = datetime.now(timezone.utc)
+            session.commit()
+            email_silent_anchors = []
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             for _ea_idx, ea in enumerate(email_silent_anchors[:5]):  # макс 5 за цикл

@@ -10934,6 +10934,24 @@ async def send_outreach_email(
         if not user:
             return " Пользователь не найден"
 
+        # ── GUARD: проверка user_rules — запрет email-рассылки ──
+        try:
+            from ai_integration.memory import decrypt_data as _dec_email_rule
+            import json as _json_er
+            _mem_er = _json_er.loads(_dec_email_rule(user.memory)) if user.memory else {}
+            _EMAIL_STOP_KW = ('не писать', 'не отправлять', 'не слать', 'стоп email',
+                              'stop email', 'без email', 'без рассылк', 'запрет email',
+                              'не рассыл', 'прекрати email', 'прекрати рассыл',
+                              'отключить email', 'отключи email', 'не использовать email',
+                              'не отправляй email', 'не отправляй письм',
+                              'не пиши по email', 'не пиши email', 'не пиши по почте',
+                              'не писать по email', 'не писать email', 'не писать по почте')
+            for _r_er in _mem_er.get('rules', []):
+                if any(kw in _r_er.lower() for kw in _EMAIL_STOP_KW):
+                    return f"⛔ Email-рассылка заблокирована правилом пользователя: «{_r_er[:80]}»"
+        except Exception as _e_er:
+            logger.debug("suppressed email rule check: %s", _e_er)
+
         # ── GUARD: не отправлять email на адрес самого пользователя ИЛИ IMAP-аккаунт агента ──
         _rcpt = (recipient_email or '').strip().lower()
         _user_email = (getattr(user, 'email', '') or '').strip().lower()
@@ -10973,6 +10991,17 @@ async def send_outreach_email(
                             f"Пишем только новым внешним пользователям — этот контакт пропускаем.")
             except Exception as _e_reg:
                 logger.debug("suppressed registered-user check: %s", _e_reg)
+
+        # ── GUARD: не отправлять отписавшимся контактам ──
+        if _rcpt:
+            try:
+                _ec_unsub_chk = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=_rcpt, status='unsubscribed'
+                ).first()
+                if _ec_unsub_chk:
+                    return f"⛔ {_rcpt} отписался — отправка заблокирована."
+            except Exception as _e_unsub_chk:
+                logger.debug("suppressed unsubscribed check: %s", _e_unsub_chk)
 
         # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
         RESEND_API_KEY = _platform_resend_key
@@ -11304,6 +11333,18 @@ async def reply_to_outreach_email(
 
         if not outreach:
             return " Не найдено письмо для ответа."
+
+        # ── GUARD: не отвечать отписавшимся контактам ──
+        _reply_rcpt = (recipient_email or outreach.recipient_email or '').strip().lower()
+        if _reply_rcpt:
+            try:
+                _ec_reply_chk = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=_reply_rcpt, status='unsubscribed',
+                ).first()
+                if _ec_reply_chk:
+                    return f"⛔ {_reply_rcpt} отписался — ответ заблокирован."
+            except Exception as _e_reply_chk:
+                logger.debug("suppressed unsubscribed check in reply: %s", _e_reply_chk)
 
         # Защита от спама: не более 2 AI-ответов одному контакту суммарно по всем записям
         _MAX_AI_REPLIES = 2
@@ -11683,6 +11724,13 @@ async def add_email_leads(
             if email in _registered_emails_set:
                 skipped_registered += 1
                 continue
+            # ── GUARD: не добавлять отписавшихся контактов ──
+            _ec_lead_chk = session.query(EmailContact).filter_by(
+                user_id=user.id, email=email, status='unsubscribed',
+            ).first()
+            if _ec_lead_chk:
+                skipped += 1
+                continue
             # Отклоняем generic-адреса через полный фильтр
             if _is_generic_email(email):
                 skipped_generic += 1
@@ -11986,6 +12034,17 @@ async def send_follow_up_email(
 
         if not outreach:
             return " Не найдено письмо для follow-up."
+
+        # ── GUARD: не отправлять follow-up отписавшимся контактам ──
+        try:
+            _ec_fu_chk = session.query(EmailContact).filter_by(
+                user_id=user.id, email=(outreach.recipient_email or '').strip().lower(),
+                status='unsubscribed',
+            ).first()
+            if _ec_fu_chk:
+                return f"⛔ {outreach.recipient_email} отписался — follow-up заблокирован."
+        except Exception as _e_fu_chk:
+            logger.debug("suppressed unsubscribed check in follow_up: %s", _e_fu_chk)
 
         campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
         if not campaign:
@@ -12811,6 +12870,69 @@ async def check_emails(
             # Сканируем snippets ответных писем: если контакт написал что хочет
             # общаться на определённом языке или в определённом стиле — сохраняем
             # это в EmailContact.notes и показываем агенту при ответе.
+            #
+            # ── AUTO-UNSUBSCRIBE: распознаём отказы в ответах ──
+            # Если контакт просит не писать → status='unsubscribed', блокируем follow-up и новые письма
+            _unsubscribed_emails: list = []
+            if _reply_snippets:
+                import re as _re_unsub_ce
+                _UNSUB_RE = _re_unsub_ce.compile(
+                    r'\bunsubscribe\b|'
+                    r'\bopt[\s\-]?out\b|'
+                    r'\bstop\s+(?:emailing|contacting|writing|sending)\b|'
+                    r'\bremove\s+(?:me|my\s+email)\b|'
+                    r'\bdo\s+not\s+(?:contact|email|write|send)\b|'
+                    r'\bdon\'?t\s+(?:contact|email|write|send)\b|'
+                    r'\bnot\s+interested\b|'
+                    r'\bno\s+thanks?\b|'
+                    r'\bleave\s+me\s+alone\b|'
+                    r'не\s*пиши(?:те)?|'
+                    r'(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
+                    r'отпис(?:ать|ка|аться)|'
+                    r'(?:больше\s+)?не\s+(?:нужно|надо|хочу)\s*(?:писать|получать|ваших?\s+пис)|'
+                    r'(?:уберите|удалите)\s+(?:меня|мой\s+(?:email|адрес))|'
+                    r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
+                    r'(?:не\s+)?интересно|'
+                    r'спам|spam',
+                    _re_unsub_ce.IGNORECASE,
+                )
+                for _unsub_em, _unsub_snip in _reply_snippets.items():
+                    if _UNSUB_RE.search(_unsub_snip):
+                        _unsubscribed_emails.append(_unsub_em)
+                        try:
+                            # Обновляем EmailContact → unsubscribed
+                            _ec_unsub = session.query(_EC_ce2).filter_by(
+                                user_id=user.id, email=_unsub_em
+                            ).first()
+                            if _ec_unsub:
+                                _ec_unsub.status = 'unsubscribed'
+                                _old_notes = _ec_unsub.notes or ''
+                                if 'отписка' not in _old_notes.lower():
+                                    _ec_unsub.notes = ((_old_notes + '\n') if _old_notes else '') + '[отписка: контакт попросил не писать]'
+                            else:
+                                session.add(_EC_ce2(
+                                    user_id=user.id, email=_unsub_em,
+                                    source='imap_reply', status='unsubscribed',
+                                    notes='[отписка: контакт попросил не писать]',
+                                    last_contacted_at=_dt_ce.datetime.utcnow(),
+                                ))
+                            # Обновляем EmailOutreach → статус 'unsubscribed', убираем follow-up
+                            _eo_unsub = session.query(_EO_ce2).filter(
+                                _EO_ce2.user_id == user.id,
+                                _EO_ce2.recipient_email == _unsub_em,
+                            ).all()
+                            for _eo_u in _eo_unsub:
+                                _eo_u.status = 'unsubscribed' if _eo_u.status != 'replied' else 'replied'
+                                _eo_u.next_follow_up_at = None  # убираем запланированные follow-up
+                            session.commit()
+                            logger.info(f'[CHECK_EMAILS] AUTO-UNSUBSCRIBE: {_unsub_em} marked as unsubscribed')
+                        except Exception as _e_unsub:
+                            logger.debug(f'[CHECK_EMAILS] auto-unsubscribe failed: {_e_unsub}')
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+
             _contact_prefs_found: dict = {}
             if _reply_snippets:
                 import re as _re_pref_ce
@@ -12908,6 +13030,11 @@ async def check_emails(
                     result += _pref_ann
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
+
+            # ── Аннотация для агента: отписавшиеся контакты ──
+            if _unsubscribed_emails:
+                result += '\n\n⛔ ОТПИСАЛИСЬ (НЕ отправляй им больше ни одного письма):\n'
+                result += '\n'.join(f'• {_ue}' for _ue in _unsubscribed_emails)
 
         return result
     except Exception as e:
