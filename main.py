@@ -483,18 +483,22 @@ def safe_avatar_url(telegram_id):
 
 
 def avatar_url_if_photo(user):
-    """Return proxied avatar URL only for users who actually have an avatar.
-    Returns None for users without photo — frontend shows initial-letter fallback."""
+    """Return proxied avatar URL for users who may have a Telegram avatar.
+    For TG users (positive ID): always returns URL so endpoint can fetch on demand.
+    For Discord users (negative ID): only if photo_url is cached."""
     if not user or not user.telegram_id:
         return None
     # Custom avatar always available
     if getattr(user, 'custom_avatar', None):
         return f"/api/avatar/{user.telegram_id}"
+    # TG users: always return URL — endpoint fetches on demand from TG API
+    if user.telegram_id > 0:
+        return f"/api/avatar/{user.telegram_id}"
+    # Discord: only if cached
     _photo = getattr(user, 'photo_url', None)
-    if not _photo or _photo == '__no_avatar__':
-        return None
-    # Has cached photo_url (file_id or URL) — return proxy URL
-    return f"/api/avatar/{user.telegram_id}"
+    if _photo and _photo != '__no_avatar__':
+        return f"/api/avatar/{user.telegram_id}"
+    return None
 
 
 async def _refresh_avatars_background(bot, telegram_ids):
