@@ -433,7 +433,7 @@ _TACTIC_FAMILIES: dict = {
     'relationship':       {'reply_to_outreach_email', 'negotiate_by_email', 'send_follow_up_email',
                            'check_emails', 'list_email_contacts', 'find_partners'},
     'content_attract':    {'generate_marketing_content', 'start_content_campaign', 'generate_image'},
-    'research_discover':  {'research_topic', 'get_news_trends'},
+    'research_discover':  {'research_topic', 'get_news_trends', 'find_relevant_contacts_for_task'},
 }
 
 # Универсальные паттерны мышления (работают для ЛЮБОЙ цели)
@@ -462,7 +462,9 @@ _UNIVERSAL_PATTERNS: dict = {
     'research_discover': (
         '🔍 ПЕРЕОСМЫСЛИТЬ',
         'Ищу новый подход/сегмент/платформу — research_topic, get_news_trends, '
-        'research_and_plan("Где ещё [целевая аудитория]?"). Смена стратегии.',
+        'research_and_plan("Где ещё [целевая аудитория]?"). Смена стратегии. '
+        'Конференции/мероприятия: research_topic("конференции [тема] 2026") → '
+        'find_relevant_contacts_for_task → send_outreach_email.',
     ),
 }
 
@@ -576,7 +578,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_imap:
         avail.append("  📧 Email: check_emails ← здесь реальные ответы живых людей; reply_to/negotiate — продолжение диалога")
     if has_github:
-        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='...') → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)")
+        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='language:python followers:>5') → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)\n  ⚠️ QUERY правило: ТОЛЬКО GitHub-квалификаторы! Примеры: 'language:python followers:>5', 'language:javascript repos:>10 location:Russia'. НЕ 'AI testing QA automation' — свободный текст даёт 0 результатов!")
     if has_rss:
         avail.append("  📰 RSS: run_agent_action(action='get_latest') ← свежие данные и инфоповоды из источника")
     if has_alpha:
@@ -602,6 +604,8 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         "  🎯 find_relevant_contacts_for_task ← люди внутри платформы по навыкам/интересам",
         "  💬 find_and_message_relevant_users ← найти + написать за 1 шаг",
         "  📨 start_email_campaign + send_outreach_email ← персональный охват с follow-up",
+        "  📅 КОНФЕРЕНЦИИ: research_topic('конференции [тема] 2026 Россия') → find_relevant_contacts_for_task → send_outreach_email",
+        "  🏘️ СООБЩЕСТВА: research_topic('Telegram Discord каналы [тема]') → find_and_message_relevant_users",
     ]
     avail.extend(_sys_always)
     if goal_type not in ('research', 'dev'):
@@ -706,7 +710,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _intg_missing = []
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
-    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(search_users, query=...) → save_email_contact → send_outreach_email [цепочка ОБЯЗАТЕЛЬНА — без отправки шаг не засчитан]')
+    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5") → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст — иначе 0 результатов!')
     if _has_rss:     _intg_connected.append('✅ RSS — мониторинг лент новостей')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
@@ -971,7 +975,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            if _has_news and not _has_alpha else '')
         + ("  RSS:           action='get_latest' — свежие посты из RSS-ленты агента\n"
            if _has_rss else '')
-        + ("  GitHub:        action='search_users' query='...' — поиск разработчиков\n"
+        + ("  GitHub:        action='search_users' query='language:python followers:>5' — поиск разработчиков\n"
+           "                 ⚠️ QUERY: используй ТОЛЬКО GitHub-квалификаторы, НЕ свободный текст!\n"
+           "                 ✅ Правильно: 'language:python followers:>5', 'language:javascript repos:>10 location:Russia'\n"
+           "                 ❌ Неправильно: 'AI testing developers QA automation' → 0 результатов!\n"
+           "                 Квалификаторы: language:X  followers:>N  repos:>N  location:X  type:user\n"
            "                action='find_contributors' repo='org/repo'\n"
            if _has_github else '')
         + ("  Notion:        action='create_page' / 'update_page'\n" if _has_notion else '')
@@ -1186,8 +1194,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "   • Прошлое: check_emails / list_email_contacts — кто уже ответил?\n"
         "   • Инструменты: research_and_plan вместо web_search (комплексная работа за 1 вызов)\n\n"
         "5️⃣ СЛЕПЫЕ ЗОНЫ — что я НЕ рассматриваю?\n"
-        "   • Другой сегмент? (если искал на GitHub → попробуй Reddit/Discord/Habr)\n"
-        "   • Другой язык? (если EN → попробуй RU, или наоборот)\n"
+        "   • Другой сегмент? (если искал на GitHub → попробуй Reddit/Discord/Habr/StackOverflow)\n"
+        "   • Конференции/мероприятия/хакатоны? research_topic('конференции [тема] 2026 Россия') → find_relevant_contacts_for_task\n"
+        "   • Сообщества? research_topic('Telegram/Discord каналы [тема]') → find_and_message_relevant_users\n"
+        "   • Другой язык? (если EN → попробуй RU, если GitHub → попробуй LinkedIn/HH.ru)\n"
         "   • Другой подход? (если прямой → косвенный; если поиск → контент-приманка)\n"
         "   • НЕпопробованные инструменты? (см. 'ЕЩЁ НЕ ПРОБОВАЛ' в истории выше)\n\n"
         "→ После анализа — СРАЗУ вызывай ЛУЧШИЙ инструмент. Без предисловий, без текста.\n\n"
