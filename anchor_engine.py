@@ -3307,6 +3307,11 @@ class AnchorEngine:
                             text=_cleaned_result,
                         )
                         # Оборачиваем в __agent JSON для корректного отображения в веб-чате
+                        # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
+                        # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
+                        _result_anchor_type = (
+                            'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
+                        )
                         _agent_content = json.dumps({
                             '__agent': {
                                 'name': _chosen_name,
@@ -3315,7 +3320,7 @@ class AnchorEngine:
                             },
                             'text': _strip_html(_cleaned_result),
                             '__tools_used': _tools_used,
-                            '__anchor_type': anchor.anchor_type,
+                            '__anchor_type': _result_anchor_type,
                         }, ensure_ascii=False)
                         # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
                         # ASI сохраняем как proactive — координаторская инициатива
