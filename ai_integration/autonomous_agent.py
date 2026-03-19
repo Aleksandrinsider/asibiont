@@ -4496,166 +4496,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _seen_emojis.add(_em)
         _intg_line = '\nПодключено у тебя:\n  ' + '\n  '.join(_intg_parts) if _intg_parts else ''
 
-    # ── Универсальные подсказки по действиям из лейблов интеграций ─────────────
-    # Работаем с _intg_hint (уже нормализованные лейблы) — не трогаем сырые api_keys.
-    # Новые интеграции из _INTEGRATION_LABELS будут корректно распознаны автоматически.
+    # ── Подсказки по интеграциям — компактная универсальная инструкция ─────────
     _intg_action_hint = ""
-    if _intg_hint:  # строим подсказки для ВСЕХ путей (не только autopilot)
-        _hints = []
-        _lbl_text = ' '.join(h.lower() for h in _intg_hint)  # всё в одну строку для проверки
-        _has_email_h = any(w in _lbl_text for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun'))
-        _has_code_h  = any(w in _lbl_text for w in ('github', 'gitlab', 'bitbucket'))
-        _has_rss_h   = any(w in _lbl_text for w in ('rss', 'лент', 'feed'))
-        _has_msg_h   = any(w in _lbl_text for w in ('slack', 'discord', 'telegram', 'whatsapp'))
-        _has_crm_h   = any(w in _lbl_text for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'pipedrive'))
-        _has_shop_h  = any(w in _lbl_text for w in ('ozon', 'wildberries', 'авито', 'shopify'))
-        _has_sheets_h = any(w in _lbl_text for w in ('sheets', 'airtable', 'notion'))
-        _other_h = [
-            h for h in _intg_hint
-            if not any(w in h.lower() for w in (
-                'почт','mail','imap','smtp','gmail','github','gitlab',
-                'rss','лент','feed','slack','discord','telegram',
-                'crm','amocrm','битрикс','hubspot','ozon','wildberries',
-                'авито','shopify','sheets','airtable','notion',
-            ))
-        ]
-        if _has_email_h:
-            _hints.append(
-                "\n\n📧 Email/Почта. Твои возможности: "
-                "send_outreach_email (персональные письма), "
-                "check_emails (проверить ответы и входящие), "
-                "reply_to_outreach_email (ответить), "
-                "find_relevant_contacts_for_task (найти контакты), "
-                "start_email_campaign (запустить кампанию). "
-                "Также доступны: web_search, research_topic, add_task. "
-                "Выбирай инструмент исходя из задачи."
-            )
-        if _has_code_h:
-            _hints.append(
-                "\n\n💻 GitHub/GitLab. Твои возможности: "
-                "run_agent_action (работа с репозиториями, PR, поиск пользователей), "
-                "find_relevant_contacts_for_task (найти разработчиков), "
-                "save_email_contact (сохранить найденных), web_search. "
-                "Токен подхватывается автоматически. Выбирай исходя из задачи."
-            )
-        if _has_rss_h:
-            _hints.append(
-                "\n\n📰 RSS/лента. Твои возможности: "
-                "run_agent_action (данные из ленты), "
-                "research_topic (глубокое исследование), "
-                "web_search, get_news_trends (тренды), "
-                "save_email_contact (сохранить автора/контакт). "
-                "Выбирай исходя из задачи."
-            )
-        if _has_msg_h:
-            _hints.append(
-                "\n\n💬 Мессенджер. Рассылка / мониторинг каналов, постинг: "
-                "run_agent_action (Slack/Discord/WhatsApp), "
-                "publish_to_telegram / create_post (Telegram-канал), "
-                "send_message_to_user (внутренние сообщения). "
-                "Выбирай исходя из платформы."
-            )
-        if _has_crm_h:
-            _hints.append(
-                "\n\n🤝 CRM. Обнови статус сделок, проверь новые лиды, сохрани контакты: "
-                "run_agent_action (AmoCRM/Битрикс/HubSpot), "
-                "save_email_contact, find_relevant_contacts_for_task, "
-                "send_outreach_email (выход на клиентов). "
-                "Выбирай исходя из задачи."
-            )
-        if _has_shop_h:
-            _hints.append(
-                "\n\n🛒 Маркетплейс. Проверь заказы / аналитику / остатки: "
-                "run_agent_action (Ozon/WB/Авито), "
-                "web_search (конкуренты/цены), "
-                "research_topic (рыночная аналитика), add_task. "
-                "Выбирай исходя из задачи."
-            )
-        if _has_sheets_h:
-            _hints.append(
-                "\n\n📊 Таблицы/Notion. Обнови данные, выгрузи отчёт, создай запись: "
-                "run_agent_action (Google Sheets/Notion/Airtable), "
-                "research_topic (собрать данные для таблицы), "
-                "add_task, update_goal_progress. "
-                "Выбирай исходя из задачи."
-            )
-        # Биржевые / крипта
-        _has_stock_h = any(w in _lbl_text for w in ('биржевые', 'alpha vantage', 'binance', 'bybit', 'coinbase', 'крипт'))
-        if _has_stock_h:
-            _hints.append(
-                "\n\n📈 Биржа/Крипта. Твои возможности: "
-                "run_agent_action (котировки, сигналы, статистика), "
-                "web_search (новости рынка), "
-                "research_topic (анализ актива), "
-                "add_task, update_goal_progress (фиксировать выводы). "
-                "Выбирай исходя из задачи."
-            )
-        # Реклама / маркетинг
-        _has_ad_h = any(w in _lbl_text for w in ('директ', 'яндекс.директ', 'adwords', 'mytarget', 'яндекс.метрика'))
-        if _has_ad_h:
-            _hints.append(
-                "\n\n📣 Реклама/Аналитика. Твои возможности: "
-                "run_agent_action (кампании, метрики, ставки), "
-                "web_search (конкуренты, тренды), "
-                "generate_marketing_content (тексты объявлений), "
-                "research_topic (анализ аудитории), add_task. "
-                "Выбирай исходя из задачи."
-            )
-        # VK / Instagram / соцсети
-        _has_social_h = any(w in _lbl_text for w in ('вконтакт', 'vk', 'instagram', 'twitter', 'youtube'))
-        if _has_social_h:
-            _hints.append(
-                "\n\n🌐 Соцсети. Твои возможности: "
-                "run_agent_action (публикация/парсинг/аналитика), "
-                "create_post (подготовить контент), "
-                "generate_marketing_content (текст+идеи), "
-                "web_search, research_topic. "
-                "Выбирай исходя из платформы."
-            )
-        # Google Calendar / планировщик
-        _has_cal_h = any(w in _lbl_text for w in ('calendar', 'google calendar', 'календар'))
-        if _has_cal_h:
-            _hints.append(
-                "\n\n📅 Календарь. Твои возможности: "
-                "run_agent_action (создание/проверка событий), "
-                "set_reminder, add_task, check_time_conflicts. "
-                "Выбирай исходя из задачи."
-            )
-        # Генерация изображений
-        _has_img_h = any(w in _lbl_text for w in ('генерац', 'replicate', 'изображен'))
-        if _has_img_h:
-            _hints.append(
-                "\n\n🎨 Генерация изображений. Твои возможности: "
-                "generate_image (создать картинку), "
-                "create_post (опубликовать с изображением), "
-                "publish_to_telegram. "
-                "Выбирай исходя из задачи."
-            )
-        # LinkedIn / HR / hh.ru
-        _has_hr_h = any(w in _lbl_text for w in ('linkedin', 'superjob', 'hh.ru', 'headhunter'))
-        if _has_hr_h:
-            _hints.append(
-                "\n\n👔 HR/Рекрутинг. Твои возможности: "
-                "run_agent_action (LinkedIn/hh.ru/SuperJob), "
-                "find_relevant_contacts_for_task (найти кандидатов), "
-                "save_email_contact (база кандидатов), "
-                "send_outreach_email (первое письмо), web_search. "
-                "Выбирай исходя из задачи."
-            )
-        if not _hints and _other_h:
-            # Неизвестная интеграция — даём общую инструкцию с её названием
-            _other_names = ', '.join(h.split('(')[0].strip() for h in _other_h[:3])
-            _hints.append(
-                f"\n\n🔧 Твои интеграции: {_other_names}. "
-                "Используй их через run_agent_action — это твой главный канал действий."
-            )
-        if _hints:
-            _hints.append(
-                "\n\nweb_search / research_topic — универсальные инструменты, доступны всегда. "
-                "update_goal_progress — обновляй прогресс после значимых действий. "
-                "Выбирай лучшее из доступных инструментов для конкретной задачи."
-            )
-        _intg_action_hint = ''.join(_hints[:3])
+    if _intg_hint:
+        _intg_names = ', '.join(_intg_hint[:8])
+        _intg_action_hint = (
+            f"\n\n🔗 Твои интеграции: {_intg_names}.\n"
+            "Каждая интеграция — это НЕ один инструмент, а НАБОР ВОЗМОЖНОСТЕЙ. Думай шире:\n"
+            "  • RSS = не только новости, но и мониторинг конкурентов, поиск авторов/экспертов, подготовка контента, трендовые темы\n"
+            "  • Почта = не только рассылка, но и follow-up, нетворкинг, мониторинг ответов, персональные предложения\n"
+            "  • GitHub = не только код, но и поиск разработчиков, анализ проектов, networking через issues/PR\n"
+            "  • CRM/Таблицы = не только записи, но и аналитика, отчёты, выгрузка данных для других задач\n"
+            "  • Соцсети/Мессенджеры = не только постинг, но и мониторинг, поиск аудитории, community building\n"
+            "Для внешних сервисов → run_agent_action. Для email → send_outreach_email / check_emails. "
+            "web_search / research_topic — универсальные, доступны всегда. "
+            "Комбинируй интеграции с платформенными инструментами для максимального результата.\n"
+            "Сам решай КАК использовать интеграции — исходя из задачи, цели и контекста пользователя."
+        )
 
     # === Универсальный парсинг ACTION из скрипта агента (работает для любого агента) ===
     _py_code_sa = agent.get('python_code', '').strip()

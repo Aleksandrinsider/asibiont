@@ -3107,7 +3107,7 @@ class AnchorEngine:
                         _exec_agent_for_director(
                             agent_data, _task_trimmed, user.telegram_id,
                         ),
-                        timeout=90,
+                        timeout=150,
                     )
                 except (asyncio.TimeoutError, Exception) as _ai_err:
                     logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
@@ -6145,11 +6145,11 @@ class AnchorEngine:
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=120,
+                        timeout=180,
                     )
                 except asyncio.TimeoutError:
-                    _ae_msg = f'Таймаут 120с — агент не успел выполнить задачу'
-                    logger.warning("[COORD] agent %s timeout after 120s", _ag_name)
+                    _ae_msg = f'Таймаут 180с — агент не успел выполнить задачу'
+                    logger.warning("[COORD] agent %s timeout after 180s", _ag_name)
                     if _step_task_id:
                         try:
                             from sqlalchemy import text as _sql_t_ae
@@ -6203,7 +6203,7 @@ class AnchorEngine:
                         try:
                             _raw_retry = await asyncio.wait_for(
                                 _exec_agent_for_director(_ag_data, _retry_prompt, user.telegram_id),
-                                timeout=120,
+                                timeout=180,
                             )
                             _result_retry = _raw_retry[0] if isinstance(_raw_retry, (tuple, list)) else _raw_retry
                             _retry_tools = list(_raw_retry[1]) if isinstance(_raw_retry, (tuple, list)) and len(_raw_retry) > 1 else []

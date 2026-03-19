@@ -603,7 +603,16 @@ async def _autonomous_analyze_result(
     for a in all_agents:
         if a.get('id') == agent_id or a.get('name', '').lower() == agent_name.lower():
             continue
-        other.append(f"- {a.get('name', '?')} ({a.get('specialization', 'агент')}): {(a.get('description') or '')[:100]}")
+        _desc = (a.get('description') or '')[:100]
+        _intg = ''
+        if _parse_agent_integrations:
+            _caps = _parse_agent_integrations(
+                a.get('user_api_keys', ''), a.get('python_code', ''),
+                a.get('tools_allowed', ''),
+            )
+            if _caps:
+                _intg = f" [интеграции: {', '.join(_caps[:4])}]"
+        other.append(f"- {a.get('name', '?')} ({a.get('specialization', 'агент')}): {_desc}{_intg}")
     if not other:
         return {'action': 'done'}  # нет других агентов — некому передать
 

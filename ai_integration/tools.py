@@ -1705,7 +1705,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "run_agent_action",
-            "description": "⚡ Выполнить действие через внешний сервис (Slack, GitHub, Trello, Notion, Jira, Gmail). Уточни детали у пользователя перед вызовом.",
+            "description": "⚡ Выполнить действие через подключённую интеграцию агента (любые внешние API и сервисы). Используй творчески — одна интеграция может решать разные задачи.",
             "parameters": {
                 "type": "object",
                 "properties": {
