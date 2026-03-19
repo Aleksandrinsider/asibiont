@@ -511,6 +511,26 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
         lines.append("   Особенно важно: если 'direct_action' опробован 2+ раза → переключись на 'infrastructure'")
     elif len(tried) == len(_UNIVERSAL_PATTERNS):
         lines.append("\n✅ Все паттерны опробованы! Масштабируй самый эффективный.")
+
+    # ── Динамическая стратегия на основе истории результатов ──
+    _h_combined = h_text
+    _did_outreach = 'direct_action' in used_patterns
+    _got_replies = any(w in _h_combined for w in ('ответил', 'replied', 'ответ получен', 'interested'))
+    _got_blocks = any(w in _h_combined for w in ('cooldown', 'уже отправлено', 'already sent', 'лимит', 'ошибка'))
+    if _did_outreach and not _got_replies and len(agent_history or []) >= 4:
+        lines.append(
+            "\n💡 СТРАТЕГИЯ: прямой аутрич без ответов 4+ циклов. AI рекомендует:\n"
+            "  — Сменить целевую аудиторию (другой query, другая платформа)\n"
+            "  — Создать контент (пост, статья) чтобы привлечь органически\n"
+            "  — Переключиться на infrastructure: FAQ, landing, демо-материалы"
+        )
+    elif _did_outreach and _got_blocks:
+        lines.append(
+            "\n💡 СТРАТЕГИЯ: блокировки cooldown/дубли. Попробуй:\n"
+            "  — Новая страница поиска (page=N+1)\n"
+            "  — Другой query с другими фильтрами\n"
+            "  — Косвенный подход: content_attract или infrastructure"
+        )
     
     lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     return '\n'.join(lines) + '\n'
@@ -1156,12 +1176,43 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         agent_history=_agent_hist_for_scaffold,
     )
 
+    # ── Outreach effectiveness stats ──
+    _outreach_stats = ''
+    if user and (_has_imap or _has_github):
+        try:
+            from models import Session as _SOR, EmailOutreach as _EO_stat
+            from sqlalchemy import func as _func_stat
+            _db_stat = _SOR()
+            try:
+                _total_sent = _db_stat.query(_func_stat.count(_EO_stat.id)).filter(
+                    _EO_stat.user_id == user.id).scalar() or 0
+                _total_replied = _db_stat.query(_func_stat.count(_EO_stat.id)).filter(
+                    _EO_stat.user_id == user.id,
+                    _EO_stat.status == 'replied').scalar() or 0
+                if _total_sent >= 3:
+                    _rate = round(_total_replied / _total_sent * 100)
+                    _outreach_stats = (
+                        f"\n📬 СТАТИСТИКА АУТРИЧА: отправлено {_total_sent}, ответили {_total_replied} "
+                        f"(конверсия {_rate}%). "
+                    )
+                    if _rate < 5:
+                        _outreach_stats += "Конверсия низкая → меняй подход: персонализируй письма, ищи другую аудиторию.\n"
+                    elif _rate > 20:
+                        _outreach_stats += "Конверсия отличная → продолжай этот подход!\n"
+                    else:
+                        _outreach_stats += "Конверсия средняя → попробуй A/B: измени тему или целевую аудиторию.\n"
+            finally:
+                _db_stat.close()
+        except Exception:
+            pass
+
     return (
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Твои интеграции/специализация: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
         f"{_goal_state_hint}"
+        f"{_outreach_stats}"
         f"{_tactics_block}"
         f"\n{_catalog}"
         f"{_team_block}"

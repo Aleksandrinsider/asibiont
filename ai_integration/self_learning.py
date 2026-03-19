@@ -34,6 +34,8 @@ class SelfLearner:
             'total_response_length': 0,
             'tools_used_count': 0,
             'tools_histogram': defaultdict(int),
+            'tool_success': defaultdict(int),   # tool_name → кол-во успешных вызовов
+            'tool_fail': defaultdict(int),       # tool_name → кол-во ошибок
             'successful_patterns': [],
             'failed_patterns': [],
             'preferences': {},
@@ -75,6 +77,8 @@ class SelfLearner:
                         m['successful_patterns'] = _sl.get('successful_patterns', [])[-20:]
                         m['failed_patterns'] = _sl.get('failed_patterns', [])[-10:]
                         m['preferences'] = _sl.get('preferences', {})
+                        m['tool_success'] = defaultdict(int, _sl.get('tool_success', {}))
+                        m['tool_fail'] = defaultdict(int, _sl.get('tool_fail', {}))
                         m['last_emotions'] = _sl.get('last_emotions', [])[-10:]
                         m['conversation_style'] = _sl.get('conversation_style', 'normal')
                         logger.info(f"[LEARN] Loaded {m['total_turns']} turns from DB for user {user_id}")
@@ -104,6 +108,8 @@ class SelfLearner:
                     'total_response_length': m['total_response_length'],
                     'tools_used_count': m['tools_used_count'],
                     'tools_histogram': dict(m['tools_histogram']),
+                    'tool_success': dict(m['tool_success']),
+                    'tool_fail': dict(m['tool_fail']),
                     'successful_patterns': m['successful_patterns'][-20:],
                     'failed_patterns': m['failed_patterns'][-10:],
                     'preferences': m['preferences'],
@@ -301,6 +307,43 @@ class SelfLearner:
             return "Проактивность: пользователь активно ведёт задачи. Предложи создать ЦЕЛЬ для группировки."
         
         return ""
+    
+    def record_tool_result(self, user_id: int, tool_name: str, success: bool):
+        """Записывает успех/ошибку вызова инструмента для трекинга эффективности."""
+        self._load_from_db(user_id)
+        metrics = self.user_metrics[user_id]
+        if success:
+            metrics['tool_success'][tool_name] += 1
+        else:
+            metrics['tool_fail'][tool_name] += 1
+
+    def get_tool_effectiveness_hint(self, user_id: int) -> str:
+        """Возвращает подсказку об эффективности инструментов для системного промпта.
+        
+        Показывает AI какие инструменты работают надёжно, а какие часто ломаются.
+        """
+        self._load_from_db(user_id)
+        metrics = self.user_metrics[user_id]
+        succ = metrics.get('tool_success', {})
+        fail = metrics.get('tool_fail', {})
+        all_tools = set(succ.keys()) | set(fail.keys())
+        if not all_tools:
+            return ""
+        lines = []
+        for t in sorted(all_tools, key=lambda x: succ.get(x, 0) + fail.get(x, 0), reverse=True)[:8]:
+            s = succ.get(t, 0)
+            f = fail.get(t, 0)
+            total = s + f
+            if total < 2:
+                continue
+            rate = round(s / total * 100)
+            if rate < 60:
+                lines.append(f"⚠ {t}: {rate}% успехов ({s}/{total}) — часто ошибки, используй осторожно")
+            elif rate == 100 and total >= 5:
+                lines.append(f"✅ {t}: стабильно работает ({total} вызовов)")
+        if not lines:
+            return ""
+        return "\n[ЭФФЕКТИВНОСТЬ ИНСТРУМЕНТОВ]\n" + "\n".join(lines)
 
 
 # ═══════════════════════════════════════════════════════════════

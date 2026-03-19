@@ -620,6 +620,19 @@ class HybridAutonomousAgent:
             if any(kw in msg_lower for kw in group_info['keywords']):
                 selected |= group_info['tools']
 
+        # ── Адаптивное расширение: если пользователь часто использует инструменты группы,
+        # подключаем её даже без ключевых слов в сообщении
+        try:
+            _hist = get_learner().user_metrics.get(getattr(self, '_current_user_id', 0), {})
+            _th = _hist.get('tools_histogram', {})
+            if _th:
+                for _gn, _gi in self.TOOL_GROUPS.items():
+                    _group_uses = sum(_th.get(t, 0) for t in _gi['tools'])
+                    if _group_uses >= 5:
+                        selected |= _gi['tools']
+        except Exception:
+            pass
+
         # Always include save_user_rule (behavioral rules) + run_agent_action
         selected.add('save_user_rule')
         selected.add('run_agent_action')
@@ -1885,6 +1898,10 @@ class HybridAutonomousAgent:
                 proactive_hint = learner.suggest_proactive_action(user_id, profile_data)
                 if proactive_hint:
                     dynamic_context += f"\n{proactive_hint}"
+
+                tool_eff = learner.get_tool_effectiveness_hint(user_id)
+                if tool_eff:
+                    dynamic_context += tool_eff
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
@@ -2305,6 +2322,7 @@ class HybridAutonomousAgent:
             multi_limit_counts = {}
 
             # Smart tool filtering — reduce tokens sent to API
+            self._current_user_id = user_id
             tools_to_exclude = self._select_tools_for_message(user_message)
             # Дополнительные запрещённые инструменты от вызывающего кода (напр. при обзоре отчита агента)
             if exclude_tools:
@@ -2519,6 +2537,8 @@ class HybridAutonomousAgent:
                         if _r.get('success'):
                             _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)
                             _rc = CognitiveEngine.compress_tool_result(_rc)
+                            try: get_learner().record_tool_result(user_id, _name, True)
+                            except Exception: pass
 
                             # ── Авто-заметка: длинный результат research → save_note ─────────
                             # Пользователю не нужно говорить "запиши" — длинное исследование
@@ -2584,10 +2604,14 @@ class HybridAutonomousAgent:
                                     pass
                         else:
                             _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
+                            try: get_learner().record_tool_result(user_id, _name, False)
+                            except Exception: pass
                     except Exception as _err:
                         logger.error(f"[EXEC] {_name} parallel crashed: {_err}\n{traceback.format_exc()}")
                         _r = {"success": False, "error": str(_err)}
                         _rc = json.dumps({"error": str(_err)}, ensure_ascii=False)
+                        try: get_learner().record_tool_result(user_id, _name, False)
+                        except Exception: pass
                     return _r, {"role": "tool", "tool_call_id": _tc['id'], "content": _rc}
 
                 if _ready_calls:
@@ -5397,6 +5421,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "— Нашёл что-то интересное при поиске → ИСПОЛЬЗУЙ это как основу для письма/поста.\n"
     )
 
+    # ── Инъекция обученных предпочтений + эффективность инструментов ──
+    try:
+        _learner_ap = get_learner()
+        _tool_eff = _learner_ap.get_tool_effectiveness_hint(user_id)
+        if _tool_eff:
+            system_prompt += _tool_eff + "\n"
+        _user_pref = _learner_ap.get_user_preferences(user_id)
+        if _user_pref:
+            system_prompt += _user_pref + "\n"
+    except Exception:
+        pass
+
     # Для autopilot-задач: фокус на конкретное действие, не на анализ истории
     if _is_autopilot_task:
         system_prompt += (
@@ -5710,14 +5746,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     if _r0.get('success'):
                         _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)
                         _tc_result = _tc_result[:1500]
+                        try: get_learner().record_tool_result(user_id, _tname, True)
+                        except Exception: pass
                     else:
                         _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
+                        try: get_learner().record_tool_result(user_id, _tname, False)
+                        except Exception: pass
                 except asyncio.TimeoutError:
                     _tc_result = json.dumps({"error": "tool timeout"}, ensure_ascii=False)
                     logger.warning("[DIRECTOR-EXEC] tool %s timeout for %s", _tname, agent['name'])
+                    try: get_learner().record_tool_result(user_id, _tname, False)
+                    except Exception: pass
                 except Exception as _te:
                     _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
                     logger.debug("[DIRECTOR-EXEC] tool %s error for %s: %s", _tname, agent['name'], _te)
+                    try: get_learner().record_tool_result(user_id, _tname, False)
+                    except Exception: pass
 
             _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
         _tool_call_count += 1
