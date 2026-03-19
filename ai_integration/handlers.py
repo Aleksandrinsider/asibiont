@@ -485,11 +485,12 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             logger.info(f"[ADD_TASK] Title cleaned: '{original_title}' -> '{title}'")
 
     # Агентские задачи — всегда без описания (вся суть уже в названии)
+    # Агентские задачи: описание СОХРАНЯЕМ (AI объясняет зачем создал задачу)
+    # Очищаем только если это точная копия title
     if created_by_agent_id and description:
-        logger.info(f"[ADD_TASK] Agent task: clearing description (was {len(description)} chars)")
-        description = ''
+        logger.info(f"[ADD_TASK] Agent task: keeping description ({len(description)} chars)")
 
-    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 200 символов (только для пользовательских задач)
+    # УМНОЕ СОКРАЩЕНИЕ ОПИСАНИЯ: максимум 200 символов
     if description and len(description) > 200:
         original_desc = description
         description = description[:197] + "..."

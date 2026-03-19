@@ -5476,7 +5476,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _pending_subdelegations: list[dict] = []
     _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
 
-    _TOOL_TIMEOUT = 55  # секунд на один инструмент (research_topic с веб-поиском занимает 30-45с)
+    _TOOL_TIMEOUT = 55  # дефолтный таймаут
+    # Адаптивные таймауты: тяжёлые инструменты получают больше времени, лёгкие — меньше
+    _TOOL_TIMEOUTS: dict[str, int] = {
+        'research_topic': 60, 'web_search': 30, 'get_news_trends': 30,
+        'negotiate_by_email': 50, 'run_agent_action': 50, 'generate_image': 50,
+        'schedule_background_task': 45,
+        'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
+        'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
+        'save_note': 10, 'update_profile': 10, 'send_message_to_user': 15, 'send_email': 20,
+    }
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
@@ -5484,12 +5493,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
-    _max_iters = 5 if _is_autopilot_task else 3  # autopilot: search + save + send + update + summary
+    _max_iters = 5 if _is_autopilot_task else 4  # autopilot: search + save + send + update + summary; regular: до 4 итераций для сложных задач
     # GitHub-агент: определяем заранее для форсирования цепочки
     _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
     for _iter in range(_max_iters):
-        # GitHub-агент: нужно больше tool calls — search(1) + save×N + send×N + progress(1)
-        _max_tool_calls = 9 if (_is_autopilot_task and _agent_has_github_local) else (6 if _is_autopilot_task else 3)
+        # Адаптивные лимиты: github нужно больше (search+save×N+send×N), autopilot — средне, обычные — базово
+        _max_tool_calls = 12 if (_is_autopilot_task and _agent_has_github_local) else (8 if _is_autopilot_task else 5)
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -5683,7 +5692,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                                 [{"tool": _tname, "params": _targs, "reason": f"{agent['name']}: {_tname}"}],
                                                 user_id, session=None, user_message=task,
                                             ),
-                                            timeout=_TOOL_TIMEOUT,
+                                            timeout=_TOOL_TIMEOUTS.get(_tname, _TOOL_TIMEOUT),
                                         )
                                         _r0 = _tres[0] if _tres else {"success": False}
                                         if _r0.get('success'):
@@ -5740,7 +5749,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             [{"tool": _tname, "params": _targs, "reason": f"{agent['name']}: {_tname}"}],
                             user_id, session=None, user_message=task,
                         ),
-                        timeout=_TOOL_TIMEOUT,
+                        timeout=_TOOL_TIMEOUTS.get(_tname, _TOOL_TIMEOUT),
                     )
                     _r0 = _tres[0] if _tres else {"success": False}
                     if _r0.get('success'):

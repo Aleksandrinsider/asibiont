@@ -7081,12 +7081,6 @@ async def api_interactions_handler(request):
         # 4. Deduplicate only within a 5-minute window (prevents burst duplicates,
         #    but allows same message content from different autopilot cycles to show)
         _NOISE_PATTERNS = (
-            'Дорабатываю, сейчас будет лучше',
-            'Подготовительная работа завершена',
-            'Задачу выполнил.',
-            'Задачу выполнила.',
-            'Принял в работу.',
-            'Задачу принял.',
             'анализирует цели...',   # intro "X анализирует цели..." — only noise, result follows
             'Задача передана',       # таймаут-placeholder из office_engine
             'результат будет позже', # то же
@@ -7097,7 +7091,7 @@ async def api_interactions_handler(request):
             # coordinator_assignment and coordinator_result are VISIBLE — they show inter-agent chat
             'coordinator_agent_request',  # запрос агента на интеграцию
             # coordinator_result shown in chat (individual agent outputs)
-            'coordinator_summary',        # итоговый отчёт цикла (уже отправляется через send_message)
+            # coordinator_summary — ВИДИМ (итоговый отчёт цикла)
             'coordinator_intg_recommend', # рекомендация интеграции
             'goal_autopilot_assignment',  # ASI назначает задачу
             'goal_autopilot_review',      # проверка результата цикла
