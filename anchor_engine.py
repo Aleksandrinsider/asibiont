@@ -3153,7 +3153,7 @@ class AnchorEngine:
                 if _ap_task_id and (result or '').strip():
                     try:
                         from ai_integration.autonomous_agent import _update_agent_delegation_task as _uadt
-                        _uadt(_ap_task_id, (result or '')[:500])
+                        _uadt(_ap_task_id, (result or '')[:1000])
                     except Exception as _uadt_err:
                         logger.debug("[ANCHOR-AUTOPILOT] delegation task update skipped: %s", _uadt_err)
 
@@ -6312,7 +6312,7 @@ class AnchorEngine:
                             "UPDATE tasks SET status='completed', completion_notes=:n, "
                             "actual_completion_time=:t WHERE id=:id"
                         ), {
-                            'n': _cleaned[:500],
+                            'n': _cleaned[:1000],
                             't': _dt_done.datetime.now(_dt_done.timezone.utc),
                             'id': _step_task_id,
                         })
@@ -11779,8 +11779,19 @@ class AnchorEngine:
             # — быстрее и надёжнее чем anchor mode с обязательным web-search
             # service_degraded тоже в reminder mode: сообщение шаблонное, инструменты не нужны
             _reminder_only_types = {'task_reminder', 'task_overdue', 'task_deadline_soon', 'service_degraded'}
+            _agent_office_types = {'agent_office_update', 'agent_inbox_reply', 'agent_task_blocked'}
             _anchor_types_set = {a.anchor_type for a in anchors}
-            if _anchor_types_set <= _reminder_only_types:
+            if _anchor_types_set <= _agent_office_types:
+                _ai_mode = 'reminder'
+                _ai_instruction = (
+                    "Напиши КРАТКИЙ статус от имени агента (2-3 предложения, до 300 символов). "
+                    "Только ФАКТЫ: что сделано, что найдено, какой результат. "
+                    "ЗАПРЕЩЕНО: вопросы пользователю, аналитика рынка, списки, предложения стратегий. "
+                    "ЗАПРЕЩЕНО: markdown, маркеры (•, -, *). "
+                    "Стиль: короткий отчёт в мессенджере."
+                )
+                _ai_max_iter = 1
+            elif _anchor_types_set <= _reminder_only_types:
                 _ai_mode = 'reminder'
                 # Проверяем: нет ли в последних сообщениях пользователя сигнала выполнения
                 _recent_user_texts = ' '.join(
@@ -11960,6 +11971,9 @@ class AnchorEngine:
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
 
+            # Определяем anchor_type для метаданных — первый непустой тип из якорей
+            _deliver_anchor_type = anchor_types[0] if anchor_types else ''
+
             # Оборачиваем контент в __agent JSON, если есть агент
             interaction_content = message
             if _agent_name:
@@ -11977,6 +11991,7 @@ class AnchorEngine:
                                 'avatar_url': _safe_avatar(_ua.avatar_url, _ua.id),
                             },
                             'text': message,
+                            '__anchor_type': _deliver_anchor_type,
                         }, ensure_ascii=False)
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
@@ -11987,6 +12002,7 @@ class AnchorEngine:
                 interaction_content = json.dumps({
                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
                     'text': interaction_content,
+                    '__anchor_type': _deliver_anchor_type,
                 }, ensure_ascii=False)
             interaction = Interaction(
                 user_id=user.id,

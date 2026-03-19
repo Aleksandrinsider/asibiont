@@ -6043,8 +6043,8 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
         try:
             _aname = agent.get('name', 'Агент')
             _title, _overflow = normalize_task_title(task_text, agent_name=_aname)
-            # description = результат агента; если пусто — остаток из title
-            _desc = result_summary[:500] if result_summary else _overflow[:500]
+            # description = результат агента; если пусто — полный текст задачи (не только overflow)
+            _desc = result_summary[:1000] if result_summary else (task_text[:1000] if task_text else _overflow[:1000])
             _t = _Task(
                 user_id=user_db_id,
                 title=_title,
@@ -6083,7 +6083,7 @@ def _update_agent_delegation_task(task_id: int, result_summary: str):
             _t = _s.query(_Task).filter_by(id=task_id).first()
             if _t:
                 _t.status = 'completed'
-                _t.description = result_summary[:500] if result_summary else _t.description
+                _t.description = result_summary[:1000] if result_summary else _t.description
                 import datetime as _dt
                 _t.actual_completion_time = _dt.datetime.now(_dt.timezone.utc)
                 _s.commit()

@@ -1785,11 +1785,12 @@ async def delegate_task(
                         try:
                             _dir_json = _json_ag.dumps({
                                 '__agent': {
-                                    'name': 'ASI Biont',
+                                    'name': 'ASI',
                                     'id': 0,
                                     'avatar_url': '/static/asibiont.svg',
                                 },
                                 'text': f'{_agent_name}, {_agent_task_text[:300]}',
+                                '__anchor_type': 'agent_delegation',
                             }, ensure_ascii=False)
                             _save_ifd(user_id, _dir_json)
                         except Exception as _dir_err:
@@ -1840,6 +1841,15 @@ async def delegate_task(
                     elif not any(c.isalpha() for c in _result_stripped):
                         _needs_rework = True
 
+                    # Проверка релевантности: ключевые слова задачи должны пересекаться с ответом
+                    if not _needs_rework:
+                        _task_words = set(w.lower() for w in _ren.findall(r'[а-яёa-z]{4,}', _agent_task_text.lower()))
+                        _result_words = set(w.lower() for w in _ren.findall(r'[а-яёa-z]{4,}', _result_stripped.lower()))
+                        _common = _task_words & _result_words
+                        # Если менее 2 общих слов (4+ букв) — скорее всего галлюцинация
+                        if len(_task_words) >= 3 and len(_common) < 2:
+                            _needs_rework = True
+
                     if _needs_rework:
                         # Доработка — 1 попытка (без шума в чат)
                         _rework_task = (
@@ -1877,6 +1887,7 @@ async def delegate_task(
                                 'avatar_url': _av,
                             },
                             'text': _result,
+                            '__anchor_type': 'agent_delegation',
                         }, ensure_ascii=False)
                         _save_ifd(user_id, _resp_json)
                     except Exception as _resp_err:
@@ -1897,7 +1908,7 @@ async def delegate_task(
                             _at = session.query(Task).get(_agent_task_id)
                             if _at:
                                 _at.status = 'completed'
-                                _at.completion_notes = _result[:500]
+                                _at.completion_notes = _result[:1000]
                                 _at.actual_completion_time = datetime.now(timezone.utc)
                         session.commit()
                     except Exception:
