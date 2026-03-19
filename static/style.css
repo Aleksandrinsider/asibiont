@@ -1101,6 +1101,9 @@ details[open] .details-content {
     display: flex;
     align-items: center;
     position: relative;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    min-width: 0;
 }
 
 .task-title .copy-username-btn {

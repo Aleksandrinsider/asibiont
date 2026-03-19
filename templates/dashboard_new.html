@@ -2989,12 +2989,14 @@
                         const activationLabel = a.is_subscribed ? t('mp-status-active') : t('mp-status-inactive');
                         const activationColor = a.is_subscribed ? '#068487' : '#8C959F';
                         const arenaLabel = isArenaActive ? t('mp-in-arena') : a.status === 'review' ? t('mp-in-review') : a.status === 'disabled' ? t('mp-disabled') : '';
+                        const jobSubLabel = a.job_title ? escapeHtml(a.job_title) : (a.specialization ? escapeHtml(a.specialization) : '');
                         return `
                         <div class="mp-card" style="flex-direction:row;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
                             ${avatarHtml}
                             <div style="flex:1;min-width:140px;">
                                 <span style="font-size:13px;font-weight:500;color:#374151;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</span>
                                 <span style="font-weight:400;color:#6B7280;font-size:12px;margin-left:6px;">${privacyLabel}</span>
+                                ${jobSubLabel ? `<div style="font-size:12px;color:#9CA3AF;margin-top:2px;">${jobSubLabel}</div>` : ''}
                                 <div style="font-size:12px;color:#8C959F;margin-top:3px;">
                                     <span style="color:${activationColor};font-weight:400;">${activationLabel}</span>
                                     ${arenaLabel ? `<span style="margin-left:6px;font-weight:400;color:#068487;font-size:12px;">${arenaLabel}</span>` : ''}
@@ -11978,7 +11980,7 @@ else:
         
         function renderTaskItem(task) {
             let html = '';
-            html += '<div style="flex: 1;">';
+            html += '<div style="flex: 1; min-width: 0;">';
             let cleanTitle = task.title;
             let delegationInfo = '';
             
