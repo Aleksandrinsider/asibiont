@@ -1314,7 +1314,8 @@ class ReminderService:
             db.close()
 
     async def update_user_avatars(self):
-        """Update avatars for all users from Telegram API"""
+        """Update avatars for all users from Telegram API.
+        Prioritizes users with old-format expiring URLs or missing avatars."""
         from main import get_user_avatar_url
         logger = logging.getLogger(__name__)
 
@@ -1324,21 +1325,39 @@ class ReminderService:
 
         db = Session()
         try:
-            users = db.query(User).filter(User.telegram_id.isnot(None)).all()
-            logger.info(f"Updating avatars for {len(users)} users")
+            # Priority 1: users with old-format expiring URLs (https://api.telegram.org/file/bot...)
+            users_old_url = db.query(User).filter(
+                User.telegram_id.isnot(None),
+                User.telegram_id > 0,
+                User.photo_url.like('https://api.telegram.org/file/bot%')
+            ).all()
+            # Priority 2: users with no avatar
+            users_no_avatar = db.query(User).filter(
+                User.telegram_id.isnot(None),
+                User.telegram_id > 0,
+                User.photo_url.is_(None)
+            ).all()
+            # Priority 3: remaining users (already have file_id — refresh less urgently)
+            users_ok = db.query(User).filter(
+                User.telegram_id.isnot(None),
+                User.telegram_id > 0,
+                User.photo_url.isnot(None),
+                ~User.photo_url.like('https://api.telegram.org/file/bot%')
+            ).all()
+
+            all_users = users_old_url + users_no_avatar + users_ok
+            logger.info(f"Updating avatars: {len(users_old_url)} old-format, {len(users_no_avatar)} missing, {len(users_ok)} ok — total {len(all_users)}")
 
             updated_count = 0
-            for user in users:
+            for user in all_users:
                 try:
-                    # get_user_avatar_url stores file_id via its own session — no overwrite here
                     result = await get_user_avatar_url(self.bot, user.telegram_id, force_refresh=True)
                     if result:
                         updated_count += 1
-                        logger.info(f"Refreshed avatar file_id for user {user.telegram_id}")
                 except Exception as e:
                     logger.error(f"Error updating avatar for user {user.telegram_id}: {e}")
 
-            logger.info(f"Avatar update completed: {updated_count} users updated")
+            logger.info(f"Avatar update completed: {updated_count}/{len(all_users)} users updated")
 
         except Exception as e:
             logger.error(f"Error in update_user_avatars: {e}")

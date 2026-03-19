@@ -396,24 +396,22 @@ async def start_handler(message: Message):
                 else:
                     logger.warning(f"Referrer not found for telegram_id: {referrer_id}")
             
-            # Get avatar from Telegram
-            avatar_url = None
-            try:
-                from main import get_user_avatar_url
-                avatar_url = await get_user_avatar_url(message.bot, user_id, force_refresh=True)
-                logger.info(f"Got avatar for new user {user_id}: {avatar_url}")
-            except Exception as av_err:
-                logger.warning(f"Failed to get avatar for new user {user_id}: {av_err}")
-            
             user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0,
                         referrer_id=referrer.id if referrer else None,
-                        language=detected_lang, photo_url=avatar_url)
+                        language=detected_lang, photo_url=None)
             session.add(user)
             session.commit()
             logger.info(f"Created new user {user_id}, referrer={referrer_id}, lang={detected_lang}")
             is_new_user = True
             # Начисляем бесплатные токены
             grant_signup_tokens(user_id, session=session)
+            # Now user exists in DB — fetch avatar and store permanent file_id
+            try:
+                from main import get_user_avatar_url
+                await get_user_avatar_url(message.bot, user_id, force_refresh=True)
+                logger.info(f"Fetched avatar file_id for new user {user_id}")
+            except Exception as av_err:
+                logger.warning(f"Failed to get avatar for new user {user_id}: {av_err}")
         else:
             # Existing user — use their saved language + update avatar
             detected_lang = getattr(user, 'language', None) or detected_lang

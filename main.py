@@ -394,9 +394,14 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                                 return None
                             # fall through to full refresh below (only for TG API errors)
                 elif cached.startswith('https://api.telegram.org/file/bot'):
-                    # Old bot-file URL format: expires after ~1h — always force fresh fetch to update DB
-                    logger.debug(f"Expiring bot-file URL detected for {user_id}, re-fetching")
-                    # Do NOT return here: fall through to fetch fresh below
+                    # Old bot-file URL format: expires after ~1h — clear and fetch fresh file_id
+                    logger.info(f"Expiring bot-file URL detected for {user_id}, clearing and re-fetching")
+                    try:
+                        user.photo_url = None
+                        db.commit()
+                    except Exception:
+                        pass
+                    # fall through to fetch fresh below
                 else:
                     # Non-bot URL (e.g. t.me CDN from Telegram Login Widget) — return directly
                     return cached
@@ -767,12 +772,10 @@ async def auth_handler(request):
                                 discord_user.username = data.get('username') or discord_user.username
                                 discord_user.first_name = data.get('first_name') or discord_user.first_name
                                 discord_user.platform = 'telegram'
-                                # Update avatar from TG
+                                # Update avatar from TG (stores permanent file_id via its own session)
                                 if 'bot' in request.app:
                                     try:
-                                        av = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
-                                        if av:
-                                            discord_user.photo_url = av
+                                        await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
                                     except Exception:
                                         pass
                                 link_db.commit()
@@ -805,18 +808,6 @@ async def auth_handler(request):
                     timezone, city = await get_timezone_from_ip(ip_address)
                     logger.info(f"Auto-detected timezone: {timezone}, city: {city} for new user {user_id}")
 
-                    # Get avatar from Telegram API
-                    avatar_url = None
-                    if 'bot' in request.app:
-                        try:
-                            avatar_url = await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
-                            logger.info(f"Got avatar URL for new user {user_id}: {avatar_url}")
-                        except Exception as e:
-                            logger.error(f"Error getting avatar for new user {user_id}: {e}")
-                    # Fallback: Telegram Login Widget provides photo_url in auth data
-                    if not avatar_url and data.get('photo_url'):
-                        avatar_url = data['photo_url']
-
                     # Find referrer
                     referrer = None
                     if referrer_telegram_id:
@@ -826,15 +817,26 @@ async def auth_handler(request):
                         else:
                             logger.warning(f"Referrer not found for telegram_id: {referrer_telegram_id}")
 
+                    # Widget photo_url (CDN link) as initial fallback — will be replaced by file_id below
+                    _widget_photo = data.get('photo_url') or None
+
                     user = User(
                         telegram_id=user_id,
                         username=data.get('username'),
                         first_name=data.get('first_name'),
-                        photo_url=avatar_url,
+                        photo_url=_widget_photo,
                         timezone=timezone,
                         referrer_id=referrer.id if referrer else None)
                     session_db.add(user)
                     session_db.commit()
+
+                    # Now user exists in DB — fetch avatar from TG API and store permanent file_id
+                    if 'bot' in request.app:
+                        try:
+                            await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
+                            logger.info(f"Fetched avatar file_id for new user {user_id}")
+                        except Exception as e:
+                            logger.error(f"Error getting avatar for new user {user_id}: {e}")
 
                     # Начисляем бесплатные токены при регистрации
                     try:
@@ -868,6 +870,8 @@ async def auth_handler(request):
                         except Exception as e:
                             logger.error(f"Error updating avatar for user {user_id}: {e}")
                     # Fallback: save widget photo_url if bot couldn't fetch it and DB has none
+                    # Refresh user from DB since get_user_avatar_url may have updated photo_url in its own session
+                    session_db.refresh(user)
                     if not user.photo_url and data.get('photo_url'):
                         user.photo_url = data['photo_url']
                         try:
@@ -6459,25 +6463,8 @@ async def api_avatar_handler(request):
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
             return _default_avatar_response()
 
-        # FIXME: Force refresh if cached URL is old Telegram file URL (likely expired after ~1h)
-        # Check if user has old-format URL in DB and force refresh
-        _needs_refresh = False
-        try:
-            _db_check = Session()
-            try:
-                _u_check = _db_check.query(_User).filter_by(telegram_id=telegram_id).first()
-                if _u_check and _u_check.photo_url:
-                    # Old format: https://api.telegram.org/file/bot... (expires ~1hr)
-                    # New format: AgACAgIAAxUAAWm... (file_id, permanent)
-                    if _u_check.photo_url.startswith('https://api.telegram.org/file/bot'):
-                        _needs_refresh = True
-                        logger.info(f"[AVATAR] Old expiring URL detected for {telegram_id}, forcing refresh")
-            finally:
-                _db_check.close()
-        except Exception:
-            pass
-
-        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=_needs_refresh)
+        # get_user_avatar_url handles old-format URL detection and cleanup internally
+        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id)
 
         async def _proxy_tg_avatar(url):
             """Proxy a Telegram file URL, return web.Response or None on failure."""
@@ -6497,18 +6484,17 @@ async def api_avatar_handler(request):
             return None
 
         if avatar_url:
-            # Проксируем изображение через сервер, чтобы не раскрывать Bot Token
             result = await _proxy_tg_avatar(avatar_url)
             if result:
                 return result
-            # Expired Telegram file URL — force-refresh and retry once
-            logger.info(f"Avatar URL expired for {telegram_id}, refreshing from Telegram")
+            # Proxy failed (expired URL?) — force-refresh and retry once
+            logger.info(f"Avatar proxy failed for {telegram_id}, force-refreshing")
             fresh_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
             if fresh_url and fresh_url != avatar_url:
                 result = await _proxy_tg_avatar(fresh_url)
                 if result:
                     return result
-        elif not avatar_url:
+        else:
             # No cached URL — try fetching fresh from Telegram
             fresh_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
             if fresh_url:
