@@ -13315,65 +13315,6 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             result = await _fetch(access_token)
         if result is None:
             return "Не удалось авторизоваться в Gmail. Пользователю нужно переподключить Google OAuth."
-
-    # ── Backfill: целевой поиск reply_text для контактов с пустым ответом ──
-    # На случай если ответ пришёл раньше window последних N писем (или webhook не получил body).
-    try:
-        from models import EmailOutreach as _EO_bf
-        _missing_rt = session.query(_EO_bf).filter(
-            _EO_bf.user_id == user.id,
-            _EO_bf.status.in_(['replied', 'unsubscribed']),
-            _EO_bf.reply_text.is_(None),
-        ).limit(10).all()
-        if _missing_rt:
-            import aiohttp as _aiohttp_bf
-            import datetime as _dt_bf
-            _backfilled = []
-            async with _aiohttp_bf.ClientSession() as _bsess:
-                for _eo_bf in _missing_rt:
-                    _bfrom = (_eo_bf.recipient_email or '').strip().lower()
-                    if not _bfrom:
-                        continue
-                    try:
-                        _br = await _bsess.get(
-                            'https://gmail.googleapis.com/gmail/v1/users/me/messages',
-                            headers={'Authorization': f'Bearer {access_token}'},
-                            params={'maxResults': '3', 'q': f'from:{_bfrom}'},
-                            timeout=_aiohttp_bf.ClientTimeout(total=10),
-                        )
-                        if _br.status != 200:
-                            continue
-                        _bd = await _br.json()
-                        _bmsgs = _bd.get('messages', [])
-                        if not _bmsgs:
-                            continue
-                        # берём самое последнее письмо от этого контакта
-                        _bmr = await _bsess.get(
-                            f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{_bmsgs[0]["id"]}',
-                            headers={'Authorization': f'Bearer {access_token}'},
-                            params={'format': 'full'},
-                            timeout=_aiohttp_bf.ClientTimeout(total=10),
-                        )
-                        if _bmr.status != 200:
-                            continue
-                        _bmd = await _bmr.json()
-                        _bbody = _gmail_extract_body(_bmd.get('payload', {}))
-                        if not _bbody:
-                            _bbody = _bmd.get('snippet', '')
-                        if _bbody:
-                            _eo_bf.reply_text = _bbody[:3000]
-                            if not _eo_bf.reply_at:
-                                _eo_bf.reply_at = _dt_bf.datetime.utcnow()
-                            session.commit()
-                            _backfilled.append(_bfrom)
-                            logger.info(f'[CHECK_EMAILS] Backfilled reply_text for {_bfrom}')
-                    except Exception as _be:
-                        logger.debug(f'[CHECK_EMAILS] backfill failed for {_bfrom}: {_be}')
-            if _backfilled and result and not result.startswith("Не удалось") and not result.startswith("Входящих"):
-                result += f'\n\n📥 Текст ответа восстановлен для: {", ".join(_backfilled)}'
-    except Exception as _e_bf:
-        logger.debug(f'[CHECK_EMAILS] backfill step failed: {_e_bf}')
-
     return result
 
 

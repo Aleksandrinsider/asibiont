@@ -8956,7 +8956,7 @@ async def api_outreach_reply_handler(request):
 
 
 async def api_outreach_load_reply_handler(request):
-    """Fetch reply text from Gmail API for a specific outreach with missing reply_text."""
+    """Fetch reply text from user's email (Gmail API or IMAP) for a specific outreach."""
     try:
         session = await get_session(request)
         user_id = session.get('user_id') if session else None
@@ -8978,111 +8978,156 @@ async def api_outreach_load_reply_handler(request):
             if not email:
                 return web.json_response({'error': 'No recipient email'}, status=400)
 
-            # Get Gmail OAuth token
-            from config import decrypt_token, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-            import json as _json_lr
-            if not getattr(user, 'google_oauth_token', None):
-                return web.json_response({'error': 'Gmail не подключён'}, status=400)
-            token_data = _json_lr.loads(decrypt_token(user.google_oauth_token))
-            access_token = token_data.get('access_token', '')
-            refresh_token = token_data.get('refresh_token', '')
+            # Use the same integration discovery as check_emails
+            from ai_integration.handlers import _get_user_email_integrations
+            integrations = _get_user_email_integrations(user, session_db)
+            if not integrations:
+                return web.json_response({'error': 'Почта не подключена'}, status=400)
 
-            async def _refresh_tok():
-                nonlocal access_token
-                if not refresh_token or not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+            chosen = integrations[0]
+            reply_body = ''
+
+            if chosen['type'] == 'gmail_oauth':
+                # Gmail OAuth path
+                from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, encrypt_token
+                import json as _json_lr, base64 as _b64_lr, re as _re_lr
+                token_data = chosen['token_data']
+                access_token = token_data.get('access_token', '')
+                refresh_token = token_data.get('refresh_token', '')
+
+                async def _refresh_tok():
+                    nonlocal access_token
+                    if not refresh_token or not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+                        return False
+                    async with aiohttp.ClientSession() as h:
+                        r = await h.post('https://oauth2.googleapis.com/token', data={
+                            'client_id': GOOGLE_CLIENT_ID, 'client_secret': GOOGLE_CLIENT_SECRET,
+                            'refresh_token': refresh_token, 'grant_type': 'refresh_token',
+                        }, timeout=aiohttp.ClientTimeout(total=10))
+                        if r.status == 200:
+                            d = await r.json()
+                            access_token = d.get('access_token', access_token)
+                            new_tok = {**token_data, 'access_token': access_token}
+                            user.google_oauth_token = encrypt_token(_json_lr.dumps(new_tok))
+                            session_db.commit()
+                            return True
                     return False
-                async with aiohttp.ClientSession() as h:
-                    r = await h.post('https://oauth2.googleapis.com/token', data={
-                        'client_id': GOOGLE_CLIENT_ID,
-                        'client_secret': GOOGLE_CLIENT_SECRET,
-                        'refresh_token': refresh_token,
-                        'grant_type': 'refresh_token',
-                    }, timeout=aiohttp.ClientTimeout(total=10))
-                    if r.status == 200:
+
+                def _extract_body(payload):
+                    mime = payload.get('mimeType', '')
+                    parts = payload.get('parts', [])
+                    body_data = payload.get('body', {}).get('data', '')
+                    if mime == 'text/plain' and body_data:
+                        try: return _b64_lr.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace').strip()
+                        except Exception: pass
+                    if mime == 'text/html' and body_data:
+                        try:
+                            raw = _b64_lr.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace')
+                            return _re_lr.sub(r'<[^>]+>', '', raw).strip()
+                        except Exception: pass
+                    for part in parts:
+                        if part.get('mimeType') == 'text/plain':
+                            d = part.get('body', {}).get('data', '')
+                            if d:
+                                try: return _b64_lr.urlsafe_b64decode(d + '==').decode('utf-8', errors='replace').strip()
+                                except Exception: pass
+                    for part in parts:
+                        if part.get('mimeType') == 'text/html':
+                            d = part.get('body', {}).get('data', '')
+                            if d:
+                                try:
+                                    raw = _b64_lr.urlsafe_b64decode(d + '==').decode('utf-8', errors='replace')
+                                    return _re_lr.sub(r'<[^>]+>', '', raw).strip()
+                                except Exception: pass
+                        if part.get('parts'):
+                            sub = _extract_body(part)
+                            if sub: return sub
+                    return ''
+
+                async def _fetch_reply():
+                    async with aiohttp.ClientSession() as h:
+                        r = await h.get(
+                            'https://gmail.googleapis.com/gmail/v1/users/me/messages',
+                            headers={'Authorization': f'Bearer {access_token}'},
+                            params={'maxResults': '5', 'q': f'from:{email}'},
+                            timeout=aiohttp.ClientTimeout(total=10),
+                        )
+                        if r.status == 401: return None
+                        if r.status != 200: return ''
                         d = await r.json()
-                        access_token = d.get('access_token', access_token)
-                        new_tok = {**token_data, 'access_token': access_token}
-                        from config import encrypt_token
-                        user.google_oauth_token = encrypt_token(_json_lr.dumps(new_tok))
-                        session_db.commit()
-                        return True
-                return False
+                        msgs = d.get('messages', [])
+                        if not msgs: return ''
+                        mr = await h.get(
+                            f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msgs[0]["id"]}',
+                            headers={'Authorization': f'Bearer {access_token}'},
+                            params={'format': 'full'},
+                            timeout=aiohttp.ClientTimeout(total=15),
+                        )
+                        if mr.status != 200: return ''
+                        md = await mr.json()
+                        body = _extract_body(md.get('payload', {}))
+                        if not body: body = md.get('snippet', '')
+                        return body
 
-            import base64 as _b64_lr, re as _re_lr
-            def _extract_body(payload):
-                mime = payload.get('mimeType', '')
-                parts = payload.get('parts', [])
-                body_data = payload.get('body', {}).get('data', '')
-                if mime == 'text/plain' and body_data:
+                reply_body = await _fetch_reply()
+                if reply_body is None:
+                    if await _refresh_tok():
+                        reply_body = await _fetch_reply()
+
+            elif chosen['type'] in ('smtp', 'gmail_server'):
+                # IMAP path — search for emails from the contact
+                import imaplib, email as email_mod
+                imap_host = chosen.get('smtp_host', 'imap.gmail.com')
+                if 'yandex' in imap_host: imap_host = 'imap.yandex.ru'
+                elif 'mail.ru' in imap_host: imap_host = 'imap.mail.ru'
+                else: imap_host = 'imap.gmail.com'
+                email_user = chosen.get('email_user', '')
+                email_pass = chosen.get('email_pass', '')
+                if not email_user or not email_pass:
+                    return web.json_response({'error': 'Нет пароля для IMAP'}, status=400)
+
+                def _imap_fetch():
                     try:
-                        return _b64_lr.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace').strip()
-                    except Exception:
-                        pass
-                if mime == 'text/html' and body_data:
-                    try:
-                        raw = _b64_lr.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace')
-                        return _re_lr.sub(r'<[^>]+>', '', raw).strip()
-                    except Exception:
-                        pass
-                for part in parts:
-                    if part.get('mimeType') == 'text/plain':
-                        d = part.get('body', {}).get('data', '')
-                        if d:
-                            try:
-                                return _b64_lr.urlsafe_b64decode(d + '==').decode('utf-8', errors='replace').strip()
-                            except Exception:
-                                pass
-                for part in parts:
-                    if part.get('mimeType') == 'text/html':
-                        d = part.get('body', {}).get('data', '')
-                        if d:
-                            try:
-                                raw = _b64_lr.urlsafe_b64decode(d + '==').decode('utf-8', errors='replace')
-                                return _re_lr.sub(r'<[^>]+>', '', raw).strip()
-                            except Exception:
-                                pass
-                    if part.get('parts'):
-                        sub = _extract_body(part)
-                        if sub:
-                            return sub
-                return ''
+                        M = imaplib.IMAP4_SSL(imap_host, timeout=15)
+                        M.login(email_user, email_pass)
+                        M.select('INBOX', readonly=True)
+                        _, nums = M.search(None, 'FROM', f'"{email}"')
+                        ids = nums[0].split() if nums[0] else []
+                        if not ids:
+                            M.logout()
+                            return ''
+                        mid = ids[-1]
+                        _, msg_data = M.fetch(mid, '(RFC822)')
+                        M.logout()
+                        if not msg_data or not msg_data[0]:
+                            return ''
+                        msg = email_mod.message_from_bytes(msg_data[0][1])
+                        for part in msg.walk():
+                            ct = part.get_content_type()
+                            if ct == 'text/plain':
+                                payload = part.get_payload(decode=True)
+                                if payload:
+                                    charset = part.get_content_charset() or 'utf-8'
+                                    return payload.decode(charset, errors='replace').strip()
+                        for part in msg.walk():
+                            ct = part.get_content_type()
+                            if ct == 'text/html':
+                                payload = part.get_payload(decode=True)
+                                if payload:
+                                    import re as _re_imap
+                                    charset = part.get_content_charset() or 'utf-8'
+                                    raw = payload.decode(charset, errors='replace')
+                                    return _re_imap.sub(r'<[^>]+>', '', raw).strip()
+                        return ''
+                    except Exception as e:
+                        logger.warning(f"[LOAD_REPLY] IMAP error: {e}")
+                        return ''
 
-            async def _fetch_reply():
-                async with aiohttp.ClientSession() as h:
-                    r = await h.get(
-                        'https://gmail.googleapis.com/gmail/v1/users/me/messages',
-                        headers={'Authorization': f'Bearer {access_token}'},
-                        params={'maxResults': '5', 'q': f'from:{email}'},
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    )
-                    if r.status == 401:
-                        return None  # need refresh
-                    if r.status != 200:
-                        return ''
-                    d = await r.json()
-                    msgs = d.get('messages', [])
-                    if not msgs:
-                        return ''
-                    mr = await h.get(
-                        f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msgs[0]["id"]}',
-                        headers={'Authorization': f'Bearer {access_token}'},
-                        params={'format': 'full'},
-                        timeout=aiohttp.ClientTimeout(total=15),
-                    )
-                    if mr.status != 200:
-                        return ''
-                    md = await mr.json()
-                    body = _extract_body(md.get('payload', {}))
-                    if not body:
-                        body = md.get('snippet', '')
-                    return body
+                import asyncio
+                reply_body = await asyncio.get_running_loop().run_in_executor(None, _imap_fetch)
 
-            reply_body = await _fetch_reply()
-            if reply_body is None:
-                if await _refresh_tok():
-                    reply_body = await _fetch_reply()
             if not reply_body:
-                return web.json_response({'error': 'Ответ не найден в Gmail'}, status=404)
+                return web.json_response({'error': 'Ответ не найден в почте'}, status=404)
 
             outreach.reply_text = reply_body[:5000]
             if not outreach.reply_at:
