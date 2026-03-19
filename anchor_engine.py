@@ -578,7 +578,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_imap:
         avail.append("  📧 Email: check_emails ← здесь реальные ответы живых людей; reply_to/negotiate — продолжение диалога")
     if has_github:
-        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='language:python followers:>5') → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)\n  ⚠️ QUERY правило: ТОЛЬКО GitHub-квалификаторы! Примеры: 'language:python followers:>5', 'language:javascript repos:>10 location:Russia'. НЕ 'AI testing QA automation' — свободный текст даёт 0 результатов!")
+        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='language:python followers:>5', page=1) → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)\n  ⚠️ QUERY правило: ТОЛЬКО GitHub-квалификаторы! Примеры: 'language:python followers:>5', 'language:javascript repos:>10 location:Russia'. НЕ 'AI testing QA automation' — свободный текст даёт 0 результатов!\n  🔄 ПАГИНАЦИЯ: если send_outreach_email вернул 'уже отправлено' для всех — используй page=2, page=3, на каждом цикле следующую страницу. Так обходишь до 300 пользователей за 30 циклов.")
     if has_rss:
         avail.append("  📰 RSS: run_agent_action(action='get_latest') ← свежие данные и инфоповоды из источника")
     if has_alpha:
@@ -710,7 +710,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _intg_missing = []
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
-    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5") → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст — иначе 0 результатов!')
+    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5", page=1) → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст — иначе 0 результатов!\n  🔄 ПАГИНАЦИЯ: если все найденные уже contacted ("уже отправлено") — ищи дальше: page=2, page=3 и т.д. На каждом цикле используй следующую страницу.')
     if _has_rss:     _intg_connected.append('✅ RSS — мониторинг лент новостей')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')

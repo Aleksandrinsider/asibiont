@@ -5452,8 +5452,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # GitHub-агент: определяем заранее для форсирования цепочки
     _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
     for _iter in range(_max_iters):
-        # 6 tool calls суммарно для автопилота (search + save×N + send×N + progress)
-        _max_tool_calls = 6 if _is_autopilot_task else 3
+        # GitHub-агент: нужно больше tool calls — search(1) + save×N + send×N + progress(1)
+        _max_tool_calls = 9 if (_is_autopilot_task and _agent_has_github_local) else (6 if _is_autopilot_task else 3)
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -5477,12 +5477,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Проверяем: был ли send_outreach_email уже после save
             _was_send = 'send_outreach_email' in _tools_used
             _was_save = 'save_email_contact' in _tools_used
-            if _was_send and not ('update_goal_progress' in _tools_used):
+            # Считаем сколько раз уже отправляли письмо — чтобы не прерывать цепочку после первого
+            _send_count = _tools_used.count('send_outreach_email')
+            # GitHub-агент: даём отправить минимум 3 письма перед тем как требовать update_goal_progress
+            _min_sends_before_update = 3 if _agent_has_github_local else 1
+            if _was_send and _send_count >= _min_sends_before_update and not ('update_goal_progress' in _tools_used):
                 _messages.append({"role": "user", "content": (
-                    f"Письма отправлены ({_used_str}). "
+                    f"Письма отправлены ({_send_count} шт., использовал: {_used_str}). "
                     "ФИНАЛЬНЫЙ ШАГ — update_goal_progress:\n"
                     "Обнови прогресс цели: сколько новых контактов/писем получилось. "
                     "Вызови update_goal_progress(goal_title='...', notes='краткий итог')."
+                )})
+            elif _was_send and _send_count < _min_sends_before_update and not ('update_goal_progress' in _tools_used):
+                _messages.append({"role": "user", "content": (
+                    f"Письмо отправлено ({_send_count}/{_min_sends_before_update}, использовал: {_used_str}). "
+                    "ПРОДОЛЖАЙ — есть ещё найденные контакты:\n"
+                    "Если есть ещё пользователи из поиска с email — отправь следующее письмо (send_outreach_email).\n"
+                    "Если все контакты уже обработаны — вызови update_goal_progress."
                 )})
             elif _was_save and not _was_send:
                 _messages.append({"role": "user", "content": (
@@ -5502,10 +5513,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Это нормально — попробуй другой query или find_relevant_contacts_for_task."
                 )})
             else:
-                _messages.append({"role": "user", "content": (
-                    f"Уже использовал: {_used_str}. "
-                    f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
-                    f"Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
+                # GitHub-агент: если последнее действие было отправка и все контакты ранее уже contacted
+                # → предлагаем искать следующую страницу
+                _github_all_sent = (
+                    _agent_has_github_local
+                    and _was_send
+                    and _was_github_search
+                )
+                if _github_all_sent:
+                    _messages.append({"role": "user", "content": (
+                        f"Использовал: {_used_str}. "
+                        "Если send_outreach_email вернул 'уже отправлено' для всех — значит эта страница уже обработана.\n"
+                        "🔄 СЛЕДУЮЩАЯ СТРАНИЦА: повтори search_users с page=2 (или page=3, если page=2 тоже использовался).\n"
+                        "Пример: run_agent_action(action='search_users', query='прежний_query', page=2)\n"
+                        "Так находишь новых людей, ещё не получавших письмо."
+                    )})
+                else:
+                    _messages.append({"role": "user", "content": (
+                        f"Уже использовал: {_used_str}. "
+                        f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
+                        f"Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
                 )})
         # Adaptive tokens: tool-calling iterations only need short JSON output (400),
         # text-only final summary iterations need full response space (1200)
@@ -5716,14 +5743,34 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "НЕ пиши отчёт — вызови send_outreach_email прямо сейчас!"
                     )})
                 elif _is_search_tool and _agent_has_github_local and _last_t_post == 'run_agent_action':
-                    # GitHub-поиск: ЖЁСТКО требуем save + send
-                    _messages.append({"role": "user", "content": (
-                        "Данные поиска получены. 🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub:\n"
-                        "1. save_email_contact — сохрани каждого найденного пользователя\n"
-                        "2. send_outreach_email — напиши каждому из них письмо\n"
-                        "Если поиск вернул 0 результатов — попробуй другой query в run_agent_action.\n"
-                        "НЕ пиши отчёт — вызови инструмент!"
-                    )})
+                    # GitHub-поиск: Проверяем все tool results на "уже отправлено"
+                    _all_sent_blocked = False
+                    _github_result_texts = [
+                        m.get('content', '') for m in _messages
+                        if m.get('role') == 'tool'
+                    ]
+                    _sent_blocked_count = sum(
+                        1 for t in _github_result_texts
+                        if 'уже отправлено' in t or 'already sent' in t.lower() or 'Cooldown' in t
+                    )
+                    _all_sent_blocked = _sent_blocked_count >= 3
+                    if _all_sent_blocked:
+                        _messages.append({"role": "user", "content": (
+                            "Данные поиска получены, но все контакты уже получали письма (cooldown). "
+                            "🔄 ИЩИ СЛЕДУЮЩУЮ СТРАНИЦУ:\n"
+                            "Вызови run_agent_action с тем же query, но page=2 (или page=3 если page=2 тоже использовался). "
+                            "Пример: run_agent_action(action='search_users', query='language:python followers:>5', page=2)\n"
+                            "Новые пользователи → save_email_contact → send_outreach_email."
+                        )})
+                    else:
+                        # GitHub-поиск: ЖЁСТКО требуем save + send
+                        _messages.append({"role": "user", "content": (
+                            "Данные поиска получены. 🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub:\n"
+                            "1. save_email_contact — сохрани каждого найденного пользователя\n"
+                            "2. send_outreach_email — напиши каждому из них письмо\n"
+                            "Если поиск вернул 0 результатов — попробуй другой query в run_agent_action.\n"
+                            "НЕ пиши отчёт — вызови инструмент!"
+                        )})
                 elif _is_search_tool:
                     # Обычный поиск: мягкое требование
                     _messages.append({"role": "user", "content": (
