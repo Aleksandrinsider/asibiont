@@ -12026,16 +12026,14 @@ else:
                     const cleanDesc = task.description.trim();
                     const isOldDelegationText = cleanDesc.match(/^(Задача|Task)\s+(от|для|на|from|for|to)\s+@?[\wА-Яа-яЁё]+$/i);
                     if (!isOldDelegationText) {
-                        let shortDesc = cleanDesc.split(/Шаги выполнения:|Steps:|Expected result:|Ожидаемый результат:|Tips:|Советы:/)[0].trim();
-                        // Если intro-часть пустая (описание начинается сразу с заголовка шагов) — показываем весь текст
-                        descText = shortDesc || cleanDesc;
+                        descText = cleanDesc;
                     }
                 }
                 // Всегда рендерим div с id для возможности редактирования
                 const escapedFull = (task.description || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;');
-                // Агентские задачи: если описание длиннее 90 символов — показываем свёрнутым
-                if (task.source === 'agent' && descText && descText.length > 90) {
-                    const shortPreview = escapeHtml(descText.substring(0, 88)) + '…';
+                // Для длинных описаний (>200 символов) показываем свёрнутым с кнопкой "…ещё"
+                if (descText && descText.length > 200) {
+                    const shortPreview = escapeHtml(descText.substring(0, 198)) + '…';
                     const fullEscaped = escapeHtml(descText);
                     html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069; white-space: pre-wrap; word-break: break-word;">';
                     html += '<span class="agent-desc-preview-' + task.id + '">' + shortPreview + '</span>';
