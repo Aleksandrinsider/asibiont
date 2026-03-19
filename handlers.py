@@ -416,7 +416,7 @@ async def start_handler(message: Message):
             # Existing user — use their saved language + update avatar
             detected_lang = getattr(user, 'language', None) or detected_lang
             # Refresh avatar file_id in DB if missing (get_user_avatar_url stores file_id itself)
-            if not user.photo_url:
+            if not user.photo_url or user.photo_url == '__no_avatar__':
                 try:
                     from main import get_user_avatar_url
                     await get_user_avatar_url(message.bot, user_id, force_refresh=True)
