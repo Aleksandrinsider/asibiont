@@ -9056,6 +9056,21 @@ class AnchorEngine:
             total_sent = campaign.emails_sent or 0
             total_replied = campaign.emails_replied or 0
             if total_sent > 0 and sent_today > 0:
+                # Ищем агента который управляет email-рассылкой для атрибуции сообщения
+                _email_agent_name_r = None
+                try:
+                    from models import UserAgent as _UA_r
+                    _ua_candidates_r = session.query(_UA_r).filter(
+                        _UA_r.author_id == user.id, _UA_r.is_active == True,
+                    ).all()
+                    for _ua_r in _ua_candidates_r:
+                        _keys_r = (getattr(_ua_r, 'user_api_keys', '') or '').lower()
+                        _code_r = (getattr(_ua_r, 'python_code', '') or '').lower()
+                        if 'gmail_user=' in _keys_r or 'resend_api_key=' in _keys_r or 'send_outreach_email' in _code_r:
+                            _email_agent_name_r = _ua_r.name
+                            break
+                except Exception:
+                    pass
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_campaign_report',
@@ -9072,6 +9087,7 @@ class AnchorEngine:
                         'sent_today': sent_today,
                         'remaining_daily': remaining_daily,
                         'remaining_total': remaining_total,
+                        **({'agent_name': _email_agent_name_r} if _email_agent_name_r else {}),
                     }),
                     triggered_at=now_utc,
                     expires_at=now_utc + timedelta(hours=18),
@@ -11869,14 +11885,17 @@ class AnchorEngine:
                         pass
 
             # Определяем, связаны ли якоря с конкретным агентом
+            # Проверяем ЛЮБОЙ якорь с agent_name/agent в data (не только AGENT_ANCHOR_TYPES)
             AGENT_ANCHOR_TYPES = {'agent_inbox_reply', 'agent_task_blocked', 'agent_office_update', 'integration_alert'}
             _agent_name = None
             for anchor in anchors:
-                if anchor.anchor_type in AGENT_ANCHOR_TYPES and anchor.data:
+                if anchor.data:
                     try:
                         _ad = json.loads(anchor.data) if isinstance(anchor.data, str) else anchor.data
-                        _agent_name = _ad.get('agent_name') or _ad.get('agent')
-                        if _agent_name:
+                        _candidate = _ad.get('agent_name') or _ad.get('agent')
+                        # Для AGENT_ANCHOR_TYPES берём любое имя; для остальных — только явное agent_name
+                        if _candidate and (anchor.anchor_type in AGENT_ANCHOR_TYPES or _ad.get('agent_name')):
+                            _agent_name = _candidate
                             break
                     except Exception:
                         pass
@@ -12855,6 +12874,20 @@ class AnchorEngine:
                 if recent_sends > 0:
                     continue
                 source_key = f'camp_stale:{c.id}:{now_utc.strftime("%Y-%m-%d")}'
+                _email_agent_name_s = None
+                try:
+                    from models import UserAgent as _UA_s
+                    _ua_candidates_s = session.query(_UA_s).filter(
+                        _UA_s.author_id == user.id, _UA_s.is_active == True,
+                    ).all()
+                    for _ua_s in _ua_candidates_s:
+                        _keys_s = (getattr(_ua_s, 'user_api_keys', '') or '').lower()
+                        _code_s = (getattr(_ua_s, 'python_code', '') or '').lower()
+                        if 'gmail_user=' in _keys_s or 'resend_api_key=' in _keys_s or 'send_outreach_email' in _code_s:
+                            _email_agent_name_s = _ua_s.name
+                            break
+                except Exception:
+                    pass
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_campaign_report',
@@ -12868,6 +12901,7 @@ class AnchorEngine:
                         'total_sent': c.emails_sent or 0,
                         'total_replied': c.emails_replied or 0,
                         'stale_days': 3,
+                        **({'agent_name': _email_agent_name_s} if _email_agent_name_s else {}),
                     }, ensure_ascii=False),
                     triggered_at=now_utc,
                     expires_at=now_utc + timedelta(hours=48),
