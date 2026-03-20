@@ -5041,6 +5041,42 @@ class AnchorEngine:
             _n_agents = len(_profiles)
             _profiles_str = '\n'.join(_profiles_lines)
 
+            # ── Строгие правила матчинга возможностей агентов (чтобы LLM не назначал Кристину искать Telegram) ──
+            _cap_rules_lines = []
+            for _p_cr in _profiles:
+                _ag_cr_obj = next((a for a in real_agents if a.name == _p_cr['name']), None)
+                _keys_cr = (getattr(_ag_cr_obj, 'user_api_keys', '') or '').lower() if _ag_cr_obj else ''
+                _py_cr = (getattr(_ag_cr_obj, 'python_code', '') or '').lower() if _ag_cr_obj else ''
+                _is_email_only = (
+                    ('gmail_user=' in _keys_cr or 'imap_' in _keys_cr or 'yandex_user=' in _keys_cr or 'mailru_user=' in _keys_cr)
+                    and not ('rss_url=' in _keys_cr or 'github_token=' in _keys_cr or 'github_access_token=' in _keys_cr)
+                )
+                _is_rss_agent = 'rss_url=' in _keys_cr
+                _is_github_agent = ('github_token=' in _keys_cr or 'github_access_token=' in _keys_cr)
+                if _is_email_only:
+                    _cap_rules_lines.append(
+                        f"  ⚠️ {_p_cr['name']} [ТОЛЬКО email]: "
+                        f"НЕ назначать: поиск Telegram/Discord/Reddit, анализ RSS, GitHub-поиск, web_search как основное. "
+                        f"ТОЛЬКО: check_emails, send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task (как вспомогательный)."
+                    )
+                elif _is_github_agent and not _is_rss_agent:
+                    _cap_rules_lines.append(
+                        f"  💻 {_p_cr['name']} [GitHub]: "
+                        f"Основное — run_agent_action(action='search_users', params={{query:'...'}}), save_email_contact. "
+                        f"НЕ назначать check_emails или send_outreach_email как основное."
+                    )
+                elif _is_rss_agent:
+                    _cap_rules_lines.append(
+                        f"  📰 {_p_cr['name']} [RSS]: "
+                        f"Основное — run_agent_action (читает RSS-ленту), get_news_trends, save_email_contact, research_topic. "
+                        f"НЕ назначать check_emails или send_outreach_email."
+                    )
+            _cap_rules_str = (
+                "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
+                + '\n'.join(_cap_rules_lines) + '\n'
+                if _cap_rules_lines else ''
+            )
+
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
             import re as _re_al
             _agent_banned_tools: dict = {}
@@ -5536,6 +5572,7 @@ class AnchorEngine:
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
+                + f"{_cap_rules_str}"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
                 f"Кампании: {_email_campaigns_str}\n"
@@ -6380,7 +6417,8 @@ class AnchorEngine:
                     f"\n  • Если нашёл что-то важное КРОМЕ задания — упомяни это как коллега."
                     f"\n  • Если план нерабочий — предложи другой подход: \"Лучше сделаю Z, потому что...\""
                     f"\n  • Говори от первого лица. Не шаблонно. Ты {'специалист' if not _ag_is_fem else 'специалистка'} со своим мнением."
-                    f"\n  • Можно сказать \"я бы предложил{'а' if _ag_is_fem else ''}...\", \"заметил{'а' if _ag_is_fem else ''} интересное...\", \"стоит также проверить...\""
+                    f"\n  • Если нужна интеграция — скажи прямо: «Мне нужен X» или «Попросите пользователя подключить Y»."
+                    f"\n  • Если что-то важное нашёл по ходу работы — включи в отчёт как часть результата, без отдельных «кстати» и «стоит также»."
                     f"\n\n🧩 КРИТИЧЕСКОЕ МЫШЛЕНИЕ (перед выполнением задания):"
                     f"\n  [АНАЛИТИК] Оцени задание: какой РЕАЛЬНЫЙ результат нужен пользователю? Не формальное выполнение, а польза."
                     f"\n  [СТРАТЕГ] Какой инструмент даст максимум? Есть ли короткий путь? Если данные уже есть в контексте — не ищи заново."
@@ -6500,13 +6538,15 @@ class AnchorEngine:
 
                 # ── Детектор живых реакций агента: запросы интеграций, инициатива, отклонение от сценария ──
                 # Если в ответе агент просит что-то / предлагает альтернативу → ASI озвучивает это пользователю
+                # Только РЕАЛЬНЫЕ запросы к пользователю: нет интеграции / нет доступа
+                # НЕ включаем: "заметил", "стоит также", "я бы предложил" — они провоцируют
+                # лишний relay пользователю при каждом сообщении агента
                 _AGENT_REQUEST_PHRASES = (
-                    'нужен ', 'нужна ', 'нужны ', 'не хватает', 'отсутствует', 'не подключен', 'не настроен',
-                    'попросите пользователя', 'добавить api', 'добавить ключ', 'подключить',
-                    'предлагаю', 'лучше сделать', 'лучше попробовать', 'стоит також', 'стоит также',
-                    'заметил', 'заметила', 'обнаружил', 'обнаружила', 'кстати,', 'важное:', 'важный момент',
-                    'имеет смысл', 'я бы предложил', 'я бы предложила', 'я бы рекомендовал', 'я бы рекомендовала',
+                    'нужен ', 'нужна ', 'нужны ', 'не хватает', 'отсутствует',
+                    'не подключен', 'не настроен', 'нет подключения', 'нет доступа к',
+                    'попросите пользователя', 'добавить api', 'добавить ключ', 'настройте',
                     'к сожалению, у меня нет', 'к сожалению нет доступа',
+                    'интеграция не настроена', 'нет api-ключа', 'нет api ключа',
                 )
                 _agent_has_initiative = any(
                     ph in _cleaned.lower() for ph in _AGENT_REQUEST_PHRASES
@@ -6602,6 +6642,45 @@ class AnchorEngine:
                 )
                 # Накапливаем контекст для следующих агентов в цепочке
                 _prev_steps_context += f"• {_ag_name}: {_cleaned[:300]}\n"
+
+                # ── Same-cycle pipeline: если агент сохранил новые контакты → email-агент должен писать им СЕЙЧАС ──
+                # Не ждём следующего цикла — вводим шаг прямо сейчас
+                if 'save_email_contact' in (_step_tools or []):
+                    # Ищем email-отправляющего агента (не текущего)
+                    _email_sender_name = None
+                    for _a_pipe in real_agents:
+                        if _a_pipe.name.lower() == _ag_name.lower():
+                            continue  # не тот же агент
+                        _keys_pipe = (getattr(_a_pipe, 'user_api_keys', '') or '').lower()
+                        _can_send_pipe = (
+                            any(k in _keys_pipe for k in ('smtp_', 'resend_api_key', 'sendgrid_', 'mailgun_'))
+                            or ('gmail_user=' in _keys_pipe and any(pk in _keys_pipe for pk in ('gmail_pass=', 'gmail_app_password=', 'gmail_password=')))
+                            or 'yandex_user=' in _keys_pipe or 'mailru_user=' in _keys_pipe
+                        )
+                        if _can_send_pipe:
+                            _email_sender_name = _a_pipe.name
+                            break
+                    # Инжектируем шаг только если email-агент ещё не назначен на send в очереди
+                    _already_has_send = any(
+                        s.get('agent', '').lower() == (_email_sender_name or '').lower()
+                        and s.get('tool', '') in ('send_outreach_email', 'start_email_campaign')
+                        for s in _step_queue
+                    )
+                    if _email_sender_name and not _already_has_send:
+                        _inject_goal = _ag_goal_title or (_goals[0]['title'] if _goals else '')
+                        _inject_step = {
+                            'agent': _email_sender_name,
+                            'tool': 'send_outreach_email',
+                            'task': (
+                                f"{_ag_name} только что сохранил новые контакты через save_email_contact. "
+                                f"Немедленно отправь им outreach-письма (send_outreach_email). "
+                                f"НЕ пиши тем кто уже в списке уже_написали. Проверь список unsent контактов и пиши."
+                            ),
+                            'goal': _inject_goal,
+                        }
+                        _step_queue.insert(0, _inject_step)
+                        logger.info("[COORD] pipeline-inject: %s→send after %s save_email_contact (goal=%s)",
+                                    _email_sender_name, _ag_name, _inject_goal[:40])
 
                 # ── Накапливаем контекст шага для финального отчёта (без лишнего AI-вызова) ──
                 if len(_cleaned) > 40:
