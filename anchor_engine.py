@@ -4324,36 +4324,51 @@ class AnchorEngine:
                     _transfer_text = _tr_gen.strip()
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
-            if self.bot:
-                try:
-                    await self.bot.send_message(
-                        chat_id=user.telegram_id,
-                        text=f"{prev_agent.name}:\n\n{_transfer_text}",
-                    )
-                except Exception as _e:
-                    logger.debug("suppressed: %s", _e)
-            # Сохраняем в interaction для web-чата (от имени передающего агента)
-            _transfer_content = json.dumps({
-                '__agent': {
-                    'name': prev_agent.name,
-                    'id': getattr(prev_agent, 'id', 0),
-                    'avatar_url': _safe_avatar(getattr(prev_agent, 'avatar_url', ''), getattr(prev_agent, 'id', 0)),
-                },
-                'text': _transfer_text,
-                '__anchor_type': 'agent_chain_transfer',
-            }, ensure_ascii=False)
-            session.add(Interaction(
-                user_id=user.id,
-                message_type='proactive',
-                content=_transfer_content,
-            ))
+            # Dedup: пропускаем уведомление если совсем недавно было проактивное сообщение (≤5 мин)
+            _chain_transfer_gap_ok = True
             try:
-                session.commit()
+                _last_proactive_ts = session.query(Interaction.created_at).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'proactive',
+                ).order_by(Interaction.created_at.desc()).limit(1).scalar()
+                if _last_proactive_ts:
+                    _lp_utc = _last_proactive_ts.replace(tzinfo=timezone.utc) if _last_proactive_ts.tzinfo is None else _last_proactive_ts
+                    if (datetime.now(timezone.utc) - _lp_utc).total_seconds() < 300:  # 5 min
+                        _chain_transfer_gap_ok = False
+                        logger.info("[ANCHOR-CHAIN] user %d: transfer notify suppressed (proactive gap < 5min)", user.id)
             except Exception:
+                pass
+            if _chain_transfer_gap_ok:
+                if self.bot:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=f"{prev_agent.name}:\n\n{_transfer_text}",
+                        )
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                # Сохраняем в interaction для web-чата (от имени передающего агента)
+                _transfer_content = json.dumps({
+                    '__agent': {
+                        'name': prev_agent.name,
+                        'id': getattr(prev_agent, 'id', 0),
+                        'avatar_url': _safe_avatar(getattr(prev_agent, 'avatar_url', ''), getattr(prev_agent, 'id', 0)),
+                    },
+                    'text': _transfer_text,
+                    '__anchor_type': 'agent_chain_transfer',
+                }, ensure_ascii=False)
+                session.add(Interaction(
+                    user_id=user.id,
+                    message_type='proactive',
+                    content=_transfer_content,
+                ))
                 try:
-                    session.rollback()
+                    session.commit()
                 except Exception:
-                    pass
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
 
             logger.info(
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s)",
@@ -12096,6 +12111,17 @@ class AnchorEngine:
                     if _rdl_types - _DIALOG_GAP_EXCLUDE:
                         recent_dialog_delivery = _rdl
                         break
+                # Дополнительная защита: проверяем interactions таблицу (ловит agent_chain_transfer и
+                # случаи когда AnchorDeliveryLog ещё не закоммитился в рамках того же цикла)
+                if not recent_dialog_delivery:
+                    _recent_proactive_ts = session.query(Interaction.created_at).filter(
+                        Interaction.user_id == user.id,
+                        Interaction.message_type == 'proactive',
+                        Interaction.created_at >= now_utc - timedelta(minutes=5),
+                    ).order_by(Interaction.created_at.desc()).limit(1).scalar()
+                    if _recent_proactive_ts:
+                        logger.info(f"[ANCHOR] User {user.telegram_id}: recent proactive in interactions (< 5min), skip")
+                        return
                 if recent_dialog_delivery:
                     logger.info(f"[ANCHOR] User {user.telegram_id}: delivery gap too small ({MIN_PROACTIVE_GAP_MINUTES}min), skip")
                     return
