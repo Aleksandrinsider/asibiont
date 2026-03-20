@@ -2957,6 +2957,7 @@ class HybridAutonomousAgent:
                         "Help solve the task — don't suggest, DO it.\n"
                         "Use tools and give a concrete result.\n"
                         "Do NOT create new tasks.\n"
+                        "FORBIDDEN: call create_post, publish_to_telegram, publish_to_discord — publishing requires explicit user request.\n"
                         "STYLE: 300–800 characters, flowing text, single newlines between paragraphs. FORBIDDEN: bullet lists, numbered lists, headers, double newlines."
                     ),
                     'proactive': (
@@ -3040,6 +3041,7 @@ class HybridAutonomousAgent:
                         "Помоги решить задачу — не предлагай, а СДЕЛАЙ.\n"
                         "Используй инструменты и дай конкретный результат.\n"
                         "НЕ создавай новые задачи.\n"
+                        "ЗАПРЕЩЕНО: вызывать create_post, publish_to_telegram, publish_to_discord — публикация требует явного запроса пользователя.\n"
                         "СТИЛЬ: 300–800 символов, сплошной текст, одинарные переносы между абзацами. ЗАПРЕЩЕНО: списки, нумерация, заголовки, двойные переносы."
                     ),
                     'proactive': (
@@ -5033,35 +5035,36 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'negotiate_by_email', 'send_follow_up_email', 'set_contact_alert',
                 })
             # Контент/маркетинг — по специализации или мессенджер-интеграции
+            # create_post/publish_to_telegram/publish_to_discord убраны: autopilot НЕ публикует без явного запроса пользователя
             if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr ', 'пиар', 'копирайт', 'редактор')) or
                     any(w in _lbl_ap for w in ('telegram', 'discord', 'slack', 'вконтакт'))):
                 _autopilot_tools.update({
-                    'create_post', 'publish_to_telegram', 'publish_to_discord',
                     'generate_image', 'start_content_campaign', 'manage_content_campaign',
                     'set_content_strategy', 'get_news_trends',
                     # Исследование тем для постов — контент-агент должен уметь искать
                     'research_topic', 'web_search',
                 })
             # Аналитика/исследования — по специализации
+            # create_post убран: autopilot не публикует аналитику без явного запроса пользователя
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _autopilot_tools.update({
                     'get_news_trends', 'find_and_message_relevant_users',
                     'research_topic', 'web_search', 'get_stock_price', 'save_note',
-                    'create_post',  # публиковать аналитику
                 })
             # Alpha Vantage / NewsAPI / Биржевые данные — по ключу интеграции (не только по специализации)
+            # create_post/publish убраны: autopilot не публикует без явного запроса
             if any(w in _lbl_ap for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
                 _autopilot_tools.update({
                     'get_stock_price', 'get_news_trends', 'research_topic',
-                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                    'save_note',
                 })
             # RSS/мониторинг — по лейблу интеграции
+            # create_post/publish убраны: autopilot не публикует без явного запроса пользователя
             if any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')):
                 _autopilot_tools.update({
                     'get_news_trends', 'save_email_contact', 'find_relevant_contacts_for_task',
-                    # RSS-агент суммирует и публикует → нужны эти инструменты
+                    # RSS-агент суммирует данные и исследует → нужны эти инструменты
                     'research_topic', 'web_search',
-                    'create_post', 'publish_to_telegram', 'publish_to_discord',
                     # Outreach авторов/источников из RSS-ленты
                     'send_outreach_email',
                 })
@@ -5768,12 +5771,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _tool_data_str = '\n'.join(_tool_data_ctx[-2:]) if _tool_data_ctx else ''
             _messages.append({"role": "assistant", "content": _final_text})
             _messages.append({"role": "user", "content": (
-                "Ты написал слишком коротко. Пользователь получит это сообщение в Telegram — "
+                "Ты написал слишком коротко. Пользователь получит это сообщение в чате — "
                 "ему нужно понять что произошло. Вот данные из инструментов:\n"
                 f"{_tool_data_str}\n\n"
                 "Перескажи эти данные СВОИМИ СЛОВАМИ для пользователя: что нашлось, "
                 "какие конкретные факты, имена, цифры, и что ты думаешь делать дальше. "
-                "Только текст, без tool-вызовов. Пиши как живой помощник."
+                "СТИЛЬ: сплошной текст, 2–4 предложения. "
+                "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк."
             )})
             _summary_resp = await asyncio.wait_for(
                 _agent_inst.call_ai(_messages, use_tools=False, max_tokens=800, api_timeout=30),
@@ -5988,7 +5992,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "Пиши от первого лица, живо, с фактами и цифрами.\n"
                         "НЕ пиши 'выполнил поиск' или 'обновил прогресс'.\n"
                         "⛔ ЗАПРЕЩЕНО упоминать названия инструментов (save_email_contact, web_search, update_goal_progress и т.д.).\n"
-                        "Пиши что НАШЁЛ и СДЕЛАЛ, а не через какой инструмент."
+                        "Пиши что НАШЁЛ и СДЕЛАЛ, а не через какой инструмент.\n"
+                        "СТИЛЬ: сплошной текст, 2–4 предложения. ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки (##), двойные переносы строк."
                     )},
                     {"role": "user", "content": (
                         f"Вот данные из инструментов:\n{_tool_data_fb_str}\n\n"
