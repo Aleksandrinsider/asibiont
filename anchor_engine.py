@@ -5061,22 +5061,28 @@ class AnchorEngine:
 
             # ── Форсированный outreach при стагнации цели ──
             _stagnant_instr = ''
-            _stagnant_goals = [g for g in _goals if g.get('progress', 0) < 15 and g.get('metric_target')]
+            # Порог 80%: любая незавершённая цель при 4+ циклах без реального прогресса
+            _stagnant_goals = [g for g in _goals if g.get('progress', 0) < 80 and g.get('metric_target')]
             if _stagnant_goals and len(_recent) >= 4:
                 _sg = _stagnant_goals[0]
-                # Если уже есть отправленные письма — приоритет на check_emails, не на отправку новых
+                _sg_progress = _sg.get('progress', 0)
+                _sg_cur = _sg.get('metric_current', 0)
+                _sg_tgt = _sg.get('metric_target', 0)
+                _sg_gap = (_sg_tgt or 0) - (_sg_cur or 0)
+                # Если уже есть отправленные письма — приоритет на check_emails + новые отправки
                 if _already_sent and _email_sent > 0:
                     _stagnant_instr = (
-                        f"\n⚠️ Цель «{_sg['title'][:50]}» стагнирует ({_sg.get('progress',0)}% за {len(_recent)}+ циклов). "
-                        "Отправлены письма, но ответов не видно.\n"
-                        "ОБЯЗАТЕЛЬНЫЙ шаг этого цикла:\n"
-                        "  1. Email-агент ОБЯЗАН вызвать check_emails — проверить, не ответил ли кто-то.\n"
-                        "  2. Если есть ответы → reply/negotiate. Если нет → искать новых через run_agent_action(search_users).\n"
-                        "  3. RSS-агент → save_email_contact для новых авторов из ленты.\n"
+                        f"\n⚠️ Цель «{_sg['title'][:50]}» = {_sg_progress}% ({int(_sg_cur or 0)}/{int(_sg_tgt or 0)}). "
+                        f"Остаток: {int(_sg_gap)} единиц. Отправлено писем: {_email_sent}.\n"
+                        "ОБЯЗАТЕЛЬНЫЕ шаги этого цикла (по приоритету):\n"
+                        "  1. Email-агент: check_emails — проверить входящие ответы.\n"
+                        "  2. Если ответов < gap — email-агент: send_outreach_email НОВЫМ контактам (не из уже_написали).\n"
+                        "  3. RSS-агент: save_email_contact для НОВЫХ авторов/разработчиков из ленты → email-агент пишет им.\n"
+                        "  4. НЕ делай поиск/research если уже есть unsent contacts в базе — сначала напиши им!\n"
                     )
                 else:
                     _stagnant_instr = (
-                        f"\n⚠️ СРОЧНО: Цель «{_sg['title'][:50]}» стагнирует ({_sg.get('progress',0)}% за {len(_recent)}+ циклов). "
+                        f"\n⚠️ СРОЧНО: Цель «{_sg['title'][:50]}» стагнирует ({_sg_progress}% за {len(_recent)}+ циклов). "
                         "ПРИНУДИТЕЛЬНЫЙ шаг этого цикла:\n"
                         "  1. Если нет активных кампаний → email-агент ОБЯЗАН вызвать start_email_campaign прямо сейчас.\n"
                         "  2. Если кампания есть → email-агент ОБЯЗАН вызвать send_outreach_email.\n"
@@ -6041,6 +6047,13 @@ class AnchorEngine:
                     _task_title_short = (_ag_task.split('\n')[0].split('.')[0])[:100].strip()
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:14])
+                    # Guard: если задание = название цели → добавляем инструмент для конкретики
+                    if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:100]:
+                        if _tool_hint:
+                            _task_title_short = f"{_tool_hint.replace('_', ' ').title()}: {_ag_goal_title[:70]}"
+                        else:
+                            _task_title_short = f"Шаг к цели: {_ag_goal_title[:80]}"
+                        logger.info("[COORD] vague task remapped for %s: tool=%s title=%s", _ag_name, _tool_hint, _task_title_short[:60])
 
                     # ── DEDUP: не создавать задачу если аналогичная уже была за 4 часа ──
                     _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
@@ -8193,6 +8206,43 @@ class AnchorEngine:
                     logger.debug("suppressed: %s", _e)
         except Exception as _pah_err:
             logger.debug("[AUTOPILOT] per_agent_history: %s", _pah_err)
+
+        # ── Дополняем per_agent_history из AAL (fallback: agent_msg мог быть удалён) ──
+        try:
+            from models import AgentActivityLog as _AAL_pah
+            _aal_pah_items = session.query(_AAL_pah).filter(
+                _AAL_pah.user_id == user.id,
+                _AAL_pah.activity_type == 'agent_task',
+                _AAL_pah.status == 'completed',
+                _AAL_pah.created_at >= now_utc - timedelta(hours=48),
+            ).order_by(_AAL_pah.created_at.desc()).limit(50).all()
+            for _api in _aal_pah_items:
+                _ag_nm_aal = (_api.target or '').replace('agent:', '').strip()
+                if not _ag_nm_aal:
+                    continue
+                _aal_title = (_api.title or '')[:100]
+                _aal_content = (_api.content or '')[:120]
+                _aal_ts = _api.created_at.strftime('%d.%m %H:%M')
+                # Угадываем инструмент по содержимому — для совместимости с anti-loop парсером
+                _tl_lower = (_aal_title + ' ' + _aal_content).lower()
+                if any(w in _tl_lower for w in ('почт', 'imap', 'email', 'ответ')):
+                    _guessed = '[check_emails]'
+                elif any(w in _tl_lower for w in ('rss', 'лента', 'github', 'репозитор')):
+                    _guessed = '[run_agent_action]'
+                elif any(w in _tl_lower for w in ('отправил', 'написал', 'outreach')):
+                    _guessed = '[send_outreach_email]'
+                elif any(w in _tl_lower for w in ('поиск', 'нашёл', 'найден', 'search')):
+                    _guessed = '[web_search]'
+                elif any(w in _tl_lower for w in ('telegram', 'discord', 'канал', 'сообщест')):
+                    _guessed = '[web_search]'
+                else:
+                    _guessed = '[research_topic]'
+                _entry_aal = f"{_aal_ts} {_guessed} {_aal_title}: {_aal_content}"
+                _per_agent_history.setdefault(_ag_nm_aal, [])
+                if len(_per_agent_history[_ag_nm_aal]) < 12:
+                    _per_agent_history[_ag_nm_aal].append(_entry_aal)
+        except Exception as _aal_pah_err:
+            logger.debug("[AUTOPILOT] per_agent_history from AAL: %s", _aal_pah_err)
 
         # Уже отправленные письма — не писать повторно одним и тем же адресатам
         # Запрашиваем по user_id напрямую (не только по активным кампаниям)
