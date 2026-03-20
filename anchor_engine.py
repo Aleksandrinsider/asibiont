@@ -5803,12 +5803,11 @@ class AnchorEngine:
                 if '[tools:' in _pr_clean:
                     _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
                 _prev_result_summary = _pr_clean[:300]
-            # Анонс-шаблон: краткий (без превью задач — предварительный план сбивает с толку)
+            # Анонс-шаблон: минимальный
             if _prev_result_summary:
                 _coord_announce = (
                     f"Продолжаю работу над {_brief_goals}. "
-                    f"Результат прошлого цикла: {_trunc(_prev_result_summary, 200)}. "
-                    f"Работают: {_agents_announce_list}."
+                    f"Команда: {_agents_announce_list}."
                 )
             else:
                 _coord_announce = (
@@ -6020,57 +6019,10 @@ class AnchorEngine:
                         logger.info("[COORD] skip %s — billing: %s", _ag_name, _bill_c2.get('error'))
                         continue
 
-                # ── Per-agent assignment: агент объявляет что берётся за задачу (от первого лица, под своим ава) ──
+                # ── Per-agent assignment: логируем задачу в AAL но НЕ создаём отдельное сообщение ──
+                # (coordinator_assignment "начинаю..." заполнял чат пустыми сообщениями без реальных действий)
                 _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
-                _assign_text = f"Начинаю: {_ag_task[:120]}"
-                try:
-                    _proj_ctx_a = (_user_profile_coord or {}).get('company', '')
-                    _proj_pfx_a = f" проекта «{_proj_ctx_a}»" if _proj_ctx_a else ''
-                    if _prev_steps_context and len(_prev_steps_context.strip()) > 30:
-                        _assign_prompt = (
-                            f"Ты агент {_ag_name}{_proj_pfx_a}. Напиши от первого лица что ты сейчас начинаешь делать.\n"
-                            f"Задача: {_ag_task[:250]}\n"
-                            f"Коллеги уже сделали: {_prev_steps_context[:300]}\n\n"
-                            f"1-2 предложения, живая речь от первого лица, без обращений к себе по имени. "
-                            f"Например: «Проверю входящие — там могут быть ответы. Если есть — сразу отвечу.» "
-                            f"Без списков и markdown."
-                        )
-                        _assign_max_tok = 100
-                    else:
-                        _assign_prompt = (
-                            f"Ты агент {_ag_name}{_proj_pfx_a}. Напиши от первого лица что ты сейчас начинаешь делать.\n"
-                            f"Задача: {_ag_task[:200]}\n\n"
-                            f"1-2 предложения, живая речь от первого лица, без обращений к себе по имени. "
-                            f"Например: «Начну с проверки почты — посмотрю что пришло.» "
-                            f"Без списков и markdown."
-                        )
-                        _assign_max_tok = 80
-                    _gen_assign = await asyncio.wait_for(
-                        _quick_ai_call_raw([{'role': 'user', 'content': _assign_prompt}], max_tokens=_assign_max_tok),
-                        timeout=10,
-                    )
-                    if _gen_assign and len(_gen_assign.strip()) > 10:
-                        _assign_text = _gen_assign.strip()
-                except Exception as _assign_err:
-                    logger.debug("[COORD] per-agent assign gen failed: %s", _assign_err)
-                try:
-                    _assign_cs = Session()
-                    try:
-                        _assign_cs.add(Interaction(
-                            user_id=user.id,
-                            message_type='agent_msg',
-                            content=json.dumps({
-                                '__agent': {'name': _ag_name, 'id': _ag_id_c, 'avatar_url': _ag_avatar_c},
-                                'text': _assign_text,
-                                '__anchor_type': 'coordinator_assignment',
-                            }, ensure_ascii=False),
-                        ))
-                        _assign_cs.commit()
-                    finally:
-                        _assign_cs.close()
-                except Exception as _assign_save_err:
-                    logger.debug("[COORD] per-agent assign save failed: %s", _assign_save_err)
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
@@ -6758,15 +6710,12 @@ class AnchorEngine:
                         + (f"Ход работы:\n{_bridge_flow}\n\n" if _bridge_flow else '')
                         + f"Состояние целей:\n{_goals_state_now}\n\n"
                         f"Правила:\n"
-                        f"- Адресат — ПОЛЬЗОВАТЕЛЬ, не агенты. НЕ обращайся к агентам по имени.\n"
-                        f"- Пиши ЧТО БЫЛО СДЕЛАНО этот цикл (прошедшее время). НЕ пиши что надо сделать дальше.\n"
-                        f"- НЕ цитируй агентов дословно — синтезируй итог своими словами.\n"
-                        f"- НЕ задавай вопросов пользователю ('Продолжить?', 'Перепоручить?') — ты координатор автопилота, решай сам.\n"
-                        f"- Называй КОНКРЕТНО: что нашли, кому написали, сколько контактов — без воды.\n"
-                        f"- Если агент не привёл конкретный результат — не упоминай его вообще.\n"
-                        f"- Если ничего конкретного не сделано — пиши ОДНО предложение: 'Цикл завершён, новых подтверждённых результатов нет.'.\n"
+                        f"- Адресат — ПОЛЬЗОВАТЕЛЬ. Пиши безлично или через 'команда': 'Найдено 3 контакта', 'Команда проверила почту'.\n"
+                        f"- ТОЛЬКО конкретные факты прошедшего цикла: цифры, имена, результаты.\n"
+                        f"- Если агент не привёл конкретного результата — НЕ упоминай его.\n"
+                        f"- Если ничего конкретного не сделано — одно предложение: 'Цикл завершён без новых результатов.'.\n"
                         + _note_hint
-                        + f"- 2-4 предложения. Без markdown. Без [АВТОПИЛОТ]. Без скобок. Без вопросов."
+                        + f"- 2-3 предложения. Без markdown. Без [АВТОПИЛОТ]. Без вопросов."
                     )
                     _report_gen = await asyncio.wait_for(
                         _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=200),
@@ -11921,7 +11870,7 @@ class AnchorEngine:
                 _rules += [
                     "ПРАВИЛА ДЛЯ ИНТЕГРАЦИЙ:",
                     "— integration_alert: прочитай snippet, реши ценность. CRITICAL/HIGH=пиши, MEDIUM=пиши если конкретное событие, LOW=SKIP если рутина.",
-                    "— agent_office_update: план агента по целям, спроси 'Запустить?'",
+                    "— agent_office_update: отчёт агента о назначенной задаче. Пиши от ПЕРВОГО ЛИЦА агента: 'Я взялась за...' / 'Сейчас работаю над...'. НИКОГДА не пиши '{имя} получила/получил' — это третье лицо.",
                     "— agent_inbox_reply: КРИТИЧНО — агент нашёл новые письма. Покажи preview, спроси про ответ.",
                     "— agent_task_blocked: КРИТИЧНО — агент застрял. Объясни причину, задай конкретный вопрос.",
                     "— agent_delegation: отчёт от имени агента (от первого лица): что сделано, каков итог.",
@@ -12146,11 +12095,13 @@ class AnchorEngine:
             if _anchor_types_set <= _agent_office_types:
                 _ai_mode = 'reminder'
                 _ai_instruction = (
-                    "Напиши КРАТКИЙ статус от имени агента (2-3 предложения, до 300 символов). "
-                    "Только ФАКТЫ: что сделано, что найдено, какой результат. "
+                    "Напиши КРАТКИЙ статус от первого лица (2-3 предложения, до 300 символов). "
+                    "КРИТИЧНО: пиши от ПЕРВОГО ЛИЦА — 'Я начала...', 'Сейчас работаю...', 'Взялась за...'. "
+                    "ЗАПРЕЩЕНО: писать о себе в третьем лице ('{имя} получила', '{имя} начал'). "
+                    "Только ФАКТЫ: что делаю, что нашла, какой результат. "
                     "ЗАПРЕЩЕНО: вопросы пользователю, аналитика рынка, списки, предложения стратегий. "
                     "ЗАПРЕЩЕНО: markdown, маркеры (•, -, *). "
-                    "Стиль: короткий отчёт в мессенджере."
+                    "Стиль: короткий отчёт в мессенджере от первого лица."
                 )
                 _ai_max_iter = 1
             elif _anchor_types_set <= _reminder_only_types:

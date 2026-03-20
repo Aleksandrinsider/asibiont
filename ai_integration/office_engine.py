@@ -1380,23 +1380,55 @@ class OfficeEngine:
         finally:
             s.close()
 
+        # Собираем реальные инструменты каждого агента
+        _agents_caps = []
+        for aid, aname, aspec, adesc in agents:
+            _line = f"- {aname} ({aspec or 'специалист'})"
+            # Инferируем возможности из api_keys
+            try:
+                from models import UserAgent as _UA_coord
+                _ua_c = s.query(_UA_coord).filter_by(id=aid).first()
+                if _ua_c:
+                    _keys_c = (getattr(_ua_c, 'user_api_keys', '') or '').lower()
+                    _caps_c = []
+                    if any(k in _keys_c for k in ('smtp_', 'resend_', 'sendgrid_', 'mailgun_', 'gmail_', 'yandex_', 'mailru_')):
+                        _caps_c.append('отправка email')
+                    if any(k in _keys_c for k in ('imap_', 'gmail_')):
+                        _caps_c.append('чтение почты')
+                    if 'telegram' in _keys_c:
+                        _caps_c.append('Telegram')
+                    if 'github' in _keys_c:
+                        _caps_c.append('GitHub')
+                    if _caps_c:
+                        _line += f" [{', '.join(_caps_c)}]"
+                    else:
+                        _line += " [веб-поиск, исследования, создание постов]"
+            except Exception:
+                pass
+            _agents_caps.append(_line)
+        agents_caps_text = "\n".join(_agents_caps)
+
         prompt = (
-            "Ты — ASI-координатор. Проанализируй цели и агентов пользователя.\n"
-            "Если агенты могут прямо сейчас продвинуть разные цели — назначь каждому конкретную задачу.\n"
-            "Если нечего делать или всё уже делается — wait.\n\n"
+            "Ты — ASI-координатор. Назначаешь агентам КОНКРЕТНЫЕ микро-задачи, которые двигают цели вперёд.\n\n"
             f"ЦЕЛИ:\n{goals_text}\n\n"
-            f"АГЕНТЫ:\n{agents_text}\n\n"
+            f"АГЕНТЫ (и их реальные возможности):\n{agents_caps_text}\n\n"
             f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
-            "Правила:\n"
-            "1. Не повторяй задачи из активности за 6ч.\n"
-            "2. Задачу описывай КОНКРЕТНО (40+ слов): что сделать, какой результат, зачем.\n"
-            "3. Можешь назначить нескольким агентам если у них разные цели.\n"
-            "4. Если цель имеет конкретный дедлайн — пометь urgency=high.\n\n"
+            "ПРАВИЛА НАЗНАЧЕНИЯ:\n"
+            "1. НЕ ПОВТОРЯЙ задачи из активности 6ч — ни дословно, ни по смыслу.\n"
+            "2. Задача = ОДНО конкретное действие с измеримым результатом (30-60 слов).\n"
+            "   ХОРОШО: «Проверь входящую почту через IMAP. Если есть ответы на рассылку — сохрани позитивные контакты через save_email_contact и ответь каждому через reply_to_outreach_email.»\n"
+            "   ПЛОХО: «Проведи анализ социальных медиа для выявления каналов привлечения.»\n"
+            "3. Называй КОНКРЕТНЫЙ инструмент который агент должен использовать (web_search, check_email, send_outreach_email, read_rss, create_post, save_email_contact и др.).\n"
+            "4. Каждый агент получает РАЗНУЮ задачу — не давай двум агентам «исследовать» одно и то же.\n"
+            "5. Если прошлые циклы дали мало результата — СМЕНИ подход, не повторяй стратегию.\n"
+            "6. Агент БЕЗ email-ключей НЕ МОЖЕТ отправлять письма — давай ему задачи на поиск/контент/анализ.\n"
+            "7. Если цель имеет конкретный дедлайн — urgency=high.\n"
+            "8. Если все задачи уже делаются или нечего делать — wait.\n\n"
             "Ответь JSON (без ```):\n"
-            '{"action": "delegate", "agent_name": "имя", "task": "подробная задача 40+ слов", "goal": "для какой цели", "urgency": "high/normal"}\n'
+            '{"action": "delegate", "agent_name": "имя", "task": "...", "goal": "...", "urgency": "normal"}\n'
             'или {"action": "delegate_multiple", "assignments": [{"agent_name": "...", "task": "...", "goal": "...", "urgency": "normal"}, ...]}\n'
-            'или {"action": "wait", "reason": "почему"}\n'
-            "Ответь ТОЛЬКО JSON."
+            'или {"action": "wait", "reason": "..."}\n'
+            "ТОЛЬКО JSON, без пояснений."
         )
 
         try:
@@ -1405,7 +1437,7 @@ class OfficeEngine:
                     "https://api.deepseek.com/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                     json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                          "max_tokens": 400, "temperature": 0.5},
+                          "max_tokens": 600, "temperature": 0.4},
                     timeout=aiohttp.ClientTimeout(total=15),
                 ) as resp:
                     if resp.status != 200:
@@ -1470,35 +1502,8 @@ class OfficeEngine:
             # Приоритет под urgency
             _anchor_priority = AnchorPriority.HIGH if _urgency == 'high' else AnchorPriority.LOW
 
-            # Создаём задачу-делегирование + якорь + лог
+            # Создаём задачу-делегирование + лог (без лишних якорей/сообщений)
             _auto_delegate_to_agent_sync(user_db_id, _agent_id, _agent_name_db, _atask[:200])
-
-            _save_office_anchor_sync(
-                user_db_id, _agent_name_db,
-                f"L2: поручил «{_atask[:80]}» для цели «{_agoal[:60]}»"
-            )
-
-            s2 = Db2()
-            try:
-                s2.add(Anchor(
-                    user_id=user_db_id,
-                    anchor_type='agent_office_update',
-                    source=f'l2-coord:{_now.strftime("%Y-%m-%d-%H")}:{_agent_name_db[:8]}',
-                    topic=f'L2: {_agent_name_db} → {_atask[:60]}',
-                    priority=_anchor_priority,
-                    data=_json.dumps({'action': 'delegate', 'agent_name': _aname,
-                                      'task': _atask, 'goal': _agoal,
-                                      'urgency': _urgency}, ensure_ascii=False),
-                    triggered_at=_now,
-                    expires_at=_now + timedelta(hours=8),
-                    cooldown_hours=2,
-                    batch_group='integration',
-                ))
-                s2.commit()
-            except Exception:
-                s2.rollback()
-            finally:
-                s2.close()
 
             _log_agent_activity_sync(
                 user_db_id, _agent_name_db, _agent_id,
