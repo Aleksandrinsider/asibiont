@@ -13110,10 +13110,11 @@ async def check_emails(
                             break  # одно предпочтение на контакт
 
             # Авто-обновление метрики если появились новые replied контакты
-            if _new_auto or _replied_known:
+            # Считаем ИНКРЕМЕНТ (только новые ответы за этот вызов), а не общий счётчик
+            _newly_replied_this_call = len(_new_auto) + len(_replied_known)
+            if _newly_replied_this_call > 0:
                 try:
                     from models import Goal as _Goal_ce
-                    _total_replied_ce = session.query(_EC_ce2).filter_by(user_id=user.id, status='replied').count()
                     _ppl_kw_ce = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт')
                     _ppl_goals_ce = session.query(_Goal_ce).filter(
                         _Goal_ce.user_id == user.id,
@@ -13123,14 +13124,30 @@ async def check_emails(
                     for _g_ce2 in _ppl_goals_ce:
                         _g_text_ce = (_g_ce2.title + ' ' + (_g_ce2.description or '') + ' ' + (_g_ce2.metric_unit or '')).lower()
                         if any(w in _g_text_ce for w in _ppl_kw_ce):
-                            if _total_replied_ce > (_g_ce2.metric_current or 0):
+                            _new_metric = float(_g_ce2.metric_current or 0) + _newly_replied_this_call
+                            if _new_metric > (_g_ce2.metric_current or 0):
                                 update_goal_progress(
                                     goal_title=_g_ce2.title,
-                                    metric_current=_total_replied_ce,
-                                    notes=f'check_emails: {_total_replied_ce} ответивших контактов',
+                                    metric_current=int(_new_metric),
+                                    notes=f'check_emails: +{_newly_replied_this_call} новых ответов',
                                     user_id=user_id,
                                 )
-                                logger.info(f'[CHECK_EMAILS] Auto-updated goal metric: {_g_ce2.title} → {_total_replied_ce}')
+                                logger.info(f'[CHECK_EMAILS] Auto-updated goal metric: {_g_ce2.title} +{_newly_replied_this_call} → {_new_metric}')
+                                # Логируем inbox_reply в AgentActivityLog для сигнала другим инструментам
+                                try:
+                                    from models import AgentActivityLog as _AAL_ce_ir
+                                    _aal_ir = _AAL_ce_ir(
+                                        user_id=user.id,
+                                        activity_type='inbox_reply',
+                                        title=f'+{_newly_replied_this_call} новых ответов на письма',
+                                        content=f'Обновлена цель «{_g_ce2.title}»',
+                                        target='email_inbox',
+                                        status='completed',
+                                    )
+                                    session.add(_aal_ir)
+                                    session.commit()
+                                except Exception as _e_aal_ir:
+                                    logger.debug(f'[CHECK_EMAILS] AAL inbox_reply log failed: {_e_aal_ir}')
                                 break
                 except Exception as _e_auto_gp:
                     logger.debug(f'[CHECK_EMAILS] auto update_goal_progress failed: {_e_auto_gp}')
@@ -13159,6 +13176,14 @@ async def check_emails(
             if _unsubscribed_emails:
                 result += '\n\n⛔ ОТПИСАЛИСЬ (НЕ отправляй им больше ни одного письма):\n'
                 result += '\n'.join(f'• {_ue}' for _ue in _unsubscribed_emails)
+
+            # ── Явный счётчик новых ответов для агента ──
+            if _newly_replied_this_call > 0:
+                result += (
+                    f'\n\n📊 НОВЫЕ ОТВЕТЫ В ЭТОМ СЕАНСЕ: +{_newly_replied_this_call} контакт(а/ов) с интересом к проекту.\n'
+                    f'   → Метрика цели уже обновлена автоматически (+{_newly_replied_this_call}).\n'
+                    f'   → НЕ вызывай update_goal_progress повторно — уже сделано!'
+                )
 
             # ── Аннотация: инструкция AI по анализу намерения ──
             _has_replies = bool(_reply_snippets)
