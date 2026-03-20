@@ -5861,6 +5861,22 @@ class AnchorEngine:
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
+                    # Cleanup: отменяем застрявшие in_progress задачи агента старше 30 минут
+                    try:
+                        _stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                        session.execute(
+                            text("UPDATE tasks SET status='cancelled', completion_notes='Прервано: новый цикл агента' "
+                                 "WHERE user_id=:uid AND source='agent' AND status='in_progress' "
+                                 "AND delegated_to_username=:ag AND created_at < :cutoff"),
+                            {'uid': user.id, 'ag': _ag_name, 'cutoff': _stuck_cutoff}
+                        )
+                        session.commit()
+                    except Exception as _stuck_err:
+                        logger.debug("[COORD] stuck task cleanup error: %s", _stuck_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                     # Короткий заголовок = первое предложение/строка задания
                     _task_title_short = (_ag_task.split('\n')[0].split('.')[0])[:100].strip()
                     if len(_task_title_short) < 15:
@@ -8055,9 +8071,11 @@ class AnchorEngine:
                 _already_ai_replied_emails = set()
             import re as _re_pr_clean
             def _clean_reply_text(txt: str) -> str:
-                """Убирает MIME boundary/header артефакты из текста письма."""
+                """Убирает MIME boundary/header артефакты и HTML-теги из текста письма."""
                 if not txt:
                     return ''
+                # Strip HTML tags to prevent XSS and prompt injection from malicious replies
+                txt = _re_pr_clean.sub(r'<[^>]+>', '', txt)
                 txt = _re_pr_clean.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', txt)
                 txt = _re_pr_clean.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', txt)
                 return txt.strip()

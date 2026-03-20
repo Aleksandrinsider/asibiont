@@ -8133,7 +8133,7 @@ else:
                                 bodyHtml += `</div>`;
                                 if (replyFrom) bodyHtml += `<div style="font-size: 12px; color: #8C959F; margin-bottom: 8px;">${t('from-label')} ${replyFrom}</div>`;
                                 if (o.reply_text) {
-                                    bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.reply_text}</div>`;
+                                    bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${escapeHtml(o.reply_text)}</div>`;
                                 } else {
                                     bodyHtml += `<div id="reply-placeholder-${o.id}" style="font-size: 13px; color: #9CA3AF; font-style: italic;">Загрузка ответа...</div>`;
                                     setTimeout(() => loadOutreachReply(o.id), 300);
@@ -8148,7 +8148,7 @@ else:
                                 bodyHtml += `<span style="font-size: 13px; color: #068487; font-weight: 600;">${t('mp-agent-reply')}</span>`;
                                 if (aiReplyDate) bodyHtml += `<span style="font-size: 12px; color: #9CA3AF;">${aiReplyDate}</span>`;
                                 bodyHtml += `</div>`;
-                                bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${o.ai_reply_text}</div>`;
+                                bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${escapeHtml(o.ai_reply_text)}</div>`;
                                 bodyHtml += `</div>`;
                             }
 
