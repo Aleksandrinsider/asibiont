@@ -279,7 +279,7 @@ _TASK_PERSONALITY_MARKERS = (
 )
 
 
-def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 100) -> tuple:
+def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 200) -> tuple:
     """Нормализует заголовок задачи. Возвращает (short_title, overflow_for_description).
 
     - Удаляет мусор (system prompt, [АВТОПИЛОТ], имя агента)
@@ -290,7 +290,7 @@ def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 
     Args:
         raw_title: исходный текст задачи
         agent_name: имя агента для удаления из начала
-        max_len: максимальная длина title (по умолчанию 100)
+        max_len: максимальная длина title (по умолчанию 200)
 
     Returns:
         (title, overflow) — title: str до max_len, overflow: str остаток (может быть пустым)

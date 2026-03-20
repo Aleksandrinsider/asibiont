@@ -5041,19 +5041,26 @@ class AnchorEngine:
             _n_agents = len(_profiles)
             _profiles_str = '\n'.join(_profiles_lines)
 
-            # ── Строгие правила матчинга возможностей агентов (чтобы LLM не назначал Кристину искать Telegram) ──
+            # ── Строгие правила матчинга возможностей агентов (чтобы LLM не назначал бесполезные задачи) ──
             _cap_rules_lines = []
             for _p_cr in _profiles:
                 _ag_cr_obj = next((a for a in real_agents if a.name == _p_cr['name']), None)
                 _keys_cr = (getattr(_ag_cr_obj, 'user_api_keys', '') or '').lower() if _ag_cr_obj else ''
                 _py_cr = (getattr(_ag_cr_obj, 'python_code', '') or '').lower() if _ag_cr_obj else ''
-                _is_email_only = (
-                    ('gmail_user=' in _keys_cr or 'imap_' in _keys_cr or 'yandex_user=' in _keys_cr or 'mailru_user=' in _keys_cr)
-                    and not ('rss_url=' in _keys_cr or 'github_token=' in _keys_cr or 'github_access_token=' in _keys_cr)
-                )
+                _has_email_cr = ('gmail_user=' in _keys_cr or 'imap_' in _keys_cr or 'yandex_user=' in _keys_cr or 'mailru_user=' in _keys_cr)
                 _is_rss_agent = 'rss_url=' in _keys_cr
                 _is_github_agent = ('github_token=' in _keys_cr or 'github_access_token=' in _keys_cr)
-                if _is_email_only:
+                _is_email_only = _has_email_cr and not _is_rss_agent and not _is_github_agent
+                # Мульти-интеграция: email + GitHub
+                if _has_email_cr and _is_github_agent:
+                    _cap_rules_lines.append(
+                        f"  🔀 {_p_cr['name']} [email+GitHub]: "
+                        f"МОЖЕТ: check_emails, send_outreach_email, reply_to_outreach_email, "
+                        f"run_agent_action(action='search_users', params={{query:'language:X followers:>N'}}), save_email_contact. "
+                        f"ЛУЧШАЯ ЦЕПОЧКА: search_users → save_email_contact → send_outreach_email. "
+                        f"НЕ назначать: поиск Telegram/Discord/Reddit, web_search как основное."
+                    )
+                elif _is_email_only:
                     _cap_rules_lines.append(
                         f"  ⚠️ {_p_cr['name']} [ТОЛЬКО email]: "
                         f"НЕ назначать: поиск Telegram/Discord/Reddit, анализ RSS, GitHub-поиск, web_search как основное. "
@@ -6071,12 +6078,12 @@ class AnchorEngine:
                             session.rollback()
                         except Exception:
                             pass
-                    # Короткий заголовок = первое предложение/строка задания
-                    _task_title_short = (_ag_task.split('\n')[0].split('.')[0])[:100].strip()
+                    # Заголовок = первое предложение/строка задания (до 200 сим — полный текст)
+                    _task_title_short = (_ag_task.split('\n')[0])[:200].strip()
                     if len(_task_title_short) < 15:
-                        _task_title_short = ' '.join(_ag_task.split()[:14])
+                        _task_title_short = ' '.join(_ag_task.split()[:20])
                     # Guard: если задание = название цели → добавляем инструмент для конкретики
-                    if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:100]:
+                    if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:200]:
                         if _tool_hint:
                             _task_title_short = f"{_tool_hint.replace('_', ' ').title()}: {_ag_goal_title[:70]}"
                         else:

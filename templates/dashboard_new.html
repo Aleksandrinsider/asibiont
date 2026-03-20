@@ -12084,12 +12084,7 @@ else:
                 html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="display:none;"></div>';
             }
             
-            // Показываем что именно сделал агент (completion_notes) для завершённых агентских задач
-            if (task.status === 'completed' && task.source === 'agent' && task.completion_notes && task.completion_notes.trim()) {
-                const notes = task.completion_notes.trim();
-                const shortNotes = notes.length > 300 ? notes.substring(0, 298) + '…' : notes;
-                html += '<div style="margin-top:6px;font-size:12px;color:#047D82;background:#F0FAFA;border-radius:4px;padding:6px 8px;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(shortNotes) + '</div>';
-            }
+            // completion_notes для агентских задач — не показываем, только название
 
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
             if (task.reminder_time_local) {

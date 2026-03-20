@@ -1417,7 +1417,7 @@ class OfficeEngine:
                     if 'telegram' in _keys_c:
                         _caps_c.append('Telegram')
                     if 'github' in _keys_c:
-                        _caps_c.append('GitHub')
+                        _caps_c.append('GitHub search_users→save_email_contact→send_outreach_email')
                     if _caps_c:
                         _line += f" [{', '.join(_caps_c)}]"
                     else:
