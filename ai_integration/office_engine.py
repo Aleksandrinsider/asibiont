@@ -1467,7 +1467,7 @@ class OfficeEngine:
         if action == 'delegate_multiple':
             _assignments = plan.get('assignments', [])[:3]  # max 3 агента за цикл
         elif action == 'delegate':
-            _an = plan.get('agent_name', '').strip()
+            _an = (plan.get('agent_name') or plan.get('agent') or '').strip()
             _at = plan.get('task', '').strip()
             _ag = plan.get('goal', '').strip()
             if not _an or not _at:
@@ -1481,7 +1481,7 @@ class OfficeEngine:
         _now = datetime.now(timezone.utc)
 
         for _asgn in _assignments:
-            _aname = (_asgn.get('agent_name') or '').strip()
+            _aname = (_asgn.get('agent_name') or _asgn.get('agent') or '').strip()
             _atask = (_asgn.get('task') or '').strip()
             _agoal = (_asgn.get('goal') or '').strip()
             _urgency = _asgn.get('urgency', 'normal')
