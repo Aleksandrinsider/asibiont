@@ -7113,15 +7113,14 @@ async def api_interactions_handler(request):
         )
         # Internal coordinator/assignment anchor types — saved for AI context, hidden from user
         _HIDDEN_ANCHOR_TYPES = {
-            'coordinator_plan',           # «Запускаю автопилот…»
-            # coordinator_assignment and coordinator_result are VISIBLE — they show inter-agent chat
-            'coordinator_agent_request',  # запрос агента на интеграцию
-            # coordinator_result shown in chat (individual agent outputs)
+            # coordinator_plan — ВИДИМ (стартовый анонс «Запускаю автопилот…»)
+            # coordinator_result — ВИДИМ (результаты шагов агентов)
             # coordinator_summary — ВИДИМ (итоговый отчёт цикла)
-            'coordinator_intg_recommend', # рекомендация интеграции
-            'goal_autopilot_assignment',  # ASI назначает задачу
-            'goal_autopilot_review',      # проверка результата цикла
-            'asi_self_analysis',          # «Анализирую цели…»
+            # goal_autopilot_assignment — ВИДИМ (ASI назначает задачу агенту)
+            'coordinator_agent_request',  # запрос агента на интеграцию (внутренний)
+            'coordinator_intg_recommend', # рекомендация интеграции (внутренний)
+            'goal_autopilot_review',      # проверка результата цикла (внутренний)
+            'asi_self_analysis',          # «Анализирую цели…» (внутренний)
             'asi_director_review',        # внутренний анализ директора
             'autopilot_escalation',       # эскалация внутри автопилота
             'agent_chain_transfer',       # внутренняя передача

@@ -3158,23 +3158,22 @@ class AnchorEngine:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
 
                             if not _skip_coord:
-                                # Coordinator assignment больше не сохраняется в хронологию
-                                # from ai_integration.utils import clean_technical_details as _ctd_coord_save
-                                # _coord_text_clean_save = _ctd_coord_save(_coord_text) if _coord_text else _coord_text
-                                # _coord_content = json.dumps({
-                                #     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                #     'text': _coord_text_clean_save,
-                                #     '__to_agent': _chosen_name,
-                                #     '__anchor_type': 'goal_autopilot_assignment',
-                                # }, ensure_ascii=False)
-                                # _cs.add(Interaction(
-                                #     user_id=user.id,
-                                #     message_type='agent_msg',
-                                #     content=_coord_content,
-                                # ))
-                                # _cs.commit()
-                                # logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
-                                pass
+                                # Coordinator assignment — сохраняем в хронологию чтобы пользователь видел поручения
+                                from ai_integration.utils import clean_technical_details as _ctd_coord_save
+                                _coord_text_clean_save = _ctd_coord_save(_coord_text) if _coord_text else _coord_text
+                                _coord_content = json.dumps({
+                                    '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                    'text': _coord_text_clean_save,
+                                    '__to_agent': _chosen_name,
+                                    '__anchor_type': 'goal_autopilot_assignment',
+                                }, ensure_ascii=False)
+                                _cs.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='agent_msg',
+                                    content=_coord_content,
+                                ))
+                                _cs.commit()
+                                logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
                         finally:
                             _cs.close()
                         if not _skip_coord and self.bot:
@@ -5870,6 +5869,15 @@ class AnchorEngine:
                         }, ensure_ascii=False),
                     ))
                     session.commit()
+                    # Отправляем стартовый анонс в Telegram
+                    if self.bot:
+                        try:
+                            await self.bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=f"🤖 {_coord_announce}",
+                            )
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
             except Exception:
                 try:
                     session.rollback()
@@ -6623,6 +6631,17 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
+
+                # Отправляем результат шага агента в Telegram — пользователь видит прогресс
+                if self.bot and _cleaned and len(_cleaned.strip()) > 20:
+                    try:
+                        _tg_text = f"📋 {_ag_name}:\n\n{_cleaned[:3500]}"
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=_tg_text,
+                        )
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 _results_summary.append(
                     f"{_ag_name}: {_cleaned[:150]}"
