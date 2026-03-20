@@ -1377,6 +1377,25 @@ class OfficeEngine:
                 f"- {a.target}: {a.title[:60]} ({a.status})"
                 for a in recent_acts
             ) if recent_acts else "(нет недавней активности)"
+
+            # Провалившиеся задачи за 24ч — координатор должен избегать повторов
+            _failed_tasks_l2 = ''
+            try:
+                from models import Task as _Task_l2f
+                _fail_c_l2 = _now - timedelta(hours=24)
+                _ftasks = s.query(_Task_l2f).filter(
+                    _Task_l2f.user_id == user_db_id,
+                    _Task_l2f.source == 'agent',
+                    _Task_l2f.status.in_(['cancelled']),
+                    _Task_l2f.created_at >= _fail_c_l2,
+                ).order_by(_Task_l2f.created_at.desc()).limit(8).all()
+                if _ftasks:
+                    _fl = ['ПРОВАЛИВШИЕСЯ ЗАДАЧИ 24ч (НЕ повторяй — дай ДРУГОЕ):']
+                    for _ft in _ftasks:
+                        _fl.append(f"  - {_ft.delegated_to_username or '?'}: {(_ft.title or '')[:70]}")
+                    _failed_tasks_l2 = '\n'.join(_fl) + '\n'
+            except Exception:
+                pass
         finally:
             s.close()
 
@@ -1413,6 +1432,7 @@ class OfficeEngine:
             f"ЦЕЛИ:\n{goals_text}\n\n"
             f"АГЕНТЫ (и их реальные возможности):\n{agents_caps_text}\n\n"
             f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
+            f"{_failed_tasks_l2}"
             "ПРАВИЛА НАЗНАЧЕНИЯ:\n"
             "1. НЕ ПОВТОРЯЙ задачи из активности 6ч — ни дословно, ни по смыслу.\n"
             "2. Задача = ОДНО конкретное действие с измеримым результатом (30-60 слов).\n"

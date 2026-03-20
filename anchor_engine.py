@@ -5077,6 +5077,28 @@ class AnchorEngine:
                 if _cap_rules_lines else ''
             )
 
+            # ── Failed/cancelled tasks awareness — координатор ЗНАЕТ что провалилось ──
+            _failed_tasks_str = ''
+            try:
+                from models import Task as _Task_fail
+                _fail_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+                _failed_tasks = session.query(_Task_fail).filter(
+                    _Task_fail.user_id == user.id,
+                    _Task_fail.source == 'agent',
+                    _Task_fail.status.in_(['cancelled']),
+                    _Task_fail.created_at >= _fail_cutoff,
+                ).order_by(_Task_fail.created_at.desc()).limit(12).all()
+                if _failed_tasks:
+                    _ft_lines = ['\n❌ ПРОВАЛИВШИЕСЯ ЗАДАЧИ за 24ч (НЕ назначать повторно — ищи другой путь):']
+                    for _ft in _failed_tasks:
+                        _reason = (getattr(_ft, 'completion_notes', '') or '').strip()
+                        _reason_short = f' — {_reason[:60]}' if _reason else ''
+                        _ft_lines.append(f'  • {_ft.delegated_to_username or "?"}: {(_ft.title or "")[:70]}{_reason_short}')
+                    _ft_lines.append('  → ОБЯЗАТЕЛЬНО: дай ДРУГУЮ задачу или ДРУГОЙ инструмент. Повтор = провал.')
+                    _failed_tasks_str = '\n'.join(_ft_lines) + '\n'
+            except Exception as _ft_err:
+                logger.debug('[COORD] failed tasks query: %s', _ft_err)
+
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
             import re as _re_al
             _agent_banned_tools: dict = {}
@@ -5382,10 +5404,13 @@ class AnchorEngine:
                         _strategy_lines.append(f"    цикл -{len(_summs)-_idx_s-len(_summs)+4}: [{', '.join(_tools_s[:3])}] {_txt_s}")
                 # Какие стратегии перегружены
                 _overused = [f"{s} ({n}x)" for s, n in sorted(_strategy_usage.items(), key=lambda x: -x[1]) if n >= 2]
+                _heavily_overused = [s for s, n in _strategy_usage.items() if n >= 4]
                 if _overused:
                     _strategy_lines.append(f"\n  ⚠️ ПЕРЕГРУЖЕННЫЕ подходы (повторяются циклами): {', '.join(_overused)}")
                     _strategy_lines.append(f"     → Эти подходы УЖЕ испробованы многократно. Результата явно недостаточно.")
                     _strategy_lines.append(f"     → ЗАПРЕЩЕНО назначать то же самое. Придумай принципиально другой путь.")
+                if _heavily_overused:
+                    _strategy_lines.append(f"     ⛔ ЖЁСТКИЙ ЗАПРЕТ на: {', '.join(_heavily_overused)} — использованы 4+ раз без прогресса.")
                 if _strategy_never_tried:
                     _nice_names = {
                         'direct_search': 'прямой поиск контактов',
@@ -5578,6 +5603,7 @@ class AnchorEngine:
                 f"Кампании: {_email_campaigns_str}\n"
                 f"{_banned_tools_str}"
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
+                + f"{_failed_tasks_str}"
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + (
                     "⚡ ПРИОРИТЕТ: Есть отправленные письма — "
@@ -6057,27 +6083,29 @@ class AnchorEngine:
                             _task_title_short = f"Шаг к цели: {_ag_goal_title[:80]}"
                         logger.info("[COORD] vague task remapped for %s: tool=%s title=%s", _ag_name, _tool_hint, _task_title_short[:60])
 
-                    # ── DEDUP: не создавать задачу если аналогичная уже была за 4 часа ──
-                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
+                    # ── DEDUP: не создавать задачу если аналогичная уже была за 24 часа ──
+                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
                     # Стоп-слова: не учитывать при сравнении
                     _DEDUP_STOP = {'на', 'в', 'для', 'и', 'от', 'по', 'через', 'из', 'с', 'о', 'к', 'не',
                                    'проверить', 'провести', 'использовать', 'используя', 'текущей', 'текущую',
-                                   'наличие', 'ответов', 'ситуации', 'обработки'}
-                    _dedup_words = set(w for w in _task_title_short.lower().split()[:8] if w not in _DEDUP_STOP and len(w) > 2)
+                                   'наличие', 'ответов', 'ситуации', 'обработки', 'активных', 'активные',
+                                   'последних', 'наиболее', 'найти', 'проанализировать', 'исследовать',
+                                   'собрать', 'составить', 'список'}
+                    _dedup_words = set(w for w in _task_title_short.lower().split()[:10] if w not in _DEDUP_STOP and len(w) > 2)
+                    # Ищем похожие задачи у ВСЕХ агентов (не только текущего) — кросс-агент дедуп
                     _recent_similar = session.query(_Task_c2).filter(
                         _Task_c2.user_id == user.id,
                         _Task_c2.source == 'agent',
                         _Task_c2.created_at >= _dedup_cutoff,
-                        _Task_c2.delegated_to_username == _ag_name,
                     ).all()
                     _is_dup = False
                     for _rs in _recent_similar:
-                        _rs_words = set(w for w in (_rs.title or '').lower().split()[:8] if w not in _DEDUP_STOP and len(w) > 2)
+                        _rs_words = set(w for w in (_rs.title or '').lower().split()[:10] if w not in _DEDUP_STOP and len(w) > 2)
                         _overlap = len(_dedup_words & _rs_words)
-                        # 2+ значимых слов совпало = дубль
-                        if _overlap >= 2 and (_overlap / max(len(_dedup_words), 1)) >= 0.4:
+                        # 3+ значимых слов совпало и >40% = дубль
+                        if _overlap >= 3 and (_overlap / max(len(_dedup_words), 1)) >= 0.4:
                             _is_dup = True
-                            logger.info(f"[COORD] dedup: skipping task '{_task_title_short[:50]}' — similar to [{_rs.id}] '{_rs.title[:50]}' (overlap={_overlap})")
+                            logger.info(f"[COORD] dedup: skipping task '{_task_title_short[:50]}' — similar to [{_rs.id}] '{_rs.title[:50]}' (overlap={_overlap}, agent={_rs.delegated_to_username})")
                             break
                     if _is_dup:
                         _step_task_id = None
