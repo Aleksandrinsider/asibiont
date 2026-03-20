@@ -4968,6 +4968,19 @@ class AnchorEngine:
                     + ', '.join(_uc_names)
                     + "\n→ Email-агент ОБЯЗАН вызвать send_outreach_email — НЕ делать новый поиск!\n"
                 )
+            elif _email_sent > 0 and _goals:
+                # Все контакты уже получили письма — нужны НОВЫЕ контакты
+                _gap_needed = sum(
+                    max(0, int((g.get('metric_target') or 0) - (g.get('metric_current') or 0)))
+                    for g in _goals[:3] if g.get('metric_target')
+                )
+                if _gap_needed > 0:
+                    _unsent_contacts_str = (
+                        f"\n💡 ВСЕ {_email_sent} известных контактов уже получили письма. "
+                        f"Осталось {_gap_needed} единиц до цели.\n"
+                        "→ ПАЙПЛАЙН: RSS/GitHub-агент ДОЛЖЕН найти НОВЫХ людей → save_email_contact → email-агент отправляет им.\n"
+                        "→ НЕ повторяй check_emails если уже делали недавно — ищи НОВЫЕ контакты!\n"
+                    )
 
             # Блок приоритетных ответов на входящие — если есть replied без AI-ответа
             _pending_replies_str = ''
