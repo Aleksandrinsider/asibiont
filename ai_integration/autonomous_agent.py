@@ -1307,6 +1307,16 @@ class HybridAutonomousAgent:
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
 
+                    # Если _fix_tool_params заблокировал вызов (нет обязательного контента) — пропускаем
+                    if params.pop('__skip__', False):
+                        results.append({
+                            "tool": tool_name, "success": False,
+                            "error": f"{tool_name}: нет контента для публикации — сначала сгенерируй текст поста",
+                            "reason": reason
+                        })
+                        logger.warning("[EXEC] %s SKIPPED: no content to publish", tool_name)
+                        continue
+
                     # === Дедупликация add_task: не создаём задачи с очень похожим названием ===
                     if tool_name == 'add_task':
                         _new_title = (params.get('title') or '').strip().lower()
@@ -1489,16 +1499,17 @@ class HybridAutonomousAgent:
 
         elif tool_name in ('publish_to_telegram', 'publish_to_discord', 'create_post'):
             if 'content' not in params or not params.get('content'):
-                # DeepSeek вызвал без content — извлекаем из user_message или reason
+                # DeepSeek вызвал без content — извлекаем только из явных полей ответа AI
+                # ВАЖНО: не использовать user_message как fallback — это текст задачи автопилота,
+                # а не контент для публикации. Если контента нет — блокируем вызов.
                 fallback_content = params.pop('text', None) or params.pop('message', None) or params.pop('post_text', None) or params.pop('body', None)
-                if not fallback_content and user_message:
-                    fallback_content = user_message[:500]
                 if fallback_content:
                     params['content'] = fallback_content
-                    logger.info(f"[FIX_PARAMS] {tool_name}: extracted content from fallback")
+                    logger.info(f"[FIX_PARAMS] {tool_name}: extracted content from fallback field")
                 else:
-                    params['content'] = 'Новый пост'
-                    logger.info(f"[FIX_PARAMS] {tool_name}: used default content")
+                    # Нет контента — возвращаем ошибку, чтобы AI сгенерировал контент сначала
+                    params['__skip__'] = True
+                    logger.warning(f"[FIX_PARAMS] {tool_name}: no content provided, blocking publish call")
 
         elif tool_name == 'generate_image':
             if 'prompt' not in params or not params.get('prompt'):
@@ -2957,7 +2968,6 @@ class HybridAutonomousAgent:
                         "Help solve the task — don't suggest, DO it.\n"
                         "Use tools and give a concrete result.\n"
                         "Do NOT create new tasks.\n"
-                        "FORBIDDEN: call create_post, publish_to_telegram, publish_to_discord — publishing requires explicit user request.\n"
                         "STYLE: 300–800 characters, flowing text, single newlines between paragraphs. FORBIDDEN: bullet lists, numbered lists, headers, double newlines."
                     ),
                     'proactive': (
@@ -3041,7 +3051,6 @@ class HybridAutonomousAgent:
                         "Помоги решить задачу — не предлагай, а СДЕЛАЙ.\n"
                         "Используй инструменты и дай конкретный результат.\n"
                         "НЕ создавай новые задачи.\n"
-                        "ЗАПРЕЩЕНО: вызывать create_post, publish_to_telegram, publish_to_discord — публикация требует явного запроса пользователя.\n"
                         "СТИЛЬ: 300–800 символов, сплошной текст, одинарные переносы между абзацами. ЗАПРЕЩЕНО: списки, нумерация, заголовки, двойные переносы."
                     ),
                     'proactive': (
@@ -5035,36 +5044,35 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'negotiate_by_email', 'send_follow_up_email', 'set_contact_alert',
                 })
             # Контент/маркетинг — по специализации или мессенджер-интеграции
-            # create_post/publish_to_telegram/publish_to_discord убраны: autopilot НЕ публикует без явного запроса пользователя
             if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr ', 'пиар', 'копирайт', 'редактор')) or
                     any(w in _lbl_ap for w in ('telegram', 'discord', 'slack', 'вконтакт'))):
                 _autopilot_tools.update({
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
                     'generate_image', 'start_content_campaign', 'manage_content_campaign',
                     'set_content_strategy', 'get_news_trends',
                     # Исследование тем для постов — контент-агент должен уметь искать
                     'research_topic', 'web_search',
                 })
             # Аналитика/исследования — по специализации
-            # create_post убран: autopilot не публикует аналитику без явного запроса пользователя
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _autopilot_tools.update({
                     'get_news_trends', 'find_and_message_relevant_users',
                     'research_topic', 'web_search', 'get_stock_price', 'save_note',
+                    'create_post',  # публиковать аналитику
                 })
             # Alpha Vantage / NewsAPI / Биржевые данные — по ключу интеграции (не только по специализации)
-            # create_post/publish убраны: autopilot не публикует без явного запроса
             if any(w in _lbl_ap for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
                 _autopilot_tools.update({
                     'get_stock_price', 'get_news_trends', 'research_topic',
-                    'save_note',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
                 })
             # RSS/мониторинг — по лейблу интеграции
-            # create_post/publish убраны: autopilot не публикует без явного запроса пользователя
             if any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')):
                 _autopilot_tools.update({
                     'get_news_trends', 'save_email_contact', 'find_relevant_contacts_for_task',
-                    # RSS-агент суммирует данные и исследует → нужны эти инструменты
+                    # RSS-агент суммирует и публикует → нужны эти инструменты
                     'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
                     # Outreach авторов/источников из RSS-ленты
                     'send_outreach_email',
                 })
