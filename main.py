@@ -367,13 +367,18 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
             _NO_AVATAR = '__no_avatar__'
             _had_real_photo = user and user.photo_url and user.photo_url != _NO_AVATAR
 
-            # Clear legacy __no_avatar__ marker — we no longer set it
+            # Negative cache: __no_avatar__ means TG confirmed no photo
             if user and user.photo_url == _NO_AVATAR:
-                user.photo_url = None
-                try:
-                    db.commit()
-                except Exception:
-                    pass
+                if force_refresh:
+                    # Clear negative cache on force_refresh to retry TG API
+                    user.photo_url = None
+                    try:
+                        db.commit()
+                    except Exception:
+                        pass
+                else:
+                    # Return None immediately — don't hit TG API again
+                    return None
 
             # Cache hit — try to return without hitting get_user_profile_photos
             if not force_refresh and user and user.photo_url:
@@ -466,7 +471,14 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 logger.debug(f"Using cached https photo_url for user {user_id}: {user.photo_url[:40]}")
                 return user.photo_url
 
-            # No avatar found — dashboard background refresh will retry each visit
+            # No avatar found — store negative cache to avoid hitting TG API again
+            if user and not user.photo_url:
+                user.photo_url = _NO_AVATAR
+                try:
+                    db.commit()
+                    logger.debug(f"Stored __no_avatar__ for user {user_id}")
+                except Exception:
+                    pass
             return None
         finally:
             db.close()
@@ -483,18 +495,13 @@ def safe_avatar_url(telegram_id):
 
 
 def avatar_url_if_photo(user):
-    """Return proxied avatar URL for users who may have a Telegram avatar.
-    For TG users (positive ID): always returns URL so endpoint can fetch on demand.
-    For Discord users (negative ID): only if photo_url is cached."""
+    """Return proxied avatar URL only when we know user has a real photo.
+    Returns None for users without photo — frontend shows initial-letter fallback."""
     if not user or not user.telegram_id:
         return None
     # Custom avatar always available
     if getattr(user, 'custom_avatar', None):
         return f"/api/avatar/{user.telegram_id}"
-    # TG users: always return URL — endpoint fetches on demand from TG API
-    if user.telegram_id > 0:
-        return f"/api/avatar/{user.telegram_id}"
-    # Discord: only if cached
     _photo = getattr(user, 'photo_url', None)
     if _photo and _photo != '__no_avatar__':
         return f"/api/avatar/{user.telegram_id}"
@@ -6432,17 +6439,11 @@ async def translate_comment_handler(request):
 
 
 def _default_avatar_response():
-    """Return a neutral SVG avatar placeholder (200 OK) to avoid browser 404 console errors."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
-        '<circle cx="32" cy="32" r="32" fill="#E8ECEF"/>'
-        '<circle cx="32" cy="24" r="10" fill="#B0B8C1"/>'
-        '<ellipse cx="32" cy="52" rx="18" ry="12" fill="#B0B8C1"/>'
-        '</svg>'
-    )
+    """Return 404 so frontend onerror handler shows initial-letter fallback."""
     return web.Response(
-        body=svg.encode(),
-        content_type='image/svg+xml',
+        status=404,
+        text='no avatar',
+        content_type='text/plain',
         headers={'Cache-Control': 'public, max-age=3600'}
     )
 
