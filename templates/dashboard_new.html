@@ -12053,7 +12053,9 @@ else:
             html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
             
             // Показываем описание задачи
-            {
+            // Для агентских задач description содержит технические исследовательские заметки — 
+            // не показываем их в карточке (пользователь видит completion_notes для завершённых)
+            if (task.source !== 'agent') {
                 let descText = '';
                 if (task.description && task.description.trim()) {
                     const cleanDesc = task.description.trim();
@@ -12076,6 +12078,10 @@ else:
                 } else {
                     html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="margin-top: 4px; font-size: 13px; color: #586069; white-space: pre-wrap; word-break: break-word;' + (descText ? '' : ' display: none;') + '">' + escapeHtml(descText) + '</div>';
                 }
+            } else {
+                // Для агентских задач: скрытый div с data-full нужен для редактора
+                const escapedFull = (task.description || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;');
+                html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="display:none;"></div>';
             }
             
             // Показываем что именно сделал агент (completion_notes) для завершённых агентских задач
