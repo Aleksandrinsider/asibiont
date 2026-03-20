@@ -1259,10 +1259,24 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "3. РАССУЖДАЙ через вопрос: что РЕАЛЬНО = +1 к метрике этой цели? Затем выбирай инструмент.\n"
         "4. Цепочка: ИНСТРУМЕНТ → обработай РЕЗУЛЬТАТ → update_goal_progress (макс ОДИН раз за сессию).\n"
         "   GitHub цепочка ОБЯЗАТЕЛЬНАЯ: run_agent_action(search_users) → save_email_contact × N → send_outreach_email × N.\n"
+        "   GitHub запросы ДОЛЖНЫ МЕНЯТЬСЯ каждый цикл:\n"
+        "     Цикл 1: 'language:python followers:>10' → Цикл 2: 'machine learning repos:>5' → Цикл 3: 'qa automation location:Russia'\n"
+        "     ❌ НЕЛЬЗЯ повторять один и тот же запрос два цикла подряд — меняй query, язык, фильтры.\n"
         "5. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
-        "6. Каждый цикл = ДРУГИЕ инструменты: если уже делал web_search → "
-        "пробуй research_topic, research_and_plan, negotiate_by_email, find_and_message_relevant_users.\n"
+        "6. Каждый цикл = РАЗНЫЕ подходы (строго чередуй!):\n"
+        "   Цикл A: поиск людей (GitHub/web_search) + рассылка\n"
+        "   Цикл B: постинг в каналы (publish_to_telegram/publish_to_discord) — чтобы люди сами шли\n"
+        "   Цикл C: ответы на входящие (check_emails + reply_to_outreach_email)\n"
+        "   Цикл D: новая площадка (Reddit, Discord, HN, конференции)\n"
+        "   ЗАПРЕЩЕНО: делать одно и то же действие 3+ раза подряд.\n"
         "7. НЕ пиши одним и тем же людям повторно.\n"
+        "7а. ПУБЛИКАЦИЯ В СВОЙ КАНАЛ — publish_to_telegram(content=...) / publish_to_discord(content=...):\n"
+        "   publish_to_telegram публикует в личный канал пользователя (@asibiont — уже настроен).\n"
+        "   publish_to_discord публикует на сервер Discord пользователя.\n"
+        "   Это контент-магнит: интересный пост → люди сами найдут и напишутся.\n"
+        "   Правильный синтаксис: publish_to_telegram(content='текст поста')\n"
+        "   ⚠️ НЕ работает для публикации в ЧУЖИЕ каналы (@qa_automation и т.д.) — нет прав.\n"
+        "   Если нужно достучаться до чужой аудитории — используй Цикл A (поиск + прямая рассылка).\n"
         "8. 🛡️ АНАЛИЗ НАМЕРЕНИЯ КОНТАКТА — ОБЯЗАТЕЛЬНО перед reply_to_outreach_email:\n"
         "   Прочитай reply_text контакта и определи его намерение:\n"
         "   • ПОЗИТИВНОЕ (интерес, вопросы, согласие) → отвечай на языке контакта\n"
@@ -1285,11 +1299,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "      ❌ email-адреса: 'user@gmail.com repos:>5' → вернёт 0\n"
            "      ❌ названия задач: 'email_analysis repos:>5' → вернёт 0\n"
            "      ❌ случайные слова из контекста → вернёт 0\n"
-           "    ПРАВИЛЬНЫЕ query-примеры для поиска пользователей ПОО:\n"
+           "    ПРАВИЛЬНЫЕ query-примеры для поиска (ОБЯЗАТЕЛЬНО ЧЕРЕДУЙ — НЕ ПОВТОРЯЙ!):\n"
            "      ✅ 'language:python repos:>10 followers:>5' — Python-разработчики\n"
            "      ✅ 'autonomous agent language:python followers:>20' — AI-энтузиасты\n"
            "      ✅ 'machine learning location:Russia repos:>5' — ML в РФ\n"
            "      ✅ 'indie hacker saas repos:>15 followers:>30' — инди-разработчики\n"
+           "      ✅ 'testing qa automation followers:>10 repos:>8' — QA-инженеры\n"
+           "      ✅ 'language:typescript ai agent followers:>15' — TS AI-разработчики\n"
+           "      ✅ 'language:rust systems programming repos:>10' — Rust-разработчики\n"
+           "      ✅ 'llm openai language:python followers:>10' — LLM-энтузиасты\n"
+           "    ВАЖНО: Если в _этом_ цикле уже использовал 'language:python' → возьми ДРУГОЙ query!\n"
            "    ПОСЛЕ ПОЛУЧЕНИЯ РЕЗУЛЬТАТОВ ОБЯЗАТЕЛЬНО:\n"
            "      1) save_email_contact для КАЖДОГО найденного с email\n"
            "      2) send_outreach_email каждому из них ← без этого шага весь цикл впустую!\n"
@@ -5612,15 +5631,25 @@ class AnchorEngine:
             _bridge_notes: list = []
 
             try:
-                session.add(Interaction(
-                    user_id=user.id, message_type='proactive',
-                    content=json.dumps({
-                        '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                        'text': _coord_announce,
-                        '__anchor_type': 'coordinator_plan',
-                    }, ensure_ascii=False),
-                ))
-                session.commit()
+                # Дедуп стартового анонса: не показывать то же сообщение чаще раза в 30 минут
+                from datetime import timedelta as _td_ann
+                _ann_cutoff = datetime.now(timezone.utc) - _td_ann(minutes=30)
+                _ann_prev = session.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'proactive',
+                    Interaction.content.like('%coordinator_plan%'),
+                    Interaction.created_at >= _ann_cutoff,
+                ).first()
+                if not _ann_prev:
+                    session.add(Interaction(
+                        user_id=user.id, message_type='proactive',
+                        content=json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _coord_announce,
+                            '__anchor_type': 'coordinator_plan',
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
             except Exception:
                 try:
                     session.rollback()
@@ -5954,6 +5983,9 @@ class AnchorEngine:
                         'send_outreach_email', 'start_email_campaign', 'add_email_leads',
                         'check_emails', 'update_goal_progress', 'update_goal', 'create_goal',
                         'quick_topic_search', 'get_news_trends',
+                        'run_agent_action', 'publish_to_telegram', 'publish_to_discord',
+                        'reply_to_outreach_email', 'send_follow_up_email',
+                        'find_and_message_relevant_users', 'negotiate_by_email',
                     ]
                     _ag_data = {
                         'id': 0, 'name': 'ASI',
