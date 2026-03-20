@@ -714,7 +714,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     'биржа', 'котировк', 'тренды', 'данные', 'аналитик', 'прогноз',
                     'статистик', 'oil', 'stock', 'commodity', 'forex', 'сырьё', 'металл', 'отчёт')
     _OUTREACH_KW = ('найти клиент', 'привлеч', 'подписчик', 'пользовател',
-                    'набор', 'аудитор', 'лид', 'lead', 'beta', 'бета', 'тестировщик', 'рекрутинг')
+                    'набор', 'аудитор', 'лид', 'lead', 'beta', 'бета', 'тестировщик', 'рекрутинг',
+                    'продаж', 'b2b', 'партнёр', 'сделк', 'клиентск',  # B2B/sales
+                    'вакансия', 'кандидат', 'найм', 'нанять', 'hr', 'стаж',  # найм
+                    'инвест', 'инвестор', 'финансиров', 'раунд', 'фандрейзинг',  # fundraising
+                    'участник', 'комьюнити', 'member', 'contributor', 'беты', 'регистрац')  # community
     _CONTENT_KW  = ('контент', 'smm', 'reels', 'видео', 'медиаплан')
     _DEV_KW      = ('разработ', 'программ', 'github', 'backend', 'frontend', 'developer', 'деплой')
     _gtype_scores = {
@@ -1263,15 +1267,17 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "     Цикл 1: 'language:python followers:>10' → Цикл 2: 'machine learning repos:>5' → Цикл 3: 'qa automation location:Russia'\n"
         "     ❌ НЕЛЬЗЯ повторять один и тот же запрос два цикла подряд — меняй query, язык, фильтры.\n"
         "5. Если нашёл данные но нет нужной интеграции — делегируй коллеге с конкретными данными.\n"
-        "6. Каждый цикл = РАЗНЫЕ подходы (строго чередуй!):\n"
+        ("6. Каждый цикл = РАЗНЫЕ подходы (строго чередуй!):\n"
         "   Цикл A: поиск людей (GitHub/web_search) + рассылка\n"
-        "   Цикл B: постинг в каналы (publish_to_telegram/publish_to_discord) — чтобы люди сами шли\n"
+        "   Цикл B: постинг в свой канал (publish_to_telegram/discord) — создаёт контент-магнит\n"
         "   Цикл C: ответы на входящие (check_emails + reply_to_outreach_email)\n"
-        "   Цикл D: новая площадка (Reddit, Discord, HN, конференции)\n"
+        "   Цикл D: новая площадка (Reddit, Discord, HN, конференции, product hunt)\n"
         "   ЗАПРЕЩЕНО: делать одно и то же действие 3+ раза подряд.\n"
+        if _goal_type in ('outreach', 'general') else
+        "6. Каждый цикл = РАЗНЫЕ подходы: смени инструмент если повторяешься. ЗАПРЕЩЕНО одно действие 3+ раз подряд.\n")
         "7. НЕ пиши одним и тем же людям повторно.\n"
         "7а. ПУБЛИКАЦИЯ В СВОЙ КАНАЛ — publish_to_telegram(content=...) / publish_to_discord(content=...):\n"
-        "   publish_to_telegram публикует в личный канал пользователя (@asibiont — уже настроен).\n"
+        + (f"   publish_to_telegram публикует в личный канал пользователя ({getattr(user, 'telegram_channel', None) or 'настроен в профиле'}).\n" if user else "   publish_to_telegram публикует в личный Telegram-канал пользователя (настроен в профиле).\n")
         "   publish_to_discord публикует на сервер Discord пользователя.\n"
         "   Это контент-магнит: интересный пост → люди сами найдут и напишутся.\n"
         "   Правильный синтаксис: publish_to_telegram(content='текст поста')\n"
