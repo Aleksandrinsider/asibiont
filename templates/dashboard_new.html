@@ -1291,9 +1291,7 @@
                             <select id="task-filter-select" onchange="filterTasks(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
                                 <option value="all" selected data-i18n="tf-all">Все</option>
                                 <option value="my" data-i18n="tf-my">Личные</option>
-                                <option value="agent" data-i18n="tf-agent">Поручения агентам</option>
                                 <option value="assigned-to-me" data-i18n="tf-to-me">Поручили мне</option>
-                                <option value="assigned-by-me" data-i18n="tf-by-me">Поручил я</option>
                                 <option value="overdue" data-i18n="tf-overdue">Просрочено</option>
                                 <option value="completed" data-i18n="tf-done">Выполнено</option>
                             </select>
@@ -1899,6 +1897,18 @@
             // Агентские под-отчёты скрыты из чата — они внутренние (agent_report)
             // ASI сам усвоил их контекст и говорит своим голосом
             if (sender === 'agent_report') return;
+
+            // Директорское поручение агенту — компактная строка «→ Имя, задача», не полный пузырёк
+            if (sender === 'agent_msg') {
+                const _dm = document.createElement('div');
+                const _t = String(text || '');
+                const _preview = _t.length > 90 ? _t.slice(0, 88) + '…' : _t;
+                _dm.style.cssText = 'padding: 1px 0 5px 32px; font-size: 12px; color: #9CA3AF; font-style: italic;';
+                _dm.textContent = '→ ' + _preview;
+                messages.appendChild(_dm);
+                messages.scrollTop = messages.scrollHeight;
+                return;
+            }
 
             // Авто-разбор JSON-сообщений от офисного движка
             // Формат: {"__agent": {name, id, avatar_url}, "text": "..."}
@@ -7348,8 +7358,8 @@ else:
 
             if (hasContent) {
                 const body = document.createElement('div');
-                // Все элементы свёрнуты по умолчанию
-                body.style.cssText = 'overflow:hidden;transition:max-height 0.25s ease;max-height:0px;';
+                // Показываем первые ~2 строки сразу; клик — развернуть полностью
+                body.style.cssText = 'overflow:hidden;transition:max-height 0.3s ease;max-height:40px;';
                 const inner = document.createElement('div');
                 inner.style.cssText = 'font-size:13px;color:#374151;line-height:1.5;padding:0 0 10px 0;white-space:pre-wrap;word-break:break-word;';
                 inner.textContent = cleanContent;
@@ -7357,18 +7367,18 @@ else:
                 wrap.appendChild(body);
 
                 header.onclick = () => {
-                    const collapsed = body.style.maxHeight === '0px';
+                    const collapsed = body.style.maxHeight === '40px';
                     if (collapsed) {
                         body.style.maxHeight = body.scrollHeight + 200 + 'px';
                         if (chev) chev.style.transform = 'rotate(0deg)';
                         body.addEventListener('transitionend', function _exp() {
                             body.removeEventListener('transitionend', _exp);
-                            if (body.style.maxHeight !== '0px') { body.style.maxHeight = 'none'; body.style.overflow = 'visible'; }
+                            if (body.style.maxHeight !== '40px') { body.style.maxHeight = 'none'; body.style.overflow = 'visible'; }
                         }, { once: true });
                     } else {
                         body.style.overflow = 'hidden';
                         body.style.maxHeight = body.scrollHeight + 'px';
-                        requestAnimationFrame(() => { body.style.maxHeight = '0px'; });
+                        requestAnimationFrame(() => { body.style.maxHeight = '40px'; });
                         if (chev) chev.style.transform = 'rotate(-90deg)';
                     }
                 };

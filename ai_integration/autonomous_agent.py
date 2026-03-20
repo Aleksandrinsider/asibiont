@@ -3517,7 +3517,7 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
             # Проверяем только если это директива (не отчёт агента с __agent)
             _is_directive = '"__agent"' not in content
             if _is_directive:
-                _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=30)
+                _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=5)
                 _existing = (
                     _s.query(_Intr)
                     .filter(
@@ -4670,8 +4670,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "⚠️ ГОЛОС ПИСЕМ: пиши ОТ СВОЕГО ИМЕНИ (sender_name=своё имя), НЕ от имени пользователя. "
             "В теме и теле ВСЕГДА упоминай проект/компанию/цель из контекста. "
             "Получатель должен понять кто пишет, откуда и зачем — без доп. информации.\n"
-            "Делегируй коллеге ТОЛЬКО если у него есть нужная интеграция, которой у тебя нет.\n"
-            + (f"Формат: {_delegate_example}\n" if _delegate_example else "Формат: DELEGATE[Имя]: задача с данными.\n") +
+            "Делегируй коллеге если:\n"
+            "  • у него есть нужная интеграция/доступ которой у тебя нет, ИЛИ\n"
+            "  • его специализация лучше подходит для конкретного шага (email-агент пишет письма, контент-агент делает посты), ИЛИ\n"
+            "  • задача параллельная — разделим работу и сделаем быстрее.\n"
+            + (f"Формат: {_delegate_example}\n" if _delegate_example else "Формат: DELEGATE[Имя]: задача с конкретными данными из твоего поиска.\n") +
             "Если инструмент вернул ошибку или нет данных — НЕ пиши пустую строку. "
             "Напиши что именно попробовал и почему не получилось (1-2 предл.). Это поможет координатору дать другую задачу.\n\n"
             f"{_persona}"
@@ -5726,8 +5729,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 # Последняя итерация: завершаем
                 _messages.append({"role": "user", "content": (
                     "Финальный шаг. Вызови update_goal_progress, затем расскажи пользователю "
-                    "ЧТО КОНКРЕТНО ты СДЕЛАЛ — факты, имена, цифры из результатов. "
-                    "НЕ пиши 'выполнил поиск' — пиши что НАШЁЛ и что С ЭТИМ СДЕЛАЛ."
+                    "ЧТО КОНКРЕТНО ты СДЕЛАЛ — 2–3 предложения, не более 350 символов. "
+                    "Только главный факт: что нашёл, кому написал, что сохранил. Без деталей и списков."
                 )})
         else:
             _messages.append({"role": "user", "content": (
@@ -5793,9 +5796,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
             if _summary_resp and _summary_resp.get('choices'):
                 _summary_text = (_summary_resp['choices'][0]['message'].get('content') or '').strip()
-                if _summary_text and len(_summary_text) > len(_final_text):
+                if _summary_text and (not _final_text or len(_final_text) < 80):
                     _final_text = _summary_text
-                    logger.info("[DIRECTOR-EXEC] autopilot summary expanded: %d chars", len(_final_text))
+                    logger.info("[DIRECTOR-EXEC] autopilot summary filled (was empty): %d chars", len(_final_text))
         except Exception as _sum_err:
             logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
 
@@ -6438,11 +6441,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 lambda m: m.group(1) + m.group(2).lower(),
                 _dm_display,
             )
-            # Только логируем в БД — если дубль (то же поручение <30 мин), пропускаем запуск агента
-            _saved = _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
-            if not _saved:
-                logger.info("[DIRECTOR] skipping duplicate agent task for %s: %s...", ag.get('name'), director_message[:60])
-                return f"(поручение '{director_message[:40]}...' уже было дано недавно — пропускаю дубль)"
+            # Сохраняем директиву в чат (дедупликация только сообщения, НЕ выполнения задачи).
+            # Даже если сообщение — дубль (< 5 мин), агент всё равно запускается — это новое поручение.
+            _msg_dedup = _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
+            if not _msg_dedup:
+                logger.info("[DIRECTOR] directive is a duplicate message (not blocking execution) for %s: %s...", ag.get('name'), director_message[:60])
 
         # Списываем токены за запуск агента директором
         try:
