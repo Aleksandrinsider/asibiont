@@ -1941,6 +1941,7 @@ async def dashboard_handler(request):
                 'delegated_by_me': task.delegated_by == user.id if task.delegated_by else False,
                 'source': getattr(task, 'source', 'manual') or 'manual',
                 'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
+                'completion_notes': (task.completion_notes or '') if task.status == 'completed' else '',
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
             tasks_dict.append(task_dict)
@@ -6957,6 +6958,7 @@ async def api_tasks_handler(request):
                 'delegated_by_me': task.delegated_by == user.id,
                 'source': getattr(task, 'source', 'manual') or 'manual',
                 'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
+                'completion_notes': (task.completion_notes or '') if task.status == 'completed' else '',
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
                 'goal_id': task.goal_id,
                 'goal_name': _goal_name,
@@ -8331,9 +8333,11 @@ _TIMELINE_VISIBLE_TYPES = {
     'goal_created', 'goal_completed', 'goal_updated',
     'post_newsfeed', 'post_telegram', 'post_discord',
     'content_campaign', 'delegation_campaign',
-    'background_research_ready',
+    'background_research', 'background_research_ready',
     'agent_task',
     'inbox_reply',
+    'integration',
+    'run_agent_action',
     'checkpoint',
     'daily_report',
     'goal_autopilot_dispatch',
