@@ -5935,29 +5935,29 @@ class AnchorEngine:
                         logger.info("[COORD] skip %s — billing: %s", _ag_name, _bill_c2.get('error'))
                         continue
 
-                # ── Per-agent assignment: поручение ASI → агент видно в чате ──
-                _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), getattr(_target_ag, 'id', 0)) if _target_ag else ''
-                _assign_text = f"{_ag_name}, {_ag_task[:120]}"
+                # ── Per-agent assignment: агент объявляет что берётся за задачу (от первого лица, под своим ава) ──
+                _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
+                _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
+                _assign_text = f"Начинаю: {_ag_task[:120]}"
                 try:
                     _proj_ctx_a = (_user_profile_coord or {}).get('company', '')
                     _proj_pfx_a = f" проекта «{_proj_ctx_a}»" if _proj_ctx_a else ''
                     if _prev_steps_context and len(_prev_steps_context.strip()) > 30:
                         _assign_prompt = (
-                            f"Ты руководитель{_proj_pfx_a}, говоришь с коллегой {_ag_name} как живой человек.\n"
-                            f"Нужно: {_ag_task[:250]}\n"
-                            f"Команда уже сделала: {_prev_steps_context[:400]}\n\n"
-                            f"Напиши 2-3 предложения — обычная живая речь, как скажешь коллеге в офисе. "
-                            f"Например: «{_ag_name}, посмотри входящие — там может быть что-то от тех людей. "
-                            f"Марк только что нашёл пару интересных контактов, стоит сверить.» "
-                            f"Пиши своими словами, без списков и markdown."
+                            f"Ты агент {_ag_name}{_proj_pfx_a}. Напиши от первого лица что ты сейчас начинаешь делать.\n"
+                            f"Задача: {_ag_task[:250]}\n"
+                            f"Коллеги уже сделали: {_prev_steps_context[:300]}\n\n"
+                            f"1-2 предложения, живая речь от первого лица, без обращений к себе по имени. "
+                            f"Например: «Проверю входящие — там могут быть ответы. Если есть — сразу отвечу.» "
+                            f"Без списков и markdown."
                         )
-                        _assign_max_tok = 130
+                        _assign_max_tok = 100
                     else:
                         _assign_prompt = (
-                            f"Ты руководитель{_proj_pfx_a}, говоришь с коллегой {_ag_name} как живой человек.\n"
-                            f"Нужно: {_ag_task[:200]}\n\n"
-                            f"Напиши 1-2 предложения — обычная живая речь. "
-                            f"Например: «{_ag_name}, проверь почту — есть ли что-то новое по проекту.» "
+                            f"Ты агент {_ag_name}{_proj_pfx_a}. Напиши от первого лица что ты сейчас начинаешь делать.\n"
+                            f"Задача: {_ag_task[:200]}\n\n"
+                            f"1-2 предложения, живая речь от первого лица, без обращений к себе по имени. "
+                            f"Например: «Начну с проверки почты — посмотрю что пришло.» "
                             f"Без списков и markdown."
                         )
                         _assign_max_tok = 80
@@ -5976,9 +5976,8 @@ class AnchorEngine:
                             user_id=user.id,
                             message_type='agent_msg',
                             content=json.dumps({
-                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                '__agent': {'name': _ag_name, 'id': _ag_id_c, 'avatar_url': _ag_avatar_c},
                                 'text': _assign_text,
-                                '__to_agent': _ag_name,
                                 '__anchor_type': 'coordinator_assignment',
                             }, ensure_ascii=False),
                         ))
