@@ -1400,7 +1400,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             f"   web_search('{_domain_hint} Telegram community admin OR moderator email contact')\n"
             f"   web_search('{_domain_hint} Discord server invite email admin')\n"
             "   → save_email_contact → send_outreach_email к организатору/модератору\n"
-            "   ⛔ прямой постинг в чужие каналы/серверы инструментами НЕ поддерживается!"
+            "   ⛔ прямой постинг в чужие каналы/серверы инструментами НЕ поддерживается!\n"
+            "   ⛔ Telegram-username (@username) — НЕ email. web_search('@username email') чтобы найти их контакт."
         )
         _ch_num += 1
 
@@ -3202,20 +3203,35 @@ class AnchorEngine:
                     _coord_text = f"{_chosen_name}, займись текущими задачами."
                     try:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
+                        # Сформируем суть задания понятным языком (не технические названия инструментов/целей)
+                        _task_hint_human = ''
+                        if 'email' in _brief_task.lower() or 'письм' in _brief_task.lower() or 'почт' in _brief_task.lower():
+                            _task_hint_human = 'проверь письма и ответь тем, кто откликнулся'
+                        elif 'тестировщ' in _brief_task.lower() or 'тестер' in _brief_task.lower() or 'qa' in _brief_task.lower():
+                            _task_hint_human = 'поищи тестировщиков и свяжись с лучшими кандидатами'
+                        elif 'контакт' in _brief_task.lower() or 'outreach' in _brief_task.lower():
+                            _task_hint_human = 'займись поиском новых контактов для рассылки'
+                        elif 'аналит' in _brief_task.lower() or 'исслед' in _brief_task.lower() or 'анализ' in _brief_task.lower():
+                            _task_hint_human = 'покопайся в свежей аналитике, что полезного найдёшь'
+                        elif 'публик' in _brief_task.lower() or 'пост' in _brief_task.lower() or 'контент' in _brief_task.lower():
+                            _task_hint_human = 'подготовь пост или контент'
+                        else:
+                            _task_hint_human = _brief_task[:60] if _brief_task else 'займись активными целями'
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
-                            + f". Пишешь коллеге {_chosen_name} как живой человек — коротко и по делу.\n\n"
-                            f"Агент: {_chosen_name}" + (f" ({_agent_role})" if _agent_role else '') + "\n"
-                            + (f"Роль: {_agent_role}\n" if _agent_role else '')
-                            + (f"Прогресс целей: {_goals_progress_c}\n" if _goals_progress_c else '')
-                            + (f"Активные направления: {_brief_task}\n" if _brief_task else '')
-                            + "\nНапиши 1 предложение как скажешь живому коллеге в рабочем чате. "
-                            "Обращение по имени, конкретно что делать прямо сейчас, без квадратных скобок, "
-                            "без 'Жду отчёт', без формальностей. "
-                            "Примеры: «Кристина, загляни в почту — там могут быть ответы.» "
-                            "«Марк, поищи свежую аналитику.» "
-                            "⛔ НЕ упоминай названия инструментов (web_search, send_email и т.д.)."
+                            + f". Обращаешься к коллеге {_chosen_name} в рабочем чате — как живой человек, кратко и тепло.\n\n"
+                            f"Что нужно сделать: {_task_hint_human}\n"
+                            + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
+                            + f"\nНапиши ОДНО короткое предложение-просьбу. "
+                            "Обязательно обратись по имени. Говори как коллега — вежливо, по-человечески, конкретно.\n"
+                            "❌ ЗАПРЕЩЕНО: инструменты (web_search, send_email), технические термины, квадратные скобки, «Жду отчёт».\n"
+                            "❌ ЗАПРЕЩЕНО: начинать с технического названия задачи («Найти контакты...», «Проанализировать...»).\n"
+                            "✅ ОБРАЗЦЫ:\n"
+                            "  «Кристина, загляни в почту — там должны быть ответы от тестировщиков.»\n"
+                            "  «Марк, поищи свежую аналитику по QA — что интересного появилось?»\n"
+                            "  «Кристина, пожалуйста, напиши тем, кто ещё не ответил — у нас уже 10 контактов.»\n"
+                            "  «Марк, покопайся в своих RSS-лентах, нужны свежие инсайты по рынку.»"
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=80)
                         if _gen and len(_gen.strip()) > 15:
@@ -5172,9 +5188,13 @@ class AnchorEngine:
                     )
                 elif _is_rss_agent:
                     _cap_rules_lines.append(
-                        f"  📰 {_p_cr['name']} [RSS]: "
-                        f"Основное — run_agent_action (читает RSS-ленту), get_news_trends, save_email_contact, research_topic. "
-                        f"НЕ назначать check_emails или send_outreach_email."
+                        f"  📰 {_p_cr['name']} [RSS-только]: "
+                        f"Единственный инструмент — run_agent_action (читает одну RSS-ленту), get_news_trends, research_topic, web_search, create_post. "
+                        f"⛔ СТРОГО ЗАПРЕЩЕНО назначать: check_emails, send_outreach_email, reply_to_outreach_email, "
+                        f"настройку Gmail API, анализ входящих писем, поиск email-контактов через Telegram/Discord. "
+                        f"Марк/RSS-агент НЕ имеет email — это физически невозможно. "
+                        f"Email-задания → только агенту с email-интеграцией. "
+                        f"RSS-агент МОЖЕТ: анализировать тренды, делегировать инсайты email-агенту через DELEGATE[имя]."
                     )
             _cap_rules_str = (
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
@@ -6157,6 +6177,44 @@ class AnchorEngine:
                     logger.info("[COORD] agent '%s' not in team, skip", _ag_name)
                     continue
 
+                # ── Жёсткий фильтр: не давать RSS-only агенту email-задания ──
+                if _target_ag:
+                    _tg_keys = (getattr(_target_ag, 'user_api_keys', '') or '').lower()
+                    _tg_py   = (getattr(_target_ag, 'python_code', '') or '').lower()
+                    _tg_is_rss = 'rss_url=' in _tg_keys
+                    _tg_has_email = ('gmail_user=' in _tg_keys or 'imap_' in _tg_keys or 'yandex_user=' in _tg_keys or 'mailru_user=' in _tg_keys)
+                    _tg_has_github = ('github_token=' in _tg_keys or 'github_access_token=' in _tg_keys)
+                    _tg_is_rss_only = _tg_is_rss and not _tg_has_email and not _tg_has_github
+                    # Email-задания запрещены RSS-only агенту
+                    _EMAIL_TOOLS = {'check_emails', 'send_outreach_email', 'reply_to_outreach_email',
+                                    'send_follow_up_email', 'start_email_campaign', 'negotiate_by_email'}
+                    _EMAIL_KEYWORDS = ('проверь почту', 'проверь письма', 'ответь на письм', 'отправь письм',
+                                       'email рассылку', 'email-рассылку', 'отправь контакт', 'email кампани',
+                                       'check email', 'send email', 'email outreach')
+                    if _tg_is_rss_only and (
+                        _tool_hint in _EMAIL_TOOLS
+                        or any(kw in _ag_task.lower() for kw in _EMAIL_KEYWORDS)
+                    ):
+                        # Переназначаем на email-агента если он есть
+                        _email_backup = next(
+                            (a for a in real_agents
+                             if a.name.lower() != _ag_name.lower()
+                             and any(k in (getattr(a, 'user_api_keys', '') or '').lower()
+                                     for k in ('gmail_user=', 'yandex_user=', 'imap_', 'mailru_user='))),
+                            None
+                        )
+                        if _email_backup:
+                            logger.info(
+                                "[COORD] redirect email-task from RSS-agent %s → %s (task: %s)",
+                                _ag_name, _email_backup.name, _ag_task[:60]
+                            )
+                            _ag_name = _email_backup.name
+                            _target_ag = _email_backup
+                        else:
+                            logger.info("[COORD] skip email task for RSS-only agent %s (no email agent found)", _ag_name)
+                            _results_summary.append(f"{_ag_name}: пропущено (email-задание, нет email-интеграции)")
+                            continue
+
                 # Биллинг кастомного агента
                 if _target_ag and getattr(_target_ag, 'id', 0) != 0:
                     from ai_integration.user_agents import bill_agent_message as _bam_c2
@@ -6165,10 +6223,67 @@ class AnchorEngine:
                         logger.info("[COORD] skip %s — billing: %s", _ag_name, _bill_c2.get('error'))
                         continue
 
-                # ── Per-agent assignment: логируем задачу в AAL но НЕ создаём отдельное сообщение ──
-                # (coordinator_assignment "начинаю..." заполнял чат пустыми сообщениями без реальных действий)
+                # ── Per-agent assignment: живое обращение ASI к агенту (видно в чате) ──
                 _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
+                # Генерируем живое, человеческое поручение от ASI
+                try:
+                    _ag_is_fem_c = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
+                    _task_hint_c = ''
+                    _ag_task_lc = _ag_task.lower()
+                    if any(w in _ag_task_lc for w in ('email', 'письм', 'рассылк', 'почт', 'ответ', 'inbox')):
+                        _task_hint_c = 'загляни в почту и ответь на входящие сообщения'
+                    elif any(w in _ag_task_lc for w in ('rss', 'лент', 'новост', 'аналит', 'трен', 'тренд')):
+                        _task_hint_c = 'поищи свежие инсайты в своих источниках'
+                    elif any(w in _ag_task_lc for w in ('github', 'разработчик', 'программист', 'developer')):
+                        _task_hint_c = 'поищи разработчиков на GitHub'
+                    elif any(w in _ag_task_lc for w in ('контакт', 'найди', 'тестировщ', 'специалист', 'кандидат')):
+                        _task_hint_c = 'займись поиском новых контактов'
+                    elif any(w in _ag_task_lc for w in ('пост', 'публик', 'контент', 'текст')):
+                        _task_hint_c = 'подготовь контент'
+                    else:
+                        # Берём первые слова задачи как подсказку
+                        _task_hint_c = ' '.join(_ag_task.split()[:8])[:60]
+                    _asi_assign_prompt = (
+                        f"Ты — ASI, координатор команды. Обращаешься к {_ag_name} в командном чате.\n"
+                        f"Что нужно сделать: {_task_hint_c}\n"
+                        f"Напиши одно короткое живое предложение-просьбу, обращаясь по имени {'(женский род)' if _ag_is_fem_c else '(мужской род)'}.\n"
+                        "Говори как коллега — вежливо, конкретно, по-человечески. Без технических терминов, без скобок, без формальностей.\n"
+                        "Примеры:\n"
+                        "«Кристина, пожалуйста, проверь почту — там должны быть ответы.»\n"
+                        "«Марк, поищи свежую аналитику по рынку QA.»\n"
+                        "«Кристина, напиши тем, кто ещё не ответил — у нас уже хорошая база.»"
+                    )
+                    _asi_assign_text = await asyncio.wait_for(
+                        _quick_ai_call_raw([{'role': 'user', 'content': _asi_assign_prompt}], max_tokens=60),
+                        timeout=6,
+                    )
+                    if not _asi_assign_text or len(_asi_assign_text.strip()) < 10:
+                        _asi_assign_text = f"{_ag_name}, пожалуйста, займись следующим заданием."
+                    else:
+                        _asi_assign_text = _asi_assign_text.strip()
+                except Exception as _aac_err:
+                    _asi_assign_text = f"{_ag_name}, пожалуйста, займись следующим заданием."
+                    logger.debug("[COORD] asi assign text failed: %s", _aac_err)
+                # Сохраняем живое поручение в чат
+                try:
+                    session.add(Interaction(
+                        user_id=user.id,
+                        message_type='agent_msg',
+                        content=json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _asi_assign_text,
+                            '__to_agent': _ag_name,
+                            '__anchor_type': 'coordinator_assignment',
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
+                except Exception as _aas_err:
+                    logger.debug("[COORD] asi assign save error: %s", _aas_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
