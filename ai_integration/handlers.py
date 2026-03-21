@@ -4364,8 +4364,11 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 )
                 if _is_ppl_chk and (mc - _old_mc) >= 1:
                     try:
-                        from models import EmailContact as _EC_chk, AgentActivityLog as _AAL_chk
-                        _rpl_chk = session.query(_EC_chk).filter(_EC_chk.user_id == user.id, _EC_chk.status == 'replied').count()
+                        from models import EmailOutreach as _EO_chk, AgentActivityLog as _AAL_chk
+                        # Считаем ТОЛЬКО реальные ответы на outreach-письма (не email_contacts — там дефолт 'replied')
+                        _rpl_chk = session.query(_EO_chk).filter(
+                            _EO_chk.user_id == user.id, _EO_chk.status == 'replied'
+                        ).count()
                         _ibx_chk = session.query(_AAL_chk).filter(
                             _AAL_chk.user_id == user.id, _AAL_chk.activity_type == 'inbox_reply',
                             _AAL_chk.created_at >= datetime.now() - timedelta(days=14),
@@ -4418,8 +4421,11 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     )
                     if _mc_is_ppl:
                         try:
-                            from models import EmailContact as _EC_mc, AgentActivityLog as _AAL_mc
-                            _rpl_mc = session.query(_EC_mc).filter(_EC_mc.user_id == user.id, _EC_mc.status == 'replied').count()
+                            from models import EmailOutreach as _EO_mc, AgentActivityLog as _AAL_mc
+                            # Считаем только реальные ответы на email (не email_contacts — там статус 'replied' ставится по-умолчанию)
+                            _rpl_mc = session.query(_EO_mc).filter(
+                                _EO_mc.user_id == user.id, _EO_mc.status == 'replied'
+                            ).count()
                             _ibx_mc = session.query(_AAL_mc).filter(
                                 _AAL_mc.user_id == user.id, _AAL_mc.activity_type == 'inbox_reply',
                                 _AAL_mc.created_at >= datetime.now() - timedelta(days=14),
@@ -14102,7 +14108,8 @@ async def save_email_contact(
             position=(position or '').strip() or None,
             notes=(notes or '').strip() or None,
             source=source or 'manual',
-            status=status or 'replied',
+            # Дефолт 'new' — агент сохраняет найденный контакт, это НЕ означает что он ответил
+            status=status or 'new',
         )
         session.add(contact)
         session.commit()

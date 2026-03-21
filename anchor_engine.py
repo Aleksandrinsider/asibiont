@@ -8638,10 +8638,11 @@ class AnchorEngine:
                     or any(u in _gunit_au for u in _PPL_UNIT_AU)
                 )
                 if _is_ppl_goal_au and (_g_au.metric_target or 0) > 0:
-                    # Только подтверждённые участники (replied/interested)
-                    _replied_count = session.query(_EC_au).filter(
-                        _EC_au.user_id == user.id,
-                        _EC_au.status.in_(['replied', 'interested']),
+                    # Только реальные ответы на email-outreach (НЕ email_contacts — там статус 'replied' по умолчанию)
+                    from models import EmailOutreach as _EO_au
+                    _replied_count = session.query(_EO_au).filter(
+                        _EO_au.user_id == user.id,
+                        _EO_au.status == 'replied',
                     ).count()
                     _cur_mc = _g_au.metric_current or 0
                     _mt_au = _g_au.metric_target or 0
