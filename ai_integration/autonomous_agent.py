@@ -5526,6 +5526,40 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             elif _allowed_tools and _tname not in _allowed_tools:
                 _tc_result = json.dumps({"error": f"tool {_tname} not in tools_allowed"}, ensure_ascii=False)
             else:
+                # ── GUARD: block update_goal_progress if only research tools were used ──
+                # Прогресс можно обновлять только после реального исходящего действия
+                _RESEARCH_ONLY_TOOLS = {
+                    'web_search', 'research_topic', 'run_agent_action',
+                    'get_news_trends', 'quick_topic_search',
+                    'find_relevant_contacts_for_task', 'list_tasks', 'list_goals',
+                    'list_email_contacts',
+                }
+                _OUTGOING_ACTION_TOOLS = {
+                    'send_outreach_email', 'start_email_campaign', 'check_emails',
+                    'reply_to_outreach_email', 'send_follow_up_email',
+                    'negotiate_by_email', 'save_email_contact',
+                    'publish_to_telegram', 'publish_to_discord', 'create_post',
+                    'send_email', 'add_email_leads',
+                }
+                if _tname == 'update_goal_progress' and _is_autopilot_task:
+                    _prior_tools_set = set(_tools_used[:-1])  # exclude current
+                    _had_outgoing = bool(_prior_tools_set & _OUTGOING_ACTION_TOOLS)
+                    _only_research = _prior_tools_set and _prior_tools_set.issubset(_RESEARCH_ONLY_TOOLS)
+                    if _only_research and not _had_outgoing:
+                        _tc_result = json.dumps({
+                            "error": (
+                                "⛔ Обновление прогресса заблокировано. "
+                                "В этом цикле были только исследовательские действия "
+                                f"({', '.join(sorted(_prior_tools_set)[:3])}), "
+                                "но прогресс цели обновляется ТОЛЬКО после реального действия: "
+                                "отправка письма, публикация, сохранение контакта. "
+                                "Сначала выполни действие, потом обновляй прогресс."
+                            )
+                        }, ensure_ascii=False)
+                        _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                        _tool_call_count += 1
+                        continue
+
                 # Задачи создаваемые агентом помечаются source='agent'
                 if _tname == 'add_task' and agent.get('id'):
                     _targs['created_by_agent_id'] = agent['id']

@@ -5514,7 +5514,8 @@ class AnchorEngine:
                 "• Ты не ограничен списком подходов — генерируй СВОИ стратегии исходя из контекста цели.\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
-                '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название"}]'
+                '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название", '
+                '"reason": "почему именно этот агент и этот подход (1 предл.)"}]'
             )
 
             try:
@@ -5598,6 +5599,37 @@ class AnchorEngine:
                                     _force_reply_agent, _reply_tool, _pr0.get('outreach_id'))
 
             logger.info("[COORD] plan accepted as-is (no corrections): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
+
+            # ── Анонс плана пользователю: кратко что координатор решил делать ──
+            _plan_announce_lines = []
+            for _pi, _ps in enumerate(_plan[:6], 1):
+                _ps_reason = _ps.get('reason', '')
+                _ps_line = f"{_pi}. {_ps.get('agent', '?')} → {(_ps.get('task') or '')[:60]}"
+                if _ps_reason:
+                    _ps_line += f" ({_ps_reason[:50]})"
+                _plan_announce_lines.append(_ps_line)
+            if _plan_announce_lines:
+                _plan_announce_text = "📋 План цикла:\n" + '\n'.join(_plan_announce_lines)
+                try:
+                    session.add(Interaction(
+                        user_id=user.id,
+                        message_type='proactive',
+                        content=json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _plan_announce_text,
+                            '__anchor_type': 'coordinator_plan',
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
+                except Exception as _pa_err:
+                    logger.debug("[COORD] plan announce save error: %s", _pa_err)
+                    try: session.rollback()
+                    except Exception: pass
+                if self.bot:
+                    try:
+                        await self.bot.send_message(chat_id=user.telegram_id, text=_plan_announce_text)
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
             # ── ASI fallback: цели без исполнителя в плане ──
             # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
@@ -6318,6 +6350,14 @@ class AnchorEngine:
                                 session.rollback()
                             except Exception:
                                 pass
+                    # Уведомляем пользователя о причине провала агента
+                    _fail_explain = (
+                        f"{_ag_name} не смог завершить задачу за отведённое время. "
+                        f"Задание: «{_ag_task[:100]}». Возможно, запрос к API занял слишком долго — "
+                        f"попробую другой подход в следующем цикле."
+                    )
+                    _results_summary.append(f"{_ag_name}: [таймаут] {_ag_task[:80]}")
+                    _prev_steps_context += f"• {_ag_name}: ТАЙМАУТ — не успел: {_ag_task[:120]}\n"
                     continue
                 except Exception as _ae:
                     logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
@@ -6334,6 +6374,7 @@ class AnchorEngine:
                                 session.rollback()
                             except Exception:
                                 pass
+                    _prev_steps_context += f"• {_ag_name}: ОШИБКА — {str(_ae)[:100]}\n"
                     continue
 
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
@@ -6376,8 +6417,8 @@ class AnchorEngine:
 
                 if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
                     if _result_stripped not in _DONE_FB_SET:
-                        # Реально пустой результат после retry: отменяем задачу, НЕ беспокоим пользователя
-                        logger.info(f"[COORD] agent {_ag_name}: empty result after retry — silent skip")
+                        # Пустой результат после retry: отменяем задачу + объясняем пользователю
+                        logger.info(f"[COORD] agent {_ag_name}: empty result after retry")
                         if _step_task_id:
                             try:
                                 from sqlalchemy import text as _sql_t_empty
@@ -6390,8 +6431,8 @@ class AnchorEngine:
                                     session.rollback()
                                 except Exception:
                                     pass
-                        # Тихий пропуск — не создаём interaction и не шлём в Telegram
-                        # Раньше слали "не нашёл конкретных результатов" — это мусор для пользователя
+                        # Объясняем провал в контексте для следующих агентов
+                        _prev_steps_context += f"• {_ag_name}: не выполнил задачу (пустой результат для «{_ag_task[:80]}»)\n"
                     # _done_fb: агент выполнил задачу без детального отчёта — тихо пропускаем
                     continue
 
