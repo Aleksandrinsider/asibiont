@@ -2628,9 +2628,10 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
-                            # timeout = 120s per agent × number of agents + 40s overhead
+                            # timeout = 240s per agent × number of agents + 60s overhead
+                            # Per-agent inner timeout is 300s, so outer must leave room for N agents
                             _n_coord_agents = len(_coord_real)
-                            _coord_timeout = max(220, _n_coord_agents * 120 + 40)
+                            _coord_timeout = max(480, _n_coord_agents * 240 + 60)
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
@@ -5966,8 +5967,11 @@ class AnchorEngine:
                             _task_title_short = f"Шаг к цели: {_ag_goal_title[:80]}"
                         logger.info("[COORD] vague task remapped for %s: tool=%s title=%s", _ag_name, _tool_hint, _task_title_short[:60])
 
-                    # ── DEDUP: не создавать задачу если аналогичная уже была за 24 часа ──
-                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+                    # ── DEDUP: не создавать задачу если аналогичная уже была за 8 часов ──
+                    # Рутинные действия (check_emails, reply) не дедуплицируем — они важны каждый цикл
+                    _NODEDUP_TOOLS = {'check_emails', 'reply_to_outreach_email', 'send_follow_up_email'}
+                    _skip_dedup = _tool_hint in _NODEDUP_TOOLS
+                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=8)
                     # Стоп-слова: не учитывать при сравнении
                     _DEDUP_STOP = {'на', 'в', 'для', 'и', 'от', 'по', 'через', 'из', 'с', 'о', 'к', 'не',
                                    'проверить', 'провести', 'использовать', 'используя', 'текущей', 'текущую',
@@ -5976,7 +5980,7 @@ class AnchorEngine:
                                    'собрать', 'составить', 'список'}
                     _dedup_words = set(w for w in _task_title_short.lower().split()[:10] if w not in _DEDUP_STOP and len(w) > 2)
                     # Ищем похожие задачи у ВСЕХ агентов (не только текущего) — кросс-агент дедуп
-                    _recent_similar = session.query(_Task_c2).filter(
+                    _recent_similar = [] if _skip_dedup else session.query(_Task_c2).filter(
                         _Task_c2.user_id == user.id,
                         _Task_c2.source == 'agent',
                         _Task_c2.created_at >= _dedup_cutoff,
@@ -6546,13 +6550,19 @@ class AnchorEngine:
                     )
                     if _email_sender_name and not _already_has_send:
                         _inject_goal = _ag_goal_title or (_goals[0]['title'] if _goals else '')
+                        # Извлекаем контакты из результата предыдущего агента для явной передачи
+                        _contact_context = _cleaned[:400] if _cleaned else ''
                         _inject_step = {
                             'agent': _email_sender_name,
                             'tool': 'send_outreach_email',
                             'task': (
-                                f"{_ag_name} только что сохранил новые контакты через save_email_contact. "
-                                f"Немедленно отправь им outreach-письма (send_outreach_email). "
-                                f"НЕ пиши тем кто уже в списке уже_написали. Проверь список unsent контактов и пиши."
+                                f"{_ag_name} только что сохранил новые контакты. "
+                                f"Результат его работы:\n{_contact_context}\n\n"
+                                f"Твоя задача: немедленно отправь outreach-письма этим людям (send_outreach_email). "
+                                f"Используй их имена и email из контекста выше. "
+                                f"Параметры: recipient_email=их_email, recipient_name=их_имя, "
+                                f"subject=персональная строка, body=персональный текст.\n"
+                                f"НЕ пиши тем кто уже получил: {', '.join(_already_sent[:8]) if _already_sent else 'список пуст'}."
                             ),
                             'goal': _inject_goal,
                         }
