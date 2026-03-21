@@ -11779,7 +11779,7 @@ class AnchorEngine:
                     "ПРАВИЛА ДЛЯ EMAIL:",
                     "— email_outreach_send: отправь drafts через send_outreach_email. Персонализируй каждое письмо. Верни SKIP. ANTI-SPAM: пропускай контакты которым уже писали за 30 дней.",
                     "— email_follow_up: follow-up через send_outreach_email. Ненавязчиво. Верни SKIP.",
-                    "— email_reply_received: КРИТИЧНО! Прочитай цепочку original_body→reply_text→ai_previous_reply. НЕ повторяй уже заданные вопросы. Ответь через reply_to_outreach_email. ОБЯЗАТЕЛЬНО уведоми пользователя. Не завершай кампанию без явного подтверждения целевого действия.",
+                    "— email_reply_received: КРИТИЧНО! Прочитай цепочку original_body→reply_text→ai_previous_reply. НЕ повторяй уже заданные вопросы. Ответь через reply_to_outreach_email. ⚠ ЯЗЫК: если reply_text на другом языке (греческий, немецкий и т.д.) — ОТВЕЧАЙ на языке КОНТАКТА, не на языке оригинала! ОБЯЗАТЕЛЬНО уведоми пользователя. Не завершай кампанию без явного подтверждения целевого действия.",
                     "— email_campaign_report: краткая сводка: отправлено, ответов, что дальше.",
                     "— email_need_leads: engine ищет лидов автоматически. Верни SKIP.",
                     "",

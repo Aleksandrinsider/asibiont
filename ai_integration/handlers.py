@@ -11442,25 +11442,36 @@ async def reply_to_outreach_email(
         if not reply_body:
             return " Нужен текст ответа (reply_body)."
 
-        # ── GUARD: язык reply_body должен совпадать с языком оригинального outreach ──
-        # Если оригинальное письмо отправлено на EN, а AI сгенерировал ответ на RU — блокируем
-        _orig_body = (outreach.body or '')
-        if _orig_body and reply_body:
+        # ── GUARD: язык reply_body должен совпадать с языком ответа контакта (reply_text) ──
+        # Если контакт ответил на определённом языке — AI должен отвечать на ТОМ ЖЕ языке.
+        # Fallback: если reply_text нет — сравниваем с языком оригинального outreach.
+        _contact_reply = (outreach.reply_text or '')
+        _lang_reference = _contact_reply if len(_contact_reply) > 20 else (outreach.body or '')
+        if _lang_reference and reply_body:
             import re as _re_lang
-            _cyr_orig = len(_re_lang.findall(r'[а-яёА-ЯЁ]', _orig_body))
-            _lat_orig = len(_re_lang.findall(r'[a-zA-Z]', _orig_body))
-            _cyr_reply = len(_re_lang.findall(r'[а-яёА-ЯЁ]', reply_body))
-            _lat_reply = len(_re_lang.findall(r'[a-zA-Z]', reply_body))
-            _orig_is_en = _lat_orig > _cyr_orig * 3 and _lat_orig > 30
-            _reply_is_ru = _cyr_reply > _lat_reply * 2 and _cyr_reply > 20
-            _orig_is_ru = _cyr_orig > _lat_orig * 3 and _cyr_orig > 30
-            _reply_is_en = _lat_reply > _cyr_reply * 2 and _lat_reply > 20
-            if _orig_is_en and _reply_is_ru:
-                return ("⚠ Язык reply_body (русский) не совпадает с языком оригинального письма (английский). "
-                        "ПЕРЕПИШИ reply_body НА АНГЛИЙСКОМ — контакт получил письмо на EN, ответ тоже должен быть на EN!")
-            if _orig_is_ru and _reply_is_en:
-                return ("⚠ Язык reply_body (английский) не совпадает с языком оригинального письма (русский). "
-                        "ПЕРЕПИШИ reply_body НА РУССКОМ — контакт получил письмо на RU, ответ тоже должен быть на RU!")
+            import unicodedata as _ud
+            def _detect_script(text):
+                scripts = {}
+                for ch in text:
+                    if ch.isalpha():
+                        try:
+                            name = _ud.name(ch, '').split()[0]
+                        except ValueError:
+                            continue
+                        scripts[name] = scripts.get(name, 0) + 1
+                return scripts
+            _ref_scripts = _detect_script(_lang_reference)
+            _reply_scripts = _detect_script(reply_body)
+            _ref_top = max(_ref_scripts, key=_ref_scripts.get) if _ref_scripts else 'LATIN'
+            _reply_top = max(_reply_scripts, key=_reply_scripts.get) if _reply_scripts else 'LATIN'
+            # Блокируем если доминирующий скрипт отличается (Greek vs Cyrillic, Cyrillic vs Latin, etc.)
+            if _ref_top != _reply_top and max(_ref_scripts.values(), default=0) > 20:
+                _script_names = {'LATIN': 'латиница', 'CYRILLIC': 'кириллица', 'GREEK': 'греческий', 'ARABIC': 'арабский', 'CJK': 'CJK', 'HANGUL': 'корейский', 'HIRAGANA': 'японский', 'KATAKANA': 'японский', 'DEVANAGARI': 'деванагари'}
+                _ref_name = _script_names.get(_ref_top, _ref_top)
+                _reply_name = _script_names.get(_reply_top, _reply_top)
+                _src = 'ответа контакта' if len(_contact_reply) > 20 else 'оригинального письма'
+                return (f"⚠ Язык reply_body ({_reply_name}) не совпадает с языком {_src} ({_ref_name}). "
+                        f"ПЕРЕПИШИ reply_body на {_ref_name} — контакт ожидает ответ на своём языке!")
 
         # MX-проверка (на всякий — получатель мог сменить домен)
         mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
