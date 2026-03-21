@@ -62,6 +62,13 @@ def _validate_email_domain(email: str) -> tuple:
             return True, None
 
         _mx_cache[domain] = (has_mx, time.time())
+        # Limit cache size
+        if len(_mx_cache) > 1000:
+            import time as _t
+            now = _t.time()
+            stale = [k for k, v in _mx_cache.items() if now - v[1] > 3600]
+            for k in stale:
+                del _mx_cache[k]
 
         if not has_mx:
             return False, f"Домен {domain} не принимает почту (нет MX-записей). Проверь email."
@@ -1027,7 +1034,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                     user_id=user.id,
                     activity_type='task_completed',
                     title=f'Задача выполнена: {task.title}',
-                    content=completion_note[:200] if completion_note else None,
+                    content=completion_note[:400] if completion_note else None,
                     status='completed',
                     ref_id=task.id,
                 )
@@ -2875,6 +2882,14 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
             result += f" плюс {len(delegated_to_me)} делегированных"
         result += ". "
 
+        def _task_label(t):
+            """Title + short description if exists."""
+            lbl = f"'{t.title}'"
+            desc = getattr(t, 'description', None)
+            if desc and desc.strip():
+                lbl += f" ({desc.strip()[:80]})"
+            return lbl
+
         # ФОРМАТИРОВАНИЕ В ПОВЕСТВОВАТЕЛЬНОМ СТИЛЕ
         if priority_tasks:
             result += f"Просроченные задачи: "
@@ -2888,14 +2903,14 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                         delay_str = f"{days} дней {hours} часов" if hours else f"{days} дней"
                     else:
                         delay_str = f"{hours} часов"
-                    result += f"'{task.title}' просрочена на {delay_str}"
+                    result += f"{_task_label(task)} просрочена на {delay_str}"
                     if i < len(priority_tasks) - 1:
                         result += ", "
                     else:
                         result += ". "
                 except Exception as e:
                     logger.warning(f"[TASKLIST] Error formatting priority task time: {e}")
-                    result += f"'{task.title}'"
+                    result += _task_label(task)
                     if i < len(priority_tasks) - 1:
                         result += ", "
                     else:
@@ -2907,14 +2922,14 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     time_str = reminder_dt.strftime("%H:%M")
-                    result += f"'{task.title}' в {time_str}"
+                    result += f"{_task_label(task)} в {time_str}"
                     if i < len(today_tasks[:5]) - 1:
                         result += ", "
                     else:
                         result += ". "
                 except Exception as e:
                     logger.warning(f"[TASKLIST] Error formatting today task time: {e}")
-                    result += f"'{task.title}'"
+                    result += _task_label(task)
                     if i < len(today_tasks[:5]) - 1:
                         result += ", "
                     else:
@@ -2926,14 +2941,14 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                 try:
                     reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                     time_str = reminder_dt.strftime("%H:%M")
-                    result += f"'{task.title}' в {time_str}"
+                    result += f"{_task_label(task)} в {time_str}"
                     if i < len(upcoming_tasks[:3]) - 1:
                         result += ", "
                     else:
                         result += ". "
                 except Exception as e:
                     logger.warning(f"[TASKLIST] Error formatting upcoming task time: {e}")
-                    result += f"'{task.title}'"
+                    result += _task_label(task)
                     if i < len(upcoming_tasks[:3]) - 1:
                         result += ", "
                     else:
@@ -2948,16 +2963,16 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
                     if task.reminder_time:
                         reminder_dt = task.reminder_time.replace(tzinfo=pytz.UTC).astimezone(user_tz)
                         time_str = reminder_dt.strftime("%d.%m в %H:%M")
-                        result += f"'{task.title}' {time_str}"
+                        result += f"{_task_label(task)} {time_str}"
                     else:
-                        result += f"'{task.title}'"
+                        result += _task_label(task)
                     if i < len(remaining_later) - 1:
                         result += ", "
                     else:
                         result += ". "
                 except Exception as e:
                     logger.warning(f"[TASKLIST] Error formatting later task time: {e}")
-                    result += f"'{task.title}'"
+                    result += _task_label(task)
                     if i < len(remaining_later) - 1:
                         result += ", "
                     else:
@@ -2967,7 +2982,7 @@ def list_tasks(user_id=None, session=None, include_completed=False, filter_type=
         if no_time_tasks:
             result += f" ЗАДАЧИ БЕЗ ВРЕМЕНИ (нужно установить напоминание!): "
             for i, task in enumerate(no_time_tasks):
-                result += f"'{task.title}'"
+                result += _task_label(task)
                 if i < len(no_time_tasks) - 1:
                     result += ", "
                 else:
@@ -4633,6 +4648,9 @@ def list_goals(status_filter=None, user_id=None, session=None):
             
             result += f"{g.title} {status_lbl} {pri}\n".replace('  ', ' ').strip() + '\n'
             result += f"   {progress_bar} {g.progress_percentage}%"
+            
+            if getattr(g, 'metric_current', None) is not None and getattr(g, 'metric_target', None):
+                result += f" ({int(g.metric_current)}/{int(g.metric_target)})"
             
             if g.category:
                 result += f" | {g.category}"
@@ -9380,7 +9398,7 @@ def get_incoming_messages(
             
             status_icon = {"sent": "🟢", "delivered": "🟢", "read": "👁", "replied": "✅", "declined": "❌"}.get(msg.status, "")
             
-            line = f"{status_icon} {sender_name} ({intent_str}, {time_ago}): {msg.message_text[:150]}{'...' if len(msg.message_text) > 150 else ''}"
+            line = f"{status_icon} {sender_name} ({intent_str}, {time_ago}): {msg.message_text[:500]}{'...' if len(msg.message_text) > 500 else ''}"
             result_lines.append(line)
             
             # Помечаем как прочитанные

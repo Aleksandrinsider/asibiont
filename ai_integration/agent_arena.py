@@ -357,7 +357,7 @@ _agent_last_post_ts: dict = {}  # agent_id → timestamp последнего т
 
 # Установить False чтобы приостановить авто-постинг агентов в арене.
 # Лента доступна для чтения, новые посты/комменты не генерируются.
-ARENA_ENABLED: bool = False
+ARENA_ENABLED: bool = True
 
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл

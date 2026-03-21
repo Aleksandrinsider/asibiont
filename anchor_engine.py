@@ -2675,50 +2675,73 @@ class AnchorEngine:
                             except Exception:
                                 pass
 
-                        # ── Анализ текущих потребностей цели ──
-                        _needs = set()
+                        # ── Универсальный скоринг: интеграции агента × потребности цели ──
+                        from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_rr
                         _task_lower = task_text.lower()
                         _exhausted_strats = data.get('exhausted_strategies', [])
-                        # Определяем что НУЖНО сейчас по контексту задачи
-                        if any(w in _task_lower for w in ('email', 'письм', 'outreach', 'контакт', 'рассылк')):
-                            _needs.add('email')
+
+                        # Ключевые слова цели → категории интеграций
+                        _GOAL_KW = {
+                            'email': ('email', 'письм', 'outreach', 'рассылк'),
+                            'github': ('github', 'код', 'разработ', 'developer', 'репозитор', 'программист'),
+                            'rss': ('rss', 'новост', 'хабр', 'feed', 'мониторинг'),
+                            'content': ('пост', 'контент', 'публик', 'telegram', 'discord', 'smm', 'канал', 'подписчик'),
+                            'finance': ('нефт', 'газ', 'биржа', 'акци', 'финанс', 'трейдинг', 'инвест', 'рынок', 'котировк', 'крипт'),
+                            'crm': ('crm', 'клиент', 'воронк', 'лид', 'сделк', 'продаж'),
+                            'marketplace': ('маркетплейс', 'ozon', 'wildberries', 'товар', 'магазин'),
+                            'project': ('проект', 'kanban', 'спринт'),
+                            'analytics': ('аналитик', 'отчёт', 'таблиц', 'данные', 'метрик', 'дашборд'),
+                            'hr': ('найм', 'вакансия', 'резюме', 'рекрутинг', 'кандидат', 'собеседов'),
+                        }
+                        _needs = set()
+                        for _cat, _kws in _GOAL_KW.items():
+                            if any(w in _task_lower for w in _kws):
+                                _needs.add(_cat)
+                        # Поиск людей → релевантны github, email, hr (что есть у агентов)
+                        if any(w in _task_lower for w in ('тестировщик', 'пользовател', 'участник', 'контакт', 'людей', 'человек')):
+                            _needs.update(('github', 'email', 'hr'))
                         if any(w in _task_lower for w in ('поиск', 'исследов', 'найти', 'search', 'analyz')):
                             _needs.add('search')
-                        if any(w in _task_lower for w in ('rss', 'новост', 'хабр', 'feed', 'мониторинг')):
-                            _needs.add('rss')
-                        if any(w in _task_lower for w in ('github', 'код', 'разработ', 'developer')):
-                            _needs.add('github')
-                        if any(w in _task_lower for w in ('пост', 'контент', 'публик', 'telegram', 'discord')):
-                            _needs.add('content')
                         if not _needs:
-                            _needs.add('search')  # дефолт: нужен поиск
+                            _needs.add('search')
 
-                        # ── Скоринг: способности агента × потребности goal ──
+                        # Маппинг: слово в label интеграции → категория
+                        _LABEL_CAT = {
+                            'email': ('почта', 'gmail', 'imap', 'smtp', 'mail', 'email', 'resend', 'sendgrid', 'outlook'),
+                            'github': ('github', 'gitlab'),
+                            'rss': ('rss', 'тасс', 'newsapi', 'новост', 'feed'),
+                            'content': ('telegram', 'discord', 'slack', 'вконтакте', 'twitter', 'instagram', 'youtube'),
+                            'finance': ('биржев', 'alpha vantage', 'binance', 'bybit', 'coinbase', 'крипт'),
+                            'crm': ('amocrm', 'битрикс', 'hubspot', 'salesforce'),
+                            'marketplace': ('ozon', 'wildberries', 'shopify', 'авито', 'маркет'),
+                            'project': ('notion', 'trello', 'asana', 'todoist', 'jira', 'clickup', 'linear'),
+                            'analytics': ('google sheets', 'airtable', 'метрик', 'analytics', 'pandas'),
+                            'hr': ('superjob', 'hh.ru', 'linkedin'),
+                        }
+
                         def _capability_score(a):
                             aid = getattr(a, 'id', 0)
-                            _api = (getattr(a, 'user_api_keys', '') or '').lower()
-                            _pc = (getattr(a, 'python_code', '') or '').lower()
-                            score = 0
                             if aid == 0:
-                                # ASI — координатор: базовый скор = 1 (поиск),
-                                # чтобы не застревал в конце ротации навсегда.
-                                # Специализированные агенты с интеграциями (score≥3) всё равно приоритетнее.
-                                return 1
-                            if 'email' in _needs:
-                                if any(w in _api for w in ('gmail', 'imap', 'smtp', 'resend', 'mail')):
-                                    score += 3
-                            if 'rss' in _needs:
-                                if any(w in _api for w in ('rss', 'feed', 'habr')) or 'feedparser' in _pc:
-                                    score += 3
-                            if 'github' in _needs:
-                                if 'github' in _api or 'github' in _pc:
-                                    score += 3
-                            if 'content' in _needs:
-                                if any(w in _api for w in ('telegram', 'discord', 'slack')):
-                                    score += 2
-                            if 'search' in _needs and _pc:
-                                score += 1  # агенты с python_code могут делать доп. исследования
-                            return score
+                                return 1  # ASI — координатор, базовый скор
+                            try:
+                                _caps = _pai_rr(
+                                    getattr(a, 'user_api_keys', '') or '',
+                                    getattr(a, 'python_code', '') or '',
+                                    getattr(a, 'tools_allowed', '') or '',
+                                    getattr(a, 'search_scope', '') or '',
+                                )
+                            except Exception:
+                                _caps = []
+                            _agent_cats = set()
+                            for _lbl in _caps:
+                                _lb = _lbl.lower()
+                                for _c, _ws in _LABEL_CAT.items():
+                                    if any(w in _lb for w in _ws):
+                                        _agent_cats.add(_c)
+                            if getattr(a, 'python_code', ''):
+                                _agent_cats.add('search')
+                            # Скор = совпадения категорий агента × потребности цели × 3
+                            return len(_agent_cats & _needs) * 3
 
                         # Вычисляем медианный id реальных агентов для ASI-tie_break
                         _real_ids = sorted(getattr(a2, 'id', 1) for a2 in _rotation_pool if getattr(a2, 'id', 0) != 0)
@@ -3043,17 +3066,6 @@ class AnchorEngine:
                         _asi_gl = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
                         _asi_ann = f"Анализирую цели: {', '.join(_asi_gl)}. Подбираю следующий шаг."
                         await self.bot.send_message(chat_id=user.telegram_id, text=_asi_ann)
-                        # ASI self-analysis больше не сохраняется в хронологию
-                        # session.add(Interaction(
-                        #     user_id=user.id,
-                        #     message_type='agent_msg',
-                        #     content=json.dumps({
-                        #         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                        #         'text': _asi_ann,
-                        #         '__anchor_type': 'asi_self_analysis',
-                        #     }, ensure_ascii=False),
-                        # ))
-                        # session.commit()
                     except Exception as _asi_ann_err:
                         logger.debug("[ANCHOR-AUTOPILOT] ASI self-announce failed: %s", _asi_ann_err)
                         try:
@@ -4774,7 +4786,7 @@ class AnchorEngine:
                     _goals = [
                         {
                             'id': g.id, 'title': g.title,
-                            'description': (g.description or '')[:150],
+                            'description': (g.description or '')[:300],
                             'progress': g.progress_percentage or 0,
                             'metric_current': g.metric_current or 0,
                             'metric_target': g.metric_target,
@@ -6065,7 +6077,9 @@ class AnchorEngine:
 
                 # Task prompt для агента — его конкретное задание + контекст
                 _agent_goals_block = '\n'.join(
-                    f"  • {g['title']} ({g.get('progress', 0)}%)" for g in _goals[:5]
+                    f"  • {g['title']} ({g.get('progress', 0)}%"
+                    + (f", {int(g.get('metric_current', 0))}/{int(g.get('metric_target', 0))}" if g.get('metric_target') else '')
+                    + ')' for g in _goals[:5]
                 )
                 _agent_contacts_block = '\n'.join(
                     f"  {c}" for c in data.get('known_contacts', [])[:8]
@@ -6250,6 +6264,7 @@ class AnchorEngine:
                     + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
+                    + (f"\n\nЭТИ инструменты ЛОМАЛИСЬ (не повторяй): {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
                     + (f"\n\nУже сделано командой (используй):\n{_prev_steps_context}" if _prev_steps_context else '')
                     + (f"\n\nКоманда:\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
@@ -6558,7 +6573,7 @@ class AnchorEngine:
                     try:
                         _upd_sess.execute(_aal_t_c(
                             "UPDATE agent_activity_log SET status=:st, result=:res, updated_at=NOW() WHERE id=:aid"
-                        ), {'st': _st, 'res': _full_res[:800], 'aid': _aal_id_c})
+                        ), {'st': _st, 'res': _full_res[:2000], 'aid': _aal_id_c})
                         _upd_sess.commit()
                     except Exception as _upd:
                         logger.warning("[COORD] AAL update: %s", _upd)
@@ -8007,7 +8022,7 @@ class AnchorEngine:
             if a.activity_type == 'run_agent_action':
                 _action_name = (a.title or '').replace(' — обзор целей', '')
                 actions_history.append(
-                    f"[{a.created_at.strftime('%H:%M')}] [run_agent_action] {_action_name}: {_res[:400]}"
+                    f"[{a.created_at.strftime('%H:%M')}] [run_agent_action] {_action_name}: {_res[:800]}"
                 )
                 # Считаем partial failure для run_agent_action
                 if _res and 'error' in _res.lower():
@@ -8047,7 +8062,7 @@ class AnchorEngine:
             _agent = (a.title or '').replace(' — обзор целей', '')
             _tools_info = f" [инструменты: {_tools_tag}]" if _tools_tag else ''
             actions_history.append(
-                f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:600]}"
+                f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:1200]}"
             )
 
         # Fallback: если AAL пуст, берём историю из interactions (proactive сообщения за 24ч)
@@ -8279,15 +8294,15 @@ class AnchorEngine:
             tasks_detail = []
             for t in goal_tasks[:10]:  # Макс 10 задач на цель
                 tasks_detail.append({
-                    'title': t.title[:100],
+                    'title': t.title[:200],
                     'status': t.status,
-                    'result': (t.completion_notes or '')[:80] if t.status == 'done' else None,
+                    'result': (t.completion_notes or '')[:300] if t.status == 'done' else None,
                 })
 
             goals_summary.append({
                 'id': g.id,
                 'title': g.title,
-                'description': (g.description or '')[:150],
+                'description': (g.description or '')[:300],
                 'category': g.category or '',
                 'progress': g.progress_percentage,
                 'metric_target': g.metric_target,
@@ -8302,7 +8317,7 @@ class AnchorEngine:
             Task.created_at >= now_utc - timedelta(hours=24),
             Task.source == 'agent',
         ).order_by(Task.created_at.desc()).limit(10).all()
-        agent_tasks_history = [f"{t.title[:80]} [{t.status}]" for t in _recent_agent_tasks]
+        agent_tasks_history = [f"{t.title[:200]} [{t.status}]" for t in _recent_agent_tasks]
 
         # Всего отправлено email/outreach — авторитетный источник: таблица EmailOutreach
         _total_emails_sent = session.query(EmailOutreach).filter(

@@ -16,9 +16,12 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, W
 _tg_rate_store: dict[int, list[float]] = {}
 _TG_RATE_WINDOW = 60.0   # seconds
 _TG_RATE_MAX = 20        # messages per window per user
+_TG_RATE_STORE_MAX = 5000  # max unique users tracked
+_tg_rate_purge_counter = 0
 
 def _check_tg_rate_limit(user_id: int) -> bool:
     """Return True if the user is within rate limit, False if they exceeded it."""
+    global _tg_rate_purge_counter
     now = time_module.time()
     if user_id not in _tg_rate_store:
         _tg_rate_store[user_id] = []
@@ -26,6 +29,13 @@ def _check_tg_rate_limit(user_id: int) -> bool:
     if len(_tg_rate_store[user_id]) >= _TG_RATE_MAX:
         return False
     _tg_rate_store[user_id].append(now)
+    # Periodic purge of stale entries
+    _tg_rate_purge_counter += 1
+    if _tg_rate_purge_counter >= 500:
+        _tg_rate_purge_counter = 0
+        stale = [uid for uid, ts_list in _tg_rate_store.items() if not ts_list or now - max(ts_list) > _TG_RATE_WINDOW]
+        for uid in stale:
+            del _tg_rate_store[uid]
     return True
 
 

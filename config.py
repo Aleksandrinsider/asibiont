@@ -174,9 +174,9 @@ VAPID_EMAIL = os.getenv("VAPID_EMAIL", "mailto:admin@asibiont.com")
 # SMTP (email sending) — Gmail with App Password
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 465))
-SMTP_USER = os.getenv("SMTP_USER", "aleksandr.insider@gmail.com")
+SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", "ASI Biont <aleksandr.insider@gmail.com>")
+SMTP_FROM = os.getenv("SMTP_FROM", "")
 
 # Resend.com HTTP Email API (fallback when SMTP ports are blocked)
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")

@@ -23,6 +23,7 @@ import time
 from handlers import router as handlers_router
 import hashlib
 import hmac
+import html as html_module
 import json
 import warnings
 from dotenv import load_dotenv
@@ -566,7 +567,7 @@ def verify_password(password, stored_hash):
         salt = decoded[:16]
         stored_key = decoded[16:]
         key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
-        return key == stored_key
+        return hmac.compare_digest(key, stored_key)
     except Exception:
         return False
 
@@ -686,7 +687,11 @@ async def health_handler(request):
     return web.Response(text='OK', status=200)
 
 async def smtp_check_handler(request):
-    """Diagnostic: check email config"""
+    """Diagnostic: check email config (admin only)"""
+    admin_secret = request.headers.get('X-Admin-Secret') or request.query.get('admin_secret')
+    expected_secret = os.getenv('ADMIN_SECRET')
+    if not expected_secret or not admin_secret or not hmac.compare_digest(admin_secret, expected_secret):
+        return web.json_response({'error': 'Forbidden'}, status=403)
     from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, RESEND_API_KEY
     return web.json_response({
         'resend_configured': bool(RESEND_API_KEY),
@@ -1035,6 +1040,17 @@ async def email_register_handler(request):
 async def email_login_handler(request):
     """Login with email + password"""
     try:
+        # Rate limit: 10 attempts per minute per IP
+        client_ip = request.headers.get('X-Forwarded-For', request.remote or '0.0.0.0')
+        if ',' in client_ip:
+            client_ip = client_ip.split(',')[0].strip()
+        _login_key = f"{client_ip}:email_login"
+        _now_login = _time_module.time()
+        _rate_limit_store[_login_key] = [ts for ts in _rate_limit_store[_login_key] if _now_login - ts < 60]
+        if len(_rate_limit_store[_login_key]) >= 10:
+            return web.json_response({'error': 'Слишком много попыток. Попробуйте позже.'}, status=429)
+        _rate_limit_store[_login_key].append(_now_login)
+
         data = await request.json()
         email = (data.get('email') or '').strip().lower()
         password = data.get('password', '')
@@ -3466,12 +3482,12 @@ async def get_user_id_from_request(request):
     """Helper function to get user_id from session or query parameters"""
     session_req = await get_session(request)
     user_id = session_req.get('user_id')
-    logger.info(f"Session keys: {list(session_req.keys())}, user_id: {user_id}")
+    logger.debug(f"Session keys: {list(session_req.keys())}, user_id: {user_id}")
     
     # Check for telegram_id in query parameters (for local testing ONLY)
     if not user_id:
         telegram_id_param = request.query.get('telegram_id')
-        if telegram_id_param and LOCAL:
+        if telegram_id_param and LOCAL and not os.getenv('RAILWAY_ENVIRONMENT'):
             try:
                 user_id = int(telegram_id_param)
                 logger.info(f"Set user_id from query parameter: {user_id}")
@@ -11683,14 +11699,14 @@ async def api_arena_comment_handler(request):
         _rate_limit_store[_arena_cmt_key].append(_now_cmt)
 
         data = await request.json()
-        comment_text = (data.get('text') or '').strip()
+        comment_text = html_module.escape((data.get('text') or '').strip())
         post_text = (data.get('context') or '').strip()
         post_key = (data.get('post_id') or '').strip()
         if not comment_text:
             return web.json_response({'error': 'empty text'}, status=400)
         from ai_integration.agent_arena import reply_to_comment
         agent_id = (data.get('agent_id') or '').strip()
-        display_name = (data.get('display_name') or 'Участник').strip()[:50]
+        display_name = html_module.escape((data.get('display_name') or 'Участник').strip()[:50])
         avatar_url = (data.get('avatar_url') or '').strip()
         user_cmt_client_id = (data.get('user_cmt_id') or '').strip()
         reply = await reply_to_comment(comment_text, post_text, agent_id, post_key=post_key)
@@ -12484,12 +12500,12 @@ async def api_arena_user_post_handler(request):
 app.router.add_post('/api/arena/user-post', api_arena_user_post_handler)
 
 async def api_arena_force_post_handler(request):
-    """POST /api/arena/force-post — принудительно создать один пост (для тестирования)"""
+    """POST /api/arena/force-post — принудительно создать один пост (admin only)"""
     try:
-        session_web = await get_session(request)
-        user_id = session_web.get('user_id') if session_web else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
+        admin_secret = request.headers.get('X-Admin-Secret') or request.query.get('admin_secret')
+        expected_secret = os.getenv('ADMIN_SECRET')
+        if not expected_secret or not admin_secret or not hmac.compare_digest(admin_secret, expected_secret):
+            return web.json_response({'error': 'Forbidden'}, status=403)
         from ai_integration.agent_arena import (
             _load_marketplace_agents, _generate_agent_reply, _global_feed, _db_save_post
         )
@@ -12522,39 +12538,38 @@ async def api_arena_force_post_handler(request):
 app.router.add_post('/api/arena/force-post', api_arena_force_post_handler)
 
 async def api_arena_clear_all_handler(request):
-    """POST /api/arena/clear-all — удаляет ВСЕ посты арены из БД и памяти, после чего агенты сгенерируют свежие"""
+    """POST /api/arena/clear-all — удаляет ВСЕ посты арены из БД и памяти (admin only)"""
     try:
-        session_web = await get_session(request)
-        user_id = session_web.get('user_id') if session_web else None
-        if not user_id:
-            return web.json_response({'error': 'Not authenticated'}, status=401)
+        admin_secret = request.headers.get('X-Admin-Secret') or request.query.get('admin_secret')
+        expected_secret = os.getenv('ADMIN_SECRET')
+        if not expected_secret or not admin_secret or not hmac.compare_digest(admin_secret, expected_secret):
+            return web.json_response({'error': 'Forbidden'}, status=403)
         import ai_integration.agent_arena as _arena_mod
         # Сбрасываем семафор seed чтобы новые SSE-подключения ждали seed
         _arena_mod._seed_done.clear()
         # Удаляем все посты из БД
         def _delete_all_posts():
-            import psycopg2
             try:
-                conn = psycopg2.connect(DATABASE_URL)
-                cur = conn.cursor()
-                cur.execute("DELETE FROM arena_posts")
-                deleted = cur.rowcount
-                # Also clear comments if table exists
+                db = Session()
                 try:
-                    cur.execute("DELETE FROM arena_comments")
-                except Exception as _e:
-                    logger.debug("suppressed: %s", _e)
-                # Reset agent arena counters
-                try:
-                    cur.execute(
-                        "UPDATE user_agents SET messages_count = 0, "
-                        "arena_likes_count = 0, arena_views_count = 0"
-                    )
-                except Exception as _e:
-                    logger.debug("suppressed: %s", _e)
-                conn.commit()
-                cur.close(); conn.close()
-                return deleted
+                    from models import ArenaPost, ArenaComment, UserAgent
+                    deleted = db.query(ArenaPost).delete()
+                    try:
+                        db.query(ArenaComment).delete()
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                    try:
+                        db.query(UserAgent).update({
+                            UserAgent.messages_count: 0,
+                            UserAgent.arena_likes_count: 0,
+                            UserAgent.arena_views_count: 0,
+                        })
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                    db.commit()
+                    return deleted
+                finally:
+                    db.close()
             except Exception as e:
                 logger.error(f'[ARENA] DB delete error: {e}')
                 return 0

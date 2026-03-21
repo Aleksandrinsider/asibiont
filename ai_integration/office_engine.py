@@ -1597,11 +1597,11 @@ async def _run_once_live():
             )
             _s.commit()
             cnt = _s.query(_UA).filter(_UA.status.in_(['active', 'paused'])).count()
-            print(f'\n[ОДИНОЧНЫЙ ПРОГОН] Агентов к запуску: {cnt}')
+            logger.info('[ОДИНОЧНЫЙ ПРОГОН] Агентов к запуску: %d', cnt)
         finally:
             _s.close()
     except Exception as e:
-        print(f'[WARN] cooldown reset: {e}')
+        logger.warning('[WARN] cooldown reset: %s', e)
 
     engine = OfficeEngine()
     await engine._run_all_agent_scripts()
@@ -1620,12 +1620,12 @@ async def _run_once_live():
             ).count()
             new_emails = _s2.query(EmailContact).filter(EmailContact.created_at >= _since).count()
             new_acts   = _s2.query(AgentActivityLog).filter(AgentActivityLog.created_at >= _since).count()
-            print(f'\n[ИТОГИ] сообщений в чат: {new_msgs} | делегирований: {new_tasks} '
-                  f'| email-контактов: {new_emails} | activity log: {new_acts}')
+            logger.info('[ИТОГИ] сообщений в чат: %d | делегирований: %d '
+                  '| email-контактов: %d | activity log: %d', new_msgs, new_tasks, new_emails, new_acts)
         finally:
             _s2.close()
     except Exception as e:
-        print(f'[WARN] summary error: {e}')
+        logger.warning('[WARN] summary error: %s', e)
 
 
 if __name__ == '__main__':
