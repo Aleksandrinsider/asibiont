@@ -1898,19 +1898,24 @@
             // ASI сам усвоил их контекст и говорит своим голосом
             if (sender === 'agent_report') return;
 
-            // Внутренние сообщения агентов скрыты из чата — итоги уже включены в отчёт ASI
-            if (sender === 'agent_msg') return;
+            // agent_msg — показываем в чате: директивы директора и ответы агентов с __agent JSON
 
             // Авто-разбор JSON-сообщений от офисного движка
             // Формат: {"__agent": {name, id, avatar_url}, "text": "..."}
+            let _isAgentMsgWithAgent = false;
             if (typeof text === 'string' && text.trim().startsWith('{')) {
                 try {
                     const _parsed = JSON.parse(text);
                     if (_parsed.__agent && _parsed.text) {
                         if (!agentInfo) agentInfo = _parsed.__agent;
                         text = _parsed.text;
+                        _isAgentMsgWithAgent = true;
                     }
                 } catch(e) { /* обычный текст — продолжаем */ }
+            }
+            // Директивы директора (agent_msg без __agent): показываем с именем "Директор"
+            if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
+                agentInfo = { name: 'Директор', avatar_url: '' };
             }
             
             // Normalize sender: 'agent', 'ai', 'agent_msg', 'proactive', 'reminder' -> 'ai' for consistent styling
@@ -2303,7 +2308,7 @@
                     let msgDelay = 0;
                     for (const im of intermediateMessages) {
                         const _im = im;
-                        setTimeout(() => addMessage(_im.content, 'ai', _im.created_at), msgDelay);
+                        setTimeout(() => addMessage(_im.content, _im.message_type, _im.created_at, _im.id), msgDelay);
                         msgDelay += 350;
                     }
                     if (data.response) {
@@ -7274,7 +7279,15 @@ else:
 
         function _tlCleanText(text, isTitle = false) {
             // Универсальная очистка текста от кода, HTML, markdown, эмодзи
-            let cleaned = (text || '')
+            // Если контент — JSON с __agent (ответы агентов), извлекаем только .text
+            let _tlInput = (text || '');
+            if (_tlInput.trim().startsWith('{')) {
+                try {
+                    const _tlP = JSON.parse(_tlInput);
+                    if (_tlP.__agent && _tlP.text) _tlInput = String(_tlP.text);
+                } catch(e) { /* не валидный JSON — оставляем как есть */ }
+            }
+            let cleaned = _tlInput
                 .replace(/^\[filtered:[^\]]*\]\s*/g, '')  // strip internal [filtered:noise] tags
                 .replace(/^\[tools:[^\]]*\]\s*/g, '')  // strip internal [tools: ...] prefix
                 .replace(/^\[[^\]]*\]\s*/, '')  // strip bare [tool1, tool2] prefix at start
@@ -12082,9 +12095,11 @@ else:
                 // Для агентских задач: скрытый div с data-full нужен для редактора
                 const escapedFull = (task.description || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '&#10;');
                 html += '<div id="task-desc-' + task.id + '" data-full="' + escapedFull + '" style="display:none;"></div>';
+                // Для прерванных/ошибочных задач — показываем причину из completion_notes
+                if (task.status === 'failed' && task.completion_notes) {
+                    html += '<div style="margin-top:4px;font-size:12px;color:#9CA3AF;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(task.completion_notes.substring(0, 200)) + '</div>';
+                }
             }
-            
-            // completion_notes для агентских задач — не показываем, только название
 
             html += '<div style="display: flex; column-gap: 6px; row-gap: 2px; margin-top: 8px;">';
             if (task.reminder_time_local) {
@@ -16168,7 +16183,7 @@ else:
       'copied':'Скопировано!','copy-username':'Копировать ник',
       'status-in-progress':'В работе','status-pending-accept':'Ожидает принятия',
       'status-pending-confirm':'Ожидает подтверждения','status-rejected':'Отклонена',
-      'status-accepted':'Принята','status-completed':'Выполнена','status-failed':'Ошибка агента','status-overdue':'С отставанием',
+      'status-accepted':'Принята','status-completed':'Выполнена','status-failed':'Задача прервана','status-overdue':'С отставанием',
       'time-days':'дн.','time-hours':'ч.','time-minutes':'мин.','just-now':'только что',
       'accept-task':'Принять задачу','reject-task':'Отклонить задачу',
       'cancel-delegation':'Отменить делегирование','complete-task':'Завершить задачу',
@@ -16463,7 +16478,7 @@ else:
       'copied':'Copied!','copy-username':'Copy username',
       'status-in-progress':'In progress','status-pending-accept':'Pending acceptance',
       'status-pending-confirm':'Pending confirmation','status-rejected':'Rejected',
-      'status-accepted':'Accepted','status-completed':'Completed','status-failed':'Agent error','status-overdue':'Overdue',
+      'status-accepted':'Accepted','status-completed':'Completed','status-failed':'Task interrupted','status-overdue':'Overdue',
       'time-days':'d','time-hours':'h','time-minutes':'min','just-now':'just now',
       'accept-task':'Accept task','reject-task':'Reject task',
       'cancel-delegation':'Cancel delegation','complete-task':'Complete task',

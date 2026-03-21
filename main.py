@@ -6929,6 +6929,8 @@ async def api_tasks_handler(request):
         tasks = [t for t in tasks if t.status != 'rejected' and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
         # Hide old cancelled tasks without notes (manual cancellations)
         tasks = [t for t in tasks if t.status != 'cancelled' or (getattr(t, 'source', None) == 'agent' and t.completion_notes)]
+        # Hide "interrupted by new cycle" agent tasks — these are autopilot internal restarts, not user-visible failures
+        tasks = [t for t in tasks if 'Прервано: новый цикл' not in (t.completion_notes or '')]
         
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
@@ -6981,7 +6983,7 @@ async def api_tasks_handler(request):
                 'id': task.id,
                 'title': title,
                 'description': decrypt_data(task.description) if task.description else '',
-                'status': 'failed' if (task.status == 'cancelled' and getattr(task, 'source', None) == 'agent' and task.completion_notes) else task.status,
+                'status': 'failed' if (task.status == 'cancelled' and getattr(task, 'source', None) == 'agent' and task.completion_notes and 'Прервано: новый цикл' not in (task.completion_notes or '')) else task.status,
                 'reminder_time': None,
                 'reminder_time_local': None,
                 'overdue': False,

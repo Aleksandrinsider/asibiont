@@ -2921,7 +2921,8 @@ class AnchorEngine:
 
                 # Log dispatch — используем raw SQL через отдельное соединение
                 # ORM-вставка через shared session ненадёжна (session state после token spend)
-                _log_content = (_rr_debug + '\n' + task_text)[:500] if _rr_debug else task_text[:500]
+                _goals_brief = ', '.join(g.get('title', '')[:40] for g in goals_info[:3]) if goals_info else ''
+                _log_content = _goals_brief or anchor.topic or ''
                 _aal_id = None
                 try:
                     from sqlalchemy import text as _aal_text
