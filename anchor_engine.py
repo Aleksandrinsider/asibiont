@@ -1223,6 +1223,137 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         except Exception as _osr_err:
             logger.debug(f"[SYSTEM_PROMPT] outreach stats failed: {_osr_err}")
 
+    # ── Динамическая карта каналов для "поисковых" целей ──
+    # Инжектируется когда цель — найти людей (тестировщиков, разработчиков, клиентов и т.д.)
+    _people_search_map = ''
+    _PEOPLE_KW = (
+        'тестировщик', 'tester', 'qa', ' qa ', 'разработчик', 'developer', 'девелопер',
+        'пользователь', 'клиент', 'подписчик', 'лид', 'lead', 'специалист', 'инженер',
+        'найти людей', 'найти человек', 'набрать', 'рекрут', 'recruit', 'наём', 'нанять',
+        'аудитория', 'участник', 'бета-тестер', 'бета тестер',
+    )
+    _goals_text_for_map = ' '.join(
+        (g.get('title', '') + ' ' + (g.get('description', '') or '')).lower()
+        for g in goals_summary
+    )
+    _is_people_goal = any(w in _goals_text_for_map for w in _PEOPLE_KW)
+    if _is_people_goal and _goal_type in ('outreach', 'general', 'dev'):
+        # Определяем предметную область из цели для точных примеров
+        _domain_hint = 'QA automation'
+        _habr_query = 'тестировщик OR "QA engineer" OR "автоматизатор"'
+        _devto_query = '"qa automation" OR "software tester" OR "test engineer"'
+        _conf_query = 'конференции QA testing 2026 спикеры email contact'
+        _gh_query_examples = (
+            "'language:python repos:>3', 'language:javascript repos:>10 location:Russia', "
+            "'language:java automation repos:>3', 'language:go testing followers:>2'"
+        )
+        if any(w in _goals_text_for_map for w in ('разработчик', 'developer', 'девелопер', 'программист')):
+            _domain_hint = 'python developer'
+            _habr_query = 'разработчик OR программист OR "software developer"'
+            _devto_query = '"software developer" OR "backend developer" OR "python developer"'
+            _conf_query = 'конференции разработчики Python 2026 спикеры email'
+            _gh_query_examples = (
+                "'language:python followers:>10', 'language:go repos:>10 location:Russia', "
+                "'language:rust repos:>5 followers:>3'"
+            )
+        elif any(w in _goals_text_for_map for w in ('клиент', 'пользователь', 'подписчик', 'b2b', 'saas')):
+            _domain_hint = 'SaaS user'
+            _habr_query = '"product manager" OR "стартап" OR "технический директор" email'
+            _devto_query = '"product manager" OR "startup founder" OR "tech lead"'
+            _conf_query = 'конференции стартапы продукт 2026 участники email'
+            _gh_query_examples = (
+                "'language:python repos:>20 followers:>10', 'language:javascript repos:>15 followers:>5'"
+            )
+
+        # Нумерованный список каналов, расставленных по приоритету (интеграция первая)
+        _ch_lines = []
+        _ch_num = 1
+
+        if _has_github:
+            _ch_lines.append(
+                f"{_ch_num}. 🐙 GitHub [ИНТЕГРАЦИЯ АКТИВНА — используй первым!]\n"
+                f"   run_agent_action(action='search_users', query=<вари каждый цикл>, page=1)\n"
+                f"   Примеры query: {_gh_query_examples}\n"
+                "   → save_email_contact → send_outreach_email\n"
+                "   ⚠️ НЕ повторяй query из ИСТОРИИ выше! Каждый цикл — новая комбинация.\n"
+                "   Нет email у найденных → пробуй web_search('[username] site:github.com email') или следующий query."
+            )
+            _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. ✉️ Habr.ru авторы — пишут о {_domain_hint}:\n"
+            f"   web_search('site:habr.com {_habr_query} email')\n"
+            "   → save_email_contact → send_outreach_email\n"
+            "   Habr-авторы обычно указывают email в профиле или в bio статьи."
+        )
+        _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. 🌐 dev.to / Stack Overflow профили:\n"
+            f"   web_search('site:dev.to {_devto_query} email contact')\n"
+            f"   web_search('site:stackoverflow.com/users {_domain_hint} profile email')\n"
+            "   → save_email_contact → send_outreach_email"
+        )
+        _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. 📅 Конференции 2026 (только будущие!):\n"
+            f"   web_search('{_conf_query}')\n"
+            "   → save_email_contact(speaker_name, speaker_email) → send_outreach_email\n"
+            "   ⚠️ Проверь что дата >= сегодня! Спикеры — высокий авторитет, персонализируй письмо."
+        )
+        _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. 👥 Платформа ASI Biont (пользователи внутри системы):\n"
+            f"   find_relevant_contacts_for_task('{_domain_hint}')\n"
+            "   → find_and_message_relevant_users (пишет им прямо в чат платформы)\n"
+            "   ⚠️ Это люди ВНУТРИ ASI Biont, не внешние соцсети!"
+        )
+        _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. 📚 Онлайн-курсы (преподаватели/координаторы):\n"
+            f"   web_search('OTUS \"{_domain_hint}\" преподаватель email') | "
+            f"web_search('Skillbox GeekBrains {_domain_hint} наставник email contact')\n"
+            "   → save_email_contact → send_outreach_email\n"
+            "   Преподаватели курсов часто имеют сети учеников — они могут порекомендовать."
+        )
+        _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. 🔗 GitHub bio / email в профиле напрямую:\n"
+            f"   web_search('\"@gmail.com\" OR \"@yandex.ru\" site:github.com {_domain_hint}')\n"
+            f"   web_search('\"contact me\" OR \"email me\" github.com {_domain_hint}')\n"
+            "   → save_email_contact → send_outreach_email"
+        )
+        _ch_num += 1
+
+        _ch_lines.append(
+            f"{_ch_num}. 🏘️ Администраторы QA-сообществ (не прямой постинг, только контакт):\n"
+            f"   web_search('{_domain_hint} Telegram community admin OR moderator email contact')\n"
+            f"   web_search('{_domain_hint} Discord server invite email admin')\n"
+            "   → save_email_contact → send_outreach_email к организатору/модератору\n"
+            "   ⛔ прямой постинг в чужие каналы/серверы инструментами НЕ поддерживается!"
+        )
+        _ch_num += 1
+
+        if _has_imap:
+            _ch_lines.append(
+                f"{_ch_num}. 📬 Повторная активация старых контактов:\n"
+                "   list_email_contacts → check_emails (кто ещё не ответил?) → send_follow_up_email\n"
+                "   Напомни о проекте тем кто не ответил >7 дней назад."
+            )
+            _ch_num += 1
+
+        _people_search_map = (
+            f"\n\n🗺️ КАРТА ВСЕХ КАНАЛОВ ДЛЯ ПОИСКА (выбирай следующий когда текущий исчерпан):\n"
+            + '\n\n'.join(_ch_lines)
+            + "\n\n📌 СТРАТЕГИЯ: не застревай на одном канале. "
+            "GitHub → Habr → dev.to/SO → Конференции → Платформа → Курсы → bio → Сообщества.\n"
+            "Каждый цикл — ДРУГОЙ канал ИЛИ другой query в том же канале.\n"
+        )
+
     # ── GitHub-specific compact rules ──
     _github_rules = ''
     if _has_github:
@@ -1276,6 +1407,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_intg_block}"
         f"{_goal_state_hint}"
         f"{_outreach_stats}"
+        f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"
         f"{_team_block}"
