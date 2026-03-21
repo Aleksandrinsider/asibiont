@@ -185,14 +185,14 @@ _INTEGRATION_PLANS = [
     # RSS лента / Feedparser
     (lambda c: any(w in c for w in ('rss', 'feed', 'лент')),
      'rss',
-     "Твоя RSS-лента — источник авторов и трендов. Найди автора → передай контакт email-агенту.",
-     ["A) run_agent_action(action='get_latest') → найди автора → save_email_contact",
-      "B) run_agent_action(action='search', query=тема) → статьи → save_email_contact авторов",
-      "C) research_topic → площадки/сообщества → add_task с конкретными контактами",
-      "D) run_agent_action(action='get_latest') → トレンд-анализ → create_post (краткий обзор для Telegram)",
-      "E) quick_topic_search (дополни ленту: форумы, Reddit, Habr) → save_email_contact новых авторов",
-      "F) web_search (расширенный поиск по теме статьи) → save_email_contact экспертов",
-      "G) run_agent_action(action='get_latest') → schedule_background_task (напомни через 24ч о не-ответивших)"]),
+     "Твоя RSS-лента — источник аналитики и контентных идей. Твоя роль: анализировать тренды и передавать идеи/зацепки email-агенту для outreach. НЕ ищи контакты сам — поиск людей (GitHub, web) это работа агента с email/GitHub-интеграцией.",
+     ["A) run_agent_action(action='get_latest') → выдели 2-3 актуальных тренда → DELEGATE[email-агент]: идеи/зацепки для outreach-письма",
+      "B) run_agent_action(action='search', query=тема_цели) → найди релевантную статью → DELEGATE[email-агент]: используй этот инсайт как персонализацию в письме",
+      "C) research_topic(query=тема) → анализ рынка/настроений → add_task с инсайтами для кампании",
+      "D) run_agent_action(action='get_latest') → тренд-анализ → create_post (краткий обзор для Telegram-канала)",
+      "E) Если автор статьи явно релевантен цели И есть публичный контакт → save_email_contact (исключение, не правило — только очевидно подходящие)",
+      "F) web_search (что волнует ЦА прямо сейчас по теме цели) → DELEGATE[email-агент]: ключевой инсайт для персонализации письма",
+      "G) run_agent_action(action='get_latest') → schedule_background_task (мониторинг темы через 24ч)"]),
     # Slack
     (lambda c: 'slack' in c,
      'slack',
@@ -311,7 +311,7 @@ _INTEGRATION_TYPE_LABELS = {
     'email':     'чтение входящих / ответы (check_emails)',
     'outreach':  'отправка outreach-писем (send_outreach_email)',
     'github':    'поиск разработчиков/контрибьюторов',
-    'rss':       'мониторинг ленты/поиск авторов',
+    'rss':       'аналитика трендов / контентные идеи для email-кампаний',
     'slack':     'коммуникация/рассылка в Slack',
     'notion':    'запись/обновление Notion',
     'pm':        'задачи в Trello/Jira',
@@ -6355,7 +6355,8 @@ class AnchorEngine:
                     _intg_live_lines.append(
                         "  ⚠️ run_agent_action читает ТОЛЬКО ЭТУ ленту. "
                         "Если тема задачи не совпадает с тематикой ленты → "
-                        "используй research_topic(query=...) или web_search(query=...) вместо run_agent_action."
+                        "передай коллеге через DELEGATE[имя]: что нужно найти/сделать. "
+                        "НЕ занимайся поиском контактов или GitHub-поиском — это роль агента с email/GitHub-интеграцией."
                     )
 
                 # GitHub: токен есть — подсказываем action-имена из скрипта
