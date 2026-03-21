@@ -130,6 +130,8 @@ _pytest_out.txt
 _autonomy_out.txt
 _*.py
 _*.txt
+gitinfo.py
+check_git.py
 _agent_audit*.py
 
 
@@ -137,7 +139,7 @@ _agent_audit*.py
 .DS_Store
 Thumbs.db
 
-# Test files
+# Test files in root (not in tests/ subdirectory)
 test_*.py
 *_test.py
 comprehensive_agent_test.py
