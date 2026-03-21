@@ -6905,8 +6905,10 @@ async def api_tasks_handler(request):
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
         
-        # Exclude rejected and cancelled (soft-deleted) tasks from the list
-        tasks = [t for t in tasks if t.status not in ('rejected', 'cancelled') and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
+        # Exclude rejected tasks; show cancelled agent tasks with failure reason as 'failed'
+        tasks = [t for t in tasks if t.status != 'rejected' and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
+        # Hide old cancelled tasks without notes (manual cancellations)
+        tasks = [t for t in tasks if t.status != 'cancelled' or (getattr(t, 'source', None) == 'agent' and t.completion_notes)]
         
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
@@ -6959,7 +6961,7 @@ async def api_tasks_handler(request):
                 'id': task.id,
                 'title': title,
                 'description': decrypt_data(task.description) if task.description else '',
-                'status': task.status,
+                'status': 'failed' if (task.status == 'cancelled' and getattr(task, 'source', None) == 'agent' and task.completion_notes) else task.status,
                 'reminder_time': None,
                 'reminder_time_local': None,
                 'overdue': False,
@@ -6974,7 +6976,7 @@ async def api_tasks_handler(request):
                 'delegated_by_me': task.delegated_by == user.id,
                 'source': getattr(task, 'source', 'manual') or 'manual',
                 'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
-                'completion_notes': (task.completion_notes or '') if task.status == 'completed' else '',
+                'completion_notes': (task.completion_notes or '') if task.status in ('completed', 'cancelled') else '',
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
                 'goal_id': task.goal_id,
                 'goal_name': _goal_name,
@@ -7133,14 +7135,14 @@ async def api_interactions_handler(request):
             # coordinator_result — ВИДИМ (результаты шагов агентов)
             # coordinator_summary — ВИДИМ (итоговый отчёт цикла)
             # goal_autopilot_assignment — ВИДИМ (ASI назначает задачу агенту)
+            # agent_chain_transfer — ВИДИМ (межагентское общение: агент передаёт задачу другому)
+            # agent_chain_continue — ВИДИМ (агент продолжает и отчитывается о прогрессе)
             'coordinator_agent_request',  # запрос агента на интеграцию (внутренний)
             'coordinator_intg_recommend', # рекомендация интеграции (внутренний)
             'goal_autopilot_review',      # проверка результата цикла (внутренний)
             'asi_self_analysis',          # «Анализирую цели…» (внутренний)
             'asi_director_review',        # внутренний анализ директора
             'autopilot_escalation',       # эскалация внутри автопилота
-            'agent_chain_transfer',       # внутренняя передача
-            'agent_chain_continue',
         }
         filtered_interactions = []
         # Dedup window: (message_type, content[:200]) → last seen timestamp
@@ -8351,6 +8353,7 @@ _TIMELINE_VISIBLE_TYPES = {
     'background_research', 'background_research_ready',
     'agent_task',
     'inbox_reply',
+    'email',
     'integration',
     'run_agent_action',
     'checkpoint',
