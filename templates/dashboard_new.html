@@ -7307,7 +7307,21 @@ else:
         function createTimelineItem(a, isNew) {
             const wrap = document.createElement('div');
             wrap.setAttribute('data-act-id', a.id || '');
-            wrap.style.cssText = 'padding: 0; border-bottom: 1px solid #F0F3F5;' + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
+            const _tlBorderColors = {
+                'goal_autopilot_dispatch': '#0d9488',
+                'coordinator_summary': '#0d9488',
+                'coordinator_plan': '#0d9488',
+                'email_sent': '#2563eb',
+                'email_received': '#2563eb',
+                'post_created': '#7c3aed',
+                'task_created': '#d97706',
+                'agent_task': '#d97706',
+                'search_performed': '#6b7280',
+                'contact_found': '#059669',
+                'call_made': '#0891b2',
+            };
+            const _borderClr = _tlBorderColors[a.activity_type] || '#9CA3AF';
+            wrap.style.cssText = `padding:0;border-bottom:1px solid #F0F3F5;border-left:3px solid ${_borderClr};padding-left:10px;` + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
             const labels = _tlLabels();
             const typeLabel = labels[a.activity_type] || a.activity_type;
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
@@ -7349,13 +7363,14 @@ else:
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasContent ? 'cursor:pointer;user-select:none;' : '');
+            const _typeLabelHtml = typeLabel ? `<span style="font-size:11px;color:${_borderClr};background:${_borderClr}18;padding:1px 6px;border-radius:9px;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>` : '';
             header.innerHTML = `
-                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;">
+                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span style="font-size:13px;font-weight:500;color:#1F2328;flex:1;min-width:0;word-break:break-word;">${cleanTitle}</span>
                     ${_statusBadge}
-                    <span style="font-size:12px;color:#6C727F;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>
+                    ${_typeLabelHtml}
                 </div>
-                <span style="font-size:12px;color:#9CA3AF;flex-shrink:0;white-space:nowrap;">${timeStr}</span>
+                <span style="font-size:12px;color:#9CA3AF;flex-shrink:0;white-space:nowrap;margin-left:6px;">${timeStr}</span>
                 ${deleteBtn}
                 ${chevron}
             `;
@@ -7397,7 +7412,7 @@ else:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set([]);  // coordinator_summary теперь видим
+            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'run_agent_action', 'background_research', 'background_research_ready', 'agent_event_dispatch', 'agent_chain_continue']);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
                 // Hide only in_progress/noise/dedup autopilot dispatches — failed и completed показываем
@@ -12109,10 +12124,7 @@ else:
             if (task.reminder_time_local) {
                 html += '<span class="task-meta">' + task.reminder_time_local + '</span>';
             }
-            if (task.source === 'agent') {
-                // Всегда показываем бейдж для задач, созданных агентом/автопилотом
-                html += '<span class="task-meta" style="color:#068487;">' + (t('agent-created-label') || 'Создано агентом') + '</span>';
-            }
+            // "Создано агентом" бейдж скрыт — лишний технический статус
 
             
             let statusText = t('status-in-progress');
@@ -12133,9 +12145,12 @@ else:
             } else if (task.status === 'completed') {
                 statusText = t('status-completed');
                 statusColor = '#068487';
-            } else if (task.status === 'failed') {
+            } else if (task.status === 'failed' && task.source !== 'agent') {
                 statusText = t('status-failed');
                 statusColor = '#D73A49';
+            } else if (task.status === 'failed' && task.source === 'agent') {
+                // Автозадачи агента не показываем как «прерванные» — просто скрываем статус
+                statusText = '';
             } else if (task.overdue) {
                 statusText = t('status-overdue') + ' ' + formatOverdueText(task.overdue_value, task.overdue_unit);
                 statusColor = '#D73A49';
@@ -16147,7 +16162,7 @@ else:
       'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
       'act-email':'Email','act-delegation':'Делегирование','act-agent-task':'Поручение агенту','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Аутрич-кампания','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента','agent-task-label':'Поручено агенту',
       'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
-      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Агент застрял','act-autopilot':'Автопилот цели','act-coordinator-summary':'Итог координатора','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов','agent-created-label':'Создано агентом','autopilot-label':'Автопилот',
+      'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Автопилот приостановлен','act-autopilot':'Автопилот','act-coordinator-summary':'Итог цикла','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов','agent-created-label':'Автозадача','autopilot-label':'Автопилот',
       'cc-title':'Контент-кампания','cc-goal':'Цель:','cc-topics':'Темы:','cc-freq':'Частота:','cc-last':'Посл. пост:','cc-posts':'п.','cc-freq-daily':'Ежедн.','cc-freq-weekly':'Еженед.','cc-del-confirm':'Удалить контент-кампанию?','plat-feed':'Лента',
       'dc-title':'Аутрич-кампания','dc-audience':'Аудитория:','dc-sent':'Отпр.','dc-accepted':'Прин.','dc-del-confirm':'Удалить аутрич-кампанию?',
       'act-item-1':'действие','act-item-2':'действия','act-item-5':'действий','act-pending':'ожид.',

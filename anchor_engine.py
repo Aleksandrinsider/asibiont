@@ -5600,37 +5600,6 @@ class AnchorEngine:
 
             logger.info("[COORD] plan accepted as-is (no corrections): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
 
-            # ── Анонс плана пользователю: кратко что координатор решил делать ──
-            _plan_announce_lines = []
-            for _pi, _ps in enumerate(_plan[:6], 1):
-                _ps_reason = _ps.get('reason', '')
-                _ps_line = f"{_pi}. {_ps.get('agent', '?')} → {(_ps.get('task') or '')[:60]}"
-                if _ps_reason:
-                    _ps_line += f" ({_ps_reason[:50]})"
-                _plan_announce_lines.append(_ps_line)
-            if _plan_announce_lines:
-                _plan_announce_text = "📋 План цикла:\n" + '\n'.join(_plan_announce_lines)
-                try:
-                    session.add(Interaction(
-                        user_id=user.id,
-                        message_type='proactive',
-                        content=json.dumps({
-                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': _plan_announce_text,
-                            '__anchor_type': 'coordinator_plan',
-                        }, ensure_ascii=False),
-                    ))
-                    session.commit()
-                except Exception as _pa_err:
-                    logger.debug("[COORD] plan announce save error: %s", _pa_err)
-                    try: session.rollback()
-                    except Exception: pass
-                if self.bot:
-                    try:
-                        await self.bot.send_message(chat_id=user.telegram_id, text=_plan_announce_text)
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
-
             # ── ASI fallback: цели без исполнителя в плане ──
             # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
             _covered_goals = {(_p.get('goal') or '').strip().lower() for _p in _plan}
