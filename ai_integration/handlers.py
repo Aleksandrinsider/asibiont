@@ -1173,6 +1173,10 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                         logger.info(f"[COMPLETE_TASK] Auto-updated goal '{goal.title}' progress: {pct}% ({done}/{total})")
             except Exception as _eg:
                 logger.warning(f"[COMPLETE_TASK] Auto-goal-progress error: {_eg}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
         
         # Возвращаем сообщение с флагом для AI чтобы спросил о результате
         result = f"TASK_COMPLETED_ASK_RESULT: Задача '{task.title}' завершена."

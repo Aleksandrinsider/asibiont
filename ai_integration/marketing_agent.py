@@ -50,19 +50,22 @@ async def generate_marketing_content(product_name, target_audience, platform, go
             )
         except _aio_mg.TimeoutError:
             competitors = pains = trends = None
-        for _r in (competitors, pains, trends):
-            if isinstance(_r, Exception):
-                _r = None
+        if isinstance(competitors, Exception):
+            competitors = None
+        if isinstance(pains, Exception):
+            pains = None
+        if isinstance(trends, Exception):
+            trends = None
         # 1. Конкуренты/альтернативы
-        if competitors and not isinstance(competitors, Exception):
+        if competitors:
             lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in competitors[:3]]
             competitor_ctx = "\n\nКОНКУРЕНТЫ И РЫНОК (реальные данные из сети):\n" + "\n".join(lines)
         # 2. Боли аудитории
-        if pains and not isinstance(pains, Exception):
+        if pains:
             lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in pains[:3]]
             pain_ctx = "\n\nБОЛИ АУДИТОРИИ (реальные данные из сети):\n" + "\n".join(lines)
         # 3. Актуальные тренды
-        if trends and not isinstance(trends, Exception):
+        if trends:
             lines = [f"- {r.get('title', '')}: {r.get('snippet', '')[:120]}" for r in trends[:3]]
             trend_ctx = "\n\nАКТУАЛЬНЫЕ ТРЕНДЫ:\n" + "\n".join(lines)
 

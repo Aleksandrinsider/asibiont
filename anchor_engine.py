@@ -1219,8 +1219,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         _outreach_stats += "Конверсия средняя → попробуй A/B: измени тему или целевую аудиторию.\n"
             finally:
                 _db_stat.close()
-        except Exception:
-            pass
+        except Exception as _osr_err:
+            logger.debug(f"[SYSTEM_PROMPT] outreach stats failed: {_osr_err}")
 
     # ── GitHub-specific compact rules ──
     _github_rules = ''
@@ -2274,10 +2274,17 @@ class AnchorEngine:
         except Exception as e:
             logger.error(f"[ANCHOR] _process_background_research_anchor error: {e}")
             try:
+                session.rollback()
+            except Exception:
+                pass
+            try:
                 anchor.delivered_at = datetime.now(timezone.utc)
                 session.commit()
             except Exception:
-                session.rollback()
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
 
     # ═══════════════════════════════════════════════════════
     # EVENT-DRIVEN AGENT DISPATCH
@@ -10189,7 +10196,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh
                         _smh(user.telegram_id, 'assistant', notify, session=session)
-                    except Exception: pass
+                    except Exception as _smh_err:
+                        logger.debug("[ANCHOR] save_message_to_history failed: %s", _smh_err)
                 logger.info(f"[ANCHOR] ✅ Feed post for {user.telegram_id}: {post_text[:80]}...")
 
             elif anchor.anchor_type == 'channel_post':
@@ -10240,7 +10248,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh
                         _smh(user.telegram_id, 'assistant', notify, session=session)
-                    except Exception: pass
+                    except Exception as _smh_err:
+                        logger.debug("[ANCHOR] save_message_to_history failed: %s", _smh_err)
                 status_icon = "✅" if published else "❌"
                 logger.info(f"[ANCHOR] {status_icon} Channel post for {user.telegram_id} -> {channel}: {post_text[:80]}...")
 
@@ -10309,7 +10318,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh
                         _smh(user.telegram_id, 'assistant', notify, session=session)
-                    except Exception: pass
+                    except Exception as _smh_err:
+                        logger.debug("[ANCHOR] save_message_to_history failed: %s", _smh_err)
                 status_icon = "✅" if dc_ok else "❌"
                 logger.info(f"[ANCHOR] {status_icon} Discord post for {user.telegram_id}: {post_text[:80]}...")
 
@@ -12296,7 +12306,8 @@ class AnchorEngine:
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh
                         _smh(user.telegram_id, 'assistant', message, session=session)
-                    except Exception: pass
+                    except Exception as _smh_err:
+                        logger.debug("[ANCHOR] save_message_to_history failed: %s", _smh_err)
                     session.commit()
                     logger.info(f"[ANCHOR] ✅ Delivered to {user.telegram_id}: {message[:80]}...")
                 except Exception as send_err:

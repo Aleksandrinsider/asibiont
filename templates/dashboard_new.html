@@ -12114,6 +12114,9 @@ else:
             } else if (task.status === 'completed') {
                 statusText = t('status-completed');
                 statusColor = '#068487';
+            } else if (task.status === 'failed') {
+                statusText = t('status-failed');
+                statusColor = '#D73A49';
             } else if (task.overdue) {
                 statusText = t('status-overdue') + ' ' + formatOverdueText(task.overdue_value, task.overdue_unit);
                 statusColor = '#D73A49';
@@ -16165,7 +16168,7 @@ else:
       'copied':'Скопировано!','copy-username':'Копировать ник',
       'status-in-progress':'В работе','status-pending-accept':'Ожидает принятия',
       'status-pending-confirm':'Ожидает подтверждения','status-rejected':'Отклонена',
-      'status-accepted':'Принята','status-completed':'Выполнена','status-overdue':'С отставанием',
+      'status-accepted':'Принята','status-completed':'Выполнена','status-failed':'Ошибка агента','status-overdue':'С отставанием',
       'time-days':'дн.','time-hours':'ч.','time-minutes':'мин.','just-now':'только что',
       'accept-task':'Принять задачу','reject-task':'Отклонить задачу',
       'cancel-delegation':'Отменить делегирование','complete-task':'Завершить задачу',
@@ -16460,7 +16463,7 @@ else:
       'copied':'Copied!','copy-username':'Copy username',
       'status-in-progress':'In progress','status-pending-accept':'Pending acceptance',
       'status-pending-confirm':'Pending confirmation','status-rejected':'Rejected',
-      'status-accepted':'Accepted','status-completed':'Completed','status-overdue':'Overdue',
+      'status-accepted':'Accepted','status-completed':'Completed','status-failed':'Agent error','status-overdue':'Overdue',
       'time-days':'d','time-hours':'h','time-minutes':'min','just-now':'just now',
       'accept-task':'Accept task','reject-task':'Reject task',
       'cancel-delegation':'Cancel delegation','complete-task':'Complete task',

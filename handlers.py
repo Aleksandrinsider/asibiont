@@ -607,13 +607,15 @@ async def chat_handler(message: Message):
         try:
             # Проверка баланса токенов
             session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
-                session.add(user)
-                session.commit()
-                grant_signup_tokens(user_id, session=session)
-            session.close()
+            try:
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+                    session.add(user)
+                    session.commit()
+                    grant_signup_tokens(user_id, session=session)
+            finally:
+                session.close()
 
             if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'voice_message'):
                 await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'voice_message'))
@@ -674,13 +676,15 @@ async def chat_handler(message: Message):
         logger.info(f"[DOC] Received document from user {user_id}: {message.document.file_name}")
         try:
             session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
-                session.add(user)
-                session.commit()
-                grant_signup_tokens(user_id, session=session)
-            session.close()
+            try:
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+                    session.add(user)
+                    session.commit()
+                    grant_signup_tokens(user_id, session=session)
+            finally:
+                session.close()
 
             if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
                 await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
@@ -801,13 +805,15 @@ async def chat_handler(message: Message):
         logger.info(f"[PHOTO] Received photo from user {user_id}")
         try:
             session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
-                session.add(user)
-                session.commit()
-                grant_signup_tokens(user_id, session=session)
-            session.close()
+            try:
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                if not user:
+                    user = User(telegram_id=user_id, username=message.from_user.username, token_balance=0)
+                    session.add(user)
+                    session.commit()
+                    grant_signup_tokens(user_id, session=session)
+            finally:
+                session.close()
 
             if not FREE_ACCESS_MODE and not has_enough_tokens(user_id, 'message'):
                 await message.bot.send_message(message.chat.id, insufficient_balance_message(user_id, 'message'))
@@ -944,12 +950,14 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
         if text.lower() in ("очистить историю", "clear history"):
             # Update user.history_cleared_at in DB
             session = Session()
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if user:
-                from datetime import datetime, timezone
-                user.history_cleared_at = datetime.now(timezone.utc)
-                session.commit()
-            session.close()
+            try:
+                user = session.query(User).filter_by(telegram_id=user_id).first()
+                if user:
+                    from datetime import datetime, timezone
+                    user.history_cleared_at = datetime.now(timezone.utc)
+                    session.commit()
+            finally:
+                session.close()
             cleared_msg = "History cleared." if lang == 'en' else "История очищена."
             await message.bot.send_message(message.chat.id, cleared_msg)
             return
@@ -1384,13 +1392,14 @@ async def dashboard_handler(message: Message):
     user_id = message.from_user.id
     lang = get_user_lang(user_id)
     session = Session()
-    user = session.query(User).filter_by(telegram_id=user_id).first()
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+    finally:
+        session.close()
     if not user:
         msg = "Please register first by sending /start" if lang == 'en' else "Сначала отправь /start — и всё заработает"
         await message.bot.send_message(message.chat.id, msg)
-        session.close()
         return
-    session.close()
 
     # Generate dashboard URL
     base_url = WEBHOOK_URL.replace("/webhook", "")

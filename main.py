@@ -1957,7 +1957,7 @@ async def dashboard_handler(request):
                 'delegated_by_me': task.delegated_by == user.id if task.delegated_by else False,
                 'source': getattr(task, 'source', 'manual') or 'manual',
                 'agent_name': task.delegated_to_username if getattr(task, 'source', None) == 'agent' else None,
-                'completion_notes': (task.completion_notes or '') if task.status == 'completed' else '',
+                'completion_notes': (task.completion_notes or '') if task.status in ('completed', 'cancelled') else '',
                 'updated_at': (task.actual_completion_time.isoformat() + 'Z') if task.actual_completion_time else ((task.created_at.isoformat() + 'Z') if task.created_at else None),
             }
             tasks_dict.append(task_dict)
@@ -3395,34 +3395,31 @@ async def yookassa_webhook(request):
                     pack_info = TOKEN_PACKAGES.get(pack_key) or TOKEN_PACK_PRICES.get(tier)
                     tokens_to_add = pack_info['tokens'] if pack_info else int(float(payment['amount']['value']))
 
+                    # Insert PaymentHistory BEFORE add_tokens so both are in same commit
+                    # This prevents double-crediting on webhook retry: if PaymentHistory
+                    # exists, we skip; if add_tokens commits, PaymentHistory goes with it.
+                    payment_history = PaymentHistory(
+                        user_id=user.id,
+                        telegram_username=user.username,
+                        action='token_purchase',
+                        tier='LIGHT',
+                        amount=payment['amount']['value'],
+                        payment_id=payment['id'],
+                        duration_days=0,
+                        start_date=datetime.now(pytz.UTC),
+                        end_date=datetime.now(pytz.UTC),
+                        details=json.dumps({
+                            'type': 'token_purchase',
+                            'pack': pack_key,
+                            'tokens_added': tokens_to_add,
+                            'payment_method': payment.get('payment_method', {}).get('type'),
+                            'status': payment.get('status')
+                        })
+                    )
+                    session.add(payment_history)
+
                     result = add_tokens(int(user_id), tokens_to_add, reason='purchase', session=session)
                     logger.info(f"💰 Token purchase: user={user.username}, pack={pack_key}, tokens={tokens_to_add}, result={result}")
-
-                    # Log to payment history
-                    try:
-                        payment_history = PaymentHistory(
-                            user_id=user.id,
-                            telegram_username=user.username,
-                            action='token_purchase',
-                            tier='LIGHT',  # placeholder (legacy column)
-                            amount=payment['amount']['value'],
-                            payment_id=payment['id'],
-                            duration_days=0,
-                            start_date=datetime.now(pytz.UTC),
-                            end_date=datetime.now(pytz.UTC),
-                            details=json.dumps({
-                                'type': 'token_purchase',
-                                'pack': pack_key,
-                                'tokens_added': tokens_to_add,
-                                'balance_after': result.get('balance', 0),
-                                'payment_method': payment.get('payment_method', {}).get('type'),
-                                'status': payment.get('status')
-                            })
-                        )
-                        session.add(payment_history)
-                        session.commit()
-                    except Exception as e:
-                        logger.error(f"❌ Failed to log token payment to history: {e}")
 
                     # Notify user
                     if bot:
@@ -3442,31 +3439,54 @@ async def yookassa_webhook(request):
                 # Handle referral commission (20% of payment → tokens to referrer)
                 if user.referrer_id:
                     try:
-                        referrer = session.query(User).filter_by(id=user.referrer_id).first()
-                        if referrer:
-                            payment_amount = float(payment['amount']['value'])
-                            commission_tokens = int(payment_amount * 0.20)
-                            referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
-                            referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
+                        payment_amount = float(payment['amount']['value'])
+                        commission_tokens = int(payment_amount * 0.20)
+                        from sqlalchemy import text as _rt
+                        from config import LOCAL as _rl
+                        if _rl:
+                            referrer = session.query(User).filter_by(id=user.referrer_id).first()
+                            if referrer:
+                                referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
+                                referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
+                                new_balance = referrer.token_balance
+                                ref_db_id = referrer.id
+                                ref_tid = referrer.telegram_id
+                            else:
+                                ref_db_id = None
+                        else:
+                            row = session.execute(
+                                _rt(
+                                    "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amt, "
+                                    "referral_balance = COALESCE(referral_balance, 0) + :amt "
+                                    "WHERE id = :uid "
+                                    "RETURNING id, token_balance, telegram_id"
+                                ),
+                                {'amt': commission_tokens, 'uid': user.referrer_id}
+                            ).fetchone()
+                            if row:
+                                ref_db_id, new_balance, ref_tid = row
+                            else:
+                                ref_db_id = None
+                        if ref_db_id:
                             from models import TokenTransaction as _RefTx
                             session.add(_RefTx(
-                                user_id=referrer.id,
+                                user_id=ref_db_id,
                                 amount=commission_tokens,
                                 action='referral_commission',
                                 description=f'20% комиссия от покупки реферала ({payment_amount}₽)',
-                                balance_after=referrer.token_balance
+                                balance_after=new_balance
                             ))
                             session.commit()
-                            logger.info(f"Referral commission: {commission_tokens} tokens added to referrer {referrer.telegram_id} from payment {payment_amount} RUB")
+                            logger.info(f"Referral commission: {commission_tokens} tokens added to referrer {ref_tid} from payment {payment_amount} RUB")
                             
                             if bot:
                                 try:
                                     await bot.send_message(
-                                        int(referrer.telegram_id),
-                                        f"💰 Ваш реферал пополнил баланс! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {referrer.token_balance} токенов."
+                                        int(ref_tid),
+                                        f"💰 Ваш реферал пополнил баланс! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {new_balance} токенов."
                                     )
                                 except Exception as e:
-                                    logger.error(f"Failed to notify referrer {referrer.telegram_id} about commission: {e}")
+                                    logger.error(f"Failed to notify referrer {ref_tid} about commission: {e}")
                     except Exception as e:
                         logger.error(f"Error processing referral commission: {e}")
                         session.rollback()
@@ -10091,10 +10111,8 @@ async def nowpayments_webhook(request):
                 logger.info(f'[NOWPAYMENTS] Duplicate webhook for {payment_id}, skipping')
                 return web.Response(text='OK')
 
-            from token_service import add_tokens
-            result = add_tokens(tg_user_id, tokens_to_add, reason='purchase', session=session)
-            logger.info(f'[NOWPAYMENTS] Credited {tokens_to_add} tokens to user {tg_user_id}')
-
+            # Insert PaymentHistory BEFORE add_tokens so both commit atomically
+            # (add_tokens calls session.commit() internally with the same session)
             history = PaymentHistory(
                 user_id=user.id,
                 telegram_username=user.username,
@@ -10109,14 +10127,16 @@ async def nowpayments_webhook(request):
                     'type': 'crypto_purchase',
                     'pack': pack,
                     'tokens_added': tokens_to_add,
-                    'balance_after': result.get('balance', 0),
                     'payment_method': 'nowpayments',
                     'currency': data.get('pay_currency'),
                     'status': status,
                 })
             )
             session.add(history)
-            session.commit()
+
+            from token_service import add_tokens
+            result = add_tokens(tg_user_id, tokens_to_add, reason='purchase', session=session)
+            logger.info(f'[NOWPAYMENTS] Credited {tokens_to_add} tokens to user {tg_user_id}')
 
             if bot:
                 try:
@@ -10132,26 +10152,49 @@ async def nowpayments_webhook(request):
             # Handle referral commission (20% of token value → tokens to referrer)
             if user.referrer_id:
                 try:
-                    referrer = session.query(User).filter_by(id=user.referrer_id).first()
-                    if referrer:
-                        commission_tokens = int(tokens_to_add * 0.20)
-                        referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
-                        referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
+                    commission_tokens = int(tokens_to_add * 0.20)
+                    from sqlalchemy import text as _crt
+                    from config import LOCAL as _crl
+                    if _crl:
+                        referrer = session.query(User).filter_by(id=user.referrer_id).first()
+                        if referrer:
+                            referrer.token_balance = (referrer.token_balance or 0) + commission_tokens
+                            referrer.referral_balance = (referrer.referral_balance or 0) + commission_tokens
+                            new_balance = referrer.token_balance
+                            ref_db_id = referrer.id
+                            ref_tid = referrer.telegram_id
+                        else:
+                            ref_db_id = None
+                    else:
+                        row = session.execute(
+                            _crt(
+                                "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amt, "
+                                "referral_balance = COALESCE(referral_balance, 0) + :amt "
+                                "WHERE id = :uid "
+                                "RETURNING id, token_balance, telegram_id"
+                            ),
+                            {'amt': commission_tokens, 'uid': user.referrer_id}
+                        ).fetchone()
+                        if row:
+                            ref_db_id, new_balance, ref_tid = row
+                        else:
+                            ref_db_id = None
+                    if ref_db_id:
                         from models import TokenTransaction as _CryptoRefTx
                         session.add(_CryptoRefTx(
-                            user_id=referrer.id,
+                            user_id=ref_db_id,
                             amount=commission_tokens,
                             action='referral_commission',
                             description=f'20% комиссия от крипто-покупки реферала ({pack})',
-                            balance_after=referrer.token_balance
+                            balance_after=new_balance
                         ))
                         session.commit()
-                        logger.info(f'[NOWPAYMENTS] Referral commission: {commission_tokens} tokens to referrer {referrer.telegram_id}')
+                        logger.info(f'[NOWPAYMENTS] Referral commission: {commission_tokens} tokens to referrer {ref_tid}')
                         if bot:
                             try:
                                 await bot.send_message(
-                                    int(referrer.telegram_id),
-                                    f"💰 Ваш реферал пополнил баланс криптой! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {referrer.token_balance} токенов."
+                                    int(ref_tid),
+                                    f"💰 Ваш реферал пополнил баланс криптой! Вам начислено {commission_tokens} токенов (20% комиссия). Баланс: {new_balance} токенов."
                                 )
                             except Exception as _e:
                                 logger.debug("suppressed: %s", _e)
@@ -10303,7 +10346,6 @@ async def add_test_users_handler(request):
         
         session.commit()
         total = session.query(User).count()
-        session.close()
         
         logger.info(f"Test users added: {len(added)}, skipped: {len(skipped)}")
         
@@ -10318,8 +10360,10 @@ async def add_test_users_handler(request):
         logger.error(f"Error adding test users: {e}")
         if 'session' in locals():
             session.rollback()
-            session.close()
         return web.json_response({'error': 'Internal server error'}, status=500)
+    finally:
+        if 'session' in locals():
+            session.close()
 
 
 async def admin_invite_handler(request):

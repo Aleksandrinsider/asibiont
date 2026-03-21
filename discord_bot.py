@@ -126,7 +126,6 @@ async def stop_discord_bot():
     if _discord_bot and not _discord_bot.is_closed():
         await _discord_bot.close()
         logger.info("Discord bot closed")
-    _starting = False
     if _discord_task and not _discord_task.done():
         _discord_task.cancel()
         try:
