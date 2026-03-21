@@ -613,11 +613,11 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         "  🤝 start_delegation_campaign ← делегировать по специализации агентов",
     ]
     _sys_outreach_only = [
-        "  🎯 find_relevant_contacts_for_task ← люди внутри платформы по навыкам/интересам",
-        "  💬 find_and_message_relevant_users ← найти + написать за 1 шаг",
-        "  📨 start_email_campaign + send_outreach_email ← персональный охват с follow-up",
-        "  📅 КОНФЕРЕНЦИИ: research_topic('конференции [тема] 2026 Россия') → find_relevant_contacts_for_task → send_outreach_email",
-        "  🏘️ СООБЩЕСТВА: research_topic('Telegram Discord каналы [тема]') → find_and_message_relevant_users",
+        "  🎯 find_relevant_contacts_for_task ← контакты ВНУТРИ платформы (не внешние соцсети!)",
+        "  💬 find_and_message_relevant_users ← написать пользователям ЭТОЙ платформы (не Telegram/Reddit!)",
+        "  📨 start_email_campaign + send_outreach_email ← Email-охват по тем у кого есть email",
+        "  📅 КОНФЕРЕНЦИИ 2026: web_search('конференции тестирование QA 2026 спикеры email') → save_email_contact → send_outreach_email (ПРОВЕРЬ что год >= 2026!)",
+        "  🏘️ СООБЩЕСТВА (прямой постинг НЕ возможен!): web_search('site:habr.com тестировщики OR \"QA engineer\" email') → save_email_contact → send_outreach_email. Аналогично Reddit, GitHub Issues.",
     ]
     # Инструменты для личных / обучающих / здоровье-целей
     _sys_personal = [
@@ -1257,10 +1257,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _goal_type in ('outreach', 'general'):
         _escalation_block = (
             "\nЭСКАЛАЦИЯ (0 ответов за 5 писем): "
-            "1)смени тему/аудиторию → 2)Telegram/Discord → 3)контент-магнит → 4)community → 5)партнёры.\n"
+            "1)смени GitHub query (другой язык/страна) → "
+            "2)ищи email через web_search('site:habr.com [тема] email contact') → "
+            "3)publish_to_telegram ТОЛЬКО в свой канал (не в чужие!) → "
+            "4)другой сегмент аудитории (джуны/сеньоры, другой стек) → 5)партнёры через find_partners.\n"
+            "⛔ У агентов НЕТ инструмента публикации в чужих Telegram/Discord/Reddit-каналах!\n"
         )
 
+    from datetime import datetime as _dt_ap
+    _today_str = _dt_ap.now().strftime('%d.%m.%Y')
+
     return (
+        f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
@@ -2542,7 +2550,8 @@ class AnchorEngine:
                 _exh_labels = [_STRATEGY_LABELS.get(s, s) for s in _exhausted]
                 _STRATEGY_RECOVERY = {
                     'search': 'перейди к прямому контакту: find_relevant_contacts_for_task → send_outreach_email',
-                    'email': 'переключись на соцсети: find_and_message_relevant_users / publish_to_telegram',
+                    'email': 'смени источник контактов: web_search(\'site:habr.com [тема] email\') или другой GitHub query (другой язык/страна/followers). publish_to_telegram только в свой канал, не в чужие!',
+                    # ⛔ find_and_message_relevant_users — это внутренняя платформа, не внешние соцсети
                     'content': 'контент создан → теперь привлекай людей: send_outreach_email / find_relevant_contacts_for_task',
                     'delegation': 'делегирование не помогло → действуй сам: send_outreach_email / run_agent_action',
                 }
