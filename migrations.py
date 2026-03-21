@@ -666,6 +666,40 @@ def _migrate_payment_id_unique(session, inspector):
         logger.debug(f"[MIGRATION] payment_history unique index skipped: {e}")
 
 
+def _cleanup_junk_agent_tasks(session):
+    """Удаляет мусорные задачи агентов, которые не нужны пользователю.
+
+    - cancelled + 'Прервано: новый цикл агента' → внутренний перезапуск автопилота
+    - cancelled + 'Агент вернул пустой результат' → агент не дал результата
+    - in_progress + source='agent' старше 2ч → зависшие задачи координатора
+    """
+    try:
+        result = session.execute(text(
+            "DELETE FROM tasks WHERE source='agent' AND status='cancelled' "
+            "AND completion_notes IN ('Прервано: новый цикл агента', 'Агент вернул пустой результат')"
+        ))
+        deleted_cancelled = result.rowcount if hasattr(result, 'rowcount') else 0
+
+        result2 = session.execute(text(
+            "DELETE FROM tasks WHERE source='agent' AND status='in_progress' "
+            "AND created_at < NOW() - INTERVAL '2 hours'"
+        ))
+        deleted_stuck = result2.rowcount if hasattr(result2, 'rowcount') else 0
+
+        session.commit()
+        if deleted_cancelled or deleted_stuck:
+            logger.info(
+                "Cleanup: removed %d cancelled+%d stuck junk agent tasks",
+                deleted_cancelled, deleted_stuck,
+            )
+    except Exception as e:
+        logger.warning("Cleanup junk agent tasks failed (non-fatal): %s", e)
+        try:
+            session.rollback()
+        except Exception:
+            pass
+
+
 def run_migrations():
     """Запускает все миграции базы данных"""
     logger.info("Running database migrations...")
@@ -692,6 +726,7 @@ def run_migrations():
         _migrate_fix_agent_python_code(session)
         _migrate_payment_id_unique(session, inspector)
         _migrate_activity_log_updated_at_index(session, inspector)
+        _cleanup_junk_agent_tasks(session)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")
