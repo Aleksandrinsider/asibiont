@@ -1216,6 +1216,31 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
         if _warn and not _force_analyse:
             _memory_block += f"⚠️ Использовано по 1 разу — лучше попробовать новое: {', '.join(sorted(_warn))}\n"
+
+        # ── Трекинг содержимого запросов (soft-hint: что уже искал) ──
+        # Извлекаем темы из текстов истории — только для поисковых инструментов
+        _SEARCH_TOOLS_TRACK = {
+            'web_search', 'research_topic', 'research_and_plan',
+            'quick_topic_search', 'get_news_trends', 'analyze_situation_and_suggest_tasks',
+        }
+        _searched_topics: list = []
+        _re_hist = __import__('re')
+        for _h in (agent_history or [])[:8]:
+            # Формат: "21.03 20:58 [web_search, research_topic] текст..."
+            _m_brk = _re_hist.match(r'\S+\s+\S+\s+\[([^\]]*)\]\s*(.*)', _h)
+            if _m_brk:
+                _h_tools_str = _m_brk.group(1).lower()
+                _h_text = _m_brk.group(2).strip()
+                _uses_search = any(st in _h_tools_str for st in _SEARCH_TOOLS_TRACK)
+                if _uses_search and len(_h_text) > 10:
+                    _searched_topics.append(_h_text[:80])
+        # Показываем подсказку только если накопилось 2+ поисковых действия
+        if len(_searched_topics) >= 2 and not _force_analyse:
+            _memory_block += (
+                "\n🔎 УЖЕ ИССЛЕДОВАНО (не повторяй — ищи другой угол):\n"
+                + '\n'.join(f"  • {t}" for t in _searched_topics[:5])
+                + "\n→ Попробуй: другую площадку, другую аудиторию, другой формат поиска или создай контент/письмо.\n"
+            )
         _memory_block += _untried_block
 
     # ── Имена целей для привязки задач ──
@@ -5058,12 +5083,28 @@ class AnchorEngine:
 
             # Строим детальный профиль каждого агента с его личной историей действий
             _profiles_lines = []
+            _re_coord = __import__('re')
+            _COORD_SEARCH_TOOLS = {
+                'web_search', 'research_topic', 'research_and_plan',
+                'quick_topic_search', 'get_news_trends',
+            }
             for p in _profiles:
                 _hist = _per_agent_history.get(p['name'], [])
                 _hist_str = (
                     ' | '.join(h[:100] for h in _hist[:3])
                     if _hist else 'нет истории'
                 )
+                # Добавляем темы уже исследованных запросов для видимости координатором
+                _coord_topics = []
+                for _ch in _hist[:5]:
+                    _cm = _re_coord.match(r'\S+\s+\S+\s+\[([^\]]*)\]\s*(.*)', _ch)
+                    if _cm:
+                        _ch_tools = _cm.group(1).lower()
+                        _ch_text = _cm.group(2).strip()
+                        if any(st in _ch_tools for st in _COORD_SEARCH_TOOLS) and len(_ch_text) > 10:
+                            _coord_topics.append(_ch_text[:50])
+                if _coord_topics:
+                    _hist_str += f" [исследовал: {' / '.join(_coord_topics[:3])}]"
                 _desc_part = f', описание: {p["desc"][:150]}' if p.get('desc') else ''
                 _spec_part = f' [{p["spec"]}]' if p.get('spec') else ''
                 # Добавляем конкретный RSS URL чтобы координатор понимал тематику ленты
@@ -5093,6 +5134,7 @@ class AnchorEngine:
                     f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}{_send_note}'
                     f', инструменты=[{", ".join(p["tools"][:6]) if p["tools"] else (", ".join(p["caps"][:4]) + " через run_agent_action") if p["caps"] else "web_search, research_topic"}]'
                     f'{_desc_part}'
+                    f', история={_hist_str}'
                 )
             _n_agents = len(_profiles)
             _profiles_str = '\n'.join(_profiles_lines)
