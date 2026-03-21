@@ -6694,11 +6694,33 @@ class AnchorEngine:
             if _results_for_report:
                 try:
                     _report_items = '\n'.join(f"• {r}" for r in _results_for_report[:5])
+                    # Перезагружаем актуальный прогресс целей (агенты могли обновить за время цикла)
+                    try:
+                        from models import Goal as _Goal_fresh
+                        _fresh_goals = session.query(_Goal_fresh).filter(
+                            _Goal_fresh.user_id == user.id,
+                            _Goal_fresh.status == 'active',
+                        ).order_by(_Goal_fresh.created_at.desc()).limit(5).all()
+                        if _fresh_goals:
+                            _goals_for_report = [
+                                {
+                                    'title': g.title,
+                                    'progress': g.progress_percentage or 0,
+                                    'metric_current': g.metric_current or 0,
+                                    'metric_target': g.metric_target,
+                                    'metric_unit': getattr(g, 'metric_unit', '') or '',
+                                }
+                                for g in _fresh_goals
+                            ]
+                        else:
+                            _goals_for_report = _goals
+                    except Exception:
+                        _goals_for_report = _goals
                     _goals_state_now = '\n'.join(
                         f"  {g['title'][:60] + '…' if len(g['title']) > 60 else g['title']} — {g.get('progress', 0)}%"
                         + (f" ({int(g.get('metric_current', 0))}/{int(g.get('metric_target', 0))} {g.get('metric_unit', '')})"
                            if g.get('metric_target') else '')
-                        for g in _goals[:3]
+                        for g in _goals_for_report[:3]
                     )
                     _bridge_flow = '\n'.join(_bridge_notes) if _bridge_notes else ''
                     # Проверяем — кто сохранил заметку в этом цикле
