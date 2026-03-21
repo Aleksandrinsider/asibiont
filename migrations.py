@@ -686,11 +686,19 @@ def _cleanup_junk_agent_tasks(session):
         ))
         deleted_stuck = result2.rowcount if hasattr(result2, 'rowcount') else 0
 
+        # Переименовываем старые AAL-записи с техническим префиксом "L2 координация:"
+        result3 = session.execute(text(
+            "UPDATE agent_activity_log "
+            "SET title = REGEXP_REPLACE(title, '^L2 координация: ', '') "
+            "WHERE title LIKE 'L2 координация: %'"
+        ))
+        renamed_aal = result3.rowcount if hasattr(result3, 'rowcount') else 0
+
         session.commit()
-        if deleted_cancelled or deleted_stuck:
+        if deleted_cancelled or deleted_stuck or renamed_aal:
             logger.info(
-                "Cleanup: removed %d cancelled+%d stuck junk agent tasks",
-                deleted_cancelled, deleted_stuck,
+                "Cleanup: removed %d cancelled+%d stuck junk agent tasks, renamed %d AAL titles",
+                deleted_cancelled, deleted_stuck, renamed_aal,
             )
     except Exception as e:
         logger.warning("Cleanup junk agent tasks failed (non-fatal): %s", e)

@@ -1527,7 +1527,7 @@ class OfficeEngine:
 
             _log_agent_activity_sync(
                 user_db_id, _agent_name_db, _agent_id,
-                f'L2 координация: {_atask[:120]}',
+                f'{_agent_name_db}: {_atask[:120]}',
                 f'Цель: {_agoal}. Задача: {_atask}',
                 activity_type='agent_task',
             )
