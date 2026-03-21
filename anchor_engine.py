@@ -856,8 +856,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         'find_relevant_contacts_for_task', 'update_goal_progress', 'add_task',
         # web_search специально удалён — должен баниться после 2 раз чтобы не зацикливаться
     }
-    # GitHub-агенты: run_agent_action не банить — каждый query уникален (search_users, find_contributors...)
-    if _has_github:
+    # GitHub/RSS-агенты: run_agent_action не банить — каждый вызов уникален
+    # (GitHub: разные query/pages; RSS: данные меняются каждый час)
+    if _has_github or _has_rss:
         _MULTI_USE_OK.add('run_agent_action')
     _banned = {t for t, n in _tool_cnt.items() if n >= 2 and t not in _MULTI_USE_OK}
     _warn   = {t for t, n in _tool_cnt.items() if n == 1}
@@ -872,6 +873,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         'web_search', 'quick_topic_search', 'research_topic', 'get_news_trends',
         'research_and_plan', 'analyze_situation_and_suggest_tasks',
     }
+    # Для RSS-агентов run_agent_action — основной рабочий инструмент, не признак петли
+    _RSS_WORK_TOOLS = {'run_agent_action', 'research_topic', 'create_post', 'add_task',
+                       'schedule_background_task', 'web_search'} if _has_rss else set()
     _SAVE_ONLY   = {'save_email_contact', 'add_email_leads', 'add_task'}
     _PROGRESS_ONLY = {'update_goal_progress'}
     _last4 = _last_tools[-4:]
@@ -882,35 +886,47 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         len(_last6) >= 4
         and len(set(_last6)) <= 2
         and len(_last6) >= 4
+        # RSS ping-pong: run_agent_action ↔ research_topic это НОРМАЛЬНЫЙ рабочий цикл
+        and not (_has_rss and set(_last6) <= _RSS_WORK_TOOLS)
     )
     _is_trivial_loop = (
         # Ping-pong между двумя инструментами (web_search ↔ update_goal_progress и т.д.)
         _is_pingpong
         # Только поиск + обновление прогресса
         or (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _PROGRESS_ONLY for t in _last4))
-        # Поиск → сохранить: цикл без отправки
+        # Поиск → сохранить: цикл без отправки (НЕ для RSS — у него нет email-отправки)
         or (len(_last4) >= 4 and all(t in _SEARCH_ONLY | _SAVE_ONLY for t in _last4)
             and not any(t in ('send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users')
-                        for t in _last_tools))
-        # Только сохранение контактов без отправки (частая получасть collecting-агенте)
+                        for t in _last_tools)
+            and not _has_rss)
+        # Только сохранение контактов без отправки
         or (len(_last5) >= 5 and all(t in _SAVE_ONLY for t in _last5))
-        # Только поиск (без email и без делегирования) — 4+ циклов
-        or (len(_last4) >= 4 and all(t in _SEARCH_ONLY for t in _last4))
+        # Только поиск (без email и без делегирования) — 4+ циклов (НЕ для RSS-агентов)
+        or (len(_last4) >= 4 and all(t in _SEARCH_ONLY for t in _last4) and not _has_rss)
     )
     if _is_trivial_loop:
         _force_analyse = True
 
-    # Инструменты которые агент ЕЩЁ НЕ пробовал — сортированные по полезности
-    _ALL_ACTION_TOOLS = [
-        'send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users',
-        'start_email_campaign', 'start_content_campaign', 'generate_marketing_content',
-        'create_post', 'publish_to_telegram', 'find_partners', 'start_delegation_campaign',
-        'find_relevant_contacts_for_task', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
-        'send_follow_up_email', 'schedule_background_task', 'set_contact_alert',
-        'research_topic', 'quick_topic_search', 'get_news_trends', 'web_search',
-        'generate_image', 'publish_to_discord', 'list_email_contacts',
-        'add_task', 'save_email_contact', 'update_goal_progress',
-    ]
+    # Инструменты которые агент ЕЩЁ НЕ пробовал — адаптированы под тип агента
+    if _has_rss and not _has_imap and not _has_github:
+        # RSS-only агент: только реально доступные инструменты
+        _ALL_ACTION_TOOLS = [
+            'run_agent_action', 'research_topic', 'web_search', 'create_post',
+            'publish_to_telegram', 'add_task', 'schedule_background_task',
+            'get_news_trends', 'analyze_situation_and_suggest_tasks', 'research_and_plan',
+            'quick_topic_search', 'update_goal_progress',
+        ]
+    else:
+        _ALL_ACTION_TOOLS = [
+            'send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users',
+            'start_email_campaign', 'start_content_campaign', 'generate_marketing_content',
+            'create_post', 'publish_to_telegram', 'find_partners', 'start_delegation_campaign',
+            'find_relevant_contacts_for_task', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
+            'send_follow_up_email', 'schedule_background_task', 'set_contact_alert',
+            'research_topic', 'quick_topic_search', 'get_news_trends', 'web_search',
+            'generate_image', 'publish_to_discord', 'list_email_contacts',
+            'add_task', 'save_email_contact', 'update_goal_progress',
+        ]
     _used_tools = set(_tool_cnt.keys())
     _untried = [t for t in _ALL_ACTION_TOOLS if t not in _used_tools and t not in _banned]
     _untried_block = ''
@@ -951,16 +967,29 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
 
         if _zero_progress and not _has_outreach_done and _has_search_done:
-            _goal_state_hint += (
-                "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
-                "Следующий шаг — выход на людей: "
-                "find_relevant_contacts_for_task → send_outreach_email / find_and_message_relevant_users.\n"
-            )
+            if _has_rss and not _has_imap and not _has_github:
+                # RSS-only: не отправляет письма сам — делегирует
+                _goal_state_hint += (
+                    "\n📊 СТАТУС: поиск/анализ сделан. Твоя следующая задача — "
+                    "DELEGATE[email-агент]: передай ключевые инсайты и идеи для outreach-писем.\n"
+                )
+            else:
+                _goal_state_hint += (
+                    "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
+                    "Следующий шаг — выход на людей: "
+                    "find_relevant_contacts_for_task → send_outreach_email / find_and_message_relevant_users.\n"
+                )
         elif _stuck_goals and agent_history and len(agent_history) >= 4 and not _has_outreach_done:
-            _goal_state_hint += (
-                "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
-                "Пора действовать: find_relevant_contacts_for_task или find_and_message_relevant_users.\n"
-            )
+            if _has_rss and not _has_imap and not _has_github:
+                _goal_state_hint += (
+                    "\n📡 АНАЛИТИК: ты мониторишь тренды — хорошо. Теперь передай лучшие инсайты "
+                    "через DELEGATE[email-агент] чтобы команда использовала их в outreach.\n"
+                )
+            else:
+                _goal_state_hint += (
+                    "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
+                    "Пора действовать: find_relevant_contacts_for_task или find_and_message_relevant_users.\n"
+                )
         elif _has_find_contacts and _has_outreach_done and not _metric_hints:
             # Агент искал и отправлял, но метрика не отображается — значит прогресс есть
             _goal_state_hint += (
@@ -1149,7 +1178,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + '\n'.join(_mem_lines) + '\n'
         )
         if _force_analyse:
-            # Предлагаем конкретные альтернативы с учётом типа цели
+            # Предлагаем конкретные альтернативы с учётом типа агента и типа цели
+            _ALTS_RSS_ONLY = [
+                # Для RSS-only агента: меняй action, формат вывода, делегируй
+                "run_agent_action(action='search', query=НОВЫЙ_ЗАПРОС)",
+                'create_post', 'web_search', 'research_topic',
+                'add_task', 'schedule_background_task', 'analyze_situation_and_suggest_tasks',
+                'get_news_trends', 'DELEGATE[Кристина]: передай идеи/инсайты email-агенту',
+            ]
             _ALTS_RESEARCH = [
                 'run_agent_action', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
                 'get_news_trends', 'create_post', 'publish_to_telegram', 'schedule_background_task',
@@ -1160,13 +1196,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 'start_delegation_campaign', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
                 'get_news_trends', 'find_relevant_contacts_for_task',
             ]
-            _alts_pool = _ALTS_RESEARCH if _goal_type in ('research', 'dev') else _ALTS_OUTREACH
+            if _has_rss and not _has_imap and not _has_github:
+                _alts_pool = _ALTS_RSS_ONLY
+            elif _goal_type in ('research', 'dev'):
+                _alts_pool = _ALTS_RESEARCH
+            else:
+                _alts_pool = _ALTS_OUTREACH
             _alts = [t for t in _alts_pool if t not in _used_tools][:5]
             _alts_str = ', '.join(_alts) if _alts else 'research_and_plan, analyze_situation_and_suggest_tasks'
             _memory_block += (
                 "🔴 ПЕТЛЯ ОБНАРУЖЕНА: ты повторяешь одни и те же инструменты без прогресса!\n"
                 f"→ НЕМЕДЛЕННО примени ЛЮБОЙ из этих (ты ещё не пробовал!): {_alts_str}\n"
-                "Правило при застревании: роль вторична, важен результат — выеди за рамки специализации если надо.\n"
+                "Правило при застревании: используй DELEGATE[коллега] чтобы передать работу тому, у кого есть нужные инструменты.\n"
             )
         elif _banned:
             _memory_block += (
