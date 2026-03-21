@@ -1405,6 +1405,8 @@ async def dashboard_handler(request):
             tasks = session_db.query(Task).filter(or_(*_task_conditions)).all()
             # Exclude rejected/cancelled — same filter as /api/tasks
             tasks = [t for t in tasks if t.status not in ('rejected', 'cancelled') and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
+            # Hide failed agent tasks (autopilot internal failures — not useful for user)
+            tasks = [t for t in tasks if not (t.status == 'failed' and getattr(t, 'source', None) == 'agent')]
             logger.info(f"Found {len(tasks)} tasks for user {user.id} (telegram_id: {user.telegram_id})")
             profile = session_db.query(UserProfile).filter_by(user_id=user.id).first() if user else None
 
@@ -6925,13 +6927,10 @@ async def api_tasks_handler(request):
         
         tasks = session_db.query(Task).filter(or_(*query_conditions)).all()
         
-        # Exclude rejected tasks; show cancelled agent tasks with failure reason as 'failed'
-        tasks = [t for t in tasks if t.status != 'rejected' and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
-        # Hide old cancelled tasks without notes (manual cancellations)
-        tasks = [t for t in tasks if t.status != 'cancelled' or (getattr(t, 'source', None) == 'agent' and t.completion_notes)]
-        # Hide internal autopilot task failures that are not meaningful for the user
-        _HIDDEN_NOTES = ('Прервано: новый цикл', 'Агент вернул пустой результат')
-        tasks = [t for t in tasks if not any(h in (t.completion_notes or '') for h in _HIDDEN_NOTES)]
+        # Exclude rejected/cancelled tasks
+        tasks = [t for t in tasks if t.status not in ('rejected', 'cancelled') and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
+        # Hide failed agent tasks (autopilot internal failures — not useful for user)
+        tasks = [t for t in tasks if not (t.status == 'failed' and getattr(t, 'source', None) == 'agent')]
         
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
