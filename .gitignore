@@ -128,6 +128,8 @@ _backfill_*.py
 _out*.txt
 _pytest_out.txt
 _autonomy_out.txt
+_*.py
+_*.txt
 _agent_audit*.py
 
 
