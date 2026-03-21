@@ -6610,7 +6610,34 @@ class AnchorEngine:
                 if not any(p in r.lower() for p in _BORING_RESULT_PHRASES)
             ]
             if _results_summary and not _results_for_report:
-                # Все результаты — placeholder'ы. Не генерируем отчёт, не беспокоим пользователя.
+                # Все результаты — placeholder'ы (таймауты, нет данных). Сохраняем минимальный итог в хронологию.
+                try:
+                    from models import Session as _Min_Sess_cls, AgentActivityLog as _Min_AAL
+                    _min_sess = _Min_Sess_cls()
+                    try:
+                        _goals_titles_min = ', '.join(
+                            (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
+                            for g in _goals[:2]
+                        )
+                        _min_sess.add(_Min_AAL(
+                            user_id=user.id,
+                            activity_type='coordinator_summary',
+                            title=f'Цикл завершён: {_goals_titles_min}'[:120],
+                            content='Агенты работали над целью, конкретных новых результатов в этом цикле нет.',
+                            status='completed',
+                            result='no_new_results',
+                        ))
+                        _min_sess.commit()
+                        logger.info("[COORD] minimal coordinator_summary (boring results) saved for user %d", user.id)
+                    except Exception as _min_err:
+                        logger.debug("[COORD] minimal summary save failed: %s", _min_err)
+                        try: _min_sess.rollback()
+                        except Exception: pass
+                    finally:
+                        try: _min_sess.close()
+                        except Exception: pass
+                except Exception:
+                    pass
                 return True
             if _results_for_report:
                 try:

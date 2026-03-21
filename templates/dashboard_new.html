@@ -7317,7 +7317,10 @@ else:
 
             // Для autopilot/coordinator показываем result (итог), а не content (промпт)
             const _isAutoType = a.activity_type === 'goal_autopilot_dispatch' || a.activity_type === 'coordinator_summary';
-            const _rawDisplay = (_isAutoType && a.result) ? a.result : (a.content || a.result || '');
+            let _rawDisplay = (_isAutoType && a.result) ? a.result : (a.content || a.result || '');
+            // Человекочитаемые замены технических результатов
+            if (_rawDisplay === 'timeout/process_restart') _rawDisplay = 'Рабочий цикл был прерван перезапуском сервера. Агенты продолжат работу в следующем цикле.';
+            else if (_rawDisplay === 'no_new_results') _rawDisplay = '';  // не показываем "нет новых результатов" — и так видно из заголовка
 
             // Чистим контент через универсальную функцию
             const cleanContent = _tlCleanText(_rawDisplay, false);
@@ -7328,12 +7331,12 @@ else:
             let _statusBadge = '';
             if (a.activity_type === 'goal_autopilot_dispatch' && a.status) {
                 const _statusColors = {
-                    'failed': '#cf222e',
+                    'failed': '#8250df',
                     'noise_filtered': '#6e7781', 'dedup_filtered': '#6e7781',
                     'empty_result': '#6e7781', 'no_action': '#6e7781',
                 };
                 const _statusLabels = {
-                    'failed': 'ERR',
+                    'failed': 'прерван',
                     'noise_filtered': 'skip', 'dedup_filtered': 'skip',
                     'empty_result': 'skip', 'no_action': 'skip',
                 };
@@ -7394,11 +7397,11 @@ else:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set(['coordinator_summary']);
+            const _HIDDEN_ACT_TYPES = new Set([]);  // coordinator_summary теперь видим
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
-                // Hide failed/empty/in_progress/noise/dedup autopilot dispatches — no useful info for user
-                if (a.activity_type === 'goal_autopilot_dispatch' && ['failed', 'empty_result', 'in_progress', 'noise_filtered', 'dedup_filtered'].includes(a.status)) return false;
+                // Hide only in_progress/noise/dedup autopilot dispatches — failed и completed показываем
+                if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered'].includes(a.status)) return false;
                 return true;
             }).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
@@ -8387,7 +8390,7 @@ else:
                     const agentHeader = document.createElement('div');
                     agentHeader.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #D1D9E0; cursor: pointer; user-select: none;';
                     const _acFiltered = agentActivities.filter(a => {
-                        if (a.activity_type === 'goal_autopilot_dispatch' && ['failed', 'empty_result', 'in_progress'].includes(a.status)) return false;
+                        if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress'].includes(a.status)) return false;
                         return true;
                     });
                     const _ac = _acFiltered.length;
