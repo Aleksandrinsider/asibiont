@@ -64,6 +64,20 @@ EXCLUDED_TOOLS = {
     'get_stock_info',                    # удалён — заменён research_topic
     'and_',                              # SQLAlchemy operator leak
     'or_',                               # SQLAlchemy operator leak
+    # Дубли активных инструментов — убираем чтобы не путать AI
+    'set_reminder',                      # дубль add_task(reminder_time)
+    'update_goal',                       # дубль update_goal_progress(notes/status)
+    'complete_goal',                     # дубль update_goal_progress(status='completed')
+    'get_message_status',                # редко используется, покрывается get_incoming_messages
+    'check_time_conflicts',              # внутренняя, вызывается автоматически в add_task
+    'restore_task',                      # редкий кейс, покрывается add_task
+    'get_stock_price',                   # дубль research_topic для финансовых данных
+    'quick_topic_search',                # дубль research_topic(depth='basic')
+    'research_and_plan',                 # дубль research_topic(depth='deep')
+    'analyze_situation_and_suggest_tasks', # AI анализирует сам
+    'analyze_group_opportunities',       # дубль find_relevant_contacts_for_task
+    'find_partners',                     # дубль find_relevant_contacts_for_task
+    'generate_marketing_content',        # AI генерирует сам через create_post
 }
 
 def get_available_tools(subscription_tier=None):

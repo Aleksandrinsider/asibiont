@@ -33,9 +33,6 @@ from .autonomous_agent import chat_with_ai as autonomous_chat_with_ai
 
 logger = logging.getLogger(__name__)
 
-# Базовый системный промпт для простых сообщений
-system_prompt = "Ты - ASI Biont, умный AI-помощник для управления задачами и повышения продуктивности. Отвечай кратко и по делу."
-
 # ── Bilingual labels for proactive context & situation prompt ──
 def _t(key, lang='ru'):
     """Get a translated label by key."""
