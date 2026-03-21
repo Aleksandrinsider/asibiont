@@ -5641,6 +5641,7 @@ class AnchorEngine:
             # ── AAL запись ──
             from models import AgentActivityLog as _AAL_c, Session as _AAL_Sess
             _aal_id_c = None
+            _safe_task_text = str(base_task_text or '')[:600]
             try:
                 # Используем отдельную сессию — основная может быть в ненадёжном состоянии
                 _aal_sess = _AAL_Sess()
@@ -5649,17 +5650,18 @@ class AnchorEngine:
                         user_id=user.id,
                         activity_type='goal_autopilot_dispatch',
                         title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}'[:300],
-                        content=base_task_text[:600],
-                        target=(anchor.source or '')[:300],
+                        content=_safe_task_text,
+                        target=str(getattr(anchor, 'source', '') or '')[:300],
                         status='in_progress',
                         ref_id=None,
                     )
                     _aal_sess.add(_aal_c)
                     _aal_sess.commit()
                     _aal_id_c = _aal_c.id
-                    logger.info("[COORD] AAL created id=%s for user %d", _aal_id_c, user.id)
+                    logger.info("[COORD] AAL dispatch created id=%s for user %d", _aal_id_c, user.id)
                 except Exception as _aal_err:
                     logger.warning("[COORD] AAL create failed: %s", _aal_err)
+                    import traceback; logger.warning("[COORD] AAL traceback: %s", traceback.format_exc())
                     try:
                         _aal_sess.rollback()
                     except Exception:
@@ -6623,7 +6625,7 @@ class AnchorEngine:
             _BORING_RESULT_PHRASES = (
                 'задача передана', 'результат будет позже', 'таймаут', 'timeout',
                 'нет новых писем', 'входящих писем нет', 'новых данных нет',
-                'не удалось', 'ошибка выполнения',
+                'ошибка выполнения',
             )
             _results_for_report = [
                 r for r in _results_summary
@@ -6655,6 +6657,36 @@ class AnchorEngine:
                         except Exception: pass
                     finally:
                         try: _min_sess.close()
+                        except Exception: pass
+                except Exception:
+                    pass
+                return True
+            elif not _results_summary:
+                # Полностью пустой результат (агенты не вернули ничего) — тоже фиксируем в хронологии
+                try:
+                    from models import Session as _Empty_Sess_cls, AgentActivityLog as _Empty_AAL
+                    _empty_sess = _Empty_Sess_cls()
+                    try:
+                        _goals_titles_empty = ', '.join(
+                            (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
+                            for g in _goals[:2]
+                        )
+                        _empty_sess.add(_Empty_AAL(
+                            user_id=user.id,
+                            activity_type='coordinator_summary',
+                            title=f'Цикл завершён: {_goals_titles_empty}'[:120],
+                            content='Координатор запустил цикл, агенты не вернули результатов.',
+                            status='completed',
+                            result='empty_cycle',
+                        ))
+                        _empty_sess.commit()
+                        logger.info("[COORD] empty coordinator_summary saved for user %d", user.id)
+                    except Exception as _empty_err:
+                        logger.debug("[COORD] empty summary save failed: %s", _empty_err)
+                        try: _empty_sess.rollback()
+                        except Exception: pass
+                    finally:
+                        try: _empty_sess.close()
                         except Exception: pass
                 except Exception:
                     pass
@@ -6711,8 +6743,30 @@ class AnchorEngine:
                                     "AND created_at >= :cutoff LIMIT 1"
                                 ), {'uid': user.id, 'cutoff': _sum_cutoff}).fetchone()
                                 if _recent_summary:
-                                    logger.info("[COORD] coordinator_summary deduped — recent exists (id=%s)", _recent_summary[0])
-                                    _sum_sess.close()
+                                    logger.info("[COORD] coordinator_summary interaction deduped — recent exists (id=%s)", _recent_summary[0])
+                                    # Interaction дедуплицирована, но AAL всё равно создаём для хронологии
+                                    try:
+                                        _goals_titles_dd = ', '.join(
+                                            (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
+                                            for g in _goals[:2]
+                                        )
+                                        _sum_sess.add(AgentActivityLog(
+                                            user_id=user.id,
+                                            activity_type='coordinator_summary',
+                                            title=f'Итог цикла: {_goals_titles_dd}'[:120],
+                                            content=_report_text,
+                                            status='completed',
+                                            result=_report_text[:800],
+                                        ))
+                                        _sum_sess.commit()
+                                        logger.info("[COORD] coordinator_summary AAL saved (interaction deduped) for user %d", user.id)
+                                    except Exception as _dd_err:
+                                        logger.warning("[COORD] dedup AAL save failed: %s", _dd_err)
+                                        try: _sum_sess.rollback()
+                                        except Exception: pass
+                                    finally:
+                                        try: _sum_sess.close()
+                                        except Exception: pass
                                     if self.bot:
                                         try:
                                             await self.bot.send_message(
