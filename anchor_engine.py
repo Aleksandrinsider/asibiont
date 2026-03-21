@@ -11564,33 +11564,68 @@ class AnchorEngine:
                 session.add(log)
                 session.commit()
 
-                # ── Если 0 новых лидов и кампания почти не продвинулась — сообщить пользователю ──
-                if count == 0 and (campaign.emails_sent or 0) < 3:
-                    _total_created_at = campaign.created_at
-                    if _total_created_at:
-                        if _total_created_at.tzinfo is None:
-                            _total_created_at = _total_created_at.replace(tzinfo=timezone.utc)
-                        _age_h = (datetime.now(timezone.utc) - _total_created_at).total_seconds() / 3600
+                # ── Если 0 новых лидов — проверяем не застряла ли кампания ──
+                _should_notify_stuck = False
+                _notify_reason = ''
+                if count == 0:
+                    _emails_sent_so_far = campaign.emails_sent or 0
+                    if _emails_sent_so_far < 3:
+                        # Новая кампания — ещё ни разу не отправила
+                        _total_created_at = campaign.created_at
+                        if _total_created_at:
+                            if _total_created_at.tzinfo is None:
+                                _total_created_at = _total_created_at.replace(tzinfo=timezone.utc)
+                            _age_h = (datetime.now(timezone.utc) - _total_created_at).total_seconds() / 3600
+                        else:
+                            _age_h = 999
+                        if _age_h >= 1.5:
+                            _should_notify_stuck = True
+                            _notify_reason = 'new_no_leads'
                     else:
-                        _age_h = 999
-                    if _age_h >= 1.5:  # Кампания существует > 1.5ч и всё ещё без лидов
-                        _camp_goal_short = (campaign.goal or campaign.name or '')[:120]
-                        _camp_audience = (campaign.target_audience or '')[:100]
-                        # Определяем тип аудитории для умных подсказок
-                        _aud_lower = f"{_camp_audience} {_camp_goal_short}".lower()
-                        _is_tech = any(w in _aud_lower for w in ('python', 'developer', 'разработ', 'programmer', 'github', 'saas', 'startup', 'ai ', 'ml ', 'bot', 'api', 'engineer', 'инженер', 'frontend', 'backend', 'fullstack'))
-                        _is_biz = any(w in _aud_lower for w in ('b2b', 'компан', 'бизнес', 'предприн', 'hr', 'cto', 'ceo', 'founder', 'director'))
-                        _has_github_tok = bool(anchor_data.get('github_token', ''))
+                        # Активная кампания — проверяем когда было последнее письмо
+                        try:
+                            from models import EmailOutreach as _EO_stuck
+                            _last_sent = session.query(_EO_stuck).filter(
+                                _EO_stuck.campaign_id == campaign.id,
+                                _EO_stuck.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                            ).order_by(_EO_stuck.sent_at.desc()).first()
+                            if _last_sent and _last_sent.sent_at:
+                                _ls = _last_sent.sent_at
+                                if _ls.tzinfo is None:
+                                    _ls = _ls.replace(tzinfo=timezone.utc)
+                                _hours_since_last = (datetime.now(timezone.utc) - _ls).total_seconds() / 3600
+                                if _hours_since_last >= 48:
+                                    _should_notify_stuck = True
+                                    _notify_reason = 'no_leads_48h'
+                        except Exception as _e_stuck:
+                            logger.debug("suppressed stuck check: %s", _e_stuck)
 
-                        if _is_tech and not _has_github_tok:
+                if _should_notify_stuck:
+                    _camp_goal_short = (campaign.goal or campaign.name or '')[:120]
+                    _camp_audience = (campaign.target_audience or '')[:100]
+                    _aud_lower = f"{_camp_audience} {_camp_goal_short}".lower()
+                    _is_tech = any(w in _aud_lower for w in ('python', 'developer', 'разработ', 'programmer', 'github', 'saas', 'startup', 'ai ', 'ml ', 'bot', 'api', 'engineer', 'инженер', 'frontend', 'backend', 'fullstack'))
+                    _is_biz = any(w in _aud_lower for w in ('b2b', 'компан', 'бизнес', 'предприн', 'hr', 'cto', 'ceo', 'founder', 'director'))
+                    _has_github_tok = bool(anchor_data.get('github_token', ''))
+
+                    if _is_tech and not _has_github_tok:
+                        _suggestions = (
+                            f"💡 Вижу что цель связана с tech-аудиторией.\n"
+                            f"Чтобы найти разработчиков через GitHub — добавь в настройки агента:\n"
+                            f"  GITHUB_TOKEN=ghp_xxx (создай на github.com → Settings → Developer settings → Tokens)\n"
+                            f"Это даёт 5000 запросов/час вместо 60 — агент найдёт сотни email.\n\n"
+                            f"Или напиши: \"Кристина, найди мне 10 Python-разработчиков с GitHub\""
+                        )
+                    elif _is_tech:
+                        if _notify_reason == 'no_leads_48h':
                             _suggestions = (
-                                f"💡 Вижу что цель связана с tech-аудиторией.\n"
-                                f"Чтобы найти разработчиков через GitHub — добавь в настройки агента:\n"
-                                f"  GITHUB_TOKEN=ghp_xxx (создай на github.com → Settings → Developer settings → Tokens)\n"
-                                f"Это даёт 5000 запросов/час вместо 60 — агент найдёт сотни email.\n\n"
-                                f"Или напиши: \"Кристина, найди мне 10 Python-разработчиков с GitHub\""
+                                f"💡 GitHub ищет активно, но все найденные контакты уже в базе.\n"
+                                f"Чтобы расширить охват:\n"
+                                f"  а) Уточни аудиторию: «тестировщики Selenium» или «QA fintech»\n"
+                                f"  б) Смени сегмент: разработчики смежных областей\n"
+                                f"  в) Добавь новые email вручную через «Добавить контакт»"
                             )
-                        elif _is_tech:
+                        else:
                             _suggestions = (
                                 f"💡 Tech-аудитория: GitHub ищем активно, но может лимит исчерпан.\n"
                                 f"Скажи точнее: кого именно ищем?\n"
@@ -11598,34 +11633,35 @@ class AnchorEngine:
                                 f"  б) \"indie hacker с SaaS продуктом\" — другой сегмент\n"
                                 f"  в) \"авторы open-source telegram ботов\" — конкретная ниша"
                             )
-                        elif _is_biz:
-                            _suggestions = (
-                                f"💡 B2B-аудитория: hh.ru ищем HR/CTO компаний, но email редко публичные.\n"
-                                f"Что поможет лучше:\n"
-                                f"  а) Укажи конкретные компании или домены (example.com)\n"
-                                f"  б) Добавь LinkedIn URL нужных людей\n"
-                                f"  в) Напиши кому именно хочешь написать — помогу найти"
-                            )
-                        else:
-                            _suggestions = (
-                                f"💡 Помогут уточнения:\n"
-                                f"  а) Какие площадки/сайты посещает твоя аудитория?\n"
-                                f"  б) Есть ли Telegram-группы или форумы по теме?\n"
-                                f"  в) Можешь накинуть 2-3 известных тебе email для старта?"
-                            )
-                        _notify_text = (
-                            f"📧 Кампания «{campaign.name}» пока не нашла контакты\n\n"
-                            f"Цель: {_camp_goal_short}\n\n"
-                            f"{_suggestions}"
+                    elif _is_biz:
+                        _suggestions = (
+                            f"💡 B2B-аудитория: hh.ru ищем HR/CTO компаний, но email редко публичные.\n"
+                            f"Что поможет лучше:\n"
+                            f"  а) Укажи конкретные компании или домены (example.com)\n"
+                            f"  б) Добавь LinkedIn URL нужных людей\n"
+                            f"  в) Напиши кому именно хочешь написать — помогу найти"
                         )
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=_notify_text,
-                            )
-                            logger.info(f"[ANCHOR] email_need_leads: notified user {user.telegram_id} about stuck campaign #{campaign_id}")
-                        except Exception as _notify_err:
-                            logger.warning(f"[ANCHOR] email_need_leads notify error: {_notify_err}")
+                    else:
+                        _suggestions = (
+                            f"💡 Помогут уточнения:\n"
+                            f"  а) Какие площадки/сайты посещает твоя аудитория?\n"
+                            f"  б) Есть ли Telegram-группы или форумы по теме?\n"
+                            f"  в) Можешь накинуть 2-3 известных тебе email для старта?"
+                        )
+                    _stuck_header = (
+                        f"📧 Кампания «{campaign.name}»: нет новых лидов"
+                        + (" уже 48ч+" if _notify_reason == 'no_leads_48h' else "")
+                        + f"\n\nЦель: {_camp_goal_short}\n\n"
+                    )
+                    _notify_text = _stuck_header + _suggestions
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user.telegram_id,
+                            text=_notify_text,
+                        )
+                        logger.info(f"[ANCHOR] email_need_leads: notified user {user.telegram_id} about stuck campaign #{campaign_id} ({_notify_reason})")
+                    except Exception as _notify_err:
+                        logger.warning(f"[ANCHOR] email_need_leads notify error: {_notify_err}")
                 return
             else:
                 return

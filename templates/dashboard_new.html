@@ -7307,28 +7307,7 @@ else:
         function createTimelineItem(a, isNew) {
             const wrap = document.createElement('div');
             wrap.setAttribute('data-act-id', a.id || '');
-            const _tlBorderColors = {
-                'goal_autopilot_dispatch': '#0d9488',
-                'coordinator_summary': '#0d9488',
-                'coordinator_plan': '#0d9488',
-                'email_sent': '#2563eb',
-                'email_received': '#2563eb',
-                'email': '#2563eb',
-                'inbox_reply': '#2563eb',
-                'post_created': '#7c3aed',
-                'task_created': '#d97706',
-                'agent_task': '#d97706',
-                'search_performed': '#6b7280',
-                'contact_found': '#059669',
-                'call_made': '#0891b2',
-                'goal_updated': '#059669',
-                'goal_created': '#059669',
-                'goal_completed': '#059669',
-                'content_campaign': '#7c3aed',
-                'delegation_campaign': '#7c3aed',
-            };
-            const _borderClr = _tlBorderColors[a.activity_type] || '#9CA3AF';
-            wrap.style.cssText = `padding:0;border-bottom:1px solid #F0F3F5;border-left:3px solid ${_borderClr};padding-left:10px;` + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
+            wrap.style.cssText = `padding:0;border-bottom:1px solid #F0F3F5;border-left:3px solid #E8ECEF;padding-left:10px;` + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
             const labels = _tlLabels();
             const typeLabel = labels[a.activity_type] || a.activity_type;
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
@@ -7370,7 +7349,7 @@ else:
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasContent ? 'cursor:pointer;user-select:none;' : '');
-            const _typeLabelHtml = typeLabel ? `<span style="font-size:11px;color:${_borderClr};background:${_borderClr}18;padding:1px 6px;border-radius:9px;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>` : '';
+            const _typeLabelHtml = typeLabel ? `<span style="font-size:11px;color:#068487;padding:1px 6px;flex-shrink:0;white-space:nowrap;">${typeLabel}</span>` : '';
             header.innerHTML = `
                 <div style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                     <span style="font-size:13px;font-weight:500;color:#1F2328;flex:1;min-width:0;word-break:break-word;">${cleanTitle}</span>

@@ -9974,21 +9974,23 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             
             gh_queries = gh_queries[:6]  # увеличили лимит для RU
             if gh_queries:
-                # Rotate GitHub page: page 1 for first 15 emails_sent, page 2 for next 15, etc.
-                # This ensures each email_need_leads run explores a fresh set of users
-                _gh_page = max(1, (campaign.emails_sent or 0) // 15 + 1)
-                logger.info(f"[AUTO_LEADS] Tech audience → GitHub search page={_gh_page}: {gh_queries}")
-                github_leads = await api.github_multi_search(
-                    queries=gh_queries,
-                    max_users_per_query=20,
-                    page=_gh_page,
-                    github_token=github_token or None,
-                )
+                # Rotate GitHub pages: base page from emails_sent, always try 2 pages to avoid duplicates
+                _gh_page_base = max(1, (campaign.emails_sent or 0) // 15 + 1)
+                _gh_pages = [_gh_page_base, _gh_page_base + 1]
+                logger.info(f"[AUTO_LEADS] Tech audience → GitHub search pages={_gh_pages}: {gh_queries}")
+                for _gh_page in _gh_pages:
+                    _page_leads = await api.github_multi_search(
+                        queries=gh_queries,
+                        max_users_per_query=20,
+                        page=_gh_page,
+                        github_token=github_token or None,
+                    )
+                    github_leads.extend(_page_leads)
                 for lead in github_leads:
                     em = lead.get('email', '').lower().strip('.')
                     if em and not _is_generic_email(em):
                         all_emails_raw.add(em)
-                logger.info(f"[AUTO_LEADS] GitHub found {len(github_leads)} users with email")
+                logger.info(f"[AUTO_LEADS] GitHub found {len(github_leads)} users total from {len(_gh_pages)} pages")
         except Exception as _gh_err:
             logger.warning(f"[AUTO_LEADS] GitHub search failed: {_gh_err}")
     else:
@@ -11268,11 +11270,16 @@ async def send_outreach_email(
         try:
             from models import AgentActivityLog
             _name_part = f" ({recipient_name})" if recipient_name else ""
+            _sndr_name = (campaign.sender_name or '').strip()
+            _sndr_email = (campaign.sender_email or '').strip()
+            _from_line = ''
+            if _sndr_name or _sndr_email:
+                _from_line = f"От: {_sndr_name}{' <' + _sndr_email + '>' if _sndr_email else ''}\n"
             log_entry = AgentActivityLog(
                 user_id=user.id,
                 activity_type='email',
-                title=f"Outreach → {recipient_email}{_name_part}",
-                content=f"Тема: {subject}\n\n{body[:500]}",
+                title=f"{_sndr_name + ' → ' if _sndr_name else ''}{recipient_email}{_name_part}",
+                content=f"Тема: {subject}\n{_from_line}\n{body[:500]}",
                 target=recipient_email,
                 status='sent',
                 ref_id=outreach.id if hasattr(outreach, 'id') else None,
