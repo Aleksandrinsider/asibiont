@@ -194,15 +194,23 @@ for _fix_k in list(_fix_os.environ.keys()):
 import builtins as _sec_b
 _sec_orig_import = _sec_b.__import__
 _SEC_BLOCKED = frozenset({
-    'subprocess', 'shutil', 'ctypes', 'importlib', 'code', 'codeop',
+    'shutil', 'ctypes', 'importlib', 'code', 'codeop',
     'multiprocessing', 'threading', 'signal', 'pty', 'fcntl', 'termios',
-    'resource', 'gc', 'sys', 'pickle', 'shelve', 'marshal',
+    'resource', 'gc', 'pickle', 'shelve', 'marshal',
 })
 def _sec_safe_import(name, *_a, **_kw):
     _top = name.split('.')[0]
     if _top in _SEC_BLOCKED:
         raise ImportError(f'Module {name!r} is not available in agent sandbox')
-    return _sec_orig_import(name, *_a, **_kw)
+    _mod = _sec_orig_import(name, *_a, **_kw)
+    # Allow importing subprocess (needed by imaplib) but neuter dangerous calls
+    if _top == 'subprocess':
+        def _blocked(*_ba, **_bk):
+            raise PermissionError('subprocess execution is not allowed in agent sandbox')
+        for _attr in ('Popen', 'run', 'call', 'check_output', 'check_call', 'getoutput', 'getstatusoutput'):
+            if hasattr(_mod, _attr):
+                setattr(_mod, _attr, _blocked)
+    return _mod
 _sec_b.__import__ = _sec_safe_import
 '''
 
