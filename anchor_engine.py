@@ -1424,7 +1424,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _publish_hint = ''
     if user:
         _ch = getattr(user, 'telegram_channel', None) or 'настроен в профиле'
-        _publish_hint = f"\npublish_to_telegram → личный канал ({_ch}). НЕ работает для чужих каналов.\n"
+        _publish_hint = (
+            f"\n⛔ publish_to_telegram → ТОЛЬКО личный канал ({_ch}). "
+            "НЕ работает для чужих каналов (@qa_ru, @manus_ai_agent_bot, любых внешних). "
+            "Если нашёл чужой Telegram-канал с аудиторией — НЕ пытайся туда публиковать. "
+            "Вместо этого: web_search('site:[канал] email OR contact') → save_email_contact → send_outreach_email.\n"
+        )
 
     _escalation_block = ''
     if _goal_type in ('outreach', 'general'):
@@ -5687,7 +5692,10 @@ class AnchorEngine:
                 "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
                 "• Если у агента [отправка+чтение email] и писем > 5 — сначала check_emails.\n"
                 "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N, location:X. Без email/имён.\n"
-                "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post. НЕ check_emails, НЕ run_agent_action.\n\n"
+                "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post. НЕ check_emails, НЕ run_agent_action.\n"
+                "• ⛔ publish_to_telegram ПУБЛИКУЕТ ТОЛЬКО в ЛИЧНЫЙ канал пользователя (@aleksandrinsider). "
+                "НЕ назначай задачу 'опубликовать в @qa_ru / @manus_ai_agent_bot / [любой чужой канал]' — агент туда НЕ имеет доступа! "
+                "Альтернатива: создай пост через create_post (сохраняется как контент) или send_outreach_email участникам найденных каналов.\n\n"
                 "СТРАТЕГИЧЕСКОЕ МЫШЛЕНИЕ:\n"
                 "• Если прямой поиск+рассылка не работает → создай контент-магнит (пост, статья), чтобы люди САМИ откликнулись.\n"
                 "• Если рассылка игнорируется → проблема в ценностном предложении. Пусть агент исследует: что РЕАЛЬНО нужно этим людям?\n"
