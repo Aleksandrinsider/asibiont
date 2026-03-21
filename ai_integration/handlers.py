@@ -4365,26 +4365,37 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 if _is_ppl_chk and (mc - _old_mc) >= 1:
                     try:
                         from models import EmailOutreach as _EO_chk, AgentActivityLog as _AAL_chk
-                        # Считаем ТОЛЬКО реальные ответы на outreach-письма (не email_contacts — там дефолт 'replied')
-                        _rpl_chk = session.query(_EO_chk).filter(
-                            _EO_chk.user_id == user.id, _EO_chk.status == 'replied'
-                        ).count()
-                        _ibx_chk = session.query(_AAL_chk).filter(
-                            _AAL_chk.user_id == user.id, _AAL_chk.activity_type == 'inbox_reply',
-                            _AAL_chk.created_at >= datetime.now() - timedelta(days=14),
-                        ).count()
-                        if _rpl_chk == 0 and _ibx_chk == 0:
-                            return (
-                                f"⛔ Нельзя обновить метрику «{matched.title}» (+{int(mc - _old_mc)}) — "
-                                f"нет подтверждённых ответов от целевых людей.\n\n"
-                                f"Правило: email отправлен / контакт в базе ≠ достигнутая единица цели.\n"
-                                f"Метрика обновляется только когда человек подтвердил участие (ответ «да, тестирую»).\n\n"
-                                f"Что нужно сделать:\n"
-                                f"  1. check_emails — проверь, есть ли ответы\n"
-                                f"  2. negotiate_by_email или reply_to_outreach_email — продолжи диалог\n"
-                                f"  3. Обновляй metric_current на +1 за каждый реальный положительный ответ\n"
-                                f"Текущая метрика: {int(_old_mc)} / {int(matched.metric_target)} {matched.metric_unit or ''}"
-                            )
+                        _delta_chk = mc - _old_mc
+                        # Размер прыжка определяет требуемые доказательства:
+                        # +1..3 — всегда OK (small increment per real contact found)
+                        # +4..10 — нужны свежие inbox_reply за последний час
+                        # +11 и более — нужны реальные EmailOutreach.replied > 0
+                        if _delta_chk > 10:
+                            _rpl_chk = session.query(_EO_chk).filter(
+                                _EO_chk.user_id == user.id, _EO_chk.status == 'replied'
+                            ).count()
+                            if _rpl_chk == 0:
+                                return (
+                                    f"⛔ Нельзя увеличить метрику «{matched.title}» сразу на +{int(_delta_chk)} — "
+                                    f"нет подтверждённых ответов на outreach-письма.\n\n"
+                                    f"Правило: 1 единица цели = 1 реальный человек, подтвердивший участие.\n"
+                                    f"Обновляй метрику постепенно: +1 за каждый реальный ответ.\n\n"
+                                    f"Текущая метрика: {int(_old_mc)} / {int(matched.metric_target)} {matched.metric_unit or ''}"
+                                )
+                        elif _delta_chk > 3:
+                            # Нужны inbox_reply за последний час (реальная свежая активность)
+                            _ibx_chk = session.query(_AAL_chk).filter(
+                                _AAL_chk.user_id == user.id, _AAL_chk.activity_type == 'inbox_reply',
+                                _AAL_chk.created_at >= datetime.now() - timedelta(hours=1),
+                            ).count()
+                            if _ibx_chk == 0:
+                                return (
+                                    f"⛔ Нельзя увеличить метрику «{matched.title}» на +{int(_delta_chk)} сразу — "
+                                    f"не было свежих ответов на письма в последний час.\n\n"
+                                    f"Правило: обновляй метрику только после check_emails.\n"
+                                    f"Шаг: +1-3 за каждую реальную новую группу ответов.\n\n"
+                                    f"Текущая метрика: {int(_old_mc)} / {int(matched.metric_target)} {matched.metric_unit or ''}"
+                                )
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
                 # Исключение: если это финальный update (цель достигается) — rate-limit пропускаем
@@ -4410,7 +4421,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 matched.progress_percentage = pct
                 changes.append(f"метрика: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''} ({pct}%)")
                 if pct >= 100 and matched.status == 'active':
-                    # GUARD: people-goals требуют подтверждённого участия
+                    # GUARD: people-goals требуют подтверждённого участия перед закрытием
                     _mc_people_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
                                         'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
                     _mc_people_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
@@ -4421,18 +4432,14 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     )
                     if _mc_is_ppl:
                         try:
-                            from models import EmailOutreach as _EO_mc, AgentActivityLog as _AAL_mc
-                            # Считаем только реальные ответы на email (не email_contacts — там статус 'replied' ставится по-умолчанию)
+                            from models import EmailOutreach as _EO_mc
+                            # Требуем минимум 1 реальный ответ на outreach-письмо
                             _rpl_mc = session.query(_EO_mc).filter(
                                 _EO_mc.user_id == user.id, _EO_mc.status == 'replied'
                             ).count()
-                            _ibx_mc = session.query(_AAL_mc).filter(
-                                _AAL_mc.user_id == user.id, _AAL_mc.activity_type == 'inbox_reply',
-                                _AAL_mc.created_at >= datetime.now() - timedelta(days=14),
-                            ).count()
-                            if _rpl_mc == 0 and _ibx_mc == 0:
+                            if _rpl_mc == 0:
                                 # Записываем обновление метрики, но НЕ закрываем цель
-                                changes.append(f"⚠️ цель НЕ закрыта — нет подтверждения реального участия (check_emails → проверь ответы)")
+                                changes.append(f"⚠️ цель НЕ закрыта — нет подтверждённых ответов на outreach-письма")
                                 session.commit()
                                 return (
                                     f"⚠️ Метрика обновлена: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''}, "
@@ -4510,21 +4517,15 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     )
                     if _is_people_goal:
                         try:
-                            from models import EmailContact as _EC_v
-                            _replied_cnt = session.query(_EC_v).filter(
-                                _EC_v.user_id == user.id,
-                                _EC_v.status == 'replied',
+                            from models import EmailOutreach as _EO_v
+                            # Требуем только реальные ответы на outreach (EmailOutreach.replied > 0)
+                            _replied_cnt = session.query(_EO_v).filter(
+                                _EO_v.user_id == user.id,
+                                _EO_v.status == 'replied',
                             ).count()
-                            # Также проверяем inbox_reply в activity log
-                            from models import AgentActivityLog as _AAL_v
-                            _inbox_evidence = session.query(_AAL_v).filter(
-                                _AAL_v.user_id == user.id,
-                                _AAL_v.activity_type == 'inbox_reply',
-                                _AAL_v.created_at >= datetime.now() - timedelta(days=14),
-                            ).count()
-                            if _replied_cnt == 0 and _inbox_evidence == 0:
+                            if _replied_cnt == 0:
                                 return (
-                                    f"⛔ Цель «{matched.title}» нельзя закрыть — нет подтверждения реального участия.\n\n"
+                                    f"⛔ Цель «{matched.title}» нельзя закрыть — нет подтверждённых ответов на outreach-письма.\n\n"
                                     f"Email-контакты в базе ≠ зарегистрированные тестировщики/пользователи.\n"
                                     f"Сначала убедись в реальном участии:\n"
                                     f"  1. Вызови check_emails — проверь есть ли ответы на outreach\n"
@@ -12889,6 +12890,7 @@ async def check_emails(
             _found_em = {em for em in _found_em if not _is_noreply(em)}
             _new_auto = _found_em - _known_emails
             # 1) Новые контакты → создаём с status=replied
+            _truly_new_contacts = 0  # Счётчик реально новых контактов (не повторных)
             for _new_em in list(_new_auto)[:5]:
                 try:
                     _existing_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_new_em).first()
@@ -12904,6 +12906,7 @@ async def check_emails(
                         session.add(_ec_new)
                         session.commit()
                         _known_emails.add(_new_em)
+                        _truly_new_contacts += 1
                         logger.info(f'[CHECK_EMAILS] Auto-saved contact: {_new_em} for user {user.id}')
                 except Exception as _e_save:
                     logger.debug(f'[CHECK_EMAILS] auto-save contact failed: {_e_save}')
@@ -12935,6 +12938,7 @@ async def check_emails(
 
             # 2) Известные контакты, которые ответили → обновляем статус на replied + сохраняем текст
             _replied_known = _found_em & _known_emails
+            _truly_new_replies = 0  # Счётчик контактов, чей статус ИЗМЕНИЛСЯ на replied впервые
             for _rep_em in list(_replied_known)[:10]:
                 try:
                     _rep_snippet = _reply_snippets.get(_rep_em, '')
@@ -12943,6 +12947,7 @@ async def check_emails(
                     if _ec_existing and _ec_existing.status in ('contacted', 'new', None):
                         _ec_existing.status = 'replied'
                         _ec_existing.last_contacted_at = _now_ce
+                        _truly_new_replies += 1  # Только реальное ПЕРВОЕ изменение статуса
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated contact status to replied: {_rep_em}')
                     # Также обновляем EmailOutreach если есть — сохраняем reply_text и reply_at
@@ -13149,8 +13154,9 @@ async def check_emails(
                             break  # одно предпочтение на контакт
 
             # Авто-обновление метрики если появились новые replied контакты
-            # Считаем ИНКРЕМЕНТ (только новые ответы за этот вызов), а не общий счётчик
-            _newly_replied_this_call = len(_new_auto) + len(_replied_known)
+            # Считаем ТОЛЬКО реально новые ответы (статус изменился с non-replied → replied)
+            # НЕ считаем уже известных replied-контактов повторно при каждой проверке!
+            _newly_replied_this_call = _truly_new_contacts + _truly_new_replies
             if _newly_replied_this_call > 0:
                 try:
                     from models import Goal as _Goal_ce
