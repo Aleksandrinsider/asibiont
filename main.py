@@ -6929,8 +6929,9 @@ async def api_tasks_handler(request):
         tasks = [t for t in tasks if t.status != 'rejected' and (not hasattr(t, 'delegation_status') or t.delegation_status != 'rejected')]
         # Hide old cancelled tasks without notes (manual cancellations)
         tasks = [t for t in tasks if t.status != 'cancelled' or (getattr(t, 'source', None) == 'agent' and t.completion_notes)]
-        # Hide "interrupted by new cycle" agent tasks — these are autopilot internal restarts, not user-visible failures
-        tasks = [t for t in tasks if 'Прервано: новый цикл' not in (t.completion_notes or '')]
+        # Hide internal autopilot task failures that are not meaningful for the user
+        _HIDDEN_NOTES = ('Прервано: новый цикл', 'Агент вернул пустой результат')
+        tasks = [t for t in tasks if not any(h in (t.completion_notes or '') for h in _HIDDEN_NOTES)]
         
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
