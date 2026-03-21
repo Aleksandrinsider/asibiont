@@ -1231,10 +1231,16 @@ class HybridAutonomousAgent:
                     if _al_ua:
                         _svc_a = agent_data.get('service_label') or agent_data.get('name', 'Агент')
                         _aname_a = agent_data.get('name', 'Агент')
+                        # Для search_users: сохраняем query+page в title для истории запросов
+                        _action_log_suffix = ''
+                        if action == 'search_users' and action_params:
+                            _q_l = str(action_params.get('query', ''))[:60]
+                            _p_l = str(action_params.get('page', 1))
+                            _action_log_suffix = f' [q={_q_l} p={_p_l}]'
                         _al_sa.add(_AALA(
                             user_id=_al_ua.id,
                             activity_type='run_agent_action',
-                            title=f'{_aname_a} · {action}',
+                            title=f'{_aname_a} · {action}{_action_log_suffix}',
                             content=(out[:600] if out else (err or 'нет вывода')),
                             target=_svc_a,
                             status='completed' if out else 'failed',
@@ -5290,6 +5296,45 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _max_iters = 5 if _is_autopilot_task else 4  # autopilot: search + save + send + update + summary; regular: до 4 итераций для сложных задач
     # GitHub-агент: определяем заранее для форсирования цепочки
     _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
+
+    # ── История GitHub-запросов за 7 дней (предотвращает повтор query между сессиями) ──
+    if _is_autopilot_task and _agent_has_github_local:
+        try:
+            from models import Session as _DBgh, AgentActivityLog as _ALog_gh
+            from datetime import datetime as _dt_gh, timezone as _tz_gh, timedelta as _td_gh
+            import re as _re_gh
+            _db_gh = _DBgh()
+            try:
+                _gh_logs = _db_gh.query(_ALog_gh).filter(
+                    _ALog_gh.user_id == user_id,
+                    _ALog_gh.activity_type == 'run_agent_action',
+                    _ALog_gh.title.like('% · search_users [q=%'),
+                    _ALog_gh.created_at >= _dt_gh.now(_tz_gh.utc) - _td_gh(days=7),
+                ).order_by(_ALog_gh.created_at.desc()).limit(20).all()
+                _used_qp: list[str] = []
+                for _gl in _gh_logs:
+                    _m_qp = _re_gh.search(r'\[q=(.+?)\s+p=(\d+)\]', _gl.title or '')
+                    if _m_qp:
+                        _entry = f"query='{_m_qp.group(1).strip()}' page={_m_qp.group(2)}"
+                        if _entry not in _used_qp:
+                            _used_qp.append(_entry)
+                if _used_qp:
+                    _qp_str = '\n  '.join(_used_qp[:10])
+                    system_prompt += (
+                        f"\n\n📋 ИСТОРИЯ GitHub-поисков за 7 дней (НЕ ПОВТОРЯЙ — уже сделано):\n"
+                        f"  {_qp_str}\n"
+                        "⚡ Для следующего цикла используй ДРУГУЮ комбинацию. Примеры новых вариантов:\n"
+                        "  'language:javascript repos:>5 location:Russia', 'language:java automation repos:>3',\n"
+                        "  'language:go testing followers:>2', 'location:Kazakhstan language:python repos:>2',\n"
+                        "  'language:kotlin android repos:>5', 'language:typescript repos:>10 followers:>3',\n"
+                        "  'language:ruby repos:>10', 'language:php repos:>15 location:Russia'\n"
+                        "Или используй следующий page= для уже запускавшихся query (page+1).\n"
+                    )
+            finally:
+                _db_gh.close()
+        except Exception as _gh_hist_err:
+            logger.debug('[DIRECTOR] gh query history: %s', _gh_hist_err)
+
     for _iter in range(_max_iters):
         # Адаптивные лимиты: github нужно больше (search+save×N+send×N), autopilot — средне, обычные — базово
         _max_tool_calls = 12 if (_is_autopilot_task and _agent_has_github_local) else (8 if _is_autopilot_task else 5)

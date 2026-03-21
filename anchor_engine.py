@@ -590,7 +590,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_imap:
         avail.append("  📧 Email: check_emails ← здесь реальные ответы живых людей; reply_to/negotiate — продолжение диалога")
     if has_github:
-        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='language:python followers:>5', page=1) → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)\n  ⚠️ QUERY правило: ТОЛЬКО GitHub-квалификаторы! Примеры: 'language:python followers:>5', 'language:javascript repos:>10 location:Russia'. НЕ 'AI testing QA automation' — свободный текст даёт 0 результатов!\n  🔄 ПАГИНАЦИЯ: если send_outreach_email вернул 'уже отправлено' для всех — используй page=2, page=3, на каждом цикле следующую страницу. Так обходишь до 300 пользователей за 30 циклов.")
+        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='language:python followers:>5', page=1) → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)\n  ⚠️ QUERY правило: ТОЛЬКО GitHub-квалификаторы! language:, repos:, followers:, location: — НЕ свободный текст!\n  💡 Примеры разнообразных query (меняй каждый цикл!):\n    QA/тест: 'language:python repos:>5 followers:>2' | 'language:javascript repos:>10 location:Russia' | 'language:java automation repos:>3'\n    Разнообразие: 'language:go testing followers:>2' | 'location:Kazakhstan language:python' | 'language:kotlin repos:>5' | 'language:typescript followers:>3 location:Russia'\n  🔄 ПАГИНАЦИЯ: если все уже contacted — используй page=2, page=3. На каждом цикле следующую страницу. Так обходишь до 300 пользователей.\n  📋 Уже использованные query видишь в секции ИСТОРИЯ (не повторяй их!)")
     if has_rss:
         avail.append("  📰 RSS: run_agent_action(action='get_latest') ← свежие данные и инфоповоды из источника")
     if has_alpha:
@@ -617,7 +617,8 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         "  💬 find_and_message_relevant_users ← написать пользователям ЭТОЙ платформы (не Telegram/Reddit!)",
         "  📨 start_email_campaign + send_outreach_email ← Email-охват по тем у кого есть email",
         "  📅 КОНФЕРЕНЦИИ 2026: web_search('конференции тестирование QA 2026 спикеры email') → save_email_contact → send_outreach_email (ПРОВЕРЬ что год >= 2026!)",
-        "  🏘️ СООБЩЕСТВА (прямой постинг НЕ возможен!): web_search('site:habr.com тестировщики OR \"QA engineer\" email') → save_email_contact → send_outreach_email. Аналогично Reddit, GitHub Issues.",
+        "  🏘️ СООБЩЕСТВА (прямой постинг НЕ возможен!): web_search('site:habr.com тестировщики OR \"QA engineer\" email') → save_email_contact → send_outreach_email",
+        "  🌐 ДРУГИЕ ИСТОЧНИКИ: web_search('site:dev.to \"QA automation\" OR \"software tester\" email contact') | web_search('site:stackoverflow.com/users tester OR QA OR automati') → save_email_contact → send_outreach_email",
     ]
     # Инструменты для личных / обучающих / здоровье-целей
     _sys_personal = [
@@ -746,7 +747,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _intg_missing = []
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
-    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5", page=1) → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст — иначе 0 результатов!\n  🔄 ПАГИНАЦИЯ: если все найденные уже contacted ("уже отправлено") — ищи дальше: page=2, page=3 и т.д. На каждом цикле используй следующую страницу.')
+    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5", page=1) → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст!\n  💡 Примеры query (меняй каждый цикл, не повторяй предыдущий!):\n    QA/тест: "language:python repos:>5" | "language:javascript repos:>10 location:Russia" | "language:java automation repos:>3" | "language:go testing followers:>2"\n    Опыт/место: "location:Kazakhstan language:python" | "language:kotlin repos:>5" | "language:typescript followers:>3" | "language:ruby repos:>10"\n  🔄 ПАГИНАЦИЯ: если все найденные уже contacted — page=2, page=3 и т.д. Историю использованных query смотри в блоке ИСТОРИЯ GitHub-поисков.')
     if _has_rss:     _intg_connected.append('✅ RSS — мониторинг лент новостей')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
