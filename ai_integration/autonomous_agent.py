@@ -195,8 +195,10 @@ import builtins as _sec_b
 _sec_orig_import = _sec_b.__import__
 _SEC_BLOCKED = frozenset({
     'shutil', 'ctypes', 'importlib', 'code', 'codeop',
-    'multiprocessing', 'threading', 'signal', 'pty', 'fcntl', 'termios',
+    'multiprocessing', 'threading', 'pty', 'fcntl', 'termios',
     'resource', 'gc', 'pickle', 'shelve', 'marshal',
+    # 'signal' removed — imaplib/smtplib/subprocess import it transitively;
+    # dangerous calls (raise_signal, alarm) are neutered below instead.
 })
 def _sec_safe_import(name, *_a, **_kw):
     _top = name.split('.')[0]
@@ -210,6 +212,16 @@ def _sec_safe_import(name, *_a, **_kw):
         for _attr in ('Popen', 'run', 'call', 'check_output', 'check_call', 'getoutput', 'getstatusoutput'):
             if hasattr(_mod, _attr):
                 setattr(_mod, _attr, _blocked)
+    # Allow signal (needed by imaplib/smtplib/ssl) but neuter process-killing calls
+    if _top == 'signal':
+        def _sig_blocked(*_ba, **_bk):
+            raise PermissionError('signal manipulation is not allowed in agent sandbox')
+        for _attr in ('raise_signal', 'setitimer', 'sigwait', 'sigwaitinfo', 'sigtimedwait'):
+            if hasattr(_mod, _attr):
+                setattr(_mod, _attr, _sig_blocked)
+        # alarm(0) is safe (resets timer); non-zero would disrupt server timeouts — neuter
+        if hasattr(_mod, 'alarm'):
+            setattr(_mod, 'alarm', lambda _n=0: None)
     return _mod
 _sec_b.__import__ = _sec_safe_import
 '''
