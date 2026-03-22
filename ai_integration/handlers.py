@@ -12909,6 +12909,96 @@ async def check_emails(
         else:
             return f"Тип интеграции '{chosen['type']}' не поддерживает чтение входящих."
 
+        # ── Дедупликация: фильтруем письма, о которых агент уже сообщал ──
+        _no_new_kw_pre = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
+        if result and not any(kw in result.lower() for kw in _no_new_kw_pre):
+            try:
+                import hashlib as _hl_dup
+                import json as _json_dup
+                from models import AgentActivityLog as _AAL_dup
+                # Загружаем ранее виденные fingerprints (за 48ч)
+                _seen_fp: set = set()
+                try:
+                    _seen_rows = session.query(_AAL_dup).filter(
+                        _AAL_dup.user_id == user.id,
+                        _AAL_dup.activity_type == 'seen_inbox_emails',
+                        _AAL_dup.created_at >= datetime.utcnow() - timedelta(hours=48),
+                    ).all()
+                    for _sr in _seen_rows:
+                        try:
+                            _fps = _json_dup.loads(_sr.content or '[]')
+                            _seen_fp.update(_fps)
+                        except Exception:
+                            pass
+                except Exception as _e_seen:
+                    logger.debug('[CHECK_EMAILS] seen_fp load: %s', _e_seen)
+
+                # Разбиваем result на блоки по "---"
+                import re as _re_dup
+                _header_match = _re_dup.match(r'^(.*?\d+\s*писем[^:]*:?\s*(?:\n[^\n]*примечание[^\n]*)?)\n\n', result, _re_dup.DOTALL | _re_dup.IGNORECASE)
+                _header_part = _header_match.group(1) if _header_match else ''
+                _body_part = result[len(_header_part):].strip() if _header_part else result
+                _blocks = _re_dup.split(r'\n---\n', _body_part)
+
+                _new_blocks = []
+                _new_fps = []
+                _skipped_count = 0
+                for _blk in _blocks:
+                    if not _blk.strip():
+                        continue
+                    # Fingerprint = hash(from + subject + date_prefix)
+                    _fp_from = _re_dup.search(r'От:\s*(?:\[email-контакт[^\]]*\]\s*)?(.+)', _blk)
+                    _fp_subj = _re_dup.search(r'Тема:\s*(.+)', _blk)
+                    _fp_date = _re_dup.search(r'Дата:\s*(.+)', _blk)
+                    _fp_str = (
+                        (_fp_from.group(1).strip() if _fp_from else '') + '|' +
+                        (_fp_subj.group(1).strip() if _fp_subj else '') + '|' +
+                        (_fp_date.group(1).strip()[:20] if _fp_date else '')
+                    )
+                    _fp_hash = _hl_dup.md5(_fp_str.encode('utf-8', 'ignore')).hexdigest()[:16]
+
+                    if _fp_hash in _seen_fp:
+                        _skipped_count += 1
+                        continue
+                    _new_blocks.append(_blk)
+                    _new_fps.append(_fp_hash)
+
+                # Сохраняем fingerprints новых писем
+                if _new_fps:
+                    try:
+                        _aal_seen = _AAL_dup(
+                            user_id=user.id,
+                            activity_type='seen_inbox_emails',
+                            title=f'seen {len(_new_fps)} emails',
+                            content=_json_dup.dumps(_new_fps),
+                            target='email_inbox',
+                            status='completed',
+                        )
+                        session.add(_aal_seen)
+                        session.commit()
+                    except Exception as _e_save_fp:
+                        logger.debug('[CHECK_EMAILS] save seen_fp: %s', _e_save_fp)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+
+                if _skipped_count > 0:
+                    logger.info('[CHECK_EMAILS] Dedup: skipped %d already-seen emails, %d new', _skipped_count, len(_new_blocks))
+
+                if not _new_blocks:
+                    result = f"Нет новых писем (все {_skipped_count} уже были обработаны ранее)."
+                elif _skipped_count > 0:
+                    _email_account = _re_dup.search(r'\(([^,]+),', _header_part)
+                    _acct = _email_account.group(1) if _email_account else chosen.get('email_user', '')
+                    result = (
+                        f"Новые входящие ({_acct}, {len(_new_blocks)} новых, {_skipped_count} уже обработано):\n\n"
+                        + "\n---\n".join(_new_blocks)
+                    )
+                # else: result stays as-is (all emails are new)
+            except Exception as _e_dedup:
+                logger.debug('[CHECK_EMAILS] dedup error (skipping): %s', _e_dedup)
+
         # Автоматически сохраняем/обновляем контакты из входящих в EmailContact
         _no_new_keywords = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
         if result and not any(kw in result.lower() for kw in _no_new_keywords):
@@ -13438,7 +13528,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             _known_count = len(skipped_known_g)
             _known_note = (f"\n⚠️ Примечание: {_known_count} из них помечены [email-контакт] — добавлены в базу контактов, "
                            f"но НЕ зарегистрированы как пользователи сервиса." if _known_count else "")
-            return (f"Новые входящие ({gmail_email}, {len(results)} писем){_known_note}:\n\n"
+            return (f"Входящие ({gmail_email}, {len(results)} писем){_known_note}:\n\n"
                     + "\n---\n".join(results))
 
     result = await _fetch(access_token)
@@ -13587,7 +13677,7 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
             _known_cnt = len(skipped_known)
             _known_n = (f"\n⚠️ Примечание: {_known_cnt} из них помечены [email-контакт] — добавлены в базу контактов, "
                         f"но НЕ зарегистрированы как пользователи сервиса." if _known_cnt else "")
-            return (f"Новые входящие ({email_user}, {len(results)} писем){_known_n}:\n\n"
+            return (f"Входящие ({email_user}, {len(results)} писем){_known_n}:\n\n"
                     + "\n---\n".join(results))
         except imaplib.IMAP4.error as e:
             return f"Ошибка IMAP ({label}): {e}. Проверь пароль приложения."

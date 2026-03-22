@@ -4409,7 +4409,7 @@ class AnchorEngine:
                 'yandex_user=' in _prev_keys_lower or
                 'mailru_user=' in _prev_keys_lower
             )
-            _INBOX_MARKERS = ('Новые входящие', 'От: ', 'Тема: ', 'Превью: ')
+            _INBOX_MARKERS = ('Входящие', 'Новые входящие', 'От: ', 'Тема: ', 'Превью: ')
             _is_inbox_result = (
                 _prev_has_imap  # только IMAP-агент может вернуть реальные входящие
                 and sum(1 for p in _INBOX_MARKERS if p in result) >= 3
@@ -4422,7 +4422,11 @@ class AnchorEngine:
             if _is_inbox_result:
                 # Дедупликация: не передавать ASI те же входящие что уже обрабатывались в последние 2ч
                 import hashlib as _hashlib
-                _inbox_hash = _hashlib.md5(result[:1000].encode('utf-8', 'ignore')).hexdigest()[:12]
+                # Hash строится по сортированным email-адресам — устойчив к перестановке
+                _inbox_emails_sorted = sorted(set(
+                    e.lower() for e in _re2.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result)
+                ))
+                _inbox_hash = _hashlib.md5('|'.join(_inbox_emails_sorted).encode()).hexdigest()[:12]
                 try:
                     from sqlalchemy import text as _sql_chk
                     _prev_inbox = session.execute(_sql_chk(
@@ -6721,6 +6725,31 @@ class AnchorEngine:
                 _this_agent_hist = _per_agent_history.get(_ag_name, [])
                 _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:5])
 
+                # Память: что агент уже сообщал (email, контакты, действия) — НЕ повторяй!
+                _agent_seen_block = ''
+                try:
+                    _seen_senders: list = []
+                    for _hentry in _this_agent_hist[:8]:
+                        _hlow = _hentry.lower()
+                        if any(w in _hlow for w in ('check_emails', 'входящ', 'писем', 'inbox')):
+                            import re as _re_seen_h
+                            _se = _re_seen_h.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _hentry)
+                            _seen_senders.extend(e.lower() for e in _se)
+                        if any(w in _hlow for w in ('save_email', 'сохранил контакт', 'добавил')):
+                            import re as _re_seen_h2
+                            _se2 = _re_seen_h2.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _hentry)
+                            _seen_senders.extend(e.lower() for e in _se2)
+                    if _seen_senders:
+                        _unique_seen = list(dict.fromkeys(_seen_senders))[:15]
+                        _agent_seen_block = (
+                            '\n⚠️ УЖЕ ОБРАБОТАНО (не сообщай повторно как "новые"):\n'
+                            f'  Письма от: {", ".join(_unique_seen)}\n'
+                            '  → Если check_emails вернул тех же отправителей — '
+                            'НЕ пиши "8 новых входящих", а отметь только РЕАЛЬНО НОВЫЕ.\n'
+                        )
+                except Exception:
+                    pass
+
                 # Уже отправленные письма — этот агент должен знать
                 _sent_emails_block = (
                     'Уже получили письма (НЕ писать повторно): ' + ', '.join(_already_sent[:15])
@@ -6902,6 +6931,7 @@ class AnchorEngine:
                     + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
+                    + _agent_seen_block
                     + (f"\n\nЭТИ инструменты ЛОМАЛИСЬ (не повторяй): {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
                     + (f"\n\nУже сделано командой (используй):\n{_prev_steps_context}" if _prev_steps_context else '')
                     + (f"\n\nКоманда:\n" + '\n'.join(_team_lines_c)
