@@ -195,10 +195,12 @@ import builtins as _sec_b
 _sec_orig_import = _sec_b.__import__
 _SEC_BLOCKED = frozenset({
     'shutil', 'ctypes', 'importlib', 'code', 'codeop',
-    'multiprocessing', 'threading', 'pty', 'fcntl', 'termios',
+    'multiprocessing', 'pty', 'fcntl', 'termios',
     'resource', 'gc', 'pickle', 'shelve', 'marshal',
     # 'signal' removed — imaplib/smtplib/subprocess import it transitively;
     # dangerous calls (raise_signal, alarm) are neutered below instead.
+    # 'threading' removed — imaplib imports it transitively;
+    # dangerous calls (Thread.start, Timer.start) are neutered below instead.
 })
 def _sec_safe_import(name, *_a, **_kw):
     _top = name.split('.')[0]
@@ -222,6 +224,13 @@ def _sec_safe_import(name, *_a, **_kw):
         # alarm(0) is safe (resets timer); non-zero would disrupt server timeouts — neuter
         if hasattr(_mod, 'alarm'):
             setattr(_mod, 'alarm', lambda _n=0: None)
+    # Allow threading (needed by imaplib/smtplib) but prevent thread spawning
+    if _top == 'threading':
+        def _no_start(self, *_ba, **_bk):
+            raise PermissionError('thread.start() is not allowed in agent sandbox')
+        for _tcls in ('Thread', 'Timer'):
+            if hasattr(_mod, _tcls):
+                getattr(_mod, _tcls).start = _no_start
     return _mod
 _sec_b.__import__ = _sec_safe_import
 '''

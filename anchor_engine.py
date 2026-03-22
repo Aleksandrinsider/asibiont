@@ -12915,6 +12915,30 @@ class AnchorEngine:
                         prompt_parts.append("   --- DATA ---")
                         prompt_parts.extend(data_lines)
 
+                # Для goal_milestone / task_completed_streak — данные о прогрессе цели/серии
+                if ad.get('type') in ('goal_milestone', 'task_completed_streak') and ad.get('data'):
+                    _md = ad['data']
+                    if ad['type'] == 'goal_milestone':
+                        prompt_parts.append(
+                            f"   Цель: «{_md.get('title', '')}» | "
+                            f"Прогресс: {_md.get('progress', '')}% | "
+                            f"Milestone: {_md.get('milestone', '')}%"
+                        )
+                    elif ad['type'] == 'task_completed_streak':
+                        prompt_parts.append(
+                            f"   Серия: {_md.get('count', '')} задач подряд"
+                            + (f" | Последняя: «{_md.get('task_title', '')}»" if _md.get('task_title') else '')
+                        )
+
+                # Для task_stale — данные о задаче
+                if ad.get('type') == 'task_stale' and ad.get('data'):
+                    _sd = ad['data']
+                    prompt_parts.append(
+                        f"   Задача: «{_sd.get('title', '')}»"
+                        + (f" | Статус: {_sd.get('status', '')}" if _sd.get('status') else '')
+                        + (f" | Давность: {_sd.get('days_stale', '')} дн" if _sd.get('days_stale') else '')
+                    )
+
                 # Для DDG-обогащённых якорей — показываем реальные результаты веб-поиска
                 if ad.get('type') in DDG_ENRICHED_TYPES and ad.get('data'):
                     data = ad['data']
@@ -13054,9 +13078,40 @@ class AnchorEngine:
                     )
                     _ai_max_iter = 1
             else:
-                _ai_mode = 'anchor'
-                _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
-                _ai_max_iter = 2
+                # Определяем набор присутствующих типов для выбора стратегии
+                _NOTIFICATION_DIRECT = {'goal_milestone', 'task_completed_streak', 'task_stale', 'email_campaign_report'}
+                _DDG_ENRICHED_S = {'event_discovery', 'market_insight', 'content_opportunity'}
+                _NEEDS_RESEARCH = _anchor_types_set - _NOTIFICATION_DIRECT - _DDG_ENRICHED_S
+                # Если ВСЕ якоря — нотификационные или DDG-обогащённые (уже есть данные),
+                # используем reminder mode без лишних tool-вызовов
+                if not _NEEDS_RESEARCH:
+                    _ai_mode = 'reminder'
+                    _has_ddg_anchor = bool(_anchor_types_set & _DDG_ENRICHED_S)
+                    if _has_ddg_anchor:
+                        _ai_instruction = (
+                            "В якорях (секции 'ДАННЫЕ ИЗ СЕТИ') уже есть свежие результаты веб-поиска. "
+                            "НЕ вызывай дополнительные инструменты — ИСПОЛЬЗУЙ готовые данные из якорей. "
+                            "Выбери 1-2 самых релевантных для пользователя результата, напиши живое сообщение "
+                            "с фактами и ссылками (если есть). "
+                            "Для goal_milestone — поздравь с прогрессом цели. "
+                            "Для task_stale — мягко напомни о задаче. "
+                            "Для email_campaign_report — сводка (отправлено/ответов/что дальше). "
+                            "Кратко (2-4 предложения). Если данных нет совсем или всё нерелевантно — верни SKIP."
+                        )
+                    else:
+                        _ai_instruction = (
+                            "На основе якорей напиши ОДНО конкретное сообщение (2-3 предложения). "
+                            "goal_milestone: поздравь с прогрессом цели — что достигнуто, что дальше. "
+                            "task_completed_streak: кратко отметь серию выполненных задач, мотивационно. "
+                            "task_stale: напомни о задаче которая давно не обновлялась — возобновить или закрыть? "
+                            "email_campaign_report: краткая сводка со статистикой. "
+                            "Стиль: живой, дружеский, конкретный. Без воды."
+                        )
+                    _ai_max_iter = 1
+                else:
+                    _ai_mode = 'anchor'
+                    _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
+                    _ai_max_iter = 2
 
             result = await agent.generate_system_message(
                 user_id=user.telegram_id,
