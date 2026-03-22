@@ -13374,6 +13374,42 @@ async def check_emails(
                     '\n→ Определяй язык из текста ответа контакта и пиши reply_body на том же языке!'
                 )
 
+            # ── AI-уже-ответил: помечаем контакты, которым AI уже отправлял reply ──
+            # Защита от повторных ответов: fingerprint-dedup лишь 48ч, а ai_reply_sent_at хранится в БД навсегда.
+            # Если агент видит письмо из inbox снова (после истечения fingerprint), эта аннотация
+            # явно запрещает вызывать reply_to_outreach_email для уже обработанных контактов.
+            try:
+                if _found_em:
+                    import datetime as _dt_air
+                    _already_ai_replied: list = []
+                    for _air_em in _found_em:
+                        _eo_air = session.query(_EO_ce2).filter(
+                            _EO_ce2.user_id == user.id,
+                            _EO_ce2.recipient_email == _air_em,
+                            _EO_ce2.ai_reply_sent_at.isnot(None),
+                        ).order_by(_EO_ce2.ai_reply_sent_at.desc()).first()
+                        if _eo_air:
+                            _air_date = str(_eo_air.ai_reply_sent_at)[:10]
+                            _agent_name = ''
+                            try:
+                                from models import UserAgent as _UA_air
+                                _ua_air = session.query(_UA_air).filter_by(
+                                    id=_eo_air.sent_by_agent_id
+                                ).first() if hasattr(_eo_air, 'sent_by_agent_id') and _eo_air.sent_by_agent_id else None
+                                if _ua_air:
+                                    _agent_name = f' (агент: {_ua_air.name})'
+                            except Exception:
+                                pass
+                            _already_ai_replied.append(f'• {_air_em} — AI ответил {_air_date}{_agent_name}')
+                    if _already_ai_replied:
+                        result += (
+                            '\n\n🚫 AI УЖЕ ОТВЕЧАЛ НА ЭТИ ПИСЬМА — НЕ ОТВЕЧАЙ ПОВТОРНО:\n'
+                            + '\n'.join(_already_ai_replied)
+                            + '\n→ НЕ вызывай reply_to_outreach_email для этих адресов! Ответ уже был отправлен.'
+                        )
+            except Exception as _e_air:
+                logger.debug('[CHECK_EMAILS] ai_reply_sent_at annotation failed: %s', _e_air)
+
         return result
     except Exception as e:
         logger.error(f"[CHECK_EMAILS] Error: {e}", exc_info=True)
