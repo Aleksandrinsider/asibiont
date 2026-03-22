@@ -5702,15 +5702,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _prior_tools_set = set(_tools_used[:-1])  # exclude current
                     _had_outgoing = bool(_prior_tools_set & _OUTGOING_ACTION_TOOLS)
                     _only_research = _prior_tools_set and _prior_tools_set.issubset(_RESEARCH_ONLY_TOOLS)
-                    if _only_research and not _had_outgoing:
+                    # Разрешаем update_goal_progress БЕЗ действий если агент НЕ повышает числовой прогресс
+                    # (т.е. это фиксация итога сессии-поиска, а не накрутка метрики)
+                    _ugp_progress = _targs.get('progress')
+                    _ugp_metric = _targs.get('metric_current')
+                    _is_progress_increase = (
+                        (_ugp_progress is not None and float(_ugp_progress) > 0)
+                        or (_ugp_metric is not None and float(_ugp_metric) > 0)
+                    )
+                    if _only_research and not _had_outgoing and _is_progress_increase:
                         _tc_result = json.dumps({
                             "error": (
                                 "⛔ Обновление прогресса заблокировано. "
                                 "В этом цикле были только исследовательские действия "
                                 f"({', '.join(sorted(_prior_tools_set)[:3])}), "
-                                "но прогресс цели обновляется ТОЛЬКО после реального действия: "
+                                "но числовой прогресс/метрика обновляются ТОЛЬКО после реального действия: "
                                 "отправка письма, публикация, сохранение контакта. "
-                                "Сначала выполни действие, потом обновляй прогресс."
+                                "Если хочешь зафиксировать итог без прогресса — передай progress=None и только note."
                             )
                         }, ensure_ascii=False)
                         _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
@@ -5831,6 +5839,69 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 "Простая задача — кратко (1-3 предложения). Сложная — столько сколько нужно. "
                 "НЕ пиши 'ищу данные' или 'уточняю'. Заверши мысль."
             )})
+    # ── Autopilot: принудительный update_goal_progress если не был вызван ──
+    # Фиксируем итог каждой сессии — агент мог завершить только поиском без update
+    if (_is_autopilot_task and _early_text is None
+            and 'update_goal_progress' not in _tools_used
+            and _tools_used):
+        try:
+            _ugp_note = (
+                f"Сессия: использованы инструменты: {', '.join(_tools_used[-4:])}. "
+                "Результат поиска зафиксирован."
+            )
+            _messages.append({"role": "user", "content": (
+                "ОБЯЗАТЕЛЬНЫЙ ФИНАЛ: Вызови update_goal_progress чтобы зафиксировать итог этой сессии.\n"
+                f"Используй: goal_title='название цели', note='{_ugp_note}'\n"
+                "НЕ меняй числа прогресса если не было отправленных писем или подтверждённых контактов."
+            )})
+            _ugp_resp = await asyncio.wait_for(
+                _agent_inst.call_ai(
+                    _messages,
+                    use_tools=True,
+                    tool_choice="required",
+                    exclude_tools=_exclude_for_agent,
+                    max_tokens=200,
+                    api_timeout=30,
+                ),
+                timeout=35,
+            )
+            if _ugp_resp and _ugp_resp.get('choices'):
+                _ugp_msg = _ugp_resp['choices'][0]['message']
+                _ugp_tcs = _ugp_msg.get('tool_calls') or []
+                if _ugp_tcs:
+                    _messages.append(_ugp_msg)
+                    for _ugp_tc in _ugp_tcs[:1]:
+                        _ugp_tname = _ugp_tc.get('function', {}).get('name', '')
+                        try:
+                            _ugp_targs = json.loads(_ugp_tc.get('function', {}).get('arguments', '{}'))
+                        except Exception:
+                            _ugp_targs = {}
+                        if _ugp_tname == 'update_goal_progress':
+                            _tools_used.append(_ugp_tname)
+                            try:
+                                _ugp_tres = await asyncio.wait_for(
+                                    _agent_inst.execute_actions(
+                                        [{"tool": _ugp_tname, "params": _ugp_targs,
+                                          "reason": f"{agent.get('name')}: end-of-session update"}],
+                                        user_id, session=None, user_message=task,
+                                    ),
+                                    timeout=15,
+                                )
+                                _ugp_r0 = _ugp_tres[0] if _ugp_tres else {"success": False}
+                                _ugp_result = json.dumps(
+                                    _ugp_r0.get('result', {}), ensure_ascii=False, default=str
+                                )[:300]
+                                _messages.append({"role": "tool", "tool_call_id": _ugp_tc['id'],
+                                                  "content": _ugp_result})
+                                logger.info(
+                                    "[DIRECTOR-EXEC] end-of-session update_goal_progress OK for %s",
+                                    agent.get('name'),
+                                )
+                            except Exception as _ugp_exec_err:
+                                logger.debug("[DIRECTOR-EXEC] update_goal_progress exec: %s", _ugp_exec_err)
+        except Exception as _ugp_err:
+            logger.debug("[DIRECTOR-EXEC] end-of-session update_goal_progress: %s", _ugp_err)
+
     # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
     if _early_text is not None:
         _final_text = _early_text
