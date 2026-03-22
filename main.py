@@ -467,8 +467,22 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
 
-            # Final fallback: any cached https URL (e.g. CDN URL from Telegram Login Widget)
-            if user and user.photo_url and user.photo_url.startswith('http'):
+            # In force_refresh mode: if fresh TG fetch failed AND we have a cached non-permanent
+            # https URL (e.g. CDN URL from Login Widget that may have expired), clear it so that
+            # next requests trigger a proper TG lookup instead of serving a dead URL forever.
+            if force_refresh and user and user.photo_url \
+               and user.photo_url.startswith('http') \
+               and not user.photo_url.startswith('https://api.telegram.org/file/bot'):
+                logger.info(f"force_refresh: clearing stale CDN photo_url for user {user_id}: {user.photo_url[:40]}")
+                user.photo_url = None
+                try:
+                    db.commit()
+                except Exception:
+                    pass
+
+            # Final fallback: any cached https URL (CDN URL from Login Widget)
+            # Only used in non-force_refresh mode — in force_refresh mode the URL is cleared above
+            if not force_refresh and user and user.photo_url and user.photo_url.startswith('http'):
                 logger.debug(f"Using cached https photo_url for user {user_id}: {user.photo_url[:40]}")
                 return user.photo_url
 
@@ -919,11 +933,18 @@ async def auth_handler(request):
                             await get_user_avatar_url(request.app['bot'], user_id, force_refresh=True)
                         except Exception as e:
                             logger.error(f"Error updating avatar for user {user_id}: {e}")
-                    # Fallback: save widget photo_url if bot couldn't fetch it and DB has none
-                    # Refresh user from DB since get_user_avatar_url may have updated photo_url in its own session
+                    # Fallback: save widget photo_url if bot couldn't fetch a permanent file_id.
+                    # Refresh user from DB since get_user_avatar_url may have updated photo_url in its own session.
+                    # IMPORTANT: also refresh when existing photo_url is an https URL (CDN from prior login)
+                    # since CDN URLs expire when user changes TG profile photo — widget always provides fresh URL.
                     session_db.refresh(user)
-                    if (not user.photo_url or user.photo_url == '__no_avatar__') and data.get('photo_url'):
-                        user.photo_url = data['photo_url']
+                    _widget_photo_now = data.get('photo_url')
+                    if _widget_photo_now and (
+                        not user.photo_url
+                        or user.photo_url == '__no_avatar__'
+                        or (user.photo_url and user.photo_url.startswith('http'))
+                    ):
+                        user.photo_url = _widget_photo_now
                         try:
                             session_db.commit()
                         except Exception as _e:
