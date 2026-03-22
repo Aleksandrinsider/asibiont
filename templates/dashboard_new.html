@@ -7307,7 +7307,7 @@ else:
         function createTimelineItem(a, isNew) {
             const wrap = document.createElement('div');
             wrap.setAttribute('data-act-id', a.id || '');
-            wrap.style.cssText = `padding:0;border-bottom:1px solid #F0F3F5;border-left:3px solid #E8ECEF;padding-left:10px;` + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
+            wrap.style.cssText = `padding:0;border-bottom:1px solid #F0F3F5;` + (isNew ? 'animation:tlFadeIn 0.35s ease;' : '');
             const labels = _tlLabels();
             const typeLabel = labels[a.activity_type] || a.activity_type;
             const timeStr = a.created_at ? new Date(a.created_at).toLocaleString(_dl(), {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:window.USER_TIMEZONE||'UTC'}) : '';
