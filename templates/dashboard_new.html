@@ -59,21 +59,16 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
-            position: sticky;
-            top: 70px;
-            height: calc(100vh - 80px);
+        }
+
+        /* скролл только на списках — как .tasks-section в правой колонке */
+        #people-list {
+            max-height: calc(100vh - 310px);
             overflow-y: auto;
         }
-        
-        .left-column .context-section,
-        .left-column .people-section {
-            flex: 0 0 auto;
-            overflow: visible;
-        }
-        .left-column .context-section.collapsed,
-        .left-column .people-section.collapsed {
-            flex: 0 0 auto;
-            overflow: visible;
+        #contacts-list {
+            max-height: calc(100vh - 310px);
+            overflow-y: auto;
         }
         
         .center-column {
