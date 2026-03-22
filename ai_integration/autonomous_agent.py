@@ -5014,9 +5014,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Аналитика/исследования — по специализации
             if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
                 _autopilot_tools.update({
-                    'get_news_trends', 'find_and_message_relevant_users',
+                    'get_news_trends',
                     'research_topic', 'web_search', 'get_stock_price', 'save_note',
                     'create_post',  # публиковать аналитику
+                    # find_and_message_relevant_users убран — аналитик исследует данные, а не ищет контакты
                 })
             # Alpha Vantage / NewsAPI / Биржевые данные — по ключу интеграции (не только по специализации)
             if any(w in _lbl_ap for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
@@ -5024,15 +5025,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'get_stock_price', 'get_news_trends', 'research_topic',
                     'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
                 })
-            # RSS/мониторинг — по лейблу интеграции
-            if any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')):
+            # RSS/мониторинг — по лейблу интеграции ИЛИ специализации агента
+            if (any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')) or
+                    any(w in _spec for w in ('rss', 'лент', 'feed'))):
                 _autopilot_tools.update({
-                    'get_news_trends', 'save_email_contact', 'find_relevant_contacts_for_task',
+                    'get_news_trends',
                     # RSS-агент суммирует и публикует → нужны эти инструменты
                     'research_topic', 'web_search',
-                    'create_post', 'publish_to_telegram', 'publish_to_discord',
-                    # Outreach авторов/источников из RSS-ленты
-                    'send_outreach_email',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                    # Контактные инструменты убраны: RSS-монитор читает/анализирует, не ищет людей
                 })
             # Продажи/HR/нетворкинг
             if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b')):
@@ -5106,12 +5107,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'get_stock_price', 'get_news_trends', 'research_topic', 'web_search',
                     'create_post', 'publish_to_telegram', 'save_note',
                 })
-            # RSS — по ключу интеграции (часто нет в _spec, только в api_keys)
-            if any(w in _lbl_ch for w in ('rss', 'лент', 'feed', 'новост')):
+            # RSS — по ключу интеграции ИЛИ специализации агента
+            if (any(w in _lbl_ch for w in ('rss', 'лент', 'feed', 'новост')) or
+                    any(w in _spec for w in ('rss', 'лент', 'feed'))):
                 _inferred_tools.update({
                     'get_news_trends', 'research_topic', 'web_search',
-                    'create_post', 'publish_to_telegram', 'publish_to_discord',
-                    'save_email_contact', 'find_relevant_contacts_for_task', 'send_outreach_email',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                    # Контактные инструменты убраны: RSS-монитор читает и публикует, не ищет людей
                 })
             # Telegram/Discord интеграция — контент-инструменты по ключу
             if any(w in _lbl_ch for w in ('telegram', 'discord', 'slack')):
