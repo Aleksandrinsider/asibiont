@@ -11266,6 +11266,42 @@ async def send_outreach_email(
         # Ставим follow-up через 3 дня
         outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
 
+        # ── Авто-обновление прогресса цели при отправке письма ──
+        # Ищем активную цель, которая отслеживает отправку писем по этой кампании
+        try:
+            from models import Goal as _Goal_oe
+            _email_kw_oe = ('рассылк', 'email', 'письм', 'outreach', 'кампан', 'campaign', 'отправ')
+            _active_goals_oe = session.query(_Goal_oe).filter(
+                _Goal_oe.user_id == user.id,
+                _Goal_oe.status == 'active',
+                _Goal_oe.metric_target.isnot(None),
+            ).all()
+            for _goal_oe in _active_goals_oe:
+                _gtext_oe = (
+                    _goal_oe.title + ' ' +
+                    (_goal_oe.description or '') + ' ' +
+                    (_goal_oe.metric_unit or '')
+                ).lower()
+                # Цель должна быть про email/рассылку И метрика — про письма/отправку
+                _is_email_goal = any(kw in _gtext_oe for kw in _email_kw_oe)
+                _not_reply_goal = not any(
+                    w in _gtext_oe for w in ('ответ', 'reply', 'replied', 'ответили')
+                )
+                if _is_email_goal and _not_reply_goal:
+                    _new_mc_oe = float(campaign.emails_sent)
+                    _old_mc_oe = float(_goal_oe.metric_current or 0)
+                    if _new_mc_oe > _old_mc_oe:
+                        _pct_oe = min(100, int(_new_mc_oe / float(_goal_oe.metric_target) * 100))
+                        _goal_oe.metric_current = _new_mc_oe
+                        _goal_oe.progress_percentage = _pct_oe
+                        logger.info(
+                            f'[EMAIL_OUTREACH] Auto-updated goal "{_goal_oe.title}": '
+                            f'{_new_mc_oe}/{_goal_oe.metric_target} ({_pct_oe}%)'
+                        )
+                    break
+        except Exception as _e_goal_oe:
+            logger.debug(f'[EMAIL_OUTREACH] Auto goal update failed: {_e_goal_oe}')
+
         # Логируем в AgentActivityLog для ленты активности
         try:
             from models import AgentActivityLog
