@@ -4601,9 +4601,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   web_search нашёл только имя без email → сохрани имя+URL, НЕ пиши письмо на выдуманный адрес.\n"
             "   Канал в Telegram — это НЕ email-контакт. Нельзя send_outreach_email на @username.\n\n"
             "🎯 КОНВЕРТАЦИЯ (критически важно!):\n"
-            "   Нашёл РЕАЛЬНОГО человека с РЕАЛЬНЫМ email → СРАЗУ: save_email_contact + send_outreach_email\n"
+            "   Нашёл РЕАЛЬНОГО человека с РЕАЛЬНЫМ email → СРАЗУ: save_email_contact → send_outreach_email\n"
+            "   ⛔ save_email_contact без send_outreach_email = НЕЗАВЕРШЁННАЯ ЦЕПОЧКА. Никогда не останавливайся посередине.\n"
             "   Нашёл профиль без email → сохрани URL, запиши в notes, НЕ придумывай email.\n"
             "   НЕ ищи email одного человека 3 раза. Зафиксировал → следующий.\n\n"
+            "📊 ФИНАЛ КАЖДОЙ СЕССИИ — update_goal_progress (ОБЯЗАТЕЛЬНО):\n"
+            "   Последний инструмент в сессии ВСЕГДА = update_goal_progress(goal_title='...', progress=N, note='итог').\n"
+            "   Даже если не было действий — укажи текущий %, напиши что именно пробовал.\n\n"
             "⛔ ЗАПРЕЩЕНО В АВТОПИЛОТЕ:\n"
             "  • add_task — НЕ создавай задачи. Координатор уже дал тебе задачу, ВЫПОЛНЯЙ её.\n"
             "  • Больше 1 create_post за сессию — это спам.\n"
@@ -5418,9 +5422,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             elif _was_save and not _was_send:
                 _messages.append({"role": "user", "content": (
                     f"Контакт(ы) сохранены (использовал: {_used_str}). "
-                    "🚨 СЛЕДУЮЩИЙ ШАГ — ТОЛЬКО send_outreach_email:\n"
-                    "Отправь персональное письмо каждому сохранённому пользователю. "
-                    "Используй его имя и GitHub-профиль. Действуй немедленно — вызови send_outreach_email!"
+                    "🚨 ОБЯЗАТЕЛЬНЫЙ СЛЕДУЮЩИЙ ШАГ — send_outreach_email:\n"
+                    "Отправь персональное письмо каждому сохранённому контакту ПРЯМО СЕЙЧАС. "
+                    "save_email_contact без последующего send_outreach_email = незавершённая цепочка.\n"
+                    "Вызови send_outreach_email немедленно — НЕ завершай сессию без отправки письма!"
                 )})
             elif _was_github_search and not _was_save:
                 _messages.append({"role": "user", "content": (
@@ -5497,6 +5502,69 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _content = _re_sub.sub(
                     r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
                 ).strip()
+
+            # ── Autopilot retry: save_email_contact без send_outreach_email на любой итерации ──
+            # Агент сохранил контакт и написал текст вместо письма — принудительный retry
+            if (_is_autopilot_task and _iter > 0 and not _tool_calls
+                    and _was_save and not _was_send):
+                logger.info(
+                    "[DIRECTOR-EXEC] autopilot save-without-send retry for %s",
+                    agent.get('name'),
+                )
+                _messages.append({"role": "assistant", "content": _content or ""})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Ты сохранил контакт(ы) через save_email_contact, но так и не отправил письмо. "
+                    "Это нарушение цепочки.\n"
+                    "ОБЯЗАТЕЛЬНО вызови прямо сейчас: send_outreach_email\n"
+                    "Используй имя и email контакта которого только что сохранил. "
+                    "НЕ пиши текст — только вызов инструмента send_outreach_email!"
+                )})
+                try:
+                    _sws_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=300,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _sws_resp and _sws_resp.get('choices'):
+                        _sws_msg = _sws_resp['choices'][0]['message']
+                        _sws_tools = _sws_msg.get('tool_calls') or []
+                        if _sws_tools:
+                            logger.info("[DIRECTOR-EXEC] save-without-send retry succeeded: %s", len(_sws_tools))
+                            _messages.append(_sws_msg)
+                            for _swstc in _sws_tools[:2]:
+                                _sws_tname = _swstc.get('function', {}).get('name', '')
+                                try:
+                                    _sws_targs = json.loads(_swstc.get('function', {}).get('arguments', '{}'))
+                                except Exception:
+                                    _sws_targs = {}
+                                _tools_used.append(_sws_tname)
+                                try:
+                                    _sws_tres = await asyncio.wait_for(
+                                        _agent_inst.execute_actions(
+                                            [{"tool": _sws_tname, "params": _sws_targs,
+                                              "reason": f"{agent['name']}: {_sws_tname}"}],
+                                            user_id, session=None, user_message=task,
+                                        ),
+                                        timeout=_TOOL_TIMEOUTS.get(_sws_tname, _TOOL_TIMEOUT),
+                                    )
+                                    _sws_r0 = _sws_tres[0] if _sws_tres else {"success": False}
+                                    _sws_result = json.dumps(
+                                        _sws_r0.get('result', {}) if _sws_r0.get('success')
+                                        else {"error": str(_sws_r0.get('error', ''))},
+                                        ensure_ascii=False, default=str
+                                    )[:800]
+                                except Exception as _sws_err:
+                                    _sws_result = json.dumps({"error": str(_sws_err)[:200]}, ensure_ascii=False)
+                                _messages.append({"role": "tool", "tool_call_id": _swstc['id'], "content": _sws_result})
+                                _tool_call_count += 1
+                except Exception as _sws_ex:
+                    logger.warning("[DIRECTOR-EXEC] save-without-send retry error: %s", _sws_ex)
 
             # ── Autopilot retry: агент ответил текстом на первой итерации —
             # Делаем короткий повторный запрос с прямым указанием инструмента ──
