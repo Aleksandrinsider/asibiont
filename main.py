@@ -6483,7 +6483,7 @@ def _default_avatar_response():
         status=404,
         text='no avatar',
         content_type='text/plain',
-        headers={'Cache-Control': 'public, max-age=3600'}
+        headers={'Cache-Control': 'no-cache, max-age=0'}
     )
 
 

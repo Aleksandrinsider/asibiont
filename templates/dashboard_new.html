@@ -842,7 +842,7 @@
                                     <div class="avatar-wrap" style="position: relative;">
                                         {% set tier_glow = '#D1D9E0' %}
                                         {% if user_avatar_url %}
-                                        <img id="profile-avatar-img" src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onload="handleAvatarLoad(this, 'profile-avatar-fallback')" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <img id="profile-avatar-img" src="{{ user_avatar_url }}" alt="Avatar" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onload="handleAvatarLoad(this, 'profile-avatar-fallback')" onerror="handleAvatarError(this, 'profile-avatar-fallback'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
                                         <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="display: none; width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
                                         {% else %}
                                         <div id="profile-avatar-fallback" onclick="openContactProfileModal('{{ user.username or '' }}', true, {{ user.id }})" style="width: 64px; height: 64px; border-radius: 50%; background-color: #F6F8FA; color: #374151; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; border: 2px solid #E8ECEF; cursor: pointer;">{{ (user.username or user.first_name or 'U')[0].upper() }}</div>
@@ -1761,6 +1761,7 @@
         // По умолчанию отключаем аватары, включим после первой успешной загрузки
         let avatarServiceAvailable = false;
         let avatarCheckDone = false;
+        let avatarRetryCount = 0;
         
         // Функция обработки ошибки загрузки аватара
         function handleAvatarError(img, fallbackId) {
@@ -1769,7 +1770,16 @@
                 avatarServiceAvailable = false;
                 avatarCheckDone = true;
             }
-            // Fallback уже виден, ничего не делаем
+            // Retry avatar after 3 seconds (background refresh may complete)
+            if (img && avatarRetryCount < 2) {
+                avatarRetryCount++;
+                setTimeout(() => {
+                    const src = img.getAttribute('src');
+                    if (src) {
+                        img.src = src + (src.includes('?') ? '&' : '?') + 'r=' + Date.now();
+                    }
+                }, 3000);
+            }
         }
         
         function handleAvatarLoad(img, fallbackId) {

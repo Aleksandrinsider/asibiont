@@ -765,6 +765,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _news_kw = ('новост', 'мониторинг', 'тренды', 'медиа', 'сми', 'пресс', 'обзор рынка')
     _ppl_kw  = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг')
     _cnt_kw  = ('контент', 'smm', 'публикац', 'канал', 'посты')
+    _team_kw = ('команд', 'сотрудник', 'коллег', 'менеджер', 'hr', 'координац')
+    _proj_kw = ('проект', 'задач', 'sprint', 'kanban', 'agile', 'трекер', 'backlog')
+    _doc_kw  = ('документ', 'wiki', 'база знаний', 'заметк', 'confluence', 'notion')
+    _crm_kw  = ('продаж', 'лид', 'сделк', 'воронк', 'crm', 'клиентск')
+    _ecom_kw = ('маркетплейс', 'wildberries', 'ozon', 'shopify', 'товар', 'карточк', 'остатк')
+    _crypto_kw2 = ('биткоин', 'bitcoin', 'btc', 'eth', 'крипто', 'crypto', 'binance', 'bybit', 'трейдинг')
+    _data_kw = ('отчёт', 'аналитик', 'kpi', 'дашборд', 'таблиц', 'excel', 'sheets', 'данн')
 
     if any(w in _goals_text_all for w in _fin_kw):
         if not _has_alpha:
@@ -785,6 +792,31 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if any(w in _goals_text_all for w in _cnt_kw):
         if not _has_content:
             _intg_missing.append('⚡ Telegram Bot Token — публикация постов в канал (TELEGRAM_BOT_TOKEN в настройках агента)')
+    if any(w in _goals_text_all for w in _team_kw):
+        if not _has_slack:
+            _intg_missing.append('⚡ Slack — координация с командой (SLACK_BOT_TOKEN в настройках агента)')
+    if any(w in _goals_text_all for w in _proj_kw):
+        _has_pm = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('trello', 'jira', 'asana', 'todoist'))
+        if not _has_pm:
+            _intg_missing.append('⚡ Trello/Jira/Asana — управление проектами и задачами (ключи в настройках агента)')
+    if any(w in _goals_text_all for w in _doc_kw):
+        if not _has_notion:
+            _intg_missing.append('⚡ Notion — база знаний и документация (NOTION_TOKEN в настройках агента)')
+    if any(w in _goals_text_all for w in _crm_kw):
+        _has_crm = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('amocrm', 'bitrix', 'hubspot'))
+        if not _has_crm:
+            _intg_missing.append('⚡ CRM (AmoCRM/Bitrix24/HubSpot) — воронка продаж и лиды (ключи в настройках)')
+    if any(w in _goals_text_all for w in _ecom_kw):
+        _has_ecom = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('wildberries', 'ozon', 'shopify'))
+        if not _has_ecom:
+            _intg_missing.append('⚡ Маркетплейс (WB/Ozon) — статистика продаж и позиций (API-ключ в настройках)')
+    if any(w in _goals_text_all for w in _crypto_kw2):
+        _has_crypto = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('binance', 'bybit'))
+        if not _has_crypto:
+            _intg_missing.append('⚡ Binance/Bybit — криптовалютные данные и трейдинг (API-ключ в настройках)')
+    if any(w in _goals_text_all for w in _data_kw):
+        if not _has_sheets:
+            _intg_missing.append('⚡ Google Sheets — автоматические отчёты и дашборды (GOOGLE_SHEETS_KEY в настройках)')
 
     _intg_block = ''
     if _intg_connected or _intg_missing:
@@ -835,6 +867,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             '  Пример: "Не смог получить котировки — нет Alpha Vantage ключа. '
             'Если подключишь ALPHAVANTAGE_API_KEY, буду присылать актуальные данные по нефти каждый день."\n'
         )
+        if _intg_missing:
+            _intg_block += (
+                '→ ПРОАКТИВНОСТЬ: даже если текущая задача выполнима — '
+                'предложи пользователю подключить недостающие интеграции из списка выше. '
+                'Объясни конкретную пользу для его целей. '
+                'Используй send_message_to_user для этого.\n'
+            )
 
     # ── История инструментов → что запрещено/предупреждение ──
     _tool_cnt: dict = {}
@@ -5547,6 +5586,76 @@ class AnchorEngine:
             _missing_intg_str_c = ('\n\n⚠️ ВАЖНО для планирования (отсутствующие интеграции):\n'
                                    + '\n'.join(_missing_intg_coord)) if _missing_intg_coord else ''
 
+            # ── Проактивный советник по интеграциям ──
+            # Помимо целевых подсказок выше, добавляем ПОЛНЫЙ каталог доступных интеграций,
+            # чтобы координатор мог проактивно предложить пользователю подключить что-то новое
+            _all_connected_types: set = set()
+            for _a_cat in real_agents:
+                _k_cat = (getattr(_a_cat, 'user_api_keys', '') or '').lower()
+                _p_cat = (getattr(_a_cat, 'python_code', '') or '').lower()
+                if 'gmail_user=' in _k_cat or 'imap_' in _k_cat or 'yandex_user=' in _k_cat or 'mailru_user=' in _k_cat:
+                    _all_connected_types.add('email')
+                if 'github_token=' in _k_cat or 'github_access_token=' in _k_cat:
+                    _all_connected_types.add('github')
+                if 'rss_url=' in _k_cat:
+                    _all_connected_types.add('rss')
+                if 'alphavantage' in _k_cat or 'alpha_vantage' in _k_cat:
+                    _all_connected_types.add('alphavantage')
+                if 'newsapi' in _k_cat:
+                    _all_connected_types.add('newsapi')
+                if 'notion' in _k_cat:
+                    _all_connected_types.add('notion')
+                if 'slack' in _k_cat:
+                    _all_connected_types.add('slack')
+                if 'trello' in _k_cat or 'jira' in _k_cat or 'asana' in _k_cat or 'todoist' in _k_cat:
+                    _all_connected_types.add('pm')
+                if 'amocrm' in _k_cat or 'bitrix' in _k_cat or 'hubspot' in _k_cat:
+                    _all_connected_types.add('crm')
+                if 'wildberries' in _k_cat or 'ozon' in _k_cat or 'shopify' in _k_cat:
+                    _all_connected_types.add('ecommerce')
+                if 'binance' in _k_cat or 'bybit' in _k_cat:
+                    _all_connected_types.add('crypto')
+                if 'google_sheets' in _k_cat or 'gspread' in _k_cat or 'airtable' in _k_cat or 'gspread' in _p_cat:
+                    _all_connected_types.add('sheets')
+                if 'stripe' in _k_cat or 'юкасс' in _k_cat or 'yookassa' in _k_cat:
+                    _all_connected_types.add('payments')
+                if 'telegram_bot_token=' in _k_cat:
+                    _all_connected_types.add('tg_channel')
+            if getattr(user, 'telegram_channel', None):
+                _all_connected_types.add('tg_channel')
+            if getattr(user, 'discord_webhook', None):
+                _all_connected_types.add('discord')
+
+            _FULL_CATALOG = [
+                ('email', 'Email (Gmail/Яндекс/Mail.ru)', 'чтение входящих + отправка', 'поиск людей, outreach, переговоры'),
+                ('github', 'GitHub', 'поиск разработчиков по языку/навыкам', 'набор тестировщиков, разработчиков, контрибьюторов'),
+                ('rss', 'RSS-лента', 'мониторинг новостей и тренды в реальном времени', 'контент-маркетинг, аналитика рынка'),
+                ('alphavantage', 'Alpha Vantage', 'котировки нефти/акций/металлов/крипты', 'финансовый анализ, мониторинг рынка'),
+                ('newsapi', 'NewsAPI', '100+ новостных источников', 'трендовый анализ, пресс-мониторинг'),
+                ('notion', 'Notion', 'база знаний, документы, планы', 'структурирование данных, wiki'),
+                ('slack', 'Slack', 'командные каналы и уведомления', 'координация команды'),
+                ('pm', 'Trello/Jira/Asana/Todoist', 'управление задачами и проектами', 'agile-процессы'),
+                ('crm', 'CRM (AmoCRM/Bitrix24/HubSpot)', 'управление лидами и сделками', 'продажи, воронка'),
+                ('ecommerce', 'Маркетплейс (WB/Ozon/Shopify)', 'статистика продаж и позиций', 'е-коммерция'),
+                ('crypto', 'Binance/Bybit', 'криптовалютные данные', 'трейдинг, портфель'),
+                ('sheets', 'Google Sheets/Airtable', 'таблицы и автоотчёты', 'KPI, дашборды'),
+                ('payments', 'Stripe/ЮКасса', 'платёжные данные и выручка', 'подписки, монетизация'),
+                ('tg_channel', 'Telegram-канал', 'публикация постов в канал', 'аудитория, контент'),
+                ('discord', 'Discord', 'webhook-уведомления и посты', 'сообщество, контент'),
+            ]
+            _not_connected = [(name, desc, use) for _type, name, desc, use in _FULL_CATALOG if _type not in _all_connected_types]
+            _intg_advisor_str = ''
+            if _not_connected and len(_not_connected) > 2:
+                _advisor_lines = [f'  • {name} — {desc} (для: {use})' for name, desc, use in _not_connected[:8]]
+                _intg_advisor_str = (
+                    '\n\n💡 ДОСТУПНЫЕ ИНТЕГРАЦИИ (ещё не подключены):\n'
+                    + '\n'.join(_advisor_lines)
+                    + '\n→ Если текущие подходы не дают результата — ПРЕДЛОЖИ пользователю подключить '
+                    'новую интеграцию через Телеграм: "Подключите [интеграцию] для [цели] — '
+                    'инструкция в Дашборде → Настройки агента → API-ключи".\n'
+                    '→ Включи это как один из шагов плана с tool="send_message_to_user" если считаешь подключение полезным.\n'
+                )
+
             # ── Строим per-goal блок: для каждой цели — её тематика и подходящие инструменты ──
             _goal_blocks = []
             _DOMAIN_TOOLS = {
@@ -5879,6 +5988,8 @@ class AnchorEngine:
                 f"{_banned_tools_str}"
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + f"{_failed_tasks_str}"
+                + _missing_intg_str_c
+                + _intg_advisor_str
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + (
                     "⚡ ПРИОРИТЕТ: Есть отправленные письма — "
