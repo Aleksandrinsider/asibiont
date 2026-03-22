@@ -748,7 +748,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
     if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5", page=1) → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст!\n  💡 Примеры query (меняй каждый цикл, не повторяй предыдущий!):\n    QA/тест: "language:python repos:>5" | "language:javascript repos:>10 location:Russia" | "language:java automation repos:>3" | "language:go testing followers:>2"\n    Опыт/место: "location:Kazakhstan language:python" | "language:kotlin repos:>5" | "language:typescript followers:>3" | "language:ruby repos:>10"\n  🔄 ПАГИНАЦИЯ: если все найденные уже contacted — page=2, page=3 и т.д. Историю использованных query смотри в блоке ИСТОРИЯ GitHub-поисков.')
-    if _has_rss:     _intg_connected.append('✅ RSS — мониторинг одной ленты через run_agent_action(get_latest). ⚠️ Это НЕ веб-поиск! Для поиска в интернете используй web_search.')
+    if _has_rss:     _intg_connected.append('✅ RSS — мониторинг новостей через run_agent_action(get_latest). Используй для контента/аналитики, НЕ для поиска людей.')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
     if _has_notion:  _intg_connected.append('✅ Notion — записи, базы знаний')
@@ -1474,12 +1474,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _rss_rules = ''
     if _has_rss and not _has_github:
         _rss_rules = (
-            "\nRSS vs ВЕБ-ПОИСК — ЭТО РАЗНЫЕ ИНСТРУМЕНТЫ:\n"
-            "  • run_agent_action(get_latest) = RSS-лента (один конкретный источник, НЕ интернет-поиск)\n"
-            "  • web_search(query) = ПОЛНОЦЕННЫЙ поиск в интернете (DDG/Bing/Google, любые запросы)\n"
-            "  • research_topic(query) = глубокий анализ темы через веб-поиск + AI\n"
-            "НЕ путай их! Для поиска людей/сайтов/контактов используй web_search, а НЕ RSS.\n"
-            "RSS: после run_agent_action(get_latest) — save_email_contact для авторов.\n"
+            "\n📰 ТВОЯ РОЛЬ (RSS-агент) — КОНТЕНТ И АНАЛИТИКА:\n"
+            "  • run_agent_action(get_latest) — получи новости из RSS-ленты\n"
+            "  • web_search(query) — поиск в интернете (DDG/Bing/Google) для дополнительного контекста\n"
+            "  • research_topic(query) — глубокий анализ темы\n"
+            "  • create_post / publish_to_telegram — создание и публикация контента\n"
+            "Твоя сила: мониторинг трендов, аналитика, создание контента на основе данных.\n"
+            "⛔ НЕ ищи контакты/людей — это задача агентов с GitHub/Email. "
+            "Если цель требует контактов — делегируй через DELEGATE[имя].\n"
         )
 
     _imap_rules = ''
@@ -5362,14 +5364,13 @@ class AnchorEngine:
                     )
                 elif _is_rss_agent:
                     _cap_rules_lines.append(
-                        f"  📰 {_p_cr['name']} [RSS + веб-поиск]: "
-                        f"Инструменты: (1) run_agent_action(get_latest) — RSS-лента (конкретный источник), "
-                        f"(2) web_search — полноценный ИНТЕРНЕТ-поиск (DDG/Bing/Google, любые запросы, НЕ RSS!), "
-                        f"(3) research_topic — глубокий анализ темы через веб, (4) get_news_trends — тренды, (5) create_post. "
-                        f"⚠️ web_search и RSS — РАЗНЫЕ инструменты! web_search ищет в интернете, RSS читает одну ленту. "
-                        f"⛔ ЗАПРЕЩЕНО назначать: check_emails, send_outreach_email, reply_to_outreach_email. "
-                        f"Email-задания → только агенту с email-интеграцией. "
-                        f"RSS-агент МОЖЕТ: веб-поиск, анализ трендов, создание контента, делегирование инсайтов через DELEGATE[имя]."
+                        f"  📰 {_p_cr['name']} [КОНТЕНТ + аналитика]: "
+                        f"РОЛЬ: мониторинг новостей/трендов, аналитика, создание контента. "
+                        f"Инструменты: run_agent_action(get_latest), web_search, research_topic, "
+                        f"get_news_trends, create_post, publish_to_telegram. "
+                        f"⛔ НЕ назначать поиск людей/контактов, check_emails, send_outreach_email, save_email_contact. "
+                        f"Поиск людей → агенту с GitHub/Email. "
+                        f"RSS-агент МОЖЕТ: найти инсайт в новостях → DELEGATE[имя] коллеге для действий."
                     )
             _cap_rules_str = (
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
