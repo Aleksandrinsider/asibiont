@@ -60,13 +60,13 @@
             flex-direction: column;
             gap: 4px;
             height: 100%;
+            overflow-y: auto; /* единый скроллбар для всей колонки */
         }
         
         .left-column .context-section,
         .left-column .people-section {
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow: hidden;
+            flex: 0 0 auto; /* естественная высота, не занимает всё место */
+            overflow: visible;
         }
         .left-column .context-section.collapsed,
         .left-column .people-section.collapsed {
@@ -821,7 +821,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="profile-content" class="profile-content" style="display: block; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">
+                    <div id="profile-content" class="profile-content" style="display: block; padding: 0 4px;">
                     <script>
                         // Профиль всегда развёрнут при загрузке страницы
                         (function() {
@@ -888,9 +888,7 @@
                     </div>
                 </div>
                 {% endif %}
-                <!-- Единый scroll-контейнер для обоих блоков контактов — убирает двойной скроллбар -->
-                <div id="contacts-all-wrapper" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px;">
-                <div class="people-section" style="display: flex; flex-direction: column; flex: 0 0 auto; overflow: visible;">
+                <div class="people-section" style="display: flex; flex-direction: column;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0; flex-shrink: 0;">
                         <div onclick="toggleContactsSection()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
@@ -926,7 +924,7 @@
 
                 <!-- Email-контакты в левой колонке -->
                 {% if logged_in %}
-                <div class="people-section" id="email-contacts-section" style="display: flex; flex-direction: column; flex: 0 0 auto; overflow: visible;">
+                <div class="people-section" id="email-contacts-section" style="display: flex; flex-direction: column;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0; flex-shrink: 0;">
                         <div onclick="toggleEmailContactsSection()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
@@ -960,7 +958,6 @@
                     </div><!-- /email-contacts-content -->
                 </div>
                 {% endif %}
-                </div><!-- /contacts-all-wrapper -->
             </div>
 
             <script>
@@ -15037,7 +15034,7 @@ else:
                         html += '</button>';
                         html += '</div>';
                         const displayStyle = isCollapsed ? 'none' : 'block';
-                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 5px; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">';
+                        html += '<div id="profile-content" class="profile-content" style="display: ' + displayStyle + '; margin-bottom: 5px; padding: 0 4px;">';
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
