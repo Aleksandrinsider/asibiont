@@ -888,7 +888,9 @@
                     </div>
                 </div>
                 {% endif %}
-                <div class="people-section" style="display: flex; flex-direction: column;">
+                <!-- Единый scroll-контейнер для обоих блоков контактов — убирает двойной скроллбар -->
+                <div id="contacts-all-wrapper" style="flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px;">
+                <div class="people-section" style="display: flex; flex-direction: column; flex: 0 0 auto; overflow: visible;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0; flex-shrink: 0;">
                         <div onclick="toggleContactsSection()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;">
@@ -902,7 +904,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="contacts-content" style="display: block; padding: 0 4px; overflow-y: auto; flex: 1; min-height: 0;">
+                    <div id="contacts-content" style="display: block; padding: 0 4px;">
                         <div id="contact-filter-content" style="margin-bottom: 15px;">
                             <div style="position: relative; width: 100%;">
                                 <select id="contact-filter-select" onchange="filterContacts(this.value)" style="width: 100%; padding: 8px 36px 8px 12px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #374151; font-weight: 400; font-family: inherit; outline: none !important; appearance: none; -webkit-appearance: none; -moz-appearance: none;">
@@ -924,7 +926,7 @@
 
                 <!-- Email-контакты в левой колонке -->
                 {% if logged_in %}
-                <div class="people-section" id="email-contacts-section" style="display: flex; flex-direction: column;">
+                <div class="people-section" id="email-contacts-section" style="display: flex; flex-direction: column; flex: 0 0 auto; overflow: visible;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #D1D9E0; flex-shrink: 0;">
                         <div onclick="toggleEmailContactsSection()" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151" style="opacity: 0.7;"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442ZM14.5 4.07v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
@@ -936,7 +938,7 @@
                             </svg>
                         </button>
                     </div>
-                    <div id="email-contacts-content" style="display: flex; flex-direction: column; padding: 0 4px; flex: 1; min-height: 0;">
+                    <div id="email-contacts-content" style="display: flex; flex-direction: column; padding: 0 4px;">
                         <div id="email-filter-content" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; flex-shrink: 0;">
                             <input type="email" id="contact-email" placeholder="email@example.com" data-i18n-ph="contact-email-ph" onkeypress="if(event.key==='Enter')document.getElementById('contact-name').focus()" style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 12px; font-family: inherit; outline: none; transition: border-color 0.15s;" onfocus="this.style.borderColor='#068487'" onblur="this.style.borderColor='#D1D9E0'">
                             <div style="display: flex; gap: 6px;">
@@ -952,12 +954,13 @@
                             </button>
                         </div>
                         <!-- Список email-контактов -->
-                        <div class="people-list" id="contacts-list" style="overflow-y: auto; flex: 1; min-height: 0;">
+                        <div class="people-list" id="contacts-list">
                             <div id="contacts-empty" style="padding: 20px; text-align: center; color: #6C727F; font-size: 12px;" data-i18n="contacts-empty-short">Нет контактов</div>
                         </div>
                     </div><!-- /email-contacts-content -->
                 </div>
                 {% endif %}
+                </div><!-- /contacts-all-wrapper -->
             </div>
 
             <script>
