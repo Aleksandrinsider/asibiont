@@ -3770,14 +3770,17 @@ class AnchorEngine:
                 _tot_disp = sum(_tf_esc.values())
                 _blocker_in_result = bool(result and 'БЛОКЕР:' in result.upper())
                 _stag_warn = next((w for w in _fw_esc if 'СТАГНАЦИЯ' in w.upper()), '')
-                _cap_warns = [w for w in _fw_esc if '⚠️' in w or '⚡' in w]
-                if self.bot and (_stag_warn or _blocker_in_result) \
-                        and (_is_noise_result or _blocker_in_result):
+                _cap_warns = [w for w in _fw_esc if '⚠️' in w or '💡' in w]
+                # Escalation: отправляем при стагнации ИЛИ БЛОКЕРЕ — независимо от шумности результата
+                # cap_warns (интеграционные советы) отправляем отдельно если есть, даже без стагнации
+                if self.bot and (_stag_warn or _blocker_in_result or _cap_warns):
                     try:
+                        # БЛОКЕР/стагнация: cooldown 3ч; только интеграционные советы: cooldown 24ч
+                        _esc_cooldown_h = 3 if (_stag_warn or _blocker_in_result) else 24
                         _esc_recent = session.query(Interaction).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'proactive',
-                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=3),
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=_esc_cooldown_h),
                         ).all()
                         _esc_sent = any('autopilot_escalation' in (i.content or '') for i in _esc_recent)
                         if not _esc_sent:
@@ -9366,11 +9369,17 @@ class AnchorEngine:
                     )
 
             # Стагнация: >12ч без реального прогресса → уведомляем пользователя в Telegram
-            if actions_history and _mt:
+            # ВАЖНО: _mt может быть None (цель без числового таргета) — проверяем только по dispatch-count
+            if actions_history:
                 _action_count = len(actions_history)
-                if _action_count >= 6 and _mc <= 1:
+                _mc_int = int(_mc) if _mc else 0
+                _mt_int = int(_mt) if _mt else None
+                _stag_threshold = 6  # ≥6 dispatch'ей без прогресса = стагнация
+                _no_progress = _mc_int <= 1 if _mt_int else (_action_count >= 10)  # без таргета — просто много попыток
+                if _action_count >= _stag_threshold and _no_progress:
+                    _mt_str = f"/{_mt_int}" if _mt_int else ""
                     _stagnation_warn = (
-                        f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, но реальный прогресс = {int(_mc)}/{int(_mt)}. "
+                        f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, но реальный прогресс = {_mc_int}{_mt_str}. "
                         f"Текущая стратегия не работает. Сообщи пользователю что нужно сменить подход или добавить интеграции."
                     )
                     _feasibility_warnings.append(_stagnation_warn)
