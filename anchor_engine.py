@@ -748,7 +748,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
     if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5", page=1) → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст!\n  💡 Примеры query (меняй каждый цикл, не повторяй предыдущий!):\n    QA/тест: "language:python repos:>5" | "language:javascript repos:>10 location:Russia" | "language:java automation repos:>3" | "language:go testing followers:>2"\n    Опыт/место: "location:Kazakhstan language:python" | "language:kotlin repos:>5" | "language:typescript followers:>3" | "language:ruby repos:>10"\n  🔄 ПАГИНАЦИЯ: если все найденные уже contacted — page=2, page=3 и т.д. Историю использованных query смотри в блоке ИСТОРИЯ GitHub-поисков.')
-    if _has_rss:     _intg_connected.append('✅ RSS — мониторинг лент новостей')
+    if _has_rss:     _intg_connected.append('✅ RSS — мониторинг одной ленты через run_agent_action(get_latest). ⚠️ Это НЕ веб-поиск! Для поиска в интернете используй web_search.')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
     if _has_notion:  _intg_connected.append('✅ Notion — записи, базы знаний')
@@ -1473,7 +1473,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     _rss_rules = ''
     if _has_rss and not _has_github:
-        _rss_rules = "\nRSS: после run_agent_action(get_latest) — save_email_contact для авторов.\n"
+        _rss_rules = (
+            "\nRSS vs ВЕБ-ПОИСК — ЭТО РАЗНЫЕ ИНСТРУМЕНТЫ:\n"
+            "  • run_agent_action(get_latest) = RSS-лента (один конкретный источник, НЕ интернет-поиск)\n"
+            "  • web_search(query) = ПОЛНОЦЕННЫЙ поиск в интернете (DDG/Bing/Google, любые запросы)\n"
+            "  • research_topic(query) = глубокий анализ темы через веб-поиск + AI\n"
+            "НЕ путай их! Для поиска людей/сайтов/контактов используй web_search, а НЕ RSS.\n"
+            "RSS: после run_agent_action(get_latest) — save_email_contact для авторов.\n"
+        )
 
     _imap_rules = ''
     if _has_imap:
@@ -5355,13 +5362,14 @@ class AnchorEngine:
                     )
                 elif _is_rss_agent:
                     _cap_rules_lines.append(
-                        f"  📰 {_p_cr['name']} [RSS-только]: "
-                        f"Единственный инструмент — run_agent_action (читает одну RSS-ленту), get_news_trends, research_topic, web_search, create_post. "
-                        f"⛔ СТРОГО ЗАПРЕЩЕНО назначать: check_emails, send_outreach_email, reply_to_outreach_email, "
-                        f"настройку Gmail API, анализ входящих писем, поиск email-контактов через Telegram/Discord. "
-                        f"Марк/RSS-агент НЕ имеет email — это физически невозможно. "
+                        f"  📰 {_p_cr['name']} [RSS + веб-поиск]: "
+                        f"Инструменты: (1) run_agent_action(get_latest) — RSS-лента (конкретный источник), "
+                        f"(2) web_search — полноценный ИНТЕРНЕТ-поиск (DDG/Bing/Google, любые запросы, НЕ RSS!), "
+                        f"(3) research_topic — глубокий анализ темы через веб, (4) get_news_trends — тренды, (5) create_post. "
+                        f"⚠️ web_search и RSS — РАЗНЫЕ инструменты! web_search ищет в интернете, RSS читает одну ленту. "
+                        f"⛔ ЗАПРЕЩЕНО назначать: check_emails, send_outreach_email, reply_to_outreach_email. "
                         f"Email-задания → только агенту с email-интеграцией. "
-                        f"RSS-агент МОЖЕТ: анализировать тренды, делегировать инсайты email-агенту через DELEGATE[имя]."
+                        f"RSS-агент МОЖЕТ: веб-поиск, анализ трендов, создание контента, делегирование инсайтов через DELEGATE[имя]."
                     )
             _cap_rules_str = (
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
