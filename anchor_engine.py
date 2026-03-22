@@ -3227,18 +3227,39 @@ class AnchorEngine:
                             _task_hint_human = _brief_task[:60] if _brief_task else 'займись активными целями'
                         # ── Контекст предыдущего цикла: что сделали агенты недавно ──
                         _last_cycle_ctx_c = ''
+                        _loop_channel_hint_c = ''
                         try:
                             from models import AgentActivityLog as _AAL_coord_ctx
                             import datetime as _dt_cc
                             _cc_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=6)
-                            _last_aal_c = session.query(_AAL_coord_ctx).filter(
+                            _last_aals_c = session.query(_AAL_coord_ctx).filter(
                                 _AAL_coord_ctx.user_id == user.id,
                                 _AAL_coord_ctx.activity_type.in_(['agent_task', 'coordinator_summary']),
                                 _AAL_coord_ctx.created_at >= _cc_cutoff,
                                 _AAL_coord_ctx.result.isnot(None),
-                            ).order_by(_AAL_coord_ctx.created_at.desc()).first()
-                            if _last_aal_c and (_last_aal_c.result or '').strip():
-                                _last_cycle_ctx_c = (_last_aal_c.result or '')[:180].strip()
+                            ).order_by(_AAL_coord_ctx.created_at.desc()).limit(5).all()
+                            if _last_aals_c:
+                                _last_cycle_ctx_c = (_last_aals_c[0].result or '')[:180].strip()
+                                # Детектор зацикливания: считаем упоминания каналов в последних циклах
+                                _all_recent_text_c = ' '.join((a.result or '') for a in _last_aals_c).lower()
+                                _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
+                                _disc_count_c = _all_recent_text_c.count('discord')
+                                _gh_count_c = _all_recent_text_c.count('github')
+                                if _tg_count_c >= 4:
+                                    _loop_channel_hint_c = (
+                                        f'⚠️ Telegram упоминался {_tg_count_c} раз за последние циклы — это зацикливание! '
+                                        f'Назначь {_chosen_name} другой канал: hh.ru, LinkedIn, Хабр, email напрямую.'
+                                    )
+                                elif _disc_count_c >= 3:
+                                    _loop_channel_hint_c = (
+                                        f'⚠️ Discord использовался {_disc_count_c} раз — зацикливание! '
+                                        f'Предложи {_chosen_name} попробовать LinkedIn или эмайл напрямую.'
+                                    )
+                                elif _gh_count_c >= 3:
+                                    _loop_channel_hint_c = (
+                                        f'⚠️ GitHub использовался {_gh_count_c} раз — попробуй другой канал: '
+                                        f'hh.ru/Хабр/форумы по тестированию.'
+                                    )
                         except Exception as _cc_err:
                             logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
                         _coord_prompt = (
@@ -3248,18 +3269,20 @@ class AnchorEngine:
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
+                            + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
                             + f"\nНапиши ОДНО короткое предложение-просьбу. "
                             "Обязательно обратись по имени. Говори как коллега — вежливо, по-человечески, конкретно.\n"
                             "Если есть «Последний результат» — сошлись на него: «Марк уже нашёл X — теперь напиши им».\n"
+                            "Если есть предупреждение о зацикливании — обязательно назначь другой канал!\n"
                             "❌ ЗАПРЕЩЕНО: инструменты (web_search, send_email), технические термины, квадратные скобки, «Жду отчёт».\n"
-                            "❌ ЗАПРЕЩЕНО: начинать с технического названия задачи («Найти контакты...», «Проанализировать...»).\n"
+                            "❌ ЗАПРЕщЕНО: начинать с технического названия задачи («Найти контакты...», «Проанализировать...»).\n"
                             "✅ ОБРАЗЦЫ без контекста:\n"
                             "  «Кристина, загляни в почту — там должны быть ответы от тестировщиков.»\n"
-                            "  «Марк, поищи свежую аналитику по QA — что интересного появилось?»\n"
+                            "  «Марк, поищи на hh.ru или LinkedIn QA-специалистов с публичным email — нам нужны реальные контакты.»\n"
                             "✅ ОБРАЗЦЫ с контекстом предыдущего цикла:\n"
                             "  «Кристина, Марк нашёл 5 новых контактов — сейчас твоя очередь написать им.»\n"
                             "  «Марк, Кристина разослала письма — проверь, нет ли ответов в почте.»\n"
-                            "  «Кристина, уже 8 контактов ждут ответа — напиши следующей группе.»"
+                            "  «Марк, прошлой раз был Telegram — сейчас попробуй поискать тестировщиков на Хабре или LinkedIn.»"
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=120)
                         if _gen and len(_gen.strip()) > 15:
