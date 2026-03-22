@@ -7364,8 +7364,8 @@ else:
 
             if (hasContent) {
                 const body = document.createElement('div');
-                // Показываем первые ~2 строки сразу; клик — развернуть полностью
-                body.style.cssText = 'overflow:hidden;transition:max-height 0.3s ease;max-height:40px;';
+                // Начинаем свёрнутым; клик — развернуть полностью
+                body.style.cssText = 'overflow:hidden;transition:max-height 0.3s ease;max-height:0px;';
                 const inner = document.createElement('div');
                 inner.style.cssText = 'font-size:13px;color:#374151;line-height:1.5;padding:0 0 10px 0;white-space:pre-wrap;word-break:break-word;';
                 inner.textContent = cleanContent;
@@ -7374,18 +7374,18 @@ else:
 
                 header.onclick = () => {
                     const chev = wrap.querySelector('.tl-chev');
-                    const collapsed = body.style.maxHeight === '40px';
+                    const collapsed = body.style.maxHeight === '0px' || body.style.maxHeight === '';
                     if (collapsed) {
                         body.style.maxHeight = body.scrollHeight + 200 + 'px';
                         if (chev) chev.style.transform = 'rotate(0deg)';
                         body.addEventListener('transitionend', function _exp() {
                             body.removeEventListener('transitionend', _exp);
-                            if (body.style.maxHeight !== '40px') { body.style.maxHeight = 'none'; body.style.overflow = 'visible'; }
+                            if (body.style.maxHeight !== '0px') { body.style.maxHeight = 'none'; body.style.overflow = 'visible'; }
                         }, { once: true });
                     } else {
                         body.style.overflow = 'hidden';
                         body.style.maxHeight = body.scrollHeight + 'px';
-                        requestAnimationFrame(() => { body.style.maxHeight = '40px'; });
+                        requestAnimationFrame(() => { body.style.maxHeight = '0px'; });
                         if (chev) chev.style.transform = 'rotate(-90deg)';
                     }
                 };
@@ -7431,9 +7431,15 @@ else:
             // or after collapse/expand), update it to accommodate the new content height.
             // This prevents the timeline from being cut off after SSE updates.
             const agentDetailsEl = tl.parentElement;
-            if (agentDetailsEl && agentDetailsEl.style.maxHeight && agentDetailsEl.style.maxHeight !== '0px' && agentDetailsEl.style.maxHeight !== 'none') {
-                // Container is open but has a pixel constraint — refresh to full scroll height
-                agentDetailsEl.style.maxHeight = agentDetailsEl.scrollHeight + 'px';
+            if (agentDetailsEl) {
+                const _mh = agentDetailsEl.style.maxHeight;
+                if (_mh === 'none') {
+                    // Already fully open — ensure new items are not clipped
+                    agentDetailsEl.style.overflow = 'visible';
+                } else if (_mh && _mh !== '0px') {
+                    // Container has pixel constraint — refresh to full scroll height
+                    agentDetailsEl.style.maxHeight = agentDetailsEl.scrollHeight + 'px';
+                }
             }
         }
 
@@ -12068,7 +12074,7 @@ else:
                 html += '<div style="margin-bottom: 2px;"><span style="font-size: 12px; color: #068487; font-weight: 500;">' + clickableDelegationInfo + '</span></div>';
             }
 
-            html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight: 600;' + (task.status === 'completed' ? ' opacity: 0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
+            html += '<div class="task-title" id="task-title-' + task.id + '" style="font-weight:600;word-break:break-word;overflow-wrap:break-word;' + (task.status === 'completed' ? 'opacity:0.6;' : '') + '">' + escapeHtml(cleanTitle) + '</div>';
             
             // Показываем описание задачи
             // Для агентских задач description содержит технические исследовательские заметки — 
