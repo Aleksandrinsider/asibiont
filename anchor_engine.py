@@ -3374,6 +3374,63 @@ class AnchorEngine:
                 except Exception as _cadt_err:
                     logger.debug("[ANCHOR-AUTOPILOT] delegation task create skipped: %s", _cadt_err)
 
+                # ── Агент принимает поручение — живой отклик в чате ──
+                if _chosen_id != 0 and _coord_text and self.bot:
+                    try:
+                        from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_ack
+                        # Dedup: раз в 45 мин достаточно
+                        _ack_ok = True
+                        try:
+                            _ack_chk_s = Session()
+                            try:
+                                _ack_cutoff = datetime.now(timezone.utc) - timedelta(minutes=45)
+                                _ack_recent = _ack_chk_s.query(Interaction).filter(
+                                    Interaction.user_id == user.id,
+                                    Interaction.message_type == 'agent_msg',
+                                    Interaction.created_at >= _ack_cutoff,
+                                    Interaction.content.like('%"goal_autopilot_ack"%'),
+                                ).first()
+                                if _ack_recent:
+                                    _ack_ok = False
+                            finally:
+                                _ack_chk_s.close()
+                        except Exception:
+                            pass
+                        if _ack_ok:
+                            _is_ack_fem = (_chosen_name or '')[-1:] in 'аяАЯ'
+                            _ack_role = (agent_data.get('job_title') or agent_data.get('specialization') or 'специалист')[:60]
+                            _ack_prompt = (
+                                f"Ты — {_chosen_name}, {_ack_role}. "
+                                f"ASI только что поручила тебе: «{_coord_text[:200]}».\n"
+                                f"Напиши ОДНО короткое предложение — что принял(а) задачу и что будешь делать.\n"
+                                f"От первого лица, {'по-женски' if _is_ack_fem else 'по-мужски'}. Живо и кратко.\n"
+                                f"✅ Примеры: «Хорошо, сейчас посмотрю!» «Уже делаю.» «Займусь, ASI.» «Приступаю!»\n"
+                                f"❌ Нельзя: технические термины, названия инструментов, своё имя в третьем лице."
+                            )
+                            _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=60)
+                            if _ack_gen and len(_ack_gen.strip()) > 4:
+                                _ack_text = _ack_gen.strip()
+                                try:
+                                    _ack_sv = Session()
+                                    try:
+                                        _ack_sv.add(Interaction(
+                                            user_id=user.id,
+                                            message_type='agent_msg',
+                                            content=json.dumps({
+                                                '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
+                                                'text': _ack_text,
+                                                '__anchor_type': 'goal_autopilot_ack',
+                                            }, ensure_ascii=False),
+                                        ))
+                                        _ack_sv.commit()
+                                    finally:
+                                        _ack_sv.close()
+                                    await self.bot.send_message(chat_id=user.telegram_id, text=_ack_text)
+                                except Exception as _ack_sv_err:
+                                    logger.debug("[ANCHOR-AUTOPILOT] ack save/send: %s", _ack_sv_err)
+                    except Exception as _ack_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] agent ack gen failed: %s", _ack_err)
+
                 try:
                     # Пауза перед AI-вызовом — небольшая задержка после объявления координатора
                     await asyncio.sleep(2)
@@ -6956,6 +7013,36 @@ class AnchorEngine:
                         _step_queue.insert(0, _inject_step)
                         logger.info("[COORD] pipeline-inject: %s→send after %s save_email_contact (goal=%s)",
                                     _email_sender_name, _ag_name, _inject_goal[:40])
+                        # ── Живое сообщение: email-агент принимает контакты от коллеги ──
+                        try:
+                            _is_pipe_fem = (_email_sender_name or '')[-1:] in 'аяАЯ'
+                            _is_ag_nm_fem = (_ag_name or '')[-1:] in 'аяАЯ'
+                            _ag_fnd_verb = 'нашла' if _is_ag_nm_fem else 'нашёл'
+                            _i_got_hf = 'Получила' if _is_pipe_fem else 'Получил'
+                            import random as _rnd_hf
+                            _hf_tmpl = _rnd_hf.choice([
+                                f'{_i_got_hf} контакты от {_ag_name} — уже составляю письма!',
+                                f'Хорошо, {_ag_name} {_ag_fnd_verb} нужных людей — сразу пишу им.',
+                                f'Отлично! {_i_got_hf} список от {_ag_name}, начинаю рассылку.',
+                            ])
+                            _hf_sess = Session()
+                            try:
+                                _hf_sess.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='agent_msg',
+                                    content=json.dumps({
+                                        '__agent': {'name': _email_sender_name, 'id': 0, 'avatar_url': ''},
+                                        'text': _hf_tmpl,
+                                        '__anchor_type': 'goal_autopilot_handoff',
+                                    }, ensure_ascii=False),
+                                ))
+                                _hf_sess.commit()
+                            finally:
+                                _hf_sess.close()
+                            if self.bot:
+                                await self.bot.send_message(chat_id=user.telegram_id, text=_hf_tmpl)
+                        except Exception as _hf_err:
+                            logger.debug("[COORD] handoff msg failed: %s", _hf_err)
 
                 # ── Накапливаем контекст шага для финального отчёта (без лишнего AI-вызова) ──
                 if len(_cleaned) > 40:
@@ -7107,13 +7194,14 @@ class AnchorEngine:
                         if _saved_note_agents else ''
                     )
                     _report_prompt = (
-                        f"Ты — ASI, координатор. Пишешь итоговый отчёт ПОЛЬЗОВАТЕЛЮ (не агентам!) про рабочий цикл.\n\n"
+                        f"Ты — ASI, координатор. Пишешь итоговый отчёт ПОЛЬЗОВАТЕЛЮ про рабочий цикл.\n\n"
                         f"Что сделала команда:\n{_report_items}\n\n"
                         + (f"Ход работы:\n{_bridge_flow}\n\n" if _bridge_flow else '')
                         + f"Состояние целей:\n{_goals_state_now}\n\n"
                         f"Правила:\n"
-                        f"- Адресат — ПОЛЬЗОВАТЕЛЬ. Пиши безлично или через 'команда': 'Найдено 3 контакта', 'Команда проверила почту'.\n"
-                        f"- ТОЛЬКО конкретные факты прошедшего цикла: цифры, имена, результаты.\n"
+                        f"- Адресат — ПОЛЬЗОВАТЕЛЬ. Называй агентов по именам: 'Кристина нашла…', 'Марк проверил…'. Не пиши 'команда' анонимно, если знаешь кто что сделал.\n"
+                        f"- Конкретные факты: цифры, имена контактов, результаты действий.\n"
+                        f"- Допустимо одно тёплое слово в конце ('хорошая работа', 'движемся к цели').\n"
                         f"- Если агент не привёл конкретного результата — НЕ упоминай его.\n"
                         f"- Если ничего конкретного не сделано — одно предложение: 'Цикл завершён без новых результатов.'.\n"
                         + _note_hint
