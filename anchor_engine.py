@@ -3225,23 +3225,43 @@ class AnchorEngine:
                             _task_hint_human = 'подготовь пост или контент'
                         else:
                             _task_hint_human = _brief_task[:60] if _brief_task else 'займись активными целями'
+                        # ── Контекст предыдущего цикла: что сделали агенты недавно ──
+                        _last_cycle_ctx_c = ''
+                        try:
+                            from models import AgentActivityLog as _AAL_coord_ctx
+                            import datetime as _dt_cc
+                            _cc_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=6)
+                            _last_aal_c = session.query(_AAL_coord_ctx).filter(
+                                _AAL_coord_ctx.user_id == user.id,
+                                _AAL_coord_ctx.activity_type.in_(['agent_task', 'coordinator_summary']),
+                                _AAL_coord_ctx.created_at >= _cc_cutoff,
+                                _AAL_coord_ctx.result.isnot(None),
+                            ).order_by(_AAL_coord_ctx.created_at.desc()).first()
+                            if _last_aal_c and (_last_aal_c.result or '').strip():
+                                _last_cycle_ctx_c = (_last_aal_c.result or '')[:180].strip()
+                        except Exception as _cc_err:
+                            logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
                             + f". Обращаешься к коллеге {_chosen_name} в рабочем чате — как живой человек, кратко и тепло.\n\n"
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
+                            + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + f"\nНапиши ОДНО короткое предложение-просьбу. "
                             "Обязательно обратись по имени. Говори как коллега — вежливо, по-человечески, конкретно.\n"
+                            "Если есть «Последний результат» — сошлись на него: «Марк уже нашёл X — теперь напиши им».\n"
                             "❌ ЗАПРЕЩЕНО: инструменты (web_search, send_email), технические термины, квадратные скобки, «Жду отчёт».\n"
                             "❌ ЗАПРЕЩЕНО: начинать с технического названия задачи («Найти контакты...», «Проанализировать...»).\n"
-                            "✅ ОБРАЗЦЫ:\n"
+                            "✅ ОБРАЗЦЫ без контекста:\n"
                             "  «Кристина, загляни в почту — там должны быть ответы от тестировщиков.»\n"
                             "  «Марк, поищи свежую аналитику по QA — что интересного появилось?»\n"
-                            "  «Кристина, пожалуйста, напиши тем, кто ещё не ответил — у нас уже 10 контактов.»\n"
-                            "  «Марк, покопайся в своих RSS-лентах, нужны свежие инсайты по рынку.»"
+                            "✅ ОБРАЗЦЫ с контекстом предыдущего цикла:\n"
+                            "  «Кристина, Марк нашёл 5 новых контактов — сейчас твоя очередь написать им.»\n"
+                            "  «Марк, Кристина разослала письма — проверь, нет ли ответов в почте.»\n"
+                            "  «Кристина, уже 8 контактов ждут ответа — напиши следующей группе.»"
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=80)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=120)
                         if _gen and len(_gen.strip()) > 15:
                             _coord_text = _gen.strip()
                     except Exception as _cgen_err:
@@ -6733,6 +6753,49 @@ class AnchorEngine:
                     f" Не пиши 'отправлю позже' или 'скину ссылку' без реального tool-вызова. Нет инструмента — нет обещания."
                 )
 
+                # ── Кросс-агентная "реакция": агент комментирует работу коллеги перед стартом ──
+                # Генерируется только если: есть результаты предыдущих шагов, агент — не первый,
+                # и сообщение ещё не было в этом цикле для этого агента
+                if _prev_steps_context and _executed > 0 and self.bot:
+                    try:
+                        _is_react_fem = (_ag_name or '')[-1:] in 'аяАЯ'
+                        _react_prev_short = _prev_steps_context.strip()[-350:]
+                        from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_react
+                        _react_prompt = (
+                            f"Ты — {_ag_name}. Тебе только что передали работу: «{_ag_task[:120]}».\n"
+                            f"До тебя коллеги сделали:\n{_react_prev_short}\n\n"
+                            f"Напиши ОДНО короткое предложение — живую реакцию на работу коллег + что ты сделаешь дальше.\n"
+                            f"От первого лица, {'по-женски' if _is_react_fem else 'по-мужски'}. Без технических слов.\n"
+                            f"✅ Образцы: «Отлично, вижу контакты от Марка — сразу пишу им.» "
+                            f"«Хорошо, продолжу с того места.» «Кристина уже открыла дверь — я занесу письма!»\n"
+                            f"❌ Не упоминай инструменты, не называй себя в третьем лице."
+                        )
+                        _react_gen = await _qar_react(
+                            [{'role': 'user', 'content': _react_prompt}], max_tokens=70
+                        )
+                        if _react_gen and len(_react_gen.strip()) > 8:
+                            _react_text = _react_gen.strip()
+                            try:
+                                _react_sv = Session()
+                                try:
+                                    _react_sv.add(Interaction(
+                                        user_id=user.id,
+                                        message_type='agent_msg',
+                                        content=json.dumps({
+                                            '__agent': {'name': _ag_name, 'id': _ag_data.get('id', 0), 'avatar_url': _ag_data.get('avatar_url', '')},
+                                            'text': _react_text,
+                                            '__anchor_type': 'goal_autopilot_crossreact',
+                                        }, ensure_ascii=False),
+                                    ))
+                                    _react_sv.commit()
+                                finally:
+                                    _react_sv.close()
+                                await self.bot.send_message(chat_id=user.telegram_id, text=_react_text)
+                            except Exception as _react_sv_err:
+                                logger.debug('[COORD] crossreact save/send: %s', _react_sv_err)
+                    except Exception as _react_err:
+                        logger.debug('[COORD] crossreact gen failed: %s', _react_err)
+
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
@@ -7050,7 +7113,15 @@ class AnchorEngine:
                     if _step_queue:
                         _ns0 = _step_queue[0]
                         _next_hint = f" → далее {_ns0.get('agent','?')}: {(_ns0.get('task') or '')[:60]}"
-                    _bridge_notes.append(f"{_ag_name}: {_cleaned[:200]}{_next_hint}")
+                    # Выбираем лучший фрагмент: строка с цифрами или первые 200 символов
+                    import re as _re_bn
+                    _bn_lines = [l.strip() for l in _cleaned.splitlines() if l.strip()]
+                    _bn_fact = next(
+                        (l for l in _bn_lines if _re_bn.search(r'\d', l) and len(l) > 20),
+                        _bn_lines[0] if _bn_lines else _cleaned[:200]
+                    )
+                    _bn_text = _bn_fact[:220] if len(_bn_fact) > 220 else _bn_fact
+                    _bridge_notes.append(f"{_ag_name}: {_bn_text}{_next_hint}")
 
                 await asyncio.sleep(0.5)  # небольшая пауза между агентами
 
