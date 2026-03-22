@@ -958,7 +958,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     else:
         _ALL_ACTION_TOOLS = [
             'send_outreach_email', 'negotiate_by_email', 'find_and_message_relevant_users',
-            'start_email_campaign', 'start_content_campaign', 'generate_marketing_content',
+            'start_email_campaign', 'add_email_leads', 'start_content_campaign', 'generate_marketing_content',
             'create_post', 'publish_to_telegram', 'find_partners', 'start_delegation_campaign',
             'find_relevant_contacts_for_task', 'research_and_plan', 'analyze_situation_and_suggest_tasks',
             'send_follow_up_email', 'schedule_background_task', 'set_contact_alert',
@@ -1117,6 +1117,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "\n📧 Email / Outreach:\n"
         + _td('send_outreach_email') + '\n'
         + _td('start_email_campaign') + '\n'
+        + _td('add_email_leads') + '\n'
         + _check_emails_line
         + _td('reply_to_outreach_email') + '\n'
         + _td('send_follow_up_email') + '\n'
@@ -1516,6 +1517,52 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "⛔ У агентов НЕТ инструмента публикации в чужих Telegram/Discord/Reddit-каналах!\n"
         )
 
+    # ── Директива активных email-кампаний ──
+    # Если у пользователя есть активная кампания с нехваткой лидов —
+    # явно указываем агенту campaign_id и команду add_email_leads.
+    _campaign_directive = ''
+    if user:
+        try:
+            from models import Session as _SC_ap, EmailCampaign as _EC_ap, EmailOutreach as _EO_ap
+            from sqlalchemy import func as _fc_ap
+            _db_ap = _SC_ap()
+            try:
+                _active_camps = _db_ap.query(_EC_ap).filter(
+                    _EC_ap.user_id == user.id,
+                    _EC_ap.status.in_(['active', 'running']),
+                ).all()
+                _camp_directives = []
+                for _c in _active_camps[:3]:
+                    _pdrafts = _db_ap.query(_fc_ap.count(_EO_ap.id)).filter(
+                        _EO_ap.campaign_id == _c.id,
+                        _EO_ap.status == 'draft',
+                    ).scalar() or 0
+                    if _pdrafts < 5:
+                        _camp_directives.append(
+                            f"  🎯 Кампания id={_c.id} «{_c.name}»: {_pdrafts} черновиков — НУЖНЫ ЛИДЫ!\n"
+                            f"     Цель кампании: {(_c.goal or '')[:120]}\n"
+                            f"     Аудитория: {(_c.target_audience or '')[:100]}\n"
+                            f"     → Найди контакты: web_search / find_relevant_contacts_for_task\n"
+                            f"     → ОБЯЗАТЕЛЬНО вызови: add_email_leads(campaign_id={_c.id}, "
+                            f"leads=[{{\"email\":\"...\",\"name\":\"...\",\"company\":\"...\"}}])"
+                        )
+                    else:
+                        _camp_directives.append(
+                            f"  🟢 Кампания id={_c.id} «{_c.name}»: {_pdrafts} черновиков — "
+                            f"отправляются автоматически (твоя помощь не требуется)"
+                        )
+                if _camp_directives:
+                    _campaign_directive = (
+                        "\n\n🚨 АКТИВНЫЕ EMAIL-КАМПАНИИ (ВЫСШИЙ ПРИОРИТЕТ — выполни ПЕРВЫМ!):\n"
+                        + '\n'.join(_camp_directives)
+                        + "\n⚠️ НЕ вызывай start_email_campaign — кампания УЖЕ ЗАПУЩЕНА!\n"
+                        "   Твоя задача: найди контакты и добавь их через add_email_leads.\n"
+                    )
+            finally:
+                _db_ap.close()
+        except Exception as _e_cap:
+            logger.debug("suppressed campaign_directive: %s", _e_cap)
+
     from datetime import datetime as _dt_ap
     _today_str = _dt_ap.now().strftime('%d.%m.%Y')
 
@@ -1525,6 +1572,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{'Интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
+        f"{_campaign_directive}"
         f"{_goal_state_hint}"
         f"{_outreach_stats}"
         f"{_people_search_map}"

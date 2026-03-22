@@ -599,15 +599,15 @@ class ContextBuilder:
                         elif _is_active_c and _sent_today_c >= _dlimit:
                             status_badge = f' ЖДЁТ ЗАВТРА ({_sent_today_c}/{_dlimit})'
                         elif _is_active_c and pending_leads == 0 and (c.emails_sent or 0) == 0 and _sent_today_c == 0:
-                            status_badge = ' НЕТ ЛИДОВ — НУЖНЫ КОНТАКТЫ'
+                            status_badge = f' НЕТ ЛИДОВ — НУЖНЫ КОНТАКТЫ → add_email_leads(campaign_id={c.id})'
                         elif _is_active_c and pending_leads == 0:
-                            status_badge = f' ВСЕ ОТПРАВЛЕНЫ ({_sent_today_c}/{_dlimit} сегодня)'
+                            status_badge = f' ВСЕ ОТПРАВЛЕНЫ ({_sent_today_c}/{_dlimit} сегодня) → добавь лиды: add_email_leads(campaign_id={c.id})'
                         elif _is_active_c:
                             status_badge = f'🟢 ОТПРАВЛЯЕТ ({pending_leads} черновиков, {_sent_today_c}/{_dlimit} сегодня)'
                         else:
                             status_badge = f' {c.status}'
                         camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
-                    hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ:\n" + "\n".join(camp_lines))
+                    hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ — УЖЕ ЗАПУЩЕНЫ, НЕ создавай новые:\n" + "\n".join(camp_lines))
             except Exception as e:
                 logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
 
