@@ -5183,11 +5183,22 @@ class AnchorEngine:
                     for g in _goals[:3] if g.get('metric_target')
                 )
                 if _gap_needed > 0:
+                    # Определяем наличие GitHub-агента для точных инструкций
+                    _has_gh_unsent = any(
+                        'github_token=' in (getattr(next((a for a in real_agents if a.name == p['name']), None), 'user_api_keys', '') or '').lower()
+                        for p in _profiles
+                    )
+                    _gh_pipeline_hint = (
+                        "\n→ GitHub-агент: run_agent_action(action='search_users', params={query:'language:X followers:>N', page:1}) "
+                        "— ОБЯЗАТЕЛЬНО использовать с НОВЫМ query каждый цикл! Затем save_email_contact для найденных."
+                    ) if _has_gh_unsent else ''
                     _unsent_contacts_str = (
                         f"\n💡 ВСЕ {_email_sent} известных контактов уже получили письма. "
                         f"Осталось {_gap_needed} единиц до цели.\n"
-                        "→ ПАЙПЛАЙН: RSS/GitHub-агент ДОЛЖЕН найти НОВЫХ людей → save_email_contact → email-агент отправляет им.\n"
-                        "→ НЕ повторяй check_emails если уже делали недавно — ищи НОВЫЕ контакты!\n"
+                        "→ КРИТИЧЕСКИ ВАЖНО: нужны НОВЫЕ контакты! Назначь GitHub/RSS-агенту поиск ПРЯМО СЕЙЧАС.\n"
+                        + _gh_pipeline_hint +
+                        "\n→ RSS-агент: save_email_contact для авторов/разработчиков из ленты."
+                        "\n→ НЕ повторяй check_emails если уже делали недавно — ищи НОВЫЕ контакты!\n"
                     )
 
             # Блок приоритетных ответов на входящие — если есть replied без AI-ответа
@@ -5344,6 +5355,12 @@ class AnchorEngine:
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
             import re as _re_al
             _agent_banned_tools: dict = {}
+            # Пайплайн-инструменты НЕ банить — каждый вызов уникален (разные контакты/queries)
+            _COORD_MULTI_USE_OK = {
+                'run_agent_action', 'save_email_contact', 'send_outreach_email',
+                'check_emails', 'reply_to_outreach_email', 'find_relevant_contacts_for_task',
+                'update_goal_progress', 'add_email_leads',
+            }
             for _p_al in _profiles:
                 _hist_al = _per_agent_history.get(_p_al['name'], [])
                 _tc: dict = {}
@@ -5354,7 +5371,7 @@ class AnchorEngine:
                             _t_al = _t_al.strip()
                             if _t_al:
                                 _tc[_t_al] = _tc.get(_t_al, 0) + 1
-                _banned_al = [t for t, n in _tc.items() if n >= 2]   # порог: 2+ раз = пора менять
+                _banned_al = [t for t, n in _tc.items() if n >= 2 and t not in _COORD_MULTI_USE_OK]
                 if _banned_al:
                     _agent_banned_tools[_p_al['name']] = _banned_al
             _banned_tools_str = ''
@@ -5383,6 +5400,15 @@ class AnchorEngine:
                 _sg_tgt = _sg.get('metric_target', 0)
                 _sg_gap = (_sg_tgt or 0) - (_sg_cur or 0)
                 # Если уже есть отправленные письма — приоритет на check_emails + новые отправки
+                # Определяем наличие GitHub-агента для точных инструкций
+                _has_gh_stag = any(
+                    'github_token=' in (getattr(next((a for a in real_agents if a.name == p['name']), None), 'user_api_keys', '') or '').lower()
+                    for p in _profiles
+                )
+                _gh_step = (
+                    "  3. GitHub-агент: run_agent_action(action='search_users', params={query:'language:X followers:>N'}) "
+                    "с НОВЫМ query (не повторяй предыдущие!) → save_email_contact → email-агент пишет.\n"
+                ) if _has_gh_stag else ''
                 if _already_sent and _email_sent > 0:
                     _stagnant_instr = (
                         f"\n⚠️ Цель «{_sg['title'][:50]}» = {_sg_progress}% ({int(_sg_cur or 0)}/{int(_sg_tgt or 0)}). "
@@ -5390,8 +5416,9 @@ class AnchorEngine:
                         "ОБЯЗАТЕЛЬНЫЕ шаги этого цикла (по приоритету):\n"
                         "  1. Email-агент: check_emails — проверить входящие ответы.\n"
                         "  2. Если ответов < gap — email-агент: send_outreach_email НОВЫМ контактам (не из уже_написали).\n"
-                        "  3. RSS-агент: save_email_contact для НОВЫХ авторов/разработчиков из ленты → email-агент пишет им.\n"
-                        "  4. НЕ делай поиск/research если уже есть unsent contacts в базе — сначала напиши им!\n"
+                        + _gh_step +
+                        "  4. RSS-агент: save_email_contact для НОВЫХ авторов/разработчиков из ленты → email-агент пишет им.\n"
+                        "  5. НЕ делай поиск/research если уже есть unsent contacts в базе — сначала напиши им!\n"
                     )
                 else:
                     _stagnant_instr = (
@@ -5399,7 +5426,8 @@ class AnchorEngine:
                         "ПРИНУДИТЕЛЬНЫЙ шаг этого цикла:\n"
                         "  1. Если нет активных кампаний → email-агент ОБЯЗАН вызвать start_email_campaign прямо сейчас.\n"
                         "  2. Если кампания есть → email-агент ОБЯЗАН вызвать send_outreach_email.\n"
-                        "  3. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
+                        + _gh_step +
+                        "  4. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
                     )
 
             _email_campaigns_str = '\n'.join(str(e) for e in data.get('email_campaigns', [])) or 'нет'
@@ -8872,12 +8900,18 @@ class AnchorEngine:
                 _aal_ts = _api.created_at.strftime('%d.%m %H:%M')
                 # Угадываем инструмент по содержимому — для совместимости с anti-loop парсером
                 _tl_lower = (_aal_title + ' ' + _aal_content).lower()
-                if any(w in _tl_lower for w in ('почт', 'imap', 'email', 'ответ')):
+                if any(w in _tl_lower for w in ('почт', 'imap', 'email', 'ответ', 'inbox')):
                     _guessed = '[check_emails]'
-                elif any(w in _tl_lower for w in ('rss', 'лента', 'github', 'репозитор')):
-                    _guessed = '[run_agent_action]'
-                elif any(w in _tl_lower for w in ('отправил', 'написал', 'outreach')):
+                elif any(w in _tl_lower for w in ('отправил', 'написал', 'outreach', 'рассыл')):
                     _guessed = '[send_outreach_email]'
+                elif any(w in _tl_lower for w in ('сохранил контакт', 'добавил контакт', 'save_email', 'новый контакт')):
+                    _guessed = '[save_email_contact]'
+                elif any(w in _tl_lower for w in ('search_users', 'поиск разработч', 'нашёл на github', 'github search')):
+                    _guessed = '[run_agent_action]'
+                elif any(w in _tl_lower for w in ('rss', 'лента', 'новост')):
+                    _guessed = '[run_agent_action]'
+                elif any(w in _tl_lower for w in ('github', 'репозитор', 'коммит', 'pull request')):
+                    _guessed = '[run_agent_action]'
                 elif any(w in _tl_lower for w in ('поиск', 'нашёл', 'найден', 'search')):
                     _guessed = '[web_search]'
                 elif any(w in _tl_lower for w in ('telegram', 'discord', 'канал', 'сообщест')):
