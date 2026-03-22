@@ -9653,6 +9653,10 @@ def _is_generic_email(email: str) -> bool:
     # Email начинающиеся с support+ (Substack pattern: support+xxx@substack.com)
     if prefix.startswith('support+') or prefix.startswith('noreply+'):
         return True
+    # Невалидные псевдо-домены мессенджеров (агент пишет @telegram вместо реального email)
+    if domain in ('telegram', 'vk', 'vk.com', 't.me', 'instagram', 'twitter', 'facebook',
+                  'linkedin', 'discord', 'slack', 'whatsapp'):
+        return True
 
     return False
 
@@ -11094,10 +11098,12 @@ async def send_outreach_email(
                 id=campaign_id, user_id=user.id
             ).first()
         else:
-            # Берём последнюю активную кампанию
-            campaign = session.query(EmailCampaign).filter_by(
-                user_id=user.id, status='active'
-            ).order_by(EmailCampaign.created_at.desc()).first()
+            # Берём наиболее активно используемую кампанию (emails_sent наибольший)
+            # Исключаем 'personal' — они для личных писем, не для outreach автопилота
+            campaign = session.query(EmailCampaign).filter(
+                EmailCampaign.user_id == user.id,
+                EmailCampaign.status == 'active',
+            ).order_by(EmailCampaign.emails_sent.desc()).first()
 
         if not campaign:
             return " Нет активной email-кампании. Сначала создай кампанию."
