@@ -4386,7 +4386,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                             # Нужны inbox_reply за последний час (реальная свежая активность)
                             _ibx_chk = session.query(_AAL_chk).filter(
                                 _AAL_chk.user_id == user.id, _AAL_chk.activity_type == 'inbox_reply',
-                                _AAL_chk.created_at >= datetime.now() - timedelta(hours=1),
+                                _AAL_chk.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
                             ).count()
                             if _ibx_chk == 0:
                                 return (
@@ -4409,7 +4409,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                             _AAL_rl.user_id == user.id,
                             _AAL_rl.activity_type == 'goal_updated',
                             _AAL_rl.ref_id == matched.id,
-                            _AAL_rl.created_at >= datetime.now() - timedelta(hours=1),
+                            _AAL_rl.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
                         ).count()
                         if _recent_updates >= 1:
                             return f"Метрика цели '{matched.title}' уже обновлялась менее часа назад. Подожди перед следующим обновлением. Метрика обновляется только при РЕАЛЬНОМ новом результате."
@@ -4485,7 +4485,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                             _rpl = session.query(_EC_p).filter(_EC_p.user_id == user.id, _EC_p.status == 'replied').count()
                             _ibx = session.query(_AAL_p).filter(
                                 _AAL_p.user_id == user.id, _AAL_p.activity_type == 'inbox_reply',
-                                _AAL_p.created_at >= datetime.now() - timedelta(days=14),
+                                _AAL_p.created_at >= datetime.now(timezone.utc) - timedelta(days=14),
                             ).count()
                             if _rpl == 0 and _ibx == 0:
                                 return (

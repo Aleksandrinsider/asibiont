@@ -213,6 +213,7 @@ class UserProfile(Base):
     bio_normalized_ru = Column(Text)
     status_text_normalized_ru = Column(String(100))
     current_plans_normalized_ru = Column(Text)
+    activity_streak = Column(Integer, default=0)  # Consecutive active days
 
     user = relationship("User", backref="profile")
 

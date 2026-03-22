@@ -335,8 +335,8 @@ def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks):
         if len(completed_tasks) >= 3:
             return f"Сегодня закрыл {len(completed_tasks)} задач — день прошёл не зря"
         else:
-            raw_desc = decrypt_data(completed_tasks[0].description) if completed_tasks[0].description else completed_tasks[0].title
-            task_desc = raw_desc[:50] + "..." if len(raw_desc) > 50 else raw_desc
+            raw_desc = decrypt_data(completed_tasks[0].description) if completed_tasks[0].description else (completed_tasks[0].title or '')
+            task_desc = (raw_desc[:50] + "...") if raw_desc and len(raw_desc) > 50 else (raw_desc or 'задачу')
             return f"Разобрался с '{task_desc}' — ещё одно дело с плеч"
     elif pending_tasks:
         return f"В работе {len(pending_tasks)} задач — копаю дальше"

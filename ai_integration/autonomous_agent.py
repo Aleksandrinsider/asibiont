@@ -5421,7 +5421,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Если есть ещё пользователи из поиска с email — отправь следующее письмо (send_outreach_email).\n"
                     "Если все контакты уже обработаны — вызови update_goal_progress."
                 )})
-            elif _was_save and not _was_send:
+            elif _was_save_contact:
+                # Последний инструмент = save_email_contact → нужен send
                 _messages.append({"role": "user", "content": (
                     f"Контакт(ы) сохранены (использовал: {_used_str}). "
                     "🚨 ОБЯЗАТЕЛЬНЫЙ СЛЕДУЮЩИЙ ШАГ — send_outreach_email:\n"
@@ -5507,8 +5508,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             # ── Autopilot retry: save_email_contact без send_outreach_email на любой итерации ──
             # Агент сохранил контакт и написал текст вместо письма — принудительный retry
+            # ВАЖНО: используем _was_save_contact (последний инструмент = save), не _was_save (общий флаг).
+            # Сценарий-баг: save(A)→send(A)→save(B)→текст: _was_save=True, _was_send=True → retry не срабатывал.
+            # Правильно: проверяем ПОСЛЕДНИЙ инструмент — если save без следующего send, форсируем send.
             if (_is_autopilot_task and _iter > 0 and not _tool_calls
-                    and _was_save and not _was_send):
+                    and _was_save_contact and not (_last_tool_local == 'send_outreach_email')):
                 logger.info(
                     "[DIRECTOR-EXEC] autopilot save-without-send retry for %s",
                     agent.get('name'),
