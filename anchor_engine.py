@@ -2713,10 +2713,18 @@ class AnchorEngine:
 
             # Уже отправленные письма — не дублировать
             _already_sent_str_ctx = data.get('already_sent_emails', [])
-            if _already_sent_str_ctx:
+            _negotiation_ctx = set(data.get('negotiation_emails', []))
+            # Исключаем из "не писать" тех кто уже в переговорах — им нужен ответ
+            _already_sent_str_ctx_filtered = [e for e in _already_sent_str_ctx if e.lower() not in _negotiation_ctx]
+            if _already_sent_str_ctx_filtered:
                 task_text += (
                     f"\n\n⚠️ Уже получили письма (НЕ писать повторно): "
-                    + ', '.join(_already_sent_str_ctx[:20])
+                    + ', '.join(_already_sent_str_ctx_filtered[:20])
+                )
+            if _negotiation_ctx:
+                task_text += (
+                    f"\n\n🔴 В АКТИВНЫХ ПЕРЕГОВОРАХ (ответили — ТОЛЬКО reply_to_outreach_email, не новое письмо): "
+                    + ', '.join(list(_negotiation_ctx)[:10])
                 )
 
             # Задачи уже созданные агентами — не создавай дублей, предлагай новые шаги
@@ -5047,7 +5055,10 @@ class AnchorEngine:
             _failed_str = ', '.join(f"{t}({n}x)" for t, n in _failed_tools.items()) if _failed_tools else 'нет'
             _per_agent_history = data.get('per_agent_history', {})
             _already_sent = data.get('already_sent_emails', [])
-            _already_sent_str = ', '.join(_already_sent[:20]) if _already_sent else 'нет'
+            _negotiation_emails_coord = set(data.get('negotiation_emails', []))
+            # Убираем из "уже написали" тех кто УЖЕ ОТВЕТИЛ — им нужен персональный ответ, не новое письмо
+            _already_sent_filtered = [e for e in _already_sent if e.lower() not in _negotiation_emails_coord]
+            _already_sent_str = ', '.join(_already_sent_filtered[:20]) if _already_sent_filtered else 'нет'
             _pending_replies = data.get('pending_replies', [])
             _unsent_contacts_data = data.get('unsent_contacts', [])
             _overworked_goals = data.get('overworked_goals', [])
@@ -5085,20 +5096,26 @@ class AnchorEngine:
                 _pr_lines = []
                 for _pr_item in _pending_replies[:5]:
                     _pr_txt = _pr_item.get('reply_text', '') or '[текст не получен — нужен check_emails]'
+                    _pr_lang = _pr_item.get('lang_hint', '')
+                    _pr_orig = _pr_item.get('original_body', '')
+                    _lang_warn = f'\n     ⚠️ ЯЗЫК: {_pr_lang} — ОТВЕЧАЙ СТРОГО НА ЭТОМ ЯЗЫКЕ!' if _pr_lang and 'КИРИЛЛИЦА' not in _pr_lang else ''
+                    _orig_hint = f'\n     📤 Твоё исходное письмо: "{_pr_orig[:400]}"' if _pr_orig else ''
                     _pr_lines.append(
                         f"  🆕 {_pr_item.get('name') or _pr_item.get('email')} ({_pr_item.get('email')}): \n"
-                        f"     ответ=\"{_pr_txt[:1500]}\" (outreach_id={_pr_item.get('outreach_id')})" 
+                        f"     📩 ОНИ НАПИСАЛИ: \"{_pr_txt[:2000]}\""
+                        + _lang_warn
+                        + _orig_hint
+                        + f"\n     → reply_to_outreach_email(outreach_id={_pr_item.get('outreach_id')}, reply_body=<ОТВЕТ НА ИХ КОНКРЕТНЫЙ ВОПРОС>)"
                     )
                 _pending_replies_str = (
                     "\n🔴 НАИВЫСШИЙ ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
+                    "⚠️ ПРАВИЛА ОТВЕТА: (1) Отвечай на КОНКРЕТНЫЙ вопрос контакта. "
+                    "(2) Используй ЯЗЫК контакта. (3) НЕ отправляй стандартное outreach-письмо — только reply_to_outreach_email.\n"
                     + '\n'.join(_pr_lines)
-                    + "\n→ Email-агент ОБЯЗАН первым делом вызвать reply_to_outreach_email для этих контактов!\n"
+                    + "\n→ Email-агент ОБЯЗАН первым делом ответить на эти письма через reply_to_outreach_email!\n"
                     + ("→ Если reply_text='[текст не получен]' → сначала вызови check_emails чтобы получить текст!\n"
                        if any(not p.get('reply_text') for p in _pending_replies) else '')
                 )
-
-            # Строим детальный профиль каждого агента с его личной историей действий
-            _profiles_lines = []
             _re_coord = __import__('re')
             _COORD_SEARCH_TOOLS = {
                 'web_search', 'research_topic', 'research_and_plan',
@@ -5725,7 +5742,12 @@ class AnchorEngine:
                 + f"{_cap_rules_str}"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
-                f"Кампании: {_email_campaigns_str}\n"
+                + (
+                    f"⚡ В АКТИВНЫХ ПЕРЕГОВОРАХ (ответили — ждут персонального ответа, НЕ новое письмо): "
+                    f"[{', '.join(list(_negotiation_emails_coord)[:10])}]\n"
+                    if _negotiation_emails_coord else ''
+                )
+                + f"Кампании: {_email_campaigns_str}\n"
                 f"{_banned_tools_str}"
                 f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + f"{_failed_tasks_str}"
@@ -6518,18 +6540,22 @@ class AnchorEngine:
                 if _ag_email_user:
                     _intg_live_lines.append(f"📧 Твой email-аккаунт: {_ag_email_user}")
                     # Pending replies для этого агента
-                    _pr_for_agent = [
-                        p for p in _pending_replies
-                        if not p.get('reply_text')  # без текста → нужен check_emails сначала
-                        or p.get('reply_text')
-                    ]
+                    _pr_for_agent = list(_pending_replies)  # все ответившие контакты
                     if _pr_for_agent:
                         for _prr in _pr_for_agent[:3]:
                             _prr_txt = _prr.get('reply_text') or '[текст не получен — вызови check_emails]'
+                            _prr_lang = _prr.get('lang_hint', '')
+                            _prr_orig = _prr.get('original_body', '')
+                            _lang_line = f'\n     ⚠️ ОТВЕЧАЙ НА {_prr_lang} — контакт написал именно на этом языке!' if _prr_lang and 'КИРИЛЛИЦА' not in _prr_lang else ''
+                            _orig_line = f'\n     Твоё исходное письмо: "{_prr_orig[:300]}"' if _prr_orig else ''
                             _intg_live_lines.append(
-                                f"  🆕 Ждёт ответа: {_prr.get('name') or _prr.get('email')} "
-                                f"({_prr.get('email')}) — \"{_prr_txt[:1500]}\" "
-                                f"→ reply_to_outreach_email(outreach_id={_prr.get('outreach_id')}, reply_body=...) "  
+                                f"  🆕 ОТВЕТИЛ: {_prr.get('name') or _prr.get('email')} "
+                                f"({_prr.get('email')}):\n"
+                                f"     📩 ИХ ТЕКСТ: \"{_prr_txt[:2000]}\""
+                                + _lang_line
+                                + _orig_line
+                                + f"\n     → ОБЯЗАТЕЛЬНО: reply_to_outreach_email(outreach_id={_prr.get('outreach_id')}, "
+                                f"reply_body=ОТВЕТ_НА_ИХ_КОНКРЕТНЫЙ_ВОПРОС) — НЕ send_outreach_email!"
                             )
 
                 # RSS: URL и тематика ленты
@@ -8684,14 +8710,22 @@ class AnchorEngine:
             logger.debug("[AUTOPILOT] per_agent_history from AAL: %s", _aal_pah_err)
 
         # Уже отправленные письма — не писать повторно одним и тем же адресатам
-        # Запрашиваем по user_id напрямую (не только по активным кампаниям)
+        # ВАЖНО: НЕ включаем 'replied' — это активные переговоры, им нужен ОТВЕТ, а не запрет!
+        # Только 'sent'/'delivered'/'opened' — контакты которым написали и ждём ответа
         _already_sent_emails: list = []
+        _negotiation_emails: set = set()  # email-адреса в активных переговорах (replied)
         try:
             _sent_outreach = session.query(EmailOutreach).filter(
                 EmailOutreach.user_id == user.id,
-                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
             ).order_by(EmailOutreach.sent_at.desc()).limit(200).all()
             _already_sent_emails = list({o.recipient_email for o in _sent_outreach if o.recipient_email})
+            # Отдельно собираем replied-контакты (в активных переговорах)
+            _replied_outreach = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.status == 'replied',
+            ).all()
+            _negotiation_emails = {o.recipient_email.lower() for o in _replied_outreach if o.recipient_email}
         except Exception as _ase_err:
             logger.debug("[AUTOPILOT] already_sent_emails: %s", _ase_err)
 
@@ -8741,12 +8775,42 @@ class AnchorEngine:
                 if _pr_email_lower in _seen_pr_emails:
                     continue  # дубль в текущей выборке
                 _seen_pr_emails.add(_pr_email_lower)
+                # Определяем язык ответа по доминирующему скрипту Unicode
+                _pr_reply_raw = _clean_reply_text((_pr.reply_text or '')[:4000])
+                _pr_lang_hint = ''
+                try:
+                    import unicodedata as _ud_pr
+                    _script_cnt: dict = {}
+                    for _ch_pr in _pr_reply_raw:
+                        if _ch_pr.isalpha():
+                            try:
+                                _sc = _ud_pr.name(_ch_pr, '').split()[0]
+                            except ValueError:
+                                continue
+                            _script_cnt[_sc] = _script_cnt.get(_sc, 0) + 1
+                    if _script_cnt:
+                        _top_sc = max(_script_cnt, key=_script_cnt.get)
+                        _sc_map = {
+                            'GREEK': '🇬🇷 ГРЕЧЕСКИЙ',
+                            'ARABIC': '🇸🇦 АРАБСКИЙ',
+                            'LATIN': '🇬🇧 ЛАТИНИЦА (EN/DE/FR/ES/IT/...)',
+                            'CYRILLIC': '🇷🇺 КИРИЛЛИЦА (RU)',
+                            'CJK': '🇨🇳 КИТАЙСКИЙ/ЯПОНСКИЙ',
+                            'HANGUL': '🇰🇷 КОРЕЙСКИЙ',
+                            'DEVANAGARI': '🇮🇳 ХИНДИ',
+                            'HEBREW': '🇮🇱 ИВРИТ',
+                        }
+                        _pr_lang_hint = _sc_map.get(_top_sc, _top_sc)
+                except Exception:
+                    pass
                 _pending_replies.append({
                     'outreach_id': _pr.id,
                     'email': _pr.recipient_email,
                     'name': _pr.recipient_name or '',
-                    'reply_text': _clean_reply_text((_pr.reply_text or '')[:4000])[:1500],
+                    'reply_text': _pr_reply_raw[:2000],
                     'subject': _pr.subject or '',
+                    'original_body': (_pr.body or '')[:800],  # оригинальное письмо агента
+                    'lang_hint': _pr_lang_hint,  # язык ответа контакта
                 })
             if _pending_replies:
                 logger.info("[AUTOPILOT] pending_replies (need AI response): %d", len(_pending_replies))
@@ -9085,6 +9149,7 @@ class AnchorEngine:
             'user_profile': _user_profile_ctx,
             'per_agent_history': _per_agent_history,
             'already_sent_emails': _already_sent_emails,
+            'negotiation_emails': list(_negotiation_emails),  # email-адреса в активных переговорах (replied)
             'pending_replies': _pending_replies,
             'overworked_goals': _overworked_goals,
             'neglected_goals': _neglected_goals,
@@ -9092,7 +9157,8 @@ class AnchorEngine:
                 c for c in contacts_summary[:10]
                 if '<' in c and '>' in c and
                 c.split('<')[1].split('>')[0].strip().lower() not in
-                {e.lower() for e in _already_sent_emails}
+                {e.lower() for e in _already_sent_emails} and
+                c.split('<')[1].split('>')[0].strip().lower() not in _negotiation_emails
             ],
         }
 
@@ -9739,9 +9805,9 @@ class AnchorEngine:
                         'recipient_name': email.recipient_name,
                         'recipient_company': email.recipient_company,
                         'original_subject': email.subject,
-                        'original_body': email.body[:500] if email.body else '',
-                        'reply_text': __import__('re').sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', __import__('re').sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', email.reply_text[:2000])).strip()[:1000] if email.reply_text else '',
-                        'ai_previous_reply': email.ai_reply_text[:500] if email.ai_reply_text else None,
+                        'original_body': email.body[:1500] if email.body else '',
+                        'reply_text': __import__('re').sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', __import__('re').sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', __import__('re').sub(r'<[^>]+>', '', email.reply_text[:4000]))).strip()[:2000] if email.reply_text else '',
+                        'ai_previous_reply': email.ai_reply_text[:800] if email.ai_reply_text else None,
                     }),
                     triggered_at=now_utc,
                     expires_at=now_utc + timedelta(hours=24),
