@@ -796,22 +796,22 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if not _has_slack:
             _intg_missing.append('⚡ Slack — координация с командой (SLACK_BOT_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _proj_kw):
-        _has_pm = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('trello', 'jira', 'asana', 'todoist'))
+        _has_pm = any(x in ' '.join(_caps_lower) for x in ('trello', 'jira', 'asana', 'todoist'))
         if not _has_pm:
             _intg_missing.append('⚡ Trello/Jira/Asana — управление проектами и задачами (ключи в настройках агента)')
     if any(w in _goals_text_all for w in _doc_kw):
         if not _has_notion:
             _intg_missing.append('⚡ Notion — база знаний и документация (NOTION_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _crm_kw):
-        _has_crm = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('amocrm', 'bitrix', 'hubspot'))
+        _has_crm = any(x in ' '.join(_caps_lower) for x in ('amocrm', 'bitrix', 'hubspot'))
         if not _has_crm:
             _intg_missing.append('⚡ CRM (AmoCRM/Bitrix24/HubSpot) — воронка продаж и лиды (ключи в настройках)')
     if any(w in _goals_text_all for w in _ecom_kw):
-        _has_ecom = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('wildberries', 'ozon', 'shopify'))
+        _has_ecom = any(x in ' '.join(_caps_lower) for x in ('wildberries', 'ozon', 'shopify'))
         if not _has_ecom:
             _intg_missing.append('⚡ Маркетплейс (WB/Ozon) — статистика продаж и позиций (API-ключ в настройках)')
     if any(w in _goals_text_all for w in _crypto_kw2):
-        _has_crypto = any(x in (getattr(agent_record, 'user_api_keys', '') or '').lower() for x in ('binance', 'bybit'))
+        _has_crypto = any(x in ' '.join(_caps_lower) for x in ('binance', 'bybit'))
         if not _has_crypto:
             _intg_missing.append('⚡ Binance/Bybit — криптовалютные данные и трейдинг (API-ключ в настройках)')
     if any(w in _goals_text_all for w in _data_kw):
