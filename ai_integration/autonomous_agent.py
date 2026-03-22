@@ -5840,8 +5840,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 "НЕ пиши 'ищу данные' или 'уточняю'. Заверши мысль."
             )})
     # ── Autopilot: принудительный update_goal_progress если не был вызван ──
-    # Фиксируем итог каждой сессии — агент мог завершить только поиском без update
-    if (_is_autopilot_task and _early_text is None
+    # Фиксируем итог каждой сессии — агент мог завершить текстом или исчерпать итерации
+    if (_is_autopilot_task
             and 'update_goal_progress' not in _tools_used
             and _tools_used):
         try:
