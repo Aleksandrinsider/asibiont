@@ -11034,6 +11034,24 @@ async def send_outreach_email(
             except Exception as _e_unsub_chk:
                 logger.debug("suppressed unsubscribed check: %s", _e_unsub_chk)
 
+        # ── GUARD: не слать новый холодный outreach тому, кто уже ответил ──
+        # replied/interested — это активные контакты, для них используй reply_to_outreach_email или negotiate_by_email
+        if _rcpt:
+            try:
+                _ec_replied_chk = session.query(EmailContact).filter(
+                    EmailContact.user_id == user.id,
+                    EmailContact.email == _rcpt,
+                    EmailContact.status.in_(['replied', 'interested']),
+                ).first()
+                if _ec_replied_chk:
+                    return (
+                        f"⛔ {_rcpt} уже ответил (статус: {_ec_replied_chk.status}). "
+                        "Не отправляй новый холодный outreach — используй reply_to_outreach_email "
+                        "чтобы ответить на их сообщение, или negotiate_by_email для продолжения диалога."
+                    )
+            except Exception as _e_rpl_chk:
+                logger.debug("suppressed replied check: %s", _e_rpl_chk)
+
         # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
         RESEND_API_KEY = _platform_resend_key
         _personal_resend_from = ''
@@ -14228,6 +14246,21 @@ async def save_email_contact(
         email_clean = (email or '').strip().lower()
         if not email_clean or '@' not in email_clean:
             return " Некорректный email"
+
+        # Блокируем фейковые/placeholder домены — агент не должен придумывать email
+        _FAKE_DOMAINS = {
+            'example.com', 'example.org', 'example.net',
+            'test.com', 'test.ru', 'test.org',
+            'fake.com', 'fake.ru', 'placeholder.com',
+            'domain.com', 'email.com', 'yourdomain.com',
+        }
+        _email_domain = email_clean.split('@')[-1] if '@' in email_clean else ''
+        if _email_domain in _FAKE_DOMAINS:
+            return (
+                f"⛔ {email_clean} — это placeholder/фейковый адрес. "
+                "Сохраняй только РЕАЛЬНЫЕ email, найденные через поиск или входящие письма. "
+                "НЕ придумывай адреса из имён пользователей."
+            )
 
         # Блокируем generic/корпоративные адреса
         if _is_generic_email(email_clean):
