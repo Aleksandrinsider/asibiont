@@ -8101,10 +8101,40 @@ else:
                     details.innerHTML = inner;
 
                     if (c.outreach && c.outreach.length > 0) {
-                        c.outreach.forEach((o, oi) => {
+                        // Group outreach by day (sent_at date)
+                        const _tz = window.USER_TIMEZONE || 'UTC';
+                        const _dayGroups = {};
+                        const _noDateKey = '__no_date__';
+                        c.outreach.forEach(o => {
+                            let dk = _noDateKey;
+                            if (o.sent_at) {
+                                const d = new Date(o.sent_at);
+                                dk = d.toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', timeZone: _tz});
+                            }
+                            if (!_dayGroups[dk]) _dayGroups[dk] = [];
+                            _dayGroups[dk].push(o);
+                        });
+                        // Sorted day keys: most recent first, no-date at end
+                        const _dayKeys = Object.keys(_dayGroups).filter(k => k !== _noDateKey);
+                        _dayKeys.sort((a, b) => {
+                            const da = _dayGroups[a][0].sent_at ? new Date(_dayGroups[a][0].sent_at) : 0;
+                            const db = _dayGroups[b][0].sent_at ? new Date(_dayGroups[b][0].sent_at) : 0;
+                            return db - da;
+                        });
+                        if (_dayGroups[_noDateKey]) _dayKeys.push(_noDateKey);
+
+                        _dayKeys.forEach(dk => {
+                            // Day separator
+                            const dayLabel = dk === _noDateKey ? (t('report-drafts') || 'Черновики') : dk;
+                            const daySep = document.createElement('div');
+                            daySep.style.cssText = 'padding: 8px 0 4px; margin-top: 6px; border-bottom: 1px solid #E5E7EB; display: flex; align-items: center; gap: 8px;';
+                            daySep.innerHTML = `<span style="font-size: 12px; font-weight: 600; color: #6E7781; text-transform: uppercase; letter-spacing: 0.5px;">${dayLabel}</span><span style="font-size: 11px; color: #9CA3AF;">(${_dayGroups[dk].length})</span>`;
+                            details.appendChild(daySep);
+
+                        _dayGroups[dk].forEach((o, oi) => {
                             const oLbl = o.status === 'replied' ? t('os-replied') : o.status === 'interested' ? t('os-interested') : o.status === 'opened' ? t('os-opened') : o.status === 'delivered' ? t('os-delivered') : o.status === 'bounced' ? t('os-bounced') : o.status === 'failed' ? t('os-failed') : o.status === 'sent' ? t('os-sent') : (o.status || '');
                             const oClr = '#068487';
-                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone: window.USER_TIMEZONE || 'UTC'}) : '';
+                            const oDate = o.sent_at ? new Date(o.sent_at).toLocaleString(_dl(), {hour:'2-digit', minute:'2-digit', timeZone: _tz}) : '';
                             const rcpt = o.recipient_name ? `${o.recipient_name} &lt;${o.recipient_email}&gt;` : (o.recipient_email || '');
                             const oKey = cKey + '-o' + (o.id || oi);
                             const oWasExpanded = _reportsExpandedSet.has(oKey);
@@ -8202,7 +8232,8 @@ else:
                             } else {
                                 oBody.style.maxHeight = '0px';
                             }
-                        });
+                        }); // end _dayGroups[dk].forEach
+                        }); // end _dayKeys.forEach
                     }
 
                     section.appendChild(details);
@@ -16153,7 +16184,7 @@ else:
       'camp-active':'Активна','camp-paused':'На паузе','camp-completed':'Завершена','camp-launched':'Кампания запущена','camp-on-pause':'Кампания на паузе',
       'camp-sending':'Отправляет','camp-wait-day':'Ждёт завтра','camp-no-leads':'Нет лидов','camp-searching':'Ищет контакты',
       'camp-pause-tip':'Поставить на паузу','camp-resume-tip':'Возобновить','camp-wait-tip':'Дневной лимит исчерпан, продолжит завтра',
-      'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено',
+      'os-replied':'Ответил','os-interested':'Заинтересован','os-opened':'Открыто','os-delivered':'Доставлено','os-bounced':'Отклонено','os-failed':'Ошибка','os-sent':'Отправлено','report-drafts':'Черновики',
       'act-email':'Email','act-delegation':'Делегирование','act-agent-task':'Поручение агенту','act-post-feed':'Пост в ленту','act-post-tg':'Пост в Telegram','act-post-discord':'Пост в Discord','act-content-campaign':'Контент-кампания','act-deleg-campaign':'Аутрич-кампания','act-other':'Прочая активность','act-bg-research':'Исследование','act-bg-research-ready':'Исследование готово','agent-activity-title':'Хронология','act-integration':'Интеграция','act-run-action':'Действие агента','agent-task-label':'Поручено агенту',
       'act-task-added':'Задача создана','act-task-completed':'Задача выполнена','act-goal-created':'Цель создана','act-goal-updated':'Цель обновлена','act-goal-completed':'Цель достигнута','act-goal-deleted':'Цель удалена','act-profile-updated':'Профиль',
       'act-reminder-sent':'Напоминание','act-followup':'Повторное напоминание','act-result-check':'Проверка результата','act-daily-report':'Дневной отчёт','act-checkpoint':'Чекпоинт задач','act-deleg-accepted':'Задача принята','act-deleg-rejected':'Задача отклонена','act-inbox-reply':'Входящие письма','act-task-blocked':'Автопилот приостановлен','act-autopilot':'Автопилот','act-coordinator-summary':'Итог цикла','act-event-dispatch':'Реакция агента','act-chain-continue':'Цепочка агентов','agent-created-label':'Автозадача','autopilot-label':'Автопилот',
@@ -16448,7 +16479,7 @@ else:
       'camp-active':'Active','camp-paused':'Paused','camp-completed':'Completed','camp-launched':'Campaign launched','camp-on-pause':'Campaign paused',
       'camp-sending':'Sending','camp-wait-day':'Waiting tomorrow','camp-no-leads':'No leads','camp-searching':'Searching contacts',
       'camp-pause-tip':'Pause campaign','camp-resume-tip':'Resume campaign','camp-wait-tip':'Daily limit reached, will continue tomorrow',
-      'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent',
+      'os-replied':'Replied','os-interested':'Interested','os-opened':'Opened','os-delivered':'Delivered','os-bounced':'Bounced','os-failed':'Failed','os-sent':'Sent','report-drafts':'Drafts',
       'act-email':'Email','act-delegation':'Delegation','act-agent-task':'Agent task','act-post-feed':'Feed post','act-post-tg':'Telegram post','act-post-discord':'Discord post','act-content-campaign':'Content campaign','act-deleg-campaign':'Outreach campaign','act-other':'Other','act-bg-research':'Research','act-bg-research-ready':'Research ready','agent-activity-title':'Timeline','act-integration':'Integration','act-run-action':'Agent action','agent-task-label':'Assigned to agent',
       'act-task-added':'Task created','act-task-completed':'Task completed','act-goal-created':'Goal created','act-goal-updated':'Goal updated','act-goal-completed':'Goal achieved','act-goal-deleted':'Goal deleted','act-profile-updated':'Profile',
       'act-reminder-sent':'Reminder sent','act-followup':'Followup reminder','act-result-check':'Result check','act-daily-report':'Daily report','act-checkpoint':'Task checkpoint','act-deleg-accepted':'Task accepted','act-deleg-rejected':'Task rejected','act-inbox-reply':'Incoming emails','act-task-blocked':'Agent blocked','act-autopilot':'Goal autopilot','act-coordinator-summary':'Coordinator summary','act-event-dispatch':'Agent reaction','act-chain-continue':'Agent chain','agent-created-label':'Created by agent','autopilot-label':'Autopilot',
