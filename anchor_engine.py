@@ -81,7 +81,7 @@ def _strip_html(text: str) -> str:
 
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
-MAX_DIALOG_PER_DAY = 8
+MAX_DIALOG_PER_DAY = 20
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -94,7 +94,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
-MIN_AUTOPILOT_GAP_MINUTES = 45  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -1953,19 +1953,41 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_rd
             _log_rd.getLogger(__name__).debug('[AUTOPILOT] recent dialog block: %s', _e_rd)
 
-    # ── ⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ — что агент НЕ может делать ──
-    # Универсальный блок для ВСЕХ агентов, чтобы не создавали невыполнимые задачи
+    # ── ⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ — адаптивный блок по интеграциям агента ──
+    # Запрещаем только то, на что РЕАЛЬНО нет инструментов/интеграций
+    _limits = []
+    if not any(w in c for c in _caps_lower for w in ('telegram', 'клиент', 'telethon', 'pyrogram')):
+        _limits.append("• НЕ МОЖЕШЬ вступать/просматривать Telegram-каналы/группы/чаты — нет Telegram-клиента (но publish_to_telegram РАБОТАЕТ)")
+    if not any(w in c for c in _caps_lower for w in ('discord client',)):
+        _limits.append("• НЕ МОЖЕШЬ вступать/просматривать Discord-серверы (но publish_to_discord РАБОТАЕТ)")
+    _limits.append("• НЕ МОЖЕШЬ постить в ЧУЖИЕ каналы — только в канал пользователя")
+    # Соцсети: запрещаем только если нет соответствующих интеграций
+    _social_blocked = []
+    if not any(w in c for c in _caps_lower for w in ('twitter', 'x.com', 'tweet')):
+        _social_blocked.append('Twitter/X')
+    if not any(w in c for c in _caps_lower for w in ('linkedin',)):
+        _social_blocked.append('LinkedIn')
+    if not any(w in c for c in _caps_lower for w in ('instagram',)):
+        _social_blocked.append('Instagram')
+    if not any(w in c for c in _caps_lower for w in ('vk', 'вконтакте')):
+        _social_blocked.append('VK')
+    if _social_blocked:
+        _limits.append(f"• НЕТ прямого API к: {', '.join(_social_blocked)} — используй run_agent_action если есть скрипт/ключи")
+    if not any(w in c for c in _caps_lower for w in ('twilio', 'sms', 'звонк', 'call')):
+        _limits.append("• НЕ МОЖЕШЬ звонить/отправлять SMS — нет Twilio")
+    _limits.append("• НЕ МОЖЕШЬ заходить на сайты требующие авторизацию/логин")
+    # run_agent_action — всегда доступен в автопилоте
+    _can_do = ["web_search", "research_topic", "email (IMAP/Resend)", "publish в канал", "add_task", "delegate", "goals"]
+    if _has_script:
+        _can_do.append("run_agent_action (Python-скрипты)")
+    if _has_github:
+        _can_do.append("GitHub API")
+    if _has_rss:
+        _can_do.append("RSS")
     _capability_limits_block = (
         "\n\n⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ (ОБЯЗАТЕЛЬНО УЧИТЫВАЙ):\n"
-        "  • НЕ МОЖЕШЬ вступать/просматривать Telegram-каналы/группы/чаты — у тебя нет Telegram-клиента\n"
-        "  • НЕ МОЖЕШЬ вступать/просматривать Discord-серверы — у тебя нет Discord-клиента\n"
-        "  • НЕ МОЖЕШЬ постить в ЧУЖИЕ Telegram/Discord/Reddit-каналы — только в канал пользователя\n"
-        "  • НЕ МОЖЕШЬ взаимодействовать с соцсетями (Twitter, LinkedIn, Instagram) — нет API\n"
-        "  • НЕ МОЖЕШЬ заходить на сайты требующие авторизацию/логин\n"
-        "  • НЕ МОЖЕШЬ скачивать/устанавливать программы или запускать произвольный код\n"
-        "  • НЕ МОЖЕШЬ звонить, отправлять SMS или физически встречаться с людьми\n"
-        "  ✅ МОЖЕШЬ: web_search, research_topic, send email (IMAP), publish в канал пользователя,\n"
-        "     GitHub API, RSS, add_task, save_note, delegate коллегам, manage goals\n"
+        + '\n'.join(f"  {l}" for l in _limits) + '\n'
+        f"  ✅ МОЖЕШЬ: {', '.join(_can_do)}\n"
         "  → ПЕРЕД созданием задачи спроси себя: 'ЕСТЬ ЛИ У МЕНЯ ИНСТРУМЕНТ для этого?'\n"
         "    Если нет — НЕ СОЗДАВАЙ задачу, а предложи пользователю альтернативный подход.\n"
     )
@@ -6837,11 +6859,11 @@ class AnchorEngine:
                 "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N. Без email/имён.\n"
                 "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
                 "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя. Для чужих каналов → create_post или send_outreach_email.\n"
-                "• ⛔ НЕТ доступа к Reddit, LinkedIn, Twitter, Instagram, Facebook — агенты НЕ МОГУТ читать/постить/анализировать эти платформы.\n"
                 "• ⛔ НЕТ Telegram-клиента — агенты НЕ МОГУТ вступать/читать/постить в чужие TG-каналы/группы.\n"
-                "• ⛔ НЕТ Discord-клиента — агенты НЕ МОГУТ вступать/читать/постить в Discord-серверы.\n"
-                "• web_search МОЖЕТ найти ссылки на Reddit/LinkedIn/etc, но НЕ МОЖЕТ взаимодействовать с ними.\n"
-                "• Не создавай задачи типа 'проанализировать Reddit/Discord/TG-сообщества' — это невозможно.\n\n"
+                "• ⛔ НЕТ Discord-клиента — агенты НЕ МОГУТ вступать/читать Discord-серверы (но publish_to_discord работает).\n"
+                "• Если у агента есть интеграция (python_code/user_api_keys) с LinkedIn/Twitter/VK и т.д. — он МОЖЕТ работать с ней через run_agent_action.\n"
+                "• web_search МОЖЕТ найти ссылки на Reddit/LinkedIn/etc для исследования.\n"
+                "• Не создавай задачи для платформ, к которым у агента НЕТ интеграции — проверь его список интеграций.\n\n"
                 "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
                 "• Генерируй СВОИ уникальные стратегии — ты не ограничен списком подходов.\n"
                 "• Контент-магниты, партнёрства, community building, нишевые площадки — всё в твоей власти.\n"
