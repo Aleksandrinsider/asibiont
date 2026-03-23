@@ -11709,23 +11709,24 @@ async def reply_to_outreach_email(
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
 
-        # Помечаем EmailContact как ответившего (replied) — подтверждение реального контакта
+        # Продвигаем EmailContact в статус 'interested' — двусторонний контакт состоялся.
+        # НЕ оставляем 'replied' — иначе агент будет бесконечно видеть их через list_email_contacts(status='replied').
         try:
             from models import EmailContact as _EC_rply
             _ec_rply = session.query(_EC_rply).filter_by(
                 user_id=user.id, email=outreach.recipient_email.strip().lower()
             ).first()
             if _ec_rply:
-                _ec_rply.status = 'replied'
+                _ec_rply.status = 'interested'  # двусторонний диалог подтверждён
                 _ec_rply.last_contacted_at = dt.now(tz.utc)
             else:
-                # Создаём контакт с replied статусом если его ещё нет
+                # Создаём контакт с interested статусом если его ещё нет
                 session.add(_EC_rply(
                     user_id=user.id,
                     email=outreach.recipient_email.strip().lower(),
                     name=outreach.recipient_name or '',
                     source='outreach_reply',
-                    status='replied',
+                    status='interested',  # сразу отмечаем как engaged
                     notes='Ответил на outreach — подтверждён двусторонний контакт',
                     last_contacted_at=dt.now(tz.utc),
                 ))
@@ -12474,6 +12475,54 @@ async def negotiate_by_email(
         except Exception as _e_neg:
             logger.debug("suppressed unsubscribed check in negotiate: %s", _e_neg)
 
+        # ── GUARD: не начинать новые переговоры с тем, кто уже в активном диалоге ──
+        # Если контакт уже ответил на письмо — нужно reply_to_outreach_email, не новая кампания
+        try:
+            _ec_active_neg = session.query(EmailContact).filter(
+                EmailContact.user_id == user.id,
+                EmailContact.email == _neg_rcpt,
+                EmailContact.status.in_(['replied', 'interested']),
+            ).first()
+            if _ec_active_neg:
+                _existing_replied_eon = session.query(EmailOutreach).filter(
+                    EmailOutreach.user_id == user.id,
+                    EmailOutreach.recipient_email == _neg_rcpt,
+                    EmailOutreach.status == 'replied',
+                    EmailOutreach.ai_reply_sent_at.is_(None),
+                ).order_by(EmailOutreach.reply_at.desc()).first()
+                if _existing_replied_eon:
+                    return (
+                        f"⛔ {contact_email} уже ответил на письмо #{_existing_replied_eon.id} "
+                        f"(«{(_existing_replied_eon.subject or '')[:50]}»). "
+                        f"Используй reply_to_outreach_email(outreach_id={_existing_replied_eon.id}, reply_body=...) "
+                        f"вместо negotiate_by_email."
+                    )
+                else:
+                    return (
+                        f"⛔ {contact_email} уже в активном диалоге (статус: {_ec_active_neg.status}). "
+                        f"Вызови check_emails чтобы увидеть входящие, и reply_to_outreach_email чтобы ответить. "
+                        f"Новые переговоры не нужны — переписка уже идёт."
+                    )
+        except Exception as _e_active_neg:
+            logger.debug("suppressed active contact check in negotiate: %s", _e_active_neg)
+
+        # ── GUARD: анти-спам — не более 3 писем одному контакту за 7 дней ──
+        try:
+            from datetime import timedelta as _td_neg
+            _neg_sent_count = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == _neg_rcpt,
+                EmailOutreach.sent_at >= dt.now(tz.utc) - _td_neg(days=7),
+                EmailOutreach.status.in_(['sent', 'delivered', 'replied', 'opened']),
+            ).count()
+            if _neg_sent_count >= 3:
+                return (
+                    f"🛑 Стоп-спам: {contact_email} уже получил {_neg_sent_count} писем за последние 7 дней. "
+                    f"Подожди ответа или смени контакт."
+                )
+        except Exception as _e_spam_neg:
+            logger.debug("suppressed spam check in negotiate: %s", _e_spam_neg)
+
         # MX-проверка
         mx_valid, mx_err = _validate_email_domain(contact_email.strip().lower())
         if not mx_valid:
@@ -12574,6 +12623,30 @@ async def negotiate_by_email(
                 session.add(log_entry)
             except Exception as _le:
                 logger.warning(f"[NEGOTIATE_EMAIL] Activity log error: {_le}")
+
+            # Обновляем EmailContact → 'contacted' (контакт получил первое письмо)
+            # Если уже был 'replied'/'interested' — guards выше заблокировали бы этот вызов.
+            try:
+                from models import EmailContact as _EC_neg
+                _ec_neg_upd = session.query(_EC_neg).filter_by(
+                    user_id=user.id, email=contact_email.strip().lower()
+                ).first()
+                if _ec_neg_upd:
+                    if _ec_neg_upd.status in ('new', None):
+                        _ec_neg_upd.status = 'contacted'
+                    _ec_neg_upd.last_contacted_at = dt.now(tz.utc)
+                else:
+                    session.add(_EC_neg(
+                        user_id=user.id,
+                        email=contact_email.strip().lower(),
+                        name=contact_name or '',
+                        source='negotiate',
+                        status='contacted',
+                        notes=f'Переговоры: {goal[:80]}',
+                        last_contacted_at=dt.now(tz.utc),
+                    ))
+            except Exception as _le_ec:
+                logger.debug("[NEGOTIATE_EMAIL] EmailContact update: %s", _le_ec)
 
             session.commit()
             return (
