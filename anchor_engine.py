@@ -6817,6 +6817,40 @@ class AnchorEngine:
             except Exception as _eff_err:
                 logger.debug("[COORD] effectiveness analysis: %s", _eff_err)
 
+            # ── Недавние выполненные задачи (anti-repeat для координатора) ──
+            _recent_done_str = ''
+            try:
+                from models import Task as _Task_rd
+                _rd_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _rd_tasks = session.query(_Task_rd).filter(
+                    _Task_rd.user_id == user.id,
+                    _Task_rd.source == 'agent',
+                    _Task_rd.created_at >= _rd_cutoff,
+                ).order_by(_Task_rd.created_at.desc()).limit(20).all()
+                if _rd_tasks:
+                    _rd_by_agent: dict = {}
+                    for _rdt in _rd_tasks:
+                        _ag_name_rd = None
+                        for _p_rd in _profiles:
+                            _ag_rd_obj = next((a for a in real_agents if a.name == _p_rd['name']), None)
+                            if _ag_rd_obj and _ag_rd_obj.id == _rdt.created_by_agent_id:
+                                _ag_name_rd = _p_rd['name']
+                                break
+                        if not _ag_name_rd:
+                            _ag_name_rd = f'agent#{_rdt.created_by_agent_id}'
+                        _rd_by_agent.setdefault(_ag_name_rd, []).append(
+                            (_rdt.title or '')[:80]
+                        )
+                    _rd_lines = ['\n📋 НЕДАВНО ВЫПОЛНЕННЫЕ ЗАДАЧИ (за 3ч — НЕ повторять буквально!):']
+                    for _ag_rd_n, _titles_rd in _rd_by_agent.items():
+                        _rd_lines.append(f'  {_ag_rd_n}:')
+                        for _t_rd in _titles_rd[:4]:
+                            _rd_lines.append(f'    • {_t_rd}')
+                    _rd_lines.append('  → Если задача уже выполнена — дай ДРУГУЮ задачу или пропусти агента.')
+                    _recent_done_str = '\n'.join(_rd_lines) + '\n'
+            except Exception as _rd_err:
+                logger.debug("[COORD] recent done tasks: %s", _rd_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -6830,6 +6864,7 @@ class AnchorEngine:
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
+                + f"{_recent_done_str}"
                 + f"{_cap_rules_str}"
                 f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
@@ -6847,8 +6882,8 @@ class AnchorEngine:
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + (
                     "⚡ ПРИОРИТЕТ: Есть отправленные письма — "
-                    "агент с IMAP должен ПЕРВЫМ делом вызвать check_emails! "
-                    "Ответившие контакты (replied/interested) — нужен reply/negotiate, не новое outreach.\n"
+                    "если check_emails НЕ выполнялся в НЕДАВНО ВЫПОЛНЕННЫХ задачах, назначь его. "
+                    "Если уже выполнен — НЕ повторяй, дай другую задачу.\n"
                     if _already_sent and _email_sent > 0 and
                     any(any(kw in (getattr(a, 'user_api_keys', '') or '').lower()
                             for kw in ('gmail_user=', 'imap_')) for a in real_agents)
@@ -6871,6 +6906,11 @@ class AnchorEngine:
                 "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
                 "• Задача = конкретное ДЕЙСТВИЕ (найти X, написать Y, проанализировать Z).\n"
                 "• ⛔ НЕ давай агентам задачи НЕ ПО ТЕМЕ ЦЕЛИ пользователя. Каждая задача ОБЯЗАНА напрямую продвигать одну из активных целей. Если задача не ведёт к цели — не создавай её.\n"
+                "• ⛔ ИНТЕГРАЦИЯ ≠ ЗАДАЧА: наличие Finance/get_stock_price/Alpha Vantage/Crypto НЕ означает что нужно их использовать. "
+                "Используй финансовые инструменты ТОЛЬКО если цель ЯВНО связана с финансами/инвестициями/трейдингом. "
+                "Цели типа «Продвижение», «Привлечение пользователей», «Маркетинг» — НЕ финансовые.\n"
+                "• ⛔ НЕ ПОВТОРЯЙ задачу которая уже есть в НЕДАВНО ВЫПОЛНЕННЫХ — если агент УЖЕ выполнил check_emails/ответы контактам, "
+                "НЕ назначай ту же задачу снова. Дай ДРУГУЮ задачу или пропусти агента.\n"
                 "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
                 "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N. Без email/имён.\n"
                 "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
