@@ -154,7 +154,7 @@ _INTEGRATION_PLANS = [
      'email',
      "Твой уникальный инструмент — чтение входящих (check_emails). Только ты можешь читать ответы на письма и реплаить. Отправлять через Resend могут все агенты и ASI — это обычный канал.",
      ["A) check_emails → есть ответ → ПРОЧИТАЙ ТЕКСТ → КЛАССИФИЦИРУЙ (интерес/вопрос/отказ) → "
-      "ВОПРОС: ответь на конкретный вопрос + CTA. ИНТЕРЕС: reply_to_outreach_email → negotiate. "
+      "ВОПРОС: ответь на конкретный вопрос + CTA. ИНТЕРЕС: reply_to_outreach_email (включи ссылку на платформу из goal_context или https://asibiont.com если продвижение ASI Biont) → negotiate. "
       "ОТКАЗ: не отвечай, система отпишет. → update_goal_progress",
       "B) start_email_campaign(name, goal, target_audience) → send_outreach_email → update_goal_progress",
       "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress",
@@ -1038,6 +1038,34 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     "\n📡 АНАЛИТИК: ты мониторишь тренды — хорошо. Теперь передай лучшие инсайты "
                     "через DELEGATE[email-агент] чтобы команда использовала их в outreach.\n"
                 )
+            elif _has_imap:
+                # Email-агент с IMAP — проверяем реальные результаты outreach
+                try:
+                    from models import EmailOutreach as _EO_gs
+                    _gs_replied = session.query(_EO_gs).filter(
+                        _EO_gs.user_id == user.id,
+                        _EO_gs.status == 'replied',
+                    ).count() if (session and user) else 0
+                    if _gs_replied > 0:
+                        _prog_est = min(75, _gs_replied * 5)
+                        _g0t = goals_summary[0].get('title', '') if goals_summary else ''
+                        _goal_state_hint += (
+                            f"\n📊 РЕАЛЬНЫЙ РЕЗУЛЬТАТ: {_gs_replied} человек ответили на outreach!\n"
+                            f"→ Это значительный прогресс. Вызови update_goal_progress("
+                            f"goal_title=\"{_g0t[:40]}\", progress={_prog_est}, "
+                            f"notes=\"{_gs_replied} людей откликнулись\" ) чтобы зафиксировать.\n"
+                            f"→ С заинтересованными — продолжай диалог, отправляй ссылку https://asibiont.com.\n"
+                        )
+                    else:
+                        _goal_state_hint += (
+                            "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: письма отправлены, но ответов нет. "
+                            "Попробуй другую тему/аудиторию: web_search → save_email_contact → send_outreach_email.\n"
+                        )
+                except Exception:
+                    _goal_state_hint += (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: письма отправлены, но ответов нет пока. "
+                        "Попробуй другую тему или аудиторию.\n"
+                    )
             else:
                 _goal_state_hint += (
                     "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
@@ -1649,7 +1677,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "6. Каждый цикл = ДРУГОЙ подход. Запрещено одно действие 3+ раз подряд.\n"
         "7. НЕ пиши повторно тем же людям. Персонализируй: упомяни проект/стек получателя.\n"
         "8. Ответы на письма — ЧИТАЙ ТЕКСТ ОТВЕТА и ДЕЙСТВУЙ ПО КОНТЕКСТУ:\n"
-        "   🟢 ИНТЕРЕС (хочу, давайте, расскажите) → ответь быстро + ссылка → negotiate → update_goal_progress(+1)\n"
+        "   🟢 ИНТЕРЕС (хочу, давайте, расскажите) → ответь быстро + ссылка https://asibiont.com (или URL из контекста цели) → negotiate → update_goal_progress(+1)\n"
         "   🟡 ВОПРОС (как? сколько? есть ли?) → ОТВЕТЬ НА КОНКРЕТНЫЙ ВОПРОС, не шаблонно. Дай факт + мягкий CTA\n"
         "   🔴 ОТКАЗ (не интересно, уже есть, не пишите, не сейчас) → НЕ ОТВЕЧАЙ, система отпишет автоматически\n"
         "   ⚪ НЕЯСНО (ок, спасибо, автоответ) → если есть вопрос — ответь; если нет — не пиши, жди ответа\n"
@@ -9925,6 +9953,34 @@ class AnchorEngine:
                             session.rollback()
         except Exception as _au_err:
             logger.debug("[AUTOPILOT] auto-update goal metric: %s", _au_err)
+
+        # ── Авто-обновление прогресса для целей БЕЗ metric_target (на основе email ответов) ──
+        # Для целей без явной метрики: прогресс = f(количество ответов на outreach).
+        # Формула: min(75, replied_count * 5). Только вверх, не превышает 75% (финал — вручную).
+        try:
+            from models import EmailOutreach as _EO_nm
+            _eo_nm_replied = session.query(_EO_nm).filter(
+                _EO_nm.user_id == user.id,
+                _EO_nm.status == 'replied',
+            ).count()
+            if _eo_nm_replied > 0:
+                for _g_nm in active_goals:
+                    if (not _g_nm.metric_target) and (_g_nm.progress_percentage or 0) < 75:
+                        _prog_from_emails = min(75, _eo_nm_replied * 5)
+                        if _prog_from_emails > (_g_nm.progress_percentage or 0):
+                            _old_nm_prog = _g_nm.progress_percentage or 0
+                            _g_nm.progress_percentage = _prog_from_emails
+                            _g_nm.metric_current = float(_eo_nm_replied)
+                            try:
+                                session.commit()
+                                logger.info(
+                                    f"[AUTOPILOT] Auto-progress (no-metric) goal #{_g_nm.id}: "
+                                    f"{_old_nm_prog}% → {_prog_from_emails}% (email_replied={_eo_nm_replied})"
+                                )
+                            except Exception:
+                                session.rollback()
+        except Exception as _nm_err:
+            logger.debug("[AUTOPILOT] auto-update no-metric goals: %s", _nm_err)
 
         # ── Синхронизируем goals_summary с обновлёнными ORM-объектами ──
         # goals_summary был построен ДО авто-обновления метрик → патчим свежими данными
