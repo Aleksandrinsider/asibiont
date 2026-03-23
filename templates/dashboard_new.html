@@ -118,6 +118,12 @@
             overflow-y: auto;
         }
 
+        /* Предотвращаем двойной скролл: список контактов скроллит внутри себя */
+        #people-list, #contacts-list {
+            max-height: calc(100vh - 340px);
+            overflow-y: auto;
+        }
+
         /* Typing indicator animation */
         .typing-dots span {
             animation: typingDot 1.4s infinite;

@@ -510,17 +510,12 @@ def safe_avatar_url(telegram_id):
 
 
 def avatar_url_if_photo(user):
-    """Return proxied avatar URL only when we know user has a real photo.
-    Returns None for users without photo — frontend shows initial-letter fallback."""
+    """Return proxied avatar URL for the user. Always returns proxy URL when
+    telegram_id is present so the browser can request via /api/avatar/{id}
+    and the proxy handles the no-photo case with a 404 → frontend fallback."""
     if not user or not user.telegram_id:
         return None
-    # Custom avatar always available
-    if getattr(user, 'custom_avatar', None):
-        return f"/api/avatar/{user.telegram_id}"
-    _photo = getattr(user, 'photo_url', None)
-    if _photo and _photo != '__no_avatar__':
-        return f"/api/avatar/{user.telegram_id}"
-    return None
+    return f"/api/avatar/{user.telegram_id}"
 
 
 async def _refresh_avatars_background(bot, telegram_ids):
@@ -6560,6 +6555,16 @@ async def api_avatar_handler(request):
         if 'bot' not in request.app or not request.app['bot']:
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
             return _default_avatar_response()
+
+        # Fast-path: skip Telegram API call for users confirmed to have no avatar
+        _db2 = Session()
+        try:
+            _u2 = _db2.query(User).filter_by(telegram_id=telegram_id).first()
+            if _u2 and getattr(_u2, 'photo_url', None) == '__no_avatar__' \
+                    and not getattr(_u2, 'custom_avatar', None):
+                return _default_avatar_response()
+        finally:
+            _db2.close()
 
         # get_user_avatar_url handles old-format URL detection and cleanup internally
         avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id)
