@@ -704,6 +704,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_slack  = any(w in c for c in _caps_lower for w in ('slack',))
     _has_sheets = any(w in c for c in _caps_lower for w in ('google sheets', 'gsheets', 'spreadsheet'))
     _has_stripe = any(w in c for c in _caps_lower for w in ('stripe', 'юкасс', 'yookassa', 'платеж'))
+    _has_crm    = any(w in c for c in _caps_lower for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'salesforce'))
+    _has_market = any(w in c for c in _caps_lower for w in ('ozon', 'wildberries', 'shopify', 'авито'))
+    _has_crypto = any(w in c for c in _caps_lower for w in ('binance', 'bybit', 'coinbase', 'крипт'))
+    _has_social = any(w in c for c in _caps_lower for w in ('twitter', 'instagram', 'linkedin', 'youtube', 'вконтакт'))
+    _has_pm     = any(w in c for c in _caps_lower for w in ('jira', 'trello', 'asana', 'clickup', 'linear', 'todoist'))
+    _has_cal    = any(w in c for c in _caps_lower for w in ('calendar', 'календар', 'zoom'))
 
     # ── Блок: что подключено у агента, что доступно для целей ──
     _goals_text_all = ' '.join(
@@ -759,6 +765,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _has_stripe:  _intg_connected.append('✅ Stripe/ЮКасса — платёжные данные')
     if _has_content: _intg_connected.append('✅ Telegram/Discord — публикация контента')
     if _has_script:  _intg_connected.append('✅ Python / HTTP — кастомные скрипты через run_agent_action')
+    if _has_crm:     _intg_connected.append('✅ CRM — управление контактами и сделками через run_agent_action')
+    if _has_market:  _intg_connected.append('✅ Маркетплейс — статистика продаж через run_agent_action')
+    if _has_crypto:  _intg_connected.append('✅ Крипто-биржа — котировки и торговые данные через run_agent_action')
+    if _has_social:  _intg_connected.append('✅ Соцсети — публикация и мониторинг через run_agent_action')
+    if _has_pm:      _intg_connected.append('✅ Трекер задач — управление проектами через run_agent_action')
+    if _has_cal:     _intg_connected.append('✅ Календарь/Zoom — расписание и встречи через run_agent_action')
 
     # Рекомендации: смотрим на темы целей и чего нет у агента
     import os as _os_bap
@@ -3381,20 +3393,9 @@ class AnchorEngine:
                     _coord_text = f"{_chosen_name}, займись текущими задачами."
                     try:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
-                        # Сформируем суть задания понятным языком (не технические названия инструментов/целей)
-                        _task_hint_human = ''
-                        if 'email' in _brief_task.lower() or 'письм' in _brief_task.lower() or 'почт' in _brief_task.lower():
-                            _task_hint_human = 'проверь письма и ответь тем, кто откликнулся'
-                        elif 'тестировщ' in _brief_task.lower() or 'тестер' in _brief_task.lower() or 'qa' in _brief_task.lower():
-                            _task_hint_human = 'поищи тестировщиков и свяжись с лучшими кандидатами'
-                        elif 'контакт' in _brief_task.lower() or 'outreach' in _brief_task.lower():
-                            _task_hint_human = 'займись поиском новых контактов для рассылки'
-                        elif 'аналит' in _brief_task.lower() or 'исслед' in _brief_task.lower() or 'анализ' in _brief_task.lower():
-                            _task_hint_human = 'покопайся в свежей аналитике, что полезного найдёшь'
-                        elif 'публик' in _brief_task.lower() or 'пост' in _brief_task.lower() or 'контент' in _brief_task.lower():
-                            _task_hint_human = 'подготовь пост или контент'
-                        else:
-                            _task_hint_human = _brief_task[:60] if _brief_task else 'займись активными целями'
+                        # Суть задания — передаём реальный текст из координатора, 
+                        # не hardcoded шаблоны (те не учитывали интеграции агента)
+                        _task_hint_human = _brief_task[:80] if _brief_task else 'займись активными целями'
                         # ── Контекст предыдущего цикла: что сделали агенты недавно ──
                         _last_cycle_ctx_c = ''
                         _loop_channel_hint_c = ''
@@ -5753,7 +5754,8 @@ class AnchorEngine:
                     elif _ch == 'RSS':
                         _cap_rules_lines.append(
                             f"  📰 {_p_cr['name']} [RSS/контент]: "
-                            f"run_agent_action(get_latest), get_news_trends, web_search, research_topic, create_post, publish_to_telegram."
+                            f"run_agent_action(get_latest), get_news_trends, web_search, research_topic, create_post, publish_to_telegram. "
+                            f"⛔ НЕ назначай: check_emails, send_outreach_email, reply_to_outreach_email — у {'неё' if _p_cr['name'][-1] in 'аяАЯ' else 'него'} НЕТ email!"
                         )
                     elif _ch == 'GitHub':
                         _cap_rules_lines.append(
@@ -6406,35 +6408,35 @@ class AnchorEngine:
                     else ''
                 )
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
-                "Ты — стратег. НЕ следуй шаблону. Думай САМОСТОЯТЕЛЬНО.\n\n"
-                "Посмотри на СТРАТЕГИЧЕСКУЮ КАРТУ выше: там видно, что команда делала в прошлых циклах.\n"
-                "Если подход повторялся 2+ раз и не дал прогресса — он НЕ РАБОТАЕТ. Придумай другой.\n\n"
-                "ПЕРЕД генерацией плана ответь себе (мысленно):\n"
-                "  1. Какие подходы команда уже пробовала? (см. СТРАТЕГИЧЕСКАЯ КАРТА)\n"
-                "  2. Какие подходы ЕЩЁ НЕ пробовали? (см. 'ЕЩЁ НЕ ПРОБОВАЛИ')\n"
-                "  3. Почему прошлые действия не дали результата? Что пошло не так?\n"
-                "  4. Какой ПРИНЦИПИАЛЬНО ДРУГОЙ путь к цели существует?\n\n"
-                "КЛЮЧЕВЫЕ ПРАВИЛА:\n"
-                "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его реальные возможности.\n"
-                "• Задача = конкретное ДЕЙСТВИЕ (найти X, написать Y, проанализировать Z), не 'изучить' или 'исследовать в целом'.\n"
+                "Ты — автономный стратег с полной свободой решений. Система ДОВЕРЯЕТ твоему выбору.\n\n"
+                "ТВОЯ АВТОНОМИЯ:\n"
+                "• Ты САМ решаешь стратегию, распределение задач и приоритеты.\n"
+                "• Подсказки системы (контакты, стратегическая карта) — это ИНФОРМАЦИЯ, не приказ.\n"
+                "• Если считаешь что нужен нестандартный подход — ДЕЙСТВУЙ. Не жди одобрения.\n"
+                "• Можешь назначить агенту задачу ВОПРЕКИ стандартному паттерну, если видишь причину.\n"
+                "• Можешь создать многошаговую цепочку: агент A находит данные → агент B действует.\n\n"
+                "АНАЛИЗ ПЕРЕД ПЛАНОМ (мысленно):\n"
+                "  1. Что команда уже пробовала? (см. СТРАТЕГИЧЕСКАЯ КАРТА)\n"
+                "  2. Что ЕЩЁ НЕ пробовали?\n"
+                "  3. Почему прошлые подходы не дали результата?\n"
+                "  4. Какой ПРИНЦИПИАЛЬНО ДРУГОЙ путь к цели?\n\n"
+                "ПРАВИЛА (технические ограничения):\n"
+                "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
+                "• Задача = конкретное ДЕЙСТВИЕ (найти X, написать Y, проанализировать Z).\n"
                 "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
-                "• Если у агента [отправка+чтение email] и писем > 5 — сначала check_emails.\n"
-                "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N, location:X. Без email/имён.\n"
-                "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post. НЕ check_emails, НЕ run_agent_action.\n"
-                "• ⛔ publish_to_telegram ПУБЛИКУЕТ ТОЛЬКО в ЛИЧНЫЙ канал пользователя (@aleksandrinsider). "
-                "НЕ назначай задачу 'опубликовать в @qa_ru / @manus_ai_agent_bot / [любой чужой канал]' — агент туда НЕ имеет доступа! "
-                "Альтернатива: создай пост через create_post (сохраняется как контент) или send_outreach_email участникам найденных каналов.\n\n"
-                "СТРАТЕГИЧЕСКОЕ МЫШЛЕНИЕ:\n"
-                "• Если прямой поиск+рассылка не работает → создай контент-магнит (пост, статья), чтобы люди САМИ откликнулись.\n"
-                "• Если рассылка игнорируется → проблема в ценностном предложении. Пусть агент исследует: что РЕАЛЬНО нужно этим людям?\n"
-                "• Если поиск в одном месте истощён → смени площадку: Telegram группы, Discord, Reddit, HN, Хабр, GitHub, конференции.\n"
-                "• Используй делегирование: один агент находит данные → передаёт другому для действия.\n"
-                "• Непрямые пути: что СОЗДАТЬ чтобы нужные люди появились? Что ПОНЯТЬ прежде чем действовать?\n"
-                "• Ты не ограничен списком подходов — генерируй СВОИ стратегии исходя из контекста цели.\n\n"
+                "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N. Без email/имён.\n"
+                "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
+                "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя. Для чужих каналов → create_post или send_outreach_email.\n\n"
+                "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
+                "• Генерируй СВОИ уникальные стратегии — ты не ограничен списком подходов.\n"
+                "• Контент-магниты, партнёрства, community building, нишевые площадки — всё в твоей власти.\n"
+                "• Один агент может получить несколько задач для разных целей.\n"
+                "• Абстрактные задачи ('исследуй рынок') допустимы — агент сам решит КАК.\n"
+                "• Делегирование: один агент находит → другой действует.\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
-                '[{"agent": "имя", "task": "конкретная задача 2-3 предл.", "tool": "инструмент", "goal": "точное_название", '
-                '"reason": "почему именно этот агент и этот подход (1 предл.)"}]'
+                '[{"agent": "имя", "task": "конкретная задача или стратегическое поручение (2-3 предл.)", "tool": "инструмент", "goal": "точное_название", '
+                '"reason": "стратегическое обоснование (1 предл.)"}]'
             )
 
             try:
@@ -6461,20 +6463,24 @@ class AnchorEngine:
             if not _plan:
                 return False
 
-            # Дедупликация плана: если один агент назначен дважды с одинаковым инструментом — бессмысленное повторение
-            _seen_agent_tool: set = set()
+            # Дедупликация плана: один агент + один инструмент для ОДНОЙ цели = бессмысленное повторение
+            # Но разрешаем одному агенту использовать тот же инструмент для РАЗНЫХ целей
+            _seen_agent_tool_goal: set = set()
             _plan_deduped = []
             for _p in _plan:
-                _ak = (_p.get('agent', '').strip().lower(), (_p.get('tool') or '').strip().lower())
-                if _ak[0] and _ak not in _seen_agent_tool:
-                    _seen_agent_tool.add(_ak)
+                _ak_agent = _p.get('agent', '').strip().lower()
+                _ak_tool = (_p.get('tool') or '').strip().lower()
+                _ak_goal = (_p.get('goal') or '').strip().lower()[:40]
+                _ak = (_ak_agent, _ak_tool, _ak_goal)
+                if _ak_agent and _ak not in _seen_agent_tool_goal:
+                    _seen_agent_tool_goal.add(_ak)
                     _plan_deduped.append(_p)
-                elif _ak[0]:
-                    logger.info("[COORD] dedup: skip dup step %s/%s", _p.get('agent'), _p.get('tool'))
+                elif _ak_agent:
+                    logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
 
-            # ── Force-reply: если есть входящие без AI-ответа — email-агент ОБЯЗАН ответить ПЕРВЫМ ──
-            # Это жёсткий пост-фильтр: LLM-план может игнорировать pending_replies → override
+            # ── Force-reply: если есть входящие без AI-ответа — добавляем reply в план ──
+            # Мягкий пост-фильтр: reply добавляется как первый шаг, но НЕ стирает план координатора
             if _pending_replies:
                 _force_reply_agent = None
                 for _a_fr in real_agents:
@@ -6507,22 +6513,22 @@ class AnchorEngine:
                         else:
                             _reply_task += '. Сначала вызови check_emails чтобы получить текст ответа и определить намерение.'
                         _reply_tool = 'reply_to_outreach_email' if _pr0_txt else 'check_emails'
-                        # Удаляем текущий шаг email-агента — заменяем на reply
-                        _plan = [p for p in _plan if p.get('agent', '').strip() != _force_reply_agent]
+                        # Добавляем reply как первый шаг, но СОХРАНЯЕМ остальной план координатора
                         _plan.insert(0, {
                             'agent': _force_reply_agent,
                             'tool': _reply_tool,
                             'task': _reply_task,
                             'goal': _pr0.get('goal') or (_goals[0]['title'] if _goals else 'ответить на входящие'),
                         })
-                        logger.info("[COORD] force-reply prepended: %s → %s (outreach_id=%s)",
+                        logger.info("[COORD] force-reply prepended (plan preserved): %s → %s (outreach_id=%s)",
                                     _force_reply_agent, _reply_tool, _pr0.get('outreach_id'))
 
-            # ── Quality filter: убираем расплывчатые задачи из LLM-плана ──
+            # ── Quality filter: мягкая подсказка (НЕ перезапись) для расплывчатых задач ──
+            # Ранее — жёсткий rewrite убивал стратегическое мышление координатора.
+            # Теперь: если задача абстрактна, ДОБАВЛЯЕМ подсказку агенту, но сохраняем оригинальный замысел.
             import re as _re_qf
             _VAGUE_TASK_RE = _re_qf.compile(
                 r'(?:прогресс\s+(?:всего\s+)?\d|'
-                r'поручил[аои].*(?:но|прогресс)|'
                 r'^изучи\s+ситуацию|'
                 r'^(?:проанализируй|исследуй)\s+(?:цель|ситуацию|текущее)|'
                 r'^предложи\s+(?:конкретный\s+)?(?:следующий\s+)?шаг$)',
@@ -6531,18 +6537,13 @@ class AnchorEngine:
             for _qf_step in _plan:
                 _qf_task = (_qf_step.get('task') or '').strip()
                 _qf_tool = (_qf_step.get('tool') or '').strip()
-                if _VAGUE_TASK_RE.search(_qf_task):
-                    _qf_goal = (_qf_step.get('goal') or '').strip()
-                    if _qf_tool:
-                        _qf_step['task'] = (f'Вызови {_qf_tool} для цели «{_qf_goal[:50]}». '
-                                            f'Найди конкретные площадки/людей/данные и сделай следующее действие.')
-                    else:
-                        _qf_step['task'] = (f'Конкретный шаг по цели «{_qf_goal[:50]}»: '
-                                            f'web_search или research_topic → найди данные → сохрани результат.')
-                    logger.info("[COORD] quality-filter: rewrote vague task for %s: %s",
-                                _qf_step.get('agent'), _qf_step['task'][:60])
+                if _VAGUE_TASK_RE.search(_qf_task) and len(_qf_task) < 60:
+                    # Только добавляем хинт — НЕ стираем оригинальную задачу координатора
+                    _qf_step['task'] = _qf_task + ' (используй инструменты для конкретного результата — данные, контакты, действия)'
+                    logger.info("[COORD] quality-hint: appended hint for %s: %s",
+                                _qf_step.get('agent'), _qf_step['task'][:80])
 
-            logger.info("[COORD] plan accepted (post quality-filter): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
+            logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan])
 
             # ── ASI fallback: цели без исполнителя в плане ──
             # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
@@ -6634,16 +6635,12 @@ class AnchorEngine:
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
 
-            # ── Анонс ASI: шаблон без AI-вызова (экономим 1 вызов на старте) ──
+            # ── Контекст предыдущего цикла — для финального отчёта ──
             def _trunc(s: str, n: int) -> str:
                 return s[:n] + '…' if len(s) > n else s
             _brief_goals = ', '.join(f'«{_trunc(g["title"], 60)}»' for g in _goals[:2])
             if len(_goals) > 2:
                 _brief_goals += f' и ещё {len(_goals) - 2}'
-            _agents_announce_list = ', '.join(
-                f"{p['name']} ({p.get('job', 'специалист')})"
-                for p in _profiles[:4]
-            )
             # Предыдущий цикл — для контекста в финальном отчёте
             _prev_result_summary = ''
             if _prev_cycle_result:
@@ -6651,54 +6648,11 @@ class AnchorEngine:
                 if '[tools:' in _pr_clean:
                     _pr_clean = _pr_clean[_pr_clean.find(']')+1:].strip()
                 _prev_result_summary = _pr_clean[:300]
-            # Анонс-шаблон: минимальный
-            if _prev_result_summary:
-                _coord_announce = (
-                    f"Продолжаю работу над {_brief_goals}. "
-                    f"Команда: {_agents_announce_list}."
-                )
-            else:
-                _coord_announce = (
-                    f"Запускаю автопилот для {_brief_goals}. "
-                    f"Команда: {_agents_announce_list}."
-                )
             # Накапливаем контекст между шагами — используется в финальном отчёте
             _bridge_notes: list = []
 
-            try:
-                # Дедуп стартового анонса: не показывать то же сообщение чаще раза в 30 минут
-                from datetime import timedelta as _td_ann
-                _ann_cutoff = datetime.now(timezone.utc) - _td_ann(minutes=30)
-                _ann_prev = session.query(Interaction).filter(
-                    Interaction.user_id == user.id,
-                    Interaction.message_type == 'proactive',
-                    Interaction.content.like('%coordinator_plan%'),
-                    Interaction.created_at >= _ann_cutoff,
-                ).first()
-                if not _ann_prev:
-                    session.add(Interaction(
-                        user_id=user.id, message_type='proactive',
-                        content=json.dumps({
-                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': _coord_announce,
-                            '__anchor_type': 'coordinator_plan',
-                        }, ensure_ascii=False),
-                    ))
-                    session.commit()
-                    # Отправляем стартовый анонс в Telegram
-                    if self.bot:
-                        try:
-                            await self.bot.send_message(
-                                chat_id=user.telegram_id,
-                                text=f"🤖 {_coord_announce}",
-                            )
-                        except Exception as _e:
-                            logger.debug("suppressed: %s", _e)
-            except Exception:
-                try:
-                    session.rollback()
-                except Exception:
-                    pass
+            # Стартовый анонс "Продолжаю работу..." убран — не несёт полезной информации.
+            # Пользователь увидит конкретные поручения агентам и финальный отчёт.
 
             # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
             # Отправляем ДО начала выполнения, чтобы пользователь мог подключить нужную интеграцию
@@ -6852,7 +6806,8 @@ class AnchorEngine:
                     logger.info("[COORD] agent '%s' not in team, skip", _ag_name)
                     continue
 
-                # ── Жёсткий фильтр: не давать RSS-only агенту email-задания ──
+                # ── Мягкий фильтр: RSS-only агент + email-задание → переназначаем если есть email-агент ──
+                # Если email-агента нет — разрешаем RSS-агенту попробовать (у него web_search/research_topic)
                 if _target_ag:
                     _tg_keys = (getattr(_target_ag, 'user_api_keys', '') or '').lower()
                     _tg_py   = (getattr(_target_ag, 'python_code', '') or '').lower()
@@ -6860,16 +6815,10 @@ class AnchorEngine:
                     _tg_has_email = ('gmail_user=' in _tg_keys or 'imap_' in _tg_keys or 'yandex_user=' in _tg_keys or 'mailru_user=' in _tg_keys)
                     _tg_has_github = ('github_token=' in _tg_keys or 'github_access_token=' in _tg_keys)
                     _tg_is_rss_only = _tg_is_rss and not _tg_has_email and not _tg_has_github
-                    # Email-задания запрещены RSS-only агенту
+                    # Email-инструменты — перенаправляем только если конкретно email-tool
                     _EMAIL_TOOLS = {'check_emails', 'send_outreach_email', 'reply_to_outreach_email',
                                     'send_follow_up_email', 'start_email_campaign', 'negotiate_by_email'}
-                    _EMAIL_KEYWORDS = ('проверь почту', 'проверь письма', 'ответь на письм', 'отправь письм',
-                                       'email рассылку', 'email-рассылку', 'отправь контакт', 'email кампани',
-                                       'check email', 'send email', 'email outreach')
-                    if _tg_is_rss_only and (
-                        _tool_hint in _EMAIL_TOOLS
-                        or any(kw in _ag_task.lower() for kw in _EMAIL_KEYWORDS)
-                    ):
+                    if _tg_is_rss_only and _tool_hint in _EMAIL_TOOLS:
                         # Переназначаем на email-агента если он есть
                         _email_backup = next(
                             (a for a in real_agents
@@ -6886,9 +6835,9 @@ class AnchorEngine:
                             _ag_name = _email_backup.name
                             _target_ag = _email_backup
                         else:
-                            logger.info("[COORD] skip email task for RSS-only agent %s (no email agent found)", _ag_name)
-                            _results_summary.append(f"{_ag_name}: пропущено (email-задание, нет email-интеграции)")
-                            continue
+                            # Нет email-агента — разрешаем RSS-агенту выполнить задачу своими инструментами
+                            # Координатор мог осознанно назначить задачу — пусть агент адаптируется
+                            logger.info("[COORD] RSS-agent %s got email task, no email-agent — allowing with own tools", _ag_name)
 
                 # Биллинг кастомного агента
                 if _target_ag and getattr(_target_ag, 'id', 0) != 0:
@@ -6901,29 +6850,27 @@ class AnchorEngine:
                 # ── Per-agent assignment: живое обращение ASI к агенту (видно в чате) ──
                 _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
-                # Генерируем поручение от ASI (шаблон без LLM — экономия токенов)
+                # Генерируем поручение от ASI — используем реальную задачу координатора
                 try:
-                    _ag_task_lc = _ag_task.lower()
-                    _task_hint_c = ''
-                    if any(w in _ag_task_lc for w in ('email', 'письм', 'рассылк', 'почт', 'ответ', 'inbox')):
-                        _task_hint_c = 'проверь почту и ответь на входящие'
-                    elif any(w in _ag_task_lc for w in ('rss', 'лент', 'новост', 'аналит', 'трен', 'тренд')):
-                        _task_hint_c = 'поищи свежие инсайты в источниках'
-                    elif any(w in _ag_task_lc for w in ('github', 'разработчик', 'программист', 'developer')):
-                        _task_hint_c = 'поищи разработчиков на GitHub'
-                    elif any(w in _ag_task_lc for w in ('контакт', 'найди', 'тестировщ', 'специалист', 'кандидат')):
-                        _task_hint_c = 'займись поиском новых контактов'
-                    elif any(w in _ag_task_lc for w in ('пост', 'публик', 'контент', 'текст')):
-                        _task_hint_c = 'подготовь контент'
-                    elif any(w in _ag_task_lc for w in ('исследуй', 'research', 'web_search', 'поиск')):
-                        _task_hint_c = 'поищи информацию по теме'
+                    # Берём оригинальную задачу из плана координатора (первые 2 предложения)
+                    _task_first_line = _ag_task.split('\n')[0].strip()
+                    # Убираем технические маркеры (→, tool:, outreach_id= и т.д.)
+                    import re as _re_assign
+                    _task_clean = _re_assign.sub(r'\(outreach_id=\d+\)', '', _task_first_line)
+                    _task_clean = _re_assign.sub(r'→.*$', '', _task_clean).strip()
+                    _task_clean = _task_clean.rstrip('.')
+                    # Добавляем стратегическое обоснование из reason если есть
+                    _step_reason = (_step.get('reason') or '').strip()
+                    if _task_clean and len(_task_clean) > 15:
+                        _asi_assign_text = f'{_ag_name}: {_task_clean[:200]}.'
+                        if _step_reason and len(_step_reason) > 10:
+                            _asi_assign_text += f' ({_step_reason[:100]})'
+                    elif _step_reason:
+                        _asi_assign_text = f'{_ag_name}: {_step_reason[:200]}.'
                     else:
-                        _clean_hint = _ag_task.split('\n')[0].strip()
-                        _clean_hint = _clean_hint.split('→')[0].strip() if '→' in _clean_hint else _clean_hint
-                        _task_hint_c = _clean_hint[:60] if len(_clean_hint) > 10 else 'займись следующим заданием'
-                    _asi_assign_text = f'{_ag_name}, пожалуйста, {_task_hint_c}.'
+                        _asi_assign_text = f'{_ag_name}: {_task_first_line[:200]}.'
                 except Exception as _aac_err:
-                    _asi_assign_text = f"{_ag_name}, пожалуйста, займись следующим заданием."
+                    _asi_assign_text = f"{_ag_name}: {(_ag_task or 'задание координатора')[:200]}."
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # Сохраняем живое поручение в чат
                 try:
@@ -7092,6 +7039,40 @@ class AnchorEngine:
                         'avatar_url': '',
                     }
                 else:
+                    try:
+                        _base_tools = json.loads(_target_ag.tools_allowed or '[]')
+                    except Exception:
+                        _base_tools = []
+                    # ── Динамическое расширение tools_allowed ──
+                    # Если координатор назначил tool_hint, которого нет в whitelist,
+                    # но у агента есть соответствующая интеграция — добавляем tool временно
+                    _expanded = False
+                    if _tool_hint and _tool_hint not in _base_tools:
+                        _ag_keys_low = (_target_ag.user_api_keys or '').lower()
+                        # Мапа: tool → какой ключ нужен
+                        _TOOL_INTG = {
+                            'check_emails': ('gmail_user=', 'imap_', 'yandex_user=', 'mailru_user='),
+                            'send_outreach_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
+                            'reply_to_outreach_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
+                            'send_follow_up_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
+                            'start_email_campaign': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
+                            'negotiate_by_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
+                            'run_agent_action': ('github_token=', 'github_access_token=', 'rss_url='),
+                            'publish_to_telegram': ('telegram_channel',),
+                            'publish_to_discord': ('discord_webhook',),
+                        }
+                        _needed_keys = _TOOL_INTG.get(_tool_hint, ())
+                        if _needed_keys and any(k in _ag_keys_low for k in _needed_keys):
+                            _base_tools.append(_tool_hint)
+                            _expanded = True
+                            logger.info("[COORD] dynamic tool expansion: %s gets %s (integration match)", _ag_name, _tool_hint)
+                    # Всегда добавляем универсальные инструменты если их нет
+                    for _ut in ('web_search', 'research_topic', 'save_email_contact', 'save_note', 'add_task'):
+                        if _ut not in _base_tools:
+                            _base_tools.append(_ut)
+                    # Всегда сериализуем актуальный список — tools и tools_allowed должны совпадать
+                    _tools_json = json.dumps(_base_tools)
+
                     _ag_data = {
                         'id': _target_ag.id,
                         'name': _target_ag.name,
@@ -7101,8 +7082,8 @@ class AnchorEngine:
                         'personality': _target_ag.personality or '',
                         'python_code': _target_ag.python_code or '',
                         'user_api_keys': _target_ag.user_api_keys or '',
-                        'tools_allowed': _target_ag.tools_allowed or '',
-                        'tools': json.loads(_target_ag.tools_allowed or '[]'),
+                        'tools_allowed': _tools_json,
+                        'tools': _base_tools,
                         'avatar_url': _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _target_ag.id),
                         'search_scope': getattr(_target_ag, 'search_scope', '') or '',
                         'knowledge_base': getattr(_target_ag, 'knowledge_base', '') or '',
@@ -7221,7 +7202,26 @@ class AnchorEngine:
                         _ag_email_user = _kl.split('=', 1)[1].strip()
                         break
                 if _ag_email_user:
-                    _intg_live_lines.append(f"📧 Твой email-аккаунт: {_ag_email_user}")
+                    _intg_live_lines.append(
+                        f"📧 Твой email-аккаунт: {_ag_email_user}\n"
+                        f"   → check_emails — получить входящие, увидеть КТО ответил и ЧТО написал\n"
+                        f"   → list_email_contacts — получить ВСЕ сохранённые контакты с email-адресами\n"
+                        f"   → send_outreach_email — отправить письмо конкретному контакту\n"
+                        f"   → reply_to_outreach_email — ответить на ВХОДЯЩЕЕ письмо\n"
+                        f"   ⚡ НЕ ПРОСИ email у пользователя! Вызови list_email_contacts или check_emails — данные УЖЕ ЕСТЬ."
+                    )
+                    # Неотправленные контакты — агент должен знать что они ЕСТЬ
+                    if _unsent_contacts_data:
+                        _uc_list = []
+                        for _uc_item in _unsent_contacts_data[:8]:
+                            _uc_clean = _uc_item.strip() if isinstance(_uc_item, str) else str(_uc_item)[:60]
+                            _uc_list.append(_uc_clean)
+                        _intg_live_lines.append(
+                            f"  📋 КОНТАКТЫ ГОТОВЫ К ОТПРАВКЕ ({len(_unsent_contacts_data)} чел.): "
+                            + ', '.join(_uc_list[:5])
+                            + ('...' if len(_unsent_contacts_data) > 5 else '')
+                            + "\n   → Вызови send_outreach_email для каждого. НЕ ищи новых — отправь ТЕМ КТО ЕСТЬ!"
+                        )
                     # Pending replies для этого агента
                     _pr_for_agent = list(_pending_replies)  # все ответившие контакты
                     if _pr_for_agent:
@@ -7297,14 +7297,73 @@ class AnchorEngine:
                         "  ПОСЛЕ поиска → для КАЖДОГО с email: save_email_contact → send_outreach_email"
                     )
 
-                # Прочие скрипт-action из python_code (не GitHub, не RSS)
-                elif _ag_py_code_raw and not _rss_url_live:
-                    _other_actions = list(dict.fromkeys(
+                # ── Универсальный детектор остальных интеграций из api_keys ──
+                _ak_upper = _ag_api_keys_raw.upper()
+                _OTHER_INTG_MAP = [
+                    # (ключевые_префиксы_в_api_keys, emoji, label, hint)
+                    (('TELEGRAM_BOT_TOKEN=', 'TELEGRAM_CHANNEL_ID='), '📢', 'Telegram-канал',
+                     'publish_to_telegram / create_post для публикации контента'),
+                    (('DISCORD_WEBHOOK',), '💬', 'Discord',
+                     'run_agent_action для отправки сообщений в канал'),
+                    (('ALPHAVANTAGE_API_KEY=', 'ALPHA_VANTAGE_API_KEY='), '📈', 'Alpha Vantage (биржевые данные)',
+                     'run_agent_action(action="get_price", symbol="BRENT"/"BTC"/"GAZP.MCX")'),
+                    (('NEWSAPI_KEY=', 'NEWS_API_KEY='), '📰', 'NewsAPI (100+ источников)',
+                     'run_agent_action / get_news_trends для поиска новостей'),
+                    (('SLACK_BOT_TOKEN=',), '💬', 'Slack',
+                     'run_agent_action для отправки сообщений и чтения каналов'),
+                    (('AMOCRM_', 'BITRIX_', 'HUBSPOT_', 'SALESFORCE_', 'PIPEDRIVE_', 'ZOHO_'), '🤝', 'CRM',
+                     'run_agent_action для управления контактами/сделками'),
+                    (('OZON_', 'WILDBERRIES_', 'WB_API', 'SHOPIFY_', 'AVITO_'), '🛒', 'Маркетплейс',
+                     'run_agent_action для статистики продаж и карточек'),
+                    (('NOTION_TOKEN=', 'NOTION_API='), '📝', 'Notion',
+                     'run_agent_action для записей и баз знаний'),
+                    (('GOOGLE_SHEETS_', 'GSPREAD_'), '📊', 'Google Sheets',
+                     'run_agent_action для таблиц и аналитики'),
+                    (('BINANCE_', 'BYBIT_', 'COINBASE_'), '💰', 'Крипто-биржа',
+                     'run_agent_action для котировок и торговых данных'),
+                    (('JIRA_', 'TRELLO_', 'ASANA_', 'CLICKUP_', 'LINEAR_', 'TODOIST_'), '📋', 'Трекер задач',
+                     'run_agent_action для управления задачами и спринтами'),
+                    (('TWITTER_', 'INSTAGRAM_', 'VK_TOKEN', 'VK_API', 'LINKEDIN_'), '🌐', 'Соцсети',
+                     'run_agent_action / create_post для публикации и мониторинга'),
+                    (('YANDEX_DIRECT_', 'GOOGLE_ADS_', 'MYTARGET_'), '📣', 'Реклама',
+                     'run_agent_action для управления рекламными кампаниями'),
+                    (('STRIPE_', 'YOOKASSA_'), '💳', 'Платежи',
+                     'run_agent_action для данных о платежах и подписках'),
+                    (('GOOGLE_CALENDAR_',), '📅', 'Google Calendar',
+                     'run_agent_action для событий и расписания'),
+                    (('REPLICATE_',), '🎨', 'Генерация изображений',
+                     'generate_image для создания визуалов'),
+                    (('FIGMA_',), '🎨', 'Figma',
+                     'run_agent_action для работы с дизайн-макетами'),
+                    (('ZOOM_',), '🎥', 'Zoom',
+                     'run_agent_action для управления конференциями'),
+                    (('MS_TEAMS_', 'MS_GRAPH_'), '💬', 'Microsoft Teams',
+                     'run_agent_action для командных коммуникаций'),
+                    (('OUTLOOK_', 'MS_OUTLOOK_'), '📧', 'Microsoft Outlook',
+                     'check_emails / send_outreach_email для переписки'),
+                    (('YANDEX_METRIKA_', 'GA4_'), '📊', 'Веб-аналитика',
+                     'run_agent_action для метрик сайта и аудитории'),
+                    (('WEBHOOK_URL=',), '🔗', 'Webhook (n8n/Zapier/Make)',
+                     'run_agent_action для автоматизаций'),
+                ]
+                for _prefixes, _emoji, _label, _hint in _OTHER_INTG_MAP:
+                    if any(p in _ak_upper for p in _prefixes):
+                        _intg_live_lines.append(f"{_emoji} {_label} → {_hint}")
+
+                # Прочие скрипт-action из python_code (независимо от RSS/GitHub)
+                if _ag_py_code_raw:
+                    _all_script_actions = list(dict.fromkeys(
                         _re_live.findall(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _ag_py_code_raw)
                     ))
-                    if _other_actions:
+                    # Убираем уже показанные GitHub-actions
+                    if _has_github_live:
+                        _gh_shown = set(_re_live.findall(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _ag_py_code_raw))
+                    else:
+                        _gh_shown = set()
+                    _extra_actions = [a for a in _all_script_actions if a not in _gh_shown or not _has_github_live]
+                    if _extra_actions and not _has_github_live:
                         _intg_live_lines.append(
-                            f"🔧 Скрипт поддерживает action: {', '.join(_other_actions[:5])} "
+                            f"🔧 Скрипт поддерживает action: {', '.join(_extra_actions[:6])} "
                             f"→ используй run_agent_action(action='...')"
                         )
 
@@ -7334,7 +7393,7 @@ class AnchorEngine:
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
-                    + (f"\n\nИзвестные контакты:\n{_agent_contacts_block}" if _agent_contacts_block else '')
+                    + (f"\n\nИзвестные контакты (есть в системе, вызови list_email_contacts для полных данных):\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
                     + _agent_seen_block
@@ -7363,35 +7422,7 @@ class AnchorEngine:
                     f" Не пиши 'отправлю позже' или 'скину ссылку' без реального tool-вызова. Нет инструмента — нет обещания."
                 )
 
-                # ── Кросс-агентная "реакция" (шаблон, без LLM) ──
-                if _prev_steps_context and _executed > 0 and self.bot:
-                    try:
-                        _react_templates = [
-                            f'Принял, продолжаю работу.',
-                            f'Понял, приступаю к заданию.',
-                            f'Хорошо, беру в работу.',
-                        ]
-                        _react_text = _react_templates[_executed % len(_react_templates)]
-                        try:
-                            _react_sv = Session()
-                            try:
-                                _react_sv.add(Interaction(
-                                    user_id=user.id,
-                                    message_type='agent_msg',
-                                    content=json.dumps({
-                                        '__agent': {'name': _ag_name, 'id': _ag_data.get('id', 0), 'avatar_url': _ag_data.get('avatar_url', '')},
-                                        'text': _react_text,
-                                        '__anchor_type': 'goal_autopilot_crossreact',
-                                    }, ensure_ascii=False),
-                                ))
-                                _react_sv.commit()
-                            finally:
-                                _react_sv.close()
-                            await self.bot.send_message(chat_id=user.telegram_id, text=_react_text)
-                        except Exception as _react_sv_err:
-                            logger.debug('[COORD] crossreact save/send: %s', _react_sv_err)
-                    except Exception as _react_err:
-                        logger.debug('[COORD] crossreact gen failed: %s', _react_err)
+                # Кросс-агентная "реакция" убрана — "Принял, продолжаю работу" не несёт пользы.
 
                 try:
                     _raw = await asyncio.wait_for(
@@ -7878,7 +7909,8 @@ class AnchorEngine:
                         f"- Если был полезный контакт/ответ — подчеркни это как достижение.\n"
                         f"- Если агент не привёл конкретного результата — НЕ упоминай его.\n"
                         + _note_hint
-                        + f"- 4-6 предложений. Без markdown. Без [АВТОПИЛОТ]. Без вопросов пользователю."
+                        + f"- 4-6 предложений. Без markdown. Без [АВТОПИЛОТ]. Без вопросов пользователю.\n"
+                        f"- ❌ НЕ начинай с 'Продолжаю работу' или 'Работаю над целями'. Начни СРАЗУ с конкретики — что сделали агенты."
                     )
                     _report_gen = await asyncio.wait_for(
                         _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=300),

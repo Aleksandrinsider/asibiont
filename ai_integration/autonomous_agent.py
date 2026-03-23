@@ -4430,12 +4430,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _EMAIL_LBL = ('почт', 'mail', 'imap', 'smtp', 'gmail', 'яндекс', 'resend', 'mailgun', 'sendgrid')
         _CODE_LBL  = ('github', 'gitlab', 'bitbucket', 'gitea')
         _RSS_LBL   = ('rss', 'лент', 'feed', 'новост', 'хабр')
-        _MSG_LBL   = ('slack', 'discord', 'telegram', 'whatsapp', 'вконтакт', 'viber')
+        _MSG_LBL   = ('slack', 'discord', 'telegram', 'whatsapp', 'вконтакт', 'viber', 'teams')
         _CRM_LBL   = ('crm', 'amocrm', 'битрикс', 'hubspot', 'pipedrive', 'salesforce', 'zoho')
         _SHOP_LBL  = ('ozon', 'wildberries', 'авито', 'shopify', 'маркет', 'wb')
         _SHEETS_LBL = ('sheets', 'airtable', 'notion', 'excel', 'таблиц', 'gspread')
-        _CRYPTO_LBL = ('binance', 'bybit', 'coinbase', 'крипт', 'биржа')
-        _AD_LBL    = ('директ', 'adwords', 'яндекс.директ', 'google ads', 'mytarget')
+        _CRYPTO_LBL = ('binance', 'bybit', 'coinbase', 'крипт', 'биржев', 'alpha vantage')
+        _AD_LBL    = ('директ', 'adwords', 'яндекс.директ', 'google ads', 'mytarget', 'метрик', 'analytics')
+        _SOCIAL_LBL = ('twitter', 'instagram', 'linkedin', 'youtube', 'tiktok')
+        _PM_LBL    = ('jira', 'trello', 'asana', 'todoist', 'clickup', 'linear')
+        _PAY_LBL   = ('stripe', 'юкасс', 'платеж', 'yookassa')
+        _CAL_LBL   = ('calendar', 'календар', 'zoom')
         # Маппинг категории → (emoji, инструмент)
         _CAT_MAP = [
             (_EMAIL_LBL,  '📧', 'check_emails / send_email / list_email_contacts'),
@@ -4447,6 +4451,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             (_SHEETS_LBL, '📊', 'run_agent_action'),
             (_CRYPTO_LBL, '📈', 'run_agent_action'),
             (_AD_LBL,     '📣', 'run_agent_action'),
+            (_SOCIAL_LBL, '🌐', 'run_agent_action / create_post'),
+            (_PM_LBL,     '📋', 'run_agent_action'),
+            (_PAY_LBL,    '💳', 'run_agent_action'),
+            (_CAL_LBL,    '📅', 'run_agent_action'),
         ]
         _intg_parts = []
         _seen_emojis: set = set()
