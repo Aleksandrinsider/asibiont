@@ -18,28 +18,54 @@ def decrypt_data(data):
 
 
 def update_user_memory(info, user_id=None):
-    """Update user memory with new information"""
+    """Update user memory with new information.
+    
+    Preserves JSON structure if memory was stored by save_user_rule ({"rules": [...]}).
+    Adds new info under "notes" key in that case.
+    """
     from models import Session, User
 
     session = Session()
     try:
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if user:
-            # Decrypt existing memory
             existing_decrypted = ""
             if user.memory:
                 try:
                     existing_decrypted = decrypt_data(user.memory)
                 except Exception:
                     existing_decrypted = ""
-            # Add new information
+
+            # Try to preserve JSON structure (used by save_user_rule)
+            mem_dict = None
+            if existing_decrypted:
+                try:
+                    mem_dict = json.loads(existing_decrypted)
+                    if isinstance(mem_dict, dict):
+                        # JSON format — add info under "notes" key
+                        notes = mem_dict.get('notes', [])
+                        if isinstance(notes, str):
+                            notes = [notes] if notes else []
+                        notes.append(info)
+                        # Keep last 30 notes to avoid bloat
+                        mem_dict['notes'] = notes[-30:]
+                        serialized = json.dumps(mem_dict, ensure_ascii=False)
+                        if len(serialized) > 5000:
+                            mem_dict['notes'] = mem_dict['notes'][-15:]
+                            serialized = json.dumps(mem_dict, ensure_ascii=False)
+                        user.memory = encrypt_data(serialized)
+                        session.commit()
+                        return "Сохранена информация."
+                except (json.JSONDecodeError, TypeError):
+                    mem_dict = None
+
+            # Plain text format (legacy)
             if existing_decrypted:
                 existing_decrypted += "\n" + info
             else:
                 existing_decrypted = info
             # Ограничиваем размер памяти (максимум 5000 символов)
             if len(existing_decrypted) > 5000:
-                # Оставляем последние 4000 символов
                 lines = existing_decrypted.split('\n')
                 trimmed = []
                 total = 0
@@ -50,7 +76,6 @@ def update_user_memory(info, user_id=None):
                     total += len(line) + 1
                 existing_decrypted = '\n'.join(trimmed)
                 logger.info(f"[MEMORY] Trimmed memory for user {user_id} to {len(existing_decrypted)} chars")
-            # Encrypt and save
             encrypted = encrypt_data(existing_decrypted)
             user.memory = encrypted
             session.commit()

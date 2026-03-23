@@ -279,7 +279,8 @@ class ExternalAPIClient:
                                    timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 self._track_call('github')
                 if resp.status == 403:
-                    logger.warning(f"[GITHUB] Rate limited on search")
+                    logger.warning(f"[GITHUB] Rate limited on search for '{query[:50]}' "
+                                   f"(token: {'yes' if github_token else 'NO — add GITHUB_TOKEN for 5000 req/hr'})")
                     return []
                 if resp.status != 200:
                     body = await resp.text()

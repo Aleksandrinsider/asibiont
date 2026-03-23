@@ -9833,14 +9833,29 @@ class AnchorEngine:
             EmailCampaign.status == 'active',
         ).all()
         email_summary = []
-        for c in email_campaigns:
-            outreach = session.query(EmailOutreach).filter_by(campaign_id=c.id).all()
-            sent = sum(1 for o in outreach if o.status in ('sent', 'delivered', 'opened'))
-            replied = sum(1 for o in outreach if o.status == 'replied')
-            drafts = sum(1 for o in outreach if o.status == 'draft')
-            email_summary.append(
-                f"Кампания «{c.name}»: отправлено={sent}, ответов={replied}, черновиков={drafts}"
-            )
+        if email_campaigns:
+            from sqlalchemy import func as _sqla_func, case as _sqla_case
+            _camp_ids = [c.id for c in email_campaigns]
+            _camp_stats = session.query(
+                EmailOutreach.campaign_id,
+                _sqla_func.count(_sqla_case(
+                    (EmailOutreach.status.in_(['sent', 'delivered', 'opened']), 1)
+                )),
+                _sqla_func.count(_sqla_case(
+                    (EmailOutreach.status == 'replied', 1)
+                )),
+                _sqla_func.count(_sqla_case(
+                    (EmailOutreach.status == 'draft', 1)
+                )),
+            ).filter(
+                EmailOutreach.campaign_id.in_(_camp_ids)
+            ).group_by(EmailOutreach.campaign_id).all()
+            _stats_map = {row[0]: (row[1], row[2], row[3]) for row in _camp_stats}
+            for c in email_campaigns:
+                sent, replied, drafts = _stats_map.get(c.id, (0, 0, 0))
+                email_summary.append(
+                    f"Кампания «{c.name}»: отправлено={sent}, ответов={replied}, черновиков={drafts}"
+                )
 
         # Email контакты пользователя — кому уже писали (replied/interested первыми)
         from models import EmailContact as _EC_scan

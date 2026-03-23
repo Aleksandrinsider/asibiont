@@ -9686,15 +9686,15 @@ def _is_generic_email(email: str) -> bool:
     return False
 
 
-# Кэш MX-проверок домена: domain → bool (имеет MX)
-_mx_cache: dict[str, bool] = {}
+# Кэш MX-проверок домена (async version): domain → bool (имеет MX)
+_mx_cache_async: dict[str, bool] = {}
 
 
 async def _check_mx_record(domain: str) -> bool:
     """Проверяет наличие MX-записей у домена через DNS. Кэширует результат."""
     domain = domain.lower().strip('.')
-    if domain in _mx_cache:
-        return _mx_cache[domain]
+    if domain in _mx_cache_async:
+        return _mx_cache_async[domain]
 
     import asyncio
     try:
@@ -9711,7 +9711,7 @@ async def _check_mx_record(domain: str) -> bool:
     except Exception:
         has_mx = False
 
-    _mx_cache[domain] = has_mx
+    _mx_cache_async[domain] = has_mx
     return has_mx
 
 
@@ -10020,6 +10020,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                     if em and not _is_generic_email(em):
                         all_emails_raw.add(em)
                 logger.info(f"[AUTO_LEADS] GitHub found {len(github_leads)} users total from {len(_gh_pages)} pages")
+                if not github_leads and not github_token:
+                    logger.warning("[AUTO_LEADS] GitHub returned 0 leads without GITHUB_TOKEN — likely rate limited (60 req/hr)")
         except Exception as _gh_err:
             logger.warning(f"[AUTO_LEADS] GitHub search failed: {_gh_err}")
     else:
@@ -10702,7 +10704,7 @@ If no relevant emails found return []"""
                 f"{[l.get('email') for l in parsed_leads[:10]]}")
 
     # Добавляем через add_email_leads (централизованная логика с дедупом)
-    leads_json = json.dumps(parsed_leads[:30], ensure_ascii=False)  # Увеличили лимит до 30
+    leads_json = json.dumps(parsed_leads[:100], ensure_ascii=False)  # Увеличили лимит до 100
     result_msg = await add_email_leads(
         campaign_id=campaign.id,
         leads=leads_json,

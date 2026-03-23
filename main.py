@@ -4758,13 +4758,29 @@ async def api_elite_partners_handler(request):
 
             logger.info(f"Returning {len(partners_data)} elite (Premium) partners for user {user_id}")
 
-            # Trigger background avatar refresh for partners missing photo_url
+            # Trigger background avatar refresh for partners missing photo_url in DB
+            # NOTE: p['photo_url'] is always /api/avatar/{id} (proxy URL), so we must
+            # check the actual DB photo_url to find users needing refresh.
             if 'bot' in request.app and request.app['bot']:
-                null_ids = [p.get('telegram_id') for p in partners_data
-                            if p.get('telegram_id') and not p.get('photo_url')
-                            and isinstance(p.get('telegram_id'), int) and p['telegram_id'] > 0]
-                if null_ids:
-                    asyncio.create_task(_refresh_avatars_background(request.app['bot'], null_ids))
+                _refresh_tg_ids = []
+                try:
+                    _partner_tg_ids = [p.get('telegram_id') for p in partners_data
+                                       if p.get('telegram_id') and isinstance(p.get('telegram_id'), int) and p['telegram_id'] > 0]
+                    if _partner_tg_ids:
+                        _db_refresh = Session()
+                        try:
+                            from sqlalchemy import or_
+                            _users_need = _db_refresh.query(User.telegram_id).filter(
+                                User.telegram_id.in_(_partner_tg_ids),
+                                or_(User.photo_url.is_(None), User.photo_url == '__no_avatar__')
+                            ).all()
+                            _refresh_tg_ids = [u[0] for u in _users_need]
+                        finally:
+                            _db_refresh.close()
+                except Exception as _e_ref:
+                    logger.debug(f"Avatar refresh query error: {_e_ref}")
+                if _refresh_tg_ids:
+                    asyncio.create_task(_refresh_avatars_background(request.app['bot'], _refresh_tg_ids))
 
             return web.json_response({'partners': partners_data})
 
