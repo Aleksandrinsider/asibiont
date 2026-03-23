@@ -10008,22 +10008,41 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             # Используем англ. термины для GitHub-запросов
             _gh_techs = _en_techs if _en_techs else _found_techs
             if _gh_techs:
-                gh_queries.append(f"{_gh_techs[0]}")
-                for tech in _gh_techs[:3]:
-                    gh_queries.append(f"{tech} developer")
+                # Для location-запросов предпочитаем специфичный термин (не 'ai', 'bot', 'api' — слишком общие)
+                _generic_gh = {'ai', 'api', 'bot', 'app ', 'saas', 'developer', 'programmer',
+                               'engineer', 'bi ', 'crm', 'erp', 'llm', 'gpt', 'software'}
+                _specific_techs = [t for t in _gh_techs if t.lower().strip() not in _generic_gh]
+                _gh_main_base = (_specific_techs[0] if _specific_techs else _gh_techs[0])
+
+                # Основные запросы: каждый уникальный тех в отдельном запросе
+                _seen_qterms: set = set()
+                for tech in _gh_techs[:4]:
+                    if tech not in _seen_qterms:
+                        _seen_qterms.add(tech)
+                        gh_queries.append(tech)
+                # Комбинированные запросы: специфичный тех + 'developer'
+                for tech in (_specific_techs or _gh_techs)[:2]:
+                    combo = f"{tech} developer"
+                    if combo not in _seen_qterms:
+                        _seen_qterms.add(combo)
+                        gh_queries.append(combo)
             elif core_kw:
+                _gh_main_base = core_kw
                 gh_queries.append(core_kw)
+            else:
+                _gh_main_base = core_kw
+
             if _has_cyrillic:
-                # Для русской аудитории — приоритет на RU-локацию
-                _gh_main = _gh_techs[0] if _gh_techs else core_kw
+                # Для русской аудитории — используем СПЕЦИФИЧНЫЙ тех для location-запросов
+                _gh_main = _gh_main_base
                 gh_queries.insert(0, f"{_gh_main} location:Russia")
                 gh_queries.append(f"{_gh_main} location:Moscow")
-                gh_queries.append(f"{_gh_main} location:Saint Petersburg")
-            
-            gh_queries = gh_queries[:6]  # увеличили лимит для RU
+
+            gh_queries = list(dict.fromkeys(gh_queries))[:6]  # дедупликация, лимит 6
             if gh_queries:
-                # Rotate GitHub pages: base page from emails_sent, always try 2 pages to avoid duplicates
-                _gh_page_base = max(1, (campaign.emails_sent or 0) // 15 + 1)
+                # Циклируем страницы 1-8 — не уходим выше 8 (location-сегменты ограничены).
+                # Дедуп в add_email_leads не даст повторно добавить уже отправленных.
+                _gh_page_base = max(1, ((campaign.emails_sent or 0) // 15) % 8 + 1)
                 _gh_pages = [_gh_page_base, _gh_page_base + 1]
                 logger.info(f"[AUTO_LEADS] Tech audience → GitHub search pages={_gh_pages}: {gh_queries}")
                 for _gh_page in _gh_pages:
