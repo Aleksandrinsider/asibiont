@@ -1129,7 +1129,63 @@ class HybridAutonomousAgent:
                 'time_str': time_str,
                 'date_str': date_str,
                 'user_lang': user_lang,
+                'email_patterns': {},
+                'contact_preferences': {},
             }
+
+            # ── Intelligence Layer: Email Success Patterns (Improvements #1 + #2) ──
+            try:
+                from models import EmailOutreach as _EO_ctx
+                from sqlalchemy import func as _func_ctx, text as _text_ctx
+                # Успешные письма (replied) за последние 90 дней
+                _replied = session.query(_EO_ctx).filter(
+                    _EO_ctx.user_id == user.id,
+                    _EO_ctx.status == 'replied',
+                    _EO_ctx.body_length.isnot(None),
+                ).order_by(_EO_ctx.reply_at.desc()).limit(20).all()
+                if _replied:
+                    _lens = [r.body_length for r in _replied if r.body_length]
+                    _avg_len = int(sum(_lens) / len(_lens)) if _lens else 0
+                    _pers_count = sum(1 for r in _replied if r.has_personalization)
+                    _cta_count = sum(1 for r in _replied if r.has_call_to_action)
+                    _tones = {}
+                    for r in _replied:
+                        if r.tone_type:
+                            _tones[r.tone_type] = _tones.get(r.tone_type, 0) + 1
+                    _best_tone = max(_tones, key=_tones.get) if _tones else None
+                    _hours = [r.sent_at_hour_utc for r in _replied if r.sent_at_hour_utc is not None]
+                    _avg_hour = int(sum(_hours) / len(_hours)) if _hours else None
+                    _result['email_patterns'] = {
+                        'total_replies': len(_replied),
+                        'avg_body_length': _avg_len,
+                        'personalization_rate': round(_pers_count / len(_replied), 2) if _replied else 0,
+                        'cta_rate': round(_cta_count / len(_replied), 2) if _replied else 0,
+                        'best_tone': _best_tone,
+                        'best_send_hour_utc': _avg_hour,
+                    }
+                    logger.debug('[CTX] Email patterns: %s', _result['email_patterns'])
+            except Exception as _e_ep:
+                logger.debug('[CTX] email_patterns query failed: %s', _e_ep)
+
+            # ── Intelligence Layer: Contact Preferences (#3) ──
+            try:
+                from models import EmailContactPreference as _ECP_ctx
+                _prefs = session.query(_ECP_ctx).filter(
+                    _ECP_ctx.user_id == user.id,
+                    _ECP_ctx.emails_replied > 0,
+                ).order_by(_ECP_ctx.last_reply_at.desc()).limit(10).all()
+                if _prefs:
+                    _result['contact_preferences'] = {
+                        p.contact_email: {
+                            'preferred_length': p.preferred_length,
+                            'preferred_tone': p.preferred_tone,
+                            'typical_reply_hour': p.typical_reply_hour,
+                            'reply_rate': round(p.emails_replied / max(p.emails_received, 1), 2),
+                        }
+                        for p in _prefs
+                    }
+            except Exception as _e_cp:
+                logger.debug('[CTX] contact_preferences query failed: %s', _e_cp)
             self._build_context_cache[_cache_key] = {
                 'data': _result, 'expires': _t_ctx.time() + 30,
             }
@@ -1430,7 +1486,44 @@ class HybridAutonomousAgent:
 
                     results.append({"tool": tool_name, "success": True,
                                     "result": result, "reason": reason})
-                    
+
+                    # ── Decision Log (#6): записываем стратегические решения ──
+                    _STRATEGIC_TOOLS = {
+                        'send_outreach_email', 'start_email_campaign', 'run_agent_action',
+                        'save_email_contact', 'check_emails', 'update_goal_progress',
+                        'negotiate_by_email', 'reply_to_outreach_email', 'web_search',
+                        'research_topic', 'delegate_task',
+                    }
+                    if tool_name in _STRATEGIC_TOOLS:
+                        try:
+                            from models import DecisionLog as _DL, Session as _DLSess, User as _DLUser
+                            _dl_sess = _DLSess()
+                            try:
+                                _dl_user = _dl_sess.query(_DLUser).filter_by(telegram_id=user_id).first()
+                                if _dl_user:
+                                    _dl_result_str = str(result)[:500] if result else ''
+                                    _dl = _DL(
+                                        user_id=_dl_user.id,
+                                        decision_type='tool_selection',
+                                        context_summary=(str(reason) or '')[:400],
+                                        chosen_action=tool_name,
+                                        rationale=(str(reason) or '')[:400],
+                                        actual_outcome=_dl_result_str,
+                                        outcome_score=0.8 if (result and 'ошибка' not in _dl_result_str.lower() and 'error' not in _dl_result_str.lower()) else 0.2,
+                                    )
+                                    _dl_sess.add(_dl)
+                                    _dl_sess.commit()
+                            except Exception as _e_dl_inner:
+                                logger.debug('[DECISION LOG] inner: %s', _e_dl_inner)
+                                try:
+                                    _dl_sess.rollback()
+                                except Exception:
+                                    pass
+                            finally:
+                                _dl_sess.close()
+                        except Exception as _e_dl:
+                            logger.debug('[DECISION LOG] outer: %s', _e_dl)
+
                     logger.info(f"[EXEC] {tool_name} ✓ result={str(result)[:200]} — {reason}")
 
                 except Exception as e:

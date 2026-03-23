@@ -1778,6 +1778,113 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "  • Единственное исключение: negotiate_by_email(email=конкретный_эксперт) если нужен ментор\n"
         )
 
+    # ── Intelligence Block: Email Success Patterns ──────────────────
+    # Запрашиваем паттерны из БД — что реально давало ответы
+    _email_intelligence_block = ''
+    if user and _goal_type in ('outreach', 'general') and _has_imap:
+        try:
+            from models import Session as _Sess_ei, EmailOutreach as _EO_ei, EmailContactPreference as _ECP_ei
+            _sess_ei = _Sess_ei()
+            try:
+                _replied_ei = _sess_ei.query(_EO_ei).filter(
+                    _EO_ei.user_id == user.id,
+                    _EO_ei.status == 'replied',
+                    _EO_ei.body_length.isnot(None),
+                ).order_by(_EO_ei.reply_at.desc()).limit(30).all()
+                if _replied_ei:
+                    _lens_ei = [r.body_length for r in _replied_ei if r.body_length]
+                    _avg_len_ei = int(sum(_lens_ei) / len(_lens_ei)) if _lens_ei else 0
+                    _pers_ei = sum(1 for r in _replied_ei if r.has_personalization)
+                    _cta_ei = sum(1 for r in _replied_ei if r.has_call_to_action)
+                    _tones_ei = {}
+                    for r in _replied_ei:
+                        if r.tone_type:
+                            _tones_ei[r.tone_type] = _tones_ei.get(r.tone_type, 0) + 1
+                    _best_tone_ei = max(_tones_ei, key=_tones_ei.get) if _tones_ei else None
+                    _hours_ei = [r.sent_at_hour_utc for r in _replied_ei if r.sent_at_hour_utc is not None]
+                    _best_hour_ei = None
+                    if _hours_ei:
+                        _hc = {}
+                        for h in _hours_ei:
+                            _hc[h] = _hc.get(h, 0) + 1
+                        _best_hour_ei = max(_hc, key=_hc.get)
+                    _tips = []
+                    if _avg_len_ei:
+                        _tips.append(f"длина ~{_avg_len_ei} симв")
+                    if _pers_ei > len(_replied_ei) // 2:
+                        _tips.append("персонализация (имя/компания)")
+                    if _cta_ei > len(_replied_ei) // 2:
+                        _tips.append("призыв к действию")
+                    if _best_tone_ei:
+                        _tips.append(f"тон: {_best_tone_ei}")
+                    if _best_hour_ei is not None:
+                        _tips.append(f"отправка ~{_best_hour_ei}:00 UTC")
+                    if _tips:
+                        _email_intelligence_block = (
+                            f"\n\n📊 ЧТО РАБОТАЕТ (на основе {len(_replied_ei)} ответивших):\n"
+                            f"  Письма с ответами: {', '.join(_tips)}\n"
+                            "  → Используй эти параметры при следующей отправке.\n"
+                        )
+                # Предпочтения конкретных контактов
+                _prefs_ei = _sess_ei.query(_ECP_ei).filter(
+                    _ECP_ei.user_id == user.id,
+                    _ECP_ei.emails_replied > 0,
+                ).order_by(_ECP_ei.last_reply_at.desc()).limit(5).all()
+                if _prefs_ei:
+                    _pref_lines = []
+                    for _p in _prefs_ei:
+                        _p_parts = []
+                        if _p.preferred_length:
+                            _p_parts.append(f"{_p.preferred_length} письма")
+                        if _p.preferred_tone:
+                            _p_parts.append(f"тон {_p.preferred_tone}")
+                        if _p.typical_reply_hour is not None:
+                            _p_parts.append(f"отвечает ~{_p.typical_reply_hour}:00 UTC")
+                        if _p_parts:
+                            _pref_lines.append(f"  • {_p.contact_email}: {', '.join(_p_parts)}")
+                    if _pref_lines:
+                        _email_intelligence_block += (
+                            "\n👤 ПРЕДПОЧТЕНИЯ ОТВЕТИВШИХ КОНТАКТОВ:\n"
+                            + '\n'.join(_pref_lines) + '\n'
+                        )
+            finally:
+                _sess_ei.close()
+        except Exception as _e_ei:
+            import logging as _log_ei
+            _log_ei.getLogger(__name__).debug('[AUTOPILOT] email intelligence block: %s', _e_ei)
+
+    # ── Decision History Block (#6): последние решения AI и их результаты ──
+    _decision_history_block = ''
+    if user:
+        try:
+            from models import Session as _Sess_dh, DecisionLog as _DL_dh
+            import datetime as _dt_dh
+            _sess_dh = _Sess_dh()
+            try:
+                _cutoff_dh = _dt_dh.datetime.utcnow() - _dt_dh.timedelta(days=14)
+                _decisions = _sess_dh.query(_DL_dh).filter(
+                    _DL_dh.user_id == user.id,
+                    _DL_dh.created_at >= _cutoff_dh,
+                    _DL_dh.outcome_score.isnot(None),
+                ).order_by(_DL_dh.created_at.desc()).limit(8).all()
+                if _decisions:
+                    _dl_lines = []
+                    for _d in _decisions:
+                        _score_icon = '✅' if (_d.outcome_score or 0) >= 0.6 else '❌'
+                        _created = _d.created_at.strftime('%d.%m %H:%M') if _d.created_at else '?'
+                        _outcome_short = (_d.actual_outcome or '')[:100].replace('\n', ' ')
+                        _dl_lines.append(f"  {_score_icon} [{_created}] {_d.chosen_action}: {(_d.rationale or '')[:80]} → {_outcome_short}")
+                    _decision_history_block = (
+                        "\n\n🧠 ИСТОРИЯ РЕШЕНИЙ (последние 14 дней):\n"
+                        + '\n'.join(_dl_lines) + '\n'
+                        "  → Анализируй: какие действия давали результат, какие нет. Не повторяй провальные.\n"
+                    )
+            finally:
+                _sess_dh.close()
+        except Exception as _e_dh:
+            import logging as _log_dh
+            _log_dh.getLogger(__name__).debug('[AUTOPILOT] decision history block: %s', _e_dh)
+
     return (
         f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
@@ -1788,6 +1895,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_campaign_directive}"
         f"{_goal_state_hint}"
         f"{_outreach_stats}"
+        f"{_email_intelligence_block}"
+        f"{_decision_history_block}"
         f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"

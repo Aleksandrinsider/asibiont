@@ -374,6 +374,17 @@ def _migrate_email_campaigns(session, inspector):
             'next_follow_up_at': 'ALTER TABLE email_outreach ADD COLUMN next_follow_up_at TIMESTAMP',
             'ai_reply_text': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_text TEXT',
             'ai_reply_sent_at': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_sent_at TIMESTAMP',
+            # Outcome Feedback Loop fields (#1)
+            'reply_count': 'ALTER TABLE email_outreach ADD COLUMN reply_count INTEGER DEFAULT 0',
+            'engagement_rating': 'ALTER TABLE email_outreach ADD COLUMN engagement_rating FLOAT',
+            'ai_reply_count': 'ALTER TABLE email_outreach ADD COLUMN ai_reply_count INTEGER DEFAULT 0',
+            'success': 'ALTER TABLE email_outreach ADD COLUMN success BOOLEAN',
+            # Email Content Fingerprint fields (#2)
+            'body_length': 'ALTER TABLE email_outreach ADD COLUMN body_length INTEGER',
+            'has_personalization': 'ALTER TABLE email_outreach ADD COLUMN has_personalization BOOLEAN',
+            'has_call_to_action': 'ALTER TABLE email_outreach ADD COLUMN has_call_to_action BOOLEAN',
+            'tone_type': 'ALTER TABLE email_outreach ADD COLUMN tone_type VARCHAR(30)',
+            'sent_at_hour_utc': 'ALTER TABLE email_outreach ADD COLUMN sent_at_hour_utc INTEGER',
         })
         # Unique index на (campaign_id, recipient_email) — защита от дублей при race condition
         try:
@@ -735,12 +746,25 @@ def run_migrations():
         _migrate_payment_id_unique(session, inspector)
         _migrate_activity_log_updated_at_index(session, inspector)
         _cleanup_junk_agent_tasks(session)
+        _migrate_intelligence_tables(session, inspector)
         logger.info("✅ Database migrations completed")
     except Exception as e:
         logger.error(f"❌ Database migrations failed: {e}")
         raise
     finally:
         session.close()
+
+
+def _migrate_intelligence_tables(session, inspector):
+    """Создаём таблицы intelligence layer: decision_log, email_contact_preferences."""
+    from models import Base, engine as _engine
+    for tbl in ('decision_log', 'email_contact_preferences'):
+        if not inspector.has_table(tbl):
+            try:
+                Base.metadata.tables[tbl].create(bind=_engine, checkfirst=True)
+                logger.info(f"[MIGRATION] Created intelligence table: {tbl}")
+            except Exception as e:
+                logger.warning(f"[MIGRATION] Could not create {tbl}: {e}")
 
 
 if __name__ == '__main__':

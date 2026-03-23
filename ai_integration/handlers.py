@@ -11381,6 +11381,43 @@ async def send_outreach_email(
 
         session.commit()
 
+        # ── Email Content Fingerprint (Improvement #2) ──
+        # Вычисляем fingerprint сразу после commit чтобы id уже был
+        try:
+            _body_text = (body or '')
+            _body_len = len(_body_text)
+            _rcpt_markers = []
+            if recipient_name:
+                _rcpt_markers.append(recipient_name.lower().split()[0] if ' ' in recipient_name else recipient_name.lower())
+            if recipient_company:
+                _rcpt_markers.append(recipient_company.lower()[:10])
+            _has_pers = bool(_rcpt_markers and any(m in _body_text.lower() for m in _rcpt_markers))
+            _CTA_KW = ('напишите', 'свяжитесь', 'позвоните', 'ответьте', 'reply', 'contact', 'call', 'book', 'schedule',
+                       'запишитесь', 'оставьте', 'перейдите', 'click', 'нажмите', 'заполните')
+            _has_cta = any(kw in _body_text.lower() for kw in _CTA_KW)
+            _FORMAL_KW = ('уважаемый', 'уважаемая', 'dear', 'sincerely', 'regards', 'с уважением', 'господин', 'госпожа')
+            _TECH_KW = ('api', 'github', 'технолог', 'разработ', 'stack', 'backend', 'frontend', 'cloud', 'devops', 'code')
+            _COMM_KW = ('продажи', 'клиент', 'заказ', 'цена', 'прайс', 'скидка', 'offer', 'price', 'deal', 'partnership')
+            _bl = _body_text.lower()
+            if any(kw in _bl for kw in _FORMAL_KW):
+                _tone = 'formal'
+            elif any(kw in _bl for kw in _TECH_KW):
+                _tone = 'technical'
+            elif any(kw in _bl for kw in _COMM_KW):
+                _tone = 'commercial'
+            else:
+                _tone = 'friendly'
+            from datetime import datetime as _dt_fp, timezone as _tz_fp
+            outreach.body_length = _body_len
+            outreach.has_personalization = _has_pers
+            outreach.has_call_to_action = _has_cta
+            outreach.tone_type = _tone
+            outreach.sent_at_hour_utc = _dt_fp.now(_tz_fp.utc).hour
+            session.commit()
+            logger.info(f'[EMAIL_FP] outreach#{outreach.id}: len={_body_len}, pers={_has_pers}, cta={_has_cta}, tone={_tone}')
+        except Exception as _e_fp:
+            logger.debug('[EMAIL_FP] fingerprint failed: %s', _e_fp)
+
         lang = _get_lang(user_id)
         name_str = f" ({recipient_name})" if recipient_name else ""
         _max_label = campaign.max_emails if campaign.max_emails and campaign.max_emails > 0 else '∞'
@@ -13208,6 +13245,16 @@ async def check_emails(
                             _eo.reply_text = _rep_snippet
                         if not _eo.reply_at:
                             _eo.reply_at = _now_ce
+                        # Outcome Feedback Loop (#1): обновляем счётчик ответов
+                        try:
+                            _eo.reply_count = (_eo.reply_count or 0) + 1
+                            # Рассчитываем задержку ответа в часах
+                            if _eo.sent_at and _eo.reply_at:
+                                _delay_h = (_eo.reply_at - _eo.sent_at).total_seconds() / 3600.0
+                                # engagement_rating: быстрый ответ (<24ч) = высокий рейтинг
+                                _eo.engagement_rating = max(0.1, min(1.0, 1.0 - _delay_h / 96.0))
+                        except Exception as _e_rc:
+                            logger.debug('[CHECK_EMAILS] reply_count update: %s', _e_rc)
                         # Инкрементируем счётчик ответов на кампании (только если статус изменился)
                         if not _was_replied_ce and _eo.campaign_id:
                             try:
@@ -13219,6 +13266,39 @@ async def check_emails(
                                 logger.debug(f'[CHECK_EMAILS] campaign replies counter update failed: {_e_camp}')
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status=replied, reply_text saved: {_rep_em}')
+
+                        # Contact Preference Memory (#3): обновляем предпочтения на основе ответа
+                        try:
+                            from models import EmailContactPreference as _ECP_ce
+                            _pref = session.query(_ECP_ce).filter_by(
+                                user_id=user.id, contact_email=_rep_em
+                            ).first()
+                            if not _pref:
+                                _pref = _ECP_ce(user_id=user.id, contact_email=_rep_em)
+                                session.add(_pref)
+                            _pref.emails_received = (_pref.emails_received or 0)
+                            _pref.emails_replied = (_pref.emails_replied or 0) + 1
+                            _pref.last_reply_at = _now_ce
+                            _pref.typical_reply_hour = _now_ce.hour
+                            # Определяем предпочтения по телу письма которое вызвало ответ
+                            if _eo.body_length:
+                                if _eo.body_length < 300:
+                                    _pref.preferred_length = 'short'
+                                elif _eo.body_length < 600:
+                                    _pref.preferred_length = 'medium'
+                                else:
+                                    _pref.preferred_length = 'long'
+                            if _eo.tone_type:
+                                _pref.preferred_tone = _eo.tone_type
+                            _pref.updated_at = _now_ce
+                            session.commit()
+                            logger.info(f'[CHECK_EMAILS] Updated ContactPreference for {_rep_em}')
+                        except Exception as _e_pref:
+                            logger.debug('[CHECK_EMAILS] ContactPreference update: %s', _e_pref)
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     else:
                         # Если контакт уже replied/unsubscribed (напр. через webhook) — обновить reply_text если snippet лучше
                         _eo_any = session.query(_EO_ce2).filter_by(

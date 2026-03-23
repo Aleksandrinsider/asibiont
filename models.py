@@ -666,6 +666,19 @@ class EmailOutreach(Base):
     last_follow_up_at = Column(DateTime)
     next_follow_up_at = Column(DateTime)
 
+    # Аналитика ответов (Outcome Feedback Loop)
+    reply_count = Column(Integer, default=0)        # сколько ответов получено на это письмо
+    engagement_rating = Column(Float)               # 0.0-1.0: общая оценка вовлечённости
+    ai_reply_count = Column(Integer, default=0)     # сколько раз AI ответил
+    success = Column(Boolean)                       # True = конверсия (перешёл в interested/deal)
+
+    # Анализ контента письма (Email Content Analysis)
+    body_length = Column(Integer)                   # длина тела в символах
+    has_personalization = Column(Boolean)           # упомянуто ли имя/компания/позиция получателя
+    has_call_to_action = Column(Boolean)            # есть ли призыв к действию
+    tone_type = Column(String(30))                  # 'formal', 'friendly', 'technical', 'commercial'
+    sent_at_hour_utc = Column(Integer)              # час отправки UTC (для A/B тестинга времени)
+
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
     sent_at = Column(DateTime)
@@ -985,6 +998,74 @@ class AgentRating(Base):
 
     __table_args__ = (
         UniqueConstraint('rater_user_id', 'agent_id', name='uq_agent_rating'),
+    )
+
+
+# ──────────────── INTELLIGENCE LAYER ────────────────
+
+class DecisionLog(Base):
+    """Лог решений AI-агента: что делал, почему, каков результат.
+    Позволяет агенту учиться на прошлых решениях и не повторять неудачи."""
+    __tablename__ = 'decision_log'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), index=True, nullable=False)
+    goal_id = Column(Integer, ForeignKey('goals.id'), nullable=True, index=True)
+
+    decision_type = Column(String(50))       # 'strategy_choice', 'tool_selection', 'message_approach'
+    context_summary = Column(Text)           # Краткий контекст: цель, прогресс, что уже пробовали
+    chosen_action = Column(String(100))      # Какой инструмент/действие выбрал
+    rationale = Column(Text)                 # Почему этот выбор (заполняет AI)
+    expected_outcome = Column(Text)          # Ожидаемый результат
+
+    actual_outcome = Column(Text)            # Фактический результат после исполнения
+    outcome_score = Column(Float)            # 0.0-1.0: насколько соответствовало ожиданию
+    learned = Column(Text)                   # Вывод / урок из этого решения
+
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+    outcome_recorded_at = Column(DateTime)
+
+    user = relationship("User", backref="decision_logs")
+
+    __table_args__ = (
+        Index('ix_decision_log_user_goal', 'user_id', 'goal_id'),
+    )
+
+
+class EmailContactPreference(Base):
+    """Накопленные предпочтения конкретного email-контакта.
+    Обновляется каждый раз когда контакт отвечает — чтобы следующее письмо было точнее."""
+    __tablename__ = 'email_contact_preferences'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), index=True, nullable=False)
+    contact_email = Column(String(300), nullable=False, index=True)
+
+    # Предпочтения по стилю
+    preferred_length = Column(String(20))    # 'short' (<300 chars), 'medium' (300-600), 'long' (600+)
+    preferred_tone = Column(String(30))      # 'formal', 'friendly', 'technical', 'commercial'
+    preferred_language = Column(String(10))  # 'ru', 'en', 'mixed'
+
+    # Поведенческие паттерны
+    typical_reply_hour = Column(Integer)     # час UTC, когда обычно отвечает
+    avg_reply_delay_hours = Column(Float)    # среднее время от отправки до ответа
+
+    # Счётчики
+    emails_received = Column(Integer, default=0)   # сколько получил наших писем
+    emails_replied = Column(Integer, default=0)    # сколько раз ответил
+    last_reply_at = Column(DateTime)
+
+    # Контекст
+    interests = Column(Text)                 # Темы/ключевые слова из ответов
+    notes = Column(Text)                     # Автоматические заметки AI
+
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="contact_preferences")
+
+    __table_args__ = (
+        Index('ix_email_contact_pref_user_email', 'user_id', 'contact_email', unique=True),
     )
 
 
