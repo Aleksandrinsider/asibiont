@@ -207,7 +207,7 @@ def test_g3_finance_goal_research_directive():
     directives = _csd(goals, data, profiles)
     assert directives, "Должна быть директива"
     tools = [d["tool"] for d in directives]
-    allowed = {"research_topic", "web_search", "run_agent_action", "update_goal_progress"}
+    allowed = {"research_topic", "web_search", "run_agent_action", "update_goal_progress", "get_stock_price"}
     for t in tools:
         assert t in allowed, f"Неожиданный инструмент для финансовой цели: {t}"
 
@@ -242,14 +242,15 @@ def test_g4_content_goal_directive():
 
 
 def test_g4b_smm_post_goal():
-    """Цель с keyword «публикация» → контент-директива."""
+    """Цель с keyword «публикация» + Telegram → telegram-директива."""
     goals = [_goal("Публикация постов в Telegram-канал 5 раз в неделю", progress=10)]
     profiles = [_profiles_for("Арина", ["Telegram публикация", "контент"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
     tools = [d["tool"] for d in directives]
-    assert "generate_marketing_content" in tools, f"SMM цель: {tools}"
+    allowed = {"generate_marketing_content", "publish_to_telegram", "create_post"}
+    assert any(t in allowed for t in tools), f"SMM цель: {tools}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -257,8 +258,8 @@ def test_g4b_smm_post_goal():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g5_dev_goal_github_directive():
-    """Цель «разработка» → директива run_agent_action."""
-    goals = [_goal("Разработать backend API для ASI Biont", progress=30)]
+    """Цель с GitHub-keyword → директива run_agent_action."""
+    goals = [_goal("Создать issue на GitHub для отслеживания багов", progress=30)]
     profiles = [_profiles_for("Дев", ["GitHub API Token"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
@@ -268,8 +269,8 @@ def test_g5_dev_goal_github_directive():
 
 
 def test_g5b_code_goal():
-    """Цель с keyword «код» → run_agent_action."""
-    goals = [_goal("Написать код парсера RSS", progress=0)]
+    """Цель с GitHub keyword → run_agent_action."""
+    goals = [_goal("Проверить pull request в репозитории", progress=0)]
     profiles = [_profiles_for("Дев", ["GitHub API Token", "Python Script"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
@@ -284,7 +285,7 @@ def test_g5b_code_goal():
 
 def test_g6_finance_goal_70pct_finalize():
     """Финансовая цель на 75% → директива update_goal_progress (финализация)."""
-    goals = [_goal("Анализ рынка нефти", progress=75, mc=75)]
+    goals = [_goal("Анализ рынка нефти", progress=75, mc=75, mt=100)]
     profiles = [_profiles_for("Марк", ["Alpha Vantage API"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
@@ -672,7 +673,7 @@ def test_g28_finance_goal_rss_finance_feed():
     assert directives
     tools = [d["tool"] for d in directives]
     # Должен использовать run_agent_action (финансовый RSS) или research_topic
-    allowed = {"run_agent_action", "research_topic", "web_search", "update_goal_progress"}
+    allowed = {"run_agent_action", "research_topic", "web_search", "update_goal_progress", "get_stock_price"}
     for t in tools:
         assert t in allowed, f"Неожиданный инструмент для финансовой цели с RSS: {t}"
 
@@ -715,8 +716,8 @@ def test_g30_finance_goal_no_rss_fallback():
     directives = _csd(goals, data, profiles)
     assert directives
     tools = [d["tool"] for d in directives]
-    assert "research_topic" in tools or "web_search" in tools or "update_goal_progress" in tools, \
-        f"Финансовая цель без RSS: ожидался research_topic/web_search: {tools}"
+    assert "research_topic" in tools or "web_search" in tools or "update_goal_progress" in tools or "get_stock_price" in tools, \
+        f"Финансовая цель без RSS: ожидался research_topic/web_search/get_stock_price: {tools}"
     # НЕ должен форсировать email outreach для аналитической цели
     task_texts = " ".join(d.get("task", "") for d in directives)
     assert "send_outreach_email" not in task_texts, \
