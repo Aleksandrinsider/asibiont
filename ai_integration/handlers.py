@@ -13064,25 +13064,37 @@ async def check_emails(
                     _new_blocks.append(_blk)
                     _new_fps.append(_fp_hash)
 
-                # Сохраняем fingerprints новых писем
+                # Сохраняем fingerprints новых писем — ОТДЕЛЬНАЯ сессия чтобы не зависеть от
+                # состояния основной (она может быть в mid-transaction или dirty).
                 if _new_fps:
                     try:
-                        _aal_seen = _AAL_dup(
-                            user_id=user.id,
-                            activity_type='seen_inbox_emails',
-                            title=f'seen {len(_new_fps)} emails',
-                            content=_json_dup.dumps(_new_fps),
-                            target='email_inbox',
-                            status='completed',
-                        )
-                        session.add(_aal_seen)
-                        session.commit()
-                    except Exception as _e_save_fp:
-                        logger.debug('[CHECK_EMAILS] save seen_fp: %s', _e_save_fp)
+                        from models import Session as _SessFP
+                        _fp_sess = _SessFP()
                         try:
-                            session.rollback()
-                        except Exception:
-                            pass
+                            _aal_seen = _AAL_dup(
+                                user_id=user.id,
+                                activity_type='seen_inbox_emails',
+                                title=f'seen {len(_new_fps)} emails',
+                                content=_json_dup.dumps(_new_fps),
+                                target='email_inbox',
+                                status='completed',
+                            )
+                            _fp_sess.add(_aal_seen)
+                            _fp_sess.commit()
+                            logger.info('[CHECK_EMAILS] Saved %d inbox fingerprints', len(_new_fps))
+                        except Exception as _e_save_fp:
+                            logger.warning('[CHECK_EMAILS] save seen_fp FAILED: %s', _e_save_fp)
+                            try:
+                                _fp_sess.rollback()
+                            except Exception:
+                                pass
+                        finally:
+                            try:
+                                _fp_sess.close()
+                            except Exception:
+                                pass
+                    except Exception as _e_fp_outer:
+                        logger.warning('[CHECK_EMAILS] fingerprint session setup failed: %s', _e_fp_outer)
 
                 if _skipped_count > 0:
                     logger.info('[CHECK_EMAILS] Dedup: skipped %d already-seen emails, %d new', _skipped_count, len(_new_blocks))
@@ -13540,41 +13552,58 @@ async def check_emails(
                     '\n→ Определяй язык из текста ответа контакта и пиши reply_body на том же языке!'
                 )
 
-            # ── AI-уже-ответил: помечаем контакты, которым AI уже отправлял reply ──
-            # Защита от повторных ответов: fingerprint-dedup лишь 48ч, а ai_reply_sent_at хранится в БД навсегда.
-            # Если агент видит письмо из inbox снова (после истечения fingerprint), эта аннотация
-            # явно запрещает вызывать reply_to_outreach_email для уже обработанных контактов.
+            # ── AI-уже-ответил: УДАЛЯЕМ из результата контакты, которым AI уже дважды ответил ──
+            # Стратегия: если ai_reply_count >= _MAX_AI_REPLIES → блок удаляется из result целиком.
+            # Это предотвращает ситуацию когда агент «объявляет» ответ на уже закрытые контакты.
+            # Если остались блоки с частично-ответившими → добавляем inline-метку внутрь блока.
             try:
-                if _found_em:
-                    import datetime as _dt_air
-                    _already_ai_replied: list = []
-                    for _air_em in _found_em:
-                        _eo_air = session.query(_EO_ce2).filter(
+                if _found_em and result:
+                    _MAX_R = 2  # должен совпадать с _MAX_AI_REPLIES в reply_to_outreach_email
+                    import re as _re_air2
+                    # Разбиваем result на заголовок + блоки
+                    _hdr_m2 = _re_air2.match(r'^(.*?(?:\d+\s*писем[^\n]*|входящих[^\n]*)\n(?:[^\n]*примечание[^\n]*\n)?\n)', result, _re_air2.DOTALL | _re_air2.IGNORECASE)
+                    _hdr2 = _hdr_m2.group(1) if _hdr_m2 else ''
+                    _body2 = result[len(_hdr2):].strip()
+                    _blks2 = _re_air2.split(r'\n---\n', _body2)
+                    _kept_blks: list = []
+                    _skipped_replied_count = 0
+                    for _blk2 in _blks2:
+                        if not _blk2.strip():
+                            continue
+                        # Находим email в блоке
+                        _blk_ems = _re_air2.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _blk2, _re_air2.IGNORECASE)
+                        _blk_em = _blk_ems[0].lower() if _blk_ems else None
+                        if not _blk_em or _blk_em not in _found_em:
+                            _kept_blks.append(_blk2)
+                            continue
+                        # Считаем сколько раз AI уже ответил этому контакту
+                        _replied_cnt2 = session.query(_EO_ce2).filter(
                             _EO_ce2.user_id == user.id,
-                            _EO_ce2.recipient_email == _air_em,
+                            _EO_ce2.recipient_email == _blk_em,
                             _EO_ce2.ai_reply_sent_at.isnot(None),
-                        ).order_by(_EO_ce2.ai_reply_sent_at.desc()).first()
-                        if _eo_air:
-                            _air_date = str(_eo_air.ai_reply_sent_at)[:10]
-                            _agent_name = ''
-                            try:
-                                from models import UserAgent as _UA_air
-                                _ua_air = session.query(_UA_air).filter_by(
-                                    id=_eo_air.sent_by_agent_id
-                                ).first() if hasattr(_eo_air, 'sent_by_agent_id') and _eo_air.sent_by_agent_id else None
-                                if _ua_air:
-                                    _agent_name = f' (агент: {_ua_air.name})'
-                            except Exception:
-                                pass
-                            _already_ai_replied.append(f'• {_air_em} — AI ответил {_air_date}{_agent_name}')
-                    if _already_ai_replied:
-                        result += (
-                            '\n\n🚫 AI УЖЕ ОТВЕЧАЛ НА ЭТИ ПИСЬМА — НЕ ОТВЕЧАЙ ПОВТОРНО:\n'
-                            + '\n'.join(_already_ai_replied)
-                            + '\n→ НЕ вызывай reply_to_outreach_email для этих адресов! Ответ уже был отправлен.'
-                        )
+                        ).count()
+                        if _replied_cnt2 >= _MAX_R:
+                            # Максимум ответов — убираем блок из result
+                            _skipped_replied_count += 1
+                            logger.info('[CHECK_EMAILS] Filtered already-max-replied contact from output: %s (%d replies)', _blk_em, _replied_cnt2)
+                        elif _replied_cnt2 > 0:
+                            # Уже ответили один раз, но можно ещё — добавляем inline-пометку
+                            _eo_air2 = session.query(_EO_ce2).filter(
+                                _EO_ce2.user_id == user.id,
+                                _EO_ce2.recipient_email == _blk_em,
+                                _EO_ce2.ai_reply_sent_at.isnot(None),
+                            ).order_by(_EO_ce2.ai_reply_sent_at.desc()).first()
+                            _air2_date = str(_eo_air2.ai_reply_sent_at)[:10] if _eo_air2 else '?'
+                            _kept_blks.append(_blk2.rstrip() + f'\n[ℹ️ AI уже отвечал {_air2_date} — ответ допустим ещё 1 раз]')
+                        else:
+                            _kept_blks.append(_blk2)
+                    if _skipped_replied_count > 0:
+                        if not _kept_blks:
+                            result = 'Нет новых входящих для обработки (все письма уже получили ответ от AI).'
+                        else:
+                            result = _hdr2 + '\n---\n'.join(_kept_blks)
             except Exception as _e_air:
-                logger.debug('[CHECK_EMAILS] ai_reply_sent_at annotation failed: %s', _e_air)
+                logger.debug('[CHECK_EMAILS] ai_reply_sent_at filter failed: %s', _e_air)
 
         return result
     except Exception as e:
