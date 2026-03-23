@@ -659,7 +659,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
 
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None) -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None) -> str:
     """Строит адаптивный промпт автопилота.
     Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
     и предоставляет AI свободу выбора лучшей цепочки под цель и интеграции агента.
@@ -1209,10 +1209,55 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 + "\nФормат: DELEGATE[Имя]: конкретная задача с данными\n"
             )
 
+    # ── Блок командного контекста: что сделали коллеги ──
+    _team_context_block = ''
+    if team_history and agent_name:
+        _teammate_entries = []
+        for _tn, _th in team_history.items():
+            if _tn == agent_name or not _th:
+                continue
+            _latest = _th[:3]  # последние 3 действия коллеги
+            for _te in _latest:
+                _teammate_entries.append(f"  {_tn}: {_te[:200]}")
+        if _teammate_entries:
+            _team_context_block = (
+                "\n📋 ЧТО СДЕЛАЛИ КОЛЛЕГИ (используй их результаты, не дублируй работу):\n"
+                + '\n'.join(_teammate_entries[:8]) + '\n'
+                "→ Если коллега нашёл контакты — используй их для писем. Если отправил письма — проверь ответы.\n"
+                "→ Если коллега застрял — предложи другой подход или помоги через DELEGATE.\n"
+            )
+
+    # ── Shared notes: заметки за последние 48ч (доступны всей команде) ──
+    if user and agent_name:
+        try:
+            from models import Session as _SNS, Note as _SN_Note
+            _sn_sess = _SNS()
+            try:
+                import datetime as _dt_sn
+                _sn_cutoff = _dt_sn.datetime.now(_dt_sn.timezone.utc) - _dt_sn.timedelta(hours=48)
+                _shared_notes = _sn_sess.query(_SN_Note).filter(
+                    _SN_Note.user_id == user.id,
+                    _SN_Note.created_at >= _sn_cutoff,
+                ).order_by(_SN_Note.created_at.desc()).limit(6).all()
+                _sn_lines = []
+                for _sn in _shared_notes:
+                    _sn_preview = (_sn.title or _sn.content[:80] or '').strip()[:150]
+                    if _sn_preview:
+                        _sn_lines.append(f"  • {_sn_preview}")
+                if _sn_lines:
+                    _team_context_block += (
+                        "\n📝 ЗАМЕТКИ КОМАНДЫ (сохранены за 48ч — доступны всем агентам):\n"
+                        + '\n'.join(_sn_lines[:5]) + '\n'
+                    )
+            finally:
+                _sn_sess.close()
+        except Exception as _sn_err:
+            logger.debug("[AUTOPILOT] shared notes: %s", _sn_err)
+
     # ── Блок памяти ──
     _memory_block = ''
     if agent_history:
-        _mem_lines = [f"  {i+1}. {h}" for i, h in enumerate(agent_history[:6])]
+        _mem_lines = [f"  {i+1}. {h}" for i, h in enumerate(agent_history[:10])]
         _memory_block = (
             "\nТВОЯ ИСТОРИЯ (последние действия — НЕ ПОВТОРЯЙ без нового результата):\n"
             + '\n'.join(_mem_lines) + '\n'
@@ -1579,6 +1624,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_tactics_block}"
         f"\n{_catalog}"
         f"{_team_block}"
+        f"{_team_context_block}"
         f"{_memory_block}\n"
         "АВТОПИЛОТ — ПРИНЦИПЫ:\n"
         "1. Первый ответ = вызов инструмента (НЕ текст).\n"
@@ -1592,7 +1638,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "Позитивное → ссылка → negotiate → update_goal_progress(+1). Пиши на языке контакта.\n"
         "9. add_task — только внутренние шаги (source=agent), не создавай задачи за пользователя.\n"
         "10. Отчёт = факты и цифры. Блокер → начни с 'БЛОКЕР:' — ASI спросит пользователя.\n"
-        "11. Прямой путь не работает 2+ раза → переключись на косвенный "
+        "11. СТРАТЕГИЧЕСКАЯ ИНИЦИАТИВА: если прогресс цели < 20% и прошло > 3 циклов — "
+        "ПРЕДЛОЖИ пользователю конкретную смену стратегии в отчёте: 'Считаю что нужно попробовать X потому что Y'. "
+        "Если не хватает интеграции — скажи какая нужна и зачем.\n"
+        "12. ИСПОЛЬЗУЙ РАБОТУ КОЛЛЕГ: если в разделе 'Что сделали коллеги' есть контакты/данные — "
+        "работай С НИМИ, а не ищи заново. Команда = ЕДИНЫЙ процесс.\n"
+        "13. Прямой путь не работает 2+ раза → переключись на косвенный "
         "(контент-приманка, инфраструктура, community, реферальная петля).\n"
         + _github_rules + _rss_rules + _imap_rules + _no_imap_block
         + _publish_hint + _escalation_block
@@ -3137,11 +3188,13 @@ class AnchorEngine:
                         _detected = []
                     # Перестраиваем task_text — вставляем промпт после placeholder
                     _per_agent_hist = data.get('per_agent_history', {}).get(chosen.name, [])
+                    _full_team_hist = data.get('per_agent_history', {})
                     _autopilot_prompt = _build_autopilot_prompt(
                         _goals_for_prompt, user=user,
                         agent_caps=_detected, agent_name=chosen.name,
                         team_profiles=_team_profiles,
                         agent_history=_per_agent_hist,
+                        team_history=_full_team_hist,
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:
@@ -7573,10 +7626,13 @@ class AnchorEngine:
                         f"- КОНКРЕТИКА: имена контактов, цифры, что именно найдено/отправлено.\n"
                         f"- ОЦЕНКА ПРОГРЕССА: одним предложением — движемся вперёд или застряли?\n"
                         f"  Если застряли — предложи что изменить: 'Думаю, стоит попробовать другой канал.'\n"
+                        f"- ОЦЕНКА КАЧЕСТВА: были ли действия агентов результативными? "
+                        f"Если кто-то просто искал без результата — отметь это как проблему.\n"
+                        f"- РЕКОМЕНДАЦИЯ: одно конкретное предложение на следующий цикл — что нужно сделать иначе.\n"
                         f"- Если был полезный контакт/ответ — подчеркни это как достижение.\n"
                         f"- Если агент не привёл конкретного результата — НЕ упоминай его.\n"
                         + _note_hint
-                        + f"- 3-5 предложений. Без markdown. Без [АВТОПИЛОТ]. Без вопросов пользователю."
+                        + f"- 4-6 предложений. Без markdown. Без [АВТОПИЛОТ]. Без вопросов пользователю."
                     )
                     _report_gen = await asyncio.wait_for(
                         _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=300),
