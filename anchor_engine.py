@@ -13366,15 +13366,15 @@ class AnchorEngine:
                 api = get_api_client()
 
                 outreach_id = anchor_data.get('outreach_id')
-                recipient_email = anchor_data.get('recipient_email', '')
-                recipient_name = anchor_data.get('recipient_name', '')
-                recipient_company = anchor_data.get('recipient_company', '')
-                original_subject = anchor_data.get('original_subject', '')
-                original_body = anchor_data.get('original_body', '')[:500]
-                reply_text = anchor_data.get('reply_text', '')[:1500]
-                ai_previous_reply = anchor_data.get('ai_previous_reply', '')[:500]
-                campaign_name = anchor_data.get('campaign_name', '')
-                campaign_goal = anchor_data.get('campaign_goal', '')[:500]
+                recipient_email = anchor_data.get('recipient_email') or ''
+                recipient_name = anchor_data.get('recipient_name') or ''
+                recipient_company = anchor_data.get('recipient_company') or ''
+                original_subject = anchor_data.get('original_subject') or ''
+                original_body = (anchor_data.get('original_body') or '')[:500]
+                reply_text = (anchor_data.get('reply_text') or '')[:1500]
+                ai_previous_reply = (anchor_data.get('ai_previous_reply') or '')[:500]
+                campaign_name = anchor_data.get('campaign_name') or ''
+                campaign_goal = (anchor_data.get('campaign_goal') or '')[:500]
 
                 if not outreach_id or not reply_text:
                     logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: no outreach_id or reply_text, skip")
@@ -13439,8 +13439,13 @@ class AnchorEngine:
                                 if part.startswith('{'):
                                     text = part
                                     break
-                        parsed = _json_reply.loads(text)
-                        _reply_body = parsed.get('body', '')
+                        try:
+                            parsed = _json_reply.loads(text)
+                            _reply_body = parsed.get('body', '') if isinstance(parsed, dict) else ''
+                        except Exception:
+                            # Fallback: treat entire response as reply body if not JSON
+                            if text and not text.lower().startswith('{') and len(text) > 20:
+                                _reply_body = text
                 except Exception as _compose_err:
                     logger.error(f"[ANCHOR] email_reply_received compose error: {_compose_err}")
 
