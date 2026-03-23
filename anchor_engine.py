@@ -3295,8 +3295,22 @@ class AnchorEngine:
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
                     _gl_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:3]]
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
-                    _intg_list = ', '.join(str(d).split('(')[0].strip() for d in _detected[:4]) if _detected else ''
+                    _intg_list = ', '.join(str(d).split('(')[0].strip() for d in _detected[:6]) if _detected else ''
                     _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
+                    # ── Универсальный блок: что подключено у агента + каналы юзера ──
+                    _connected_c = []
+                    if _intg_list:
+                        _connected_c.append(_intg_list)
+                    if getattr(user, 'telegram_channel', None):
+                        _connected_c.append('Telegram-канал')
+                    if getattr(user, 'discord_webhook', None):
+                        _connected_c.append('Discord')
+                    _connected_c.append('web_search (всегда доступен)')
+                    _channels_info_c = f"✅ Подключено у {_chosen_name}: {', '.join(_connected_c)}."
+                    _channels_info_c += (
+                        f"\n💡 Если для цели нужна интеграция, которой нет в этом списке — "
+                        f"попроси пользователя подключить её в Настройках → Агенты → API-ключи."
+                    )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
                     _project_c = (_user_prof_c.get('company') or '').strip()
@@ -3342,20 +3356,25 @@ class AnchorEngine:
                                 _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
                                 _disc_count_c = _all_recent_text_c.count('discord')
                                 _gh_count_c = _all_recent_text_c.count('github')
+                                # Альтернативы: интеграции агента + универсальные через web_search
+                                _alt_channels_c = ['hh.ru', 'Хабр']
+                                if _intg_list:
+                                    _alt_channels_c.append(_intg_list)
+                                _alt_str_c = ', '.join(_alt_channels_c)
                                 if _tg_count_c >= 4:
                                     _loop_channel_hint_c = (
                                         f'⚠️ Telegram упоминался {_tg_count_c} раз за последние циклы — это зацикливание! '
-                                        f'Назначь {_chosen_name} другой канал: hh.ru, Хабр, email напрямую, GitHub Issues.'
+                                        f'Назначь {_chosen_name} другой ПОДКЛЮЧЁННЫЙ канал: {_alt_str_c}.'
                                     )
                                 elif _disc_count_c >= 3:
                                     _loop_channel_hint_c = (
                                         f'⚠️ Discord использовался {_disc_count_c} раз — зацикливание! '
-                                        f'Предложи {_chosen_name} попробовать email напрямую или Хабр/GitHub.'
+                                        f'Предложи {_chosen_name} использовать: {_alt_str_c}.'
                                     )
                                 elif _gh_count_c >= 3:
                                     _loop_channel_hint_c = (
                                         f'⚠️ GitHub использовался {_gh_count_c} раз — попробуй другой канал: '
-                                        f'hh.ru/Хабр/форумы по тестированию.'
+                                        f'{_alt_str_c}.'
                                     )
                         except Exception as _cc_err:
                             logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
@@ -3363,6 +3382,7 @@ class AnchorEngine:
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
                             + f". Обращаешься к коллеге {_chosen_name} ({_agent_role}) в рабочем чате.\n\n"
+                            f"{_channels_info_c}\n"
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
@@ -3371,11 +3391,14 @@ class AnchorEngine:
                             "1. КОНКРЕТНОЕ действие — не 'займись целями', а 'проверь ответы в почте' или 'найди 3 контакта на hh.ru'\n"
                             "2. СТРАТЕГИЯ — объясни ПОЧЕМУ именно этот подход: 'в прошлый раз Telegram не дал результатов, давай попробуем email-рассылку'\n"
                             "3. ОЖИДАНИЕ — что ты ждёшь в отчёте: 'жду конкретные имена и email' или 'расскажи, кто ответил и что написал'\n"
+                            "4. КАНАЛЫ — предлагай ТОЛЬКО подключённые каналы из списка выше. "
+                            "Если для цели нужна интеграция, которой нет — скажи: «Для этого было бы полезно подключить [что именно], попроси в настройках.»\n"
                             "Тон: как старший коллега — уважительно, но конкретно. Без шаблонов и канцелярита.\n"
                             "Если есть «Последний результат» — отталкивайся от него: что уже сделано, какой СЛЕДУЮЩИЙ шаг.\n"
-                            "Если есть предупреждение о зацикливании — ОБЯЗАТЕЛЬНО назначь другой канал и объясни почему!\n"
+                            "Если есть предупреждение о зацикливании — ОБЯЗАТЕЛЬНО смени подход и объясни почему!\n"
                             "❌ ЗАПРЕЩЕНО: инструменты (web_search, send_email), технические термины, квадратные скобки.\n"
                             "❌ ЗАПРЕЩЕНО: формулы вроде «Жду отчёт», «Приступай к работе».\n"
+                            "❌ ЗАПРЕЩЕНО: предлагать каналы/сервисы, которых НЕТ в списке подключённых.\n"
                             "✅ ОБРАЗЦЫ:\n"
                             "  «Кристина, загляни в почту — там должны быть ответы от вчерашней рассылки. "
                             "Если кто-то заинтересовался, сразу договаривайся о тестировании. "
@@ -9402,7 +9425,8 @@ class AnchorEngine:
                     _mt_str = f"/{_mt_int}" if _mt_int else ""
                     _stagnation_warn = (
                         f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, но реальный прогресс = {_mc_int}{_mt_str}. "
-                        f"Текущая стратегия не работает. Сообщи пользователю что нужно сменить подход или добавить интеграции."
+                        f"Текущая стратегия не работает. ПОПРОСИ пользователя подключить недостающие интеграции "
+                        f"или предложи конкретно другой подход в отчёте."
                     )
                     _feasibility_warnings.append(_stagnation_warn)
                     # Отправляем Telegram-уведомление пользователю если прошло >24ч с последнего стагнации-алёрта
@@ -9420,17 +9444,31 @@ class AnchorEngine:
                         )
                         if _should_notify and self.bot and user.telegram_id:
                             _stag_goal_title = g.get('title', '')[:60]
+                            # Универсальная таблица: ключевые слова цели → полезная интеграция
+                            _GOAL_INTG_MAP = [
+                                (('клиент', 'пользовател', 'тестировщик', 'лид', 'lead', 'outreach', 'партнёр', 'кандидат', 'найм'), 'mail', 'Email (SMTP/IMAP) — для рассылки и follow-up'),
+                                (('разработ', 'developer', 'qa', 'тестировщик', 'программист', 'open-source'), 'github', 'GitHub Token — для поиска разработчиков'),
+                                (('подписчик', 'аудитор', 'контент', 'охват', 'smm', 'бренд', 'pr'), 'telegram', 'Telegram-канал — для публикации контента'),
+                                (('подписчик', 'аудитор', 'комьюнити', 'community', 'сообщество'), 'discord', 'Discord — для community building'),
+                                (('аналитик', 'мониторинг', 'новости', 'тренды'), 'rss', 'RSS/NewsAPI — для мониторинга трендов'),
+                                (('crm', 'продаж', 'сделк', 'воронк', 'pipeline'), 'crm', 'CRM (AmoCRM/HubSpot) — для управления сделками'),
+                                (('маркетплейс', 'товар', 'ozon', 'wildberries', 'магазин'), 'marketplace', 'Маркетплейс API — для управления товарами'),
+                            ]
+                            _gt_low = _stag_goal_title.lower()
                             _miss_intg = []
-                            if not _has_email_cap:
-                                _miss_intg.append("Email (SMTP/IMAP/Gmail) — для отправки outreach-писем")
-                            if not _has_github_cap and any(w in _stag_goal_title.lower() for w in ('разработ', 'тестировщик', 'github')):
-                                _miss_intg.append("GitHub Token — для поиска разработчиков")
+                            for _kws, _cap_key, _label in _GOAL_INTG_MAP:
+                                if any(w in _gt_low for w in _kws):
+                                    if not any(_cap_key in c for c in _team_caps_all):
+                                        _miss_intg.append(_label)
+                            _connected_intg = list(_team_caps_all)[:6] if _team_caps_all else []
+                            _connected_str = ', '.join(_connected_intg) if _connected_intg else 'только web_search'
                             _miss_str = '\n'.join(f"  • {m}" for m in _miss_intg) if _miss_intg else ''
                             _stag_msg = (
                                 f"⚠️ Автопилот застрял на цели «{_stag_goal_title}»\n\n"
-                                f"Запусков: {_action_count} за 48ч, но прогресс = {int(_mc)}/{int(_mt)}.\n"
-                                + (f"Нужны интеграции:\n{_miss_str}\n\n" if _miss_str else
-                                   "Попробуй скорректировать цель или взять паузу в автопилоте.\n\n")
+                                f"Запусков: {_action_count} за 48ч, прогресс = {int(_mc)}/{int(_mt)}.\n"
+                                f"Подключено: {_connected_str}.\n"
+                                + (f"\nДля этой цели полезно подключить:\n{_miss_str}\n\n" if _miss_str else
+                                   "\nПопробуй скорректировать цель или сменить стратегию.\n\n")
                                 + "Настройки → Агенты → API-ключи для подключения."
                             )
                             try:
