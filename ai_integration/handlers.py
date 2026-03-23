@@ -4360,7 +4360,15 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         changes = []
         
         # Обработка metric_current — автоматический расчёт процента
-        if metric_current is not None and matched.metric_target:
+        if metric_current is not None and not matched.metric_target:
+            # metric_target не задан — сохраняем metric_current, но не можем рассчитать процент
+            try:
+                mc = float(metric_current)
+                matched.metric_current = mc
+                changes.append(f"метрика: {int(mc)} (цель не задана — обновляй progress вручную)")
+            except (ValueError, TypeError):
+                pass
+        elif metric_current is not None and matched.metric_target:
             try:
                 mc = float(metric_current)
                 # GUARD: metric_current должен увеличиться хотя бы на 1 целую единицу

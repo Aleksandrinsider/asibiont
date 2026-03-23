@@ -81,7 +81,7 @@ def _strip_html(text: str) -> str:
 
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
-MAX_DIALOG_PER_DAY = 14
+MAX_DIALOG_PER_DAY = 8
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -94,7 +94,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 10
-MIN_AUTOPILOT_GAP_MINUTES = 30  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 45  # Интервал между autopilot dispatch'ами
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -6836,7 +6836,12 @@ class AnchorEngine:
                 "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
                 "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N. Без email/имён.\n"
                 "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
-                "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя. Для чужих каналов → create_post или send_outreach_email.\n\n"
+                "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя. Для чужих каналов → create_post или send_outreach_email.\n"
+                "• ⛔ НЕТ доступа к Reddit, LinkedIn, Twitter, Instagram, Facebook — агенты НЕ МОГУТ читать/постить/анализировать эти платформы.\n"
+                "• ⛔ НЕТ Telegram-клиента — агенты НЕ МОГУТ вступать/читать/постить в чужие TG-каналы/группы.\n"
+                "• ⛔ НЕТ Discord-клиента — агенты НЕ МОГУТ вступать/читать/постить в Discord-серверы.\n"
+                "• web_search МОЖЕТ найти ссылки на Reddit/LinkedIn/etc, но НЕ МОЖЕТ взаимодействовать с ними.\n"
+                "• Не создавай задачи типа 'проанализировать Reddit/Discord/TG-сообщества' — это невозможно.\n\n"
                 "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
                 "• Генерируй СВОИ уникальные стратегии — ты не ограничен списком подходов.\n"
                 "• Контент-магниты, партнёрства, community building, нишевые площадки — всё в твоей власти.\n"
