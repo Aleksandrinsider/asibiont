@@ -153,7 +153,9 @@ _INTEGRATION_PLANS = [
     (lambda c: any(w in c for w in ('mail', 'почт', 'email', 'imap', 'smtp', 'gmail', 'yandex', 'mailru')),
      'email',
      "Твой уникальный инструмент — чтение входящих (check_emails). Только ты можешь читать ответы на письма и реплаить. Отправлять через Resend могут все агенты и ASI — это обычный канал.",
-     ["A) check_emails → есть ответ → АНАЛИЗИРУЙ НАМЕРЕНИЕ контакта → reply_to_outreach_email (только если позитивный/нейтральный!) → update_goal_progress",
+     ["A) check_emails → есть ответ → ПРОЧИТАЙ ТЕКСТ → КЛАССИФИЦИРУЙ (интерес/вопрос/отказ) → "
+      "ВОПРОС: ответь на конкретный вопрос + CTA. ИНТЕРЕС: reply_to_outreach_email → negotiate. "
+      "ОТКАЗ: не отвечай, система отпишет. → update_goal_progress",
       "B) start_email_campaign(name, goal, target_audience) → send_outreach_email → update_goal_progress",
       "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress",
       "D) check_emails → нет новых ответов → send_follow_up_email (follow-up тем, кто не ответил за 2+ дня)",
@@ -1634,8 +1636,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "5. Нет интеграции → делегируй коллеге с данными. Нашёл контакт → DELEGATE[Имя]: отправь.\n"
         "6. Каждый цикл = ДРУГОЙ подход. Запрещено одно действие 3+ раз подряд.\n"
         "7. НЕ пиши повторно тем же людям. Персонализируй: упомяни проект/стек получателя.\n"
-        "8. Ответы: негативное → unsubscribe, не отвечать. Нейтральное → факт + CTA. "
-        "Позитивное → ссылка → negotiate → update_goal_progress(+1). Пиши на языке контакта.\n"
+        "8. Ответы на письма — ЧИТАЙ ТЕКСТ ОТВЕТА и ДЕЙСТВУЙ ПО КОНТЕКСТУ:\n"
+        "   🟢 ИНТЕРЕС (хочу, давайте, расскажите) → ответь быстро + ссылка → negotiate → update_goal_progress(+1)\n"
+        "   🟡 ВОПРОС (как? сколько? есть ли?) → ОТВЕТЬ НА КОНКРЕТНЫЙ ВОПРОС, не шаблонно. Дай факт + мягкий CTA\n"
+        "   🔴 ОТКАЗ (не интересно, уже есть, не пишите, не сейчас) → НЕ ОТВЕЧАЙ, система отпишет автоматически\n"
+        "   ⚪ НЕЯСНО (ок, спасибо, автоответ) → если есть вопрос — ответь; если нет — не пиши, жди ответа\n"
+        "   ВСЕГДА пиши на языке контакта. check_emails покажет классификацию — сверяйся.\n"
         "9. add_task — только внутренние шаги (source=agent), не создавай задачи за пользователя.\n"
         "10. Отчёт = факты и цифры. Блокер → начни с 'БЛОКЕР:' — ASI спросит пользователя.\n"
         "11. СТРАТЕГИЧЕСКАЯ ИНИЦИАТИВА: если прогресс цели < 20% и прошло > 3 циклов — "
@@ -5139,7 +5145,11 @@ class AnchorEngine:
                     directives.append({
                         'goal': title, 'agent_domain': 'email',
                         'tool': 'reply_to_outreach_email',
-                        'task': f'Есть ответы на письма по кампании. Вызови check_emails → reply_to_outreach_email для ответов.',
+                        'task': (f'Есть ответы на письма по кампании. '
+                                f'Вызови check_emails → ПРОЧИТАЙ текст каждого ответа → '
+                                f'ВОПРОС: ответь на конкретный вопрос через reply_to_outreach_email. '
+                                f'ИНТЕРЕС: reply_to + negotiate_by_email. '
+                                f'ОТКАЗ: НЕ отвечай, система отпишет автоматически.'),
                         'reason': 'есть ответы на письма',
                     })
                 # Кампания активна, письма отправлены — выбираем умную стратегию
@@ -6258,8 +6268,9 @@ class AnchorEngine:
                         )
                         if _pr0_txt:
                             _reply_task += f': «{_pr0_txt[:120]}»'
+                            _reply_task += '. ПРОЧИТАЙ текст — если это ВОПРОС, ответь на него конкретно. Если ОТКАЗ — не отвечай.'
                         else:
-                            _reply_task += '. Сначала вызови check_emails чтобы получить текст ответа.'
+                            _reply_task += '. Сначала вызови check_emails чтобы получить текст ответа и определить намерение.'
                         _reply_tool = 'reply_to_outreach_email' if _pr0_txt else 'check_emails'
                         # Удаляем текущий шаг email-агента — заменяем на reply
                         _plan = [p for p in _plan if p.get('agent', '').strip() != _force_reply_agent]

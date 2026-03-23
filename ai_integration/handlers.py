@@ -13174,6 +13174,13 @@ async def check_emails(
                     r'\bnot\s+interested\b|'
                     r'\bno\s+thanks?\b|'
                     r'\bleave\s+me\s+alone\b|'
+                    r'\bnot\s+(?:for\s+us|for\s+me|relevant|applicable)\b|'
+                    r'\bwe\s+already\s+(?:have|use)\b|'
+                    r'\bnot\s+(?:right\s+)?now\b|'
+                    r'\bmaybe\s+later\b|'
+                    r'\bdoes\s*n\'?t\s+(?:fit|suit|apply|work\s+for)\b|'
+                    r'\bpass\s+on\s+this\b|'
+                    r'\bwe\'?re?\s+(?:not\s+looking|good|all\s+set)\b|'
                     # Russian
                     r'не\s*пиши(?:те)?|'
                     r'(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
@@ -13182,6 +13189,12 @@ async def check_emails(
                     r'(?:уберите|удалите)\s+(?:меня|мой\s+(?:email|адрес))|'
                     r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
                     r'(?:не\s+)?интересно|'
+                    r'не\s+(?:подходит|актуально|релевантно)|'
+                    r'(?:у\s+нас\s+)?уже\s+(?:есть|используем|имеется)|'
+                    r'не\s+сейчас|'
+                    r'(?:может\s+)?позже|как[\s\-]нибудь\s+потом|'
+                    r'нет[,.]?\s*спасибо|'
+                    r'(?:мы\s+)?(?:это\s+)?не\s+(?:используем|применяем)|'
                     r'спам|spam|'
                     # Greek
                     r'μη\s*(?:μου)?\s*(?:στ[εέ]λν|γρ[αά]φ)|'
@@ -13391,14 +13404,66 @@ async def check_emails(
                     f'   → НЕ вызывай update_goal_progress повторно — уже сделано!'
                 )
 
-            # ── Аннотация: инструкция AI по анализу намерения ──
+            # ── Пре-классификация намерений + аннотация для агента ──
             _has_replies = bool(_reply_snippets)
+            _reply_classifications: dict = {}
             if _has_replies:
+                import re as _re_cls_ce
+                _QUESTION_RE = _re_cls_ce.compile(
+                    r'\?\s*$|'
+                    r'\b(?:how|what|when|where|which|who|why|can\s+you|could\s+you|is\s+there|do\s+you)\b|'
+                    r'\b(?:как|что|когда|где|какой|какая|какие|можно|можете|есть\s+ли|подскажите|расскажите|покажите)\b|'
+                    r'(?:πώς|τι|πότε|πού|ποιο|μπορ(?:εί|ούν)|υπάρχ)|'
+                    r'(?:cómo|qué|cuándo|dónde|puede|hay)|'
+                    r'(?:wie|was|wann|wo|können|gibt\s+es)',
+                    _re_cls_ce.IGNORECASE | _re_cls_ce.MULTILINE,
+                )
+                _INTEREST_RE = _re_cls_ce.compile(
+                    r'\b(?:interested|love|great|awesome|sounds?\s+good|let\'?s?\s+(?:do|try|talk)|sign\s+me\s+up|count\s+me\s+in)\b|'
+                    r'\b(?:интересно|отлично|здорово|давайте|хочу|готов[аы]?|попробу|подключ|хотел.{0,5}бы)\b|'
+                    r'(?:ενδιαφ[εέ]ρ(?:ομαι|ον)|τ[εέ]λεια|θα\s+[ήη]θελα)',
+                    _re_cls_ce.IGNORECASE,
+                )
+                for _cls_em, _cls_snip in _reply_snippets.items():
+                    if _cls_em in [e.lower() for e in _unsubscribed_emails]:
+                        _reply_classifications[_cls_em] = '🔴 ОТКАЗ'
+                    elif _INTEREST_RE.search(_cls_snip):
+                        if _QUESTION_RE.search(_cls_snip):
+                            _reply_classifications[_cls_em] = '🟢 ИНТЕРЕС + ВОПРОС'
+                        else:
+                            _reply_classifications[_cls_em] = '🟢 ИНТЕРЕС'
+                    elif _QUESTION_RE.search(_cls_snip):
+                        _reply_classifications[_cls_em] = '🟡 ВОПРОС'
+                    else:
+                        _reply_classifications[_cls_em] = '⚪ НЕЯСНО — прочитай внимательно'
+
+                # Показываем агенту пре-классификацию
+                if _reply_classifications:
+                    result += '\n\n📋 КЛАССИФИКАЦИЯ ОТВЕТОВ (проверь по тексту выше):\n'
+                    for _cls_em2, _cls_label in _reply_classifications.items():
+                        result += f'• {_cls_em2} → {_cls_label}\n'
+
                 result += (
-                    '\n\n🛡️ ОБЯЗАТЕЛЬНО перед ответом — проанализируй НАМЕРЕНИЕ каждого контакта по тексту выше:'
-                    '\n• ПОЗИТИВНОЕ (интерес, вопросы, согласие) → отвечай на языке контакта'
-                    '\n• НЕЙТРАЛЬНОЕ (уточнения) → отвечай вежливо'
-                    '\n• НЕГАТИВНОЕ (не интересно, не пишите, отписка — на ЛЮБОМ языке) → НЕ ОТВЕЧАЙ, помечай unsubscribed'
+                    '\n🛡️ КАК ДЕЙСТВОВАТЬ ПО КАЖДОМУ ТИПУ ОТВЕТА:'
+                    '\n'
+                    '\n🟢 ИНТЕРЕС (хочу попробовать, расскажите подробнее, давайте):'
+                    '\n   → Ответь БЫСТРО, дай конкретику: ссылку, инструкцию, предложение созвона'
+                    '\n   → reply_to_outreach_email → negotiate_by_email → update_goal_progress(+1)'
+                    '\n'
+                    '\n🟡 ВОПРОС (как это работает? сколько стоит? есть ли X?):'
+                    '\n   → ОТВЕТЬ НА КОНКРЕТНЫЙ ВОПРОС — не шаблонно, а именно то что спросили'
+                    '\n   → Если знаешь ответ — дай его. Если нет — скажи "уточню и вернусь"'
+                    '\n   → reply_to_outreach_email с reply_body = ответ на вопрос + мягкий CTA'
+                    '\n   → НЕ игнорируй вопрос, не отвечай общими фразами'
+                    '\n'
+                    '\n🔴 ОТКАЗ (не интересно, уже есть решение, не пишите, не сейчас):'
+                    '\n   → НЕ ОТВЕЧАЙ. Контакт уже автоматически отписан.'
+                    '\n   → Если автоотписка не сработала — вызови DELEGATE или отметь вручную'
+                    '\n'
+                    '\n⚪ НЕЯСНО (автоответ, подпись, короткое "ок"):'
+                    '\n   → Прочитай текст внимательно. Если есть вопрос — ответь.'
+                    '\n   → Если просто "ок/спасибо" без запроса — не отвечай, жди следующего шага от них.'
+                    '\n'
                     '\n→ Определяй язык из текста ответа контакта и пиши reply_body на том же языке!'
                 )
 
