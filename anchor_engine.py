@@ -1885,6 +1885,74 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_dh
             _log_dh.getLogger(__name__).debug('[AUTOPILOT] decision history block: %s', _e_dh)
 
+    # ── Gap-1 Fix: User rules/preferences (из user.memory) → автопилот учитывает правила ──
+    # В обычном чате autonomous_agent._build_context(mode='anchor') добавляет только
+    # user.memory['rules'] к system prompt. Здесь дублируем это для автопилота.
+    _user_rules_block = ''
+    if user:
+        try:
+            _raw_memory = getattr(user, 'memory', None) or ''
+            if _raw_memory:
+                try:
+                    from ai_integration.memory import decrypt_data as _decrypt_ur
+                    _dec_mem = _decrypt_ur(_raw_memory)
+                except Exception:
+                    _dec_mem = _raw_memory
+                if _dec_mem:
+                    try:
+                        import json as _json_ur
+                        _m_ur = (_json_ur.loads(_dec_mem.strip())
+                                 if _dec_mem.strip().startswith('{') else {})
+                        _rules = _m_ur.get('rules', [])
+                        if _rules:
+                            _rules_text = '\n'.join(f"  • {r}" for r in _rules[:15])
+                            _user_rules_block = (
+                                "\n\n📋 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательно учитывай):\n"
+                                + _rules_text + '\n'
+                            )
+                    except Exception:
+                        pass
+        except Exception as _e_ur:
+            import logging as _log_ur
+            _log_ur.getLogger(__name__).debug('[AUTOPILOT] user rules block: %s', _e_ur)
+
+    # ── Gap-3 Fix: Recent user dialog → автопилот видит текущий контекст беседы ──
+    # В обычном чате агент видит полную историю разговора. Автопилот раньше видел только
+    # историю действий агентов, но не что говорил пользователь. Это приводило к тому, что
+    # если пользователь написал "поменяй стратегию", автопилот продолжал по старой.
+    _recent_dialog_block = ''
+    if user:
+        try:
+            from models import Session as _Sess_rd, Interaction as _Int_rd
+            import datetime as _dt_rd
+            _sess_rd = _Sess_rd()
+            try:
+                _cutoff_rd = _dt_rd.datetime.utcnow() - _dt_rd.timedelta(hours=24)
+                _user_msgs = _sess_rd.query(_Int_rd).filter(
+                    _Int_rd.user_id == user.id,
+                    _Int_rd.message_type == 'user',
+                    _Int_rd.created_at >= _cutoff_rd,
+                ).order_by(_Int_rd.created_at.desc()).limit(5).all()
+                if _user_msgs:
+                    _rd_lines = []
+                    for _m in reversed(_user_msgs):
+                        _ts = _m.created_at.strftime('%H:%M') if _m.created_at else '?'
+                        _msg_text = (_m.content or '').strip()[:200]
+                        if _msg_text:
+                            _rd_lines.append(f"  [{_ts}] {_msg_text}")
+                    if _rd_lines:
+                        _recent_dialog_block = (
+                            "\n\n💬 ПОСЛЕДНИЕ СООБЩЕНИЯ ПОЛЬЗОВАТЕЛЯ (за 24ч) — учти контекст беседы:\n"
+                            + '\n'.join(_rd_lines) + '\n'
+                            "  → Если пользователь недавно менял стратегию или давал указания — "
+                            "прими их во внимание. Противоречие с целями — сообщи в отчёте.\n"
+                        )
+            finally:
+                _sess_rd.close()
+        except Exception as _e_rd:
+            import logging as _log_rd
+            _log_rd.getLogger(__name__).debug('[AUTOPILOT] recent dialog block: %s', _e_rd)
+
     return (
         f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
@@ -1897,6 +1965,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_outreach_stats}"
         f"{_email_intelligence_block}"
         f"{_decision_history_block}"
+        f"{_user_rules_block}"
+        f"{_recent_dialog_block}"
         f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"
