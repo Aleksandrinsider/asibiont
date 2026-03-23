@@ -11011,6 +11011,10 @@ async def send_outreach_email(
             return (f" Нельзя отправлять outreach на {_rcpt} — это ваша почта или IMAP-аккаунт агента. "
                     f"Найди email реального внешнего получателя.")
 
+        # ── GUARD: фейковый / generic email ──
+        if _rcpt and _is_generic_email(_rcpt):
+            return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
+
         # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
         # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"
         if _rcpt:
