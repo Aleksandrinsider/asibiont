@@ -11532,7 +11532,17 @@ async def reply_to_outreach_email(
                 logger.debug("suppressed unsubscribed check in reply: %s", _e_reply_chk)
 
         # ── GUARD: сканируем reply_text на opt-out сигналы (на случай если check_emails ещё не обработал) ──
-        _contact_reply_text = (outreach.reply_text or '').lower()
+        # Убираем цитируемую часть (quoted): строки с '>' и всё после 'On ... wrote:'
+        _raw_reply_text = outreach.reply_text or ''
+        import re as _re_strip_quote
+        # Обрезаем по 'On ... wrote:' (стандарт Gmail/Outlook)
+        _quote_cut = _re_strip_quote.split(r'\r?\nOn .{10,120}wrote:', _raw_reply_text, maxsplit=1)
+        _reply_no_quote = _quote_cut[0] if _quote_cut else _raw_reply_text
+        # Убираем строки начинающиеся с '>'
+        _reply_no_quote = '\n'.join(
+            ln for ln in _reply_no_quote.splitlines() if not ln.strip().startswith('>')
+        )
+        _contact_reply_text = _reply_no_quote.lower()
         if _contact_reply_text:
             import re as _re_unsub_guard
             _UNSUB_GUARD_RE = _re_unsub_guard.compile(
