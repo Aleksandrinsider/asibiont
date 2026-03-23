@@ -726,7 +726,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     'продаж', 'b2b', 'партнёр', 'сделк', 'клиентск',
                     'вакансия', 'кандидат', 'найм', 'нанять', 'hr', 'стаж',
                     'инвест', 'инвестор', 'финансиров', 'раунд', 'фандрейзинг',
-                    'участник', 'комьюнити', 'member', 'contributor', 'беты', 'регистрац')
+                    'участник', 'комьюнити', 'member', 'contributor', 'беты', 'регистрац',
+                    # Продвижение / маркетинг
+                    'продвижен', 'маркетинг', 'реклам', 'раскрутк', 'охват', 'брендинг',
+                    'популяризац', 'пиар', ' pr ', 'growth', 'запуск', 'launch', 'promotion',
+                    'диджитал', 'digital', 'осведомлённост', 'осведомленност')
     _CONTENT_KW  = ('контент', 'smm', 'reels', 'видео', 'медиаплан')
     _DEV_KW      = ('разработ', 'программ', 'github', 'backend', 'frontend', 'developer', 'деплой')
     _LEARNING_KW = ('изучить', 'научиться', 'курс', 'обучен', 'практик', 'навык', 'книг', 'читать',
@@ -1242,6 +1246,46 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + _sec_tasks
         )
 
+    # ── Матрица умного выбора инструментов (только для outreach/content/general/dev) ──
+    _tool_matrix = ''
+    if _goal_type not in ('learning', 'health', 'personal'):
+        _tm_rows = []
+        _tm_rows.append(
+            "  📧 Email-кампания → когда: нужно охватить 10+ человек, цель = прямые ответы/заявки/регистрации. "
+            "Для ПРОДВИЖЕНИЯ — один из лучших инструментов. "
+            "start_email_campaign → add_email_leads → send_outreach_email."
+        )
+        _tm_rows.append(
+            "  📢 Контент-пост (Telegram/Discord) → когда: цель = узнаваемость, охват широкой аудитории. "
+            "Комбо: сначала пост → потом email тем кто заинтересовался."
+        )
+        _tm_rows.append(
+            "  👥 Пользователи платформы (find_and_message_relevant_users) → когда: нужны быстрые первые "
+            "пользователи/бета-тестеры среди уже зарегистрированных. Быстрее холодного email."
+        )
+        _tm_rows.append(
+            "  🔍 research_topic/web_search → лучший ПЕРВЫЙ ШАГ перед кампанией: "
+            "найди ЦА, их боли, конкурентов → потом пиши персонально."
+        )
+        if _has_github:
+            _tm_rows.append(
+                "  🐙 GitHub → узкоспециализированная ЦА (разработчики по языку/стеку). "
+                "search_users → save_email_contact → send_outreach_email."
+            )
+        _tm_rows.append(
+            "  🔀 ЛУЧШИЕ КОМБО:\n"
+            "    • Продвижение продукта: research_topic (ЦА+боли) → email-кампания + Telegram-пост одновременно\n"
+            "    • Привлечение пользователей: find_and_message (быстро, внутри платформы) + email (охват)\n"
+            "    • Нет ответов на email: попробуй контент-пост → или смени ЦА / тему письма\n"
+            "    • Партнёрство: negotiate_by_email (тёплый конкретный контакт) → лучше cold campaign"
+        )
+        _tool_matrix = (
+            "\n💡 КАК ВЫБРАТЬ ИНСТРУМЕНТ — рассуждай сам по цели:\n"
+            + '\n'.join(_tm_rows)
+            + "\n→ Мультиканал лучше монотонного: email + контент + платформа работают вместе.\n"
+            "→ Нет явного фаворита? Начни с email-кампании — для продвижения это базовый канал.\n"
+        )
+
     # ── Матрица делегирования команды ──
     _team_block = ''
     if team_profiles:
@@ -1690,6 +1734,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"
+        f"{_tool_matrix}"
         f"{_team_block}"
         f"{_team_context_block}"
         f"{_memory_block}\n"
@@ -1716,6 +1761,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "работай С НИМИ, а не ищи заново. Команда = ЕДИНЫЙ процесс.\n"
         "13. Прямой путь не работает 2+ раза → переключись на косвенный "
         "(контент-приманка, инфраструктура, community, реферальная петля).\n"
+        "14. АВТОНОМНЫЙ ВЫБОР ИНСТРУМЕНТОВ: не жди инструкции какой инструмент запускать. "
+        "Рассуждай сам: какой канал быстрее даст результат ДЛЯ ЭТОЙ конкретной цели? "
+        "Email-кампания, Telegram-пост, поиск на GitHub, внутренние пользователи — "
+        "каждый имеет своё место. Лучший выбор = тот, что соответствует цели, а не привычке.\n"
         + _github_rules + _rss_rules + _imap_rules + _no_imap_block
         + _publish_hint + _escalation_block
     )
