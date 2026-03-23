@@ -10589,10 +10589,27 @@ async def resend_webhook_handler(request):
                             session_db.commit()
                             logger.info(f"[RESEND_WEBHOOK] Updated outreach #{outreach.id} → {new_status}")
 
-                        if event_type == 'email.bounced':
-                            campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
-                            if campaign:
-                                pass
+                        if event_type in ('email.bounced', 'email.complained'):
+                            # Синхронизируем статус EmailContact → bounced
+                            try:
+                                from models import EmailContact
+                                _ec_bounce = session_db.query(EmailContact).filter_by(
+                                    user_id=outreach.user_id,
+                                    email=(outreach.recipient_email or '').strip().lower(),
+                                ).first()
+                                if _ec_bounce and _ec_bounce.status not in ('unsubscribed',):
+                                    _ec_bounce.status = 'bounced'
+                                    session_db.commit()
+                                    logger.info(f"[RESEND_WEBHOOK] Contact {outreach.recipient_email} → bounced")
+                            except Exception as _e_bc:
+                                logger.warning(f"[RESEND_WEBHOOK] Failed to sync contact bounce: {_e_bc}")
+                            # Очищаем follow-up для bounced
+                            if outreach.next_follow_up_at:
+                                outreach.next_follow_up_at = None
+                                try:
+                                    session_db.commit()
+                                except Exception:
+                                    session_db.rollback()
 
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:

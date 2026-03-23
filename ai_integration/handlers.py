@@ -44,6 +44,17 @@ def _validate_email_domain(email: str) -> tuple:
         if not domain or '.' not in domain:
             return False, f"Некорректный домен: {domain}"
 
+        # RFC 2606 reserved + disposable domains — have MX but don't deliver
+        _TRAP_DOMAINS = {
+            'example.com', 'example.org', 'example.net',
+            'test.com', 'test.org', 'test.ru',
+            'mailinator.com', 'guerrillamail.com', 'yopmail.com',
+            'throwaway.email', 'tempmail.com', 'sharklasers.com',
+            'grr.la', 'dispostable.com', 'trashmail.com',
+        }
+        if domain in _TRAP_DOMAINS:
+            return False, f"Домен {domain} — одноразовый/тестовый, письма не будут доставлены"
+
         # Check cache (1 hour TTL)
         cached = _mx_cache.get(domain)
         if cached and (time.time() - cached[1]) < 3600:
@@ -9659,9 +9670,17 @@ def _is_generic_email(email: str) -> bool:
                         'notifications', 'alerts', 'daemon', 'no-reply'):
         return True
     # Явно мусорные домены (example.com, test.com, etc.)
-    if domain in ('example.com', 'test.com', 'localhost', 'email.com',
-                  'domain.com', 'yoursite.com', 'website.com', 'site.com',
-                  'company.com', 'placeholder.com'):
+    if domain in ('example.com', 'example.org', 'example.net',
+                  'test.com', 'test.org', 'test.ru',
+                  'localhost', 'email.com',
+                  'domain.com', 'yoursite.com', 'yourdomain.com',
+                  'website.com', 'site.com', 'mysite.com',
+                  'company.com', 'placeholder.com',
+                  'fake.com', 'fake.ru', 'sample.com',
+                  'tempmail.com', 'throwaway.email',
+                  'mailinator.com', 'guerrillamail.com', 'sharklasers.com',
+                  'grr.la', 'guerrillamailblock.com', 'yopmail.com',
+                  'trashmail.com', 'dispostable.com'):
         return True
     # Сервисные email платформ (не личные)
     if domain in ('substackinc.com', 'substack.com', 'medium.com',
@@ -11058,16 +11077,18 @@ async def send_outreach_email(
             except Exception as _e_reg:
                 logger.debug("suppressed registered-user check: %s", _e_reg)
 
-        # ── GUARD: не отправлять отписавшимся контактам ──
+        # ── GUARD: не отправлять отписавшимся / bounced контактам ──
         if _rcpt:
             try:
                 _ec_unsub_chk = session.query(EmailContact).filter_by(
-                    user_id=user.id, email=_rcpt, status='unsubscribed'
+                    user_id=user.id, email=_rcpt,
                 ).first()
-                if _ec_unsub_chk:
+                if _ec_unsub_chk and _ec_unsub_chk.status == 'unsubscribed':
                     return f"⛔ {_rcpt} отписался — отправка заблокирована."
+                if _ec_unsub_chk and _ec_unsub_chk.status == 'bounced':
+                    return f"⛔ {_rcpt} — адрес bounced, отправка заблокирована."
             except Exception as _e_unsub_chk:
-                logger.debug("suppressed unsubscribed check: %s", _e_unsub_chk)
+                logger.debug("suppressed unsubscribed/bounced check: %s", _e_unsub_chk)
 
         # ── GUARD: не слать новый холодный outreach тому, кто уже ответил ──
         # replied/interested — это активные контакты, для них используй reply_to_outreach_email или negotiate_by_email
@@ -12281,14 +12302,15 @@ async def send_follow_up_email(
         if not outreach:
             return " Не найдено письмо для follow-up."
 
-        # ── GUARD: не отправлять follow-up отписавшимся контактам ──
+        # ── GUARD: не отправлять follow-up отписавшимся / bounced контактам ──
         try:
             _ec_fu_chk = session.query(EmailContact).filter_by(
                 user_id=user.id, email=(outreach.recipient_email or '').strip().lower(),
-                status='unsubscribed',
             ).first()
-            if _ec_fu_chk:
+            if _ec_fu_chk and _ec_fu_chk.status == 'unsubscribed':
                 return f"⛔ {outreach.recipient_email} отписался — follow-up заблокирован."
+            if _ec_fu_chk and _ec_fu_chk.status == 'bounced':
+                return f"⛔ {outreach.recipient_email} — адрес bounced, follow-up заблокирован."
         except Exception as _e_fu_chk:
             logger.debug("suppressed unsubscribed check in follow_up: %s", _e_fu_chk)
 

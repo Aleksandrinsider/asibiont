@@ -12815,14 +12815,33 @@ class AnchorEngine:
 
             def _detect_recipient_lang(email='', name='', company='', context='',
                                         campaign_goal='', campaign_offer=''):
-                """Определяет язык письма: сначала по признакам получателя,
-                фолбэк — язык кампании (goal/offer)."""
+                """Определяет язык письма: сначала по сохранённым предпочтениям,
+                затем по признакам получателя, фолбэк — English."""
+                # 1. Сохранённый preferred_language из прошлых переписок
+                try:
+                    from models import EmailContactPreference as _ECP_lang
+                    _pref = session.query(_ECP_lang).filter_by(
+                        user_id=user.id,
+                        contact_email=(email or '').strip().lower(),
+                    ).first()
+                    if _pref and _pref.preferred_language:
+                        return _pref.preferred_language.capitalize()
+                except Exception:
+                    pass
+
+                # 2. Признаки получателя
                 def _has_cyr(s):
                     return any('\u0400' <= c <= '\u04ff' for c in (s or ''))
 
                 # Сильные сигналы получателя — однозначно русский
                 ru_domains = any((email or '').lower().endswith(d)
                                  for d in ('.ru', '.by', '.ua', '.kz', '.рф'))
+                _email_lower = (email or '').lower()
+                _email_domain = _email_lower.split('@')[-1] if '@' in _email_lower else ''
+                ru_mail_provider = _email_domain in (
+                    'yandex.com', 'yandex.ru', 'ya.ru', 'mail.ru', 'inbox.ru',
+                    'list.ru', 'bk.ru', 'rambler.ru', 'tut.by',
+                )
                 cyr_in_name = _has_cyr(f"{name} {company}")
                 # Русские платформы в контексте исследования
                 _ctx_lower = (context or '').lower()
@@ -12830,15 +12849,20 @@ class AnchorEngine:
                     'habr', 'vc.ru', 'хабр', 'pikabu', 'dtf.ru', 'mail.ru',
                     'rambler', 'yandex.ru', 'vk.com', 't.me', 'ok.ru',
                 ])
-                if ru_domains or cyr_in_name or ru_platforms:
+                if ru_domains or ru_mail_provider or cyr_in_name or ru_platforms:
                     return 'Russian'
 
                 # Контекст получателя пишется АГЕНТОМ (на русском) — нельзя использовать
-                # кириллицу в контексте как признак русского языка ПОЛУЧАТЕЛЯ.
-                # Используем контекст ТОЛЬКО для подтверждения английского (явная латиница).
+                # Кириллицу в контексте как признак русского языка ПОЛУЧАТЕЛЯ —
+                # используем контекст ТОЛЬКО для подтверждения английского (явная латиница).
                 if context:
                     _ctx_cyr = sum(1 for c in context if '\u0400' <= c <= '\u04ff')
                     _ctx_lat = sum(1 for c in context if 'a' <= c.lower() <= 'z')
+                    # Китайские/японские иероглифы в имени → English (международный язык)
+                    _has_cjk = any('\u4e00' <= c <= '\u9fff' or '\u3040' <= c <= '\u30ff'
+                                   for c in f"{name} {company}")
+                    if _has_cjk:
+                        return 'English'
                     if _ctx_lat > 20 and _ctx_cyr < _ctx_lat * 0.3:
                         return 'English'   # контекст явно на английском — пишем на английском
 
