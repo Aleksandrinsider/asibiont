@@ -13421,6 +13421,7 @@ class AnchorEngine:
                 )
 
                 _reply_body = ''
+                ai_result = None
                 try:
                     ai_result = await api.deepseek_analyze(
                         prompt=compose_prompt,
@@ -13441,13 +13442,15 @@ class AnchorEngine:
                                     break
                         try:
                             parsed = _json_reply.loads(text)
-                            _reply_body = parsed.get('body', '') if isinstance(parsed, dict) else ''
+                            _reply_body = (parsed.get('body') or '') if isinstance(parsed, dict) else ''
                         except Exception:
                             # Fallback: treat entire response as reply body if not JSON
                             if text and not text.lower().startswith('{') and len(text) > 20:
                                 _reply_body = text
                 except Exception as _compose_err:
                     logger.error(f"[ANCHOR] email_reply_received compose error: {_compose_err}")
+
+                logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: ai_result={(ai_result or '')[:80]!r}, _reply_body_len={len(_reply_body)}")
 
                 _send_result = ''
                 if _reply_body:
@@ -13505,12 +13508,21 @@ class AnchorEngine:
                                  session=session, auto_commit=False)
 
                 # Помечаем якорь как доставленный
+                _ai_result_short = repr((ai_result or '')[:60])
+                _reply_len = len(_reply_body)
+                _send_err_short = (_send_result or '')[:80]
+                if _reply_body and _send_result and 'отправлен' in (_send_result or '').lower():
+                    _status_suffix = ' — sent'
+                elif not _reply_body:
+                    _status_suffix = f' — skipped (ai_result={_ai_result_short}, reply_body_len={_reply_len})'
+                else:
+                    _status_suffix = f' — send_error: {_send_err_short}'
                 anchor.delivered_at = datetime.now(timezone.utc)
                 log = AnchorDeliveryLog(
                     user_id=user.id,
                     anchor_ids=json.dumps([anchor.id]),
                     message_text=f'[EMAIL_SILENT] email_reply_received: reply to {recipient_email} (outreach #{outreach_id})'
-                                 + (f' — sent' if _reply_body and _send_result and 'отправлен' in (_send_result or '').lower() else ' — skipped'),
+                                 + _status_suffix,
                     anchor_types=json.dumps([anchor.anchor_type]),
                 )
                 session.add(log)
