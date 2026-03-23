@@ -2801,13 +2801,14 @@ class AnchorEngine:
             logger.debug("suppressed user_rules email check: %s", _e_rules_pu)
 
         # ── Разделяем потоки ──
-        EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
+        EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads', 'email_reply_received'}
         CONTENT_SILENT_TYPES = {'content_campaign_publish'}
         DELEGATION_SILENT_TYPES = {'delegation_campaign_send', 'delegation_campaign_follow_up'}
         AUTOPILOT_SILENT_TYPES = {'goal_autopilot_review'}
         CUSTOM_AGENT_TYPES = {'custom_anchor'}  # агент пишет первым — dispatch с tools
-        critical_anchors = [a for a in ready if a.anchor_type in ALWAYS_DELIVER_TYPES
-                            or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH)]
+        critical_anchors = [a for a in ready if (a.anchor_type in ALWAYS_DELIVER_TYPES
+                            or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH))
+                            and a.anchor_type not in EMAIL_SILENT_TYPES]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post', 'discord_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
@@ -8684,7 +8685,8 @@ class AnchorEngine:
         existing_keys = {(a.anchor_type, a.source) for a in existing if _exp_ok(a)}
         # Also check recently DELIVERED anchors for email_reply_received — prevent
         # duplicate replies when AI doesn't set ai_reply_sent_at
-        # agent_delegation убран: без push-дедупликации не нужен (якорь всегда с новым source)
+        # BUT: allow re-creation if the outreach ai_reply_text is still empty
+        # (means the reply was never actually composed/sent — anchor delivery failed)
         _DEDUP_WITH_DELIVERED = {'email_reply_received'}
         try:
             _recent_delivered = session.query(Anchor).filter(
@@ -8694,6 +8696,15 @@ class AnchorEngine:
                 Anchor.created_at >= now_utc - timedelta(hours=24),
             ).all()
             for a in _recent_delivered:
+                # For email_reply_received: skip dedup if reply was never sent
+                if a.anchor_type == 'email_reply_received' and a.source and a.source.startswith('email:'):
+                    try:
+                        _oid = int(a.source.split(':')[1])
+                        _eo = session.query(EmailOutreach).get(_oid)
+                        if _eo and not _eo.ai_reply_text:
+                            continue  # reply not sent — allow new anchor
+                    except (ValueError, IndexError):
+                        pass
                 existing_keys.add((a.anchor_type, a.source))
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
@@ -11896,7 +11907,7 @@ class AnchorEngine:
         # ALWAYS_DELIVER типы ПОДЛЕЖАТ cooldown — их "always deliver" семантика
         # обеспечивается тем, что они не блокируются dialog_count/gap/night.
         _COOLDOWN_BYPASS = {
-            'email_outreach_send', 'email_follow_up',
+            'email_outreach_send', 'email_follow_up', 'email_reply_received',
             'content_campaign_publish',
             'delegation_campaign_send', 'delegation_campaign_follow_up',
             'post_opportunity', 'channel_post', 'discord_post',
@@ -13347,6 +13358,160 @@ class AnchorEngine:
                     except Exception as _notify_err:
                         logger.warning(f"[ANCHOR] email_need_leads notify error: {_notify_err}")
                 return
+
+            elif anchor.anchor_type == 'email_reply_received':
+                # ═══ ПРЯМОЙ ОТВЕТ НА ВХОДЯЩИЙ REPLY: AI compose → reply_to_outreach_email ═══
+                from ai_integration.api_client import get_api_client
+                from ai_integration.handlers import reply_to_outreach_email
+                api = get_api_client()
+
+                outreach_id = anchor_data.get('outreach_id')
+                recipient_email = anchor_data.get('recipient_email', '')
+                recipient_name = anchor_data.get('recipient_name', '')
+                recipient_company = anchor_data.get('recipient_company', '')
+                original_subject = anchor_data.get('original_subject', '')
+                original_body = anchor_data.get('original_body', '')[:500]
+                reply_text = anchor_data.get('reply_text', '')[:1500]
+                ai_previous_reply = anchor_data.get('ai_previous_reply', '')[:500]
+                campaign_name = anchor_data.get('campaign_name', '')
+                campaign_goal = anchor_data.get('campaign_goal', '')[:500]
+
+                if not outreach_id or not reply_text:
+                    logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: no outreach_id or reply_text, skip")
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
+                    return
+
+                # Проверяем что ответ ещё не отправлен (ai_reply_text пустой)
+                _eo_check = session.query(EmailOutreach).filter_by(id=outreach_id).first()
+                if _eo_check and _eo_check.ai_reply_text:
+                    logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: ai_reply_text already set, skip")
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    session.commit()
+                    return
+
+                # Определяем язык ответа (по языку контакта)
+                lang_hint = _detect_recipient_lang(
+                    email=recipient_email, name=recipient_name, company=recipient_company,
+                    context=reply_text,
+                    campaign_goal=campaign_goal,
+                )
+
+                compose_prompt = (
+                    f"You need to compose a reply to an incoming email response from a person "
+                    f"who replied to our outreach campaign.\n\n"
+                    f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n\n"
+                    f"Original outreach subject: {original_subject}\n"
+                    f"Original outreach body:\n{original_body}\n\n"
+                    f"Their reply:\n{reply_text}\n\n"
+                    + (f"Our previous AI reply:\n{ai_previous_reply}\n\n" if ai_previous_reply else "")
+                    + f"Recipient: {recipient_email} ({recipient_name})"
+                    + (f" from {recipient_company}" if recipient_company else "") + "\n\n"
+                    f"Language: {lang_hint} — write ENTIRELY in {lang_hint} (detected from recipient's reply language).\n\n"
+                    f"RULES:\n"
+                    f"- Read their reply carefully. If it's a QUESTION — answer it specifically and honestly.\n"
+                    f"- If it's a REFUSAL or OPT-OUT — do NOT reply (return empty body).\n"
+                    f"- Keep it short: 3-5 sentences, conversational tone.\n"
+                    f"- Be helpful, genuine, not pushy. Answer what they asked.\n"
+                    f"- Do NOT repeat what was already said in previous replies.\n"
+                    f"- No HTML, no markdown, no signatures.\n"
+                    f"- PARAGRAPH BREAKS: separate paragraphs with blank lines (\\n\\n).\n\n"
+                    f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
+                    f"If the reply is opt-out/unsubscribe/refusal, return: {{\"body\": \"\"}}"
+                )
+
+                _reply_body = ''
+                try:
+                    ai_result = await api.deepseek_analyze(
+                        prompt=compose_prompt,
+                        system_prompt="You compose email replies to inbound messages. Return ONLY valid JSON with body field.",
+                        max_tokens=400,
+                        temperature=0.7,
+                    )
+                    if ai_result:
+                        import json as _json_reply
+                        text = ai_result.strip()
+                        if '```' in text:
+                            for part in text.split('```'):
+                                part = part.strip()
+                                if part.startswith('json'):
+                                    part = part[4:].strip()
+                                if part.startswith('{'):
+                                    text = part
+                                    break
+                        parsed = _json_reply.loads(text)
+                        _reply_body = parsed.get('body', '')
+                except Exception as _compose_err:
+                    logger.error(f"[ANCHOR] email_reply_received compose error: {_compose_err}")
+
+                _send_result = ''
+                if _reply_body:
+                    try:
+                        _send_result = await reply_to_outreach_email(
+                            outreach_id=outreach_id,
+                            reply_body=_reply_body,
+                            user_id=user.telegram_id,
+                            session=session,
+                            close_session=False,
+                        )
+                        logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: reply sent to {recipient_email}: {(_send_result or '')[:120]}")
+                    except Exception as _send_err:
+                        logger.error(f"[ANCHOR] email_reply_received send error: {_send_err}")
+                        _send_result = f'Ошибка: {_send_err}'
+                else:
+                    logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: AI returned empty body (opt-out?), skip reply")
+
+                # Уведомляем пользователя о полученном ответе
+                try:
+                    _contact_label = recipient_name or recipient_email
+                    _reply_preview = reply_text[:200].strip()
+                    if _reply_body and _send_result and ('отправлен' in _send_result.lower() or 'sent' in _send_result.lower() or 'reply sent' in _send_result.lower()):
+                        _notify_msg = (
+                            f"📩 Получен ответ от {_contact_label}"
+                            + (f" ({recipient_company})" if recipient_company else "")
+                            + f" — кампания «{campaign_name}»\n\n"
+                            f"💬 Их письмо:\n{_reply_preview}\n\n"
+                            f"✅ Я автоматически ответил(а) — ответ отправлен."
+                        )
+                    elif _reply_body:
+                        _notify_msg = (
+                            f"📩 Получен ответ от {_contact_label}"
+                            + (f" ({recipient_company})" if recipient_company else "")
+                            + f" — кампания «{campaign_name}»\n\n"
+                            f"💬 Их письмо:\n{_reply_preview}\n\n"
+                            f"⚠️ Попытка автоответа: {(_send_result or 'ошибка')[:200]}"
+                        )
+                    else:
+                        _notify_msg = (
+                            f"📩 Получен ответ от {_contact_label}"
+                            + (f" ({recipient_company})" if recipient_company else "")
+                            + f" — кампания «{campaign_name}»\n\n"
+                            f"💬 Их письмо:\n{_reply_preview}\n\n"
+                            f"ℹ️ Автоответ не отправлен (возможно отписка/отказ)."
+                        )
+                    await self.bot.send_message(chat_id=user.telegram_id, text=_notify_msg)
+                except Exception as _ntf_err:
+                    logger.warning(f"[ANCHOR] email_reply_received notify error: {_ntf_err}")
+
+                # Списываем токены
+                if not FREE_ACCESS_MODE and _reply_body:
+                    spend_tokens(user.telegram_id, 'email_send',
+                                 description=f'anchor_email_reply to {recipient_email}',
+                                 session=session, auto_commit=False)
+
+                # Помечаем якорь как доставленный
+                anchor.delivered_at = datetime.now(timezone.utc)
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps([anchor.id]),
+                    message_text=f'[EMAIL_SILENT] email_reply_received: reply to {recipient_email} (outreach #{outreach_id})'
+                                 + (f' — sent' if _reply_body and _send_result and 'отправлен' in (_send_result or '').lower() else ' — skipped'),
+                    anchor_types=json.dumps([anchor.anchor_type]),
+                )
+                session.add(log)
+                session.commit()
+                return
+
             else:
                 return
 
