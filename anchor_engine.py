@@ -1953,6 +1953,53 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_rd
             _log_rd.getLogger(__name__).debug('[AUTOPILOT] recent dialog block: %s', _e_rd)
 
+    # ── ⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ — что агент НЕ может делать ──
+    # Универсальный блок для ВСЕХ агентов, чтобы не создавали невыполнимые задачи
+    _capability_limits_block = (
+        "\n\n⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ (ОБЯЗАТЕЛЬНО УЧИТЫВАЙ):\n"
+        "  • НЕ МОЖЕШЬ вступать/просматривать Telegram-каналы/группы/чаты — у тебя нет Telegram-клиента\n"
+        "  • НЕ МОЖЕШЬ вступать/просматривать Discord-серверы — у тебя нет Discord-клиента\n"
+        "  • НЕ МОЖЕШЬ постить в ЧУЖИЕ Telegram/Discord/Reddit-каналы — только в канал пользователя\n"
+        "  • НЕ МОЖЕШЬ взаимодействовать с соцсетями (Twitter, LinkedIn, Instagram) — нет API\n"
+        "  • НЕ МОЖЕШЬ заходить на сайты требующие авторизацию/логин\n"
+        "  • НЕ МОЖЕШЬ скачивать/устанавливать программы или запускать произвольный код\n"
+        "  • НЕ МОЖЕШЬ звонить, отправлять SMS или физически встречаться с людьми\n"
+        "  ✅ МОЖЕШЬ: web_search, research_topic, send email (IMAP), publish в канал пользователя,\n"
+        "     GitHub API, RSS, add_task, save_note, delegate коллегам, manage goals\n"
+        "  → ПЕРЕД созданием задачи спроси себя: 'ЕСТЬ ЛИ У МЕНЯ ИНСТРУМЕНТ для этого?'\n"
+        "    Если нет — НЕ СОЗДАВАЙ задачу, а предложи пользователю альтернативный подход.\n"
+    )
+
+    # ── ⛔ ОТМЕНЁННЫЕ ЗАДАЧИ — не повторяй провальные подходы ──
+    _cancelled_tasks_block = ''
+    if user:
+        try:
+            from models import Session as _Sess_ct, Task as _Task_ct
+            import datetime as _dt_ct
+            _sess_ct = _Sess_ct()
+            try:
+                _cutoff_ct = _dt_ct.datetime.utcnow() - _dt_ct.timedelta(days=7)
+                _cancelled = _sess_ct.query(_Task_ct).filter(
+                    _Task_ct.user_id == user.id,
+                    _Task_ct.status == 'cancelled',
+                    _Task_ct.source == 'agent',
+                    _Task_ct.created_at >= _cutoff_ct,
+                ).order_by(_Task_ct.created_at.desc()).limit(15).all()
+                if _cancelled:
+                    _ct_titles = list(dict.fromkeys(t.title for t in _cancelled))[:10]
+                    _ct_lines = [f"  • {t}" for t in _ct_titles]
+                    _cancelled_tasks_block = (
+                        f"\n\n⛔ ОТМЕНЁННЫЕ ЗАДАЧИ (последние 7 дней — {len(_ct_titles)} шт.):\n"
+                        + '\n'.join(_ct_lines) + '\n'
+                        "  → Эти задачи уже создавались и были отменены. НЕ СОЗДАВАЙ похожие!\n"
+                        "  → Вместо этого выбери ДРУГОЙ подход к цели, используя ДОСТУПНЫЕ инструменты.\n"
+                    )
+            finally:
+                _sess_ct.close()
+        except Exception as _e_ct:
+            import logging as _log_ct
+            _log_ct.getLogger(__name__).debug('[AUTOPILOT] cancelled tasks block: %s', _e_ct)
+
     return (
         f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
@@ -1967,6 +2014,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_decision_history_block}"
         f"{_user_rules_block}"
         f"{_recent_dialog_block}"
+        f"{_capability_limits_block}"
+        f"{_cancelled_tasks_block}"
         f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"
