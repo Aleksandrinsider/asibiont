@@ -11793,6 +11793,7 @@ async def reply_to_outreach_email(
 
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
+        outreach.success = True  # конверсия: двусторонний диалог состоялся
 
         # Продвигаем EmailContact в статус 'interested' — двусторонний контакт состоялся.
         # НЕ оставляем 'replied' — иначе агент будет бесконечно видеть их через list_email_contacts(status='replied').

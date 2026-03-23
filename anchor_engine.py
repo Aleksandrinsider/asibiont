@@ -81,7 +81,7 @@ def _strip_html(text: str) -> str:
 
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
-MAX_DIALOG_PER_DAY = 20
+MAX_DIALOG_PER_DAY = 12
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -4412,8 +4412,22 @@ class AnchorEngine:
 
                 # ── ASI DIRECTOR: после отчёта реального агента — анализирует + даёт следующий шаг ──
                 # Срабатывает только если: реальный агент (не ASI), есть предупреждения, результат доставлен
+                # Cooldown: не чаще 1 раза в час — иначе спамит после каждого агента
                 _fw_dir = data.get('feasibility_warnings', [])
-                if not _is_noise_result and result and _chosen_id != 0 and self.bot and _fw_dir:
+                _dir_cooldown_ok = True
+                if _fw_dir and self.bot:
+                    try:
+                        _dir_recent = session.query(Interaction).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'proactive',
+                            Interaction.content.like('%asi_director_review%'),
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=1),
+                        ).first()
+                        if _dir_recent:
+                            _dir_cooldown_ok = False
+                    except Exception:
+                        pass
+                if not _is_noise_result and result and _chosen_id != 0 and self.bot and _fw_dir and _dir_cooldown_ok:
                     await asyncio.sleep(3)  # Пауза перед комментарием ASI-директора
                     try:
                         _dir_goals = ', '.join(
@@ -6856,6 +6870,7 @@ class AnchorEngine:
                 "ПРАВИЛА (технические ограничения):\n"
                 "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
                 "• Задача = конкретное ДЕЙСТВИЕ (найти X, написать Y, проанализировать Z).\n"
+                "• ⛔ НЕ давай агентам задачи НЕ ПО ТЕМЕ ЦЕЛИ. Если цель 'Продвижение продукта' — НЕ поручай анализ акций, биржевых данных, финансовых трендов. ТОЛЬКО задачи напрямую продвигающие конкретную цель.\n"
                 "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
                 "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N. Без email/имён.\n"
                 "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
@@ -8345,7 +8360,9 @@ class AnchorEngine:
                         f"- Если агент не привёл конкретного результата — НЕ упоминай его.\n"
                         + _note_hint
                         + f"- 3-5 предложений. Без markdown. Без [АВТОПИЛОТ]. Без вопросов пользователю.\n"
-                        f"- ❌ НЕ начинай с 'Продолжаю работу' или 'Работаю над целями'. Начни СРАЗУ с конкретики."
+                        f"- ❌ НЕ начинай с 'Продолжаю работу' или 'Работаю над целями' или 'Продолжаю работу над'. Начни СРАЗУ с конкретики: кто что сделал.\n"
+                        f"- ❌ НЕ пиши 'Команда: Кристина (...), Марк (...)' — это лишнее, пользователь знает свою команду.\n"
+                        f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
                     _report_gen = await asyncio.wait_for(
                         _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=300),
@@ -8358,8 +8375,8 @@ class AnchorEngine:
                             import datetime as _dt_sumchk
                             _sum_sess = _Sum_Sess_cls()
                             try:
-                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 20 мин назад
-                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(minutes=20)
+                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 40 мин назад
+                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(minutes=40)
                                 from sqlalchemy import text as _sql_sumchk
                                 _recent_summary = _sum_sess.execute(_sql_sumchk(
                                     "SELECT id FROM interactions WHERE user_id=:uid "
@@ -10963,14 +10980,18 @@ class AnchorEngine:
             if is_personal:
                 unreplied = [
                     o for o in _camp_outreach
-                    if o.status == 'replied' and o.reply_text and not o.ai_reply_sent_at
+                    if o.status == 'replied' and o.reply_text and not o.ai_reply_text
                 ]
                 for email in unreplied:
-                    email.ai_reply_sent_at = now_utc
-                    try:
-                        session.commit()
-                    except Exception:
-                        session.rollback()
+                    # Dedup: проверяем нет ли уже якоря
+                    _existing_anchor = session.query(Anchor).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == 'email_reply_received',
+                        Anchor.source == f'email:{email.id}:reply',
+                        Anchor.delivered_at.is_(None),
+                    ).first()
+                    if _existing_anchor:
+                        continue
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='email_reply_received',
@@ -11101,17 +11122,19 @@ class AnchorEngine:
             # --- 3. Входящие ответы (reply_text заполнен, но ai_reply не отправлен) ---
             unreplied = [
                 o for o in _camp_outreach
-                if o.status == 'replied' and o.reply_text and not o.ai_reply_sent_at
+                if o.status == 'replied' and o.reply_text and not o.ai_reply_text
             ]
 
             for email in unreplied:
-                # Превентивно ставим ai_reply_sent_at чтобы следующий скан
-                # не создал ещё один якорь для этого же письма
-                email.ai_reply_sent_at = now_utc
-                try:
-                    session.commit()
-                except Exception:
-                    session.rollback()
+                # Dedup: проверяем нет ли уже якоря для этого email
+                _existing_anchor = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'email_reply_received',
+                    Anchor.source == f'email:{email.id}:reply',
+                    Anchor.delivered_at.is_(None),
+                ).first()
+                if _existing_anchor:
+                    continue  # якорь уже создан, ждёт обработки
 
                 anchors.append(Anchor(
                     user_id=user.id,
@@ -11156,7 +11179,7 @@ class AnchorEngine:
                 )
                 unanswered_replies = sum(
                     1 for o in _camp_outreach
-                    if o.status == 'replied' and o.reply_text and not o.ai_reply_sent_at
+                    if o.status == 'replied' and o.reply_text and not o.ai_reply_text
                 )
                 total_outreach = len(_camp_outreach)
                 if total_outreach > 0 and open_outreach == 0 and unanswered_replies == 0:
