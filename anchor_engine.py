@@ -1218,6 +1218,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + _sec_delegate
             + _sec_email
         )
+    elif _goal_type in ('learning', 'health', 'personal'):
+        _catalog = (
+            "ИНСТРУМЕНТЫ (порядок = приоритет для ЛИЧНОЙ/ОБУЧАЮЩЕЙ цели):\n"
+            "⛔ НЕ запускай массовые email-кампании (start_email_campaign/send_outreach_email) — "
+            "это ЛИЧНАЯ цель, а не продажи. Единственное исключение: negotiate_by_email конкретному ментору/эксперту.\n"
+            + _sec_tasks
+            + _sec_research
+            + _sec_content
+            + _sec_integrations
+            + _sec_delegate
+            + "\n📧 Email: только для negotiate_by_email с конкретным ментором/наставником по теме цели.\n"
+        )
     else:
         # outreach / general — стандарт: email первым
         _catalog = (
@@ -1653,12 +1665,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     from datetime import datetime as _dt_ap
     _today_str = _dt_ap.now().strftime('%d.%m.%Y')
 
+    # ── GUARD: личные/обучающие цели — жёсткий запрет на mass outreach ──
+    _personal_guard = ''
+    if _goal_type in ('learning', 'health', 'personal'):
+        _personal_guard = (
+            "\n\n🚫 ВАЖНО — ЛИЧНАЯ/ОБУЧАЮЩАЯ ЦЕЛЬ:\n"
+            "  • НЕ запускай start_email_campaign, send_outreach_email, add_email_leads\n"
+            "  • НЕ ищи 'тестировщиков', 'клиентов', 'подписчиков' через GitHub/web_search\n"
+            "  • Твоя задача: ПОМОЧЬ пользователю ЛИЧНО достичь этой цели\n"
+            "  • Правильные действия: research_topic → конкретный план → add_task → save_note\n"
+            "  • Единственное исключение: negotiate_by_email(email=конкретный_эксперт) если нужен ментор\n"
+        )
+
     return (
         f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
         f"{'Интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
+        f"{_personal_guard}"
         f"{_campaign_directive}"
         f"{_goal_state_hint}"
         f"{_outreach_stats}"
@@ -2954,11 +2979,31 @@ class AnchorEngine:
                     'delegation': 'Делегирование (delegate_task)',
                 }
                 _exh_labels = [_STRATEGY_LABELS.get(s, s) for s in _exhausted]
+                # Определяем тип цели — чтобы recovery не толкал learning/personal к outreach
+                _exh_goals_text = ' '.join(
+                    (g.get('title', '') + ' ' + (g.get('description', '') or ''))
+                    for g in data.get('goals_summary', [])
+                ).lower()
+                _exh_is_personal = any(
+                    w in _exh_goals_text for w in
+                    ('изучить', 'научиться', 'курс', 'обучен', 'навык',
+                     'спорт', 'тренировк', 'похуд', 'здоровь', 'пробежать',
+                     'путешеств', 'привычк', 'хобби', 'саморазвит', 'личный',
+                     'книг', 'читать', 'диплом', 'сертификат', 'workout')
+                )
                 _STRATEGY_RECOVERY = {
-                    'search': 'перейди к прямому контакту: find_relevant_contacts_for_task → send_outreach_email',
+                    'search': (
+                        'сфокусируйся на конкретном личном действии: add_task → save_note → research_topic для следующего шага'
+                        if _exh_is_personal else
+                        'перейди к прямому контакту: find_relevant_contacts_for_task → send_outreach_email'
+                    ),
                     'email': 'смени источник контактов: web_search(\'site:habr.com [тема] email\') или другой GitHub query (другой язык/страна/followers). publish_to_telegram только в свой канал, не в чужие!',
                     # ⛔ find_and_message_relevant_users — это внутренняя платформа, не внешние соцсети
-                    'content': 'контент создан → теперь привлекай людей: send_outreach_email / find_relevant_contacts_for_task',
+                    'content': (
+                        'создай конкретный план действий: add_task → research_topic → save_note'
+                        if _exh_is_personal else
+                        'контент создан → теперь привлекай людей: send_outreach_email / find_relevant_contacts_for_task'
+                    ),
                     'delegation': 'делегирование не помогло → действуй сам: send_outreach_email / run_agent_action',
                 }
                 task_text += (
