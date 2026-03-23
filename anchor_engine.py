@@ -922,8 +922,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     # Детектор петли: последние 3 инструментa одинаковые → форсируем analyse
     _force_analyse = False
+    _loop_context = ''  # Диагностика петли — показываем ИИ ПОЧЕМУ сработало
     if len(_last_tools) >= 3 and len(set(_last_tools[-3:])) == 1:
         _force_analyse = True
+        _rep_tool = _last_tools[-1]
+        _loop_context = (
+            f"\n🔄 ДЕТЕКТОР ПЕТЛИ: инструмент «{_rep_tool}» вызван 3 раза подряд без смены подхода. "
+            f"Это продуктивно или петля? Если каждый вызов давал НОВЫЕ данные — ты можешь продолжить, "
+            f"но объясни что изменилось. Если результат одинаковый — СМЕНИ инструмент.\n"
+        )
     # Детектор типичных унылых петель:
     # Расширенный набор «только поиск» — включает LLM-исследование и анализ
     _SEARCH_ONLY = {
@@ -963,6 +970,23 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     )
     if _is_trivial_loop:
         _force_analyse = True
+        # Диагностируем какой именно паттерн петли — ИИ получает контекст
+        if _is_pingpong:
+            _ping_tools = sorted(set(_last6))
+            _loop_context += (
+                f"\n🔄 ПАТТЕРН ПИНГ-ПОНГ: постоянно чередуешь {' ↔ '.join(_ping_tools[:2])}. "
+                "Это не прогресс. Реши сам: какой ТРЕТИЙ инструмент даст реальный результат?\n"
+            )
+        elif all(t in _SEARCH_ONLY for t in _last4) and not _has_rss:
+            _loop_context += (
+                "\n🔄 ПАТТЕРН ПОИСК БЕЗ ДЕЙСТВИЯ: 4 цикла только поиск, ни одного контакта/письма/поста. "
+                "Исследование закончено — пора действовать. Что ты реально можешь сделать с найденным?\n"
+            )
+        elif all(t in _SEARCH_ONLY | _SAVE_ONLY for t in _last4) and not _has_rss:
+            _loop_context += (
+                "\n🔄 ПАТТЕРН ПОИСК+СОХРАНЕНИЕ: контакты сохраняются, но письма не отправляются. "
+                "Рекомендуется: send_outreach_email или negotiate_by_email тем кто уже в базе.\n"
+            )
 
     # Инструменты которые агент ЕЩЁ НЕ пробовал — адаптированы под тип агента
     if _has_rss and not _has_imap and not _has_github:
@@ -1389,9 +1413,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _alts_str = ', '.join(_alts) if _alts else 'research_and_plan, analyze_situation_and_suggest_tasks'
             _memory_block += (
                 "🔴 ПЕТЛЯ ОБНАРУЖЕНА: ты повторяешь одни и те же инструменты без прогресса!\n"
-                f"→ НЕМЕДЛЕННО примени ЛЮБОЙ из этих (ты ещё не пробовал!): {_alts_str}\n"
-                "Правило при застревании: используй DELEGATE[коллега] чтобы передать работу тому, у кого есть нужные инструменты.\n"
+                f"→ Попробуй один из инструментов которые ты ещё не использовал: {_alts_str}\n"
+                "Или: используй DELEGATE[коллега] чтобы передать работу тому, у кого есть нужные инструменты.\n"
+                "Обоснуй свой выбор — почему именно этот инструмент лучше для цели?\n"
             )
+            if _loop_context:
+                _memory_block += _loop_context
         elif _banned:
             _memory_block += (
                 f"🚫 ЗАБЛОКИРОВАНО (2+ раз без прогресса): {', '.join(sorted(_banned))}\n"
@@ -1651,14 +1678,44 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     _escalation_block = ''
     if _goal_type in ('outreach', 'general'):
-        _escalation_block = (
-            "\nЭСКАЛАЦИЯ (0 ответов за 5 писем): "
-            "1)смени GitHub query (другой язык/страна) → "
-            "2)ищи email через web_search('site:habr.com [тема] email contact') → "
-            "3)publish_to_telegram ТОЛЬКО в свой канал (не в чужие!) → "
-            "4)другой сегмент аудитории (джуны/сеньоры, другой стек) → 5)партнёры через find_partners.\n"
-            "⛔ У агентов НЕТ инструмента публикации в чужих Telegram/Discord/Reddit-каналах!\n"
-        )
+        # Динамическая эскалация: смотрим что уже пробовали → предлагаем непробованное
+        _ESC_OPTIONS = [
+            ('github_query', _has_github, "смени GitHub query (другой язык/страна/followers)"),
+            ('habr_search', True, "web_search('site:habr.com [тема] email contact') — поиск авторов"),
+            ('telegram_post', True, "publish_to_telegram в свой канал (не в чужие!) — органический охват"),
+            ('audience_pivot', True, "другой сегмент аудитории (джуны/сеньоры, другой стек, другая страна)"),
+            ('partners', True, "find_partners — партнёры и коллаборации"),
+            ('content_campaign', True, "start_content_campaign — создать серию контента"),
+            ('platform_users', True, "find_and_message_relevant_users — пользователи внутри платформы"),
+        ]
+        _esc_tried = set()
+        if 'run_agent_action' in _used_tools and _has_github:
+            _esc_tried.add('github_query')
+        if 'publish_to_telegram' in _used_tools or 'create_post' in _used_tools:
+            _esc_tried.add('telegram_post')
+        if 'find_partners' in _used_tools:
+            _esc_tried.add('partners')
+        if 'start_content_campaign' in _used_tools:
+            _esc_tried.add('content_campaign')
+        if 'find_and_message_relevant_users' in _used_tools:
+            _esc_tried.add('platform_users')
+        _esc_untried = [
+            desc for key, available, desc in _ESC_OPTIONS
+            if available and key not in _esc_tried
+        ]
+        if _esc_untried:
+            _esc_suggestions = '\n'.join(f"  • {d}" for d in _esc_untried[:4])
+            _escalation_block = (
+                f"\nЕСЛИ НЕТ ОТВЕТОВ (холодный outreach не работает) — варианты которые ты ещё не пробовал:\n"
+                + _esc_suggestions
+                + "\n⛔ У агентов НЕТ инструмента публикации в чужих Telegram/Discord/Reddit-каналах!\n"
+                "→ Выбери что лучше подходит для ЭТОЙ цели и ЦА.\n"
+            )
+        else:
+            _escalation_block = (
+                "\nВсе стандартные каналы опробованы. Рекомендация: "
+                "проанализируй результаты (research_and_plan) и предложи пользователю стратегическую смену подхода.\n"
+            )
 
     # ── Директива активных email-кампаний ──
     # Если у пользователя есть активная кампания с нехваткой лидов —
@@ -5694,7 +5751,8 @@ class AnchorEngine:
                 _unsent_contacts_str = (
                     f"\n🟠 КОНТАКТЫ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.): "
                     + ', '.join(_uc_names)
-                    + "\n→ Email-агент ОБЯЗАН вызвать send_outreach_email — НЕ делать новый поиск!\n"
+                    + "\n→ Рекомендую email-агенту: send_outreach_email этим контактам — если данных достаточно. "
+                    "Если данные неполные или аудитория не подходит — сначала уточни/найди подходящие.\n"
                 )
             elif _email_sent > 0 and _goals:
                 # Все контакты уже получили письма — нужны НОВЫЕ контакты
@@ -5739,11 +5797,11 @@ class AnchorEngine:
                         + f"\n     → reply_to_outreach_email(outreach_id={_pr_item.get('outreach_id')}, reply_body=<ОТВЕТ НА ИХ КОНКРЕТНЫЙ ВОПРОС>)"
                     )
                 _pending_replies_str = (
-                    "\n🔴 НАИВЫСШИЙ ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
+                    "\n🔴 ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
                     "⚠️ ПРАВИЛА ОТВЕТА: (1) Отвечай на КОНКРЕТНЫЙ вопрос контакта. "
                     "(2) Используй ЯЗЫК контакта. (3) НЕ отправляй стандартное outreach-письмо — только reply_to_outreach_email.\n"
                     + '\n'.join(_pr_lines)
-                    + "\n→ Email-агент ОБЯЗАН первым делом ответить на эти письма через reply_to_outreach_email!\n"
+                    + "\n→ Email-агент: рекомендуется ответить через reply_to_outreach_email — это живые люди, ответ = реальный прогресс!\n"
                     + ("→ Если reply_text='[текст не получен]' → сначала вызови check_emails чтобы получить текст!\n"
                        if any(not p.get('reply_text') for p in _pending_replies) else '')
                 )
@@ -5990,12 +6048,14 @@ class AnchorEngine:
                     )
                 else:
                     _stagnant_instr = (
-                        f"\n⚠️ СРОЧНО: Цель «{_sg['title'][:50]}» стагнирует ({_sg_progress}% за {len(_recent)}+ циклов). "
-                        "ПРИНУДИТЕЛЬНЫЙ шаг этого цикла:\n"
-                        "  1. Если нет активных кампаний → email-агент ОБЯЗАН вызвать start_email_campaign прямо сейчас.\n"
-                        "  2. Если кампания есть → email-агент ОБЯЗАН вызвать send_outreach_email.\n"
+                        f"\n⚠️ Цель «{_sg['title'][:50]}» стагнирует ({_sg_progress}% за {len(_recent)}+ циклов). "
+                        "Текущий подход не работает — нужна смена стратегии.\n"
+                        "  Предлагаю рассмотреть варианты:\n"
+                        "  A) Запустить email-кампанию: email-агент → start_email_campaign → send_outreach_email\n"
+                        "  B) Сменить аудиторию: найти другой сегмент через web_search или GitHub\n"
+                        "  C) Усилить контент: Telegram-пост или создать landing-материал\n"
                         + _gh_step +
-                        "  4. RSS-агент ОБЯЗАН вызвать save_email_contact для найденных авторов/контактов.\n"
+                        "  → Выбери вариант который лучше всего соответствует текущему состоянию цели и скажи почему.\n"
                     )
 
             _email_campaigns_str = '\n'.join(str(e) for e in data.get('email_campaigns', [])) or 'нет'
