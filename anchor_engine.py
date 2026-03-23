@@ -5263,6 +5263,30 @@ class AnchorEngine:
                     'reason': 'контент/smm цель',
                 })
 
+            # ── LEARNING goals ──
+            elif any(w in full_l for w in ('изучить', 'научиться', 'курс', 'обучен', 'навык', 'учёб',
+                                           'learn', 'study', 'англий', 'язык')):
+                directives.append({
+                    'goal': title, 'agent_domain': 'any',
+                    'tool': 'web_search' if not _is_tool_failed('web_search') else 'research_topic',
+                    'task': (f'Для учебной цели «{title}»: найди лучшие ресурсы/курсы/материалы '
+                             f'через web_search → создай план обучения через add_task (разбей на этапы) '
+                             f'→ save_note с результатами.'),
+                    'reason': 'учебная цель',
+                })
+
+            # ── HEALTH / FITNESS goals ──
+            elif any(w in full_l for w in ('спорт', 'тренировк', 'похуд', 'здоровь', 'бег',
+                                           'fitness', 'health', 'диет', 'калори')):
+                directives.append({
+                    'goal': title, 'agent_domain': 'any',
+                    'tool': 'web_search' if not _is_tool_failed('web_search') else 'research_topic',
+                    'task': (f'Для цели здоровья «{title}»: найди рекомендации/программы '
+                             f'через web_search → создай пошаговый план через add_task '
+                             f'→ set_reminder для регулярных напоминаний.'),
+                    'reason': 'здоровье/спорт цель',
+                })
+
             # ── DEV goals ──
             elif any(w in full_l for w in _DEV_KW):
                 gh_agent = _agent_for('github') or _agent_for('any')
@@ -5374,6 +5398,7 @@ class AnchorEngine:
             _already_sent_filtered = [e for e in _already_sent if e.lower() not in _negotiation_emails_coord]
             _already_sent_str = ', '.join(_already_sent_filtered[:20]) if _already_sent_filtered else 'нет'
             _pending_replies = data.get('pending_replies', [])
+            _skipped_3plus_data = data.get('skipped_3plus_replies', [])
             _unsent_contacts_data = data.get('unsent_contacts', [])
             _overworked_goals = data.get('overworked_goals', [])
             _neglected_goals = data.get('neglected_goals', [])
@@ -5441,11 +5466,18 @@ class AnchorEngine:
                     + ("→ Если reply_text='[текст не получен]' → сначала вызови check_emails чтобы получить текст!\n"
                        if any(not p.get('reply_text') for p in _pending_replies) else '')
                 )
+            if _skipped_3plus_data:
+                _pending_replies_str += (
+                    f"\n⚠️ {len(_skipped_3plus_data)} контакт(а/ов) продолжают писать, но AI уже ответил им 2+ раз: "
+                    f"{', '.join(_skipped_3plus_data[:5])}.\n"
+                    f"→ Сообщи пользователю в отчёте — возможно стоит ответить вручную или назначить персональные переговоры.\n"
+                )
             _re_coord = __import__('re')
             _COORD_SEARCH_TOOLS = {
                 'web_search', 'research_topic', 'research_and_plan',
                 'quick_topic_search', 'get_news_trends',
             }
+            _profiles_lines = []
             for p in _profiles:
                 _hist = _per_agent_history.get(p['name'], [])
                 _hist_str = (
@@ -6606,26 +6638,10 @@ class AnchorEngine:
                 if not _ag_name or not _ag_task:
                     continue
 
-                # ── Уточнение задания на основе результатов предыдущих шагов (ReAct refinement) ──
+                # ── Уточнение задания: подставляем контекст без лишнего LLM-вызова ──
+                # Контекст предыдущих шагов уже передаётся в _agent_prompt через _prev_steps_context
                 if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
-                    try:
-                        _refine_p = (
-                            f"Координатор уточняет задание агенту {_ag_name} с учётом уже выполненного.\n"
-                            f"Уже сделано командой:\n{_prev_steps_context[:500]}\n\n"
-                            f"Исходное задание: {_ag_task}\n"
-                            + (f"Цель: {_ag_goal_title}\n" if _ag_goal_title else "")
-                            + "\nУточни задание (1-3 предложения) — используй конкретные результаты выше."
-                            " Если задание актуально без изменений — верни его дословно. Только текст задания."
-                        )
-                        _refined_task = await asyncio.wait_for(
-                            _quick_ai_call_raw([{"role": "user", "content": _refine_p}], max_tokens=120),
-                            timeout=8,
-                        )
-                        if _refined_task and len(_refined_task.strip()) > 20:
-                            _ag_task = _refined_task.strip()
-                            logger.info("[COORD] refined task step %d for %s", _executed, _ag_name)
-                    except Exception as _ref_e:
-                        logger.debug("[COORD] task refinement failed: %s", _ref_e)
+                    _ag_task = f'{_ag_task}\n\nКонтекст — уже сделано командой:\n{_prev_steps_context[:400]}'
 
                 # Ищем агента в команде
                 _target_ag = next(
@@ -6686,48 +6702,27 @@ class AnchorEngine:
                 # ── Per-agent assignment: живое обращение ASI к агенту (видно в чате) ──
                 _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
-                # Генерируем живое, человеческое поручение от ASI
+                # Генерируем поручение от ASI (шаблон без LLM — экономия токенов)
                 try:
-                    _ag_is_fem_c = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
-                    _task_hint_c = ''
                     _ag_task_lc = _ag_task.lower()
+                    _task_hint_c = ''
                     if any(w in _ag_task_lc for w in ('email', 'письм', 'рассылк', 'почт', 'ответ', 'inbox')):
-                        _task_hint_c = 'загляни в почту и ответь на входящие сообщения'
+                        _task_hint_c = 'проверь почту и ответь на входящие'
                     elif any(w in _ag_task_lc for w in ('rss', 'лент', 'новост', 'аналит', 'трен', 'тренд')):
-                        _task_hint_c = 'поищи свежие инсайты в своих источниках'
+                        _task_hint_c = 'поищи свежие инсайты в источниках'
                     elif any(w in _ag_task_lc for w in ('github', 'разработчик', 'программист', 'developer')):
                         _task_hint_c = 'поищи разработчиков на GitHub'
                     elif any(w in _ag_task_lc for w in ('контакт', 'найди', 'тестировщ', 'специалист', 'кандидат')):
                         _task_hint_c = 'займись поиском новых контактов'
                     elif any(w in _ag_task_lc for w in ('пост', 'публик', 'контент', 'текст')):
                         _task_hint_c = 'подготовь контент'
-                    elif any(w in _ag_task_lc for w in ('исследуй', 'research', 'web_search', 'поиск', 'найди')):
-                        _task_hint_c = 'поищи информацию и контакты по теме'
-                    elif any(w in _ag_task_lc for w in ('save_note', 'замет', 'запиш')):
-                        _task_hint_c = 'зафиксируй результаты'
+                    elif any(w in _ag_task_lc for w in ('исследуй', 'research', 'web_search', 'поиск')):
+                        _task_hint_c = 'поищи информацию по теме'
                     else:
-                        # Берём глагол + объект из задачи вместо первых слов
                         _clean_hint = _ag_task.split('\n')[0].strip()
                         _clean_hint = _clean_hint.split('→')[0].strip() if '→' in _clean_hint else _clean_hint
-                        _task_hint_c = _clean_hint[:60] if len(_clean_hint) > 10 else ' '.join(_ag_task.split()[:8])[:60]
-                    _asi_assign_prompt = (
-                        f"Ты — ASI, координатор команды. Обращаешься к {_ag_name} в командном чате.\n"
-                        f"Что нужно сделать: {_task_hint_c}\n"
-                        f"Напиши одно короткое живое предложение-просьбу, обращаясь по имени {'(женский род)' if _ag_is_fem_c else '(мужской род)'}.\n"
-                        "Говори как коллега — вежливо, конкретно, по-человечески. Без технических терминов, без скобок, без формальностей.\n"
-                        "Примеры:\n"
-                        "«Кристина, пожалуйста, проверь почту — там должны быть ответы.»\n"
-                        "«Марк, поищи свежую аналитику по рынку QA.»\n"
-                        "«Кристина, напиши тем, кто ещё не ответил — у нас уже хорошая база.»"
-                    )
-                    _asi_assign_text = await asyncio.wait_for(
-                        _quick_ai_call_raw([{'role': 'user', 'content': _asi_assign_prompt}], max_tokens=60),
-                        timeout=6,
-                    )
-                    if not _asi_assign_text or len(_asi_assign_text.strip()) < 10:
-                        _asi_assign_text = f"{_ag_name}, пожалуйста, займись следующим заданием."
-                    else:
-                        _asi_assign_text = _asi_assign_text.strip()
+                        _task_hint_c = _clean_hint[:60] if len(_clean_hint) > 10 else 'займись следующим заданием'
+                    _asi_assign_text = f'{_ag_name}, пожалуйста, {_task_hint_c}.'
                 except Exception as _aac_err:
                     _asi_assign_text = f"{_ag_name}, пожалуйста, займись следующим заданием."
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
@@ -7168,46 +7163,33 @@ class AnchorEngine:
                     f" Не пиши 'отправлю позже' или 'скину ссылку' без реального tool-вызова. Нет инструмента — нет обещания."
                 )
 
-                # ── Кросс-агентная "реакция": агент комментирует работу коллеги перед стартом ──
-                # Генерируется только если: есть результаты предыдущих шагов, агент — не первый,
-                # и сообщение ещё не было в этом цикле для этого агента
+                # ── Кросс-агентная "реакция" (шаблон, без LLM) ──
                 if _prev_steps_context and _executed > 0 and self.bot:
                     try:
-                        _is_react_fem = (_ag_name or '')[-1:] in 'аяАЯ'
-                        _react_prev_short = _prev_steps_context.strip()[-350:]
-                        from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_react
-                        _react_prompt = (
-                            f"Ты — {_ag_name}. Тебе только что передали работу: «{_ag_task[:120]}».\n"
-                            f"До тебя коллеги сделали:\n{_react_prev_short}\n\n"
-                            f"Напиши ОДНО короткое предложение — живую реакцию на работу коллег + что ты сделаешь дальше.\n"
-                            f"От первого лица, {'по-женски' if _is_react_fem else 'по-мужски'}. Без технических слов.\n"
-                            f"✅ Образцы: «Отлично, вижу контакты от Марка — сразу пишу им.» "
-                            f"«Хорошо, продолжу с того места.» «Кристина уже открыла дверь — я занесу письма!»\n"
-                            f"❌ Не упоминай инструменты, не называй себя в третьем лице."
-                        )
-                        _react_gen = await _qar_react(
-                            [{'role': 'user', 'content': _react_prompt}], max_tokens=70
-                        )
-                        if _react_gen and len(_react_gen.strip()) > 8:
-                            _react_text = _react_gen.strip()
+                        _react_templates = [
+                            f'Принял, продолжаю работу.',
+                            f'Понял, приступаю к заданию.',
+                            f'Хорошо, беру в работу.',
+                        ]
+                        _react_text = _react_templates[_executed % len(_react_templates)]
+                        try:
+                            _react_sv = Session()
                             try:
-                                _react_sv = Session()
-                                try:
-                                    _react_sv.add(Interaction(
-                                        user_id=user.id,
-                                        message_type='agent_msg',
-                                        content=json.dumps({
-                                            '__agent': {'name': _ag_name, 'id': _ag_data.get('id', 0), 'avatar_url': _ag_data.get('avatar_url', '')},
-                                            'text': _react_text,
-                                            '__anchor_type': 'goal_autopilot_crossreact',
-                                        }, ensure_ascii=False),
-                                    ))
-                                    _react_sv.commit()
-                                finally:
-                                    _react_sv.close()
-                                await self.bot.send_message(chat_id=user.telegram_id, text=_react_text)
-                            except Exception as _react_sv_err:
-                                logger.debug('[COORD] crossreact save/send: %s', _react_sv_err)
+                                _react_sv.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='agent_msg',
+                                    content=json.dumps({
+                                        '__agent': {'name': _ag_name, 'id': _ag_data.get('id', 0), 'avatar_url': _ag_data.get('avatar_url', '')},
+                                        'text': _react_text,
+                                        '__anchor_type': 'goal_autopilot_crossreact',
+                                    }, ensure_ascii=False),
+                                ))
+                                _react_sv.commit()
+                            finally:
+                                _react_sv.close()
+                            await self.bot.send_message(chat_id=user.telegram_id, text=_react_text)
+                        except Exception as _react_sv_err:
+                            logger.debug('[COORD] crossreact save/send: %s', _react_sv_err)
                     except Exception as _react_err:
                         logger.debug('[COORD] crossreact gen failed: %s', _react_err)
 
@@ -9352,10 +9334,12 @@ class AnchorEngine:
                 txt = _re_pr_clean.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', txt)
                 txt = _re_pr_clean.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', txt)
                 return txt.strip()
+            _skipped_3plus: list = []
             _seen_pr_emails: set = set()
             for _pr in _pr_rows:
                 _pr_email_lower = (_pr.recipient_email or '').lower()
                 if _pr_email_lower in _already_ai_replied_emails:
+                    _skipped_3plus.append(_pr_email_lower)
                     continue  # уже отвечали через другую outreach-запись
                 if _pr_email_lower in _seen_pr_emails:
                     continue  # дубль в текущей выборке
@@ -9399,6 +9383,9 @@ class AnchorEngine:
                 })
             if _pending_replies:
                 logger.info("[AUTOPILOT] pending_replies (need AI response): %d", len(_pending_replies))
+            if _skipped_3plus:
+                logger.info("[AUTOPILOT] skipped %d contacts with 3+ AI replies: %s",
+                            len(_skipped_3plus), _skipped_3plus[:5])
         except Exception as _pr_err:
             logger.debug("[AUTOPILOT] pending_replies: %s", _pr_err)
 
@@ -9776,6 +9763,7 @@ class AnchorEngine:
             'already_sent_emails': _already_sent_emails,
             'negotiation_emails': list(_negotiation_emails),  # email-адреса в активных переговорах (replied)
             'pending_replies': _pending_replies,
+            'skipped_3plus_replies': _skipped_3plus,
             'overworked_goals': _overworked_goals,
             'neglected_goals': _neglected_goals,
             'unsent_contacts': [
