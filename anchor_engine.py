@@ -4927,8 +4927,9 @@ class AnchorEngine:
         """
         directives = []
         contacts_list = data.get('known_contacts', [])
-        n_contacts = len(contacts_list)
+        n_contacts = data.get('n_total_email_contacts') or len(contacts_list)
         already_sent = set(data.get('already_sent_emails', []))
+        _unsent_from_data = data.get('unsent_contacts', [])
         email_campaigns = data.get('email_campaigns', [])
         total_sent = data.get('total_emails_sent', 0)
         failed_tools = data.get('failed_tools', {})
@@ -5020,6 +5021,9 @@ class AnchorEngine:
                             _c_email = _c_str.split('<')[1].split('>')[0].strip().lower()
                             if _c_email and _c_email not in _sent_set:
                                 _unsent_contacts.append(_c_str)
+                    # Fallback: если в top-N не видны, берём из полного unsent_contacts
+                    if not _unsent_contacts and _unsent_from_data:
+                        _unsent_contacts = list(_unsent_from_data)
                     if _unsent_contacts:
                         _unsent_names = ', '.join(
                             _c.split('<')[0].strip() for _c in _unsent_contacts[:3]
@@ -5160,10 +5164,17 @@ class AnchorEngine:
                         if '<' in _c_sm and '>' in _c_sm:
                             _em_sm = _c_sm.split('<')[1].split('>')[0].strip().lower()
                             _contact_emails_sm.add(_em_sm)
+                    # Также учитываем unsent_contacts из полного списка
                     _unsent_set_sm = _contact_emails_sm - already_sent
+                    if not _unsent_set_sm and _unsent_from_data:
+                        # В top-N не видны unsent, но в полном списке есть
+                        for _ufd in _unsent_from_data:
+                            if '<' in _ufd and '>' in _ufd:
+                                _unsent_set_sm.add(_ufd.split('<')[1].split('>')[0].strip().lower())
                     _all_contacted = (
                         len(_unsent_set_sm) == 0 and n_contacts > 0
-                        or (n_contacts > 0 and len(already_sent & _contact_emails_sm) >= max(1, len(_contact_emails_sm)) * 0.85)
+                        and len(_unsent_from_data) == 0
+                        and (len(already_sent) >= max(1, n_contacts) * 0.85)
                     )
 
                     if _all_contacted:
@@ -6800,7 +6811,8 @@ class AnchorEngine:
 
                     # ── DEDUP: не создавать задачу если аналогичная уже была за 8 часов ──
                     # Рутинные действия (check_emails, reply) не дедуплицируем — они важны каждый цикл
-                    _NODEDUP_TOOLS = {'check_emails', 'reply_to_outreach_email', 'send_follow_up_email'}
+                    _NODEDUP_TOOLS = {'check_emails', 'reply_to_outreach_email', 'send_follow_up_email',
+                                       'send_outreach_email', 'start_email_campaign'}
                     _skip_dedup = _tool_hint in _NODEDUP_TOOLS
                     _dedup_cutoff = datetime.now(timezone.utc) - timedelta(hours=8)
                     # Стоп-слова: не учитывать при сравнении
@@ -9199,9 +9211,10 @@ class AnchorEngine:
         from models import EmailContact as _EC_scan
         _contacts_raw = session.query(_EC_scan).filter_by(
             user_id=user.id,
-        ).order_by(_EC_scan.created_at.desc()).limit(30).all()
-        _status_prio = {'replied': 0, 'interested': 1, 'contacted': 2, 'new': 3}
-        contacts = sorted(_contacts_raw, key=lambda c: _status_prio.get(c.status or 'new', 4))[:20]
+        ).order_by(_EC_scan.created_at.desc()).limit(50).all()
+        _status_prio = {'new': 0, 'potential': 1, 'interested': 2, 'replied': 3, 'contacted': 4}
+        contacts = sorted(_contacts_raw, key=lambda c: _status_prio.get(c.status or 'new', 5))[:20]
+        _n_total_email_contacts = session.query(_EC_scan).filter_by(user_id=user.id).count()
         contacts_summary = [
             f"{c.name or '?'} <{c.email}> [статус: {c.status or 'new'}] (src={c.source})"
             for c in contacts
@@ -9750,7 +9763,8 @@ class AnchorEngine:
             'recent_messages': recent_messages[:6],
             'recent_proactive_topics': recent_proactive_topics[:8],  # Последние 8 тем для deduplication
             'email_campaigns': email_summary,
-            'known_contacts': contacts_summary[:10],
+            'known_contacts': contacts_summary[:15],
+            'n_total_email_contacts': _n_total_email_contacts,
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
@@ -9767,7 +9781,7 @@ class AnchorEngine:
             'overworked_goals': _overworked_goals,
             'neglected_goals': _neglected_goals,
             'unsent_contacts': [
-                c for c in contacts_summary[:10]
+                c for c in contacts_summary
                 if '<' in c and '>' in c and
                 c.split('<')[1].split('>')[0].strip().lower() not in
                 {e.lower() for e in _already_sent_emails} and

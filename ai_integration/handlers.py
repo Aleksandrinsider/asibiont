@@ -11169,8 +11169,8 @@ async def send_outreach_email(
             return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
 
         # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
-        # 1. Не слать тому, кому уже отправляли из другой кампании последние 30 дней
-        CROSS_CAMPAIGN_COOLDOWN_DAYS = 30
+        # 1. Не слать тому, кому уже отправляли из другой кампании последние 14 дней
+        CROSS_CAMPAIGN_COOLDOWN_DAYS = 14
         cross_existing = session.query(EmailOutreach).filter(
             EmailOutreach.user_id == user.id,
             EmailOutreach.recipient_email == recipient_email,
@@ -11926,7 +11926,7 @@ async def add_email_leads(
 
             # ── ANTI-SPAM: кросс-кампания + bounced/failed ──
             from datetime import datetime as _dt_leads, timezone as _tz_leads
-            CROSS_CAMPAIGN_COOLDOWN_DAYS = 30
+            CROSS_CAMPAIGN_COOLDOWN_DAYS = 14
             cross_exists = session.query(EmailOutreach).filter(
                 EmailOutreach.user_id == user.id,
                 EmailOutreach.recipient_email == email,
