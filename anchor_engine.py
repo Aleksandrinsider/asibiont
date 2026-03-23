@@ -5275,10 +5275,14 @@ class AnchorEngine:
 
             # ── Generic goal ──
             else:
+                _gen_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
                 directives.append({
                     'goal': title, 'agent_domain': 'any',
-                    'tool': 'research_topic' if not _is_tool_failed('research_topic') else 'web_search',
-                    'task': f'Изучи ситуацию по цели «{title}» ({int(progress)}%) и предложи конкретный следующий шаг.',
+                    'tool': _gen_tool,
+                    'task': (f'Конкретный шаг по цели «{title}» (прогресс {int(progress)}%): '
+                             f'вызови {_gen_tool}("{title[:40]}") → '
+                             f'найди релевантные площадки/людей → '
+                             f'save_email_contact или add_task с конкретным действием.'),
                     'reason': 'общая цель',
                 })
 
@@ -6283,7 +6287,31 @@ class AnchorEngine:
                         logger.info("[COORD] force-reply prepended: %s → %s (outreach_id=%s)",
                                     _force_reply_agent, _reply_tool, _pr0.get('outreach_id'))
 
-            logger.info("[COORD] plan accepted as-is (no corrections): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
+            # ── Quality filter: убираем расплывчатые задачи из LLM-плана ──
+            import re as _re_qf
+            _VAGUE_TASK_RE = _re_qf.compile(
+                r'(?:прогресс\s+(?:всего\s+)?\d|'
+                r'поручил[аои].*(?:но|прогресс)|'
+                r'^изучи\s+ситуацию|'
+                r'^(?:проанализируй|исследуй)\s+(?:цель|ситуацию|текущее)|'
+                r'^предложи\s+(?:конкретный\s+)?(?:следующий\s+)?шаг$)',
+                _re_qf.IGNORECASE,
+            )
+            for _qf_step in _plan:
+                _qf_task = (_qf_step.get('task') or '').strip()
+                _qf_tool = (_qf_step.get('tool') or '').strip()
+                if _VAGUE_TASK_RE.search(_qf_task):
+                    _qf_goal = (_qf_step.get('goal') or '').strip()
+                    if _qf_tool:
+                        _qf_step['task'] = (f'Вызови {_qf_tool} для цели «{_qf_goal[:50]}». '
+                                            f'Найди конкретные площадки/людей/данные и сделай следующее действие.')
+                    else:
+                        _qf_step['task'] = (f'Конкретный шаг по цели «{_qf_goal[:50]}»: '
+                                            f'web_search или research_topic → найди данные → сохрани результат.')
+                    logger.info("[COORD] quality-filter: rewrote vague task for %s: %s",
+                                _qf_step.get('agent'), _qf_step['task'][:60])
+
+            logger.info("[COORD] plan accepted (post quality-filter): %s", [(p.get('agent'), p.get('tool')) for p in _plan])
 
             # ── ASI fallback: цели без исполнителя в плане ──
             # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
@@ -6673,9 +6701,15 @@ class AnchorEngine:
                         _task_hint_c = 'займись поиском новых контактов'
                     elif any(w in _ag_task_lc for w in ('пост', 'публик', 'контент', 'текст')):
                         _task_hint_c = 'подготовь контент'
+                    elif any(w in _ag_task_lc for w in ('исследуй', 'research', 'web_search', 'поиск', 'найди')):
+                        _task_hint_c = 'поищи информацию и контакты по теме'
+                    elif any(w in _ag_task_lc for w in ('save_note', 'замет', 'запиш')):
+                        _task_hint_c = 'зафиксируй результаты'
                     else:
-                        # Берём первые слова задачи как подсказку
-                        _task_hint_c = ' '.join(_ag_task.split()[:8])[:60]
+                        # Берём глагол + объект из задачи вместо первых слов
+                        _clean_hint = _ag_task.split('\n')[0].strip()
+                        _clean_hint = _clean_hint.split('→')[0].strip() if '→' in _clean_hint else _clean_hint
+                        _task_hint_c = _clean_hint[:60] if len(_clean_hint) > 10 else ' '.join(_ag_task.split()[:8])[:60]
                     _asi_assign_prompt = (
                         f"Ты — ASI, координатор команды. Обращаешься к {_ag_name} в командном чате.\n"
                         f"Что нужно сделать: {_task_hint_c}\n"
@@ -6742,8 +6776,27 @@ class AnchorEngine:
                     _task_title_short = (_ag_task.split('\n')[0])[:200].strip()
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:20])
-                    # Guard: если задание = название цели → добавляем инструмент для конкретики
+                    # Guard: если задание расплывчатое → переформулируем в конкретное действие
+                    _is_vague_task = False
                     if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:200]:
+                        _is_vague_task = True
+                    elif len(_task_title_short) < 80:
+                        import re as _re_vague
+                        # Ловим наблюдения вместо действий: "прогресс 12%", "поручила", "ситуация"
+                        _VAGUE_PATTERNS = _re_vague.compile(
+                            r'(?:прогресс\s+(?:всего\s+)?\d|'
+                            r'поручил[аои]|'
+                            r'но\s+прогресс|'
+                            r'изучи\s+ситуацию|'
+                            r'(?:проанализируй|исследуй)\s+(?:цель|ситуацию|текущ)|'
+                            r'предложи\s+(?:конкретный\s+)?(?:следующий\s+)?шаг|'
+                            r'нет\s+прогресса|'
+                            r'продвинь\s+цель)',
+                            _re_vague.IGNORECASE,
+                        )
+                        if _VAGUE_PATTERNS.search(_task_title_short):
+                            _is_vague_task = True
+                    if _is_vague_task:
                         if _tool_hint:
                             _task_title_short = f"{_tool_hint.replace('_', ' ').title()}: {_ag_goal_title[:70]}"
                         else:
