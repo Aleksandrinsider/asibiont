@@ -4918,55 +4918,49 @@ class AnchorEngine:
 
     @staticmethod
     def _compute_state_directives(goals: list, data: dict, profiles: list) -> list:
-        """State machine: вычисляет конкретное следующее действие для каждой цели на основе реального состояния БД.
+        """Universal data-driven state machine.
 
-        Возвращает список директив:
-        [{'goal': str, 'tool': str, 'task': str, 'agent_domain': str, 'reason': str}]
+        Вместо хардкодных веток по категориям целей, использует:
+        1. Универсальные state-индикаторы (email, contacts, campaigns)
+        2. Детекцию ПОТРЕБНОСТЕЙ цели (outreach / research / content)
+        3. Подбор агента по capabilities, а не по ключевым словам
+        4. Единый пайплайн для каждой потребности — работает одинаково для ЛЮБОЙ цели
 
-        agent_domain: 'email' | 'research' | 'content' | 'any'
+        Возвращает: [{'goal': str, 'tool': str, 'task': str, 'agent_domain': str, 'reason': str}]
         """
         directives = []
+
+        # ── Universal state extraction ──
         contacts_list = data.get('known_contacts', [])
         n_contacts = data.get('n_total_email_contacts') or len(contacts_list)
         already_sent = set(data.get('already_sent_emails', []))
-        _unsent_from_data = data.get('unsent_contacts', [])
+        unsent_from_data = data.get('unsent_contacts', [])
         email_campaigns = data.get('email_campaigns', [])
         total_sent = data.get('total_emails_sent', 0)
+        pending_replies = data.get('pending_replies', [])
         failed_tools = data.get('failed_tools', {})
         per_history = data.get('per_agent_history', {})
         recent_txt = ' '.join(data.get('recent_actions', [])).lower()
 
-        # ── Детектор деградированных агентов (2 последних записи) ──
-        # Смотрим только 2 последних взаимодействия — если оба провал → деградирован.
-        # Не смотрим всю 48ч историю: иначе агент «вечно деградирован» и никогда не получает шансов.
+        # ── Degraded agents (2 последних провала подряд) ──
         degraded_agents = set()
         for ag_name, hist in per_history.items():
-            _recent2 = list(hist)[-2:]
-            fail_count = sum(1 for h in _recent2 if 'технические трудности' in h.lower() or 'не успел' in h.lower())
-            if fail_count >= 2:
+            _r2 = list(hist)[-2:]
+            if sum(1 for h in _r2 if 'технические трудности' in h.lower() or 'не успел' in h.lower()) >= 2:
                 degraded_agents.add(ag_name)
-                logger.info("[COORD-SM] agent '%s' marked degraded (last 2 = failures)", ag_name)
 
-        # ── Карта агентов по доменам ──
-        # domain → [agent_name] — выбираем первого подходящего
-        EMAIL_CAPS = ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru')
-        RSS_CAPS   = ('rss', 'feed', 'лент')
-        GITHUB_CAPS = ('github', 'gitlab')
-        RESEARCH_CAPS = ('alpha_vantage', 'newsapi', 'news_api')
-
+        # ── Agent domain map ──
         _domain_agents: dict = {'email': [], 'rss': [], 'github': [], 'research': [], 'any': []}
         for p in profiles:
-            caps_lower = [c.lower() for c in p.get('caps', [])]
-            caps_str = ' '.join(caps_lower)
+            caps_str = ' '.join(c.lower() for c in p.get('caps', []))
             _name = p.get('name', '')
-            # Деградация = логирование, не блокировка: агент всегда получает шанс работать
-            if any(w in caps_str for w in EMAIL_CAPS):
+            if any(w in caps_str for w in ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru')):
                 _domain_agents['email'].append(_name)
-            if any(w in caps_str for w in RSS_CAPS):
+            if any(w in caps_str for w in ('rss', 'feed', 'лент')):
                 _domain_agents['rss'].append(_name)
-            if any(w in caps_str for w in GITHUB_CAPS):
+            if any(w in caps_str for w in ('github', 'gitlab')):
                 _domain_agents['github'].append(_name)
-            if any(w in caps_str for w in RESEARCH_CAPS):
+            if any(w in caps_str for w in ('alpha_vantage', 'newsapi', 'news_api')):
                 _domain_agents['research'].append(_name)
             _domain_agents['any'].append(_name)
 
@@ -4976,13 +4970,34 @@ class AnchorEngine:
         def _is_tool_failed(tool: str) -> bool:
             return failed_tools.get(tool, 0) >= 2
 
-        _PEOPLE_KW = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг', 'участник', 'лид')
-        _FINANCE_KW = ('нефт', 'газ', 'рынок', 'биржа', 'акции', 'финанс', 'инвест', 'котировк', 'oil', 'stock', 'forex', 'крипто')
-        _NEWS_KW = ('новост', 'мониторинг', 'тренды', 'медиа', 'пресс', 'обзор')
-        _CONTENT_KW = ('контент', 'smm', 'пост', 'публикац', 'канал', 'telegram')
-        _DEV_KW = ('разработ', 'программ', 'developer', 'репозитор', 'код')
-        _SALES_KW = ('продаж', 'партнёр', 'b2b', 'outreach', 'сделк', 'переговор')
+        # ── Universal email pipeline state ──
+        has_unsent = len(unsent_from_data) > 0
+        has_pending_replies = bool(pending_replies)
+        has_active_campaign = any('отправлено' in ec or 'active' in ec.lower() for ec in email_campaigns)
+        has_campaign_replies = has_active_campaign and any(
+            'ответов=' in ec and 'ответов=0' not in ec for ec in email_campaigns
+        )
+        has_github = bool(_domain_agents.get('github'))
+        contacts_exhausted = (
+            n_contacts > 0 and not has_unsent
+            and len(already_sent) >= max(1, n_contacts) * 0.85
+        )
 
+        # ── Goal needs detection (universal keywords) ──
+        _OUTREACH_KW = (
+            'пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг',
+            'участник', 'лид', 'продаж', 'партнёр', 'b2b', 'outreach', 'сделк', 'переговор',
+            'разработчик', 'developer', 'кандидат', 'найм', 'наём', 'рассылк', 'привлеч',
+            'продвижен', 'промо', 'реклам', 'маркетинг',
+        )
+        _RESEARCH_KW = (
+            'нефт', 'газ', 'рынок', 'биржа', 'акции', 'финанс', 'инвест', 'котировк',
+            'oil', 'stock', 'forex', 'крипто', 'новост', 'мониторинг', 'тренды', 'медиа',
+            'пресс', 'обзор', 'аналитик', 'исследован',
+        )
+        _CONTENT_KW = ('контент', 'smm', 'пост', 'публикац', 'канал', 'блог')
+
+        # ── Process each goal with universal pipelines ──
         for g in goals[:5]:
             title = g.get('title', '')
             title_l = title.lower()
@@ -4992,334 +5007,200 @@ class AnchorEngine:
             mc = g.get('metric_current', 0) or 0
             mt = g.get('metric_target') or 0
 
-            # ── PEOPLE / OUTREACH goals ──
-            if any(w in full_l for w in _PEOPLE_KW) or any(w in full_l for w in _SALES_KW):
-                unsent = n_contacts - len(already_sent & {c.split('<')[1].rstrip('>').strip() for c in contacts_list if '<' in c})
-                has_active_campaign = any('отправлено' in ec or 'active' in ec.lower() for ec in email_campaigns)
-                email_agent = _agent_for('email') or _agent_for('github') or _agent_for('any')
+            # ── UNIVERSAL: High progress → finalize (any goal type) ──
+            if progress >= 70 and mt:
+                directives.append({
+                    'goal': title, 'agent_domain': 'any',
+                    'tool': 'update_goal_progress',
+                    'task': (
+                        f'Цель «{title}» на {int(progress)}%. ПОДВЕДИ ИТОГ: '
+                        f'save_note с подробным отчётом (5+ пунктов) → '
+                        f'update_goal_progress(new_progress=100, notes="итог"). '
+                        f'Если данных мало — web_search → потом итог.'
+                    ),
+                    'reason': f'прогресс {int(progress)}% → завершение',
+                })
+                continue
 
-                if not email_agent:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'find_relevant_contacts_for_task',
-                        'task': f'Найди потенциальных пользователей для цели «{title}» через поиск контактов.',
-                        'reason': 'нет email-агента, fallback на поиск контактов',
-                    })
-                    continue
+            needs_outreach = any(w in full_l for w in _OUTREACH_KW)
+            needs_research = any(w in full_l for w in _RESEARCH_KW)
+            needs_content = any(w in full_l for w in _CONTENT_KW)
 
-                # Есть GitHub-capable агент
-                # Check if ANY GitHub agent exists (not necessarily the email_agent itself)
-                _has_github_agent = bool(_domain_agents.get('github'))
-                _github_agent_name = (_domain_agents.get('github') or [''])[0]
-                if _has_github_agent:
-                    # ПРИОРИТЕТ 0: если есть уже сохранённые контакты без отправленных писем →
-                    # сначала отправить им письма, не тратить цикл на новый поиск
-                    _sent_set = {e.lower() for e in data.get('already_sent_emails', [])}
-                    _unsent_contacts = []
-                    for _c_str in contacts_list:
-                        if '<' in _c_str and '>' in _c_str:
-                            _c_email = _c_str.split('<')[1].split('>')[0].strip().lower()
-                            if _c_email and _c_email not in _sent_set:
-                                _unsent_contacts.append(_c_str)
-                    # Fallback: если в top-N не видны, берём из полного unsent_contacts
-                    if not _unsent_contacts and _unsent_from_data:
-                        _unsent_contacts = list(_unsent_from_data)
-                    if _unsent_contacts:
-                        _unsent_names = ', '.join(
-                            _c.split('<')[0].strip() for _c in _unsent_contacts[:3]
-                        )
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'send_outreach_email',
-                            'task': (
-                                f'В базе есть {len(_unsent_contacts)} контактов БЕЗ отправленных писем: {_unsent_names}...\n'
-                                f'🚨 НЕМЕДЛЕННО отправь им письма — НЕ делай новый GitHub-поиск!\n'
-                                f'ШАГ 1: list_email_contacts(status="new") — увидишь список\n'
-                                f'ШАГ 2: send_outreach_email(goal="{title[:50]}", limit={min(len(_unsent_contacts), 5)}) '
-                                f'— это отправит персональные письма всем новым контактам\n'
-                                f'ШАГ 3: update_goal_progress после отправки'
-                            ),
-                            'reason': f'{len(_unsent_contacts)} контактов без писем (src=GitHub/другой)',
-                        })
-                        continue
-
-                    # Нет несотправленных → ищем новых через GitHub
-                    # Формируем query под реальную тематику цели
-                    _gh_title_kw = title_l + ' ' + desc_l[:80]
-                    if any(w in _gh_title_kw for w in ('ai', 'бот', 'bot', 'автоном', 'нейро', 'ml', 'machine')):
-                        _gh_query = 'autonomous agent language:python repos:>10 followers:>10'
-                    elif any(w in _gh_title_kw for w in ('тест', 'test', 'qa', 'beta', 'пользовател')):
-                        _gh_query = 'software tester language:python repos:>5 followers:>5'
-                    elif any(w in _gh_title_kw for w in ('разработ', 'developer', 'engineer', 'программ')):
-                        _gh_query = 'indie developer language:python repos:>20 followers:>15'
-                    elif any(w in _gh_title_kw for w in ('saas', 'стартап', 'startup', 'product')):
-                        _gh_query = 'saas builder language:python repos:>10 followers:>20'
-                    else:
-                        _gh_query = 'language:python repos:>10 followers:>10'
-                    directives.append({
-                        'goal': title, 'agent_domain': 'github',
-                        'tool': 'run_agent_action',
-                        'task': (
-                            f'GitHub-поиск новых контактов для цели «{title}» ({int(mc)}/{int(mt) if mt else "?"}).\n'
-                            f'ШАГ 1: run_agent_action(action="search_users", params={{"query": "{_gh_query}"}}\n'
-                            f'ШАГ 2: для КАЖДОГО найденного WITH EMAIL → save_email_contact(name=..., email=..., source="GitHub")\n'
-                            f'ШАГ 3: send_outreach_email для каждого сохранённого контакта\n'
-                            f'ВАЖНО: query должен содержать ТОЛЬКО GitHub-квалификаторы (language:, repos:, followers:, location:)\n'
-                            f'ЗАПРЕЩЕНО передавать в query: email-адреса, имена людей из переписки, названия задач!'
-                        ),
-                        'reason': f'GitHub доступен ({_github_agent_name}), прогресс {int(mc)}/{int(mt) if mt else "?"}',
-                    })
-                    continue
-
-                # Нет контактов → найти (с ротацией стратегий чтобы не зацикливаться)
-                if n_contacts == 0:
-                    # Ротация: определяем что уже пробовали по тексту истории
-                    _rt = recent_txt  # уже lower
-                    _tried_direct   = any(w in _rt for w in ('find_relevant', 'save_email_contact', 'контакт'))
-                    _tried_telegram = any(w in _rt for w in ('telegram', 'тг', 'канал', 'group', 'группа'))
-                    _tried_reddit   = any(w in _rt for w in ('reddit', 'форум', 'community', 'hackernews'))
-                    _tried_content  = any(w in _rt for w in ('create_post', 'публикац', 'контент-', 'content_campaign'))
-                    # Выбираем стратегию по ротации
-                    if not _tried_direct:
-                        _sm_tool = 'find_relevant_contacts_for_task'
-                        _sm_task = (f'Найди контакты потенциальных пользователей для «{title}». '
-                                    f'Ищи в Telegram-группах по теме, на форумах, HH.ru, в сообществах разработчиков. '
-                                    f'Сохрани через save_email_contact.')
-                        _sm_reason = 'нет контактов — прямой поиск (стратегия А)'
-                    elif not _tried_telegram:
-                        _sm_tool = 'research_topic'
-                        _gt_short = title_l[:40]
-                        _sm_task = (f'Исследуй: где тусуются люди для цели «{title}»? '
-                                    f'Ищи: "{_gt_short} telegram community", "{_gt_short} discord server", '
-                                    f'"{_gt_short} reddit forum", "{_gt_short} slack group". '
-                                    f'По каждому найденному — add_task с конкретным планом "вступить и написать участникам".')
-                        _sm_reason = 'нет контактов — поиск сообществ (стратегия Б)'
-                    elif not _tried_content:
-                        _sm_tool = 'create_post'
-                        _sm_task = (f'Создай полезный контент-магнит для цели «{title}»: '
-                                    f'короткий пост или статья на тему "{title_l[:50]}" с вопросом в конце (кто хочет протестировать?). '
-                                    f'Вызови create_post, затем publish_to_telegram если канал подключён, иначе save_note с текстом поста.')
-                        _sm_reason = 'нет контактов — контент-магнит (стратегия В)'
-                    elif not _tried_reddit:
-                        _sm_tool = 'web_search'
-                        _gt_short = title_l[:40]
-                        _sm_task = (f'Найди площадки для outreach цели «{title}»: '
-                                    f'web_search "site:reddit.com {_gt_short}" и "site:t.me {_gt_short}". '
-                                    f'Для каждой найденной площадки — add_task с инструкцией "написать в чат/ветку". '
-                                    f'Сохрани лучшие контакты через save_email_contact.')
-                        _sm_reason = 'нет контактов — Reddit/форумы (стратегия Г)'
-                    else:
-                        # Все стратегии использованы — смена сегмента
-                        _sm_tool = 'research_topic'
-                        _sm_task = (f'Предыдущие стратегии для «{title}» не дали контактов. '
-                                    f'СМЕНА СЕГМЕНТА: подумай о ДРУГОЙ целевой аудитории или формате предложения. '
-                                    f'research_topic("альтернативные каналы привлечения для {title_l[:40]}") '
-                                    f'→ add_task с новым направлением.')
-                        _sm_reason = 'все стратегии использованы — смена сегмента'
-                    directives.append({
-                        'goal': title, 'agent_domain': 'any',
-                        'tool': _sm_tool,
-                        'task': _sm_task,
-                        'reason': _sm_reason,
-                    })
-                # Есть контакты, ни одного письма не отправлено
-                elif total_sent == 0 and n_contacts > 0:
-                    # Получаем campaign_id из строки данных если кампания активна
-                    _active_cid = ''
-                    for _ec_str in email_campaigns:
-                        import re as _re_sm
-                        _m_cid = _re_sm.search(r'#(\d+)', _ec_str)
-                        if _m_cid:
-                            _active_cid = f' (campaign_id={_m_cid.group(1)})'
-                            break
-                    _no_campaign_note = (f'Активная кампания{_active_cid} уже есть. '
-                                        if has_active_campaign else '')
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'send_outreach_email',
-                        'task': (f'В базе {n_contacts} контактов, но не отправлено НИ ОДНОГО письма. '
-                                 f'{_no_campaign_note}'
-                                 f'НЕ вызывай start_email_campaign — кампания не отправляет письма, только создаёт шаблон. '
-                                 f'ВЫЗОВИ send_outreach_email напрямую для персональной рассылки контактам из базы. '
-                                 f'Параметры: goal="{title[:50]}", limit={min(n_contacts, 5)}.'),
-                        'reason': f'{n_contacts} контактов в базе, emails_sent=0',
-                    })
-                # Кампания активна, есть ответы → обработать
-                elif has_active_campaign and any('ответов=' in ec and 'ответов=0' not in ec for ec in email_campaigns):
+            # ── UNIVERSAL OUTREACH PIPELINE (для ЛЮБОЙ цели, не только "people") ──
+            if needs_outreach:
+                # Приоритет 1: есть ответы → ответить
+                if has_campaign_replies:
                     directives.append({
                         'goal': title, 'agent_domain': 'email',
                         'tool': 'reply_to_outreach_email',
-                        'task': (f'Есть ответы на письма по кампании. '
-                                f'Вызови check_emails → ПРОЧИТАЙ текст каждого ответа → '
-                                f'ВОПРОС: ответь на конкретный вопрос через reply_to_outreach_email. '
-                                f'ИНТЕРЕС: reply_to + negotiate_by_email. '
-                                f'ОТКАЗ: НЕ отвечай, система отпишет автоматически.'),
+                        'task': (
+                            f'Есть ответы на письма. check_emails → прочитай текст → '
+                            f'ВОПРОС: reply_to_outreach_email. ИНТЕРЕС: reply_to + negotiate_by_email. '
+                            f'ОТКАЗ: НЕ отвечай.'
+                        ),
                         'reason': 'есть ответы на письма',
                     })
-                # Кампания активна, письма отправлены — выбираем умную стратегию
-                else:
-                    # Вычисляем пересечение: какие из известных контактов уже отправлены
-                    _contact_emails_sm = set()
-                    for _c_sm in contacts_list:
-                        if '<' in _c_sm and '>' in _c_sm:
-                            _em_sm = _c_sm.split('<')[1].split('>')[0].strip().lower()
-                            _contact_emails_sm.add(_em_sm)
-                    # Также учитываем unsent_contacts из полного списка
-                    _unsent_set_sm = _contact_emails_sm - already_sent
-                    if not _unsent_set_sm and _unsent_from_data:
-                        # В top-N не видны unsent, но в полном списке есть
-                        for _ufd in _unsent_from_data:
-                            if '<' in _ufd and '>' in _ufd:
-                                _unsent_set_sm.add(_ufd.split('<')[1].split('>')[0].strip().lower())
-                    _all_contacted = (
-                        len(_unsent_set_sm) == 0 and n_contacts > 0
-                        and len(_unsent_from_data) == 0
-                        and (len(already_sent) >= max(1, n_contacts) * 0.85)
-                    )
+                    continue
 
-                    if _all_contacted:
-                        # Все известные контакты уже получили письма → ищем НОВЫХ из других источников
-                        import re as _re_smd  # noqa: F811
-                        _camp_ids = [_re_smd.search(r'#(\d+)', ec).group(1) for ec in email_campaigns if _re_smd.search(r'#(\d+)', ec)]
-                        _camp_hint = f' (campaign_id={_camp_ids[0]})' if _camp_ids else ''
+                # Приоритет 2: есть несотправленные контакты → отправить
+                if has_unsent:
+                    _names = ', '.join(c.split('<')[0].strip() for c in unsent_from_data[:3])
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'send_outreach_email',
+                        'task': (
+                            f'{len(unsent_from_data)} контактов БЕЗ писем: {_names}...\n'
+                            f'send_outreach_email(goal="{title[:50]}", limit={min(len(unsent_from_data), 5)})\n'
+                            f'Отправлено: {int(total_sent)}, прогресс: {int(mc)}/{int(mt) or "?"}'
+                        ),
+                        'reason': f'{len(unsent_from_data)} несотправленных контактов',
+                    })
+                    continue
+
+                # Приоритет 3: база исчерпана → найти новых
+                if contacts_exhausted:
+                    if has_github:
+                        directives.append({
+                            'goal': title, 'agent_domain': 'github',
+                            'tool': 'run_agent_action',
+                            'task': (
+                                f'БАЗА ИСЧЕРПАНА ({n_contacts} контактов, отправлено {int(total_sent)}).\n'
+                                f'run_agent_action(action="search_users", params={{"query":"<подбери под цель>"}}) '
+                                f'→ save_email_contact → send_outreach_email.\n'
+                                f'ВАЖНО: query = ТОЛЬКО GitHub-квалификаторы (language:, repos:, followers:, location:).'
+                            ),
+                            'reason': f'база исчерпана, GitHub-поиск новых',
+                        })
+                    else:
                         directives.append({
                             'goal': title, 'agent_domain': 'email',
                             'tool': 'find_relevant_contacts_for_task',
                             'task': (
-                                f'БАЗА ИСЧЕРПАНА: {n_contacts} контактов уже получили письма '
-                                f'(отправлено {int(total_sent)}, прогресс: {int(mc)}/{int(mt) if mt else "?"}).\n'
-                                f'ОБЯЗАТЕЛЬНЫЙ СЛЕДУЮЩИЙ ШАГ — найти НОВЫХ людей из ДРУГОГО источника:\n'
-                                f'  • Используй find_relevant_contacts_for_task с НОВЫМ запросом (Telegram-группы, форумы, HH.ru, GitHub)\n'
-                                f'  • Не повторяй старый запрос — попробуй: "{title[:40]} telegram group", "beta testers", "QA engineers"\n'
-                                f'  • После нахождения → сохрани через save_email_contact → отправь через send_outreach_email{_camp_hint}\n'
-                                f'  • Или вызови check_emails чтобы проверить — может кто-то уже ответил'
+                                f'БАЗА ИСЧЕРПАНА ({n_contacts} контактов). '
+                                f'find_relevant_contacts_for_task с НОВЫМ запросом '
+                                f'(Telegram-группы, форумы, GitHub, HH.ru) → save_email_contact → send_outreach_email.'
                             ),
-                            'reason': f'все {n_contacts} известных контактов emailed, ищем новых',
+                            'reason': f'база исчерпана, ищем через другие источники',
                         })
-                    else:
-                        # Есть несendted контакты → отправить именно им
-                        _unsent_list = sorted(list(_unsent_set_sm))[:5]
-                        _unsent_hint = (
-                            f' ЕЩЁ НЕ ПОЛУЧИЛИ ПИСЬМА: {", ".join(_unsent_list)}.' if _unsent_list
-                            else f' Отправь тем {len(_unsent_set_sm)} контактам из базы, кто ещё не получал.'
+                    continue
+
+                # Приоритет 4: нет контактов → стратегия привлечения
+                if n_contacts == 0:
+                    _tried = {
+                        'find': any(w in recent_txt for w in ('find_relevant', 'save_email_contact', 'контакт')),
+                        'community': any(w in recent_txt for w in ('telegram', 'тг', 'канал', 'group', 'reddit', 'форум')),
+                        'content': any(w in recent_txt for w in ('create_post', 'публикац', 'контент')),
+                    }
+                    if has_github and not _tried['find']:
+                        tool, task = 'run_agent_action', (
+                            f'GitHub-поиск контактов для «{title}»: '
+                            f'run_agent_action(search_users) → save_email_contact → send_outreach_email.'
                         )
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'send_outreach_email',
-                            'task': (
-                                f'Продолжи outreach по цели «{title}».\n'
-                                f'{_unsent_hint}\n'
-                                f'Вызови send_outreach_email для каждого из них персонально (тема + тело письма).\n'
-                                f'Уже отправлено: {int(total_sent)} писем, прогресс: {int(mc)}/{int(mt) if mt else "?"}'
-                            ),
-                            'reason': f'есть {len(_unsent_set_sm)} несendted контактов в базе',
-                        })
-
-            # ── RESEARCH / FINANCE / NEWS goals ──
-            elif any(w in full_l for w in _FINANCE_KW) or any(w in full_l for w in _NEWS_KW):
-                # Выбираем аналитика: RSS → research → any
-                research_agent = _agent_for('rss') or _agent_for('research') or _agent_for('any')
-
-                # ── HIGH PROGRESS: цель ≥70% → подводим итог, не исследуем заново ──
-                if progress >= 70:
-                    tool = 'update_goal_progress'
-                    task = (
-                        f'Цель «{title}» уже на {int(progress)}%. НЕ НУЖНО заново исследовать. '
-                        f'ЗАДАЧА: подведи ФИНАЛЬНЫЙ ИТОГ. '
-                        f'1) Вызови save_note с подробным структурированным отчётом (заголовок «{title[:50]} — финальный отчёт», '
-                        f'содержимое — минимум 5 пунктов: ключевые факты, тренды, риски, прогнозы, выводы). '
-                        f'2) Вызови update_goal_progress(goal_title="{title[:50]}", new_progress=100, '
-                        f'notes="Итог: [ключевые выводы]"). '
-                        f'Если данных недостаточно — сначала сделай web_search, потом п.1 и п.2.'
-                    )
+                    elif not _tried['find']:
+                        tool, task = 'find_relevant_contacts_for_task', (
+                            f'Найди контакты для «{title}» в Telegram/форумах/сообществах → save_email_contact.'
+                        )
+                    elif not _tried['community']:
+                        tool, task = 'research_topic', (
+                            f'Найди сообщества для «{title}» (Telegram, Discord, Reddit) → add_task.'
+                        )
+                    elif not _tried['content']:
+                        tool, task = 'create_post', (
+                            f'Контент-магнит для «{title}»: полезный пост с CTA → publish_to_telegram.'
+                        )
+                    else:
+                        tool, task = 'research_topic', (
+                            f'Все стратегии для «{title}» опробованы. СМЕНА СЕГМЕНТА: другая аудитория/формат.'
+                        )
                     directives.append({
-                        'goal': title, 'agent_domain': 'research',
-                        'tool': tool, 'task': task,
-                        'reason': f'прогресс {int(progress)}% — пора завершать цель, не исследовать заново',
+                        'goal': title, 'agent_domain': 'any', 'tool': tool, 'task': task,
+                        'reason': 'нет контактов — ротация стратегий',
+                    })
+                    continue
+
+                # Приоритет 5: есть контакты, 0 отправок → начать рассылку
+                if total_sent == 0 and n_contacts > 0:
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'send_outreach_email',
+                        'task': (
+                            f'{n_contacts} контактов, 0 писем отправлено. '
+                            f'send_outreach_email(goal="{title[:50]}", limit={min(n_contacts, 5)}).'
+                        ),
+                        'reason': f'{n_contacts} контактов, emails_sent=0',
+                    })
+                    continue
+
+                # Дефолт: отправить из known_contacts
+                _kc_unsent = [
+                    c for c in contacts_list if '<' in c and '>' in c
+                    and c.split('<')[1].split('>')[0].strip().lower() not in already_sent
+                ]
+                if _kc_unsent:
+                    directives.append({
+                        'goal': title, 'agent_domain': 'email',
+                        'tool': 'send_outreach_email',
+                        'task': (
+                            f'Отправь письма {len(_kc_unsent)} контактам для «{title}». '
+                            f'Отправлено: {int(total_sent)}, прогресс: {int(mc)}/{int(mt) or "?"}'
+                        ),
+                        'reason': f'{len(_kc_unsent)} unsent в known_contacts',
                     })
                 else:
-                    # Проверяем — у RSS-агента лента финансовая или нет
-                    rss_is_finance = False
-                    for p in profiles:
-                        if p.get('name') == research_agent:
-                            agent_caps_str = ' '.join(c.lower() for c in p.get('caps', []))
-                            rss_is_finance = any(w in agent_caps_str for w in ('finance', 'rbc', 'tass', 'oil', 'moex', 'finam'))
-
-                    if rss_is_finance and not _is_tool_failed('run_agent_action'):
-                        tool = 'run_agent_action'
-                        task = (f'Запусти run_agent_action для получения финансовых данных из RSS-ленты. '
-                                f'Затем вызови update_goal_progress(notes="ключевые данные") для цели «{title}».')
-                    else:
-                        tool = 'web_search' if _is_tool_failed('research_topic') else 'research_topic'
-                        task = (
-                            f'Для цели «{title}» ({int(progress)}%): вызови {tool} с запросом о '
-                            f'{title[:60]}. '
-                            f'После получения данных — ОБЯЗАТЕЛЬНО вызови save_note с ПОДРОБНЫМ отчётом '
-                            f'(не менее 5 пунктов: цены, тренды, прогнозы, ключевые игроки, выводы). '
-                            f'Заголовок заметки: «{title[:50]} — отчёт». '
-                            f'Затем вызови update_goal_progress(notes="краткий итог").'
-                        )
                     directives.append({
-                        'goal': title, 'agent_domain': 'research',
-                        'tool': tool, 'task': task,
-                        'reason': 'финансовый/новостной анализ через research_topic/web_search',
+                        'goal': title, 'agent_domain': 'any',
+                        'tool': 'find_relevant_contacts_for_task',
+                        'task': f'Найди новых контактов для «{title}» → save_email_contact → send_outreach_email.',
+                        'reason': 'все known_contacts отправлены',
                     })
+                continue
 
-            # ── CONTENT goals ──
-            elif any(w in full_l for w in _CONTENT_KW):
+            # ── UNIVERSAL RESEARCH PIPELINE (для ЛЮБОЙ аналитической/мониторинговой цели) ──
+            if needs_research:
+                _rss_agent = _agent_for('rss') or _agent_for('research')
+                if _rss_agent and not _is_tool_failed('run_agent_action'):
+                    tool = 'run_agent_action'
+                elif not _is_tool_failed('research_topic'):
+                    tool = 'research_topic'
+                else:
+                    tool = 'web_search'
+                directives.append({
+                    'goal': title, 'agent_domain': 'research',
+                    'tool': tool,
+                    'task': (
+                        f'Исследуй «{title}» ({int(progress)}%): {tool} → '
+                        f'save_note с подробным отчётом (5+ пунктов: данные, тренды, прогнозы, выводы) → '
+                        f'update_goal_progress.'
+                    ),
+                    'reason': 'аналитика/мониторинг',
+                })
+                continue
+
+            # ── UNIVERSAL CONTENT PIPELINE ──
+            if needs_content:
                 directives.append({
                     'goal': title, 'agent_domain': 'content',
                     'tool': 'generate_marketing_content',
-                    'task': f'Создай контент для цели «{title}». Вызови generate_marketing_content, затем create_post.',
-                    'reason': 'контент/smm цель',
+                    'task': (
+                        f'Создай контент для «{title}»: generate_marketing_content → '
+                        f'create_post → publish (telegram/discord если подключено).'
+                    ),
+                    'reason': 'контент/публикация',
                 })
+                continue
 
-            # ── LEARNING goals ──
-            elif any(w in full_l for w in ('изучить', 'научиться', 'курс', 'обучен', 'навык', 'учёб',
-                                           'learn', 'study', 'англий', 'язык')):
-                directives.append({
-                    'goal': title, 'agent_domain': 'any',
-                    'tool': 'web_search' if not _is_tool_failed('web_search') else 'research_topic',
-                    'task': (f'Для учебной цели «{title}»: найди лучшие ресурсы/курсы/материалы '
-                             f'через web_search → создай план обучения через add_task (разбей на этапы) '
-                             f'→ save_note с результатами.'),
-                    'reason': 'учебная цель',
-                })
-
-            # ── HEALTH / FITNESS goals ──
-            elif any(w in full_l for w in ('спорт', 'тренировк', 'похуд', 'здоровь', 'бег',
-                                           'fitness', 'health', 'диет', 'калори')):
-                directives.append({
-                    'goal': title, 'agent_domain': 'any',
-                    'tool': 'web_search' if not _is_tool_failed('web_search') else 'research_topic',
-                    'task': (f'Для цели здоровья «{title}»: найди рекомендации/программы '
-                             f'через web_search → создай пошаговый план через add_task '
-                             f'→ set_reminder для регулярных напоминаний.'),
-                    'reason': 'здоровье/спорт цель',
-                })
-
-            # ── DEV goals ──
-            elif any(w in full_l for w in _DEV_KW):
-                gh_agent = _agent_for('github') or _agent_for('any')
-                directives.append({
-                    'goal': title, 'agent_domain': 'github',
-                    'tool': 'run_agent_action',
-                    'task': f'Для цели «{title}» используй run_agent_action (GitHub API) для поиска разработчиков.',
-                    'reason': 'dev/code цель',
-                })
-
-            # ── Generic goal ──
-            else:
-                _gen_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
-                directives.append({
-                    'goal': title, 'agent_domain': 'any',
-                    'tool': _gen_tool,
-                    'task': (f'Конкретный шаг по цели «{title}» (прогресс {int(progress)}%): '
-                             f'вызови {_gen_tool}("{title[:40]}") → '
-                             f'найди релевантные площадки/людей → '
-                             f'save_email_contact или add_task с конкретным действием.'),
-                    'reason': 'общая цель',
-                })
+            # ── UNIVERSAL FALLBACK: координатор решает сам ──
+            _fb_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
+            directives.append({
+                'goal': title, 'agent_domain': 'any',
+                'tool': _fb_tool,
+                'task': (
+                    f'Цель «{title}» ({int(progress)}%): определи лучший подход '
+                    f'исходя из описания цели и доступных интеграций. '
+                    f'{_fb_tool}("...") → save_note/add_task с конкретными результатами → update_goal_progress.'
+                ),
+                'reason': 'универсальный подход',
+            })
 
         return directives
 
@@ -5398,7 +5279,7 @@ class AnchorEngine:
             )
             _recent = data.get('recent_actions', [])
             _recent_txt = '\n'.join(_recent[-5:]) if _recent else 'нет'
-            _known_contacts = len(data.get('known_contacts', []))
+            _known_contacts = data.get('n_total_email_contacts') or len(data.get('known_contacts', []))
             _email_sent = data.get('total_emails_sent', 0)
             _failed_tools = data.get('failed_tools', {})
             _failed_str = ', '.join(f"{t}({n}x)" for t, n in _failed_tools.items()) if _failed_tools else 'нет'
