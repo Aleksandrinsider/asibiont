@@ -545,10 +545,21 @@ async def _refresh_one_avatar(bot, tg_id):
             # Skip if tg_avatar_data is already cached — avoid redundant TG API calls.
             # custom_avatar (user-uploaded) takes priority, but we still cache tg_avatar_data
             # in case user removes their custom avatar later.
-            if getattr(_u_r, 'tg_avatar_data', None):
-                # Already cached. Only fill first_name if missing (uses get_chat below).
+            _tg_av_cached = getattr(_u_r, 'tg_avatar_data', None)
+            if _tg_av_cached and _tg_av_cached != '__no_avatar__':
+                # Already has real bytes cached. Only fill first_name if missing.
                 if _u_r.first_name:
                     return  # Nothing to do
+            if _tg_av_cached == '__no_avatar__':
+                # Sentinel was set — skip unless it's stale (re-try once a week)
+                _updated = getattr(_u_r, 'updated_at', None)
+                import datetime
+                _stale = (not _updated) or (_updated < datetime.datetime.utcnow() - datetime.timedelta(days=7))
+                if not _stale:
+                    return  # Still fresh sentinel, don't retry
+                # Stale sentinel — clear it and retry below
+                logger.debug(f"[bg] Retrying stale __no_avatar__ sentinel for {tg_id}")
+                _u_r.tg_avatar_data = None
 
             _file_id = None
 
@@ -6738,9 +6749,8 @@ async def api_avatar_handler(request):
                             headers={'Cache-Control': 'public, max-age=1800'}
                         )
                 # No avatar available — trigger background refresh to populate tg_avatar_data for next time
-                if getattr(_u2, 'photo_url', None) == '__no_avatar__':
-                    return _default_avatar_response()
-                # Has file_id or unknown — trigger background refresh and return 404 now
+                # For __no_avatar__ sentinel: already returned 404 above — don't re-trigger
+                # But DO trigger for users with NULL tg_avatar_data (first-time refresh)
                 bot = request.app.get('bot')
                 if bot:
                     asyncio.create_task(_refresh_one_avatar(bot, telegram_id))

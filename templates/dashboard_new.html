@@ -14751,7 +14751,11 @@ else:
                                             const baseSrc = img.src.split('?')[0];
                                             const fallback = img.nextElementSibling;
                                             img.onload = function() { img.style.display = ''; if (fallback) fallback.style.display = 'none'; };
-                                            img.onerror = null;
+                                            // Keep onerror so if retry also fails, fallback initial-letter div stays visible
+                                            img.onerror = function() {
+                                                img.style.display = 'none';
+                                                if (fallback) fallback.style.display = 'flex';
+                                            };
                                             img.src = baseSrc + '?t=' + Date.now();
                                             retried++;
                                         }
