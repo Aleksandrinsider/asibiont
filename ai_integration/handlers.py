@@ -840,14 +840,17 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         context.update(action="add_task", task=task, result=result_msg)
         logger.info(f"[ADD_TASK] Updated dialog context with task '{task.title}'")
 
-    # === Векторная память ===
+    # === Векторная память (fire-and-forget, не блокирует event loop) ===
     try:
-        from ai_integration.vector_memory import store_memory_sync as _vmem_at
+        import asyncio as _aio_at
+        from ai_integration.vector_memory import store_memory as _vmem_at
         _desc_at = f" {description.strip()[:100]}" if description and description.strip() else ""
         _meta_at = {'type': 'task', 'task_id': str(task_id)}
         if task.goal_id:
             _meta_at['goal_id'] = str(task.goal_id)
-        _vmem_at(user_id, f"Задача создана: «{title}».{_desc_at}".strip(), _meta_at)
+        _aio_at.get_running_loop().create_task(
+            _vmem_at(user_id, f"Задача создана: «{title}».{_desc_at}".strip(), _meta_at)
+        )
     except Exception as _e:
         logger.debug(f"[ADD_TASK] Vector memory skipped: {_e}")
 
@@ -896,10 +899,13 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         )
         session.add(note)
         session.commit()
-        # === Векторная память ===
+        # === Векторная память (fire-and-forget, не блокирует event loop) ===
         try:
-            from ai_integration.vector_memory import store_memory_sync as _vmem_sn
-            _vmem_sn(user_id, f"Заметка: «{note.title}». {content[:200]}", {'type': 'note', 'note_id': str(note.id)})
+            import asyncio as _aio_sn
+            from ai_integration.vector_memory import store_memory as _vmem_sn
+            _aio_sn.get_running_loop().create_task(
+                _vmem_sn(user_id, f"Заметка: «{note.title}». {content[:200]}", {'type': 'note', 'note_id': str(note.id)})
+            )
         except Exception as _e:
             logger.debug(f"[SAVE_NOTE] Vector memory skipped: {_e}")
         return f"Заметка сохранена: «{note.title}»"
