@@ -599,9 +599,10 @@ async def _refresh_one_avatar(bot, tg_id):
                 except Exception as e:
                     logger.debug(f"[bg] download avatar failed {tg_id}: {e}")
             else:
-                # No photo found — mark as checked so we don't retry every time
-                if not _u_r.photo_url or _u_r.photo_url == '__no_avatar__':
-                    _u_r.photo_url = '__no_avatar__'
+                # No photo found — set sentinel in tg_avatar_data so we don't retry on every request
+                logger.info(f"[bg] No avatar found for {tg_id}, marking tg_avatar_data sentinel")
+                _u_r.tg_avatar_data = '__no_avatar__'
+                _u_r.photo_url = '__no_avatar__'
 
             _db_r.commit()
         finally:
@@ -6700,10 +6701,14 @@ async def api_avatar_handler(request):
         try:
             _u2 = _db2.query(User).filter_by(telegram_id=telegram_id).first()
             if _u2:
+                _tg_cache = getattr(_u2, 'tg_avatar_data', None)
+                # Sentinel: tried and confirmed no avatar
+                if _tg_cache == '__no_avatar__':
+                    return _default_avatar_response()
                 # Serve cached TG avatar bytes if available (highest priority after custom_avatar)
-                if getattr(_u2, 'tg_avatar_data', None):
+                if _tg_cache:
                     import base64 as _b64_h
-                    _parts = _u2.tg_avatar_data.split(',', 1)
+                    _parts = _tg_cache.split(',', 1)
                     if len(_parts) == 2:
                         _meta = _parts[0]
                         _ct = _meta.split(':')[1].split(';')[0] if ':' in _meta else 'image/jpeg'
