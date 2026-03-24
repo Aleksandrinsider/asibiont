@@ -6610,16 +6610,13 @@ async def api_avatar_handler(request):
             return _default_avatar_response()
 
         # Fast-path: skip Telegram API call for users confirmed to have no avatar.
-        # BUT trigger a background refresh once so the negative cache can be cleared
-        # (privacy settings may have changed, or bot may now have access via /start).
+        # Background refresh runs once per page load from the partners/feed handler — no
+        # need to spawn a task on every individual /api/avatar request (would cause loops).
         _db2 = Session()
         try:
             _u2 = _db2.query(User).filter_by(telegram_id=telegram_id).first()
             if _u2 and getattr(_u2, 'photo_url', None) == '__no_avatar__' \
                     and not getattr(_u2, 'custom_avatar', None):
-                # Kick off a single background refresh to clear the negative cache
-                if 'bot' in request.app and request.app['bot']:
-                    asyncio.create_task(_refresh_one_avatar(request.app['bot'], telegram_id))
                 return _default_avatar_response()
         finally:
             _db2.close()

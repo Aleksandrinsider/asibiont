@@ -13524,7 +13524,7 @@ else:
                     // Avatar and basic info - центрированно как в панели профиля
                     html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px;">';
                     
-                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.replace('@','').charAt(0).toUpperCase() : 'U');
                     if (partner.photo_url) {
                         html += `<img src="${partner.photo_url}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; margin-bottom: 8px;">`;
                         html += `<div style="width: 64px; height: 64px; border-radius: 50%; background: #068487; color: white; display: none; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px;">${initial}</div>`;
@@ -14226,7 +14226,7 @@ else:
                                     // Добавляем класс contact-favorite если контакт в избранном
                                     const favoriteClass = partner.is_favorite ? ' contact-favorite' : '';
                                     html += '<li class="task-item contact-recommended' + favoriteClass + '" data-username="' + contactInfoEscaped + '" data-type="recommended" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
-                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? '@' : '?');
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.replace('@','').charAt(0).toUpperCase() : 'U');
                                     const canAccess = partner.can_access !== false;
                                     const _pUserId = partner.user_id ? partner.user_id : null;
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true, ${_pUserId})"` : '';
@@ -14326,7 +14326,7 @@ else:
                                 } else if (partner.type === 'favorite') {
                                     // Favorite contacts - same formatting as recommended
                                     html += '<li class="task-item contact-favorite" data-username="' + contactInfoEscaped + '" data-type="favorite" style="display: flex; padding: 0 0 8px 0; margin-bottom: 8px; align-items: center; border-bottom: 1px solid #F0F0F0;">';
-                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : '@';
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.replace('@','').charAt(0).toUpperCase() : 'U');
                                     const clickHandler = `onclick="openContactProfileModal('${contactInfoEscaped}', true)"`;
                                     const cursorStyle = 'cursor: pointer;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
@@ -14522,7 +14522,7 @@ else:
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.charAt(0).toUpperCase() : '?');
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.replace('@','').charAt(0).toUpperCase() : 'U');
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
@@ -14651,7 +14651,7 @@ else:
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.charAt(0).toUpperCase() : '?');
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.replace('@','').charAt(0).toUpperCase() : 'U');
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
