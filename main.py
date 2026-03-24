@@ -576,6 +576,14 @@ async def _refresh_one_avatar(bot, tg_id):
                 except Exception as e:
                     logger.debug(f"[bg] get_chat failed {tg_id}: {e}")
 
+            # Fallback: if TG API timed out but we already have a cached file_id in photo_url,
+            # use it directly — avoids marking valid file_ids as __no_avatar__ on slow network
+            if not _file_id:
+                _existing = getattr(_u_r, 'photo_url', None)
+                if _existing and not _existing.startswith('http') and _existing != '__no_avatar__':
+                    logger.debug(f"[bg] Using cached photo_url file_id as fallback for {tg_id}")
+                    _file_id = _existing
+
             if _file_id:
                 # Store file_id for reference
                 if _u_r.photo_url != _file_id:
@@ -589,17 +597,28 @@ async def _refresh_one_avatar(bot, tg_id):
                         async with _sess.get(file_url, timeout=aiohttp.ClientTimeout(total=12)) as _resp:
                             if _resp.status == 200:
                                 _bytes = await _resp.read()
-                                _ct = _resp.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
+                                # Detect real content-type from magic bytes (TG sometimes sends octet-stream)
+                                if _bytes[:2] == b'\xff\xd8':
+                                    _ct = 'image/jpeg'
+                                elif _bytes[:8] == b'\x89PNG\r\n\x1a\n':
+                                    _ct = 'image/png'
+                                elif _bytes[:4] in (b'GIF8', b'GIF9'):
+                                    _ct = 'image/gif'
+                                else:
+                                    _ct = _resp.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
+                                    if _ct in ('application/octet-stream', ''):
+                                        _ct = 'image/jpeg'
                                 import base64 as _b64
                                 _b64_str = _b64.b64encode(_bytes).decode()
                                 _u_r.tg_avatar_data = f"data:{_ct};base64,{_b64_str}"
-                                logger.info(f"[bg] Cached avatar bytes for {tg_id} ({len(_bytes)} bytes)")
+                                logger.info(f"[bg] Cached avatar bytes for {tg_id} ({len(_bytes)} bytes, {_ct})")
                 except asyncio.TimeoutError:
                     logger.debug(f"[bg] get_file timeout {tg_id}")
+                    # Don't mark as no_avatar — might succeed next time
                 except Exception as e:
                     logger.debug(f"[bg] download avatar failed {tg_id}: {e}")
             else:
-                # No photo found — set sentinel in tg_avatar_data so we don't retry on every request
+                # TG API confirmed no photo (not a timeout) — set sentinel
                 logger.info(f"[bg] No avatar found for {tg_id}, marking tg_avatar_data sentinel")
                 _u_r.tg_avatar_data = '__no_avatar__'
                 _u_r.photo_url = '__no_avatar__'
