@@ -604,7 +604,8 @@ async def _refresh_one_avatar(bot, tg_id):
                 try:
                     file = await asyncio.wait_for(bot.get_file(_file_id), timeout=8.0)
                     file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
-                    async with aiohttp.ClientSession() as _sess:
+                    _conn = aiohttp.TCPConnector(force_close=True)
+                    async with aiohttp.ClientSession(connector=_conn) as _sess:
                         async with _sess.get(file_url, timeout=aiohttp.ClientTimeout(total=12)) as _resp:
                             if _resp.status == 200:
                                 _bytes = await _resp.read()
