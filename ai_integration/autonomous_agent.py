@@ -4688,8 +4688,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             + (f", {', '.join(_intg_hint[:5])}" if _intg_hint else "")
             + " — чередуй.\n"
             "   ⛔ Один канал/действие — максимум 1 раз за 3 цикла. Повтор = ОШИБКА.\n"
-            "   Если прошлое действие: RSS → сейчас: create_post или web_search, НЕ снова RSS.\n"
-            "   Если прошлое действие: web_search → сейчас: save_email_contact + send_outreach_email.\n"
+            "   Если прошлое действие: RSS → сейчас: create_post или поиск контактов, НЕ снова RSS.\n"
+            "   Если прошлое: поиск → сейчас: save_email_contact + send_outreach_email.\n"
             "   ⚠️ НЕ ДЕЛАЙ ВИД что можешь использовать канал, который НЕ подключён у тебя.\n"
             "   Используй ТОЛЬКО каналы из списка выше и из раздела 'Подключено у тебя'.\n"
             "   Если для цели нужен канал, которого нет — напиши в отчёте:\n"
@@ -4697,8 +4697,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             "⚡ ДЕЙСТВУЙ, НЕ ПЛАНИРУЙ:\n"
             "   70% — конкретные действия (письма, сохранение контактов, посты). 30% — поиск.\n"
+            "   ПРИОРИТЕТ ПОИСКА КОНТАКТОВ: если у тебя подключён GitHub — используй run_agent_action(search_users) "
+            "для поиска контактов, это ЛУЧШИЙ источник реальных email. web_search — резервный вариант.\n"
             "   ОДИН ПОИСК → ОДНО ДЕЙСТВИЕ: нашёл имя+email → save_email_contact + send_outreach_email.\n"
-            "   Максимум 2 web_search, 1 create_post за сессию. После поиска — КОНВЕРТИРУЙ.\n\n"
+            "   Максимум 1 create_post за сессию. После поиска — КОНВЕРТИРУЙ.\n\n"
 
             "🚫 КРИТИЧНО:\n"
             "   НЕ придумывай email (только реальные найденные). @username ≠ email.\n"
@@ -5576,11 +5578,24 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "Так находишь новых людей, ещё не получавших письмо."
                     )})
                 else:
-                    _messages.append({"role": "user", "content": (
+                    _next_hint = (
                         f"Уже использовал: {_used_str}. "
-                        f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных. "
-                        f"Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
-                )})
+                        f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных."
+                    )
+                    if _agent_has_github_local and 'run_agent_action' not in _tools_used:
+                        _next_hint += (
+                            " У тебя подключён GitHub — используй run_agent_action(action='search_users', "
+                            "params={query:'...', page:1}) для поиска контактов с реальными email."
+                        )
+                    elif not _was_send and (_was_save or 'find_relevant_contacts_for_task' in _tools_used):
+                        _next_hint += (
+                            " Контакты найдены — ОБЯЗАТЕЛЬНО вызови send_outreach_email."
+                        )
+                    else:
+                        _next_hint += (
+                            " Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
+                        )
+                    _messages.append({"role": "user", "content": _next_hint})
         # Adaptive tokens: tool-calling iterations only need short JSON output (400),
         # text-only final summary iterations need full response space (1200)
         _iter_max_tokens = 400 if _use_tools_now else 1200
