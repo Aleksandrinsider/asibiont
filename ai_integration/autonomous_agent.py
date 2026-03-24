@@ -4683,24 +4683,20 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   Лучше 1 отправленное письмо реальному человеку, чем 10 найденных каналов.\n"
             "4. ОЦЕНКА: после каждого действия — оцени результат честно. Если не сработало, скажи прямо.\n\n"
 
-            "📡 РАЗНООБРАЗИЕ ПОДХОДОВ (СТРОГО чередуй каждый цикл!):\n"
-            "   Доступные каналы: web_search (hh.ru, Хабр, форумы — всегда)"
-            + (f", {', '.join(_intg_hint[:5])}" if _intg_hint else "")
-            + " — чередуй.\n"
-            "   ⛔ Один канал/действие — максимум 1 раз за 3 цикла. Повтор = ОШИБКА.\n"
-            "   Если прошлое действие: RSS → сейчас: create_post или поиск контактов, НЕ снова RSS.\n"
-            "   Если прошлое: поиск → сейчас: save_email_contact + send_outreach_email.\n"
+            "📡 ТВОИ ИНТЕГРАЦИИ И ПОДХОДЫ:\n"
+            "   Ты умеешь использовать ВСЕ подключённые интеграции (см. 'Подключено у тебя' выше).\n"
+            "   Сам решай какую интеграцию применить для достижения цели — выбирай ЛУЧШИЙ путь.\n"
+            "   ⛔ Не повторяй одно и то же действие в соседних циклах — чередуй подходы.\n"
             "   ⚠️ НЕ ДЕЛАЙ ВИД что можешь использовать канал, который НЕ подключён у тебя.\n"
-            "   Используй ТОЛЬКО каналы из списка выше и из раздела 'Подключено у тебя'.\n"
+            "   Используй ТОЛЬКО каналы из раздела 'Подключено у тебя'.\n"
             "   Если для цели нужен канал, которого нет — напиши в отчёте:\n"
             "   «Для продвижения по этой цели был бы полезен [канал]. Рекомендую подключить в настройках.»\n\n"
 
             "⚡ ДЕЙСТВУЙ, НЕ ПЛАНИРУЙ:\n"
-            "   70% — конкретные действия (письма, сохранение контактов, посты). 30% — поиск.\n"
-            "   ПРИОРИТЕТ ПОИСКА КОНТАКТОВ: если у тебя подключён GitHub — используй run_agent_action(search_users) "
-            "для поиска контактов, это ЛУЧШИЙ источник реальных email. web_search — резервный вариант.\n"
+            "   70% — конкретные действия (письма, сохранение контактов, посты). 30% — поиск/анализ.\n"
+            "   Сам выбирай лучший источник контактов из доступных интеграций.\n"
             "   ОДИН ПОИСК → ОДНО ДЕЙСТВИЕ: нашёл имя+email → save_email_contact + send_outreach_email.\n"
-            "   Максимум 1 create_post за сессию. После поиска — КОНВЕРТИРУЙ.\n\n"
+            "   Нашёл данные через любой канал — КОНВЕРТИРУЙ в реальное действие (письмо, пост, задача).\n\n"
 
             "🚫 КРИТИЧНО:\n"
             "   НЕ придумывай email (только реальные найденные). @username ≠ email.\n"
@@ -5427,80 +5423,60 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
     _max_iters = 5 if _is_autopilot_task else 4  # autopilot: search + save + send + update + summary; regular: до 4 итераций для сложных задач
-    # GitHub-агент: определяем заранее для форсирования цепочки
-    _agent_has_github_local = 'github' in (agent.get('user_api_keys', '') or '').lower()
 
-    # ── История GitHub-запросов за 7 дней (предотвращает повтор query между сессиями) ──
-    if _is_autopilot_task and _agent_has_github_local:
-        try:
-            from models import Session as _DBgh, AgentActivityLog as _ALog_gh
-            from datetime import datetime as _dt_gh, timezone as _tz_gh, timedelta as _td_gh
-            import re as _re_gh
-            _db_gh = _DBgh()
-            try:
-                _gh_logs = _db_gh.query(_ALog_gh).filter(
-                    _ALog_gh.user_id == user_id,
-                    _ALog_gh.activity_type == 'run_agent_action',
-                    _ALog_gh.title.like('% · search_users [q=%'),
-                    _ALog_gh.created_at >= _dt_gh.now(_tz_gh.utc) - _td_gh(days=7),
-                ).order_by(_ALog_gh.created_at.desc()).limit(20).all()
-                _used_qp: list[str] = []
-                for _gl in _gh_logs:
-                    _m_qp = _re_gh.search(r'\[q=(.+?)\s+p=(\d+)\]', _gl.title or '')
-                    if _m_qp:
-                        _entry = f"query='{_m_qp.group(1).strip()}' page={_m_qp.group(2)}"
-                        if _entry not in _used_qp:
-                            _used_qp.append(_entry)
-                if _used_qp:
-                    _qp_str = '\n  '.join(_used_qp[:10])
-                    system_prompt += (
-                        f"\n\n📋 ИСТОРИЯ GitHub-поисков за 7 дней (НЕ ПОВТОРЯЙ — уже сделано):\n"
-                        f"  {_qp_str}\n"
-                        "⚡ Для следующего цикла используй ДРУГУЮ комбинацию. Примеры новых вариантов:\n"
-                        "  'language:javascript repos:>5 location:Russia', 'language:java automation repos:>3',\n"
-                        "  'language:go testing followers:>2', 'location:Kazakhstan language:python repos:>2',\n"
-                        "  'language:kotlin android repos:>5', 'language:typescript repos:>10 followers:>3',\n"
-                        "  'language:ruby repos:>10', 'language:php repos:>15 location:Russia'\n"
-                        "Или используй следующий page= для уже запускавшихся query (page+1).\n"
-                    )
-            finally:
-                _db_gh.close()
-        except Exception as _gh_hist_err:
-            logger.debug('[DIRECTOR] gh query history: %s', _gh_hist_err)
-
-    # ── История последних действий ЭТОГО агента за 24ч (anti-repeat для всех типов) ──
-    if _is_autopilot_task and agent.get('id') and not _agent_has_github_local:
+    # ── Универсальная история действий агента за 24ч (anti-repeat для ВСЕХ интеграций) ──
+    if _is_autopilot_task and agent.get('id'):
         try:
             from models import Session as _DBhist, AgentActivityLog as _ALog_hist
             from datetime import datetime as _dt_hist, timezone as _tz_hist, timedelta as _td_hist
+            import re as _re_hist
             _db_hist = _DBhist()
             try:
                 _hist_logs = _db_hist.query(_ALog_hist).filter(
                     _ALog_hist.user_id == user_id,
                     _ALog_hist.ref_id == agent['id'],
                     _ALog_hist.created_at >= _dt_hist.now(_tz_hist.utc) - _td_hist(hours=24),
-                ).order_by(_ALog_hist.created_at.desc()).limit(8).all()
+                ).order_by(_ALog_hist.created_at.desc()).limit(15).all()
                 if _hist_logs:
                     _hist_lines = []
+                    _used_qp: list[str] = []
                     for _hl in _hist_logs:
                         _ts = _hl.created_at.strftime('%H:%M') if _hl.created_at else '?'
                         _title = (_hl.title or '')[:80]
                         _content = (_hl.content or '')[:100]
                         _hist_lines.append(f"  [{_ts}] {_title} — {_content}")
+                        # Парсим query+page из search-действий (GitHub search_users и подобные)
+                        _m_qp = _re_hist.search(r'\[q=(.+?)\s+p=(\d+)\]', _hl.title or '')
+                        if _m_qp:
+                            _entry = f"query='{_m_qp.group(1).strip()}' page={_m_qp.group(2)}"
+                            if _entry not in _used_qp:
+                                _used_qp.append(_entry)
                     system_prompt += (
                         "\n\n📋 ТВОИ ДЕЙСТВИЯ за последние 24ч (НЕ ПОВТОРЯЙ — делай новое):\n"
                         + '\n'.join(_hist_lines)
-                        + "\n⚡ Выбери ПРИНЦИПИАЛЬНО ДРУГОЙ подход. Если читал RSS — теперь пиши пост или ищи контакты. "
-                        "Если искал контакты — теперь пиши письмо или создай задачу.\n"
+                        + "\n⚡ Выбери ПРИНЦИПИАЛЬНО ДРУГОЙ подход из доступных интеграций. "
+                        "Чередуй каналы: поиск → контакты → письма → посты → задачи.\n"
                     )
+                    if _used_qp:
+                        _qp_str = '\n  '.join(_used_qp[:10])
+                        system_prompt += (
+                            f"\n📋 Уже использованные поисковые запросы (НЕ ПОВТОРЯЙ):\n"
+                            f"  {_qp_str}\n"
+                            "Для следующего цикла используй ДРУГУЮ комбинацию или page+1.\n"
+                        )
             finally:
                 _db_hist.close()
         except Exception as _hist_err:
             logger.debug('[DIRECTOR] agent history load: %s', _hist_err)
 
+    # Определяем наличие интеграций для адаптивных лимитов (больше интеграций = больше цепочек)
+    _has_outreach_intg = any(
+        w in (agent.get('user_api_keys', '') or '').lower()
+        for w in ('github', 'gitlab', 'resend', 'sendgrid', 'mailgun', 'gmail_pass', 'gmail_app')
+    )
     for _iter in range(_max_iters):
-        # Адаптивные лимиты: github нужно больше (search+save×N+send×N), autopilot — средне, обычные — базово
-        _max_tool_calls = 12 if (_is_autopilot_task and _agent_has_github_local) else (8 if _is_autopilot_task else 5)
+        # Адаптивные лимиты: агенты с outreach-интеграциями нуждаются в большей цепочке (search+save×N+send×N)
+        _max_tool_calls = 12 if (_is_autopilot_task and _has_outreach_intg) else (8 if _is_autopilot_task else 5)
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -5511,91 +5487,52 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _tc_mode = "auto"
         else:
             _tc_mode = None
-        # Anti-repeat: на итерациях > 0 сообщаем модели что уже использовалось
+        # ── Anti-repeat: универсальные подсказки на основе состояния цепочки ──
+        # ИИ сам решает какие интеграции использовать; мы только следим за логикой цепочек
         if _is_autopilot_task and _iter > 0 and _tools_used:
             _used_str = ', '.join(_tools_used[-3:])
             _last_tool_local = _tools_used[-1] if _tools_used else ''
-            # GitHub-агент нашёл людей: ФОРСИРУЕМ save + send
-            _was_github_search = (
-                _agent_has_github_local
-                and _last_tool_local == 'run_agent_action'
-            )
             _was_save_contact = _last_tool_local == 'save_email_contact'
-            # Проверяем: был ли send_outreach_email уже после save
             _was_send = 'send_outreach_email' in _tools_used
             _was_save = 'save_email_contact' in _tools_used
-            # Считаем сколько раз уже отправляли письмо — чтобы не прерывать цепочку после первого
             _send_count = _tools_used.count('send_outreach_email')
-            # GitHub-агент: даём отправить минимум 3 письма перед тем как требовать update_goal_progress
-            _min_sends_before_update = 3 if _agent_has_github_local else 1
-            if _was_send and _send_count >= _min_sends_before_update and not ('update_goal_progress' in _tools_used):
+            # Адаптивный порог: агенты с outreach-интеграциями могут отправить больше за сессию
+            _min_sends_before_update = 3 if _has_outreach_intg else 1
+
+            if _was_send and _send_count >= _min_sends_before_update and 'update_goal_progress' not in _tools_used:
+                # Достаточно писем отправлено → финализируй
                 _messages.append({"role": "user", "content": (
-                    f"Письма отправлены ({_send_count} шт., использовал: {_used_str}). "
-                    "ФИНАЛЬНЫЙ ШАГ — update_goal_progress:\n"
-                    "Обнови прогресс цели: сколько новых контактов/писем получилось. "
-                    "Вызови update_goal_progress(goal_title='...', notes='краткий итог')."
+                    f"Отправлено {_send_count} писем (использовал: {_used_str}). "
+                    "ФИНАЛЬНЫЙ ШАГ — update_goal_progress: обнови прогресс цели с кратким итогом."
                 )})
-            elif _was_send and _send_count < _min_sends_before_update and not ('update_goal_progress' in _tools_used):
+            elif _was_send and _send_count < _min_sends_before_update and 'update_goal_progress' not in _tools_used:
+                # Ещё есть контакты для отправки
                 _messages.append({"role": "user", "content": (
-                    f"Письмо отправлено ({_send_count}/{_min_sends_before_update}, использовал: {_used_str}). "
-                    "ПРОДОЛЖАЙ — есть ещё найденные контакты:\n"
-                    "Если есть ещё пользователи из поиска с email — отправь следующее письмо (send_outreach_email).\n"
-                    "Если все контакты уже обработаны — вызови update_goal_progress."
+                    f"Отправлено {_send_count}/{_min_sends_before_update} (использовал: {_used_str}). "
+                    "Если есть ещё найденные контакты с email — отправь следующее письмо. "
+                    "Если все обработаны — вызови update_goal_progress."
                 )})
             elif _was_save_contact:
-                # Последний инструмент = save_email_contact → нужен send
+                # save без send = незавершённая цепочка
                 _messages.append({"role": "user", "content": (
                     f"Контакт(ы) сохранены (использовал: {_used_str}). "
-                    "🚨 ОБЯЗАТЕЛЬНЫЙ СЛЕДУЮЩИЙ ШАГ — send_outreach_email:\n"
-                    "Отправь персональное письмо каждому сохранённому контакту ПРЯМО СЕЙЧАС. "
-                    "save_email_contact без последующего send_outreach_email = незавершённая цепочка.\n"
-                    "Вызови send_outreach_email немедленно — НЕ завершай сессию без отправки письма!"
+                    "Следующий шаг — send_outreach_email: отправь письмо сохранённым контактам. "
+                    "save_email_contact без send_outreach_email = незавершённая цепочка."
                 )})
-            elif _was_github_search and not _was_save:
+            elif _last_tool_local == 'run_agent_action' and not _was_save:
+                # Поиск через интеграцию (GitHub, RSS, CRM и др.) без сохранения контактов
                 _messages.append({"role": "user", "content": (
-                    f"GitHub-поиск выполнен (использовал: {_used_str}). "
-                    "🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА — ВЫПОЛНИ ПРЯМО СЕЙЧАС:\n"
-                    "1. save_email_contact — для КАЖДОГО найденного у кого есть email\n"
-                    "   Параметры: name='Имя', email='адрес@домен', source='GitHub'\n"
-                    "2. После save → send_outreach_email каждому из сохранённых\n"
-                    "⚠️ Если у найденных НЕТ email на GitHub — напиши БЛОКЕР: нет email у контактов. "
-                    "Это нормально — попробуй другой query или find_relevant_contacts_for_task."
+                    f"Поиск выполнен (использовал: {_used_str}). "
+                    "Если нашёл людей с email — save_email_contact + send_outreach_email. "
+                    "Если данных нет — попробуй другой запрос или другую интеграцию."
                 )})
             else:
-                # GitHub-агент: если последнее действие было отправка и все контакты ранее уже contacted
-                # → предлагаем искать следующую страницу
-                _github_all_sent = (
-                    _agent_has_github_local
-                    and _was_send
-                    and _was_github_search
-                )
-                if _github_all_sent:
-                    _messages.append({"role": "user", "content": (
-                        f"Использовал: {_used_str}. "
-                        "Если send_outreach_email вернул 'уже отправлено' для всех — значит эта страница уже обработана.\n"
-                        "🔄 СЛЕДУЮЩАЯ СТРАНИЦА: повтори search_users с page=2 (или page=3, если page=2 тоже использовался).\n"
-                        "Пример: run_agent_action(action='search_users', query='прежний_query', page=2)\n"
-                        "Так находишь новых людей, ещё не получавших письмо."
-                    )})
-                else:
-                    _next_hint = (
-                        f"Уже использовал: {_used_str}. "
-                        f"Выбери следующий логичный инструмент — не повторяй предыдущий без новых данных."
-                    )
-                    if _agent_has_github_local and 'run_agent_action' not in _tools_used:
-                        _next_hint += (
-                            " У тебя подключён GitHub — используй run_agent_action(action='search_users', "
-                            "params={query:'...', page:1}) для поиска контактов с реальными email."
-                        )
-                    elif not _was_send and (_was_save or 'find_relevant_contacts_for_task' in _tools_used):
-                        _next_hint += (
-                            " Контакты найдены — ОБЯЗАТЕЛЬНО вызови send_outreach_email."
-                        )
-                    else:
-                        _next_hint += (
-                            " Если нашёл контакты/email — ОБЯЗАТЕЛЬНО вызови send_outreach_email или start_email_campaign."
-                        )
-                    _messages.append({"role": "user", "content": _next_hint})
+                # Универсальная подсказка — ИИ сам выбирает следующий шаг
+                _messages.append({"role": "user", "content": (
+                    f"Уже использовал: {_used_str}. "
+                    "Выбери следующий логичный шаг из доступных интеграций. "
+                    "Не повторяй то же действие — выбери новый подход или заверши цепочку."
+                )})
         # Adaptive tokens: tool-calling iterations only need short JSON output (400),
         # text-only final summary iterations need full response space (1200)
         _iter_max_tokens = 400 if _use_tools_now else 1200
@@ -5916,37 +5853,30 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     # Только что сохранили контакт — ОБЯЗАТЕЛЬНО отправить письмо
                     _messages.append({"role": "user", "content": (
                         "Контакт сохранён. 🚨 НЕМЕДЛЕННО вызови send_outreach_email:\n"
-                        "Напиши персональное письмо сохранённому пользователю — "
-                        "используй его имя из GitHub, предложи протестировать ASI Biont. "
+                        "Напиши персональное письмо сохранённому контакту. "
                         "НЕ пиши отчёт — вызови send_outreach_email прямо сейчас!"
                     )})
-                elif _is_search_tool and _agent_has_github_local and _last_t_post == 'run_agent_action':
-                    # GitHub-поиск: Проверяем все tool results на "уже отправлено"
-                    _all_sent_blocked = False
-                    _github_result_texts = [
+                elif _is_search_tool and _last_t_post == 'run_agent_action':
+                    # Поиск через интеграцию (GitHub, RSS, CRM и т.д.): проверяем cooldown
+                    _intg_result_texts = [
                         m.get('content', '') for m in _messages
                         if m.get('role') == 'tool'
                     ]
                     _sent_blocked_count = sum(
-                        1 for t in _github_result_texts
+                        1 for t in _intg_result_texts
                         if 'уже отправлено' in t or 'already sent' in t.lower() or 'Cooldown' in t
                     )
-                    _all_sent_blocked = _sent_blocked_count >= 3
-                    if _all_sent_blocked:
+                    if _sent_blocked_count >= 3:
                         _messages.append({"role": "user", "content": (
-                            "Данные поиска получены, но все контакты уже получали письма (cooldown). "
-                            "🔄 ИЩИ СЛЕДУЮЩУЮ СТРАНИЦУ:\n"
-                            "Вызови run_agent_action с тем же query, но page=2 (или page=3 если page=2 тоже использовался). "
-                            "Пример: run_agent_action(action='search_users', query='language:python followers:>5', page=2)\n"
-                            "Новые пользователи → save_email_contact → send_outreach_email."
+                            "Все контакты уже получали письма (cooldown). "
+                            "Попробуй: 1) другой query, 2) page=2/3 для текущего запроса, "
+                            "3) другую интеграцию для поиска контактов."
                         )})
                     else:
-                        # GitHub-поиск: ЖЁСТКО требуем save + send
                         _messages.append({"role": "user", "content": (
-                            "Данные поиска получены. 🚨 ОБЯЗАТЕЛЬНАЯ ЦЕПОЧКА GitHub:\n"
-                            "1. save_email_contact — сохрани каждого найденного пользователя\n"
-                            "2. send_outreach_email — напиши каждому из них письмо\n"
-                            "Если поиск вернул 0 результатов — попробуй другой query в run_agent_action.\n"
+                            "Данные поиска получены. Конвертируй результаты в действия:\n"
+                            "— Нашёл email → save_email_contact + send_outreach_email\n"
+                            "— 0 результатов → другой query или другая интеграция\n"
                             "НЕ пиши отчёт — вызови инструмент!"
                         )})
                 elif _is_search_tool:
