@@ -362,6 +362,8 @@ ARENA_ENABLED: bool = True
 _global_feed: List[dict] = []           # общая лента для всех посетителей
 _global_feed_started: bool = False      # запущен ли фоновый цикл
 _posts_being_discussed: set = set()     # post_id-ы, которые сейчас обсуждает _discussion_wave
+# Ограничиваем кол-во параллельных DeepSeek-запросов из арены — не больше 3 одновременно
+_arena_api_sem: asyncio.Semaphore = asyncio.Semaphore(3)
 _seed_done: asyncio.Event = asyncio.Event()  # сигнал что seed завершён
 
 # ─── Cache for get_global_feed_state() to reduce DB queries ─────────────────
@@ -404,20 +406,21 @@ async def _update_arena_summary():
         f"{posts_digest}"
     )
     try:
-        connector = aiohttp.TCPConnector(force_close=True)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                      "max_tokens": 200, "temperature": 0.3},
-                timeout=aiohttp.ClientTimeout(total=20)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    _arena_summary = data["choices"][0]["message"]["content"].strip()
-                    _arena_summary_ts = time.time()
-                    logger.info("[ARENA] Summary updated: %s", _arena_summary[:80])
+        async with _arena_api_sem:
+            connector = aiohttp.TCPConnector(force_close=True)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                    json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
+                          "max_tokens": 200, "temperature": 0.3},
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        _arena_summary = data["choices"][0]["message"]["content"].strip()
+                        _arena_summary_ts = time.time()
+                        logger.info("[ARENA] Summary updated: %s", _arena_summary[:80])
     except Exception as e:
         logger.warning("[ARENA] Summary generation error: %s", type(e).__name__ + (f': {e}' if str(e) else ''))
 
@@ -1290,20 +1293,22 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     async def _call_api() -> str:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url, headers=headers, json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data["choices"][0]["message"]["content"].strip()
-                    else:
-                        body = await resp.text()
-                        logger.error(f"[ARENA] API error {resp.status}: {body[:200]}")
-                        return f"[{agent['name']} молчит... сигнал потерян]"
+            async with _arena_api_sem:
+                _conn = aiohttp.TCPConnector(force_close=True)
+                async with aiohttp.ClientSession(connector=_conn) as session:
+                    async with session.post(
+                        url, headers=headers, json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            return data["choices"][0]["message"]["content"].strip()
+                        else:
+                            body = await resp.text()
+                            logger.error(f"[ARENA] API error {resp.status}: {body[:200]}")
+                            return f"[{agent['name']} молчит... сигнал потерян]"
         except Exception as e:
-            logger.error(f"[ARENA] Exception for {agent['id']}: {e}")
+            logger.error(f"[ARENA] Exception for {agent['id']}: {e}", exc_info=True)
             return f"[{agent['name']} недоступен: {e}]"
 
     reply_text = await _call_api()
@@ -1352,7 +1357,7 @@ async def _discussion_wave(post_msg: dict):
             try:
                 await _post_comment(post_msg, commenter)
             except Exception as e:
-                logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e)
+                logger.error("[ARENA] discussion_wave commenter %s error: %s", commenter['name'], e, exc_info=True)
 
         # ─── Thread arc: автор возвращается и подводит итог ──────────────────────
         existing_comments = [m for m in _global_feed if m.get('reply_to') == post_id]
@@ -1590,16 +1595,18 @@ async def _post_comment(post_msg: dict, commenter: dict):
         "Content-Type": "application/json",
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers=headers_req, json=payload,
-            timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
-            if resp.status != 200:
-                return
-            data = await resp.json()
-            comment_text = data["choices"][0]["message"]["content"].strip()
+    async with _arena_api_sem:
+        _conn = aiohttp.TCPConnector(force_close=True)
+        async with aiohttp.ClientSession(connector=_conn) as session:
+            async with session.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers=headers_req, json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    return
+                data = await resp.json()
+                comment_text = data["choices"][0]["message"]["content"].strip()
 
     # Добавляем как комментарий (reply_to = id родительского поста)
     reaction_msg = {
@@ -1669,18 +1676,20 @@ async def _post_author_conclusion(post_msg: dict, author_agent: dict, comments: 
         "temperature": 0.85,
     }
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                json=payload, timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    return
-                data = await resp.json()
-                conclusion_text = data["choices"][0]["message"]["content"].strip()
+        async with _arena_api_sem:
+            _conn = aiohttp.TCPConnector(force_close=True)
+            async with aiohttp.ClientSession(connector=_conn) as session:
+                async with session.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                    json=payload, timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status != 200:
+                        return
+                    data = await resp.json()
+                    conclusion_text = data["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        logger.warning("[ARENA] author conclusion API error: %s", e)
+        logger.warning("[ARENA] author conclusion API error: %s", e, exc_info=True)
         return
 
     conclusion_msg = {
@@ -1788,18 +1797,20 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    reply = data["choices"][0]["message"]["content"].strip()
-                else:
-                    reply = f"[сигнал потерян]"
+        async with _arena_api_sem:
+            _conn = aiohttp.TCPConnector(force_close=True)
+            async with aiohttp.ClientSession(connector=_conn) as session:
+                async with session.post(
+                    url, headers=headers, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        reply = data["choices"][0]["message"]["content"].strip()
+                    else:
+                        reply = f"[сигнал потерян]"
     except Exception as e:
-        logger.error(f"[ARENA] reply_to_comment error: {e}")
+        logger.error(f"[ARENA] reply_to_comment error: {e}", exc_info=True)
         reply = f"[{agent['name']} недоступен]"
 
     return {
