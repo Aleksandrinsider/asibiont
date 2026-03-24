@@ -15076,7 +15076,9 @@ else:
                         html += '<div class="context-item">';
                         html += '<div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 16px; margin-top: 20px;">';
                         if (data.user_avatar_url) {
-                            html += '<img src="' + data.user_avatar_url + '" alt="' + t('avatar-alt') + '" onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">';
+                            const _initLetter = (data.first_name || data.profile.username || 'U')[0].toUpperCase();
+                            html += '<img src="' + data.user_avatar_url + '" alt="' + t('avatar-alt') + '" onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';">';
+                            html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="display:none;width:64px;height:64px;border-radius:50%;background:#068487;color:white;align-items:center;justify-content:center;font-weight:600;font-size:24px;border:2px solid #E8ECEF;margin-bottom:8px;cursor:pointer;">' + _initLetter + '</div>';
                         } else {
                             const initial = (data.profile.username || data.first_name || 'U')[0].toUpperCase();
                             html += '<div onclick="openContactProfileModal(\'' + (data.profile.username || '') + '\')" style="width: 64px; height: 64px; border-radius: 50%; background-color: #068487; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; margin-bottom: 8px; cursor: pointer;">' + initial + '</div>';
