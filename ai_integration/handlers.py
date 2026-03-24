@@ -4843,6 +4843,33 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
             session.commit()
+            # === Удаляем из векторной памяти (Pinecone) ===
+            try:
+                from ai_integration.vector_memory import store_memory_sync as _vmem_del_all
+                from ai_integration.vector_memory import _search_memory_sync as _vsearch_del
+                from ai_integration.vector_memory import _get_pinecone as _vpc_del
+                _vpc_idx = _vpc_del()
+                if _vpc_idx:
+                    # Ищем все goal/achievement векторы пользователя и удаляем
+                    _all_vecs = _vsearch_del(user.telegram_id, 'цель проект достижение', top_k=50)
+                    _del_ids = []
+                    import hashlib as _hsh_del
+                    for _mv in _all_vecs:
+                        if _mv.get('type') in ('goal', 'achievement'):
+                            # Пересоздаём ID чтобы не хранить его отдельно — нельзя, ID включает timestamp
+                            # Поэтому используем delete_by_filter (Pinecone serverless поддерживает)
+                            pass
+                    # Pinecone serverless: удаляем вектора по filter через delete
+                    try:
+                        _vpc_idx.delete(
+                            filter={'user_id': {'$eq': str(user.telegram_id)}, 'type': {'$in': ['goal', 'achievement']}},
+                            namespace=f'user_{user.telegram_id}'
+                        )
+                        logger.info(f"[DELETE_GOAL] Removed all goal/achievement vectors for user {user.telegram_id}")
+                    except Exception as _pf_err:
+                        logger.debug(f"[DELETE_GOAL] Pinecone filter delete failed: {_pf_err}")
+            except Exception as _vm_del_err:
+                logger.debug(f"[DELETE_GOAL] Vector memory cleanup skipped: {_vm_del_err}")
             # === Лог активности ===
             try:
                 from models import AgentActivityLog as _AAL_dga
@@ -4903,6 +4930,22 @@ def delete_goal(goal_title=None, user_id=None, session=None):
             logger.debug("suppressed: %s", _e)
         
         session.commit()
+        # === Удаляем из векторной памяти (Pinecone) ===
+        try:
+            from ai_integration.vector_memory import _get_pinecone as _vpc_dg
+            _vpc_idx_dg = _vpc_dg()
+            if _vpc_idx_dg:
+                _vpc_idx_dg.delete(
+                    filter={
+                        'user_id': {'$eq': str(user.telegram_id)},
+                        'type': {'$in': ['goal', 'achievement']},
+                        'goal_id': {'$eq': str(matched.id if hasattr(matched, 'id') else '')},
+                    },
+                    namespace=f'user_{user.telegram_id}'
+                )
+                logger.info(f"[DELETE_GOAL] Removed vectors for goal '{title}' from Pinecone")
+        except Exception as _vm_dg_err:
+            logger.debug(f"[DELETE_GOAL] Vector memory cleanup skipped: {_vm_dg_err}")
         # === Лог активности ===
         try:
             from models import AgentActivityLog as _AAL_dg
