@@ -109,6 +109,7 @@ def _migrate_users(session, inspector):
         'discord_guild_id': "ALTER TABLE users ADD COLUMN discord_guild_id VARCHAR(64)",
         'discord_channel_id': "ALTER TABLE users ADD COLUMN discord_channel_id VARCHAR(64)",
         'custom_avatar': 'ALTER TABLE users ADD COLUMN custom_avatar TEXT',
+        'tg_avatar_data': 'ALTER TABLE users ADD COLUMN tg_avatar_data TEXT',
         'google_oauth_token': 'ALTER TABLE users ADD COLUMN google_oauth_token TEXT',
     })
 

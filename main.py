@@ -531,25 +531,101 @@ def avatar_url_if_photo(user):
 
 
 async def _refresh_one_avatar(bot, tg_id):
-    """Refresh avatar + first_name for a single user. Used by _refresh_avatars_background."""
-    try:
-        await get_user_avatar_url(bot, tg_id, force_refresh=True)
-    except Exception as e:
-        logger.debug(f"Background avatar refresh failed for {tg_id}: {e}")
-    # Fill first_name from TG if missing
+    """Refresh avatar + first_name for a single user. Used by _refresh_avatars_background.
+    Downloads actual avatar bytes and caches them in tg_avatar_data so the request
+    handler can serve them without any Telegram API call at request time."""
     try:
         from models import User as _URefr
         _db_r = Session()
         try:
             _u_r = _db_r.query(_URefr).filter_by(telegram_id=tg_id).first()
-            if _u_r and not _u_r.first_name:
-                _chat = await bot.get_chat(tg_id)
-                if _chat and _chat.first_name:
-                    _u_r.first_name = _chat.first_name
-                    _db_r.commit()
-                    logger.info(f"Updated first_name for {tg_id}: {_chat.first_name}")
+            if not _u_r:
+                return
+
+            # Skip if tg_avatar_data is already cached — avoid redundant TG API calls.
+            # custom_avatar (user-uploaded) takes priority, but we still cache tg_avatar_data
+            # in case user removes their custom avatar later.
+            if getattr(_u_r, 'tg_avatar_data', None):
+                # Already cached. Only fill first_name if missing (uses get_chat below).
+                if _u_r.first_name:
+                    return  # Nothing to do
+
+            _file_id = None
+
+            # Attempt 1: getUserProfilePhotos (8s — we're in background, can be slow)
+            try:
+                photos = await asyncio.wait_for(bot.get_user_profile_photos(tg_id, limit=1), timeout=8.0)
+                if photos.total_count > 0:
+                    _file_id = photos.photos[0][-1].file_id
+            except asyncio.TimeoutError:
+                logger.debug(f"[bg] get_user_profile_photos timeout {tg_id}")
+            except Exception as e:
+                logger.debug(f"[bg] get_user_profile_photos failed {tg_id}: {e}")
+
+            # Attempt 2: getChat — works even when profile photos are private
+            if not _file_id:
+                try:
+                    chat = await asyncio.wait_for(bot.get_chat(tg_id), timeout=8.0)
+                    if chat.photo and chat.photo.small_file_id:
+                        _file_id = chat.photo.small_file_id
+                    # Also fill first_name while we're here
+                    if chat.first_name and not _u_r.first_name:
+                        _u_r.first_name = chat.first_name
+                except asyncio.TimeoutError:
+                    logger.debug(f"[bg] get_chat timeout {tg_id}")
+                except Exception as e:
+                    logger.debug(f"[bg] get_chat failed {tg_id}: {e}")
+
+            if _file_id:
+                # Store file_id for reference
+                if _u_r.photo_url != _file_id:
+                    _u_r.photo_url = _file_id
+
+                # Download actual avatar bytes and cache as base64
+                try:
+                    file = await asyncio.wait_for(bot.get_file(_file_id), timeout=8.0)
+                    file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                    async with aiohttp.ClientSession() as _sess:
+                        async with _sess.get(file_url, timeout=aiohttp.ClientTimeout(total=12)) as _resp:
+                            if _resp.status == 200:
+                                _bytes = await _resp.read()
+                                _ct = _resp.headers.get('Content-Type', 'image/jpeg').split(';')[0].strip()
+                                import base64 as _b64
+                                _b64_str = _b64.b64encode(_bytes).decode()
+                                _u_r.tg_avatar_data = f"data:{_ct};base64,{_b64_str}"
+                                logger.info(f"[bg] Cached avatar bytes for {tg_id} ({len(_bytes)} bytes)")
+                except asyncio.TimeoutError:
+                    logger.debug(f"[bg] get_file timeout {tg_id}")
+                except Exception as e:
+                    logger.debug(f"[bg] download avatar failed {tg_id}: {e}")
+            else:
+                # No photo found — mark as checked so we don't retry every time
+                if not _u_r.photo_url or _u_r.photo_url == '__no_avatar__':
+                    _u_r.photo_url = '__no_avatar__'
+
+            _db_r.commit()
         finally:
             _db_r.close()
+    except Exception as e:
+        logger.debug(f"Background avatar refresh failed for {tg_id}: {e}")
+
+    # Fill first_name from TG if still missing (separate attempt)
+    try:
+        from models import User as _URefr2
+        _db_r2 = Session()
+        try:
+            _u_r2 = _db_r2.query(_URefr2).filter_by(telegram_id=tg_id).first()
+            if _u_r2 and not _u_r2.first_name:
+                try:
+                    _chat2 = await asyncio.wait_for(bot.get_chat(tg_id), timeout=8.0)
+                    if _chat2 and _chat2.first_name:
+                        _u_r2.first_name = _chat2.first_name
+                        _db_r2.commit()
+                        logger.info(f"Updated first_name for {tg_id}: {_chat2.first_name}")
+                except Exception:
+                    pass
+        finally:
+            _db_r2.close()
     except Exception as _e_fn:
         logger.debug(f"first_name refresh failed for {tg_id}: {_e_fn}")
 
@@ -6617,75 +6693,34 @@ async def api_avatar_handler(request):
             return _default_avatar_response()
 
         # Fast-path: skip Telegram API call for users confirmed to have no avatar.
-        # Background refresh runs once per page load from the partners/feed handler — no
-        # need to spawn a task on every individual /api/avatar request (would cause loops).
+        # Check DB cache: tg_avatar_data (TG avatar bytes cached by background refresh)
+        # and fast-path for __no_avatar__ users — no TG API calls at request time.
         _db2 = Session()
         try:
             _u2 = _db2.query(User).filter_by(telegram_id=telegram_id).first()
-            if _u2 and getattr(_u2, 'photo_url', None) == '__no_avatar__' \
-                    and not getattr(_u2, 'custom_avatar', None):
-                return _default_avatar_response()
+            if _u2:
+                # Serve cached TG avatar bytes if available (highest priority after custom_avatar)
+                if getattr(_u2, 'tg_avatar_data', None):
+                    import base64 as _b64_h
+                    _parts = _u2.tg_avatar_data.split(',', 1)
+                    if len(_parts) == 2:
+                        _meta = _parts[0]
+                        _ct = _meta.split(':')[1].split(';')[0] if ':' in _meta else 'image/jpeg'
+                        _img = _b64_h.b64decode(_parts[1])
+                        return web.Response(
+                            body=_img,
+                            content_type=_ct,
+                            headers={'Cache-Control': 'public, max-age=1800'}
+                        )
+                # No avatar available — trigger background refresh to populate tg_avatar_data for next time
+                if getattr(_u2, 'photo_url', None) == '__no_avatar__':
+                    return _default_avatar_response()
+                # Has file_id or unknown — trigger background refresh and return 404 now
+                bot = request.app.get('bot')
+                if bot:
+                    asyncio.create_task(_refresh_one_avatar(bot, telegram_id))
         finally:
             _db2.close()
-
-        # get_user_avatar_url handles old-format URL detection and cleanup internally
-        # Strict 4s timeout — avoid blocking event loop for slow Telegram API responses
-        try:
-            avatar_url = await asyncio.wait_for(
-                get_user_avatar_url(request.app['bot'], telegram_id),
-                timeout=4.0
-            )
-        except asyncio.TimeoutError:
-            logger.debug(f"Avatar fetch timed out for {telegram_id}, returning fallback")
-            return _default_avatar_response()
-
-        async def _proxy_tg_avatar(url):
-            """Proxy a Telegram file URL, return web.Response or None on failure."""
-            try:
-                async with aiohttp.ClientSession() as proxy_session:
-                    async with proxy_session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        if resp.status == 200:
-                            data = await resp.read()
-                            content_type = resp.headers.get('Content-Type', 'image/jpeg')
-                            return web.Response(
-                                body=data,
-                                content_type=content_type,
-                                headers={'Cache-Control': 'public, max-age=3600'}
-                            )
-            except Exception as e:
-                logger.warning(f"Failed to proxy avatar URL for {telegram_id}: {e}")
-            return None
-
-        if avatar_url:
-            result = await _proxy_tg_avatar(avatar_url)
-            if result:
-                return result
-            # Proxy failed (expired URL?) — force-refresh and retry once
-            logger.info(f"Avatar proxy failed for {telegram_id}, force-refreshing")
-            try:
-                fresh_url = await asyncio.wait_for(
-                    get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True),
-                    timeout=3.0
-                )
-            except asyncio.TimeoutError:
-                fresh_url = None
-            if fresh_url and fresh_url != avatar_url:
-                result = await _proxy_tg_avatar(fresh_url)
-                if result:
-                    return result
-        else:
-            # No cached URL — try fetching fresh from Telegram
-            try:
-                fresh_url = await asyncio.wait_for(
-                    get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True),
-                    timeout=3.0
-                )
-            except asyncio.TimeoutError:
-                fresh_url = None
-            if fresh_url:
-                result = await _proxy_tg_avatar(fresh_url)
-                if result:
-                    return result
 
         return _default_avatar_response()
     except ValueError:
