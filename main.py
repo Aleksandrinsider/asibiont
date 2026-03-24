@@ -4422,9 +4422,7 @@ async def api_partners_handler(request):
 
         logger.info(f"Returning {len(partners_data)} partners for user {user_id}")
 
-        # Trigger background avatar refresh for partners missing cached photo in DB
-        # NOTE: p['photo_url'] is always /api/avatar/{id} (proxy URL), so we must
-        # check the actual DB photo_url to find users needing refresh.
+        # Trigger background avatar refresh for partners that don't have cached bytes yet
         if 'bot' in request.app and request.app['bot']:
             _refresh_tg_ids = []
             try:
@@ -4435,7 +4433,8 @@ async def api_partners_handler(request):
                     try:
                         _users_need = _db_refresh.query(User.telegram_id).filter(
                             User.telegram_id.in_(_partner_tg_ids),
-                            or_(User.photo_url.is_(None), User.photo_url == '__no_avatar__')
+                            User.tg_avatar_data.is_(None),
+                            User.custom_avatar.is_(None)
                         ).all()
                         _refresh_tg_ids = [u[0] for u in _users_need]
                     finally:
@@ -4878,7 +4877,8 @@ async def api_elite_partners_handler(request):
                             from sqlalchemy import or_
                             _users_need = _db_refresh.query(User.telegram_id).filter(
                                 User.telegram_id.in_(_partner_tg_ids),
-                                or_(User.photo_url.is_(None), User.photo_url == '__no_avatar__')
+                                User.tg_avatar_data.is_(None),
+                                User.custom_avatar.is_(None)
                             ).all()
                             _refresh_tg_ids = [u[0] for u in _users_need]
                         finally:
@@ -5958,13 +5958,14 @@ async def get_feed_handler(request):
                 ).count()
                 has_unread_posts = viewed_count < len(post_ids)
 
-            # Background avatar refresh for feed authors missing photo
+            # Background avatar refresh for feed authors missing cached bytes
             if user_ids and 'bot' in request.app and request.app['bot']:
                 try:
                     _feed_need = session_db.query(User.telegram_id).filter(
                         User.id.in_(user_ids),
                         User.telegram_id > 0,
-                        or_(User.photo_url.is_(None), User.photo_url == '__no_avatar__')
+                        User.tg_avatar_data.is_(None),
+                        User.custom_avatar.is_(None)
                     ).all()
                     _feed_tg_ids = [u[0] for u in _feed_need]
                     if _feed_tg_ids:

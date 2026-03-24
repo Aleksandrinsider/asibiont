@@ -14761,6 +14761,7 @@ else:
                             }
                             retryFailedAvatars(6000);   // first retry — parallel TG calls complete ~2-4s
                             retryFailedAvatars(15000);  // second retry — slow API / rate limit fallback
+                            retryFailedAvatars(45000);  // third retry — background byte-cache may take up to 30s
                         }
                         
                         // Сохраняем данные для орбиты аватаров
