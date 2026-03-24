@@ -328,6 +328,35 @@
         let USER_TIMEZONE = '{{ user_timezone }}';
         window.USER_TIMEZONE = USER_TIMEZONE;
 
+        // ─── Avatar helpers (defined early — onload may fire before main script) ───
+        let avatarServiceAvailable = false;
+        let avatarCheckDone = false;
+        let avatarRetryCount = 0;
+
+        function handleAvatarError(img, fallbackId) {
+            if (!avatarCheckDone) {
+                avatarServiceAvailable = false;
+                avatarCheckDone = true;
+            }
+            if (img && avatarRetryCount < 2) {
+                avatarRetryCount++;
+                setTimeout(() => {
+                    const src = img.getAttribute('src');
+                    if (src) {
+                        img.src = src + (src.includes('?') ? '&' : '?') + 'r=' + Date.now();
+                    }
+                }, 3000);
+            }
+        }
+
+        function handleAvatarLoad(img, fallbackId) {
+            avatarServiceAvailable = true;
+            avatarCheckDone = true;
+            if (img) img.style.display = 'block';
+            const fallback = fallbackId ? document.getElementById(fallbackId) : null;
+            if (fallback) fallback.style.display = 'none';
+        }
+
         // Mobile device detection and CSSPeeper fix
         function isMobileDevice() {
             // Check screen width to show mobile modal on narrow screens
@@ -1760,40 +1789,7 @@
             return t('tasks-word-5');
         }
         
-        // Глобальная переменная для отслеживания доступности avatar API
-        // По умолчанию отключаем аватары, включим после первой успешной загрузки
-        let avatarServiceAvailable = false;
-        let avatarCheckDone = false;
-        let avatarRetryCount = 0;
-        
-        // Функция обработки ошибки загрузки аватара
-        function handleAvatarError(img, fallbackId) {
-            // Отключаем сервис аватаров после первой ошибки
-            if (!avatarCheckDone) {
-                avatarServiceAvailable = false;
-                avatarCheckDone = true;
-            }
-            // Retry avatar after 3 seconds (background refresh may complete)
-            if (img && avatarRetryCount < 2) {
-                avatarRetryCount++;
-                setTimeout(() => {
-                    const src = img.getAttribute('src');
-                    if (src) {
-                        img.src = src + (src.includes('?') ? '&' : '?') + 'r=' + Date.now();
-                    }
-                }, 3000);
-            }
-        }
-        
-        function handleAvatarLoad(img, fallbackId) {
-            avatarServiceAvailable = true;
-            avatarCheckDone = true;
-            if (img) img.style.display = 'block';
-            const fallback = fallbackId ? document.getElementById(fallbackId) : null;
-            if (fallback) {
-                fallback.style.display = 'none';
-            }
-        }
+        // Avatar service helpers — defined early (see <head> script block)
 
         // Upload custom avatar
         async function uploadAvatar(input) {
