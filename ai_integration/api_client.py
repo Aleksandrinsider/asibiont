@@ -256,8 +256,8 @@ class ExternalAPIClient:
         if github_token:
             headers['Authorization'] = f'Bearer {github_token}'
         
-        # Без токена ограничиваем до 15 пользователей (экономим rate limit)
-        effective_max = max_users if github_token else min(max_users, 15)
+        # Без токена ограничиваем до 20 пользователей (экономим rate limit, но берём больше для результативности)
+        effective_max = max_users if github_token else min(max_users, 20)
         
         session = await self._get_session()
         found_leads = []

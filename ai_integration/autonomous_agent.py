@@ -4683,11 +4683,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   Лучше 1 отправленное письмо реальному человеку, чем 10 найденных каналов.\n"
             "4. ОЦЕНКА: после каждого действия — оцени результат честно. Если не сработало, скажи прямо.\n\n"
 
-            "📡 РАЗНООБРАЗИЕ ПОДХОДОВ (используй РАЗНЫЕ в РАЗНЫХ циклах):\n"
+            "📡 РАЗНООБРАЗИЕ ПОДХОДОВ (СТРОГО чередуй каждый цикл!):\n"
             "   Доступные каналы: web_search (hh.ru, Хабр, форумы — всегда)"
             + (f", {', '.join(_intg_hint[:5])}" if _intg_hint else "")
             + " — чередуй.\n"
-            "   Один канал — максимум 1 раз за 3 цикла. Если застрял — пробуй неочевидное.\n"
+            "   ⛔ Один канал/действие — максимум 1 раз за 3 цикла. Повтор = ОШИБКА.\n"
+            "   Если прошлое действие: RSS → сейчас: create_post или web_search, НЕ снова RSS.\n"
+            "   Если прошлое действие: web_search → сейчас: save_email_contact + send_outreach_email.\n"
             "   ⚠️ НЕ ДЕЛАЙ ВИД что можешь использовать канал, который НЕ подключён у тебя.\n"
             "   Используй ТОЛЬКО каналы из списка выше и из раздела 'Подключено у тебя'.\n"
             "   Если для цели нужен канал, которого нет — напиши в отчёте:\n"
@@ -5463,6 +5465,36 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _db_gh.close()
         except Exception as _gh_hist_err:
             logger.debug('[DIRECTOR] gh query history: %s', _gh_hist_err)
+
+    # ── История последних действий ЭТОГО агента за 24ч (anti-repeat для всех типов) ──
+    if _is_autopilot_task and agent.get('id') and not _agent_has_github_local:
+        try:
+            from models import Session as _DBhist, AgentActivityLog as _ALog_hist
+            from datetime import datetime as _dt_hist, timezone as _tz_hist, timedelta as _td_hist
+            _db_hist = _DBhist()
+            try:
+                _hist_logs = _db_hist.query(_ALog_hist).filter(
+                    _ALog_hist.user_id == user_id,
+                    _ALog_hist.ref_id == agent['id'],
+                    _ALog_hist.created_at >= _dt_hist.now(_tz_hist.utc) - _td_hist(hours=24),
+                ).order_by(_ALog_hist.created_at.desc()).limit(8).all()
+                if _hist_logs:
+                    _hist_lines = []
+                    for _hl in _hist_logs:
+                        _ts = _hl.created_at.strftime('%H:%M') if _hl.created_at else '?'
+                        _title = (_hl.title or '')[:80]
+                        _content = (_hl.content or '')[:100]
+                        _hist_lines.append(f"  [{_ts}] {_title} — {_content}")
+                    system_prompt += (
+                        "\n\n📋 ТВОИ ДЕЙСТВИЯ за последние 24ч (НЕ ПОВТОРЯЙ — делай новое):\n"
+                        + '\n'.join(_hist_lines)
+                        + "\n⚡ Выбери ПРИНЦИПИАЛЬНО ДРУГОЙ подход. Если читал RSS — теперь пиши пост или ищи контакты. "
+                        "Если искал контакты — теперь пиши письмо или создай задачу.\n"
+                    )
+            finally:
+                _db_hist.close()
+        except Exception as _hist_err:
+            logger.debug('[DIRECTOR] agent history load: %s', _hist_err)
 
     for _iter in range(_max_iters):
         # Адаптивные лимиты: github нужно больше (search+save×N+send×N), autopilot — средне, обычные — базово

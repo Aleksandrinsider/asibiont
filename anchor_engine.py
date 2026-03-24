@@ -2898,6 +2898,8 @@ class AnchorEngine:
         # Cooldown на source уже блокирует, но этот guard — двойная защита.
         if autopilot_anchors:
             # ── GUARD: проверяем флаг прямо перед dispatch (мог быть выключен после создания якоря) ──
+            # expire_all() сбрасывает кэш сессии — иначе query вернёт stale объект из identity map
+            session.expire_all()
             _profile_recheck = session.query(UserProfile).filter_by(user_id=user.id).first()
             _autopilot_still_on = _profile_recheck and getattr(_profile_recheck, 'goal_autopilot_enabled', False)
             if not _autopilot_still_on:
@@ -9766,6 +9768,8 @@ class AnchorEngine:
 
     def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
         """Автопилот целей: AI анализирует цели с ПОЛНЫМ контекстом и действует."""
+        # Перечитываем профиль из БД — profile мог быть загружен давно (stale cache)
+        session.expire(profile)
         if not profile or not getattr(profile, 'goal_autopilot_enabled', False):
             return []
 
