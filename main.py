@@ -551,10 +551,10 @@ async def _refresh_one_avatar(bot, tg_id):
                 if _u_r.first_name:
                     return  # Nothing to do
             if _tg_av_cached == '__no_avatar__':
-                # Sentinel was set — skip unless it's stale (re-try once a week)
+                # Sentinel was set — skip unless it's stale (re-try once a day)
                 _updated = getattr(_u_r, 'updated_at', None)
                 import datetime
-                _stale = (not _updated) or (_updated < datetime.datetime.utcnow() - datetime.timedelta(days=7))
+                _stale = (not _updated) or (_updated < datetime.datetime.utcnow() - datetime.timedelta(days=1))
                 if not _stale:
                     return  # Still fresh sentinel, don't retry
                 # Stale sentinel — clear it and retry below
@@ -6707,6 +6707,22 @@ async def api_avatar_handler(request):
             # 3. Cached TG bytes in DB
             _cache = getattr(_u, 'tg_avatar_data', None)
             if _cache == '__no_avatar__':
+                # Return 404, but if sentinel is stale (>1 day) — trigger bg refresh
+                # so next request after Railway downloads the photo will succeed
+                import datetime as _dt_av
+                _av_updated = getattr(_u, 'updated_at', None)
+                _av_stale = (not _av_updated) or (_av_updated < _dt_av.datetime.utcnow() - _dt_av.timedelta(days=1))
+                if _av_stale:
+                    _bot_av = request.app.get('bot')
+                    if _bot_av:
+                        # Clear sentinel so refresh can attempt fresh TG API calls
+                        try:
+                            _u.tg_avatar_data = None
+                            _u.photo_url = None
+                            _db.commit()
+                        except Exception:
+                            _db.rollback()
+                        asyncio.create_task(_refresh_one_avatar(_bot_av, telegram_id))
                 return _default_avatar_response()
             if _cache and _cache.startswith('data:'):
                 import base64 as _b64t
