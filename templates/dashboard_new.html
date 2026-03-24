@@ -14743,17 +14743,24 @@ else:
                             peopleList.innerHTML = html;
                             
                             // Retry failed avatars after background server refresh completes
-                            setTimeout(() => {
-                                peopleList.querySelectorAll('img').forEach(img => {
-                                    if (!img.complete || img.naturalHeight === 0) {
-                                        const baseSrc = img.src.split('?')[0];
-                                        const fallback = img.nextElementSibling;
-                                        img.onload = function() { img.style.display = ''; if (fallback) fallback.style.display = 'none'; };
-                                        img.onerror = null;
-                                        img.src = baseSrc + '?t=' + Date.now();
-                                    }
-                                });
-                            }, 3000);
+                            function retryFailedAvatars(delay) {
+                                setTimeout(() => {
+                                    let retried = 0;
+                                    peopleList.querySelectorAll('img').forEach(img => {
+                                        if (img.naturalHeight === 0) {
+                                            const baseSrc = img.src.split('?')[0];
+                                            const fallback = img.nextElementSibling;
+                                            img.onload = function() { img.style.display = ''; if (fallback) fallback.style.display = 'none'; };
+                                            img.onerror = null;
+                                            img.src = baseSrc + '?t=' + Date.now();
+                                            retried++;
+                                        }
+                                    });
+                                    if (retried > 0) console.log('[Avatar] Retried ' + retried + ' avatars at ' + delay + 'ms');
+                                }, delay);
+                            }
+                            retryFailedAvatars(6000);   // first retry — parallel TG calls complete ~2-4s
+                            retryFailedAvatars(15000);  // second retry — slow API / rate limit fallback
                         }
                         
                         // Сохраняем данные для орбиты аватаров

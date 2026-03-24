@@ -523,35 +523,38 @@ def avatar_url_if_photo(user):
     return f"/api/avatar/{user.telegram_id}"
 
 
+async def _refresh_one_avatar(bot, tg_id):
+    """Refresh avatar + first_name for a single user. Used by _refresh_avatars_background."""
+    try:
+        await get_user_avatar_url(bot, tg_id, force_refresh=True)
+    except Exception as e:
+        logger.debug(f"Background avatar refresh failed for {tg_id}: {e}")
+    # Fill first_name from TG if missing
+    try:
+        from models import User as _URefr
+        _db_r = Session()
+        try:
+            _u_r = _db_r.query(_URefr).filter_by(telegram_id=tg_id).first()
+            if _u_r and not _u_r.first_name:
+                _chat = await bot.get_chat(tg_id)
+                if _chat and _chat.first_name:
+                    _u_r.first_name = _chat.first_name
+                    _db_r.commit()
+                    logger.info(f"Updated first_name for {tg_id}: {_chat.first_name}")
+        finally:
+            _db_r.close()
+    except Exception as _e_fn:
+        logger.debug(f"first_name refresh failed for {tg_id}: {_e_fn}")
+
+
 async def _refresh_avatars_background(bot, telegram_ids):
     """Background task: fetch & cache TG avatars for users with null photo_url.
-    Also fills in first_name from Telegram if missing in DB.
+    All users are refreshed concurrently to minimise total latency.
     Safe to fire-and-forget via asyncio.create_task()."""
-    seen = set()
-    for tg_id in telegram_ids:
-        if not tg_id or tg_id <= 0 or tg_id in seen:
-            continue
-        seen.add(tg_id)
-        try:
-            await get_user_avatar_url(bot, tg_id, force_refresh=True)
-        except Exception as e:
-            logger.debug(f"Background avatar refresh failed for {tg_id}: {e}")
-        # Fill first_name from TG if missing
-        try:
-            from models import User as _URefr
-            _db_r = Session()
-            try:
-                _u_r = _db_r.query(_URefr).filter_by(telegram_id=tg_id).first()
-                if _u_r and not _u_r.first_name:
-                    _chat = await bot.get_chat(tg_id)
-                    if _chat and _chat.first_name:
-                        _u_r.first_name = _chat.first_name
-                        _db_r.commit()
-                        logger.info(f"Updated first_name for {tg_id}: {_chat.first_name}")
-            finally:
-                _db_r.close()
-        except Exception as _e_fn:
-            logger.debug(f"first_name refresh failed for {tg_id}: {_e_fn}")
+    unique_ids = list({tg_id for tg_id in telegram_ids if tg_id and tg_id > 0})
+    if not unique_ids:
+        return
+    await asyncio.gather(*[_refresh_one_avatar(bot, tg_id) for tg_id in unique_ids], return_exceptions=True)
 
 
 def check_telegram_authentication(data):
@@ -6606,12 +6609,17 @@ async def api_avatar_handler(request):
             logger.warning(f"Bot not available for avatar request: {telegram_id}")
             return _default_avatar_response()
 
-        # Fast-path: skip Telegram API call for users confirmed to have no avatar
+        # Fast-path: skip Telegram API call for users confirmed to have no avatar.
+        # BUT trigger a background refresh once so the negative cache can be cleared
+        # (privacy settings may have changed, or bot may now have access via /start).
         _db2 = Session()
         try:
             _u2 = _db2.query(User).filter_by(telegram_id=telegram_id).first()
             if _u2 and getattr(_u2, 'photo_url', None) == '__no_avatar__' \
                     and not getattr(_u2, 'custom_avatar', None):
+                # Kick off a single background refresh to clear the negative cache
+                if 'bot' in request.app and request.app['bot']:
+                    asyncio.create_task(_refresh_one_avatar(request.app['bot'], telegram_id))
                 return _default_avatar_response()
         finally:
             _db2.close()
