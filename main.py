@@ -394,12 +394,16 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                     # and is NOT blocked by privacy settings (we already have the file_id)
                     if bot:
                         try:
-                            file = await bot.get_file(cached)
+                            file = await asyncio.wait_for(bot.get_file(cached), timeout=2.0)
                             return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+                        except asyncio.TimeoutError:
+                            # Telegram API slow — file_id is likely valid, just network latency.
+                            # Return None here (show initials now) but KEEP the file_id for next request.
+                            logger.debug(f"get_file({cached[:20]}…) timeout for {user_id}, keeping file_id")
+                            return None
                         except Exception as e:
                             err_str = str(e).lower()
-                            # Only clear stale file_id on TG API errors (bad file_id),
-                            # NOT on transient network errors (timeout, connection reset)
+                            # TG API errors (bad file_id, not found) → clear and fall through to re-fetch
                             is_tg_api_error = ('bad request' in err_str or 'not found' in err_str
                                                or 'wrong file' in err_str or 'file_id' in err_str
                                                or 'invalid' in err_str)
@@ -412,7 +416,6 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                                     logger.debug("suppressed: %s", _e)
                             else:
                                 logger.debug(f"get_file({cached[:20]}…) transient error for {user_id}: {e}, keeping cached file_id")
-                                # Return None but DO NOT clear the cached file_id — it may still be valid
                                 return None
                             # fall through to full refresh below (only for TG API errors)
                 elif cached.startswith('https://api.telegram.org/file/bot'):
@@ -452,7 +455,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
 
                 if _fetched_file_id:
                     try:
-                        file = await bot.get_file(_fetched_file_id)
+                        file = await asyncio.wait_for(bot.get_file(_fetched_file_id), timeout=2.0)
                         avatar_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                         if user:
                             user.photo_url = _fetched_file_id  # store permanent file_id
@@ -467,7 +470,7 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 logger.debug(f"Using cached file_id for user {user_id} after failed refresh")
                 try:
                     if bot:
-                        file = await bot.get_file(user.photo_url)
+                        file = await asyncio.wait_for(bot.get_file(user.photo_url), timeout=2.0)
                         return f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
