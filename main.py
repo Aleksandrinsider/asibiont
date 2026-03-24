@@ -18,6 +18,11 @@ import asyncio
 import logging
 import pytz
 import time
+import sys
+
+# Allow `from main import X` to reference THIS module instead of re-executing main.py
+if __name__ == '__main__' and 'main' not in sys.modules:
+    sys.modules['main'] = sys.modules['__main__']
 
 # Import handlers
 from handlers import router as handlers_router
