@@ -11522,7 +11522,7 @@ else:
                 <div style="flex: 1; min-width: 0;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #F6F8FA;">
                         ${post.author.photo_url ? 
-                            `<img src="${post.author.photo_url}" onclick="openContactProfileModal('${usernameClean}')" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;">` : 
+                            `<img src="${post.author.photo_url}" onclick="openContactProfileModal('${usernameClean}')" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><div onclick="openContactProfileModal('${usernameClean}')" style="display:none;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#068487 0%,#05696c 100%);align-items:center;justify-content:center;font-size:14px;font-weight:600;color:white;cursor:pointer;box-shadow:0 2px 4px rgba(6,132,135,0.2);">${post.author.first_name ? post.author.first_name[0].toUpperCase() : (telegramUsername ? telegramUsername[0].toUpperCase() : '?')}</div>` : 
                             '<div onclick="openContactProfileModal(\'' + usernameClean + '\')" style="width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #068487 0%, #05696c 100%); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 600; color: white; cursor: pointer; box-shadow: 0 2px 4px rgba(6, 132, 135, 0.2);">' + (post.author.first_name ? post.author.first_name[0].toUpperCase() : (telegramUsername ? telegramUsername[0].toUpperCase() : '?')) + '</div>'
                         }
                         <div style="flex: 1; display: flex; flex-direction: column; gap: 2px;">
@@ -14438,7 +14438,9 @@ else:
                                     html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                     if (blockedPartner && blockedPartner.photo_url) {
                                         const imgId = 'img-blocked-' + (blockedPartner.telegram_id || username);
-                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" />';
+                                        const _initBlocked = (blockedPartner.first_name ? blockedPartner.first_name[0].toUpperCase() : '@');
+                                        html += '<img id="' + imgId + '" src="' + blockedPartner.photo_url + '" onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; cursor: pointer;" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';" />';
+                                        html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="display:none;width:64px;height:64px;border-radius:50%;background:#F6F8FA;align-items:center;justify-content:center;color:#374151;font-weight:600;font-size:24px;border:2px solid #E8ECEF;cursor:pointer;">' + _initBlocked + '</div>';
                                     } else {
                                         html += '<div onclick="openContactProfileModal(' + JSON.stringify(contactInfoEscaped) + ', true)" style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; cursor: pointer;">@</div>';
                                     }
@@ -14795,8 +14797,11 @@ else:
                 const initial = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                 
                 if (contact.photo_url) {
+                    const _initOrbit = contact.first_name ? contact.first_name.charAt(0).toUpperCase() : '@';
                     html += `<a href="${telegramUrl}" target="_blank" style="flex-shrink: 0; text-decoration: none;">
-                        <img src="${contact.photo_url}" style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">
+                        <img src="${contact.photo_url}" style="width: ${avatarSize}px; height: ${avatarSize}px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                        <div style="display:none;width:${avatarSize}px;height:${avatarSize}px;border-radius:50%;background:#E5E7EB;color:#374151;align-items:center;justify-content:center;font-weight:600;font-size:${Math.floor(avatarSize * 0.4)}px;border:2px solid #E8ECEF;cursor:pointer;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.1)';" onmouseout="this.style.transform='scale(1)';">${_initOrbit}</div>
+                    </a>`;
                     </a>`;
                 } else {
                     html += `<a href="${telegramUrl}" target="_blank" style="flex-shrink: 0; text-decoration: none;">

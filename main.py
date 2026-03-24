@@ -6583,7 +6583,15 @@ async def api_avatar_handler(request):
             _db2.close()
 
         # get_user_avatar_url handles old-format URL detection and cleanup internally
-        avatar_url = await get_user_avatar_url(request.app['bot'], telegram_id)
+        # Strict 4s timeout — avoid blocking event loop for slow Telegram API responses
+        try:
+            avatar_url = await asyncio.wait_for(
+                get_user_avatar_url(request.app['bot'], telegram_id),
+                timeout=4.0
+            )
+        except asyncio.TimeoutError:
+            logger.debug(f"Avatar fetch timed out for {telegram_id}, returning fallback")
+            return _default_avatar_response()
 
         async def _proxy_tg_avatar(url):
             """Proxy a Telegram file URL, return web.Response or None on failure."""
