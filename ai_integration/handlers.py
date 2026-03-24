@@ -840,6 +840,17 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         context.update(action="add_task", task=task, result=result_msg)
         logger.info(f"[ADD_TASK] Updated dialog context with task '{task.title}'")
 
+    # === Векторная память ===
+    try:
+        from ai_integration.vector_memory import store_memory_sync as _vmem_at
+        _desc_at = f" {description.strip()[:100]}" if description and description.strip() else ""
+        _meta_at = {'type': 'task', 'task_id': str(task_id)}
+        if task.goal_id:
+            _meta_at['goal_id'] = str(task.goal_id)
+        _vmem_at(user_id, f"Задача создана: «{title}».{_desc_at}".strip(), _meta_at)
+    except Exception as _e:
+        logger.debug(f"[ADD_TASK] Vector memory skipped: {_e}")
+
     if close_session:
         session.close()
         logger.info(f"[ADD_TASK] Closed session, returning: {result_msg}")
@@ -885,6 +896,12 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         )
         session.add(note)
         session.commit()
+        # === Векторная память ===
+        try:
+            from ai_integration.vector_memory import store_memory_sync as _vmem_sn
+            _vmem_sn(user_id, f"Заметка: «{note.title}». {content[:200]}", {'type': 'note', 'note_id': str(note.id)})
+        except Exception as _e:
+            logger.debug(f"[SAVE_NOTE] Vector memory skipped: {_e}")
         return f"Заметка сохранена: «{note.title}»"
     except Exception as e:
         logger.warning(f"[SAVE_NOTE] Error: {e}")
@@ -5044,6 +5061,14 @@ def update_goal(goal_id=None, title=None, description=None, target_date=None, us
             session.commit()
         except Exception as _e:
             logger.warning(f"[UPDATE_GOAL] Activity log failed: {_e}")
+        # === Векторная память ===
+        try:
+            from ai_integration.vector_memory import store_memory_sync as _vmem_ug
+            _desc_ug = f" {goal.description[:100]}" if goal.description else ""
+            _vmem_ug(user_id, f"Цель обновлена: «{goal.title}».{_desc_ug} Изменения: {', '.join(changes)}",
+                     {'type': 'goal', 'goal_id': str(goal.id)})
+        except Exception as _e:
+            logger.debug(f"[UPDATE_GOAL] Vector memory skipped: {_e}")
         return f" Цель «{goal.title}» обновлена: {', '.join(changes)}"
     except Exception as e:
         logger.error(f"Error in update_goal for user {user_id}: {e}")
@@ -5361,6 +5386,12 @@ def save_user_rule(rule: str, user_id: int = None, session=None) -> str:
         _u.memory = _enc(_json_sr.dumps(_mem, ensure_ascii=False))
         session.commit()
         logger.info(f"[SAVE_RULE] uid={user_id}: {rule[:80]}")
+        # === Векторная память ===
+        try:
+            from ai_integration.vector_memory import store_memory_sync as _vmem_sr
+            _vmem_sr(user_id, f"Правило: {rule[:300]}", {'type': 'rule'})
+        except Exception as _e:
+            logger.debug(f"[SAVE_RULE] Vector memory skipped: {_e}")
         return f"Запомнил: «{rule[:120]}»"
     except Exception as e:
         logger.warning(f"[SAVE_RULE] Failed: {e}")
@@ -6236,9 +6267,21 @@ async def delete_task(task_id=None, task_title=None, reason=None, user_id=None, 
         task.status = 'cancelled'
         task.actual_completion_time = _dt_del.now(_pytz_del.UTC)
         session.commit()
-        
+
+        # === Векторная память: удаляем вектор задачи ===
+        try:
+            from ai_integration.vector_memory import get_pinecone_index as _get_pc_idx
+            _pc_idx = _get_pc_idx()
+            if _pc_idx:
+                user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+                _ns = f"user_{user_id}"
+                _pc_idx.delete(filter={'type': 'task', 'task_id': str(task_db_id)}, namespace=_ns)
+                logger.debug(f"[DELETE_TASK] Pinecone vectors cleaned for task_id={task_db_id}")
+        except Exception as _e:
+            logger.debug(f"[DELETE_TASK] Vector memory cleanup skipped: {_e}")
+
         logger.info(f"[DELETE_TASK] Task '{task_name}' (ID: {task_db_id}) soft-deleted (status=cancelled)")
-        
+
         reason_text = f" Причина: {reason}" if reason else ""
         return f"Задача '{task_name}' удалена.{reason_text}"
     
@@ -7013,6 +7056,14 @@ def update_profile(user_id: int, city: str = None, birth_date: str = None, inter
             result_parts.append(f"Обновлено: {', '.join(updates)}")
         
         if result_parts:
+            # === Векторная память ===
+            try:
+                from ai_integration.vector_memory import store_memory_sync as _vmem_up
+                _all_changes_up = added + [u for u in updates if 'уже есть' not in u and 'изменений' not in u]
+                if _all_changes_up:
+                    _vmem_up(user_id, f"Профиль обновлён: {', '.join(_all_changes_up[:5])}", {'type': 'profile'})
+            except Exception as _e:
+                logger.debug(f"[UPDATE_PROFILE] Vector memory skipped: {_e}")
             return ' | '.join(result_parts)
         else:
             return "Профиль проверен, изменений не требуется"
@@ -7116,6 +7167,13 @@ def smart_update_profile(user_id: int, field: str, value: str, action: str = 'ad
             loop.create_task(normalize_profile_background(profile.user_id))
         except Exception:
             pass  # Non-critical
+
+        # === Векторная память ===
+        try:
+            from ai_integration.vector_memory import store_memory_sync as _vmem_sp
+            _vmem_sp(user_id, f"Профиль обновлён: {field} → {value}", {'type': 'profile', 'field': field})
+        except Exception as _e:
+            logger.debug(f"[SMART_UPDATE_PROFILE] Vector memory skipped: {_e}")
 
         return result
 
