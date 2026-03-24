@@ -437,9 +437,11 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
 
                 # Attempt 1: getUserProfilePhotos (may be blocked by TG privacy)
                 try:
-                    photos = await bot.get_user_profile_photos(user_id, limit=1)
+                    photos = await asyncio.wait_for(bot.get_user_profile_photos(user_id, limit=1), timeout=2.0)
                     if photos.total_count > 0:
                         _fetched_file_id = photos.photos[0][-1].file_id
+                except asyncio.TimeoutError:
+                    logger.debug(f"get_user_profile_photos timeout for {user_id}")
                 except Exception as e:
                     logger.debug(f"get_user_profile_photos failed for {user_id}: {e}")
 
@@ -447,9 +449,11 @@ async def get_user_avatar_url(bot, user_id, force_refresh=False):
                 # (accessible because user has chatted with the bot)
                 if not _fetched_file_id:
                     try:
-                        chat = await bot.get_chat(user_id)
+                        chat = await asyncio.wait_for(bot.get_chat(user_id), timeout=2.0)
                         if chat.photo and chat.photo.small_file_id:
                             _fetched_file_id = chat.photo.small_file_id
+                    except asyncio.TimeoutError:
+                        logger.debug(f"get_chat timeout for {user_id}")
                     except Exception as e:
                         logger.debug(f"get_chat failed for {user_id}: {e}")
 
@@ -6658,14 +6662,26 @@ async def api_avatar_handler(request):
                 return result
             # Proxy failed (expired URL?) — force-refresh and retry once
             logger.info(f"Avatar proxy failed for {telegram_id}, force-refreshing")
-            fresh_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
+            try:
+                fresh_url = await asyncio.wait_for(
+                    get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True),
+                    timeout=3.0
+                )
+            except asyncio.TimeoutError:
+                fresh_url = None
             if fresh_url and fresh_url != avatar_url:
                 result = await _proxy_tg_avatar(fresh_url)
                 if result:
                     return result
         else:
             # No cached URL — try fetching fresh from Telegram
-            fresh_url = await get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True)
+            try:
+                fresh_url = await asyncio.wait_for(
+                    get_user_avatar_url(request.app['bot'], telegram_id, force_refresh=True),
+                    timeout=3.0
+                )
+            except asyncio.TimeoutError:
+                fresh_url = None
             if fresh_url:
                 result = await _proxy_tg_avatar(fresh_url)
                 if result:
