@@ -6673,89 +6673,91 @@ def _default_avatar_response():
 
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id.
-    Priority: custom_avatar > Telegram/Discord avatar.
-    For Telegram users: proxies avatar via server to hide Bot Token.
-    For Discord users (negative id): serves cached Discord CDN avatar directly.
+    Priority: custom_avatar > cached tg_avatar_data > inline TG download (if file_id known) > background refresh + 404.
     """
     telegram_id = request.match_info.get('telegram_id')
-
     if not telegram_id:
         return web.Response(status=400, text='Missing telegram_id')
 
     try:
         telegram_id = int(telegram_id)
 
-        # Check for custom avatar first (highest priority)
-        from models import User as _User
         _db = Session()
         try:
-            _user = _db.query(_User).filter_by(telegram_id=telegram_id).first()
-            if _user and _user.custom_avatar:
-                import base64
-                # Parse data URI: data:image/jpeg;base64,/9j/...
-                parts = _user.custom_avatar.split(',', 1)
-                if len(parts) == 2:
-                    meta = parts[0]  # data:image/jpeg;base64
-                    ct = meta.split(':')[1].split(';')[0] if ':' in meta else 'image/jpeg'
-                    img_data = base64.b64decode(parts[1])
-                    return web.Response(
-                        body=img_data,
-                        content_type=ct,
-                        headers={'Cache-Control': 'public, max-age=300'}
-                    )
+            _u = _db.query(User).filter_by(telegram_id=telegram_id).first()
+            if not _u:
+                return _default_avatar_response()
+
+            # 1. Custom (user-uploaded) avatar — highest priority
+            if _u.custom_avatar:
+                import base64 as _b64c
+                _parts = _u.custom_avatar.split(',', 1)
+                if len(_parts) == 2:
+                    _ct = _parts[0].split(':')[1].split(';')[0] if ':' in _parts[0] else 'image/jpeg'
+                    return web.Response(body=_b64c.b64decode(_parts[1]), content_type=_ct,
+                                        headers={'Cache-Control': 'public, max-age=300'})
+
+            # 2. Discord users: direct CDN URL
+            if telegram_id < 0:
+                if _u.photo_url and _u.photo_url.startswith('http'):
+                    return web.HTTPFound(_u.photo_url)
+                return _default_avatar_response()
+
+            # 3. Cached TG bytes in DB
+            _cache = getattr(_u, 'tg_avatar_data', None)
+            if _cache == '__no_avatar__':
+                return _default_avatar_response()
+            if _cache and _cache.startswith('data:'):
+                import base64 as _b64t
+                _p = _cache.split(',', 1)
+                if len(_p) == 2:
+                    _ct = _p[0].split(':')[1].split(';')[0] if ':' in _p[0] else 'image/jpeg'
+                    return web.Response(body=_b64t.b64decode(_p[1]), content_type=_ct,
+                                        headers={'Cache-Control': 'public, max-age=1800'})
+
+            # 4. Have a file_id in photo_url → download inline (await, 5s) and cache
+            _file_id = getattr(_u, 'photo_url', None)
+            if _file_id and _file_id != '__no_avatar__' and not _file_id.startswith('http'):
+                _bot = request.app.get('bot')
+                if _bot:
+                    try:
+                        _file = await asyncio.wait_for(_bot.get_file(_file_id), timeout=5.0)
+                        _file_url = f"https://api.telegram.org/file/bot{_bot.token}/{_file.file_path}"
+                        async with aiohttp.ClientSession() as _sess:
+                            async with _sess.get(_file_url, timeout=aiohttp.ClientTimeout(total=8)) as _resp:
+                                if _resp.status == 200:
+                                    import base64 as _b64i
+                                    _bytes = await _resp.read()
+                                    if _bytes[:2] == b'\xff\xd8':
+                                        _ct = 'image/jpeg'
+                                    elif _bytes[:8] == b'\x89PNG\r\n\x1a\n':
+                                        _ct = 'image/png'
+                                    else:
+                                        _ct = 'image/jpeg'
+                                    _b64_str = _b64i.b64encode(_bytes).decode()
+                                    _data_uri = f"data:{_ct};base64,{_b64_str}"
+                                    # Cache in DB for subsequent requests
+                                    try:
+                                        _u.tg_avatar_data = _data_uri
+                                        _db.commit()
+                                        logger.info(f"[avatar] Inline cached {telegram_id} ({len(_bytes)}b)")
+                                    except Exception as _dbe:
+                                        _db.rollback()
+                                        logger.debug(f"[avatar] DB cache error for {telegram_id}: {_dbe}")
+                                    return web.Response(body=_bytes, content_type=_ct,
+                                                        headers={'Cache-Control': 'public, max-age=1800'})
+                    except asyncio.TimeoutError:
+                        logger.debug(f"[avatar] inline download timeout for {telegram_id}")
+                    except Exception as _e:
+                        logger.debug(f"[avatar] inline download error for {telegram_id}: {_e}")
+
+            # 5. No cached data, no file_id → trigger background refresh and return 404
+            _bot = request.app.get('bot')
+            if _bot:
+                asyncio.create_task(_refresh_one_avatar(_bot, telegram_id))
+
         finally:
             _db.close()
-
-        # Discord-only users: serve cached photo_url (Discord CDN)
-        if telegram_id < 0:
-            from models import User as _User
-            _db = Session()
-            try:
-                _user = _db.query(_User).filter_by(telegram_id=telegram_id).first()
-                if _user and _user.photo_url and _user.photo_url.startswith('http'):
-                    # Discord CDN URLs are public, redirect directly
-                    return web.HTTPFound(_user.photo_url)
-                return _default_avatar_response()
-            finally:
-                _db.close()
-
-        # Telegram users: proxy through server
-        if 'bot' not in request.app or not request.app['bot']:
-            logger.warning(f"Bot not available for avatar request: {telegram_id}")
-            return _default_avatar_response()
-
-        # Fast-path: skip Telegram API call for users confirmed to have no avatar.
-        # Check DB cache: tg_avatar_data (TG avatar bytes cached by background refresh)
-        # and fast-path for __no_avatar__ users — no TG API calls at request time.
-        _db2 = Session()
-        try:
-            _u2 = _db2.query(User).filter_by(telegram_id=telegram_id).first()
-            if _u2:
-                _tg_cache = getattr(_u2, 'tg_avatar_data', None)
-                # Sentinel: tried and confirmed no avatar
-                if _tg_cache == '__no_avatar__':
-                    return _default_avatar_response()
-                # Serve cached TG avatar bytes if available (highest priority after custom_avatar)
-                if _tg_cache:
-                    import base64 as _b64_h
-                    _parts = _tg_cache.split(',', 1)
-                    if len(_parts) == 2:
-                        _meta = _parts[0]
-                        _ct = _meta.split(':')[1].split(';')[0] if ':' in _meta else 'image/jpeg'
-                        _img = _b64_h.b64decode(_parts[1])
-                        return web.Response(
-                            body=_img,
-                            content_type=_ct,
-                            headers={'Cache-Control': 'public, max-age=1800'}
-                        )
-                # No avatar available — trigger background refresh to populate tg_avatar_data for next time
-                # For __no_avatar__ sentinel: already returned 404 above — don't re-trigger
-                # But DO trigger for users with NULL tg_avatar_data (first-time refresh)
-                bot = request.app.get('bot')
-                if bot:
-                    asyncio.create_task(_refresh_one_avatar(bot, telegram_id))
-        finally:
-            _db2.close()
 
         return _default_avatar_response()
     except ValueError:
