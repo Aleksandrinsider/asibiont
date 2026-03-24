@@ -15,6 +15,7 @@ import logging
 import asyncio
 import aiohttp
 from typing import Optional
+from config import normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +243,7 @@ async def discord_oauth_callback(request):
                         discord_id=discord_id,
                         username=discord_username,
                         discord_username=discord_username,
-                        first_name=discord_display,
+                        first_name=normalize_name(discord_display),
                         photo_url=avatar_url,
                         platform='discord',
                         language='en',
@@ -272,7 +273,7 @@ async def discord_oauth_callback(request):
                     if discord_avatar:
                         user.photo_url = f"https://cdn.discordapp.com/avatars/{discord_id}/{discord_avatar}.png?size=256"
                     if discord_display:
-                        user.first_name = discord_display
+                        user.first_name = normalize_name(discord_display)
                     user.discord_id = discord_id
                     user.discord_username = discord_username
                     db.commit()
@@ -403,7 +404,7 @@ async def _handle_discord_message(discord_user_id: int, author, text: str) -> st
                 telegram_id=pseudo_telegram_id,
                 discord_id=discord_user_id,
                 username=str(author),
-                first_name=author.display_name,
+                first_name=normalize_name(author.display_name),
                 photo_url=avatar_url,
                 platform='discord',
                 language='en',

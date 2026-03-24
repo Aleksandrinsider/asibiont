@@ -352,7 +352,7 @@ PROGRESS_PHRASES = {
         'get_user_goals': ['Открываю карту целей...', 'Сверяю курс...'],
         'create_goal': ['Задаю новый вектор...', 'Ставлю маяк на горизонте...', 'Фиксирую вершину...'],
         'delete_goal': ['Снимаю с повестки...', 'Расчищаю горизонт...'],
-        'generate_post': ['Ловлю вдохновение...', 'Формулирую мысль...', 'Колдую над текстом...'],
+        'generate_post': ['Ловлю вдохновение...', 'Формулирую мысль...', 'Колдую над текстом...', 'Придумываю пост...', 'Генерирую контент...'],
         'create_post': ['Запускаю в эфир...', 'Публикую!'],
         'edit_post': ['Полирую текст...', 'Докручиваю...'],
         'get_posts': ['Листаю ленту...', 'Смотрю что публиковал...'],
@@ -403,7 +403,6 @@ PROGRESS_PHRASES = {
         'list_marketplace': ['Открываю маркетплейс...', 'Ищу агентов...'],
         'schedule_background_task': ['Ставлю на автопилот...', 'Запускаю фоном...'],
         'run_agent_action': ['Агент приступает...', 'Запускаю агента...'],
-        'generate_post': ['Придумываю пост...', 'Генерирую контент...'],
     },
     'en': {
         'list_tasks': ['Checking your schedule...', 'Let me see your tasks...', 'Opening your planner...'],
@@ -421,7 +420,7 @@ PROGRESS_PHRASES = {
         'get_user_goals': ['Opening your goals map...', 'Checking course...'],
         'create_goal': ['Setting a new direction...', 'Placing a beacon...', 'Locking in the target...'],
         'delete_goal': ['Removing from agenda...', 'Clearing the horizon...'],
-        'generate_post': ['Catching inspiration...', 'Crafting the message...', 'Working on the text...'],
+        'generate_post': ['Catching inspiration...', 'Crafting the message...', 'Working on the text...', 'Crafting a post...', 'Generating content...'],
         'create_post': ['Publishing...', 'Going live!'],
         'edit_post': ['Polishing the text...', 'Fine-tuning...'],
         'get_posts': ['Browsing your feed...', 'Checking your posts...'],
@@ -472,7 +471,6 @@ PROGRESS_PHRASES = {
         'list_marketplace': ['Opening marketplace...', 'Searching agents...'],
         'schedule_background_task': ['Setting on autopilot...', 'Running in background...'],
         'run_agent_action': ['Agent getting to work...', 'Launching agent...'],
-        'generate_post': ['Crafting a post...', 'Generating content...'],
     },
 }
 

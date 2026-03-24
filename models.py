@@ -89,6 +89,10 @@ class User(Base):
 
 class Task(Base):
     __tablename__ = 'tasks'
+    __table_args__ = (
+        Index('ix_task_user_status', 'user_id', 'status'),
+        Index('ix_task_user_due', 'user_id', 'due_date'),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Индекс для быстрого поиска задач пользователя
@@ -130,6 +134,9 @@ class Task(Base):
 
 class Interaction(Base):
     __tablename__ = 'interactions'
+    __table_args__ = (
+        Index('ix_interaction_user_created', 'user_id', 'created_at'),
+    )
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)  # Индекс для поиска взаимодействий пользователя

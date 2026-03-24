@@ -15,7 +15,7 @@ from .utils import parse_time_to_datetime, generate_unified_recommendations, nor
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
-from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, encrypt_token, decrypt_token
+from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, encrypt_token, decrypt_token, redact_email
 
 logger = logging.getLogger(__name__)
 
@@ -11482,7 +11482,7 @@ async def send_outreach_email(
                 resp_data = await resp.json()
                 if resp.status in (200, 201):
                     resend_id = resp_data.get('id')
-                    logger.info(f"[EMAIL_OUTREACH] Sent to {recipient_email}: {resend_id}")
+                    logger.info(f"[EMAIL_OUTREACH] Sent to {redact_email(recipient_email)}: {resend_id}")
                     # Сбрасываем запись ошибки при успехе
                     try:
                         from .service_health import clear_error as _clr_svc
@@ -14643,7 +14643,7 @@ async def send_email(
                         err = resp_data.get('message', str(resp_data))
                         return f" Ошибка Resend API: {err}"
                     resend_id = resp_data.get('id', '')
-                    logger.info(f'[SEND_EMAIL] Sent via user Resend from {sender_email} to {to_clean}')
+                    logger.info(f'[SEND_EMAIL] Sent via user Resend from {redact_email(sender_email)} to {redact_email(to_clean)}')
         except Exception as e:
             return f" Ошибка отправки: {str(e)}"
 

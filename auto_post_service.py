@@ -66,7 +66,8 @@ async def _generate_image_for_post(post_text: str) -> str:
         )
         if not image_prompt or len(image_prompt) < 5:
             image_prompt = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
-    except Exception:
+    except Exception as _img_prompt_err:
+        logger.debug("Image prompt generation failed, using fallback: %s", _img_prompt_err)
         image_prompt = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
 
     try:

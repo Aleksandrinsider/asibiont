@@ -194,6 +194,34 @@ RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET", "")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
+# ═══════════════════════════════════════════════════════
+# Утилиты
+# ═══════════════════════════════════════════════════════
+def normalize_name(name: str) -> str:
+    """NFKC-нормализация имени: убирает fancy Unicode (𝘈𝘭𝘦𝘹 → Alex)"""
+    if not name:
+        return name
+    import unicodedata
+    return unicodedata.normalize('NFKC', name).strip()
+
+
+def redact_email(email: str) -> str:
+    """Маскирует email для безопасного логирования: user@domain.com → us***@domain.com"""
+    if not email or '@' not in email:
+        return email or ''
+    name, domain = email.rsplit('@', 1)
+    return f"{name[:2]}***@{domain}" if len(name) > 2 else f"{name[0]}***@{domain}"
+
+
+def api_response(data=None, error=None, status=200):
+    """Стандартный формат API-ответа: {ok: bool, data/error}"""
+    import json
+    from aiohttp import web
+    if error:
+        return web.json_response({'ok': False, 'error': error}, status=status)
+    return web.json_response({'ok': True, 'data': data or {}}, status=status)
+
+
 # Reminder settings
 DAILY_REPORT_HOUR = int(os.getenv("DAILY_REPORT_HOUR", 22))
 PROACTIVE_CHECK_INTERVAL_MINUTES = int(os.getenv("PROACTIVE_CHECK_INTERVAL_MINUTES", 120))  # Каждые 2 часа вместо 30 минут

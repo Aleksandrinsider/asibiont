@@ -3,12 +3,12 @@ from reminder_service import ReminderService
 from auto_post_service import run_service as auto_post_run_service
 from ai_integration import chat_with_ai, get_partners_list, decrypt_data, encrypt_data
 from datetime import datetime, timedelta, timezone as dt_timezone
-from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME, encrypt_token, decrypt_token, FREE_ACCESS_MODE
+from config import TELEGRAM_TOKEN, TELEGRAM_BOT_USERNAME, PORT, CURRENT_DATE, DATABASE_URL, LOCAL, DEEPSEEK_API_KEY, DEEPSEEK_MODEL, NOWPAYMENTS_API_KEY, NOWPAYMENTS_IPN_SECRET, WEBHOOK_SECRET, SENTRY_DSN, ADMIN_TELEGRAM_USERNAME, encrypt_token, decrypt_token, FREE_ACCESS_MODE, redact_email, normalize_name
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 from aiohttp_session import get_session
 import aiohttp_session
 import os
-from sqlalchemy import text, or_, and_
+from sqlalchemy import text, or_, and_, func
 import re
 import jinja2
 import aiohttp_jinja2
@@ -35,10 +35,6 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
-
-def get_db_session():
-    """Get a new database session"""
-    return Session()
 
 from contextlib import contextmanager
 
@@ -581,7 +577,7 @@ async def _refresh_one_avatar(bot, tg_id):
                         _file_id = chat.photo.small_file_id
                     # Also fill first_name while we're here
                     if chat.first_name and not _u_r.first_name:
-                        _u_r.first_name = chat.first_name
+                        _u_r.first_name = normalize_name(chat.first_name)
                 except asyncio.TimeoutError:
                     logger.debug(f"[bg] get_chat timeout {tg_id}")
                 except Exception as e:
@@ -651,7 +647,7 @@ async def _refresh_one_avatar(bot, tg_id):
                 try:
                     _chat2 = await asyncio.wait_for(bot.get_chat(tg_id), timeout=8.0)
                     if _chat2 and _chat2.first_name:
-                        _u_r2.first_name = _chat2.first_name
+                        _u_r2.first_name = normalize_name(_chat2.first_name)
                         _db_r2.commit()
                         logger.info(f"Updated first_name for {tg_id}: {_chat2.first_name}")
                 except Exception:
@@ -764,7 +760,7 @@ async def send_email(to: str, subject: str, body: str):
         try:
             infos = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)
             host_ip = infos[0][4][0] if infos else SMTP_HOST
-        except:
+        except Exception:
             host_ip = SMTP_HOST
         
         def _smtp_send():
@@ -952,7 +948,7 @@ async def auth_handler(request):
                                 # No separate TG account — upgrade Discord account to TG
                                 discord_user.telegram_id = user_id
                                 discord_user.username = data.get('username') or discord_user.username
-                                discord_user.first_name = data.get('first_name') or discord_user.first_name
+                                discord_user.first_name = normalize_name(data.get('first_name')) or discord_user.first_name
                                 discord_user.platform = 'telegram'
                                 # Update avatar from TG (stores permanent file_id via its own session)
                                 if 'bot' in request.app:
@@ -1005,7 +1001,7 @@ async def auth_handler(request):
                     user = User(
                         telegram_id=user_id,
                         username=data.get('username'),
-                        first_name=data.get('first_name'),
+                        first_name=normalize_name(data.get('first_name')),
                         photo_url=_widget_photo,
                         timezone=timezone,
                         referrer_id=referrer.id if referrer else None)
@@ -1096,6 +1092,9 @@ async def auth_handler(request):
             logger.info(f"Session set with user_id: {user_id}, session keys: {list(session.keys())}")
 
             next_url = session.pop('next_url', None)
+            # Validate redirect URL — only allow relative paths to prevent open redirect
+            if next_url and (next_url.startswith('//') or '://' in next_url):
+                next_url = None
             redirect_to = next_url if next_url else '/dashboard'
             response = web.HTTPFound(redirect_to)
             logger.info(f"Redirecting to {redirect_to} after auth")
@@ -1166,7 +1165,7 @@ async def email_register_handler(request):
             # Log in immediately
             session = await get_session(request)
             session['user_id'] = fake_tg_id
-            logger.info(f"Email registration successful: {email}, user_id={user.id}")
+            logger.info(f"Email registration successful: {redact_email(email)}, user_id={user.id}")
 
             return web.json_response({'success': True, 'redirect': '/dashboard'})
         finally:
@@ -1208,7 +1207,7 @@ async def email_login_handler(request):
 
             session = await get_session(request)
             session['user_id'] = user.telegram_id
-            logger.info(f"Email login successful: {email}")
+            logger.info(f"Email login successful: {redact_email(email)}")
 
             return web.json_response({'success': True, 'redirect': '/dashboard'})
         finally:
@@ -1256,9 +1255,9 @@ async def password_reset_handler(request):
 — ASI Biont
 https://asibiont.com"""
                 )
-                logger.info(f"Password reset email sent to {email}")
+                logger.info(f"Password reset email sent to {redact_email(email)}")
             except Exception as mail_err:
-                logger.error(f"Failed to send password reset email to {email}: {mail_err}")
+                logger.error(f"Failed to send password reset email to {redact_email(email)}: {mail_err}")
                 return web.json_response({
                     'error': 'Не удалось отправить письмо. Попробуйте позже или обратитесь в поддержку.'
                 }, status=500)
@@ -1266,7 +1265,7 @@ https://asibiont.com"""
             # Email sent successfully — now save the new password
             user.password_hash = hash_password(new_password)
             session_db.commit()
-            logger.info(f"Password reset for email: {email}")
+            logger.info(f"Password reset for email: {redact_email(email)}")
 
             return web.json_response({
                 'success': True,
@@ -1664,23 +1663,22 @@ async def dashboard_handler(request):
                     Task.status != 'rejected'
                 ).all()
 
-                delegator_ids = set()
-                for task in delegated_tasks:
-                    if task.delegated_by and task.delegated_by not in delegator_ids:
-                        delegator_ids.add(task.delegated_by)
-                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
-                        if delegator and delegator.id != user.id:
-                            delegator_tasks = [t for t in delegated_tasks if t.delegated_by == delegator.id]
-                            task_count = len(delegator_tasks)
-                            task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegator_tasks[:3]]
-                            delegating_to_me.append({
-                                'id': delegator.id,
-                                'username': delegator.username,
-                                'first_name': delegator.first_name,
-                                'reason': f'делегироал {task_count} задач',
-                                'tasks': task_titles,
-                                'task_count': task_count
-                            })
+                delegator_ids = set(t.delegated_by for t in delegated_tasks if t.delegated_by)
+                _delegators_batch = {u.id: u for u in session_db.query(User).filter(User.id.in_(delegator_ids)).all()} if delegator_ids else {}
+                for did in delegator_ids:
+                    delegator = _delegators_batch.get(did)
+                    if delegator and delegator.id != user.id:
+                        delegator_tasks = [t for t in delegated_tasks if t.delegated_by == delegator.id]
+                        task_count = len(delegator_tasks)
+                        task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegator_tasks[:3]]
+                        delegating_to_me.append({
+                            'id': delegator.id,
+                            'username': delegator.username,
+                            'first_name': delegator.first_name,
+                            'reason': f'делегироал {task_count} задач',
+                            'tasks': task_titles,
+                            'task_count': task_count
+                        })
 
                 # Добаить избраые контакты, у которых се задачи отклоны,  контакт  избраом
                 for favorite_username in favorite_contacts:
@@ -3771,25 +3769,25 @@ async def api_partners_handler(request):
                     Task.status != 'rejected'
                 ).all()
 
-                delegator_ids = set()
-                for task in delegated_tasks:
-                    if task.delegated_by and task.delegated_by not in delegator_ids:
-                        delegator_ids.add(task.delegated_by)
-                        delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
-                        if delegator and delegator.id != user.id:
-                            delegator_profile = session_db.query(UserProfile).filter_by(user_id=delegator.id).first()
-                            task_titles = [t.title for t in delegated_tasks if t.delegated_by == delegator.id]
-                            delegating_to_me.append({
-                                'id': delegator.id,
-                                'username': delegator.username,
-                                'first_name': delegator.first_name,
-                                'position': _pick_field(delegator_profile, 'position'),
-                                'interests': _pick_field(delegator_profile, 'interests'),
-                                'city': _pick_field(delegator_profile, 'city'),
-                                'company': _pick_field(delegator_profile, 'company'),
-                                'task_count': len(task_titles),
-                                'reason': f'делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
-                            })
+                delegator_ids = set(t.delegated_by for t in delegated_tasks if t.delegated_by)
+                _delegators_batch2 = {u.id: u for u in session_db.query(User).filter(User.id.in_(delegator_ids)).all()} if delegator_ids else {}
+                _delegator_profiles = {p.user_id: p for p in session_db.query(UserProfile).filter(UserProfile.user_id.in_(delegator_ids)).all()} if delegator_ids else {}
+                for did in delegator_ids:
+                    delegator = _delegators_batch2.get(did)
+                    if delegator and delegator.id != user.id:
+                        delegator_profile = _delegator_profiles.get(delegator.id)
+                        task_titles = [t.title for t in delegated_tasks if t.delegated_by == delegator.id]
+                        delegating_to_me.append({
+                            'id': delegator.id,
+                            'username': delegator.username,
+                            'first_name': delegator.first_name,
+                            'position': _pick_field(delegator_profile, 'position'),
+                            'interests': _pick_field(delegator_profile, 'interests'),
+                            'city': _pick_field(delegator_profile, 'city'),
+                            'company': _pick_field(delegator_profile, 'company'),
+                            'task_count': len(task_titles),
+                            'reason': f'делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
+                        })
 
                 # Люди, которым я делегироал задачи
                 my_delegated_tasks = session_db.query(Task).filter(
@@ -3800,30 +3798,36 @@ async def api_partners_handler(request):
                 ).all()
 
                 delegatee_usernames = set()
+                _clean_usernames = set()
                 for task in my_delegated_tasks:
-                    if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
+                    if task.delegated_to_username:
+                        _clean_usernames.add(task.delegated_to_username.replace('@', '').lower())
                         delegatee_usernames.add(task.delegated_to_username)
-                        delegatee = session_db.query(User).filter(
-                            or_(
-                                User.username.ilike(task.delegated_to_username.replace('@', '')),
-                                User.username.ilike(f'@{task.delegated_to_username.replace("@", "")}')
-                            )
-                        ).first()
-                        if delegatee and delegatee.id != user.id:
-                            delegatee_profile = session_db.query(UserProfile).filter_by(user_id=delegatee.id).first()
-                            task_titles = [
-                                t.title for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
-                            delegating_by_me.append({
-                                'id': delegatee.id,
-                                'username': delegatee.username,
-                                'first_name': delegatee.first_name,
-                                'position': _pick_field(delegatee_profile, 'position'),
-                                'interests': _pick_field(delegatee_profile, 'interests'),
-                                'city': _pick_field(delegatee_profile, 'city'),
-                                'company': _pick_field(delegatee_profile, 'company'),
-                                'task_count': len(task_titles),
-                                'reason': f'я делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
-                            })
+                # Batch-load all delegatee users by username
+                _delegatees_all = session_db.query(User).filter(
+                    func.lower(User.username).in_(_clean_usernames)
+                ).all() if _clean_usernames else []
+                _delegatee_by_uname = {u.username.lower(): u for u in _delegatees_all if u.username}
+                _delegatee_ids = [u.id for u in _delegatees_all]
+                _delegatee_profiles = {p.user_id: p for p in session_db.query(UserProfile).filter(UserProfile.user_id.in_(_delegatee_ids)).all()} if _delegatee_ids else {}
+                for uname in delegatee_usernames:
+                    uname_clean = uname.replace('@', '').lower()
+                    delegatee = _delegatee_by_uname.get(uname_clean)
+                    if delegatee and delegatee.id != user.id:
+                        delegatee_profile = _delegatee_profiles.get(delegatee.id)
+                        task_titles = [
+                            t.title for t in my_delegated_tasks if t.delegated_to_username == uname]
+                        delegating_by_me.append({
+                            'id': delegatee.id,
+                            'username': delegatee.username,
+                            'first_name': delegatee.first_name,
+                            'position': _pick_field(delegatee_profile, 'position'),
+                            'interests': _pick_field(delegatee_profile, 'interests'),
+                            'city': _pick_field(delegatee_profile, 'city'),
+                            'company': _pick_field(delegatee_profile, 'company'),
+                            'task_count': len(task_titles),
+                            'reason': f'я делегироал {len(task_titles)} {pluralize_task(len(task_titles))}'
+                        })
 
             except Exception as e:
                 logger.error(f"Error getting delegation contacts: {e}")
@@ -5234,7 +5238,7 @@ async def api_blocked_contacts_handler(request):
                             
                             # Find the blocked user first
                             blocked_user = session_db.query(User).filter(
-                                User.username != None,
+                                User.username.isnot(None),
                                 User.username.ilike(clean_blocked)
                             ).first()
                             
@@ -5830,7 +5834,7 @@ async def get_feed_handler(request):
         user_id = session.get('user_id')
         logger.info(f"Feed handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
         if not user_id:
-            logger.error("No user_id in session for feed API")
+            logger.warning("No user_id in session for feed API")
             return web.json_response({'error': 'Not authenticated'}, status=401)
 
         session_db = Session()
@@ -5850,31 +5854,23 @@ async def get_feed_handler(request):
                     favorite_data = json.loads(user_profile.favorite_contacts)
                     logger.info(f"Feed: favorite_data from profile: {favorite_data}")
                     # favorite_contacts может содержать как ID, так и usernames
+                    _fav_usernames = []
                     for item in favorite_data:
                         if isinstance(item, int):
-                            # Это user_id
                             favorite_user_ids.append(item)
-                            logger.info(f"Feed: Added favorite user_id: {item}")
                         elif isinstance(item, str):
-                            # Это username - йти user_id
-                            username_clean = item.replace('@', '')
-                            fav_user = session_db.query(User).filter(
-                                or_(
-                                    User.username == item,
-                                    User.username == username_clean
-                                )
-                            ).first()
-                            if fav_user:
-                                favorite_user_ids.append(fav_user.id)
-                                logger.info(f"Feed: Found favorite username '{item}' -> user_id {fav_user.id}")
-                            else:
-                                logger.warning(f"Feed: Favorite username '{item}' not found in database")
+                            _fav_usernames.append(item.replace('@', ''))
+                    # Batch-resolve usernames to IDs
+                    if _fav_usernames:
+                        _fav_users = session_db.query(User).filter(
+                            func.lower(User.username).in_([u.lower() for u in _fav_usernames])
+                        ).all()
+                        for fu in _fav_users:
+                            favorite_user_ids.append(fu.id)
                 except Exception as e:
                     logger.error(f"Error parsing favorite_contacts: {e}")
                     favorite_user_ids = []
             
-            logger.info(f"Feed: final favorite_user_ids: {favorite_user_ids}")
-
             logger.info(f"Feed: final favorite_user_ids: {favorite_user_ids}")
 
             # Get users who blocked current user (exclude their posts)
@@ -5910,9 +5906,7 @@ async def get_feed_handler(request):
                     Post.user_id.in_(all_user_ids)
                 ).order_by(Post.created_at.desc()).limit(20).all()
                 logger.info(f"Found {len(posts)} posts for feed from users: {all_user_ids}")
-                for post in posts:
-                    post_author = session_db.query(User).filter_by(id=post.user_id).first()
-                    logger.info(f"Feed post: ID={post.id}, author={post_author.username if post_author else 'unknown'} (user_id={post.user_id}), content={post.content[:30]}...")
+                logger.info(f"Feed: found {len(posts)} posts from user_ids={[p.user_id for p in posts]}")
             else:
                 posts = []
                 logger.info("No favorite contacts found, returning empty feed")
@@ -7116,6 +7110,22 @@ async def on_shutdown(app):
     except Exception as _e:
         logger.debug("suppressed: %s", _e)
 
+    # Close aiogram bot session (prevents "Unclosed connection" warnings)
+    try:
+        if bot:
+            await bot.session.close()
+            logger.info("✅ Bot session closed")
+    except Exception as _e:
+        logger.debug("suppressed bot close: %s", _e)
+
+    # Dispose SQLAlchemy engine
+    try:
+        from models import engine as db_engine
+        db_engine.dispose()
+        logger.info("✅ DB engine disposed")
+    except Exception as _e:
+        logger.debug("suppressed engine dispose: %s", _e)
+
 
 async def api_tasks_handler(request):
     session = await get_session(request)
@@ -7152,6 +7162,18 @@ async def api_tasks_handler(request):
         
         logger.info(f"Found {len(tasks)} tasks for user {user_id}")
 
+        # Batch preload goals and delegators to avoid N+1 queries
+        _goal_ids = {t.goal_id for t in tasks if t.goal_id}
+        _delegator_ids = {t.delegated_by for t in tasks if t.delegated_by and t.delegated_by != user.id}
+        _goals_map = {}
+        _delegators_map = {}
+        if _goal_ids:
+            for g in session_db.query(Goal).filter(Goal.id.in_(_goal_ids)).all():
+                _goals_map[g.id] = g.title
+        if _delegator_ids:
+            for u in session_db.query(User).filter(User.id.in_(_delegator_ids)).all():
+                _delegators_map[u.id] = u
+
         # Set overdue flag and local time for tasks
         user_tz = pytz.UTC
         if user and user.timezone:
@@ -7180,22 +7202,15 @@ async def api_tasks_handler(request):
                 if user.username and (task.delegated_to_username.lower() == user.username.lower(
                 ) or task.delegated_to_username.lower() == f"@{user.username.lower()}"):
                     # Task delegated TO me
-                    creator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                    creator = _delegators_map.get(task.delegated_by)
                     if creator:
                         title = f"{title} - Делегировано от @{creator.username}"
                 elif task.user_id == user.id:
                     # Task delegated BY me to someone else
                     title = f"{title} - Делегировано @{delegated_username}"
 
-            # Resolve goal name if goal_id is set
-            _goal_name = None
-            if task.goal_id:
-                try:
-                    _goal = session_db.query(Goal).filter_by(id=task.goal_id).first()
-                    if _goal:
-                        _goal_name = _goal.title
-                except Exception as _e:
-                    logger.debug("suppressed: %s", _e)
+            # Resolve goal name from batch-preloaded map
+            _goal_name = _goals_map.get(task.goal_id) if task.goal_id else None
 
             task_data = {
                 'id': task.id,
@@ -7224,8 +7239,8 @@ async def api_tasks_handler(request):
             
             # Определяем delegated_by и delegated_by_username
             if task.delegated_by and task.delegated_by != user.id:
-                # Задача была делегироа м кем-то
-                delegator = session_db.query(User).filter_by(id=task.delegated_by).first()
+                # Задача была делегирована мне кем-то
+                delegator = _delegators_map.get(task.delegated_by)
                 if delegator and delegator.username:
                     task_data['delegated_by'] = delegator.username
                     task_data['delegated_by_username'] = delegator.username
@@ -7336,7 +7351,7 @@ async def api_interactions_handler(request):
     user_id = session.get('user_id')
     logger.info(f"API interactions handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
     if not user_id:
-        logger.error("No user_id in session for interactions API")
+        logger.warning("No user_id in session for interactions API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     session_db = Session()
@@ -9630,7 +9645,7 @@ async def api_profile_handler(request):
 
                 # Update user fields
                 if 'first_name' in data:
-                    user.first_name = data['first_name'].strip() if data['first_name'] and data['first_name'].strip() else user.first_name
+                    user.first_name = normalize_name(data['first_name'].strip()) if data['first_name'] and data['first_name'].strip() else user.first_name
                 if 'email' in data:
                     email_val = data['email'].strip().lower() if data['email'] and data['email'].strip() else None
                     if email_val and '@' in email_val:
@@ -10433,13 +10448,18 @@ async def nowpayments_webhook(request):
 
 
 async def clear_database_handler(request):
-    """Clear all data from database (admin only)"""
+    """Clear all data from database (admin only, LOCAL environment only)"""
     try:
+        # Block in production — too destructive
+        if not LOCAL:
+            return web.json_response({'error': 'Not available in production'}, status=403)
+
+        import hmac
         # Security check - require admin secret
         admin_secret = request.headers.get('X-Admin-Secret') or request.query.get('admin_secret')
-        expected_secret = os.getenv('ADMIN_SECRET')
+        expected_secret = os.getenv('ADMIN_SECRET', '')
         
-        if not admin_secret or admin_secret != expected_secret:
+        if not admin_secret or not expected_secret or not hmac.compare_digest(admin_secret, expected_secret):
             return web.json_response({'error': 'Unauthorized'}, status=403)
         
         logger.warning("Database clear requested by admin")
@@ -10458,13 +10478,18 @@ async def clear_database_handler(request):
 
 
 async def add_test_users_handler(request):
-    """Add test users with different tiers and interests (admin only)"""
+    """Add test users with different tiers and interests (admin only, LOCAL environment only)"""
     try:
+        # Block in production
+        if not LOCAL:
+            return web.json_response({'error': 'Not available in production'}, status=403)
+
+        import hmac
         # Security check
         admin_secret = request.query.get('secret', '')
-        expected_secret = os.getenv('ADMIN_SECRET')
+        expected_secret = os.getenv('ADMIN_SECRET', '')
         
-        if not admin_secret or admin_secret != expected_secret:
+        if not admin_secret or not expected_secret or not hmac.compare_digest(admin_secret, expected_secret):
             return web.json_response({'error': 'Unauthorized'}, status=403)
         
         session = Session()
@@ -10592,9 +10617,10 @@ async def admin_invite_handler(request):
     GET /admin/invite?secret=ADMIN_SECRET&email=user@example.com
     """
     try:
+        import hmac
         admin_secret = request.query.get('secret', '')
-        expected_secret = os.getenv('ADMIN_SECRET')
-        if not admin_secret or admin_secret != expected_secret:
+        expected_secret = os.getenv('ADMIN_SECRET', '')
+        if not admin_secret or not expected_secret or not hmac.compare_digest(admin_secret, expected_secret):
             return web.json_response({'error': 'Unauthorized'}, status=403)
 
         email = request.query.get('email', '').strip()
@@ -10795,7 +10821,7 @@ async def resend_webhook_handler(request):
                 subject = payload.get('subject', '') or data.get('subject', '')
                 text_body = payload.get('text', '') or payload.get('html', '') or data.get('text', '') or data.get('html', '')
                 
-                logger.info(f"[RESEND_WEBHOOK] Inbound: email_id={email_id}, raw_from={raw_from}, subject={subject[:80] if subject else ''}, has_body={bool(text_body)}")
+                logger.info(f"[RESEND_WEBHOOK] Inbound: email_id={email_id}, raw_from=***, subject={subject[:80] if subject else ''}, has_body={bool(text_body)}")
 
                 # Always try to fetch body from Resend API for inbound emails
                 if email_id:
@@ -10865,7 +10891,7 @@ async def resend_webhook_handler(request):
 
                 to_raw = payload.get('to', '') or data.get('to', '')
                 to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
-                logger.info(f"[RESEND_WEBHOOK] Parsed: from_email={from_email}, to={to_email}, subject={subject[:80] if subject else ''}, body_len={len(text_body or '')}")
+                logger.info(f"[RESEND_WEBHOOK] Parsed: from_email={redact_email(from_email)}, to={redact_email(to_email)}, subject={subject[:80] if subject else ''}, body_len={len(text_body or '')}")
 
                 if from_email:
                     from models import EmailOutreach, EmailCampaign
@@ -12785,6 +12811,7 @@ app.router.add_post('/api/arena/user-post', api_arena_user_post_handler)
 
 async def api_arena_force_post_handler(request):
     """POST /api/arena/force-post — принудительно создать один пост (admin only)"""
+    import random
     try:
         admin_secret = request.headers.get('X-Admin-Secret') or request.query.get('admin_secret')
         expected_secret = os.getenv('ADMIN_SECRET')

@@ -46,7 +46,7 @@ from models import (
     EmailCampaign, EmailOutreach, ContentCampaign,
     DelegationCampaign, AgentActivityLog,
 )
-from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR
+from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, redact_email
 
 logger = logging.getLogger(__name__)
 
@@ -1070,10 +1070,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 # Email-агент с IMAP — проверяем реальные результаты outreach
                 try:
                     from models import EmailOutreach as _EO_gs
-                    _gs_replied = session.query(_EO_gs).filter(
-                        _EO_gs.user_id == user.id,
-                        _EO_gs.status == 'replied',
-                    ).count() if (session and user) else 0
+                    from models import Session as _Session_gs
+                    _sess_gs = _Session_gs()
+                    try:
+                        _gs_replied = _sess_gs.query(_EO_gs).filter(
+                            _EO_gs.user_id == user.id,
+                            _EO_gs.status == 'replied',
+                        ).count() if user else 0
+                    finally:
+                        _sess_gs.close()
                     if _gs_replied > 0:
                         _prog_est = min(75, _gs_replied * 5)
                         _g0t = goals_summary[0].get('title', '') if goals_summary else ''
@@ -8316,8 +8321,8 @@ class AnchorEngine:
                     finally:
                         try: _min_sess.close()
                         except Exception: pass
-                except Exception:
-                    pass
+                except Exception as _outer_min_err:
+                    logger.debug("[COORD] minimal summary outer error: %s", _outer_min_err)
                 return True
             elif not _results_summary:
                 # Полностью пустой результат (агенты не вернули ничего) — тоже фиксируем в хронологии
@@ -8346,8 +8351,8 @@ class AnchorEngine:
                     finally:
                         try: _empty_sess.close()
                         except Exception: pass
-                except Exception:
-                    pass
+                except Exception as _outer_empty_err:
+                    logger.debug("[COORD] empty summary outer error: %s", _outer_empty_err)
                 return True
             if _results_for_report:
                 try:
@@ -13059,7 +13064,7 @@ class AnchorEngine:
                             temperature=0.7,
                         )
                         if not ai_result:
-                            logger.warning(f"[ANCHOR] AI compose failed for {email}: empty result")
+                            logger.warning(f"[ANCHOR] AI compose failed for {redact_email(email)}: empty result")
                             continue
 
                         # Парсим JSON
@@ -13078,7 +13083,7 @@ class AnchorEngine:
                         body = parsed.get('body', '')
 
                         if not subject or not body:
-                            logger.warning(f"[ANCHOR] AI compose: missing subject/body for {email}")
+                            logger.warning(f"[ANCHOR] AI compose: missing subject/body for {redact_email(email)}")
                             continue
 
                         # Отправляем напрямую через send_outreach_email
@@ -13094,7 +13099,7 @@ class AnchorEngine:
                             session=session,
                             close_session=False,
                         )
-                        logger.info(f"[ANCHOR] Direct send to {email}: {(result or '')[:100]}")
+                        logger.info(f"[ANCHOR] Direct send to {redact_email(email)}: {(result or '')[:100]}")
                         if result and ('отправлено' in result.lower() or 'sent' in result.lower()):
                             sent_count += 1
                         elif result and ('лимит' in result.lower() or 'limit' in result.lower()):
@@ -13118,7 +13123,7 @@ class AnchorEngine:
                             break  # не пытаемся остальных — та же ошибка будет
 
                     except Exception as _compose_err:
-                        logger.error(f"[ANCHOR] Compose/send error for {email}: {_compose_err}")
+                        logger.error(f"[ANCHOR] Compose/send error for {redact_email(email)}: {_compose_err}")
                         continue
 
                 logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(live_drafts)} for campaign #{campaign_id}")
@@ -13208,7 +13213,7 @@ class AnchorEngine:
                                 session=session,
                                 close_session=False,
                             )
-                            logger.info(f"[ANCHOR] Direct follow-up to {recipient_email}: {(result or '')[:100]}")
+                            logger.info(f"[ANCHOR] Direct follow-up to {redact_email(recipient_email)}: {(result or '')[:100]}")
                 except Exception as _fu_err:
                     logger.error(f"[ANCHOR] Follow-up compose/send error: {_fu_err}")
 
@@ -13223,7 +13228,7 @@ class AnchorEngine:
                 log = AnchorDeliveryLog(
                     user_id=user.id,
                     anchor_ids=json.dumps([anchor.id]),
-                    message_text=f'[EMAIL_SILENT] email_follow_up: follow-up #{follow_up_number} to {recipient_email}',
+                    message_text=f'[EMAIL_SILENT] email_follow_up: follow-up #{follow_up_number} to {redact_email(recipient_email)}',
                     anchor_types=json.dumps([anchor.anchor_type]),
                 )
                 session.add(log)
@@ -13469,7 +13474,7 @@ class AnchorEngine:
                             session=session,
                             close_session=False,
                         )
-                        logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: reply sent to {recipient_email}: {(_send_result or '')[:120]}")
+                        logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: reply sent to {redact_email(recipient_email)}: {(_send_result or '')[:120]}")
                     except Exception as _send_err:
                         logger.error(f"[ANCHOR] email_reply_received send error: {_send_err}")
                         _send_result = f'Ошибка: {_send_err}'

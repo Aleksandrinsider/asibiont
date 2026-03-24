@@ -449,13 +449,23 @@ def _get_ai_semaphore() -> asyncio.Semaphore:
 # === Shared aiohttp session для DeepSeek API ===
 # Переиспользование TCP/TLS-соединений экономит ~200-500мс на каждом вызове
 _SHARED_AI_SESSION: aiohttp.ClientSession | None = None
+_SHARED_AI_SESSION_LOCK: asyncio.Lock | None = None
+
+def _get_session_lock() -> asyncio.Lock:
+    global _SHARED_AI_SESSION_LOCK
+    if _SHARED_AI_SESSION_LOCK is None:
+        _SHARED_AI_SESSION_LOCK = asyncio.Lock()
+    return _SHARED_AI_SESSION_LOCK
 
 async def _get_shared_ai_session() -> aiohttp.ClientSession:
     global _SHARED_AI_SESSION
-    if _SHARED_AI_SESSION is None or _SHARED_AI_SESSION.closed:
-        _SHARED_AI_SESSION = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=120, connect=10)
-        )
+    if _SHARED_AI_SESSION is not None and not _SHARED_AI_SESSION.closed:
+        return _SHARED_AI_SESSION
+    async with _get_session_lock():
+        if _SHARED_AI_SESSION is None or _SHARED_AI_SESSION.closed:
+            _SHARED_AI_SESSION = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=120, connect=10)
+            )
     return _SHARED_AI_SESSION
 
 
@@ -2691,7 +2701,7 @@ class HybridAutonomousAgent:
                             _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)
                             _rc = CognitiveEngine.compress_tool_result(_rc)
                             try: get_learner().record_tool_result(user_id, _name, True)
-                            except Exception: pass
+                            except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
 
                             # ── Авто-заметка: длинный результат research → save_note ─────────
                             # Пользователю не нужно говорить "запиши" — длинное исследование
@@ -2752,19 +2762,20 @@ class HybridAutonomousAgent:
                                     try:
                                         if _vis:
                                             await _cb(_vis)
-                                    except Exception: pass
+                                    except Exception as _vcb:
+                                        logger.debug("suppressed vis callback: %s", _vcb)
                                 except Exception as _e:
                                     logger.debug("suppressed: %s", _e)
                         else:
                             _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
                             try: get_learner().record_tool_result(user_id, _name, False)
-                            except Exception: pass
+                            except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                     except Exception as _err:
                         logger.error(f"[EXEC] {_name} parallel crashed: {_err}\n{traceback.format_exc()}")
                         _r = {"success": False, "error": str(_err)}
                         _rc = json.dumps({"error": str(_err)}, ensure_ascii=False)
                         try: get_learner().record_tool_result(user_id, _name, False)
-                        except Exception: pass
+                        except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                     return _r, {"role": "tool", "tool_call_id": _tc['id'], "content": _rc}
 
                 if _ready_calls:
@@ -5818,21 +5829,21 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)
                         _tc_result = _tc_result[:1500]
                         try: get_learner().record_tool_result(user_id, _tname, True)
-                        except Exception: pass
+                        except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                     else:
                         _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
                         try: get_learner().record_tool_result(user_id, _tname, False)
-                        except Exception: pass
+                        except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                 except asyncio.TimeoutError:
                     _tc_result = json.dumps({"error": "tool timeout"}, ensure_ascii=False)
                     logger.warning("[DIRECTOR-EXEC] tool %s timeout for %s", _tname, agent['name'])
                     try: get_learner().record_tool_result(user_id, _tname, False)
-                    except Exception: pass
+                    except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                 except Exception as _te:
                     _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
                     logger.debug("[DIRECTOR-EXEC] tool %s error for %s: %s", _tname, agent['name'], _te)
                     try: get_learner().record_tool_result(user_id, _tname, False)
-                    except Exception: pass
+                    except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
 
             _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
         _tool_call_count += 1
