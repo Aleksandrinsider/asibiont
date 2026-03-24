@@ -14235,7 +14235,7 @@ else:
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-rec-' + (partner.telegram_id || partner.contact_info || _pUserId);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                         html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
@@ -14333,7 +14333,7 @@ else:
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-fav-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                         html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
@@ -14522,10 +14522,11 @@ else:
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.charAt(0).toUpperCase() : '?');
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-to-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                         html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
@@ -14650,10 +14651,11 @@ else:
                                     const clickHandler = canAccess ? `onclick="openContactProfileModal('${contactInfoEscaped}', true)"` : '';
                                     const cursorStyle = canAccess ? 'cursor: pointer;' : 'cursor: default;';
                                     const contactInfoHtml = partner.contact_info.replace(/'/g, "\\'").replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                                    const initial = partner.first_name ? partner.first_name.charAt(0).toUpperCase() : (partner.contact_info ? partner.contact_info.charAt(0).toUpperCase() : '?');
                                     
                                     if (partner.photo_url) {
                                         const imgId = 'img-del-by-' + (partner.telegram_id || partner.contact_info);
-                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div>';
+                                        const fallbackHtml = '<div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div>';
                                         html += '<div style="margin-right: 12px; flex-shrink: 0;">';
                                         html += '<img id="' + imgId + '" src="' + partner.photo_url + '" ' + clickHandler + ' onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';" style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 2px solid #E8ECEF; background: #F6F8FA; ' + cursorStyle + '" />';
                                         html += fallbackHtml.replace('display: flex', 'display: none');
