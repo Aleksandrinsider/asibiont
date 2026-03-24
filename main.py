@@ -6662,6 +6662,17 @@ async def translate_comment_handler(request):
             db_session.close()
 
 
+def _safe_initial(name: str, fallback: str = 'У') -> str:
+    """Return a single uppercase letter safe for display in any font.
+    Filters out non-BMP Unicode characters (e.g. Mathematical Italic) that
+    appear as broken boxes in most browsers."""
+    if not name:
+        return fallback
+    bmp = ''.join(c for c in name if ord(c) <= 0xFFFF).strip()
+    first = (bmp or fallback)[0]
+    return first.upper() if first.isalpha() else fallback
+
+
 def _default_avatar_response():
     """Return 404 so frontend onerror handler shows initial-letter fallback."""
     return web.Response(
@@ -11998,7 +12009,7 @@ async def api_arena_comment_handler(request):
                     'agent_name': display_name,
                     'agent_title': 'Участник',
                     'color': '#068487',
-                    'initials': display_name[0].upper() if display_name else 'У',
+                    'initials': _safe_initial(display_name),
                     'text': comment_text,
                     'ts': _dt.datetime.utcnow().isoformat(),
                     'reply_to': post_key,
@@ -12257,7 +12268,7 @@ async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
             _db_save_post,
         )
         color = _ARENA_COLORS[agent_id % len(_ARENA_COLORS)]
-        initials = (name or '?')[:2].upper()
+        initials = _safe_initial(name, '?')
         agent_dict = {
             'id': f'mkt_{agent_id}',
             'name': name or 'Агент',
@@ -12747,7 +12758,7 @@ async def api_arena_user_post_handler(request):
             'agent_name': display_name,
             'agent_title': 'Участник',
             'color': '#068487',
-            'initials': display_name[0].upper() if display_name else 'У',
+            'initials': _safe_initial(display_name),
             'text': text,
             'ts': _dt.datetime.utcnow().isoformat(),
             'author_username': (data.get('author_username') or '').strip()[:100],
