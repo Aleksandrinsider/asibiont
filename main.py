@@ -6776,7 +6776,8 @@ async def on_startup(app):
     import hashlib
     
     # Setup session middleware with proper cookie settings
-    cookie_params = {'httponly': True}
+    # max_age=2592000 = 30 days — persistent cookie, survives browser close & server restart
+    cookie_params = {'httponly': True, 'max_age': 2592000}
     if not LOCAL:
         cookie_params.update({
             'secure': True,  # HTTPS only in production
