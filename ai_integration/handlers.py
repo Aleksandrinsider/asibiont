@@ -1145,6 +1145,26 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         except Exception as e:
             logger.warning(f"[COMPLETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
 
+        # === Векторная память: фиксируем завершение задачи (fire-and-forget) ===
+        try:
+            _task_mem_text = f"Завершена задача: '{task.title}'"
+            if completion_note:
+                _task_mem_text += f". Результат: {completion_note[:150]}"
+            if task.goal_id:
+                from models import Goal as _GoalVM
+                _g_vm = session.query(_GoalVM).filter_by(id=task.goal_id, user_id=user.id).first()
+                if _g_vm:
+                    _task_mem_text += f". Цель: {_g_vm.title}"
+            import asyncio as _aio_vm
+            _aio_vm.get_running_loop().create_task(
+                __import__('ai_integration.vector_memory', fromlist=['store_memory']).store_memory(
+                    user.telegram_id, _task_mem_text,
+                    {'type': 'achievement', 'task_id': str(task.id)}
+                )
+            )
+        except Exception as _vm_task_err:
+            logger.debug(f"[COMPLETE_TASK] Vector memory store skipped: {_vm_task_err}")
+
         # КРИТИЧНО: всегда возвращаем маркер для запроса результата
         # AI должен ОБЯЗАТЕЛЬНО спросить о результате выполнения
         result = f"TASK_COMPLETED_ASK_RESULT:{task.title}"
@@ -4290,6 +4310,25 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
         except Exception as _e:
             logger.warning(f"[CREATE_GOAL] Activity log failed: {_e}")
 
+        # === Векторная память: сохраняем цель в Pinecone ===
+        try:
+            from ai_integration.vector_memory import store_memory_sync as _vmem_goal
+            _goal_mem = f"Цель пользователя: {goal.title}"
+            if goal.description:
+                _goal_mem += f". {goal.description[:200]}"
+            if goal.success_criteria:
+                _goal_mem += f". Критерий: {goal.success_criteria[:100]}"
+            if goal.metric_target and goal.metric_unit:
+                _goal_mem += f". Метрика: 0/{int(goal.metric_target)} {goal.metric_unit}"
+            _vmem_goal(user.telegram_id, _goal_mem, {
+                'type': 'goal',
+                'goal_id': str(goal.id),
+                'category': goal.category or 'personal',
+                'priority': goal.priority or 'medium',
+            })
+        except Exception as _vm_err:
+            logger.debug(f"[CREATE_GOAL] Vector memory store skipped: {_vm_err}")
+
         result = f"Цель создана: {goal.title}"
         if goal.metric_target and goal.metric_unit:
             result += f"\nМетрика: 0/{int(goal.metric_target)} {goal.metric_unit}"
@@ -4491,6 +4530,20 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     matched.status = 'completed'
                     matched.completed_at = datetime.now()
                     changes.append("статус: завершено! ")
+                    # === Векторная память: фиксируем достижение ===
+                    try:
+                        from ai_integration.vector_memory import store_memory_sync as _vmem_ach
+                        _ach_text = (
+                            f"Достижение: цель '{matched.title}' выполнена! "
+                            f"Метрика: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''}."
+                        )
+                        _vmem_ach(user.telegram_id, _ach_text, {
+                            'type': 'achievement',
+                            'goal_id': str(matched.id),
+                            'category': matched.category or 'personal',
+                        })
+                    except Exception as _vm_err:
+                        logger.debug(f"[UPDATE_GOAL] Vector memory achievement skipped: {_vm_err}")
             except (ValueError, TypeError):
                 pass
         elif progress is not None:
@@ -4506,6 +4559,17 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 matched.progress_percentage = pct
                 changes.append(f"прогресс: {pct}%")
                 if pct == 100 and matched.status == 'active':
+                    # === Векторная память: фиксируем достижение ===
+                    _vmem_pct_text = f"Достижение: цель '{matched.title}' выполнена на 100%!"
+                    try:
+                        from ai_integration.vector_memory import store_memory_sync as _vmem_p
+                        _vmem_p(user.telegram_id, _vmem_pct_text, {
+                            'type': 'achievement',
+                            'goal_id': str(matched.id),
+                            'category': matched.category or 'personal',
+                        })
+                    except Exception as _vm_err:
+                        logger.debug(f"[UPDATE_GOAL] Vector memory pct achievement skipped: {_vm_err}")
                     # Та же проверка участия для people-целей
                     _p_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
                                 'человек', 'участник', 'участников', 'подписчик', 'подписчиков')

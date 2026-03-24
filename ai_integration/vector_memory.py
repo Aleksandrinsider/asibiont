@@ -355,17 +355,22 @@ async def search_memory(user_id, query, top_k=5):
 
 def _build_memory_context_sync(user_id, current_message, max_chars=800):
     """Синхронный поиск памяти и формирование текстового контекста."""
-    memories = _search_memory_sync(user_id, current_message, top_k=5)
+    memories = _search_memory_sync(user_id, current_message, top_k=8)
     if not memories:
         return ""
     # Порог зависит от типа embedding: настоящие OpenAI-векторы точнее pseudo
-    _threshold = 0.65 if _openai_available else 0.45
+    _threshold = 0.65 if _openai_available else 0.40
+    # Цели и достижения показываем с пониженным порогом — они всегда релевантны
+    _high_priority_types = {'goal', 'achievement', 'milestone', 'decision'}
     parts = []
     total = 0
     for m in memories:
         txt = m.get("text", "")
-        if txt and m.get("score", 0) > _threshold:
-            entry = f"— {txt}"
+        mtype = m.get("type", "")
+        effective_threshold = (_threshold - 0.10) if mtype in _high_priority_types else _threshold
+        if txt and m.get("score", 0) > effective_threshold:
+            prefix = "🎯" if mtype == "goal" else ("✅" if mtype == "achievement" else "—")
+            entry = f"{prefix} {txt}"
             if total + len(entry) > max_chars:
                 break
             parts.append(entry)
@@ -429,4 +434,26 @@ async def store_conversation_turn(user_id, user_message, bot_response, emotion=N
         )
     except Exception as e:
         logger.warning(f"[VECTOR] Async store turn failed: {e}")
+        return False
+
+
+def store_memory_sync(user_id, text: str, metadata: dict = None) -> bool:
+    """Публичная sync-функция — сохраняет произвольный факт в Pinecone.
+
+    Вызывай из синхронного кода (create_goal, complete_task и т.д.).
+    Безопасно: никогда не бросает исключений наружу.
+    """
+    try:
+        return _store_memory_sync(user_id, text, metadata)
+    except Exception as e:
+        logger.debug(f"[VECTOR] store_memory_sync failed: {e}")
+        return False
+
+
+async def store_memory(user_id, text: str, metadata: dict = None) -> bool:
+    """Публичная async-функция — сохраняет произвольный факт без блокировки loop."""
+    try:
+        return await asyncio.to_thread(_store_memory_sync, user_id, text, metadata)
+    except Exception as e:
+        logger.debug(f"[VECTOR] store_memory async failed: {e}")
         return False
