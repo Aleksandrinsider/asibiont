@@ -7,11 +7,11 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import requests
 import aiohttp
-from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach, Anchor, AnchorPriority
+from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach, EmailContact, Anchor, AnchorPriority
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
-from .utils import parse_time_to_datetime, generate_unified_recommendations
+from .utils import parse_time_to_datetime, generate_unified_recommendations, normalize_task_title
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
@@ -7733,6 +7733,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         
         session.add(post)
         session.commit()
+        session.refresh(post)
         
         post_preview = content[:80] + '...' if len(content) > 80 else content
         has_img = bool(post.image_url)

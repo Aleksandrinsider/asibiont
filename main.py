@@ -6946,6 +6946,15 @@ async def on_shutdown(app):
     except Exception as e:
         logger.error(f"❌ Failed to close API client: {e}")
 
+    # Закрываем shared AI session
+    try:
+        from ai_integration.autonomous_agent import _SHARED_AI_SESSION
+        if _SHARED_AI_SESSION and not _SHARED_AI_SESSION.closed:
+            await _SHARED_AI_SESSION.close()
+            logger.info("✅ Shared AI session closed")
+    except Exception as e:
+        logger.debug(f"suppressed: {e}")
+
     # Close Discord bot
     try:
         from discord_bot import stop_discord_bot

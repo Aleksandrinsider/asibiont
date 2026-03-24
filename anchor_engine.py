@@ -4613,6 +4613,7 @@ class AnchorEngine:
         if not trigger_anchors:
             return
 
+        _uid = getattr(user, 'id', None) or 0
         try:
             from models import Session as _Db, UserAgent as _UA, AgentActivityLog as _AAL
             from ai_integration.autonomous_agent import _exec_agent_for_director
@@ -4804,7 +4805,7 @@ class AnchorEngine:
             finally:
                 _s.close()
         except Exception as e:
-            logger.debug("[ANCHOR-DISPATCH] dispatch error for user %d: %s", user.id, e)
+            logger.debug("[ANCHOR-DISPATCH] dispatch error for user %d: %s", _uid, e)
 
     @staticmethod
     def _format_goal_tasks(tasks: list) -> str:
