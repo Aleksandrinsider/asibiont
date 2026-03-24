@@ -404,7 +404,8 @@ async def _update_arena_summary():
         f"{posts_digest}"
     )
     try:
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(force_close=True)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
@@ -418,7 +419,7 @@ async def _update_arena_summary():
                     _arena_summary_ts = time.time()
                     logger.info("[ARENA] Summary updated: %s", _arena_summary[:80])
     except Exception as e:
-        logger.warning("[ARENA] Summary generation error: %s", e)
+        logger.warning("[ARENA] Summary generation error: %s", type(e).__name__ + (f': {e}' if str(e) else ''))
 
 
 # ─── Relationship Graph ───────────────────────────────────────────────────────
