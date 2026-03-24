@@ -9768,9 +9768,11 @@ class AnchorEngine:
 
     def _scan_goal_autopilot(self, user, profile, session, now_utc) -> list:
         """Автопилот целей: AI анализирует цели с ПОЛНЫМ контекстом и действует."""
+        if not profile:
+            return []
         # Перечитываем профиль из БД — profile мог быть загружен давно (stale cache)
         session.expire(profile)
-        if not profile or not getattr(profile, 'goal_autopilot_enabled', False):
+        if not getattr(profile, 'goal_autopilot_enabled', False):
             return []
 
         active_goals = session.query(Goal).filter(
