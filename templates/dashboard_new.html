@@ -14241,13 +14241,13 @@ else:
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
                                     // Display first_name and username
                                     {
-                                        let nameStyle = 'cursor: pointer; color: #068487;';
+                                        let nameStyle = 'cursor: pointer; color: #068487';
                                         html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                         if (partner.first_name) {
                                             html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
@@ -14339,12 +14339,12 @@ else:
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
                                     // Username - display first_name and username separately like in news feed
-                                    let nameStyle = 'cursor: pointer; color: #068487;';
+                                    let nameStyle = 'cursor: pointer; color: #068487';
                                     html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                     if (partner.first_name) {
                                         html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
@@ -14532,13 +14532,13 @@ else:
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
                                     // Show username
                                     {
-                                        let nameStyle = 'cursor: pointer; color: #068487;';
+                                        let nameStyle = 'cursor: pointer; color: #068487';
                                         html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                         if (partner.first_name) {
                                             html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
@@ -14661,13 +14661,13 @@ else:
                                         html += fallbackHtml.replace('display: flex', 'display: none');
                                         html += '</div>';
                                     } else {
-                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">@</div></div>';
+                                        html += '<div style="margin-right: 12px; flex-shrink: 0;"><div ' + clickHandler + ' style="width: 64px; height: 64px; border-radius: 50%; background: #F6F8FA; display: flex; align-items: center; justify-content: center; color: #374151; font-weight: 600; font-size: 24px; border: 2px solid #E8ECEF; ' + cursorStyle + ';">' + initial + '</div></div>';
                                     }
                                     html += '<div style="flex: 1;">';
                                     
                                     // Display username
                                     {
-                                        let nameStyle = 'cursor: pointer; color: #068487;';
+                                        let nameStyle = 'cursor: pointer; color: #068487';
                                         html += '<div class="task-title" style="display: flex; align-items: center; gap: 6px;">';
                                         if (partner.first_name) {
                                             html += '<span style="font-size: 13px; color: #1F2328; font-weight: 400;">' + partner.first_name + '</span>';
@@ -14741,6 +14741,19 @@ else:
                             
                             html += '</ul>';
                             peopleList.innerHTML = html;
+                            
+                            // Retry failed avatars after background server refresh completes
+                            setTimeout(() => {
+                                peopleList.querySelectorAll('img').forEach(img => {
+                                    if (!img.complete || img.naturalHeight === 0) {
+                                        const baseSrc = img.src.split('?')[0];
+                                        const fallback = img.nextElementSibling;
+                                        img.onload = function() { img.style.display = ''; if (fallback) fallback.style.display = 'none'; };
+                                        img.onerror = null;
+                                        img.src = baseSrc + '?t=' + Date.now();
+                                    }
+                                });
+                            }, 3000);
                         }
                         
                         // Сохраняем данные для орбиты аватаров
