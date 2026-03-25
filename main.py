@@ -7431,6 +7431,9 @@ async def api_interactions_handler(request):
                         # Hide internal coordinator/assignment messages from user
                         if _jp.get('__anchor_type') in _HIDDEN_ANCHOR_TYPES:
                             continue
+                        # agent_delegation from ASI = internal task assignment to agent, hide it
+                        if _jp.get('__anchor_type') == 'agent_delegation' and _jp.get('__agent', {}).get('name') == 'ASI':
+                            continue
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
             # Skip noise messages (very short AI/agent messages with template text)

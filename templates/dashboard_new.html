@@ -1933,6 +1933,10 @@
                     }
                 } catch(e) { /* обычный текст — продолжаем */ }
             }
+            // Скрываем внутренние задания координатора агентам — пользователю не нужны
+            if (_anchorType === 'coordinator_agent_request') return;
+            // agent_delegation от ASI = внутреннее задание координатора агенту
+            if (_anchorType === 'agent_delegation' && agentInfo && agentInfo.name === 'ASI') return;
             // Директивы директора (agent_msg без __agent): показываем с именем "Директор"
             if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
                 agentInfo = { name: 'Директор', avatar_url: '' };
@@ -1959,10 +1963,10 @@
                     // Очистка email-артефактов из IMAP перед markdown-рендером
                     text = text.replace(/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
                     text = text.replace(/mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
-                    // Схлопываем 3+ пустых строк в максимум 2 (убираем большие зазоры)
-                    text = text.replace(/\n{3,}/g, '\n\n');
+                    // Схлопываем 2+ пустых строк в одну (убираем большие зазоры)
+                    text = text.replace(/\n{2,}/g, '\n');
                     // Убираем строки из одних пробелов/tab (они тоже дают пустые <p>)
-                    text = text.replace(/\n[ \t]+\n/g, '\n\n');
+                    text = text.replace(/\n[ \t]+\n/g, '\n');
                     marked.setOptions({ breaks: true, gfm: true });
                     // Отключаем raw HTML из AI-ответа (безопасность)
                     const renderer = new marked.Renderer();
