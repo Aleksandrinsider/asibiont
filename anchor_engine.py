@@ -155,7 +155,11 @@ _INTEGRATION_PLANS = [
      "Твой уникальный инструмент — чтение входящих (check_emails). Только ты можешь читать ответы на письма и реплаить. Отправлять через Resend могут все агенты и ASI — это обычный канал.",
      ["A) check_emails → есть ответ → ПРОЧИТАЙ ТЕКСТ → КЛАССИФИЦИРУЙ (интерес/вопрос/отказ) → "
       "ВОПРОС: ответь на конкретный вопрос + CTA. ИНТЕРЕС: reply_to_outreach_email (включи ссылку на платформу из goal_context или https://asibiont.com если продвижение ASI Biont) → negotiate. "
-      "ОТКАЗ: не отвечай, система отпишет. → update_goal_progress",
+      "ОТКАЗ: не отвечай, система отпишет. → update_goal_progress. "
+      "⛔ СОЗВОН/ВСТРЕЧА: если контакт предлагает звонок/встречу или соглашается на созвон → НЕ назначай дату/время сам! "
+      "Сначала send_message_to_user('Контакт [имя] хочет созвон [дата/время]. Подтвердить? Пришли ссылку на Zoom.'). "
+      "Только после ответа пользователя → reply_to_outreach_email + add_task с датой встречи. "
+      "⛔ НИКОГДА не пиши [вставьте ссылку здесь] или любой плейсхолдер — если ссылки нет, напиши 'ссылку пришлю отдельно'.",
       "B) start_email_campaign(name, goal, target_audience) → send_outreach_email → update_goal_progress",
       "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress",
       "D) check_emails → нет новых ответов → send_follow_up_email (follow-up тем, кто не ответил за 2+ дня)",
@@ -5135,7 +5139,11 @@ class AnchorEngine:
                     'task': (
                         f"{prev_agent.name} проверил почту и нашёл {_inbox_count} новых письма. "
                         f"Реши что делать: ответить (reply_to_outreach_email), "
-                        f"сохранить контакт (save_email_contact), создать задачу (add_task) или другое.\n\n"
+                        f"сохранить контакт (save_email_contact), создать задачу (add_task) или другое.\n"
+                        f"⛔ ЕСЛИ контакт предлагает СОЗВОН/ВСТРЕЧУ — НЕ подтверждай дату сам! "
+                        f"Сначала send_message_to_user('Контакт [имя] хочет созвон [когда]. Подтвердить? Zoom-ссылка?'). "
+                        f"Только после ответа пользователя → reply + add_task.\n"
+                        f"⛔ Никогда не пиши [вставьте ссылку], [link here] или любой плейсхолдер в тексте письма.\n\n"
                         f"Входящие письма:\n{result[:2000]}"
                     ),
                 }
@@ -5974,15 +5982,46 @@ class AnchorEngine:
                 continue
 
             # ── UNIVERSAL FALLBACK ──
+            # Вместо бездумного research → даём контекстную подсказку
             _fb_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
+            # Определяем класс цели для осмысленного fallback
+            _goal_class = 'общий'
+            _goal_hint = f'{_fb_tool}("{title[:40]} — пошаговый план") → add_task → update_goal_progress.'
+            _GOAL_CLASS_MAP = [
+                (('недвижим', 'квартир', 'застройщик', 'новостройк', 'риелтор', 'ипотек', 'аренд'),
+                 'недвижимость',
+                 f'{_fb_tool}("маркетинг недвижимости — лидогенерация") → web_search("площадки для объявлений недвижимости") → add_task. '
+                 'Подумай: ЦИАН/Авито, показы, CRM/воронка, WhatsApp для клиентов.'),
+                (('ресторан', 'кафе', 'доставк', 'общепит', 'кухн', 'повар', 'рецепт', 'меню'),
+                 'общепит/HoReCa',
+                 f'{_fb_tool}("продвижение ресторана — каналы привлечения") → add_task. '
+                 'Подумай: Google Maps, Instagram, доставка (Яндекс.Еда/Delivery Club), отзывы.'),
+                (('фитнес', 'тренер', 'зал', 'психолог', 'коуч', 'репетитор', 'юрист', 'стоматолог', 'врач', 'клиник', 'салон'),
+                 'услуги',
+                 f'{_fb_tool}("привлечение клиентов в {title[:30]}") → add_task. '
+                 'Подумай: запись на приём (YClients/Calendly), отзывы (Google Maps/2GIS), WhatsApp/Telegram.'),
+                (('курс', 'школа', 'образован', 'обучен', 'вебинар', 'инфопродукт'),
+                 'EdTech',
+                 f'{_fb_tool}("продвижение онлайн-курса") → generate_marketing_content → add_task. '
+                 'Подумай: Telegram-канал, воронка (лид-магнит → email), YouTube.'),
+                (('стартап', 'приложен', 'mvp', 'saas', 'сервис', 'платформ'),
+                 'стартап/tech',
+                 f'{_fb_tool}("growth hacking для стартапа") → web_search("Product Hunt launch checklist") → add_task. '
+                 'Подумай: landing page, AppSumo, Product Hunt, beta-тестеры.'),
+            ]
+            for _gc_kw, _gc_name, _gc_hint in _GOAL_CLASS_MAP:
+                if any(w in full_l for w in _gc_kw):
+                    _goal_class = _gc_name
+                    _goal_hint = _gc_hint
+                    break
             directives.append({
                 'goal': title, 'agent_domain': 'any',
                 'tool': _fb_tool,
                 'task': (
-                    f'Цель «{title}» ({int(progress)}%): определи лучший подход. '
-                    f'{_fb_tool} → save_note/add_task → update_goal_progress.'
+                    f'Цель «{title}» ({int(progress)}%) — класс: {_goal_class}. '
+                    f'{_goal_hint}'
                 ),
-                'reason': 'универсальный подход',
+                'reason': f'универсальный подход ({_goal_class})',
             })
 
         return directives
@@ -6509,6 +6548,48 @@ class AnchorEngine:
                         "💡 Google Sheets / Airtable не подключены. "
                         "Для автоотчётов: Google Cloud Console → Service Account → credentials.json → в настройки агента."
                     )
+            # CRM: продажи, лиды, сделки, воронка, клиенты (e.g. риелтор, B2B, услуги)
+            _sales_kw_c = ('продаж', 'лид', 'сделк', 'воронк', 'клиент', 'покупател', 'партнёр', 'b2b', 'переговор', 'договор')
+            if any(w in _goals_lower_c for w in _sales_kw_c):
+                _has_crm_c = any(
+                    any(kw in (getattr(a, 'user_api_keys', '') or '').lower()
+                        for kw in ('amocrm', 'bitrix', 'hubspot', 'planfix', 'yclients'))
+                    for a in real_agents
+                )
+                if not _has_crm_c:
+                    _missing_intg_coord.append(
+                        "💡 CRM не подключена. Для трекинга сделок и лидов: "
+                        "AmoCRM или Bitrix24 → Настройки агента → API-ключи → CRM. "
+                        "Без CRM агент ведёт контакты в Google Sheets или задачах."
+                    )
+            # WhatsApp: продажи, клиентский сервис, недвижимость, услуги
+            _wa_kw_c = ('whatsapp', 'watsap', 'вотсап', 'мессенджер', 'переписк')
+            _sales_or_service = any(w in _goals_lower_c for w in _sales_kw_c + ('услуг', 'сервис', 'поддержк', 'запись', 'консультац'))
+            if _sales_or_service and not any(w in _goals_lower_c for w in _wa_kw_c):
+                _has_wa_c = any(
+                    'whatsapp' in (getattr(a, 'user_api_keys', '') or '').lower()
+                    for a in real_agents
+                )
+                if not _has_wa_c:
+                    _missing_intg_coord.append(
+                        "💡 WhatsApp Business API не подключён. "
+                        "Для клиентов в России WhatsApp — основной канал коммуникации. "
+                        "Подключить: Дашборд → Настройки агента → API-ключи → WhatsApp (через 360dialog или WABA)."
+                    )
+            # Google Calendar / запись на встречи
+            _meet_kw_c = ('встреч', 'показ', 'запись', 'консультац', 'онбординг', 'демо', 'созвон', 'звонок', 'просмотр')
+            if any(w in _goals_lower_c for w in _meet_kw_c):
+                _has_cal_c = any(
+                    any(kw in (getattr(a, 'user_api_keys', '') or '').lower()
+                        for kw in ('google_calendar', 'calendly', 'yclients', 'gcal'))
+                    for a in real_agents
+                )
+                if not _has_cal_c:
+                    _missing_intg_coord.append(
+                        "💡 Google Calendar / Calendly не подключены. "
+                        "Для записи на показы/консультации агент мог бы управлять расписанием. "
+                        "Дашборд → Настройки агента → API-ключи → Google Calendar (OAuth)."
+                    )
             _missing_intg_str_c = ('\n\n⚠️ ВАЖНО для планирования (отсутствующие интеграции):\n'
                                    + '\n'.join(_missing_intg_coord)) if _missing_intg_coord else ''
 
@@ -6547,6 +6628,24 @@ class AnchorEngine:
                     _all_connected_types.add('payments')
                 if 'telegram_bot_token=' in _k_cat:
                     _all_connected_types.add('tg_channel')
+                if 'whatsapp' in _k_cat or 'waba_' in _k_cat or '360dialog' in _k_cat:
+                    _all_connected_types.add('whatsapp')
+                if 'google_calendar' in _k_cat or 'calendly' in _k_cat or 'gcal_' in _k_cat:
+                    _all_connected_types.add('calendar')
+                if 'sms_' in _k_cat or 'smsc' in _k_cat or 'unisender' in _k_cat:
+                    _all_connected_types.add('sms')
+                if 'vk_' in _k_cat or 'vkontakte' in _k_cat:
+                    _all_connected_types.add('vk')
+                if 'avito' in _k_cat or 'cian' in _k_cat or 'циан' in _k_cat:
+                    _all_connected_types.add('avito')
+                if 'youtube' in _k_cat or 'yt_api' in _k_cat:
+                    _all_connected_types.add('youtube')
+                if 'linkedin' in _k_cat:
+                    _all_connected_types.add('linkedin')
+                if 'google_maps' in _k_cat or '2gis' in _k_cat or 'gmaps' in _k_cat:
+                    _all_connected_types.add('maps')
+                if 'typeform' in _k_cat or 'tally' in _k_cat or 'google_forms' in _k_cat:
+                    _all_connected_types.add('forms')
             if getattr(user, 'telegram_channel', None):
                 _all_connected_types.add('tg_channel')
             if getattr(user, 'discord_webhook', None):
@@ -6568,11 +6667,20 @@ class AnchorEngine:
                 ('payments', 'Stripe/ЮКасса', 'платёжные данные и выручка', 'подписки, монетизация'),
                 ('tg_channel', 'Telegram-канал', 'публикация постов в канал', 'аудитория, контент'),
                 ('discord', 'Discord', 'webhook-уведомления и посты', 'сообщество, контент'),
+                ('whatsapp', 'WhatsApp Business API', 'переписка и рассылки в WhatsApp', 'продажи, клиентский сервис, CJM'),
+                ('calendar', 'Google Calendar / Calendly', 'бронирование встреч и расписание', 'встречи с клиентами, онбординг, консультации'),
+                ('sms', 'SMS-рассылки (Unisender/SMSC/SMS.ru)', 'SMS-уведомления и рассылки', 'акции, напоминания, подтверждения'),
+                ('vk', 'VKontakte', 'посты и реклама во ВКонтакте', 'Russian-аудитория, SMM, таргет'),
+                ('avito', 'Avito/ЦИАН API', 'публикация объявлений и аналитика', 'недвижимость, товары, услуги'),
+                ('youtube', 'YouTube Data API', 'публикация видео и аналитика канала', 'видеоконтент, обзоры, обучение'),
+                ('linkedin', 'LinkedIn API', 'профессиональная сеть, B2B-контакты', 'B2B-продажи, рекрутинг, нетворкинг'),
+                ('maps', 'Google Maps / 2GIS API', 'геоданные, отзывы, актуальность карточки', 'локальный бизнес, навигация, репутация'),
+                ('forms', 'Google Forms / Typeform / Tally', 'сбор заявок и опросов', 'лидогенерация, NPS, анкетирование'),
             ]
             _not_connected = [(name, desc, use) for _type, name, desc, use in _FULL_CATALOG if _type not in _all_connected_types]
             _intg_advisor_str = ''
             if _not_connected and len(_not_connected) > 2:
-                _advisor_lines = [f'  • {name} — {desc} (для: {use})' for name, desc, use in _not_connected[:8]]
+                _advisor_lines = [f'  • {name} — {desc} (для: {use})' for name, desc, use in _not_connected[:10]]
                 _intg_advisor_str = (
                     '\n\n💡 ДОСТУПНЫЕ ИНТЕГРАЦИИ (ещё не подключены):\n'
                     + '\n'.join(_advisor_lines)
@@ -6580,6 +6688,9 @@ class AnchorEngine:
                     'новую интеграцию через Телеграм: "Подключите [интеграцию] для [цели] — '
                     'инструкция в Дашборде → Настройки агента → API-ключи".\n'
                     '→ Включи это как один из шагов плана с tool="send_message_to_user" если считаешь подключение полезным.\n'
+                    '→ ВАЖНО: список выше — только то что уже ВСТРОЕНО в систему. Если для целей пользователя '
+                    'нужен инструмент которого нет в списке — ВСЁ РАВНО предложи его через send_message_to_user. '
+                    'Думай как эксперт-консультант: какой сервис или API был бы КРИТИЧЕСКИ полезен для этих конкретных целей?\n'
                 )
 
             # ── Строим per-goal блок: для каждой цели — её тематика и подходящие инструменты ──
@@ -6591,26 +6702,108 @@ class AnchorEngine:
                 'people':   ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг', 'нанять', 'участник'),
                 'content':  ('контент', 'smm', 'пост', 'публикац', 'канал', 'telegram', 'discord'),
                 'sales':    ('продаж', 'лид', 'партнёр', 'сделка', 'b2b', 'outreach'),
-                'learning': ('изучить', 'курс', 'обучен', 'навык', 'книг', 'читать', 'сертификат', 'урок', 'освоить', 'учёб', 'тренинг', 'английск'),
-                'health':   ('спорт', 'тренировк', 'похудеть', 'здоровь', 'бег', 'марафон', 'питание', 'диета', 'сон', 'медитац', 'фитнес', 'йога', 'вес'),
-                'personal': ('путешеств', 'привычк', 'хобби', 'творч', 'музыка', 'рисован', 'дневник', 'саморазвит', 'мечт', 'личный проект'),
+                'realestate': (
+                    'недвижим', 'квартир', 'новостройк', 'застройщик', 'риелтор', 'риэлтор',
+                    'ипотек', 'жильё', 'жилье', 'дом ', 'домов', 'коттедж', 'аренд жиль',
+                    'показ квартир', 'циан', 'авито недвижим',
+                ),
+                'services': (
+                    'салон', 'клиник', 'стоматолог', 'врач', 'юрист', 'консультац',
+                    'ресторан', 'кафе', 'доставк', 'ремонт', 'установк', 'монтаж',
+                    'автосервис', 'химчистк', 'клининг', 'фотограф', 'дизайнер интерьер',
+                    'репетитор', 'психолог', 'коуч', 'тренер', 'фитнес',
+                ),
+                'ecommerce': (
+                    'магазин', 'товар', 'склад', 'wildberries', 'ozon', 'маркетплейс',
+                    'shopify', 'интернет-магазин', 'карточк товар',
+                ),
+                'edtech': (
+                    'онлайн-курс', 'вебинар', 'инфопродукт', 'школа ', 'образован',
+                    'обучающ', 'edtech', 'платформа обучен',
+                ),
+                'learning': (
+                    'изучить', 'выучить', 'научиться', 'курс', 'обучен', 'навык', 'книг',
+                    'читать', 'сертификат', 'урок', 'освоить', 'учёб', 'тренинг',
+                    'английск', 'язык', 'грамматик', 'словар', 'практик', 'профессию',
+                    'специальност', 'квалификац', 'диплом',
+                ),
+                'health':   (
+                    'спорт', 'тренировк', 'похудеть', 'здоровь', 'здоров', 'бег',
+                    'марафон', 'питание', 'диета', 'сон', 'медитац', 'фитнес', 'йога',
+                    'вес ', 'весу', 'весом', 'калори', 'бросить куриль', 'алкоголь',
+                    'давление', 'осанк', 'растяжк', 'восстановлен',
+                ),
+                'personal': (
+                    'путешеств', 'привычк', 'хобби', 'творч', 'музыка', 'рисован',
+                    'дневник', 'саморазвит', 'мечт', 'личный проект', 'переезд',
+                    'найти жильё', 'отпуск', 'поездк',
+                    'отношени', 'семь', 'друзь', 'волонтёр', 'благотворит',
+                ),
             }
+            # Извлекаем GitHub query-строки из истории агентов — чтобы ИИ не повторял те же запросы
+            _used_github_queries: list = []
+            for _pn_ghq, _hn_ghq in _per_agent_history.items():
+                for _entry_ghq in _hn_ghq:
+                    _el = _entry_ghq.lower()
+                    if 'run_agent_action' in _el and ('language:' in _el or 'search_users' in _el or 'github' in _el):
+                        # Вытаскиваем фрагмент с параметрами запроса
+                        _snip = _entry_ghq[_entry_ghq.lower().find('language:'):_entry_ghq.lower().find('language:') + 80] if 'language:' in _el else \
+                                _entry_ghq[_entry_ghq.lower().find('github'):_entry_ghq.lower().find('github') + 80]
+                        _snip = _snip.strip()[:80]
+                        if _snip and _snip not in _used_github_queries:
+                            _used_github_queries.append(_snip)
+            _github_dedup_note = (
+                f'\n  ⛔ GITHUB ЗАПРОСЫ УЖЕ ИСПОЛЬЗОВАННЫЕ (НЕ повторять): {"; ".join(_used_github_queries[:5])}'
+                f'\n  → Меняй параметры: другой language, диапазон followers:5..50 (не >20!), repos:>2, location, topic.\n'
+                if _used_github_queries else ''
+            )
+
             _DOMAIN_TOOL_MAP = {
                 'finance':  'Используй: research_topic (основной!), get_news_trends, web_search. Если есть RSS с финансовой лентой — run_agent_action первым. НЕ email для анализа.',
                 'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
-                'dev':      'Используй: run_agent_action(action="search_users", params={"query":"language:python followers:>20"}) → save_email_contact → send_outreach_email. GitHub Token есть у агента.',
-                'people':   'Если у агента GITHUB_TOKEN → run_agent_action(action="search_users", params={"query":"language:python followers:>20"}) → save_email_contact → send_outreach_email. Иначе: find_relevant_contacts_for_task, start_email_campaign.',
+                'dev':      (
+                    'Используй: run_agent_action(action="search_users", params={"query":"language:python repos:>3 followers:10..100"}) → save_email_contact → send_outreach_email.'
+                    ' МЕНЯЙ query каждый цикл под контекст цели: другой language, followers:5..50, разные topic/location. НЕ повторяй прошлый запрос.'
+                    + _github_dedup_note
+                ),
+                'people':   (
+                    'Для поиска людей: если у агента GITHUB_TOKEN → run_agent_action(action="search_users", params={"query":"<язык/тема цели> repos:>2 followers:5..80"}) → save_email_contact → send_outreach_email.'
+                    ' Адаптируй query под цель: для разработчиков — language:X, для дизайнеров — topic:design, для менторов — topic:<область>.'
+                    ' Иначе: find_relevant_contacts_for_task, start_email_campaign.'
+                    + _github_dedup_note
+                ),
                 'content':  'Используй: generate_marketing_content, create_post, publish_to_telegram/discord, start_content_campaign.',
                 'sales':    'Используй: find_partners, find_relevant_contacts_for_task, send_outreach_email, start_email_campaign.',
-                'learning': 'Используй: research_topic("[тема] best course / how to learn") → web_search → add_task("урок X до [дата]") → save_note(результат). НЕ email-рассылки.',
-                'health':   'Используй: research_topic("программа тренировок / план питания") → add_task("тренировка [время]") → save_note("результат") → update_goal_progress. НЕ email-рассылки.',
-                'personal': 'Используй: research_and_plan("[цель] — с чего начать?") → add_task → save_note(прогресс) → publish_to_telegram(дневник). НЕ email-рассылки.',
+                'realestate': (
+                    'Недвижимость: research_topic("где искать покупателей квартир/домов") → web_search("площадки объявлений недвижимости") → add_task. '
+                    'Ключевые каналы: ЦИАН/Авито (публикация), CRM (воронка), WhatsApp (переписка с клиентами), показы (календарь). '
+                    'Контент: create_post с планировками/ценами → publish_to_telegram. НЕ GitHub/RSS.'
+                ),
+                'services': (
+                    'Услуги/сервис: research_topic("продвижение [тип услуги] — каналы лидогенерации") → web_search → add_task. '
+                    'Ключевые каналы: Google Maps/2GIS (карточка + отзывы), запись онлайн (YClients/Calendly), WhatsApp. '
+                    'Контент: create_post (до/после, отзывы) → Telegram/Instagram. НЕ GitHub.'
+                ),
+                'ecommerce': (
+                    'E-commerce: run_agent_action (если есть WB/Ozon API) → аналитика продаж/остатков. '
+                    'Без API: web_search("оптимизация карточки товара [тип]") → save_note → add_task. '
+                    'Контент: create_post с товарами → publish_to_telegram.'
+                ),
+                'edtech': (
+                    'EdTech: research_topic("воронка продаж онлайн-курса") → web_search → add_task. '
+                    'Стратегия: лид-магнит (бесплатный урок) → email-воронка (send_outreach_email) → Telegram-канал. '
+                    'Контент: generate_marketing_content → create_post → publish_to_telegram.'
+                ),
+                'learning': 'Используй: research_topic("[тема] best course / как освоить") → web_search → add_task("урок X до [дата]") → save_note(результат). НЕ email-рассылки.',
+                'health':   'Используй: research_topic("программа тренировок / план питания / как похудеть") → add_task("тренировка [время]") → save_note("результат") → update_goal_progress. НЕ email-рассылки.',
+                'personal': 'Используй: research_topic("[цель] — с чего начать?") → web_search → add_task → save_note(прогресс) → update_goal_progress. НЕ email-рассылки если не нужен контакт.',
+                'universal': 'Определи сам подход под цель: research_topic("[цель] — лучший способ") → web_search → add_task → save_note → update_goal_progress. Адаптируй инструменты под конкретную задачу.',
             }
             for _g_plan in _goals[:5]:
                 _gt = (_g_plan.get('title') or '').lower()
                 _gd = (_g_plan.get('description') or '').lower()
                 _gfull = _gt + ' ' + _gd
-                _domain = 'people'  # дефолт
+                _domain = 'universal'  # дефолт — безопасный, не навязывает outreach
                 for _dom, _kws in _DOMAIN_TOOLS.items():
                     if any(w in _gfull for w in _kws):
                         _domain = _dom
@@ -6976,7 +7169,10 @@ class AnchorEngine:
                 "  4. Какой ПРИНЦИПИАЛЬНО ДРУГОЙ путь к цели?\n"
                 "  5. Что САМОЕ НЕСТАНДАРТНОЕ можно сделать прямо сейчас — партнёрство, "
                 "кейс, открытый вопрос, признание чьей-то работы?\n"
-                "  6. Если бы ты был внешним консультантом, что бы ты сказал команде?\n\n"
+                "  6. Если бы ты был внешним консультантом, что бы ты сказал команде?\n"
+                "  7. Какие ОТРАСЛЕВЫЕ инструменты/сервисы/каналы критичны для этого бизнеса,"
+                " но НЕ подключены? (WhatsApp для недвижимости? ЦИАН для риелтора? Calendly для консультанта?"
+                " LinkedIn для B2B?) → Предложи через send_message_to_user.\n\n"
                 "ПРАВИЛА (технические ограничения):\n"
                 "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
                 "• Задача = конкретное ДЕЙСТВИЕ (найти X, написать Y, проанализировать Z).\n"
@@ -6987,7 +7183,10 @@ class AnchorEngine:
                 "• ⛔ НЕ ПОВТОРЯЙ задачу которая уже есть в НЕДАВНО ВЫПОЛНЕННЫХ — если агент УЖЕ выполнил check_emails/ответы контактам, "
                 "НЕ назначай ту же задачу снова. Дай ДРУГУЮ задачу или пропусти агента.\n"
                 "• НЕ пиши письма тем кто уже в списке уже_написали.\n"
-                "• GitHub search query: ТОЛЬКО language:X, repos:>N, followers:>N. Без email/имён.\n"
+                "• GitHub search query: МЕНЯЙ параметры каждый цикл — language:X, repos:>N, followers:5..80, topic:qa/testing/automation. "
+                "⛔ НЕ используй followers:>20 если уже использовал — меняй диапазон (5..50, 10..100, etc).\n"
+                + (f"• ⛔ GitHub запросы уже использованные (не повторять): {'; '.join(_used_github_queries[:4])}\n"
+                   if _used_github_queries else '')
                 "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
                 "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя. Для чужих каналов → create_post или send_outreach_email.\n"
                 "• ⛔ НЕТ Telegram-клиента — агенты НЕ МОГУТ вступать/читать/постить в чужие TG-каналы/группы.\n"

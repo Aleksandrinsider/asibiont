@@ -11473,6 +11473,20 @@ async def send_outreach_email(
         if _rcpt and _is_generic_email(_rcpt):
             return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
 
+        # ── GUARD: плейсхолдеры в теле письма ──
+        _body_to_check_oe = (body or '') + ' ' + (subject or '')
+        if _body_to_check_oe:
+            import re as _re_ph_oe
+            _PH_RE_OE = _re_ph_oe.compile(
+                r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+                r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+                _re_ph_oe.IGNORECASE,
+            )
+            _ph_m_oe = _PH_RE_OE.search(_body_to_check_oe)
+            if _ph_m_oe:
+                return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_oe.group()}». "
+                        f"Замени на реальные данные или убери. Нельзя отправлять шаблон клиенту.")
+
         # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
         # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"
         if _rcpt:
@@ -12077,6 +12091,18 @@ async def reply_to_outreach_email(
         if not reply_body:
             return " Нужен текст ответа (reply_body)."
 
+        # ── GUARD: блокируем плейсхолдеры в тексте ответа ──
+        import re as _re_placeholder
+        _PLACEHOLDER_RE = _re_placeholder.compile(
+            r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+            r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+            _re_placeholder.IGNORECASE,
+        )
+        _ph_match = _PLACEHOLDER_RE.search(reply_body)
+        if _ph_match:
+            return (f"⛔ Ответ содержит плейсхолдер: «{_ph_match.group()}». "
+                    f"Нельзя отправлять шаблон вместо реальных данных. "
+                    f"Спроси у пользователя через send_message_to_user если нужна ссылка/данные.")
         # ── GUARD: язык reply_body должен совпадать с языком ответа контакта (reply_text) ──
         # Если контакт ответил на определённом языке — AI должен отвечать на ТОМ ЖЕ языке.
         # Fallback: если reply_text нет — сравниваем с языком оригинального outreach.
@@ -12799,6 +12825,18 @@ async def send_follow_up_email(
         if not body:
             return " Нужен текст follow-up (body)."
 
+        # ── GUARD: плейсхолдеры в теле follow-up ──
+        import re as _re_ph_fu
+        _PH_RE_FU = _re_ph_fu.compile(
+            r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+            r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+            _re_ph_fu.IGNORECASE,
+        )
+        _ph_m_fu = _PH_RE_FU.search((body or '') + ' ' + (subject or ''))
+        if _ph_m_fu:
+            return (f"⛔ Follow-up содержит плейсхолдер: «{_ph_m_fu.group()}». "
+                    f"Замени на реальные данные или убери. Спроси у пользователя через send_message_to_user.")
+
         # MX-проверка
         mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
         if not mx_valid:
@@ -13014,6 +13052,18 @@ async def negotiate_by_email(
             return " Укажи цель переговоров (goal)."
         if not opening_message:
             return " Нужен текст открывающего письма (opening_message)."
+
+        # ── GUARD: плейсхолдеры в теле переговорного письма ──
+        import re as _re_ph_neg
+        _PH_RE_NEG = _re_ph_neg.compile(
+            r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+            r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+            _re_ph_neg.IGNORECASE,
+        )
+        _ph_m_neg = _PH_RE_NEG.search((opening_message or '') + ' ' + (subject or ''))
+        if _ph_m_neg:
+            return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_neg.group()}». "
+                    f"Замени на реальные данные или убери. Спроси у пользователя через send_message_to_user.")
 
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
