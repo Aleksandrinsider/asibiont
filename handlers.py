@@ -485,17 +485,30 @@ async def broadcast_handler(message: Message):
     session = Session()
     try:
         users = session.query(User).filter(User.telegram_id.isnot(None)).all()
-        sent, failed = 0, 0
+        sent, failed, deleted = 0, 0, 0
         for u in users:
             if u.telegram_id == message.from_user.id:
                 continue  # не отправляем себе
             try:
                 await message.bot.send_message(u.telegram_id, text)
                 sent += 1
-            except Exception:
+            except Exception as e:
                 failed += 1
+                err_str = str(e).lower()
+                is_blocked = ('forbidden' in err_str and 'blocked' in err_str) or \
+                             'chat not found' in err_str or 'user is deactivated' in err_str
+                if is_blocked:
+                    try:
+                        from ai_integration.handlers import delete_user_and_data
+                        delete_user_and_data(u.id)
+                        deleted += 1
+                    except Exception:
+                        pass
             await asyncio.sleep(0.05)
-        await message.reply(f"✅ Отправлено: {sent}, ошибок: {failed}")
+        result = f"✅ Отправлено: {sent}, ошибок: {failed}"
+        if deleted:
+            result += f", удалено заблокировавших: {deleted}"
+        await message.reply(result)
     finally:
         session.close()
 

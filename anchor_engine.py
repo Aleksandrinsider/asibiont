@@ -14634,24 +14634,18 @@ class AnchorEngine:
                     _send_err_str = str(send_err).lower()
                     logger.error(f"[ANCHOR] Send failed to {user.telegram_id}: {send_err}")
                     session.rollback()
-                    # ── Если бот заблокирован или чат не найден — ставим DND на 7 дней ──
+                    # ── Если бот заблокирован или чат не найден — удаляем пользователя ──
                     _is_blocked = ('forbidden' in _send_err_str and 'blocked' in _send_err_str) or \
                                   'chat not found' in _send_err_str or \
                                   'user is deactivated' in _send_err_str
                     if _is_blocked:
                         try:
-                            _blk_sess = Session()
-                            try:
-                                _blk_sess.query(User).filter_by(telegram_id=user.telegram_id).update(
-                                    {'do_not_disturb_until': datetime.now(timezone.utc) + timedelta(days=7)},
-                                    synchronize_session=False,
-                                )
-                                _blk_sess.commit()
-                                logger.info(f"[ANCHOR] User {user.telegram_id} blocked bot → DND set for 7 days")
-                            finally:
-                                _blk_sess.close()
+                            from ai_integration.handlers import delete_user_and_data
+                            _uid = user.id
+                            logger.info(f"[ANCHOR] User {user.telegram_id} blocked bot → deleting account")
+                            delete_user_and_data(_uid)
                         except Exception as _blk_err:
-                            logger.warning(f"[ANCHOR] Failed to set DND for blocked user {user.telegram_id}: {_blk_err}")
+                            logger.warning(f"[ANCHOR] Failed to delete blocked user {user.telegram_id}: {_blk_err}")
                     # ── ANTI-DRAIN: пометить якоря delivered в отдельной сессии ──
                     # Если send_message провалился — anchor остаётся undelivered и
                     # цикл повторяется каждые 5 мин, тратя токены на AI-вызов.

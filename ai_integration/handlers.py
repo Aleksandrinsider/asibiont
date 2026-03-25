@@ -9350,6 +9350,100 @@ async def find_and_message_relevant_users(
             session.close()
 
 
+def _is_telegram_blocked(error: Exception) -> bool:
+    """Проверяет, является ли ошибка блокировкой бота пользователем."""
+    err_str = str(error).lower()
+    return ('forbidden' in err_str and 'blocked' in err_str) or \
+           'chat not found' in err_str or \
+           'user is deactivated' in err_str or \
+           ('forbidden' in err_str and 'bot was blocked' in err_str)
+
+
+def delete_user_and_data(user_id: int, session=None) -> bool:
+    """
+    Полное удаление пользователя и всех связанных данных из БД.
+    Используется при обнаружении блокировки бота пользователем.
+    """
+    from models import (Task, Interaction, Note, UserProfile, Goal, UserRating,
+                        Subscription, PaymentHistory, Post, PostLike, Comment, PostView,
+                        ActivityAlert, ContactAlert, Anchor, PushSubscription,
+                        TokenTransaction, AnchorDeliveryLog, EmailContact, EmailCampaign,
+                        EmailOutreach, ContentCampaign, DelegationCampaign, UserMessage,
+                        AgentActivityLog, UserAgent, AgentSubscription, AgentRun,
+                        AgentRating, DecisionLog, EmailContactPreference)
+
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).get(user_id)
+        if not user:
+            logger.warning(f"[CLEANUP] User {user_id} not found for deletion")
+            return False
+
+        tg_id = user.telegram_id
+        username = user.username or '?'
+        logger.info(f"[CLEANUP] Deleting user {user_id} (@{username}, tg={tg_id}) and all data")
+
+        # FK tables with user_id
+        for model in [
+            Interaction, Task, Goal, Note, UserProfile, Subscription,
+            PaymentHistory, Post, PostLike, Comment, PostView,
+            ActivityAlert, ContactAlert, Anchor, PushSubscription,
+            TokenTransaction, AnchorDeliveryLog, EmailContact, EmailCampaign,
+            EmailOutreach, ContentCampaign, DelegationCampaign, UserMessage,
+            AgentActivityLog, AgentSubscription, AgentRun, DecisionLog,
+            EmailContactPreference
+        ]:
+            try:
+                session.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+            except Exception:
+                pass  # table may not exist yet
+
+        # UserRating — two FK columns
+        try:
+            session.query(UserRating).filter(
+                (UserRating.rater_user_id == user_id) | (UserRating.rated_user_id == user_id)
+            ).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # UserAgent — author_id
+        try:
+            session.query(UserAgent).filter(UserAgent.author_id == user_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # AgentRating — rater_user_id
+        try:
+            session.query(AgentRating).filter(AgentRating.rater_user_id == user_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # User referrer_id self-reference
+        try:
+            session.query(User).filter(User.referrer_id == user_id).update(
+                {'referrer_id': None}, synchronize_session=False
+            )
+        except Exception:
+            pass
+
+        session.delete(user)
+        session.commit()
+        logger.info(f"[CLEANUP] ✅ User {user_id} (@{username}) deleted successfully")
+        return True
+
+    except Exception as e:
+        logger.error(f"[CLEANUP] Failed to delete user {user_id}: {e}", exc_info=True)
+        session.rollback()
+        return False
+    finally:
+        if close_session:
+            session.close()
+
+
 async def broadcast_message_to_all_users(
     message_text: str,
     user_id: int = None,
@@ -9389,6 +9483,7 @@ async def broadcast_message_to_all_users(
         
         sent = 0
         failed = 0
+        blocked_deleted = 0
         import asyncio
         for u in all_users:
             try:
@@ -9398,8 +9493,17 @@ async def broadcast_message_to_all_users(
             except Exception as e:
                 logger.warning(f"[BROADCAST] Failed {u.telegram_id}: {e}")
                 failed += 1
+                if _is_telegram_blocked(e):
+                    uid = u.id
+                    session.expunge(u)
+                    if delete_user_and_data(uid):
+                        blocked_deleted += 1
+                        logger.info(f"[BROADCAST] Blocked user {uid} auto-deleted")
         
-        return f"📢 Рассылка завершена: отправлено {sent}, не доставлено {failed} (всего {len(all_users)})"
+        parts = [f"📢 Рассылка завершена: отправлено {sent}, не доставлено {failed} (всего {len(all_users)})"]
+        if blocked_deleted:
+            parts.append(f"🗑 Удалено заблокировавших: {blocked_deleted}")
+        return "\n".join(parts)
     except Exception as e:
         logger.error(f"[BROADCAST] Error: {e}", exc_info=True)
         return f"Ошибка рассылки: {str(e)}"
@@ -9571,7 +9675,7 @@ def _generate_user_message_sync(sender_name, sender_username, recipient_name, in
 
 
 async def _send_telegram_message_async(chat_id, text):
-    """Отправляет сообщение в Telegram асинхронно."""
+    """Отправляет сообщение в Telegram асинхронно. При блокировке — удаляет пользователя."""
     from config import TELEGRAM_TOKEN
     import aiohttp
     
@@ -9581,7 +9685,20 @@ async def _send_telegram_message_async(chat_id, text):
                                       timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status != 200:
                 text_body = await resp.text()
-                raise Exception(f"Telegram API error: {resp.status} {text_body[:200]}")
+                error = Exception(f"Telegram API error: {resp.status} {text_body[:200]}")
+                if _is_telegram_blocked(error):
+                    try:
+                        _sess = Session()
+                        try:
+                            _u = _sess.query(User).filter_by(telegram_id=chat_id).first()
+                            if _u:
+                                logger.info(f"[SEND] User {chat_id} blocked bot → deleting account")
+                                delete_user_and_data(_u.id, session=_sess)
+                        finally:
+                            _sess.close()
+                    except Exception as _del_err:
+                        logger.warning(f"[SEND] Failed to delete blocked user {chat_id}: {_del_err}")
+                raise error
 
 
 def _send_telegram_message_sync(chat_id, text):
@@ -9591,7 +9708,20 @@ def _send_telegram_message_sync(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     resp = requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=10)
     if resp.status_code != 200:
-        raise Exception(f"Telegram API error: {resp.status_code} {resp.text[:200]}")
+        error = Exception(f"Telegram API error: {resp.status_code} {resp.text[:200]}")
+        if _is_telegram_blocked(error):
+            try:
+                _sess = Session()
+                try:
+                    _u = _sess.query(User).filter_by(telegram_id=chat_id).first()
+                    if _u:
+                        logger.info(f"[SEND_SYNC] User {chat_id} blocked bot → deleting account")
+                        delete_user_and_data(_u.id, session=_sess)
+                finally:
+                    _sess.close()
+            except Exception as _del_err:
+                logger.warning(f"[SEND_SYNC] Failed to delete blocked user {chat_id}: {_del_err}")
+        raise error
 
 
 # ═══════════════════════════════════════════════════════════════
