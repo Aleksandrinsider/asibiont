@@ -8213,7 +8213,7 @@ class AnchorEngine:
                 # Отправляем результат шага агента в Telegram — пользователь видит прогресс
                 if self.bot and _cleaned and len(_cleaned.strip()) > 20:
                     try:
-                        _tg_text = f"📋 {_ag_name}:\n\n{_cleaned[:3500]}"
+                        _tg_text = f"� {_ag_name}:\n\n{_cleaned[:3500]}"
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
                             text=_tg_text,
