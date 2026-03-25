@@ -9387,13 +9387,20 @@ def delete_user_and_data(user_id: int, session=None) -> bool:
         username = user.username or '?'
         logger.info(f"[CLEANUP] Deleting user {user_id} (@{username}, tg={tg_id}) and all data")
 
+        # Clear current_task_id to avoid FK loop with tasks
+        try:
+            user.current_task_id = None
+            session.flush()
+        except Exception:
+            pass
+
         # FK tables with user_id
         for model in [
             Interaction, Task, Goal, Note, UserProfile, Subscription,
             PaymentHistory, Post, PostLike, Comment, PostView,
             ActivityAlert, ContactAlert, Anchor, PushSubscription,
             TokenTransaction, AnchorDeliveryLog, EmailContact, EmailCampaign,
-            EmailOutreach, ContentCampaign, DelegationCampaign, UserMessage,
+            EmailOutreach, ContentCampaign, DelegationCampaign,
             AgentActivityLog, AgentSubscription, AgentRun, DecisionLog,
             EmailContactPreference
         ]:
@@ -9401,6 +9408,14 @@ def delete_user_and_data(user_id: int, session=None) -> bool:
                 session.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
             except Exception:
                 pass  # table may not exist yet
+
+        # UserMessage — sender_id / recipient_id (no user_id column)
+        try:
+            session.query(UserMessage).filter(
+                (UserMessage.sender_id == user_id) | (UserMessage.recipient_id == user_id)
+            ).delete(synchronize_session=False)
+        except Exception:
+            pass
 
         # UserRating — two FK columns
         try:
