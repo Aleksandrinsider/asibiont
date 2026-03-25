@@ -5796,6 +5796,54 @@ try:
 except Exception as e:
     print('Ошибка SMS: ' + str(e))`
             },
+            strava: {
+                name: 'Strava (бег, велосипед, плавание)',
+                fields: [
+                    {k:'STRAVA_CLIENT_ID', label:'Client ID', ph:'12345', t:'text'},
+                    {k:'STRAVA_CLIENT_SECRET', label:'Client Secret', ph:'xxxxxxxxxx', t:'password'},
+                    {k:'STRAVA_REFRESH_TOKEN', label:'Refresh Token', ph:'xxxxxxxxxx', t:'password'}
+                ],
+                hint: 'developers.strava.com → Create App → Client ID + Client Secret. Авторизация: https://www.strava.com/oauth/authorize?client_id=YOUR_ID&response_type=code&redirect_uri=http://localhost&approval_prompt=force&scope=activity:read_all — из URL возьми code, потом POST https://www.strava.com/oauth/token — получишь refresh_token.',
+                code: `import urllib.request, json, os
+CLIENT_ID = os.environ.get('STRAVA_CLIENT_ID', '')
+CLIENT_SECRET = os.environ.get('STRAVA_CLIENT_SECRET', '')
+REFRESH_TOKEN = os.environ.get('STRAVA_REFRESH_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', 'activities')
+try:
+    # Обновляем access token
+    token_data = json.dumps({'client_id': CLIENT_ID, 'client_secret': CLIENT_SECRET, 'refresh_token': REFRESH_TOKEN, 'grant_type': 'refresh_token'}).encode()
+    req = urllib.request.Request('https://www.strava.com/oauth/token', data=token_data, headers={'Content-Type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        token = json.loads(r.read().decode())
+    access_token = token.get('access_token', '')
+    if ACTION == 'athlete':
+        req2 = urllib.request.Request('https://www.strava.com/api/v3/athlete', headers={'Authorization': 'Bearer ' + access_token})
+        with urllib.request.urlopen(req2, timeout=15) as r2:
+            a = json.loads(r2.read().decode())
+        print(f'\u0421портсмен: {a.get("firstname","")} {a.get("lastname","")}. Дейтвий за все время: {a.get("athlete_type","")}')
+    elif ACTION == 'stats':
+        req2 = urllib.request.Request('https://www.strava.com/api/v3/athlete', headers={'Authorization': 'Bearer ' + access_token})
+        with urllib.request.urlopen(req2, timeout=15) as r2:
+            athlete = json.loads(r2.read().decode())
+        uid = athlete.get('id', '')
+        req3 = urllib.request.Request(f'https://www.strava.com/api/v3/athletes/{uid}/stats', headers={'Authorization': 'Bearer ' + access_token})
+        with urllib.request.urlopen(req3, timeout=15) as r3:
+            stats = json.loads(r3.read().decode())
+        ytd = stats.get('ytd_run_totals', {})
+        print(f'Бег за год: {round(ytd.get("distance",0)/1000,1)} км, {ytd.get("count",0)} тренировок')
+    else:
+        N = int(os.environ.get('AGENT_PARAM_N', '5'))
+        req2 = urllib.request.Request(f'https://www.strava.com/api/v3/athlete/activities?per_page={N}', headers={'Authorization': 'Bearer ' + access_token})
+        with urllib.request.urlopen(req2, timeout=15) as r2:
+            activities = json.loads(r2.read().decode())
+        for a in activities:
+            dist = round(a.get('distance', 0) / 1000, 2)
+            t = int(a.get('moving_time', 0))
+            sport = a.get('sport_type', '')
+            print(f'{sport}: {a.get("name","")} \u2014 {dist} км, {t//60}:{t%60:02d} мин')
+except Exception as e:
+    print('Ошибка Strava: ' + str(e))`
+            },
             webhook: {
                 name: 'Webhook (n8n / Zapier / Make)',
                 fields: [
@@ -6422,6 +6470,8 @@ else:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Формы / Карты</option>
                             <option value="google_maps">Google Maps / 2GIS</option>
                             <option value="google_forms">Google Forms / Typeform</option>
+                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Спорт / Здоровье</option>
+                            <option value="strava">Strava (бег, велосипед, плавание)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">SMS / Другое</option>
                             <option value="sms_ru">SMS-рассылки (SMS.ru / SMSC)</option>
                             <option value="twilio">Twilio (SMS)</option>
