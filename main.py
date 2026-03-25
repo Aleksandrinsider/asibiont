@@ -6673,11 +6673,8 @@ def _default_avatar_response(initial='?', color='#068487'):
     _safe_initial = (initial or '?')[:1].upper()
     if _safe_initial not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?':
         _safe_initial = '?'
-    # Pick a deterministic color from the initial
-    _colors = ['#068487', '#04a8b3', '#5c6bc0', '#43a047', '#e53935',
-               '#fb8c00', '#8e24aa', '#00897b', '#1e88e5', '#6d4c41']
-    if _safe_initial.isalpha():
-        color = _colors[(ord(_safe_initial) - ord('A')) % len(_colors)]
+    # Use neutral gray for all avatars without a photo
+    color = '#6C727F'
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
         f'<circle cx="32" cy="32" r="32" fill="{color}"/>'
@@ -12290,10 +12287,7 @@ async def api_marketplace_agent_get_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
-_ARENA_COLORS = [
-    '#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
-    '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a',
-]
+_ARENA_COLORS = ['#6C727F']
 
 async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
                                   personality: str, description: str,

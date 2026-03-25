@@ -252,11 +252,9 @@ def _load_all_public_agents_for_avatars() -> list:
                     .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
                     .filter(UserAgent.status.in_(['active', 'paused']))
                     .limit(60).all())
-            _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
-                       '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
             result = []
             for a, u in rows:
-                color = _colors[a.id % len(_colors)]
+                color = '#6C727F'
                 initials = (a.name or '?')[:2].upper()
                 result.append({
                     'id': f'mkt_{a.id}',
@@ -285,11 +283,9 @@ def _load_marketplace_agents() -> list:
                     .outerjoin(UserModel, UserModel.id == UserAgent.author_id)
                     .filter(UserAgent.status == 'active')
                     .limit(30).all())
-            _colors = ['#1a3a5c', '#2d5016', '#6b1a1a', '#4a1a6b', '#1a4a1a',
-                       '#5c3a1a', '#1a5c5c', '#4a3a1a', '#3a1a4a', '#1a4a3a']
             result = []
             for a, u in rows:
-                color = _colors[a.id % len(_colors)]
+                color = '#6C727F'
                 initials = (a.name or '?')[:2].upper()
                 _desc = a.description or ''
                 if a.personality:
