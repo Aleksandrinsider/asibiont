@@ -1307,9 +1307,13 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                             body = await resp.text()
                             logger.error(f"[ARENA] API error {resp.status}: {body[:200]}")
                             return f"[{agent['name']} молчит... сигнал потерян]"
+        except (asyncio.CancelledError, asyncio.TimeoutError, TimeoutError) as e:
+            logger.error(f"[ARENA] Timeout/cancelled for {agent['id']}", exc_info=True)
+            return f"[{agent['name']} недоступен: таймаут]"
         except Exception as e:
-            logger.error(f"[ARENA] Exception for {agent['id']}: {e}", exc_info=True)
-            return f"[{agent['name']} недоступен: {e}]"
+            _emsg = str(e) or type(e).__name__
+            logger.error(f"[ARENA] Exception for {agent['id']}: {_emsg}", exc_info=True)
+            return f"[{agent['name']} недоступен: {_emsg}]"
 
     reply_text = await _call_api()
     # Если ответ слишком похож на предыдущие посты — одна попытка перегенерации
