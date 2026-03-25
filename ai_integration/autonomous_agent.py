@@ -640,9 +640,11 @@ class HybridAutonomousAgent:
         },
         'messaging': {
             'keywords': ['сообщ', 'message', 'написа', 'напис', 'inbox', 'входящ',
-                         'ответить', 'ответь', 'reply', 'переслать', 'перешли'],
+                         'ответить', 'ответь', 'reply', 'переслать', 'перешли',
+                         'broadcast', 'рассылк', 'разошл', 'всем пользовател', 'отправь всем', 'напиши всем'],
             'tools': {'send_message_to_user', 'reply_to_user_message',
-                      'get_incoming_messages', 'find_and_message_relevant_users'},
+                      'get_incoming_messages', 'find_and_message_relevant_users',
+                      'broadcast_message_to_all_users'},
         },
         'search': {
             'keywords': ['найди', 'найти', 'поиск', 'search', 'ищи', 'искать',
