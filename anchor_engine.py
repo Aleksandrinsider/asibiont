@@ -4944,12 +4944,16 @@ class AnchorEngine:
             return getattr(obj, key, default)
 
         try:
+            # Pre-load user scalar attributes before any awaits/commits that could detach the ORM object
+            _user_id = user.id
+            _user_tg_id = user.telegram_id
+
             # Guard: не создаём цепочку длиннее max_cont продолжений
             from models import AgentActivityLog as _AAL2
             _cont_count = (
                 session.query(_AAL2)
                 .filter(
-                    _AAL2.user_id == user.id,
+                    _AAL2.user_id == _user_id,
                     _AAL2.activity_type == 'agent_chain_continue',
                     _AAL2.target == _get_anc(anchor, 'source'),
                     _AAL2.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
@@ -5100,7 +5104,7 @@ class AnchorEngine:
                         "WHERE user_id=:uid AND activity_type='inbox_reply' "
                         "AND title LIKE :hpat "
                         "AND created_at > NOW() - INTERVAL '2 hours'"
-                    ), {'uid': user.id, 'hpat': f'%[h:{_inbox_hash}]%'}).scalar()
+                    ), {'uid': _user_id, 'hpat': f'%[h:{_inbox_hash}]%'}).scalar()
                 except Exception:
                     _prev_inbox = 0
                 if _prev_inbox:
@@ -5112,7 +5116,7 @@ class AnchorEngine:
                     from models import AgentActivityLog as _AAL_ibox, Session as _Db_ibox
                     _si_ibox = _Db_ibox()
                     _si_ibox.add(_AAL_ibox(
-                        user_id=user.id,
+                        user_id=_user_id,
                         activity_type='inbox_reply',
                         status='new',
                         target=f'agent:{prev_agent.name}',
@@ -5210,7 +5214,7 @@ class AnchorEngine:
             # Логируем continuation
             from models import AgentActivityLog as _AAL3
             session.add(_AAL3(
-                user_id=user.id,
+                user_id=_user_id,
                 activity_type='agent_chain_continue',
                 title=f'[chain] {prev_agent.name} → {_next_ag.name}',
                 content=_next_task[:500],
@@ -5224,10 +5228,10 @@ class AnchorEngine:
             from token_service import has_enough_tokens as _het_ch, spend_tokens as _sp_ch
             from config import FREE_ACCESS_MODE as _FAM_ch
             if not _FAM_ch:
-                if not _het_ch(user.telegram_id, 'proactive_message', session=session):
-                    logger.info("[ANCHOR-CHAIN] user %d: skip chain — not enough tokens", user.id)
+                if not _het_ch(_user_tg_id, 'proactive_message', session=session):
+                    logger.info("[ANCHOR-CHAIN] user %d: skip chain — not enough tokens", _user_id)
                     return
-                _sp_ch(user.telegram_id, 'proactive_message', description='agent_chain_continue', session=session, auto_commit=False)
+                _sp_ch(_user_tg_id, 'proactive_message', description='agent_chain_continue', session=session, auto_commit=False)
 
             # Запускаем следующего агента
             from ai_integration.autonomous_agent import _exec_agent_for_director
@@ -5280,21 +5284,21 @@ class AnchorEngine:
             _chain_transfer_gap_ok = True
             try:
                 _last_proactive_ts = session.query(Interaction.created_at).filter(
-                    Interaction.user_id == user.id,
+                    Interaction.user_id == _user_id,
                     Interaction.message_type == 'proactive',
                 ).order_by(Interaction.created_at.desc()).limit(1).scalar()
                 if _last_proactive_ts:
                     _lp_utc = _last_proactive_ts.replace(tzinfo=timezone.utc) if _last_proactive_ts.tzinfo is None else _last_proactive_ts
                     if (datetime.now(timezone.utc) - _lp_utc).total_seconds() < 300:  # 5 min
                         _chain_transfer_gap_ok = False
-                        logger.info("[ANCHOR-CHAIN] user %d: transfer notify suppressed (proactive gap < 5min)", user.id)
+                        logger.info("[ANCHOR-CHAIN] user %d: transfer notify suppressed (proactive gap < 5min)", _user_id)
             except Exception:
                 pass
             if _chain_transfer_gap_ok:
                 if self.bot:
                     try:
                         await self.bot.send_message(
-                            chat_id=user.telegram_id,
+                            chat_id=_user_tg_id,
                             text=f"{prev_agent.name}:\n\n{_transfer_text}",
                         )
                     except Exception as _e:
@@ -5310,7 +5314,7 @@ class AnchorEngine:
                     '__anchor_type': 'agent_chain_transfer',
                 }, ensure_ascii=False)
                 session.add(Interaction(
-                    user_id=user.id,
+                    user_id=_user_id,
                     message_type='proactive',
                     content=_transfer_content,
                 ))
@@ -5349,7 +5353,7 @@ class AnchorEngine:
                 _chain_log = (
                     session.query(_AAL3)
                     .filter(
-                        _AAL3.user_id == user.id,
+                        _AAL3.user_id == _user_id,
                         _AAL3.activity_type == 'agent_chain_continue',
                         _AAL3.ref_id == _next_ag.id,
                         _AAL3.status == 'in_progress',
@@ -5389,7 +5393,7 @@ class AnchorEngine:
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
                 try:
                     await self.bot.send_message(
-                        chat_id=user.telegram_id,
+                        chat_id=_user_tg_id,
                         text=f"{_next_ag.name}:\n\n{_next_result.strip()}",
                     )
                     _chain_agent_content = json.dumps({
@@ -5403,14 +5407,14 @@ class AnchorEngine:
                         '__anchor_type': 'agent_chain_continue',
                     }, ensure_ascii=False)
                     session.add(Interaction(
-                        user_id=user.id,
+                        user_id=_user_id,
                         message_type='proactive',
                         content=_chain_agent_content,
                     ))
                     session.commit()
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh_c
-                        _smh_c(user.telegram_id, 'assistant', _next_result.strip(), session=session)
+                        _smh_c(_user_tg_id, 'assistant', _next_result.strip(), session=session)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
                 except Exception as _e_chain_send:
@@ -5418,11 +5422,12 @@ class AnchorEngine:
 
             logger.info(
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s) → %d chars",
-                user.id, prev_agent.name, _next_ag.name, _next_task[:50], len(_next_result or ''),
+                _user_id, prev_agent.name, _next_ag.name, _next_task[:50], len(_next_result or ''),
             )
 
         except Exception as _chain_e:
-            logger.debug("[ANCHOR-CHAIN] error for user %d: %s", user.id, _chain_e)
+            _uid_log = locals().get('_user_id', getattr(user, 'id', '?'))
+            logger.debug("[ANCHOR-CHAIN] error for user %s: %s", _uid_log, _chain_e)
 
     # ═══════════════════════════════════════════════════════
     # COORDINATOR DISPATCH — multi-agent plan execution

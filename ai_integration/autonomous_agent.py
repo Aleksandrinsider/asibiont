@@ -568,15 +568,16 @@ class HybridAutonomousAgent:
                             logger.info(f"[AI] No tools called, text response")
                     return result
                 error = await resp.text()
-                if resp.status < 500 or _attempt >= 1:
+                if resp.status < 500 or _attempt >= _max_retries - 1:
                     raise Exception(f"AI call failed: {resp.status} {error[:200]}")
                 logger.warning(f"[AI] Server error {resp.status}, retrying...")
                 await asyncio.sleep(2)
           except asyncio.TimeoutError:
-            if _attempt >= 1:
+            if _attempt >= _max_retries - 1:
                 raise
             logger.warning("[AI] Timeout, retrying...")
             await asyncio.sleep(2)
+         raise Exception("AI call failed: all retries exhausted")
 
     # ===== SMART TOOL FILTERING (reduces API tokens) =====
 
