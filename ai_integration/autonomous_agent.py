@@ -6321,6 +6321,11 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
             _title, _overflow = normalize_task_title(task_text, agent_name=_aname)
             # description = результат агента; если пусто — полный текст задачи (не только overflow)
             _desc = result_summary[:1000] if result_summary else (task_text[:1000] if task_text else _overflow[:1000])
+            # Очищаем description от внутреннего координационного контекста
+            import re as _re_desc
+            from .utils import _TASK_DESC_STRIP_PATS
+            for _dsp in _TASK_DESC_STRIP_PATS:
+                _desc = _re_desc.sub(_dsp, '', _desc, flags=_re_desc.DOTALL).strip()
             _t = _Task(
                 user_id=user_db_id,
                 title=_title,

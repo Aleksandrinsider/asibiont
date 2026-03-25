@@ -271,12 +271,26 @@ _TASK_GARBAGE_PATS = [
     r'^[📌🎯✅]\s*(Правила|Цели|Инструкц)[^\n]*\n?',
     r'^ОТВЕТЬ НА ВОПРОС[^:]*:\s*',
     r'^Твои интеграции:[^\n]*\n?',
+    # Координаторские/делегационные паттерны
+    r'^Твоё задание:\s*',
+    r'^Поручено\s+\S+:\s*',
+    r'^\S+ только что сохранил[аи]? новые контакты\.\s*Результат \S+ работы:\s*',
+    r'^Результат \S+ работы:\s*',
+    r'^\S+,\s*передаю тебе задачу:\s*',
+    r'^Контекст — уже сделано командой:[^\n]*\n?',
 ]
 _TASK_PERSONALITY_MARKERS = (
     'специалист в команде', 'циник,', 'pr служба', 'координатор команды',
     'выгоревший', 'любит читать', 'агент пишет первым', 'пишет первым',
     'Твои интеграции:', 'твои интеграции:',
 )
+
+# Паттерн для обрезки внутреннего координационного контекста из description
+_TASK_DESC_STRIP_PATS = [
+    r'(?:\n|^)Контекст — уже сделано командой:.*',
+    r'(?:\n|^)Твоя задача: немедленно отправь outreach-письма.*',
+    r'(?:\n|^)Параметры: recipient_email=.*',
+]
 
 
 def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 200) -> tuple:
@@ -329,7 +343,12 @@ def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 
                            if s.strip() and not any(m in s.lower() for m in _TASK_PERSONALITY_MARKERS)]
         text = clean_sentences[0] if clean_sentences else ''
 
-    if len(text.strip()) < 5:
+    # 3b. Если после чистки осталось только generic-слово — fallback
+    _gen_only = text.strip().lower() in (
+        'выполнено', 'готово', 'done', 'ok', 'ок', 'задача', 'нет данных',
+        'результат', 'принято', 'сделано', 'задание',
+    )
+    if len(text.strip()) < 5 or _gen_only:
         fallback = f"Задача агента {agent_name}" if agent_name else 'Задача'
         return fallback, ''
 

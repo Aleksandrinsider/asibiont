@@ -4605,9 +4605,8 @@ class AnchorEngine:
             # Обновляем статус dispatch-лога (ВСЕГДА — даже если result пустой)
             if agents and _aal_id:
                 try:
-                    _tools_prefix = f"[tools: {', '.join(_tools_used)}] " if _tools_used else ''
                     _filter_tag = f"[filtered:{_filter_reason}] " if _filter_reason else ''
-                    _full_result = _filter_tag + _tools_prefix + (result or '')
+                    _full_result = _filter_tag + (result or '')
                     if result and result.strip() and not _is_noise_result:
                         _aal_status = 'completed'
                     elif _filter_reason == 'dedup':
@@ -7356,7 +7355,11 @@ class AnchorEngine:
             # ── AAL запись ──
             from models import AgentActivityLog as _AAL_c, Session as _AAL_Sess
             _aal_id_c = None
-            _safe_task_text = str(base_task_text or '')[:600]
+            # Для content сохраняем только цели, а не полный системный промпт
+            _goals_for_content = '; '.join(
+                f"{g.get('title', '')[:50]} ({g.get('progress', 0)}%)"
+                for g in data.get('goals', [])[:5]
+            ) or 'цели не указаны'
             try:
                 # Используем отдельную сессию — основная может быть в ненадёжном состоянии
                 _aal_sess = _AAL_Sess()
@@ -7365,7 +7368,7 @@ class AnchorEngine:
                         user_id=user.id,
                         activity_type='goal_autopilot_dispatch',
                         title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}'[:300],
-                        content=_safe_task_text,
+                        content=_goals_for_content[:500],
                         target=str(getattr(anchor, 'source', '') or '')[:300],
                         status='in_progress',
                         ref_id=None,
@@ -8397,10 +8400,12 @@ class AnchorEngine:
                         }, ensure_ascii=False),
                     ))
                     # Также логируем agent_task в AAL — для контекста ASI (context_builder читает AAL)
+                    from ai_integration.utils import normalize_task_title as _ntt_aal
+                    _aal_task_title, _ = _ntt_aal(_step.get('task') or 'задача', agent_name=_ag_name)
                     session.add(AgentActivityLog(
                         user_id=user.id,
                         activity_type='agent_task',
-                        title=f'{_ag_name}: {(_step.get("task") or "задача")[:150]}',
+                        title=f'{_ag_name}: {_aal_task_title[:150]}',
                         target=f'agent:{_ag_name}',
                         content=_cleaned[:600],
                         result=_cleaned[:600],
@@ -8527,8 +8532,7 @@ class AnchorEngine:
             # ── Обновляем AAL ──
             if _aal_id_c:
                 try:
-                    _tools_pfx = f"[tools: {', '.join(_all_tools)}] " if _all_tools else ''
-                    _full_res = _tools_pfx + ' | '.join(_results_summary[:3])
+                    _full_res = ' | '.join(_results_summary[:3])
                     _st = 'completed' if _results_summary else 'empty_result'
                     from sqlalchemy import text as _aal_t_c
                     from models import Session as _AAL_Upd_Sess
