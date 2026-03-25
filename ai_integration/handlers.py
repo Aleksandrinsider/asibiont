@@ -9350,6 +9350,64 @@ async def find_and_message_relevant_users(
             session.close()
 
 
+async def broadcast_message_to_all_users(
+    message_text: str,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Отправить сообщение всем пользователям платформы (broadcast).
+    Доступно только для админа.
+    """
+    from config import ADMIN_TELEGRAM_USERNAME
+    logger.info(f"[BROADCAST] user={user_id}, text_len={len(message_text)}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        sender = session.query(User).filter_by(telegram_id=user_id).first()
+        if not sender:
+            return "Пользователь не найден"
+        
+        if (sender.username or "").lower() != ADMIN_TELEGRAM_USERNAME.lower():
+            return "Рассылка доступна только администратору."
+        
+        if not message_text or not message_text.strip():
+            return "Текст сообщения не может быть пустым."
+        
+        all_users = session.query(User).filter(
+            User.telegram_id.isnot(None),
+            User.id != sender.id
+        ).all()
+        
+        if not all_users:
+            return "Нет пользователей для рассылки."
+        
+        sent = 0
+        failed = 0
+        import asyncio
+        for u in all_users:
+            try:
+                await _send_telegram_message_async(u.telegram_id, message_text)
+                sent += 1
+                await asyncio.sleep(0.05)
+            except Exception as e:
+                logger.warning(f"[BROADCAST] Failed {u.telegram_id}: {e}")
+                failed += 1
+        
+        return f"📢 Рассылка завершена: отправлено {sent}, не доставлено {failed} (всего {len(all_users)})"
+    except Exception as e:
+        logger.error(f"[BROADCAST] Error: {e}", exc_info=True)
+        return f"Ошибка рассылки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def reply_to_user_message(
     recipient_username: str,
     reply_text: str,

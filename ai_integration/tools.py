@@ -835,6 +835,23 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "broadcast_message_to_all_users",
+            "description": "📢 Отправить сообщение ВСЕМ пользователям платформы (broadcast/рассылка). Только для админа. Используй когда: 'отправь всем', 'напиши всем пользователям', 'рассылка', 'broadcast', 'объявление для всех'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message_text": {
+                        "type": "string",
+                        "description": "Текст сообщения для рассылки всем пользователям"
+                    }
+                },
+                "required": ["message_text"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "reply_to_user_message",
             "description": "💬 Ответить на сообщение от другого пользователя. Используй когда: 'ответь @ivan что согласен', 'напиши @anna ответ: давай в пятницу'. Ключевые слова: 'ответь', 'ответить', 'reply'.",
             "parameters": {
