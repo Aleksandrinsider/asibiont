@@ -531,7 +531,7 @@ class ContextBuilder:
                 recent_replies = session.query(EmailOutreach).filter(
                     EmailOutreach.user_id == user.id,
                     EmailOutreach.status == 'replied',
-                ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(5).all()
+                ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(20).all()
 
                 if recent_replies:
                     new_reply_lines = []
@@ -541,8 +541,25 @@ class ContextBuilder:
                         reply_preview = (r.reply_text or '')[:120].replace('\n', ' ')
                         if not reply_preview:
                             reply_preview = '[текст ответа не получен — вызови check_emails]'
-                        if r.ai_reply_sent_at:
-                            answered_reply_lines.append(f" {name} ({r.recipient_email}): [ОТВЕТ УЖЕ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}]")
+                        # Определяем состояние диалога:
+                        # 1. Они ответили ПОСЛЕ нашего last ai_reply → продолжение, нужен ответ
+                        # 2. Мы уже ответили и нового ответа нет → ожидаем
+                        # 3. Ещё не отвечали → нужен ответ
+                        _new_reply_after_ai = (
+                            r.reply_at and r.ai_reply_sent_at
+                            and r.reply_at > r.ai_reply_sent_at
+                        )
+                        if _new_reply_after_ai:
+                            new_reply_lines.append(
+                                f"  🔄 {name} ({r.recipient_email}): [ПРОДОЛЖЕНИЕ]"
+                                f" последний наш ответ {r.ai_reply_sent_at.strftime('%d.%m %H:%M')},"
+                                f" они написали снова: {reply_preview}"
+                            )
+                        elif r.ai_reply_sent_at:
+                            answered_reply_lines.append(
+                                f"  {name} ({r.recipient_email}):"
+                                f" [ОТВЕТ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}, ожидаем реакцию]"
+                            )
                         else:
                             new_reply_lines.append(f"  🆕 {name} ({r.recipient_email}): {reply_preview}")
                     parts = []
@@ -608,6 +625,47 @@ class ContextBuilder:
                             status_badge = f' {c.status}'
                         camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
                     hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ — УЖЕ ЗАПУЩЕНЫ, НЕ создавай новые:\n" + "\n".join(camp_lines))
+
+                # ═══ Завершённые кампании с активными диалогами ═══
+                from sqlalchemy import func as _func_ccd
+                _recent_completed = session.query(_EC).filter(
+                    _EC.user_id == user.id,
+                    _EC.status == 'completed',
+                    _EC.emails_replied > 0,
+                ).order_by(_EC.updated_at.desc()).limit(3).all()
+                if _recent_completed:
+                    _cmp_comp_lines = []
+                    for _cc in _recent_completed:
+                        _rep_count = session.query(_func_ccd.count(_EO.id)).filter(
+                            _EO.campaign_id == _cc.id,
+                            _EO.status == 'replied',
+                        ).scalar() or 0
+                        _pending_reply = session.query(_func_ccd.count(_EO.id)).filter(
+                            _EO.campaign_id == _cc.id,
+                            _EO.status == 'replied',
+                            _EO.ai_reply_sent_at.is_(None),
+                        ).scalar() or 0
+                        _ongoing = session.query(_func_ccd.count(_EO.id)).filter(
+                            _EO.campaign_id == _cc.id,
+                            _EO.status == 'replied',
+                            _EO.ai_reply_sent_at.isnot(None),
+                            _EO.reply_at > _EO.ai_reply_sent_at,
+                        ).scalar() or 0
+                        _notes = []
+                        if _pending_reply:
+                            _notes.append(f"⚠ {_pending_reply} ждут ответа")
+                        if _ongoing:
+                            _notes.append(f"🔄 {_ongoing} продолжают диалог")
+                        _note_str = ', '.join(_notes) if _notes else 'диалоги завершены'
+                        _cmp_comp_lines.append(
+                            f"  ✅ ЗАВЕРШЕНА id={_cc.id} «{_cc.name}»"
+                            f" — отправлено: {_cc.emails_sent or 0}, ответили: {_rep_count} | {_note_str}"
+                            f" → для follow-up используй reply_to_outreach_email(campaign_id={_cc.id})"
+                        )
+                    hints.append(
+                        "ЗАВЕРШЁННЫЕ КАМПАНИИ С ОТВЕТАМИ — контакты ответили, не забудь продолжить диалог:\n"
+                        + "\n".join(_cmp_comp_lines)
+                    )
             except Exception as e:
                 logger.warning(f"[CAMPAIGNS_CTX] Error: {e}")
 

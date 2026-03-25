@@ -10971,12 +10971,12 @@ else:
                     html += '<span style="margin-left: auto; font-size:12px; color: #6C727F;">' + date + '</span>';
                     html += '</div>';
                     // Message text
-                    html += '<div style="font-size: 13px; color: #1F2328; line-height: 1.4; margin-bottom: 4px;">' + msg.message_text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+                    html += '<div style="font-size: 13px; color: #1F2328; line-height: 1.4; margin-bottom: 4px;">' + escapeHtml(msg.message_text).replace(/\n/g, '<br>') + '</div>';
                     // Reply
                     if (msg.reply_text) {
                         html += '<div style="background: #F6F8FA; border-left: 3px solid #068487; padding: 6px 10px; margin-top: 4px; border-radius: 4px;">';
                         html += '<span style="font-size:12px; color: #6C727F;">' + (t('reply') || 'Ответ') + ':</span><br>';
-                        html += '<span style="font-size: 13px; color: #1F2328;">' + msg.reply_text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</span>';
+                        html += '<span style="font-size: 13px; color: #1F2328;">' + escapeHtml(msg.reply_text).replace(/\n/g, '<br>') + '</span>';
                         html += '</div>';
                     }
                     // Reply button for incoming, unreplied messages
