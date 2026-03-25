@@ -7585,7 +7585,7 @@ class AnchorEngine:
                 if _is_asi_step:
                     _asi_tools = [
                         'web_search', 'research_topic', 'find_relevant_contacts_for_task',
-                        'save_email_contact', 'add_task', 'delegate_task',
+                        'save_email_contact', 'delegate_task',
                         'send_outreach_email', 'start_email_campaign', 'add_email_leads',
                         'check_emails', 'update_goal_progress', 'update_goal', 'create_goal',
                         'quick_topic_search', 'get_news_trends',
@@ -7634,7 +7634,7 @@ class AnchorEngine:
                             _expanded = True
                             logger.info("[COORD] dynamic tool expansion: %s gets %s (integration match)", _ag_name, _tool_hint)
                     # Всегда добавляем универсальные инструменты если их нет
-                    for _ut in ('web_search', 'research_topic', 'save_email_contact', 'save_note', 'add_task'):
+                    for _ut in ('web_search', 'research_topic', 'save_email_contact', 'save_note'):
                         if _ut not in _base_tools:
                             _base_tools.append(_ut)
                     # Всегда сериализуем актуальный список — tools и tools_allowed должны совпадать
