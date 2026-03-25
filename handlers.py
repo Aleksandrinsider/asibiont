@@ -468,6 +468,38 @@ async def balance_handler(message: Message):
     await message.bot.send_message(message.chat.id, info)
 
 
+@router.message(Command("broadcast"))
+async def broadcast_handler(message: Message):
+    """Рассылка сообщения всем пользователям (только для админа)."""
+    from config import ADMIN_TELEGRAM_USERNAME
+    username = (message.from_user.username or '').lower()
+    if username != (ADMIN_TELEGRAM_USERNAME or '').lower():
+        return
+
+    text = (message.text or '').replace('/broadcast', '', 1).strip()
+    if not text:
+        await message.reply("Использование: /broadcast <текст сообщения>")
+        return
+
+    from models import Session, User
+    session = Session()
+    try:
+        users = session.query(User).filter(User.telegram_id.isnot(None)).all()
+        sent, failed = 0, 0
+        for u in users:
+            if u.telegram_id == message.from_user.id:
+                continue  # не отправляем себе
+            try:
+                await message.bot.send_message(u.telegram_id, text)
+                sent += 1
+            except Exception:
+                failed += 1
+            await asyncio.sleep(0.05)
+        await message.reply(f"✅ Отправлено: {sent}, ошибок: {failed}")
+    finally:
+        session.close()
+
+
 @router.message(Command("lang"))
 async def lang_handler(message: Message):
     """Change language / Сменить язык"""
