@@ -6667,19 +6667,34 @@ def _safe_initial(name: str, fallback: str = 'У') -> str:
     return first.upper() if first.isalpha() else fallback
 
 
-def _default_avatar_response():
-    """Return 404 so frontend onerror handler shows initial-letter fallback."""
+def _default_avatar_response(initial='?', color='#068487'):
+    """Return a colored SVG avatar with initial letter — no browser console errors, no retry loops."""
+    # Sanitize to avoid SVG injection
+    _safe_initial = (initial or '?')[:1].upper()
+    if _safe_initial not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?':
+        _safe_initial = '?'
+    # Pick a deterministic color from the initial
+    _colors = ['#068487', '#04a8b3', '#5c6bc0', '#43a047', '#e53935',
+               '#fb8c00', '#8e24aa', '#00897b', '#1e88e5', '#6d4c41']
+    if _safe_initial.isalpha():
+        color = _colors[(ord(_safe_initial) - ord('A')) % len(_colors)]
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
+        f'<circle cx="32" cy="32" r="32" fill="{color}"/>'
+        f'<text x="32" y="41" text-anchor="middle" font-family="Arial,sans-serif" '
+        f'font-size="28" font-weight="700" fill="white">{_safe_initial}</text>'
+        '</svg>'
+    )
     return web.Response(
-        status=404,
-        text='no avatar',
-        content_type='text/plain',
-        headers={'Cache-Control': 'no-cache, max-age=0'}
+        body=svg.encode(),
+        content_type='image/svg+xml',
+        headers={'Cache-Control': 'public, max-age=300'}
     )
 
 
 async def api_avatar_handler(request):
     """API endpoint to get user avatar by telegram_id.
-    Priority: custom_avatar > cached tg_avatar_data > inline TG download (if file_id known) > background refresh + 404.
+    Priority: custom_avatar > cached tg_avatar_data > inline TG download (if file_id known) > background refresh + SVG placeholder.
     """
     telegram_id = request.match_info.get('telegram_id')
     if not telegram_id:
@@ -6694,6 +6709,8 @@ async def api_avatar_handler(request):
             if not _u:
                 return _default_avatar_response()
 
+            _initial = ((_u.first_name or _u.username or '') + '?')[:1]
+
             # 1. Custom (user-uploaded) avatar — highest priority
             if _u.custom_avatar:
                 import base64 as _b64c
@@ -6707,20 +6724,18 @@ async def api_avatar_handler(request):
             if telegram_id < 0:
                 if _u.photo_url and _u.photo_url.startswith('http'):
                     return web.HTTPFound(_u.photo_url)
-                return _default_avatar_response()
+                return _default_avatar_response(_initial)
 
             # 3. Cached TG bytes in DB
             _cache = getattr(_u, 'tg_avatar_data', None)
             if _cache == '__no_avatar__':
-                # Return 404, but if sentinel is stale (>1 day) — trigger bg refresh
-                # so next request after Railway downloads the photo will succeed
+                # Sentinel set — return SVG, but if stale (>1 day) trigger bg refresh
                 import datetime as _dt_av
                 _av_updated = getattr(_u, 'updated_at', None)
                 _av_stale = (not _av_updated) or (_av_updated < _dt_av.datetime.utcnow() - _dt_av.timedelta(days=1))
                 if _av_stale:
                     _bot_av = request.app.get('bot')
                     if _bot_av:
-                        # Clear sentinel so refresh can attempt fresh TG API calls
                         try:
                             _u.tg_avatar_data = None
                             _u.photo_url = None
@@ -6728,7 +6743,7 @@ async def api_avatar_handler(request):
                         except Exception:
                             _db.rollback()
                         asyncio.create_task(_refresh_one_avatar(_bot_av, telegram_id))
-                return _default_avatar_response()
+                return _default_avatar_response(_initial)
             if _cache and _cache.startswith('data:'):
                 import base64 as _b64t
                 _p = _cache.split(',', 1)
@@ -6758,7 +6773,6 @@ async def api_avatar_handler(request):
                                         _ct = 'image/jpeg'
                                     _b64_str = _b64i.b64encode(_bytes).decode()
                                     _data_uri = f"data:{_ct};base64,{_b64_str}"
-                                    # Cache in DB for subsequent requests
                                     try:
                                         _u.tg_avatar_data = _data_uri
                                         _db.commit()
@@ -6773,7 +6787,7 @@ async def api_avatar_handler(request):
                     except Exception as _e:
                         logger.debug(f"[avatar] inline download error for {telegram_id}: {_e}")
 
-            # 5. No cached data, no file_id → trigger background refresh and return 404
+            # 5. No cached data — trigger background refresh, return SVG placeholder
             _bot = request.app.get('bot')
             if _bot:
                 asyncio.create_task(_refresh_one_avatar(_bot, telegram_id))
@@ -6781,7 +6795,7 @@ async def api_avatar_handler(request):
         finally:
             _db.close()
 
-        return _default_avatar_response()
+        return _default_avatar_response(_initial)
     except ValueError:
         return web.Response(status=400, text='Invalid telegram_id')
     except Exception as e:
