@@ -11320,30 +11320,40 @@ class AnchorEngine:
 
                 # Запускаем поиск если есть квота и мало черновиков
                 if remaining_total > drafts_in_pipeline:
-                    anchors.append(Anchor(
-                        user_id=user.id,
-                        anchor_type='email_need_leads',
-                        source=f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}-{now_utc.hour // 2}',
-                        topic=_t(user,
-                            f' Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
-                            f' Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
-                        priority=AnchorPriority.HIGH if _is_stuck else AnchorPriority.MEDIUM,
-                        data=json.dumps({
-                            'campaign_id': campaign.id,
-                            'campaign_name': campaign.name,
-                            'campaign_goal': campaign.goal[:500] if campaign.goal else '',
-                            'target_audience': campaign.target_audience[:300] if campaign.target_audience else '',
-                            'offer': campaign.offer[:300] if campaign.offer else '',
-                            'drafts_in_pipeline': drafts_in_pipeline,
-                            'remaining_daily': remaining_daily,
-                            'remaining_total': min(remaining_total, 50),
-                            'is_stuck': _is_stuck,
-                        }),
-                        triggered_at=now_utc,
-                        expires_at=now_utc + timedelta(hours=6),
-                        cooldown_hours=0.5,
-                        batch_group='email',
-                    ))
+                    # Дедупликация: один необработанный email_need_leads на кампанию
+                    # (защита от дублей при параллельном запуске нескольких воркеров)
+                    _nl_source = f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}-{now_utc.hour // 2}'
+                    _nl_exists = session.query(Anchor).filter(
+                        Anchor.user_id == user.id,
+                        Anchor.anchor_type == 'email_need_leads',
+                        Anchor.source == _nl_source,
+                        Anchor.delivered_at.is_(None),
+                    ).first()
+                    if not _nl_exists:
+                        anchors.append(Anchor(
+                            user_id=user.id,
+                            anchor_type='email_need_leads',
+                            source=_nl_source,
+                            topic=_t(user,
+                                f' Кампания «{campaign.name}» — нет черновиков, найди новые контакты ({remaining_daily} квота сегодня)',
+                                f' Campaign «{campaign.name}» — no drafts, find new leads ({remaining_daily} quota today)'),
+                            priority=AnchorPriority.HIGH if _is_stuck else AnchorPriority.MEDIUM,
+                            data=json.dumps({
+                                'campaign_id': campaign.id,
+                                'campaign_name': campaign.name,
+                                'campaign_goal': campaign.goal[:500] if campaign.goal else '',
+                                'target_audience': campaign.target_audience[:300] if campaign.target_audience else '',
+                                'offer': campaign.offer[:300] if campaign.offer else '',
+                                'drafts_in_pipeline': drafts_in_pipeline,
+                                'remaining_daily': remaining_daily,
+                                'remaining_total': min(remaining_total, 50),
+                                'is_stuck': _is_stuck,
+                            }),
+                            triggered_at=now_utc,
+                            expires_at=now_utc + timedelta(hours=6),
+                            cooldown_hours=0.5,
+                            batch_group='email',
+                        ))
 
             # --- 4. Дневной отчёт по кампании (если есть активность, не для paused) ---
             if is_paused:
@@ -11351,6 +11361,15 @@ class AnchorEngine:
             total_sent = campaign.emails_sent or 0
             total_replied = campaign.emails_replied or 0
             if total_sent > 0 and sent_today > 0:
+                # Дедупликация: один отчёт в день (включая уже доставленные — защита от рейс-кондишн)
+                _report_source = f'email_campaign:{campaign.id}:report:{now_utc.strftime("%Y-%m-%d")}'
+                _report_exists = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'email_campaign_report',
+                    Anchor.source == _report_source,
+                ).first()
+                if _report_exists:
+                    continue
                 # Ищем агента который управляет email-рассылкой для атрибуции сообщения
                 _email_agent_name_r = None
                 try:
