@@ -11495,6 +11495,52 @@ async def send_outreach_email(
         if not subject or not body:
             return " Нужны subject и body письма."
 
+        # ── GUARD: язык subject+body должен соответствовать языку контакта ──
+        if subject and body:
+            import unicodedata as _ud_lang
+            def _detect_script_oe(text):
+                scripts = {}
+                for ch in text:
+                    if ch.isalpha():
+                        try:
+                            name = _ud_lang.name(ch, '').split()[0]
+                        except ValueError:
+                            continue
+                        scripts[name] = scripts.get(name, 0) + 1
+                return scripts
+
+            # Определяем ожидаемый язык контакта
+            _expected_lang = None
+            try:
+                from models import EmailContactPreference as _ECP_oe
+                _pref_oe = session.query(_ECP_oe).filter_by(
+                    user_id=user.id, contact_email=_rcpt
+                ).first()
+                if _pref_oe and _pref_oe.preferred_language:
+                    _expected_lang = _pref_oe.preferred_language.lower()
+            except Exception:
+                pass
+
+            if not _expected_lang:
+                # Определяем по домену/имени
+                _ru_domains = ('.ru', '.by', '.ua', '.kz', '.рф')
+                _ru_providers = ('yandex.com', 'mail.ru', 'bk.ru', 'rambler.ru', 'inbox.ru', 'list.ru')
+                _domain_oe = _rcpt.split('@')[-1].lower() if '@' in _rcpt else ''
+                if any(_domain_oe.endswith(d) for d in _ru_domains) or _domain_oe in _ru_providers:
+                    _expected_lang = 'ru'
+                else:
+                    _expected_lang = 'en'
+
+            _body_scripts = _detect_script_oe(subject + ' ' + body)
+            _body_top = max(_body_scripts, key=_body_scripts.get) if _body_scripts else 'LATIN'
+
+            if _expected_lang == 'en' and _body_top == 'CYRILLIC' and _body_scripts.get('CYRILLIC', 0) > 20:
+                return ("⚠ Email написан на русском (кириллица), но контакт ожидает English. "
+                        "ПЕРЕПИШИ subject и body на английском языке!")
+            if _expected_lang == 'ru' and _body_top == 'LATIN' and _body_scripts.get('LATIN', 0) > 20:
+                return ("⚠ Email написан на английском (латиница), но контакт ожидает русский. "
+                        "ПЕРЕПИШИ subject и body на русском языке!")
+
         # MX-проверка домена получателя
         mx_valid, mx_err = _validate_email_domain(recipient_email)
         if not mx_valid:
@@ -13602,6 +13648,22 @@ async def check_emails(
                                     _pref.preferred_length = 'long'
                             if _eo.tone_type:
                                 _pref.preferred_tone = _eo.tone_type
+                            # Определяем язык ответа контакта и сохраняем
+                            if _rep_snippet and len(_rep_snippet) > 20:
+                                import unicodedata as _ud_cl
+                                _cl_scripts = {}
+                                for _ch_cl in _rep_snippet:
+                                    if _ch_cl.isalpha():
+                                        try:
+                                            _sn = _ud_cl.name(_ch_cl, '').split()[0]
+                                        except ValueError:
+                                            continue
+                                        _cl_scripts[_sn] = _cl_scripts.get(_sn, 0) + 1
+                                _cl_top = max(_cl_scripts, key=_cl_scripts.get) if _cl_scripts else None
+                                if _cl_top == 'CYRILLIC':
+                                    _pref.preferred_language = 'ru'
+                                elif _cl_top == 'LATIN':
+                                    _pref.preferred_language = 'en'
                             _pref.updated_at = _now_ce
                             session.commit()
                             logger.info(f'[CHECK_EMAILS] Updated ContactPreference for {_rep_em}')
