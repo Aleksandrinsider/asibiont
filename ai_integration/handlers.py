@@ -9504,6 +9504,21 @@ async def broadcast_message_to_all_users(
             try:
                 await _send_telegram_message_async(u.telegram_id, message_text)
                 sent += 1
+                # Сохраняем в user_messages для отслеживания
+                try:
+                    msg = UserMessage(
+                        sender_id=sender.id,
+                        recipient_id=u.id,
+                        message_text=message_text,
+                        intent='broadcast',
+                        status='delivered',
+                        is_ai_generated=False,
+                        delivered_at=datetime.utcnow()
+                    )
+                    session.add(msg)
+                    session.commit()
+                except Exception:
+                    session.rollback()
                 await asyncio.sleep(0.05)
             except Exception as e:
                 logger.warning(f"[BROADCAST] Failed {u.telegram_id}: {e}")
