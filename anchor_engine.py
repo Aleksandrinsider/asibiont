@@ -691,7 +691,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
 
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None) -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None) -> str:
     """Строит адаптивный промпт автопилота.
     Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
     и предоставляет AI свободу выбора лучшей цепочки под цель и интеграции агента.
@@ -805,6 +805,22 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _has_social:  _intg_connected.append('✅ Соцсети — публикация и мониторинг через run_agent_action')
     if _has_pm:      _intg_connected.append('✅ Трекер задач — управление проектами через run_agent_action')
     if _has_cal:     _intg_connected.append('✅ Календарь/Zoom — расписание и встречи через run_agent_action')
+
+    # ── Авто-обнаружение ACTION-хендлеров из python_code ──────────────────────
+    # Извлекаем все action-имена из конструкций ACTION == '...'
+    # Это позволяет AI знать точные названия, не угадывать их.
+    # Работает автоматически для ЛЮБОГО агента любого пользователя.
+    _py_actions: list = []
+    if python_code:
+        import re as _re_bap_act
+        _py_actions = list(dict.fromkeys(
+            _re_bap_act.findall(r"""ACTION\s*==\s*['"]([^'"]{1,60})['"]""", python_code)
+        ))
+    if _py_actions:
+        _intg_connected.append(
+            f'✅ Кастомные action (из скрипта агента): {", ".join(_py_actions[:12])}\n'
+            f'  → Используй: run_agent_action(action="<одно из выше>", params={{...}})'
+        )
 
     # Рекомендации: смотрим на темы целей и чего нет у агента
     import os as _os_bap
@@ -3691,6 +3707,7 @@ class AnchorEngine:
                         team_profiles=_team_profiles,
                         agent_history=_per_agent_hist,
                         team_history=_full_team_hist,
+                        python_code=getattr(chosen, 'python_code', '') or '',
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:

@@ -3846,6 +3846,16 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
             if key.startswith(prefix):
                 found.add(label)
                 break
+        else:
+            # Ключ не распознан известными префиксами.
+            # Если выглядит как API-credential — показываем как "Custom API: Xxx".
+            # Это позволяет AI знать, что интеграция есть, даже если она нестандартная.
+            _API_SUFFIXES = ('_API', '_KEY', '_TOKEN', '_SECRET', '_ACCESS', '_HOOK', '_URL')
+            _base = key.split('_')[0]
+            if (
+                any(key.endswith(s) for s in _API_SUFFIXES) or 'API' in key or 'TOKEN' in key
+            ) and len(_base) >= 3 and _base not in ('NONE', 'NULL', 'TRUE', 'FALSE', 'DEBUG', 'ENV'):
+                found.add(f'Custom API: {_base.title()}')
 
     # 2. Из python_code — ищем import и характерные строки
     code_lc = (python_code or '').lower()
@@ -6176,7 +6186,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                         for _tn2, _ta2 in _team_map.items():
                                             if _ta2.name == _sd_target_name:
                                                 _sd_ag_id = _ta2.id
-                                                _sd_ag_avatar = getattr(_ta2, 'avatar_url', '') or ''
+                                                # Никогда не сохраняем base64 data URI в interactions
+                                                _sd_ag_avatar = f'/api/arena/agent_avatar/{_ta2.id}' if getattr(_ta2, 'id', 0) else ''
                                                 break
                                         # Сохраняем interaction
                                         _msg_s.add(_MsgInt(
@@ -7395,7 +7406,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                 'id': _ag_id,
                 'name': _answered_agent.get('name', 'Агент'),
                 'job_title': _answered_agent.get('job_title', ''),
-                'avatar_url': _avatar or (f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''),
+                'avatar_url': f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else '',
             }
 
         # Агент вклинивается в разговор — фоновая задача, не блокирует ответ

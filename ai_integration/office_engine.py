@@ -134,7 +134,8 @@ def _save_chat_message_sync(user_id: int, agent_name: str, agent_id: int, avatar
             '__agent': {
                 'name': agent_name,
                 'id': agent_id,
-                'avatar_url': avatar_url or '',
+                # Никогда не сохраняем base64 data URI — только proxy URL или пусто
+                'avatar_url': (f'/api/arena/agent_avatar/{agent_id}' if agent_id and (not avatar_url or avatar_url.startswith('data:')) else (avatar_url or '')),
             },
             'text': text,
         }, ensure_ascii=False)
@@ -903,7 +904,7 @@ class OfficeEngine:
                             user.id,
                             agent.name or 'Агент',
                             agent.id,
-                            agent.avatar_url or '',
+                            (f'/api/arena/agent_avatar/{agent.id}' if agent.id else ''),  # никогда не base64
                             report,
                             False,  # internal=False: отчёт агента виден в чате
                         )
@@ -1019,7 +1020,7 @@ class OfficeEngine:
                         'name': a.name or 'Агент',
                         'specialization': a.specialization or '',
                         'description': (a.description or '')[:150],
-                        'avatar_url': a.avatar_url or '',
+                        'avatar_url': f'/api/arena/agent_avatar/{a.id}',  # никогда не base64
                     }
                     for a in _rows if a.id in _sub_ids
                 ]
