@@ -4142,13 +4142,16 @@ class AnchorEngine:
                                 f"Стиль: неформальный рабочий чат между коллегами. Ты — реальный человек, не бот.\n"
                                 f"От первого лица, {'по-женски' if _is_ack_fem else 'по-мужски'}. С характером, живо.\n"
                                 f"✅ Хорошие примеры:\n"
-                                f"  «Приняла, сейчас гляну почту. Если есть ответы — сразу напишу.»\n"
+                                f"  «Сейчас гляну почту. Если есть ответы — сразу напишу.»\n"
                                 f"  «Ок! Попробую через hh.ru — в прошлый раз оттуда были хорошие отклики.»\n"
-                                f"  «Сделаю. Начну с новостей по теме, потом подготовлю краткую выжимку.»\n"
+                                f"  «Сделаю. Начну с новостей по теме, потом подготовлю выжимку.»\n"
                                 f"  «Есть мысль — давай зайду через Хабр, там раньше не искали.»\n"
-                                f"  «Понял, займусь. Вчера видел пару интересных проектов — с них и начну.»\n"
+                                f"  «Понял{'а' if _is_ack_fem else ''}, займусь. Вчера видел{'а' if _is_ack_fem else ''} пару интересных проектов — с них и начну.»\n"
+                                f"  «Хм, интересная задача. Попробую зайти с другой стороны.»\n"
+                                f"  «Щас разберусь, дай минуту.»\n"
                                 f"❌ Нельзя: технические термины, названия инструментов, своё имя в третьем лице, "
-                                f"дословно повторять поручение, «Приступаю к работе», «Отчёт будет готов»."
+                                f"дословно повторять поручение, «Приступаю к работе», «Отчёт будет готов», "
+                                f"«Отлично», «Супер», «Принято». Начинай СРАЗУ с сути."
                             )
                             _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=60)
                             if _ack_gen and len(_ack_gen.strip()) > 4:
@@ -7623,7 +7626,7 @@ class AnchorEngine:
                 # ── Per-agent assignment: живое обращение ASI к агенту (видно в чате) ──
                 _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
-                # Генерируем поручение от ASI — используем реальную задачу координатора
+                # Генерируем поручение от ASI — живое обращение как руководитель к коллеге
                 try:
                     # Берём оригинальную задачу из плана координатора (первые 2 предложения)
                     _task_first_line = _ag_task.split('\n')[0].strip()
@@ -7631,19 +7634,35 @@ class AnchorEngine:
                     import re as _re_assign
                     _task_clean = _re_assign.sub(r'\(outreach_id=\d+\)', '', _task_first_line)
                     _task_clean = _re_assign.sub(r'→.*$', '', _task_clean).strip()
-                    _task_clean = _task_clean.rstrip('.')
-                    # Добавляем стратегическое обоснование из reason если есть
+                    _task_clean = _task_clean.rstrip('.').rstrip(':')
+                    # Убираем внутренние инструкции типа "Результат его работы:", "Твоя задача:"
+                    _task_clean = _re_assign.sub(
+                        r'(?:Результат (?:его|её) работы:?|Твоя задача:?|Твоё задание:?).*',
+                        '', _task_clean, flags=_re_assign.DOTALL
+                    ).strip()
+                    # Ограничиваем reason — обрезаем по последнему полному слову
                     _step_reason = (_step.get('reason') or '').strip()
+                    if _step_reason and len(_step_reason) > 80:
+                        _step_reason = _step_reason[:80].rsplit(' ', 1)[0]
+                    # Формируем естественное обращение вместо тикета
+                    _ag_is_fem_c = (_ag_name or '')[-1:] in 'аяАЯ'
                     if _task_clean and len(_task_clean) > 15:
-                        _asi_assign_text = f'{_ag_name}: {_task_clean[:200]}.'
+                        # Генерируем из шаблонов живого обращения
+                        import random as _rnd_assign
+                        _assign_templates = [
+                            f'{_ag_name}, {_task_clean[:200].lower() if _task_clean[0].isupper() and not _task_clean[:3].isupper() else _task_clean[:200]}.',
+                            f'{_ag_name}, {"займись" if not _ag_is_fem_c else "займись"}: {_task_clean[:200]}.',
+                            f'{_ag_name}, нужно {_task_clean[:200].lower() if _task_clean[0].isupper() else _task_clean[:200]}.',
+                        ]
+                        _asi_assign_text = _rnd_assign.choice(_assign_templates)
                         if _step_reason and len(_step_reason) > 10:
-                            _asi_assign_text += f' ({_step_reason[:100]})'
+                            _asi_assign_text = _asi_assign_text.rstrip('.') + f' — {_step_reason.lower()}.'
                     elif _step_reason:
-                        _asi_assign_text = f'{_ag_name}: {_step_reason[:200]}.'
+                        _asi_assign_text = f'{_ag_name}, {_step_reason[:200]}.'
                     else:
-                        _asi_assign_text = f'{_ag_name}: {_task_first_line[:200]}.'
+                        _asi_assign_text = f'{_ag_name}, {_task_first_line[:200]}.'
                 except Exception as _aac_err:
-                    _asi_assign_text = f"{_ag_name}: {(_ag_task or 'задание координатора')[:200]}."
+                    _asi_assign_text = f"{_ag_name}, {(_ag_task or 'новое задание')[:200]}."
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # Сохраняем живое поручение в чат
                 try:
@@ -8183,6 +8202,10 @@ class AnchorEngine:
                     f"\n  • Если план нерабочий — предложи другой подход: \"Лучше сделаю Z, потому что...\""
                     f"\n  • Говори от первого лица. Не шаблонно. Ты {'специалист' if not _ag_is_fem else 'специалистка'} со своим мнением."
                     f"\n  • Если что-то важное нашёл по ходу работы — включи в отчёт как часть результата, без отдельных «кстати» и «стоит также»."
+                    f"\n  • СТИЛЬ ОБЩЕНИЯ: пиши как в рабочем мессенджере, не как отчёт. "
+                    f"Без «Задание выполнено», без нумерованных списков по шагам. "
+                    f"Просто расскажи что сделал{'а' if _ag_is_fem else ''} и что получилось, как живой коллега."
+                    f"\n  • НЕ начинай сообщение с «Отлично!», «Супер!», «Принято» — сразу к делу."
                     f"\n\n🧩 КРИТИЧЕСКОЕ МЫШЛЕНИЕ (перед выполнением задания):"
                     f"\n  [ШАГ 0 — ЧЕСТНОСТЬ] Прочитай свои интеграции выше. Это всё что у тебя есть."
                     f"\n  Составь мысленно: «Цель требует X. У меня есть Y. Я могу сделать [пересечение X∩Y].»"
@@ -8463,13 +8486,14 @@ class AnchorEngine:
                         _inject_goal = _ag_goal_title or (_goals[0]['title'] if _goals else '')
                         # Извлекаем контакты из результата предыдущего агента для явной передачи
                         _contact_context = _cleaned[:400] if _cleaned else ''
+                        _ag_is_fem_pipe = (_ag_name or '')[-1:] in 'аяАЯ'
+                        _ag_nsh = 'нашла' if _ag_is_fem_pipe else 'нашёл'
                         _inject_step = {
                             'agent': _email_sender_name,
                             'tool': 'send_outreach_email',
                             'task': (
-                                f"{_ag_name} только что сохранил новые контакты. "
-                                f"Результат его работы:\n{_contact_context}\n\n"
-                                f"Твоя задача: немедленно отправь outreach-письма этим людям (send_outreach_email). "
+                                f"Отправь outreach-письма контактам, которых {_ag_name} {_ag_nsh}\n"
+                                f"Контакты из результата {_ag_name}:\n{_contact_context}\n\n"
                                 f"Используй их имена и email из контекста выше. "
                                 f"Параметры: recipient_email=их_email, recipient_name=их_имя, "
                                 f"subject=персональная строка, body=персональный текст.\n"
@@ -8490,7 +8514,8 @@ class AnchorEngine:
                             _hf_tmpl = _rnd_hf.choice([
                                 f'{_i_got_hf} контакты от {_ag_name} — уже составляю письма!',
                                 f'Хорошо, {_ag_name} {_ag_fnd_verb} нужных людей — сразу пишу им.',
-                                f'Отлично! {_i_got_hf} список от {_ag_name}, начинаю рассылку.',
+                                f'{_i_got_hf} список от {_ag_name}, начинаю рассылку.',
+                                f'Есть контакты! {_ag_name} {_ag_fnd_verb}, я отправляю.',
                             ])
                             _hf_sess = Session()
                             try:

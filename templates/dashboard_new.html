@@ -5681,6 +5681,121 @@ try:
 except Exception as e:
     print('Ошибка Linear: ' + str(e))`
             },
+            google_maps: {
+                name: 'Google Maps / 2GIS',
+                fields: [
+                    {k:'GOOGLE_MAPS_API_KEY', label:'API Key (Google Maps Platform)', ph:'AIzaSy...', t:'text'}
+                ],
+                hint: 'console.cloud.google.com → APIs → Places API / Geocoding API → включить → Credentials → Create API Key.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
+ACTION = os.environ.get('AGENT_ACTION', 'search')
+QUERY = os.environ.get('AGENT_PARAM_QUERY', '')
+try:
+    if ACTION == 'search' and QUERY:
+        url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?query=' + urllib.parse.quote(QUERY) + '&key=' + API_KEY + '&language=ru'
+        import urllib.parse
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+        results = data.get('results', [])[:5]
+        if results:
+            for p in results:
+                name = p.get('name', '')
+                addr = p.get('formatted_address', '')
+                rating = p.get('rating', '-')
+                total = p.get('user_ratings_total', 0)
+                print(name + ' | ' + addr + ' | рейтинг: ' + str(rating) + ' (' + str(total) + ' отзывов)')
+        else:
+            print('Ничего не найдено по запросу: ' + QUERY)
+    elif ACTION == 'geocode' and QUERY:
+        import urllib.parse
+        url = 'https://maps.googleapis.com/maps/api/geocode/json?address=' + urllib.parse.quote(QUERY) + '&key=' + API_KEY + '&language=ru'
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+        results = data.get('results', [])
+        if results:
+            loc = results[0].get('geometry', {}).get('location', {})
+            print('Адрес: ' + results[0].get('formatted_address', ''))
+            print('Координаты: ' + str(loc.get('lat', '')) + ', ' + str(loc.get('lng', '')))
+        else:
+            print('Адрес не найден: ' + QUERY)
+    else:
+        print('Google Maps подключён. Actions: search (поиск мест), geocode (геокодирование). Параметр: query.')
+except Exception as e:
+    print('Ошибка Google Maps: ' + str(e))`
+            },
+            google_forms: {
+                name: 'Google Forms / Typeform',
+                fields: [
+                    {k:'GOOGLE_FORMS_SHEET_ID', label:'ID Google-таблицы с ответами', ph:'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', t:'text'},
+                    {k:'GOOGLE_SERVICE_KEY', label:'JSON-ключ сервисного аккаунта (одной строкой)', ph:'{"type":"service_account",...}', t:'text'}
+                ],
+                hint: 'Привяжите ответы формы к Google-таблице (Responses → Spreadsheet). Дайте доступ сервисному аккаунту к таблице. Или используйте Typeform Webhook → Webhook-интеграцию.',
+                code: `import json, os, urllib.request
+SHEET_ID = os.environ.get('GOOGLE_FORMS_SHEET_ID', '')
+SVC_KEY = os.environ.get('GOOGLE_SERVICE_KEY', '')
+try:
+    if SHEET_ID and SVC_KEY:
+        key_data = json.loads(SVC_KEY)
+        # Simple JWT-less approach: use API key or OAuth
+        # For service accounts, use google-auth library
+        url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/A1:Z1000?key='
+        # Fallback: notify user about setup
+        print('Google Forms интеграция настроена.')
+        print('Sheet ID: ' + SHEET_ID)
+        print('Для чтения ответов используйте Google Sheets интеграцию с этим Sheet ID.')
+        print('Совет: настройте Webhook в Typeform/Tally → наша Webhook-интеграция для real-time уведомлений.')
+    else:
+        print('Укажите GOOGLE_FORMS_SHEET_ID (ID таблицы с ответами) и GOOGLE_SERVICE_KEY.')
+except Exception as e:
+    print('Ошибка: ' + str(e))`
+            },
+            sms_ru: {
+                name: 'SMS-рассылки (SMS.ru / SMSC)',
+                fields: [
+                    {k:'SMS_API_KEY', label:'API-ключ (SMS.ru или SMSC)', ph:'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX', t:'text'},
+                    {k:'SMS_PROVIDER', label:'Провайдер (smsru или smsc)', ph:'smsru', t:'text'},
+                    {k:'SMS_SENDER', label:'Имя отправителя (опционально)', ph:'MyCompany', t:'text'}
+                ],
+                hint: 'SMS.ru: Кабинет → API → API ID. SMSC.ru: Настройки → API → HTTP API. Sender ID нужно подтвердить у оператора.',
+                code: `import urllib.request, json, os, urllib.parse
+API_KEY = os.environ.get('SMS_API_KEY', '')
+PROVIDER = os.environ.get('SMS_PROVIDER', 'smsru').lower()
+SENDER = os.environ.get('SMS_SENDER', '')
+ACTION = os.environ.get('AGENT_ACTION', 'send')
+TO = os.environ.get('AGENT_PARAM_TO', '')
+TEXT = os.environ.get('AGENT_PARAM_TEXT', '')
+try:
+    if ACTION == 'send' and TO and TEXT:
+        to_clean = TO.strip().replace('+', '').replace(' ', '').replace('-', '')
+        if PROVIDER == 'smsc':
+            params = urllib.parse.urlencode({'login': API_KEY.split(':')[0] if ':' in API_KEY else API_KEY, 'psw': API_KEY.split(':')[1] if ':' in API_KEY else '', 'phones': to_clean, 'mes': TEXT, 'fmt': 3, 'charset': 'utf-8'})
+            url = 'https://smsc.ru/sys/send.php?' + params
+        else:
+            params = urllib.parse.urlencode({'api_id': API_KEY, 'to': to_clean, 'msg': TEXT, 'json': 1})
+            if SENDER:
+                params += '&from=' + urllib.parse.quote(SENDER)
+            url = 'https://sms.ru/sms/send?' + params
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            resp = json.loads(r.read().decode())
+        print('SMS отправлено на ' + TO + ': ' + json.dumps(resp, ensure_ascii=False)[:200])
+    elif ACTION == 'balance':
+        if PROVIDER == 'smsc':
+            url = 'https://smsc.ru/sys/balance.php?login=' + API_KEY.split(':')[0] + '&psw=' + API_KEY.split(':')[1] + '&fmt=3'
+        else:
+            url = 'https://sms.ru/my/balance?api_id=' + API_KEY + '&json=1'
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            resp = json.loads(r.read().decode())
+        print('Баланс: ' + json.dumps(resp, ensure_ascii=False)[:200])
+    else:
+        print('SMS-интеграция подключена (' + PROVIDER + '). Actions: send (to, text), balance.')
+except Exception as e:
+    print('Ошибка SMS: ' + str(e))`
+            },
             webhook: {
                 name: 'Webhook (n8n / Zapier / Make)',
                 fields: [
@@ -6304,7 +6419,11 @@ else:
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Мессенджеры / ERP</option>
                             <option value="whatsapp">WhatsApp Business</option>
                             <option value="onec">1С (REST API)</option>
-                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Другое</option>
+                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Формы / Карты</option>
+                            <option value="google_maps">Google Maps / 2GIS</option>
+                            <option value="google_forms">Google Forms / Typeform</option>
+                            <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">SMS / Другое</option>
+                            <option value="sms_ru">SMS-рассылки (SMS.ru / SMSC)</option>
                             <option value="twilio">Twilio (SMS)</option>
                             <option value="playwright">Playwright (скрапинг)</option>
                         </select>

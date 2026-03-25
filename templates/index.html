@@ -853,7 +853,32 @@
                 </div>
                 <div class="autopilot-body">
                     <h2>{% if lang == 'en' %}Goal Autopilot — your agents are a team, not just a chatbot{% else %}Автопилот целей — ваши агенты это команда, а не просто чат-бот{% endif %}</h2>
-                    <div class="feature-description">{% if lang == 'en' %}Email agent handles correspondence. GitHub agent manages developer tasks. The analyst collects market data. All working toward one goal: yours. They rotate in turn, amplifying each other with their unique integrations.{% else %}Email-агент ведёт переписку. GitHub-агент разбирает задачи разработчиков. Аналитик собирает данные по рынку. Все работают на одну цель: вашу. Чередуются по очереди, усиливая друг друга своими интеграциями.{% endif %}</div>
+                    <div class="feature-description">{% if lang == 'en' %}Set a goal — your agents figure out the rest. Email agent reaches out to leads, GitHub agent triages developer issues, analyst tracks market shifts. They coordinate autonomously, hand off results to each other, and report back. One goal — a whole team working on it 24/7.{% else %}Поставьте цель — агенты сами разберутся. Email-агент связывается с лидами, GitHub-агент разбирает задачи, аналитик следит за рынком. Они координируются автономно, передают результаты друг другу и отчитываются. Одна цель — целая команда работает на неё 24/7.{% endif %}</div>
+                    <ul class="autopilot-points">
+{% if lang == 'en' %}
+                        <li>Sales & leads — email outreach, follow-ups, CRM sync</li>
+                        <li>Marketing — content, social media, newsletters, SEO</li>
+                        <li>Recruiting — candidate search on hh.ru, GitHub, LinkedIn</li>
+                        <li>E-commerce — marketplace monitoring, pricing, inventory</li>
+                        <li>Real estate — listings on Avito/ЦИАН, client communication</li>
+                        <li>Finance — portfolio tracking, market analytics, alerts</li>
+                        <li>Education — course management, student engagement, forms</li>
+                        <li>Customer service — WhatsApp, SMS, email support automation</li>
+                        <li>Development — GitHub issues, code reviews, CI/CD monitoring</li>
+                        <li>Analytics — data collection, reports, dashboards, KPIs</li>
+{% else %}
+                        <li>Продажи и лиды — email-рассылки, follow-up, синхронизация с CRM</li>
+                        <li>Маркетинг — контент, соцсети, рассылки, SEO-мониторинг</li>
+                        <li>Рекрутинг — поиск кандидатов на hh.ru, GitHub, LinkedIn</li>
+                        <li>E-commerce — мониторинг маркетплейсов, цены, остатки</li>
+                        <li>Недвижимость — объявления на Авито/ЦИАН, связь с клиентами</li>
+                        <li>Финансы — портфель, аналитика рынка, оповещения по котировкам</li>
+                        <li>Образование — управление курсами, вовлечение студентов, формы</li>
+                        <li>Клиентский сервис — WhatsApp, SMS, автоматизация поддержки</li>
+                        <li>Разработка — GitHub Issues, код-ревью, мониторинг CI/CD</li>
+                        <li>Аналитика — сбор данных, отчёты, дашборды, KPI</li>
+{% endif %}
+                    </ul>
                 </div>
             </div>
 
@@ -917,6 +942,9 @@
                         <span class="review-item">Тинькофф Инвестиции — агент показывает портфель, отслеживает котировки и уведомляет об изменениях.</span>
                         <span class="review-item">WhatsApp Business — агент отправляет сообщения клиентам и ведёт переписку в WhatsApp.</span>
                         <span class="review-item">1С — агент обменивается данными с 1С через REST API: документы, остатки, отчёты.</span>
+                        <span class="review-item">Google Maps / 2GIS — агент ищет организации, проверяет отзывы и карточки на картах.</span>
+                        <span class="review-item">Google Forms / Typeform — агент собирает заявки, анкеты и обрабатывает ответы автоматически.</span>
+                        <span class="review-item">SMS-рассылки (SMS.ru / SMSC) — агент отправляет SMS-уведомления клиентам и триггерные рассылки.</span>
                     </div>
                 </div>
             </div>
