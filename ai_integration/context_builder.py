@@ -1295,7 +1295,7 @@ class ContextBuilder:
                             if _sub_ids_plan else (_UA_plan.author_id == user.id)
                         )
                         _plan_team = session.query(_UA_plan).filter(
-                            _plan_filt, _UA_plan.status == 'active'
+                            _plan_filt, _UA_plan.status.in_(['active', 'paused'])
                         ).all()
                         for _pa in _plan_team:
                             _pa_kup = (_pa.user_api_keys or '').upper()
@@ -1759,7 +1759,7 @@ class ContextBuilder:
         """Передаёт агенту список неподключённых интеграций И неиспользуемых фич —
         агент сам решает что и когда предложить.
 
-        Anti-spam: не чаще 1 раза за 72 часа на пользователя.
+        Anti-spam: не чаще 1 раза за 24 часа на пользователя.
         """
         uid = user.id
         now = datetime.now(timezone.utc)
