@@ -8009,6 +8009,7 @@ else:
                     const cKey = c.id || c.name || idx;
                     const section = document.createElement('div');
                     section.style.cssText = 'padding: 0; margin-bottom: 4px;';
+                    section.dataset.campaignId = String(c.id);
 
                     // Определяем подстатус для активных кампаний
                     const isActive = c.status === 'active' || c.status === 'running';
@@ -8270,6 +8271,7 @@ else:
                     const ccKey = 'cc-' + (cc.id || idx);
                     const section = document.createElement('div');
                     section.style.cssText = 'padding: 0; margin-bottom: 4px;';
+                    section.dataset.contentCampaignId = String(cc.id);
                     const isActive = cc.status === 'active' || cc.status === 'running';
                     let stLabel, stColor;
                     if (isActive) { stLabel = t('camp-active'); stColor = '#068487'; }
@@ -8342,6 +8344,7 @@ else:
                     const dcKey = 'dc-' + (dc.id || idx);
                     const section = document.createElement('div');
                     section.style.cssText = 'padding: 0; margin-bottom: 4px;';
+                    section.dataset.delegCampaignId = String(dc.id);
                     const isActive = dc.status === 'active' || dc.status === 'running';
                     let stLabel, stColor;
                     if (isActive) { stLabel = t('camp-active'); stColor = '#068487'; }
@@ -8882,6 +8885,8 @@ else:
         async function campaignDelete(id) {
             if (!id) return;
             if (!confirm(t('c-delete-campaign'))) return;
+            const section = document.querySelector('[data-campaign-id="' + id + '"]');
+            if (section) section.remove();
             try {
                 const resp = await fetch('/api/campaigns/' + id, {
                     method: 'DELETE',
@@ -8892,9 +8897,11 @@ else:
                     loadReports();
                 } else {
                     showNotification(t('n-delete-error'), 'error');
+                    loadReports();
                 }
             } catch (err) {
                 console.error('Failed to delete campaign:', err);
+                loadReports();
             }
         }
 
@@ -8910,11 +8917,13 @@ else:
         async function contentCampaignDelete(id) {
             if (!id) return;
             if (!confirm(t('cc-del-confirm') || 'Удалить контент-кампанию?')) return;
+            const section = document.querySelector('[data-content-campaign-id="' + id + '"]');
+            if (section) section.remove();
             try {
                 const resp = await fetch('/api/content-campaigns/' + id, { method: 'DELETE', credentials: 'include' });
                 if (resp.ok) { showNotification(t('n-campaign-deleted'), 'success'); loadReports(); }
-                else showNotification('Ошибка', 'error');
-            } catch (err) { console.error('contentCampaignDelete error:', err); }
+                else { showNotification('Ошибка', 'error'); loadReports(); }
+            } catch (err) { console.error('contentCampaignDelete error:', err); loadReports(); }
         }
 
         async function delegCampaignSetStatus(id, status) {
@@ -8929,11 +8938,13 @@ else:
         async function delegCampaignDelete(id) {
             if (!id) return;
             if (!confirm(t('dc-del-confirm') || 'Удалить аутрич-кампанию?')) return;
+            const section = document.querySelector('[data-deleg-campaign-id="' + id + '"]');
+            if (section) section.remove();
             try {
                 const resp = await fetch('/api/delegation-campaigns/' + id, { method: 'DELETE', credentials: 'include' });
                 if (resp.ok) { showNotification(t('n-campaign-deleted'), 'success'); loadReports(); }
-                else showNotification('Ошибка', 'error');
-            } catch (err) { console.error('delegCampaignDelete error:', err); }
+                else { showNotification('Ошибка', 'error'); loadReports(); }
+            } catch (err) { console.error('delegCampaignDelete error:', err); loadReports(); }
         }
 
         async function activityDelete(id, type) {
@@ -8976,11 +8987,13 @@ else:
 
         async function ruleDelete(idx) {
             if (!confirm(t('rule-delete-confirm'))) return;
+            const cardEl = document.getElementById('rule-row-' + idx);
+            if (cardEl) cardEl.remove();
             try {
                 const resp = await fetch('/api/rules/' + idx, { method: 'DELETE', credentials: 'include' });
                 if (resp.ok) { showNotification(t('rule-deleted'), 'success'); loadReports(); }
-                else showNotification(t('act-del-err'), 'error');
-            } catch (err) { console.error('ruleDelete error:', err); }
+                else { showNotification(t('act-del-err'), 'error'); loadReports(); }
+            } catch (err) { console.error('ruleDelete error:', err); loadReports(); }
         }
 
         function ruleEdit(idx, btnEl) {
@@ -9029,6 +9042,9 @@ else:
 
         async function activityDeleteGroup(ids, type) {
             if (!ids || ids.length === 0) return;
+            // Optimistic: remove from DOM and local state immediately
+            ids.forEach(id => { const el = document.querySelector('[data-act-id="' + id + '"]'); if (el) el.remove(); });
+            window._allActivities = (window._allActivities || []).filter(a => !ids.includes(a.id));
             let ok = 0, fail = 0;
             for (const id of ids) {
                 try {
