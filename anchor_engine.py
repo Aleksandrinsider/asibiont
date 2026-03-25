@@ -7244,7 +7244,7 @@ class AnchorEngine:
                 + f"{_anti_repeat_str}"
                 + f"{_recent_done_str}"
                 + f"{_cap_rules_str}"
-                f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
+                + f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
                 + (
                     f"⚡ В АКТИВНЫХ ПЕРЕГОВОРАХ (ответили — ждут персонального ответа, НЕ новое письмо): "
@@ -7252,8 +7252,8 @@ class AnchorEngine:
                     if _negotiation_emails_coord else ''
                 )
                 + f"Кампании: {_email_campaigns_str}\n"
-                f"{_banned_tools_str}"
-                f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
+                + f"{_banned_tools_str}"
+                + f"Инструменты с ошибками (попробуй альтернативу): {_failed_str}\n"
                 + f"{_failed_tasks_str}"
                 + _missing_intg_str_c
                 + _intg_advisor_str
@@ -7300,7 +7300,7 @@ class AnchorEngine:
                 "⛔ НЕ используй followers:>20 если уже использовал — меняй диапазон (5..50, 10..100, etc).\n"
                 + (f"• ⛔ GitHub запросы уже использованные (не повторять): {'; '.join(_used_github_queries[:4])}\n"
                    if _used_github_queries else '')
-                "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
+                + "• Агент БЕЗ интеграций: web_search, research_topic, find_relevant_contacts_for_task, save_note, add_task, create_post.\n"
                 "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя. Для чужих каналов → create_post или send_outreach_email.\n"
                 "• ⛔ НЕТ Telegram-клиента — агенты НЕ МОГУТ вступать/читать/постить в чужие TG-каналы/группы.\n"
                 "• ⛔ НЕТ Discord-клиента — агенты НЕ МОГУТ вступать/читать Discord-серверы (но publish_to_discord работает).\n"
