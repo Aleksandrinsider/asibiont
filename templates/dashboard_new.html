@@ -1935,6 +1935,7 @@
             }
             // Скрываем внутренние задания координатора агентам — пользователю не нужны
             if (_anchorType === 'coordinator_agent_request') return;
+            if (_anchorType === 'coordinator_assignment') return;
             // agent_delegation от ASI = внутреннее задание координатора агенту
             if (_anchorType === 'agent_delegation' && agentInfo && agentInfo.name === 'ASI') return;
             // Директивы директора (agent_msg без __agent): показываем с именем "Директор"
@@ -2003,7 +2004,11 @@
             }
             
             if (normalizedSender === 'ai') {
-                processedText = processedText.replace(/@(\w+)/g, '<a href="#" onclick="openContactProfileModal(\'$1\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">@$1</a>');
+                // Linkify @username but NOT inside HTML attributes or email addresses
+                processedText = processedText.replace(/(<[^>]*>)|@(\w+)/g, function(match, tag, username) {
+                    if (tag) return tag; // inside HTML tag — return as-is
+                    return '<a href="#" onclick="openContactProfileModal(\'' + username + '\'); return false;" style="color: #068487; text-decoration: none; cursor: pointer;">@' + username + '</a>';
+                });
             }
             
             // Add checkpoint separator before user messages
