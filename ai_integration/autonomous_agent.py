@@ -5407,7 +5407,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "4. Если один инструмент заблокирован/недоступен — сразу вызови другой из твоего списка.\n"
             "5. Нашёл задачу для коллеги → DELEGATE[Имя]: задача с конкретными данными.\n"
             "6. Если check_emails вернул 'нет новых писем от незнакомых контактов' → НЕ повторяй check_emails! "
-            "Вместо этого вызови start_email_campaign или find_relevant_contacts_for_task."
+            "Вместо этого вызови start_email_campaign или find_relevant_contacts_for_task.\n"
+            "7. ФОРМАТ ОТЧЁТА: сплошной текст, 2-3 абзаца через одинарный перенос. "
+            "ЗАПРЕЩЕНО: списки (• – - 1.), нумерация, заголовки (##), жирный (**), двойные переносы строк.\n"
             + (_intg_action_hint or '')
         )
 
@@ -6237,6 +6239,21 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
     except Exception as _e:
         logger.debug("suppressed: %s", _e)
+
+    # ── Нормализация формата: убираем двойные переносы, списки, markdown ──
+    if _final_text and _final_text != _done_fb:
+        import re as _re_fmt
+        # Убираем bullet-списки: • – — - * → сплошной текст
+        _final_text = _re_fmt.sub(r'\n\s*[•–—\-\*]\s+', '\n', _final_text)
+        # Убираем нумерованные списки: 1. 2. 3.
+        _final_text = _re_fmt.sub(r'\n\s*\d+[.)\]]\s+', '\n', _final_text)
+        # Убираем заголовки markdown: ## Title
+        _final_text = _re_fmt.sub(r'\n\s*#{1,4}\s+', '\n', _final_text)
+        # Убираем жирный/курсив markdown: **text** → text, *text* → text
+        _final_text = _re_fmt.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _final_text)
+        # Множественные пустые строки → одинарный перенос
+        _final_text = _re_fmt.sub(r'\n{2,}', '\n', _final_text)
+        _final_text = _final_text.strip()
 
     # Для автопилота: если текст шаблонный но инструменты вызывались — принудительно расширяем через LLM
     if _is_autopilot_task and _tools_used and (_final_text == _done_fb or len((_final_text or '').strip()) < 60):
