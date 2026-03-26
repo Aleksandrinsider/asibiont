@@ -7402,13 +7402,12 @@ async def api_interactions_handler(request):
             # coordinator_summary     — ВИДИМ (итоговый отчёт цикла)
             # agent_chain_transfer    — ВИДИМ (межагентское общение)
             # agent_chain_continue    — ВИДИМ (агент продолжает работу)
+            # asi_director_review     — ВИДИМ (ASI комментирует работу агента)
+            # autopilot_escalation    — ВИДИМ (предупреждения о стагнации)
             'coordinator_agent_request',  # запрос агента на интеграцию (внутренний)
             'coordinator_intg_recommend', # рекомендация интеграции (внутренний)
-            'coordinator_summary',         # итоговый отчёт цикла (шум — скрываем)
             'goal_autopilot_review',      # проверка результата цикла (внутренний)
             'asi_self_analysis',          # «Анализирую цели…» (внутренний)
-            'asi_director_review',        # внутренний анализ директора
-            'autopilot_escalation',       # эскалация внутри автопилота
         }
         filtered_interactions = []
         # Dedup window: (message_type, content[:200]) → last seen timestamp

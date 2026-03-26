@@ -7957,6 +7957,12 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
+                # Отправляем поручение в Telegram — пользователь видит общение агентов
+                if self.bot and _asi_assign_text:
+                    try:
+                        await _safe_send(self.bot, user.telegram_id, _asi_assign_text)
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
@@ -8780,11 +8786,8 @@ class AnchorEngine:
                 # Отправляем результат шага агента в Telegram — пользователь видит прогресс
                 if self.bot and _cleaned and len(_cleaned.strip()) > 20:
                     try:
-                        _tg_text = f"{_ag_name}:\n{_cleaned[:3500]}"
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=_tg_text,
-                        )
+                        _tg_text = f"{_ag_name}:\n{_cleaned}"
+                        await _safe_send(self.bot, user.telegram_id, _tg_text)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
 

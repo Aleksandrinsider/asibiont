@@ -1935,11 +1935,10 @@
             }
             // Скрываем только техническо-шумовые типы
             if (_anchorType === 'coordinator_agent_request') return;
-            if (_anchorType === 'coordinator_summary') return;  // итог цикла — не нужен в чате
             // coordinator_assignment и agent_delegation от ASI — ПОКАЗЫВАЕМ (задания агентам)
+            // coordinator_summary, asi_director_review, autopilot_escalation — ПОКАЗЫВАЕМ
             // Это создаёт ощущение живого общения агентов в чате
             if (_anchorType === 'asi_self_analysis') return;
-            if (_anchorType === 'asi_director_review') return;
             // Директивы директора (agent_msg без __agent): показываем с именем "Директор"
             if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
                 agentInfo = { name: 'Директор', avatar_url: '' };
