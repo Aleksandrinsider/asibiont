@@ -10923,6 +10923,21 @@ class AnchorEngine:
                                 )
                             except Exception as _e:
                                 logger.debug("suppressed: %s", _e)
+                            # Сохраняем алерт в Post (лента новостей) и в Interaction (чат)
+                            try:
+                                from models import Post as _Post_stag
+                                session.add(_Post_stag(
+                                    user_id=user.id,
+                                    username=getattr(user, 'username', None) or str(user.telegram_id),
+                                    content=_stag_msg,
+                                ))
+                                session.commit()
+                            except Exception as _e:
+                                logger.debug("stagnation post save: %s", _e)
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
                             # Записываем факт отправки алерта
                             try:
                                 session.add(Interaction(

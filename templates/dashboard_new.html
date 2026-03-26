@@ -1935,6 +1935,7 @@
             }
             // Скрываем только техническо-шумовые типы
             if (_anchorType === 'coordinator_agent_request') return;
+            if (_anchorType === 'coordinator_summary') return;  // итог цикла — не нужен в чате
             // coordinator_assignment и agent_delegation от ASI — ПОКАЗЫВАЕМ (задания агентам)
             // Это создаёт ощущение живого общения агентов в чате
             if (_anchorType === 'asi_self_analysis') return;

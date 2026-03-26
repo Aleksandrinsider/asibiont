@@ -7404,6 +7404,7 @@ async def api_interactions_handler(request):
             # agent_chain_continue    — ВИДИМ (агент продолжает работу)
             'coordinator_agent_request',  # запрос агента на интеграцию (внутренний)
             'coordinator_intg_recommend', # рекомендация интеграции (внутренний)
+            'coordinator_summary',         # итоговый отчёт цикла (шум — скрываем)
             'goal_autopilot_review',      # проверка результата цикла (внутренний)
             'asi_self_analysis',          # «Анализирую цели…» (внутренний)
             'asi_director_review',        # внутренний анализ директора
