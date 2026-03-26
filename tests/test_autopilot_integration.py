@@ -139,8 +139,9 @@ def test_d1_create_goal_logs_goal_created():
 def test_d2_update_goal_logs_goal_updated():
     """update_goal_progress создаёт AgentActivityLog с activity_type='goal_updated'."""
     from ai_integration.handlers import create_goal, update_goal_progress
-    create_goal(title="D2-Цель-updated-log", user_id=UID)
-    update_goal_progress(goal_title="D2-Цель-updated-log", progress=40, user_id=UID)
+    create_goal(title="D2-Цель-updated-log", metric_target=100, metric_unit="шагов", user_id=UID)
+    update_goal_progress(goal_title="D2-Цель-updated-log", metric_current=40,
+                         notes="Тест: промежуточный результат подтверждён", user_id=UID)
     with TestSession() as s:
         u = s.query(models.User).filter_by(telegram_id=UID).first()
         log = s.query(models.AgentActivityLog).filter(
@@ -154,8 +155,9 @@ def test_d2_update_goal_logs_goal_updated():
 def test_d3_goal_100_pct_logs_goal_completed():
     """update_goal_progress до 100% создаёт activity_type='goal_completed'."""
     from ai_integration.handlers import create_goal, update_goal_progress
-    create_goal(title="D3-Цель-complete-log", user_id=UID)
-    update_goal_progress(goal_title="D3-Цель-complete-log", progress=100, user_id=UID)
+    create_goal(title="D3-Цель-complete-log", metric_target=10, metric_unit="шагов", user_id=UID)
+    update_goal_progress(goal_title="D3-Цель-complete-log", metric_current=10,
+                         notes="Тест: цель полностью достигнута", user_id=UID)
     with TestSession() as s:
         u = s.query(models.User).filter_by(telegram_id=UID).first()
         log = s.query(models.AgentActivityLog).filter(

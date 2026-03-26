@@ -230,15 +230,15 @@ def test_g3b_news_goal_directive():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g4_content_goal_directive():
-    """Цель «контент, smm» → директива generate_marketing_content."""
+    """Цель «контент, smm» → директива create_post (generate_marketing_content исключён из тулсета)."""
     goals = [_goal("Создать контент-план SMM на месяц", progress=0)]
     profiles = [_profiles_for("Арина", ["Telegram API", "SMM контент"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
     tools = [d["tool"] for d in directives]
-    assert "generate_marketing_content" in tools, \
-        f"Контентная цель должна использовать generate_marketing_content: {tools}"
+    assert "create_post" in tools or "generate_marketing_content" in tools, \
+        f"Контентная цель должна использовать create_post или generate_marketing_content: {tools}"
 
 
 def test_g4b_smm_post_goal():
