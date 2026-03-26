@@ -737,7 +737,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_script = any(w in c for c in _caps_lower for w in ('python', 'http', 'скрипт', 'run_agent', 'все инструменты'))
     _has_rss    = any(w in c for c in _caps_lower for w in ('rss', 'feed', 'лент'))
     _has_github = any(w in c for c in _caps_lower for w in ('github', 'gitlab'))
-    _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'контент', 'smm'))
+    _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'контент', 'smm')) or bool(getattr(user, 'telegram_channel', None)) or bool(getattr(user, 'discord_webhook', None))
     _has_alpha  = any(w in c for c in _caps_lower for w in ('alpha_vantage', 'alphavantage', 'alpha vantage', 'котировк', 'биржа', 'биржевые'))
     _has_news   = any(w in c for c in _caps_lower for w in ('newsapi', 'news api', 'news_api'))
     _has_notion = any(w in c for c in _caps_lower for w in ('notion',))
@@ -6401,8 +6401,8 @@ class AnchorEngine:
                 _is_rss_agent = 'rss_url=' in _keys_cr
                 _is_github_agent = ('github_token=' in _keys_cr or 'github_access_token=' in _keys_cr)
                 _is_email_only = _has_email_cr and not _is_rss_agent and not _is_github_agent
-                _has_tg_channel = 'telegram_channel' in _keys_cr
-                _has_discord_wh = 'discord_webhook' in _keys_cr
+                _has_tg_channel = 'telegram_channel' in _keys_cr or bool(getattr(user, 'telegram_channel', None))
+                _has_discord_wh = 'discord_webhook' in _keys_cr or bool(getattr(user, 'discord_webhook', None))
                 _has_crm = any(w in _keys_cr for w in ('amocrm', 'hubspot', 'bitrix', 'crm'))
                 _has_marketplace = any(w in _keys_cr for w in ('ozon', 'wildberries', 'wb_api', 'shopify'))
                 _has_jira = any(w in _keys_cr for w in ('jira', 'trello'))

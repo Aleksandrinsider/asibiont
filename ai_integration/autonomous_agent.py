@@ -4639,7 +4639,24 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _seen_emojis.add(_em)
         _intg_line = '\nПодключено у тебя:\n  ' + '\n  '.join(_intg_parts) if _intg_parts else ''
 
-    # ── Подсказки по интеграциям — компактная универсальная инструкция ─────────
+    # ── Telegram-канал пользователя (платформенный, доступен всем агентам) ──────
+    try:
+        from models import Session as _Sess_tg, User as _UTg
+        _s_tg = _Sess_tg()
+        try:
+            _u_tg = _s_tg.query(_UTg).filter_by(telegram_id=user_id).first()
+            if _u_tg and getattr(_u_tg, 'telegram_channel', None):
+                _tg_ch = (_u_tg.telegram_channel or '').strip()
+                _tg_entry = f"📢 Telegram-канал {_tg_ch} → publish_to_telegram(content='текст поста') ← публикуй посты, отчёты, анонсы"
+                if _intg_line:
+                    _intg_line += f"\n  {_tg_entry}"
+                else:
+                    _intg_line = f"\nПодключено у тебя:\n  {_tg_entry}"
+        finally:
+            _s_tg.close()
+    except Exception:
+        pass
+
     _intg_action_hint = ""
     if _intg_hint:
         _intg_names = ', '.join(_intg_hint[:8])
