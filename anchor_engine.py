@@ -4004,29 +4004,26 @@ class AnchorEngine:
                         f"\n💡 Если для цели нужна интеграция, которой нет в этом списке — "
                         f"попроси пользователя подключить её в Настройках → Агенты → API-ключи."
                     )
-                    # ── Блок жёстких ограничений по возможностям агента ──
-                    _hard_limits_c = []
+                    # ── Что НЕ подключено у агента (динамически из реальных ключей) ──
+                    _unavailable_c = []
                     _agent_caps_lower = [str(c).lower() for c in (_detected or [])]
                     _agent_keys_str = (agent_data.get('user_api_keys') or '').lower()
                     _all_caps_str = ' '.join(_agent_caps_lower) + ' ' + _agent_keys_str
-                    # Звонки / SMS
-                    if not any(w in _all_caps_str for w in ('twilio', 'sms', 'звонк', 'sipuni', 'voip', '+7', 'phone_api')):
-                        _hard_limits_c.append("звонки/холодные звонки/обзвон (нет телефонной интеграции)")
                     # Соцсети без API
                     for _sn, _keys in [('Twitter/X', ('twitter', 'x.com')), ('LinkedIn', ('linkedin',)),
                                        ('Instagram', ('instagram',)), ('VK', ('vk', 'вконтакте'))]:
                         if not any(k in _all_caps_str for k in _keys):
-                            _hard_limits_c.append(f"публикации в {_sn}")
+                            _unavailable_c.append(_sn)
                     # Telegram канал
                     if not getattr(user, 'telegram_channel', None) and 'telegram_bot_token' not in _all_caps_str:
-                        _hard_limits_c.append("публикация в Telegram-канал")
+                        _unavailable_c.append('Telegram-канал')
                     # Discord
                     if not getattr(user, 'discord_webhook', None):
-                        _hard_limits_c.append("публикация в Discord")
-                    if _hard_limits_c:
+                        _unavailable_c.append('Discord')
+                    if _unavailable_c:
                         _channels_info_c += (
-                            f"\n🚫 ФИЗИЧЕСКИ НЕДОСТУПНО для {_chosen_name} (НЕ НАЗНАЧАЙ ЭТИ ЗАДАЧИ): "
-                            + ', '.join(_hard_limits_c) + "."
+                            f"\n❌ Не подключено у {_chosen_name}: {', '.join(_unavailable_c)}. "
+                            f"Предложи только то, что есть в списке ✅."
                         )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
@@ -6544,10 +6541,10 @@ class AnchorEngine:
                     _cap_rules_lines.append(
                         f"  🐍 {_p_cr['name']} [custom code]: run_agent_action с пользовательским Python-кодом."
                     )
-                # Явный запрет звонков для агентов без телефонной интеграции
-                if not _has_calls:
+                # Показываем что ЕСТЬ у агента по звонкам/телефонии
+                if _has_calls:
                     _cap_rules_lines.append(
-                        f"  🚫 {_p_cr['name']}: ЗАПРЕЩЕНО назначать звонки/холодные звонки/обзвон — нет Twilio/SIP."
+                        f"  📞 {_p_cr['name']}: МОЖЕТ делать звонки/SMS (есть Twilio/SIP)."
                     )
             _cap_rules_str = (
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
@@ -7456,7 +7453,8 @@ class AnchorEngine:
                 "• ⛔ НЕТ Telegram/Discord-клиента — агенты НЕ МОГУТ вступать/постить в ЧУЖИЕ каналы.\n"
                 "• ⛔ Хабр и VC.ru — публичного API нет, публикация невозможна. Только поиск: web_search('site:habr.com ...').\n"
                 "• Reddit/Medium — публикация возможна ТОЛЬКО если агент настроен с python_code-скриптом и API-ключом пользователя. Без этого — только поиск.\n"
-                "• ⛔ Звонки/холодные звонки/обзвон — ТОЛЬКО если у агента есть Twilio/SIP в ключах. Без этого назначать НЕЛЬЗЯ — агенты не имеют доступа к телефонии.\n\n"
+                "• ⚠️ Любой инструмент (звонки, SMS, публикация в соцсети и т.д.) доступен ТОЛЬКО если он есть в строгих правилах агента выше.\n"
+                "  Если нужная интеграция отсутствует — НЕ назначай задачу, а предложи: 'Для этого нужно подключить [интеграция] в Настройках → Агент → API-ключи.'\n\n"
 
                 "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
                 "• Генерируй СВОИ уникальные стратегии — контент-магниты, партнёрства, community building.\n"
