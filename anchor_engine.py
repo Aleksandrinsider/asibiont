@@ -6603,6 +6603,21 @@ class AnchorEngine:
                     _tools_list = json.loads(getattr(ag, 'tools_allowed', '') or '[]')
                 except Exception:
                     _tools_list = []
+                _script_actions = []
+                try:
+                    import re as _re_sa_coord
+                    _py_code_coord = (getattr(ag, 'python_code', '') or '').strip()
+                    for _m_sa in _re_sa_coord.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _py_code_coord):
+                        _a = _m_sa.group(1).strip()
+                        if _a and _a not in _script_actions:
+                            _script_actions.append(_a)
+                    for _m_sa in _re_sa_coord.finditer(r"ACTION\s+in\s*\(([^)]+)\)", _py_code_coord):
+                        for _part in _m_sa.group(1).split(','):
+                            _a = _part.strip().strip("'\" ").strip()
+                            if _a and _a not in _script_actions:
+                                _script_actions.append(_a)
+                except Exception:
+                    _script_actions = []
                 _profiles.append({
                     'name': ag.name,
                     'id': getattr(ag, 'id', 0),
@@ -6611,6 +6626,7 @@ class AnchorEngine:
                     'spec': getattr(ag, 'specialization', '') or '',
                     'caps': _caps[:6],
                     'tools': _tools_list[:8],
+                    'script_actions': _script_actions[:8],
                 })
 
             _goals = data.get('goals', [])
@@ -6785,9 +6801,14 @@ class AnchorEngine:
                     _can_send = 'yandex_user=' in _keys_lower or 'mailru_user=' in _keys_lower
                 _send_note = (' [отправка+чтение email]' if _can_send else
                               ' [только чтение email, НЕ отправляет]' if _has_imap else '')
+                _actions_note = (
+                    f', action-имена run_agent_action=[{", ".join(p.get("script_actions", [])[:4])}]'
+                    if p.get('script_actions') else ''
+                )
                 _profiles_lines.append(
                     f'  - "{p["name"]}" ({p["job"]}{_spec_part}): интеграции=[{", ".join(p["caps"][:4]) or "нет"}]{_rss_note}{_send_note}'
                     f', инструменты=[{", ".join(p["tools"][:6]) if p["tools"] else (", ".join(p["caps"][:4]) + " через run_agent_action") if p["caps"] else "web_search, research_topic"}]'
+                    f'{_actions_note}'
                     f'{_desc_part}'
                     f', история={_hist_str}'
                 )
@@ -7404,9 +7425,9 @@ class AnchorEngine:
                 if _overused:
                     _strategy_lines.append(f"\n  ⚠️ ПЕРЕГРУЖЕННЫЕ подходы (повторяются циклами): {', '.join(_overused)}")
                     _strategy_lines.append(f"     → Эти подходы УЖЕ испробованы многократно. Результата явно недостаточно.")
-                    _strategy_lines.append(f"     → ЗАПРЕЩЕНО назначать то же самое. Придумай принципиально другой путь.")
+                    _strategy_lines.append(f"     → Сильный сигнал сменить подход. Придумай принципиально другой путь.")
                 if _heavily_overused:
-                    _strategy_lines.append(f"     ⛔ ЖЁСТКИЙ ЗАПРЕТ на: {', '.join(_heavily_overused)} — использованы 4+ раз без прогресса.")
+                    _strategy_lines.append(f"     ⛔ Критически переиспользуемые: {', '.join(_heavily_overused)} — использованы 4+ раз без прогресса.")
                 if _strategy_never_tried:
                     _nice_names = {
                         'direct_search': 'прямой поиск контактов',
@@ -7439,6 +7460,99 @@ class AnchorEngine:
                 'check_emails':     ['send_outreach_email', 'find_relevant_contacts_for_task'],
                 'send_outreach_email': ['check_emails', 'reply_to_outreach_email', 'find_relevant_contacts_for_task'],
             }
+            _agent_tools_map = {
+                _p_tm['name'].lower(): {str(t).strip().lower() for t in (_p_tm.get('tools') or [])}
+                for _p_tm in _profiles
+            }
+            _agent_supported_actions = {
+                _p_sa['name'].lower(): [a.lower() for a in (_p_sa.get('script_actions') or [])]
+                for _p_sa in _profiles
+            }
+
+            # ── Эмпирическая память решений: что реально сработало у каждого агента ──
+            _agent_tool_scores: dict = {}
+            _empirical_guidance_str = ''
+            try:
+                from models import DecisionLog as _DL_emp
+                _cut_emp = datetime.now(timezone.utc) - timedelta(days=21)
+                _emp_rows = session.query(
+                    _DL_emp.context_summary,
+                    _DL_emp.chosen_action,
+                    _DL_emp.outcome_score,
+                ).filter(
+                    _DL_emp.user_id == user.id,
+                    _DL_emp.decision_type == 'tool_selection',
+                    _DL_emp.outcome_score.isnot(None),
+                    _DL_emp.created_at >= _cut_emp,
+                ).order_by(_DL_emp.created_at.desc()).limit(400).all()
+
+                _agg: dict = {}
+                for _ctx_emp, _tool_emp, _score_emp in _emp_rows:
+                    _ctx_s = (_ctx_emp or '').strip()
+                    if ':' not in _ctx_s:
+                        continue
+                    _ag_emp = _ctx_s.split(':', 1)[0].strip().lower()
+                    _tl_emp = (_tool_emp or '').strip().lower()
+                    if not _ag_emp or not _tl_emp:
+                        continue
+                    _k = (_ag_emp, _tl_emp)
+                    _st = _agg.setdefault(_k, {'sum': 0.0, 'n': 0})
+                    _st['sum'] += float(_score_emp or 0.0)
+                    _st['n'] += 1
+
+                _emp_lines = []
+                for (_agk, _tlk), _st in _agg.items():
+                    if _st['n'] <= 0:
+                        continue
+                    _avg = _st['sum'] / _st['n']
+                    _agent_tool_scores.setdefault(_agk, {})[_tlk] = {'avg': _avg, 'n': _st['n']}
+
+                for _p_emp in _profiles:
+                    _ag_n = (_p_emp.get('name') or '').lower()
+                    _tools_emp = _agent_tool_scores.get(_ag_n, {})
+                    if not _tools_emp:
+                        continue
+                    _best = sorted(_tools_emp.items(), key=lambda x: (-x[1]['avg'], -x[1]['n']))[:2]
+                    _worst = sorted(_tools_emp.items(), key=lambda x: (x[1]['avg'], -x[1]['n']))[:1]
+                    _best_s = ', '.join(f"{t}({v['avg']:.2f}/{v['n']})" for t, v in _best)
+                    _worst_s = ', '.join(f"{t}({v['avg']:.2f}/{v['n']})" for t, v in _worst)
+                    _emp_lines.append(f"  {_p_emp.get('name')}: эффективно → {_best_s}; слабо → {_worst_s}")
+
+                if _emp_lines:
+                    _empirical_guidance_str = (
+                        "\n📈 ЭМПИРИКА ПО РЕЗУЛЬТАТАМ (последние 21 день):\n"
+                        + '\n'.join(_emp_lines)
+                        + "\n  → Это не жёсткие запреты. Это ориентир: чаще выбирай то, что уже приносило результат.\n"
+                    )
+            except Exception as _emp_err:
+                logger.debug("[COORD] empirical scores: %s", _emp_err)
+
+            def _tool_emp_score(_agent_name: str, _tool: str) -> float:
+                _ag_l = (_agent_name or '').strip().lower()
+                _tl_l = (_tool or '').strip().lower()
+                _d = _agent_tool_scores.get(_ag_l, {}).get(_tl_l)
+                return float(_d.get('avg', 0.5)) if _d else 0.5
+
+            def _pick_alternative_tool(_agent_name: str, _blocked_tool: str, _blocked_set: set) -> str:
+                _alts = _TOOL_ALTERNATIVES.get((_blocked_tool or '').lower(), [])
+                _agent_tools = _agent_tools_map.get((_agent_name or '').lower(), set())
+                _best = ''
+                _best_score = -1.0
+                for _cand in _alts:
+                    _cand_l = _cand.lower().strip()
+                    if _cand_l in _blocked_set:
+                        continue
+                    if _agent_tools and _cand_l in _agent_tools:
+                        _sc = _tool_emp_score(_agent_name, _cand_l)
+                        if _sc > _best_score:
+                            _best = _cand_l
+                            _best_score = _sc
+                    if not _agent_tools and _cand_l in {'web_search', 'research_topic', 'save_email_contact', 'save_note'}:
+                        _sc = _tool_emp_score(_agent_name, _cand_l)
+                        if _sc > _best_score:
+                            _best = _cand_l
+                            _best_score = _sc
+                return _best
 
             # ── Строим контекст ситуации (вместо жёсткого SM-плана) ──
             # SM-директивы → мягкие подсказки о состоянии БД, а не команды
@@ -7580,6 +7694,87 @@ class AnchorEngine:
             except Exception as _eff_err:
                 logger.debug("[COORD] effectiveness analysis: %s", _eff_err)
 
+            # ── Self-thinking block: LLM сам придумывает разные режимы применения интеграций ──
+            # Без ручного словаря вида "RSS = только новости".
+            _integration_hypothesis_str = ''
+            try:
+                _ih_prompt = (
+                    "Ты — стратег роста и операционный директор.\n"
+                    "Твоя задача: для КАЖДОГО агента предложить разные режимы использования ЕГО интеграций "
+                    "под текущие цели пользователя.\n"
+                    "Не ограничивайся очевидным использованием.\n\n"
+                    f"Команда:\n{_profiles_str}\n\n"
+                    f"Цели:\n{_goals_str}\n\n"
+                    f"Недавние действия:\n{_recent_txt}\n\n"
+                    "Верни JSON-массив объектов формата:\n"
+                    "["
+                    "{\"agent\": \"имя\", \"integration\": \"название\", "
+                    "\"modes\": ["
+                    "{\"mode\": \"краткое название подхода\", "
+                    "\"task_pattern\": \"как формулировать задачу\", "
+                    "\"expected_outcome\": \"какой результат\", "
+                    "\"kpi\": \"как измерять\"}"
+                    "]}"
+                    "]\n"
+                    "Требования:\n"
+                    "1) Для каждого integration дай 2-4 разных modes.\n"
+                    "2) Modes должны различаться по типу результата (данные, контакты, контент, обучение, конверсия, ретеншн и т.п.).\n"
+                    "3) Не предлагай действия, которых агент технически не может выполнить."
+                )
+                _ih_raw = await asyncio.wait_for(
+                    _quick_ai_call_raw([{"role": "user", "content": _ih_prompt}], max_tokens=850),
+                    timeout=16,
+                )
+                import re as _re_ih
+                _ih_lines = []
+                _ih_items = []
+                _ih_txt = (_ih_raw or '').strip()
+                if _ih_txt:
+                    # Берём внешний JSON-массив целиком (с поддержкой вложенных lists в modes)
+                    _lb = _ih_txt.find('[')
+                    _rb = _ih_txt.rfind(']')
+                    if _lb != -1 and _rb > _lb:
+                        _cand = _ih_txt[_lb:_rb + 1]
+                        try:
+                            _ih_items = json.loads(_cand)
+                        except Exception:
+                            _ih_items = []
+                    if not _ih_items:
+                        # Fallback для ответа в markdown/codeblock
+                        _m_ih = _re_ih.search(r'\[[\s\S]*\]', _ih_txt)
+                        if _m_ih:
+                            try:
+                                _ih_items = json.loads(_m_ih.group())
+                            except Exception:
+                                _ih_items = []
+                if isinstance(_ih_items, list) and _ih_items:
+                    _ih_lines.append("🧪 ГИПОТЕЗЫ ПРИМЕНЕНИЯ ИНТЕГРАЦИЙ (сгенерировано ИИ):")
+                    for _it in _ih_items[:10]:
+                        _ag_i = (_it.get('agent') or '?')[:40]
+                        _int_i = (_it.get('integration') or '?')[:40]
+                        _modes_i = _it.get('modes') or []
+                        if not isinstance(_modes_i, list):
+                            _modes_i = []
+                        if not _modes_i:
+                            continue
+                        _ih_lines.append(f"  {_ag_i} / {_int_i}:")
+                        for _md in _modes_i[:3]:
+                            _mode_n = (_md.get('mode') or 'mode')[:45]
+                            _task_p = (_md.get('task_pattern') or '')[:90]
+                            _kpi_i = (_md.get('kpi') or '')[:60]
+                            _ih_lines.append(f"    • {_mode_n}: {_task_p}")
+                            if _kpi_i:
+                                _ih_lines.append(f"      KPI: {_kpi_i}")
+                elif _ih_raw:
+                    _fallback = (_ih_raw or '').strip().replace('\n\n', '\n')
+                    if _fallback:
+                        _ih_lines.append("🧪 ГИПОТЕЗЫ ПРИМЕНЕНИЯ ИНТЕГРАЦИЙ (сгенерировано ИИ):")
+                        _ih_lines.append("  " + _fallback[:1200])
+                if _ih_lines:
+                    _integration_hypothesis_str = '\n' + '\n'.join(_ih_lines) + '\n\n'
+            except Exception as _ih_err:
+                logger.debug("[COORD] integration hypotheses: %s", _ih_err)
+
             # ── Недавние выполненные задачи (anti-repeat для координатора) ──
             _recent_done_str = ''
             try:
@@ -7619,6 +7814,8 @@ class AnchorEngine:
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + _effectiveness_str
+                + _empirical_guidance_str
+                + _integration_hypothesis_str
                 + f"{_degraded_note}"
                 + _pending_replies_str
                 + _unsent_contacts_str
@@ -7709,6 +7906,7 @@ class AnchorEngine:
                 "• Генерируй СВОИ уникальные стратегии — контент-магниты, партнёрства, community building.\n"
                 "• Один агент может получить несколько задач для разных целей.\n"
                 "• Многошаговые цепочки: агент A находит → агент B действует → результат.\n"
+                "• Для каждой интеграции выбирай РАЗНЫЕ режимы применения (не зацикливайся на одном паттерне).\n"
                 "• Думай как живой директор: 'Что принесёт максимум результата при минимуме ресурсов?'\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
@@ -7755,6 +7953,69 @@ class AnchorEngine:
                 elif _ak_agent:
                     logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
+
+            # ── Adaptive plan normalization: мягкая коррекция на основе опыта и валидности ──
+            # 1) Предупреждаем о рисках по агенту, но не выкидываем шаги без крайней причины
+            # 2) Корректируем явно зацикленные инструменты, если их эмпирика слабая
+            # 3) Валидируем action-имена run_agent_action по скрипту агента
+            _plan_normalized = []
+            import re as _re_norm_plan
+            for _p_norm in _plan:
+                _ag_norm = (_p_norm.get('agent') or '').strip()
+                _ag_norm_l = _ag_norm.lower()
+                _tool_norm = (_p_norm.get('tool') or '').strip().lower()
+                _task_norm = (_p_norm.get('task') or '').strip()
+
+                if _ag_norm in _fully_blocked_agents:
+                    logger.info("[COORD] normalize: fully-blocked warning for %s (step kept)", _ag_norm)
+                    if _task_norm:
+                        _p_norm['task'] = _task_norm + " (высокий риск повтора — постарайся выбрать другой ход)"
+                        _task_norm = _p_norm['task']
+
+                _banned_for_agent = {
+                    str(t).strip().lower()
+                    for t in _agent_banned_tools.get(_ag_norm, [])
+                }
+                if _tool_norm and _tool_norm in _banned_for_agent:
+                    _cur_score = _tool_emp_score(_ag_norm, _tool_norm)
+                    _alt = _pick_alternative_tool(_ag_norm, _tool_norm, _banned_for_agent)
+                    _alt_score = _tool_emp_score(_ag_norm, _alt) if _alt else 0.0
+                    if _alt and (_cur_score < 0.56 or _alt_score > (_cur_score + 0.07)):
+                        logger.info("[COORD] normalize: %s tool %s -> %s (score %.2f -> %.2f)",
+                                    _ag_norm, _tool_norm, _alt, _cur_score, _alt_score)
+                        _p_norm['tool'] = _alt
+                        _tool_norm = _alt
+                        if _task_norm:
+                            _p_norm['task'] = _task_norm + f" (адаптация по результатам: попробуй {_alt})"
+                    else:
+                        logger.info("[COORD] normalize: keep %s/%s (score %.2f, no better alt)",
+                                    _ag_norm, _tool_norm, _cur_score)
+
+                if _tool_norm == 'run_agent_action' and _ag_norm_l in _agent_supported_actions:
+                    _allowed_actions = _agent_supported_actions.get(_ag_norm_l, [])
+                    if _allowed_actions:
+                        _m_action = _re_norm_plan.search(r"action\s*=\s*['\"]([^'\"]+)['\"]", _task_norm, _re_norm_plan.IGNORECASE)
+                        if _m_action:
+                            _requested_action = (_m_action.group(1) or '').strip().lower()
+                            if _requested_action and _requested_action not in _allowed_actions:
+                                _safe_action = _allowed_actions[0]
+                                _p_norm['task'] = _re_norm_plan.sub(
+                                    r"action\s*=\s*['\"][^'\"]+['\"]",
+                                    f"action='{_safe_action}'",
+                                    _task_norm,
+                                    count=1,
+                                    flags=_re_norm_plan.IGNORECASE,
+                                )
+                                logger.info("[COORD] normalize: invalid action %s for %s -> %s",
+                                            _requested_action, _ag_norm, _safe_action)
+                        else:
+                            _safe_action = _allowed_actions[0]
+                            _p_norm['task'] = (_task_norm + f" Используй run_agent_action(action='{_safe_action}').").strip()
+
+                _plan_normalized.append(_p_norm)
+
+            if _plan_normalized:
+                _plan = _plan_normalized
 
             # ── Force-reply: если есть входящие без AI-ответа — добавляем reply в план ──
             # Мягкий пост-фильтр: reply добавляется как первый шаг, но НЕ стирает план координатора
@@ -8043,14 +8304,25 @@ class AnchorEngine:
                             "Используй research_topic, web_search, find_relevant_contacts_for_task, create_post.\n"
                             if _email_limit_hit else ''
                         )
+                        _used_run_lines = []
+                        for _ag_u, _tools_u in _current_run_agent_tools.items():
+                            if _tools_u:
+                                _used_run_lines.append(f"  {_ag_u}: {', '.join(sorted(_tools_u)[:4])}")
+                        _used_run_note = (
+                            "Уже использованные инструменты в этом цикле (не повторяй для того же агента):\n"
+                            + '\n'.join(_used_run_lines) + "\n\n"
+                        ) if _used_run_lines else ''
                         _next_prompt = (
                             f"Ты — координатор ASI. Команда только что сделала:\n{_done_str}\n\n"
+                            f"{_used_run_note}"
                             f"{_email_limit_note}"
                             f"{_uncovered_note}"
                             f"Активные цели:\n{_goals_remain_str}\n\n"
                             f"Доступные агенты (используй их возможности):\n{_agents_avail_str}\n\n"
                             f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
                             f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
+                            f"Важно: выбери НОВЫЙ тип результата, а не повтор прошлого шага "
+                            f"(например: данные → контакты, контакты → действия, действия → контент/обучение, и т.д.).\n"
                             f"Если все ключевые цели получили прогресс — верни {{\"done\": true}}.\n"
                             f"Если нужен ещё шаг — верни ОДИН JSON-объект:\n"
                             f'[{{"agent": "имя_агента", "task": "конкретная задача исходя из интеграций агента", '
@@ -8090,6 +8362,19 @@ class AnchorEngine:
                 _ag_goal_title = (_step.get('goal') or '').strip()   # привязка к цели из плана координатора
                 if not _ag_name or not _ag_task:
                     continue
+
+                # ── Runtime anti-loop: не даём агенту повторять тот же инструмент без необходимости ──
+                _tool_hint_l = _tool_hint.lower().strip()
+                _used_by_agent_now = _current_run_agent_tools.get(_ag_name, set())
+                if _tool_hint_l and _tool_hint_l in _used_by_agent_now and _tool_hint_l not in _COORD_MULTI_USE_OK:
+                    _curr_sc = _tool_emp_score(_ag_name, _tool_hint_l)
+                    _runtime_alt = _pick_alternative_tool(_ag_name, _tool_hint_l, set())
+                    _alt_sc = _tool_emp_score(_ag_name, _runtime_alt) if _runtime_alt else 0.0
+                    if _runtime_alt and _runtime_alt not in _used_by_agent_now and (_curr_sc < 0.55 or _alt_sc > _curr_sc):
+                        logger.info("[COORD] runtime anti-loop: %s %s -> %s (score %.2f -> %.2f)",
+                                    _ag_name, _tool_hint_l, _runtime_alt, _curr_sc, _alt_sc)
+                        _tool_hint = _runtime_alt
+                        _ag_task = _ag_task + f" (адаптируй стратегию: вместо {_tool_hint_l} попробуй {_runtime_alt})"
 
                 # ── Уточнение задания: подставляем контекст без лишнего LLM-вызова ──
                 # Контекст предыдущих шагов уже передаётся в _agent_prompt через _prev_steps_context
