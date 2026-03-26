@@ -55,6 +55,25 @@ _TG_MAX_LEN = 4096
 
 
 # ═══════════════════════════════════════════════════════
+# USER-LEVEL CHANNEL ENRICHMENT
+# ═══════════════════════════════════════════════════════
+# Добавляет каналы пользователя (Discord, Telegram) к agent_caps.
+# Эти каналы хранятся на уровне users, а не user_agents,
+# поэтому _parse_agent_integrations() их не видит.
+
+def _enrich_caps_with_user_channels(caps: list, user=None) -> list:
+    """Дополняет список интеграций агента user-level каналами (Discord, Telegram)."""
+    if not user:
+        return caps
+    enriched = set(caps)
+    if getattr(user, 'discord_webhook', None):
+        enriched.add('Discord (канал пользователя)')
+    if getattr(user, 'telegram_channel', None):
+        enriched.add('Telegram-канал (канал пользователя)')
+    return sorted(enriched)
+
+
+# ═══════════════════════════════════════════════════════
 # UNIFIED CAPABILITY CLASSIFICATION
 # ═══════════════════════════════════════════════════════
 # Единая классификация возможностей агента.
@@ -3905,8 +3924,9 @@ class AnchorEngine:
                                     getattr(a, 'tools_allowed', '') or '',
                                     getattr(a, 'search_scope', '') or '',
                                 )
+                                _caps = _enrich_caps_with_user_channels(_caps, user)
                             except Exception:
-                                _caps = []
+                                _caps = _enrich_caps_with_user_channels([], user)
                             _agent_cats = set()
                             for _lbl in _caps:
                                 _lb = _lbl.lower()
@@ -3982,8 +4002,9 @@ class AnchorEngine:
                             getattr(chosen, 'tools_allowed', '') or '',
                             getattr(chosen, 'search_scope', '') or '',
                         )
+                        _detected = _enrich_caps_with_user_channels(_detected, user)
                     except Exception:
-                        _detected = []
+                        _detected = _enrich_caps_with_user_channels([], user)
                     # Перестраиваем task_text — вставляем промпт после placeholder
                     _per_agent_hist = data.get('per_agent_history', {}).get(chosen.name, [])
                     _full_team_hist = data.get('per_agent_history', {})
@@ -6416,8 +6437,9 @@ class AnchorEngine:
                         getattr(ag, 'tools_allowed', '') or '',
                         getattr(ag, 'search_scope', '') or '',
                     )
+                    _caps = _enrich_caps_with_user_channels(_caps, user)
                 except Exception:
-                    _caps = []
+                    _caps = _enrich_caps_with_user_channels([], user)
                 try:
                     _tools_list = json.loads(getattr(ag, 'tools_allowed', '') or '[]')
                 except Exception:
@@ -11101,8 +11123,9 @@ class AnchorEngine:
                     _ta.user_api_keys or '', _ta.python_code or '',
                     _ta.tools_allowed or '', getattr(_ta, 'search_scope', '') or '',
                 )
+                _ta_caps = _enrich_caps_with_user_channels(_ta_caps, user)
             except Exception:
-                _ta_caps = []
+                _ta_caps = _enrich_caps_with_user_channels([], user)
             # Фоллбэк по роли: если нет API-ключей и кода — определяем способности по должности/специализации
             if not _ta_caps:
                 try:
