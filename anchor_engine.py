@@ -3836,7 +3836,8 @@ class AnchorEngine:
             _feasibility = data.get('feasibility_warnings', [])
             if _feasibility:
                 task_text += (
-                    "\n\nОценка достижимости:\n"
+                    "\n\n[СИСТЕМНАЯ АНАЛИТИКА — НЕ пересказывай пользователю дословно, "
+                    "используй для планирования своих действий]:\n"
                     + '\n'.join(f"  {w}" for w in _feasibility)
                 )
 
@@ -4546,7 +4547,7 @@ class AnchorEngine:
                                         _ack_sv.commit()
                                     finally:
                                         _ack_sv.close()
-                                    await self.bot.send_message(chat_id=user.telegram_id, text=_ack_text)
+                                    # Ack сохранён в БД для веб-чата — в Telegram НЕ шлём (уменьшаем шум)
                                 except Exception as _ack_sv_err:
                                     logger.debug("[ANCHOR-AUTOPILOT] ack save/send: %s", _ack_sv_err)
                     except Exception as _ack_err:
@@ -5026,14 +5027,15 @@ class AnchorEngine:
                             for g in data.get('goals', [])[:2]
                         )
                         _dir_p = (
-                            f"Ты — ASI, координатор проекта. Агент {_chosen_name} только что отчитался:\n"
+                            f"Ты — ASI, координатор проекта. Пишешь ПОЛЬЗОВАТЕЛЮ (владельцу проекта) статус-апдейт.\n"
+                            f"Агент {_chosen_name} только что отчитался:\n"
                             f"«{result.strip()[:400]}»\n\n"
                             f"Цели пользователя: {_dir_goals}\n"
                             f"Предупреждения: {'; '.join(str(w)[:100] for w in _fw_dir[:2])}\n\n"
-                            "Напиши ОДНО короткое предложение (15-25 слов): что планируется дальше "
-                            "ИЛИ что конкретно нужно от пользователя (если застряли). "
-                            "Прямо и конкретно — без общих слов. "
-                            "Обращение от ASI. Живо. Без markdown."
+                            "Напиши ОДНО короткое предложение (15-25 слов) ДЛЯ ПОЛЬЗОВАТЕЛЯ: "
+                            "что агенты сделали и что будет дальше. "
+                            "НЕ обращайся к агентам (Марк, Кристина) — пиши ПОЛЬЗОВАТЕЛЮ. "
+                            "Прямо и конкретно — без общих слов. Живо. Без markdown."
                         )
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_d
                         _dir_resp = await _qar_d(
@@ -8233,12 +8235,8 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
-                # Отправляем поручение в Telegram — пользователь видит общение агентов
-                if self.bot and _asi_assign_text:
-                    try:
-                        await _safe_send(self.bot, user.telegram_id, _asi_assign_text)
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
+                # Поручение сохранено в БД для веб-чата — в Telegram НЕ отправляем
+                # (пользователь видит в веб-чате, но не спамим Telegram внутренними назначениями)
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
@@ -11305,9 +11303,9 @@ class AnchorEngine:
                 if _action_count >= _stag_threshold and _no_progress:
                     _mt_str = f"/{_mt_int}" if _mt_int else ""
                     _stagnation_warn = (
-                        f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, реальный прогресс = {_mc_int}{_mt_str}. "
-                        f"Текущая стратегия не работает. Смени подход: предложи конкретные альтернативные шаги "
-                        f"или сообщи пользователю какие интеграции помогут (https://asibiont.com/dashboard)."
+                        f"🔴 СТАГНАЦИЯ по '{g.get('title', '')[:60]}': {_action_count} dispatch'ей за 48ч, "
+                        f"реальный прогресс = {_mc_int}{_mt_str}. Текущий подход неэффективен — "
+                        f"попробуй принципиально другую стратегию."
                     )
                     _feasibility_warnings.append(_stagnation_warn)
                     # Отправляем Telegram-уведомление пользователю если прошло >24ч с последнего стагнации-алёрта
