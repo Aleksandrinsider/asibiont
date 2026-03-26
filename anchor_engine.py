@@ -4782,7 +4782,7 @@ class AnchorEngine:
                                     _il_clean = _il if _il.upper().startswith('НУЖНА') else f"НУЖНА ИНТЕГРАЦИЯ: {_il}"
                                     _esc_lines.append(f"🔌 {_il_clean}")
                             if _stag_warn:
-                                # Строим понятное сообщение для пользователя (не агент-инструкцию)
+                                # Строим понятное сообщение с конкретикой: что пробовали, что не работает, что подключить
                                 _stag_goals = data.get('goals', [])
                                 _stag_active = [g for g in _stag_goals if g.get('status') not in ('completed', 'deleted')]
                                 _stag_g_title = _stag_active[0].get('title', '')[:60] if _stag_active else ''
@@ -4793,17 +4793,70 @@ class AnchorEngine:
                                     f"{int(_stag_active[0].get('progress_percentage', 0) or 0)}%" if _stag_active else "0%"
                                 )
                                 _stag_goal_str = f"«{_stag_g_title}»" if _stag_g_title else "текущей цели"
-                                _esc_lines.append(
-                                    f"⚠️ По {_stag_goal_str} прогресс не растёт ({_stag_prog}).\n"
-                                    f"Агенты пробуют разные подходы, но результата пока нет."
-                                )
+
+                                # --- Что уже пробовали (exhausted_strategies + recent_actions) ---
+                                _tried_parts = []
+                                _ex_strats = data.get('exhausted_strategies', [])
+                                if _ex_strats:
+                                    _tried_parts.append(', '.join(_ex_strats[:4]))
+                                _recent_acts = data.get('recent_actions', [])
+                                if _recent_acts and not _ex_strats:
+                                    # Извлекаем уникальные действия из истории
+                                    _act_set = []
+                                    for _ra in _recent_acts[:8]:
+                                        _short = str(_ra)[:60].strip()
+                                        if _short and _short not in _act_set:
+                                            _act_set.append(_short)
+                                    if _act_set:
+                                        _tried_parts.append('; '.join(_act_set[:3]))
+                                _tried_str = _tried_parts[0] if _tried_parts else ''
+
+                                # --- Какие инструменты не сработали ---
+                                _failed_t = data.get('failed_tools', {})
+                                _failed_str = ', '.join(f"{k} ({v}×)" for k, v in list(_failed_t.items())[:3]) if _failed_t else ''
+
+                                # --- Какие интеграции подключены ---
+                                _esc_team = data.get('team_profiles', [])
+                                _esc_caps_all = set()
+                                for _tp in _esc_team:
+                                    for _c in _tp.get('capabilities', []):
+                                        _esc_caps_all.add(_c.lower())
+                                _connected_str = ', '.join(list(_esc_caps_all)[:5]) if _esc_caps_all else 'только web_search'
+
+                                # --- Какие интеграции помогут (по карте ключевых слов) ---
+                                _ESC_INTG_MAP = [
+                                    (('клиент', 'пользовател', 'тестировщик', 'лид', 'outreach', 'партнёр', 'рассылк', 'заинтересованн'), 'mail', 'Email (SMTP/IMAP) — для outreach-рассылки'),
+                                    (('разработ', 'developer', 'программист', 'open-source', 'код'), 'github', 'GitHub Token — для поиска в проектах'),
+                                    (('подписчик', 'аудитор', 'контент', 'охват', 'smm', 'бренд', 'пост'), 'telegram', 'Telegram-канал — для публикации контента'),
+                                    (('комьюнити', 'community', 'сообщество', 'участник'), 'discord', 'Discord — для community building'),
+                                    (('аналитик', 'мониторинг', 'новости', 'тренды', 'рынок'), 'rss', 'RSS/NewsAPI — для мониторинга'),
+                                ]
+                                _gt_low_esc = _stag_g_title.lower()
+                                _miss_intg_esc = []
+                                for _kws, _cap_key, _label in _ESC_INTG_MAP:
+                                    if any(w in _gt_low_esc for w in _kws):
+                                        if not any(_cap_key in c for c in _esc_caps_all):
+                                            _miss_intg_esc.append(_label)
+
+                                # --- Собираем сообщение ---
+                                _stag_header = f"⚠️ Автопилот застрял на цели {_stag_goal_str}\n\nПрогресс: {_stag_prog}."
+                                _stag_body_parts = []
+                                if _tried_str:
+                                    _stag_body_parts.append(f"Что пробовали: {_tried_str}")
+                                if _failed_str:
+                                    _stag_body_parts.append(f"Не сработало: {_failed_str}")
+                                _stag_body_parts.append(f"Подключено: {_connected_str}")
+                                if _miss_intg_esc:
+                                    _miss_str_esc = '\n'.join(f"  • {m}" for m in _miss_intg_esc[:3])
+                                    _stag_body_parts.append(f"Рекомендую подключить:\n{_miss_str_esc}")
+                                elif not _failed_t and not _ex_strats:
+                                    _stag_body_parts.append("Попробуй уточнить цель или сменить стратегию.")
+                                _esc_lines.append(_stag_header + '\n' + '\n'.join(_stag_body_parts))
+
                             if _cap_warns:
                                 _esc_lines.extend(_cap_warns[:2])
                             if _esc_lines:
-                                if _intg_need_in_result or _cap_warns:
-                                    _esc_lines.append("Подключить интеграции можно в дашборде:\nhttps://asibiont.com/dashboard\n\nИли напиши мне что попробовать — я перенастрою агентов.")
-                                else:
-                                    _esc_lines.append("Можешь подключить новые интеграции в дашборде:\nhttps://asibiont.com/dashboard\n\nИли напиши мне — я скорректирую стратегию.")
+                                _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard\nИли напиши мне — я перенастрою агентов.")
                             _esc_text = '\n\n'.join(_esc_lines)
                             await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
