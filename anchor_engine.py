@@ -399,7 +399,7 @@ def _match_best_integration(goal_title: str,
 
     _CHAINS = {
         'github': ("🐙 GitHub",
-                   "run_agent_action(search_users, query='…') → save_email_contact → send_outreach_email"),
+                   "search_users → outreach / search_repos → анализ / list_issues → нетворкинг / create_issue → партнёрства"),
         'imap':   ("📧 Email",
                    "check_emails (ответы) → reply_to_outreach_email / negotiate_by_email"),
         'alpha':  ("📈 Alpha Vantage",
@@ -554,6 +554,12 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
         ("💡 Публичная демонстрация (Show, don't tell)",
          "Вместо описания продукта — покажи его в действии. "
          "Создай пост с GIF/скриншотом/числами → люди сами спросят 'как это работает?'"),
+        ("🐙 GitHub как площадка для нетворкинга",
+         "Не только ищи людей. search_repos по нише → create_issue с предложением коллаборации "
+         "или comment_on_issue в активном проекте. Участие в обсуждениях = органическая видимость."),
+        ("🔬 Исследование → Контент → Публикация",
+         "web_search/research_topic → НЕ просто отчёт, а create_post с выводами → publish_to_telegram. "
+         "Превращай каждое исследование в контент для аудитории."),
     ]
     lines.append("\n\n💡 ТВОРЧЕСКИЕ ТАКТИКИ (нестандартные ходы — не следуй правилам, думай):")
     for _name, _desc in _CREATIVE_PIVOTS:
@@ -626,7 +632,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_imap:
         avail.append("  📧 Email: check_emails ← здесь реальные ответы живых людей; reply_to/negotiate — продолжение диалога")
     if has_github:
-        avail.append("  🐙 GitHub: run_agent_action(action='search_users', query='language:python followers:>5', page=1) → save_email_contact → send_outreach_email ← найди + НАПИШИ в том же цикле (поиск без письма = 0 результатов)\n  ⚠️ QUERY правило: ТОЛЬКО GitHub-квалификаторы! language:, repos:, followers:, location: — НЕ свободный текст!\n  💡 Примеры разнообразных query (меняй каждый цикл!):\n    QA/тест: 'language:python repos:>5 followers:>2' | 'language:javascript repos:>10 location:Russia' | 'language:java automation repos:>3'\n    Разнообразие: 'language:go testing followers:>2' | 'location:Kazakhstan language:python' | 'language:kotlin repos:>5' | 'language:typescript followers:>3 location:Russia'\n  🔄 ПАГИНАЦИЯ: если все уже contacted — используй page=2, page=3. На каждом цикле следующую страницу. Так обходишь до 300 пользователей.\n  📋 Уже использованные query видишь в секции ИСТОРИЯ (не повторяй их!)")
+        avail.append("  🐙 GitHub: ПОЛНЫЙ НАБОР действий через run_agent_action:\n    • search_users(query='language:python followers:>5', page=1) → save_email_contact → send_outreach_email ← поиск + письмо в одном цикле\n    • search_repos(query='topic:ai stars:>10') ← анализ рынка, конкурентов, трендов\n    • list_issues / list_pulls ← мониторинг активности подключённого репо\n    • create_issue(title, body) ← предложить коллаборацию, сообщить о баге, идея\n    • comment_on_issue(issue_number, body) ← нетворкинг через участие в обсуждениях\n    • star_repo(repo) ← отметить проект, повысить видимость\n  ДУМАЙ ШИРЕ: GitHub ≠ только поиск email. Это платформа для анализа рынка, нетворкинга, партнёрств.\n  ⚠️ QUERY search_users: ТОЛЬКО квалификаторы (language: repos: followers: location:), НЕ свободный текст!\n  🔄 ПАГИНАЦИЯ: page=2,3... Меняй query каждый цикл.")
     if has_rss:
         avail.append("  📰 RSS: run_agent_action(action='get_latest') ← свежие данные и инфоповоды из источника")
     if has_alpha:
@@ -793,7 +799,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _intg_missing = []
 
     if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
-    if _has_github:  _intg_connected.append('✅ GitHub — run_agent_action(action="search_users", query="language:python followers:>5", page=1) → save_email_contact → send_outreach_email\n  ⚠️ QUERY: только GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст!\n  💡 Примеры query (меняй каждый цикл, не повторяй предыдущий!):\n    QA/тест: "language:python repos:>5" | "language:javascript repos:>10 location:Russia" | "language:java automation repos:>3" | "language:go testing followers:>2"\n    Опыт/место: "location:Kazakhstan language:python" | "language:kotlin repos:>5" | "language:typescript followers:>3" | "language:ruby repos:>10"\n  🔄 ПАГИНАЦИЯ: если все найденные уже contacted — page=2, page=3 и т.д. Историю использованных query смотри в блоке ИСТОРИЯ GitHub-поисков.')
+    if _has_github:  _intg_connected.append('✅ GitHub — ПОЛНЫЙ ДОСТУП к GitHub API:\n  🔍 search_users(query="language:python followers:>5", page=1) — поиск людей (ТОЛЬКО квалификаторы: language: repos: followers: location:)\n  🔍 search_repos(query="topic:ai-agents stars:>10") — поиск проектов, трендов, конкурентов\n  📋 list_issues / list_pulls — мониторинг issues/PR в подключённом репозитории\n  📝 create_issue(title, body) — создать issue (баг, идея, предложение о сотрудничестве)\n  💬 comment_on_issue(issue_number, body) — комментировать issues для нетворкинга\n  ⭐ star_repo(repo) — отметить интересный проект (видимость через activity)\n  🔗 ЦЕПОЧКА ПОИСКА ЛЮДЕЙ: search_users → save_email_contact → send_outreach_email\n  🔗 ЦЕПОЧКА АНАЛИЗА РЫНКА: search_repos → research_topic → create_post/save_note\n  🔗 ЦЕПОЧКА НЕТВОРКИНГА: list_issues → comment_on_issue → создать goodwill → save_email_contact\n  💡 ДУМАЙ ШИРЕ: GitHub — не только поиск контактов. Комментируй issues = нетворкинг. Анализируй репо = исследование рынка. Создавай issues = предложения о партнёрстве.\n  🔄 ПАГИНАЦИЯ search_users: page=2,3... если все contacted. Меняй query каждый цикл.')
     if _has_rss:     _intg_connected.append('✅ RSS — мониторинг новостей через run_agent_action(get_latest). Используй для контента/аналитики, НЕ для поиска людей.')
     if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
     if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
@@ -1401,6 +1407,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 "\n📋 ЧТО СДЕЛАЛИ КОЛЛЕГИ (используй их результаты, не дублируй работу):\n"
                 + '\n'.join(_teammate_entries[:8]) + '\n'
                 "→ Если коллега нашёл контакты — используй их для писем. Если отправил письма — проверь ответы.\n"
+                "→ Если коллега провёл исследование — ИСПОЛЬЗУЙ ДАННЫЕ: создай контент, предложи стратегию, делегируй конкретное действие.\n"
                 "→ Если коллега застрял — предложи другой подход или помоги через DELEGATE.\n"
             )
 
@@ -1690,11 +1697,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _github_rules = ''
     if _has_github:
         _github_rules = (
-            "\nGitHub: run_agent_action(action='search_users', query='language:python followers:>5') "
-            "→ save_email_contact → send_outreach_email. "
-            "Query = ТОЛЬКО GitHub-квалификаторы (language: followers: repos: location:), НЕ свободный текст. "
-            "Каждый цикл — ДРУГОЙ query. Нашёл людей но не написал = провал. "
-            "page=2,3... если все contacted.\n"
+            "\nGitHub — МУЛЬТИФУНКЦИОНАЛЬНЫЙ КАНАЛ (не только поиск людей!):\n"
+            "  • search_users + save_email_contact + send_outreach_email — поиск и outreach (query = ТОЛЬКО квалификаторы: language: followers: repos: location:)\n"
+            "  • search_repos — анализ конкурентов, трендов, поиск потенциальных партнёров по их проектам\n"
+            "  • create_issue — предложить коллаборацию в чужом репо, создать идею/баг в своём\n"
+            "  • comment_on_issue — участвовать в обсуждениях = органический нетворкинг\n"
+            "  • list_issues / list_pulls — мониторинг активности\n"
+            "Каждый цикл — ДРУГОЙ подход или query. Не только ищи людей, но и ДЕЙСТВУЙ на платформе.\n"
         )
 
     _rss_rules = ''
@@ -2128,7 +2137,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "🤝 ДЕЛЕГИРОВАНИЕ КОГДА ЗАСТРЯЛ:\n"
         "  → Не можешь отправить email? → DELEGATE[Кристина]: отправь письмо [кому] [текст]\n"
         "  → Не можешь опубликовать пост? → DELEGATE[агент с Telegram]: опубликуй [текст]\n"
-        "  → Нет GitHub? → DELEGATE[Марк/агент с GitHub]: найди контакты type:user language:python\n"
+        "  → Нет GitHub? → DELEGATE[агент с GitHub]: поиск людей, анализ репо, создание issue\n"
+        "  → Нужен контент по исследованию? → DELEGATE[Марк]: исследуй [тему] и создай пост с выводами\n"
         "  → Формат делегирования: DELEGATE[ИМЯ]: конкретная задача с данными (email/текст/query)\n"
 
         # Цель застряла на высоком % (85-99%)
@@ -2199,10 +2209,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "16. СОЗДАВАЙ ценность ВНУТРИ ТУПИКА: если не можешь отправить → заготовь. "
         "Если не можешь опубликовать → напиши текст и делегируй. "
         "Если нет ответов → анализируй что не работает и предложи новую стратегию.\n"
-        "17. КОМАНДА — ЕДИНЫЙ ОРГАНИЗМ: ты не одиночка. Кристина умеет отправлять email. "
-        "Марк умеет исследовать рынок. Если твой инструмент заблокирован — "
+        "17. КОМАНДА — ЕДИНЫЙ ОРГАНИЗМ: ты не одиночка. Каждый агент может БОЛЬШЕ чем кажется:\n"
+        "  • Кристина: не только email-рассылки, но и GitHub-нетворкинг (create_issue, comment), анализ конкурентов (search_repos), контент из найденных данных\n"
+        "  • Марк: не только исследования, но и ДЕЙСТВИЯ на основе данных — создание постов (create_post), формулировка стратегий (save_note), подготовка контента для публикации, анализ конкурентов → конкретные предложения по стратегии\n"
+        "  Если твой инструмент заблокирован — "
         "передай задачу тому, у кого нужный инструмент есть. "
         "DELEGATE[Имя]: задача с данными — это НЕ слабость, это разумное командное решение.\n"
+        "18. ИССЛЕДОВАНИЕ → ДЕЙСТВИЕ: любое исследование (web_search, research_topic, search_repos) "
+        "должно ЗАВЕРШАТЬСЯ конкретным действием: create_post, save_note со стратегией, "
+        "save_email_contact, delegate_task или update_goal_progress. "
+        "Исследование ради отчёта = 0 пользы. Исследование → решение = прогресс.\n"
         + _github_rules + _rss_rules + _imap_rules + _no_imap_block
         + _publish_hint + _escalation_block
         + _adaptive_block
@@ -5724,8 +5740,11 @@ class AnchorEngine:
                             'tool': 'research_topic',
                             'task': (
                                 f'Дневной лимит email исчерпан ({_sent_today}/{_daily_limit}). '
-                                f'НЕ отправляй письма. Вместо этого: research_topic или web_search по цели «{title[:40]}», '
-                                f'подготовь контент, найди новые контакты через find_relevant_contacts_for_task → save_email_contact.'
+                                f'НЕ отправляй письма. ПЕРЕКЛЮЧИСЬ на другие каналы: '
+                                f'GitHub (search_repos, create_issue, comment_on_issue), '
+                                f'контент (create_post → publish_to_telegram), '
+                                f'исследование + ДЕЙСТВИЕ (web_search → save_note со стратегией или create_post). '
+                                f'Также: find_relevant_contacts_for_task → save_email_contact (на завтра).'
                             ),
                             'reason': f'email лимит исчерпан ({_sent_today}/{_daily_limit})',
                         })

@@ -1056,7 +1056,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                     if _p_tg.get('__agent') and _p_tg.get('text'):
                         _name_tg = _p_tg['__agent'].get('name', 'Агент')
                         _txt_tg = _p_tg['text'][:1000].strip()
-                        display_text = f"\U0001f4ac {_name_tg}:\n{_txt_tg}"
+                        display_text = f"{_name_tg}:\n{_txt_tg}"
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
             try:
