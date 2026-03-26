@@ -2025,6 +2025,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if not any(w in c for c in _caps_lower for w in ('discord client',)):
         _limits.append("• НЕ МОЖЕШЬ вступать/просматривать Discord-серверы (но publish_to_discord РАБОТАЕТ)")
     _limits.append("• НЕ МОЖЕШЬ постить в ЧУЖИЕ каналы — только в канал пользователя")
+    # Если у агента нет Telegram-интеграции — publish_to_telegram НЕДОСТУПЕН
+    if not _has_content:
+        _limits.append("• ⛔ publish_to_telegram / publish_to_discord НЕДОСТУПНЫ — нет TELEGRAM_BOT_TOKEN или webhook в настройках агента. НЕ СОЗДАВАЙ задачи на публикацию в Telegram/Discord!")
+
     # Соцсети: запрещаем только если нет соответствующих интеграций
     _social_blocked = []
     if not any(w in c for c in _caps_lower for w in ('twitter', 'x.com', 'tweet')):
@@ -2053,7 +2057,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + '\n'.join(f"  {l}" for l in _limits) + '\n'
         f"  ✅ МОЖЕШЬ: {', '.join(_can_do)}\n"
         "  → ПЕРЕД созданием задачи спроси себя: 'ЕСТЬ ЛИ У МЕНЯ ИНСТРУМЕНТ для этого?'\n"
-        "    Если нет — НЕ СОЗДАВАЙ задачу, а предложи пользователю альтернативный подход.\n"
+        "    Если нет — НЕ СОЗДАВАЙ задачу, а выбери другой подход с доступными инструментами.\n"
+        "  → ПРОГРЕСС = РЕАЛЬНЫЕ ДЕЙСТВИЯ. Если задача выполнена, но результата нет — это НЕ выполнено.\n"
+        "    Например: 'написал пост' без публикации = 0. 'Нашёл контакт' без отправки письма = 0.\n"
+        "  → update_goal_progress: НЕ ВЫЗЫВАЙ чаще 1 раза в 30 минут. НЕ указывай progress= без реального доказательства.\n"
     )
 
     # ── ⛔ ОТМЕНЁННЫЕ ЗАДАЧИ — не повторяй провальные подходы ──
@@ -8590,6 +8597,31 @@ class AnchorEngine:
                         f"• {_ag_name}: ТОЛЬКО исследовал (tools: {', '.join(_step_tools) or 'нет'}), "
                         f"но не сделал реального действия. В следующий раз — довести до конца.\n"
                     )
+                else:
+                    # ── Проверка: инструмент был вызван, но вернул ошибку ──
+                    _failure_phrases = [
+                        'не удалось', 'не получилось', 'не могу', 'нет инструмента',
+                        'лимит исчерпан', 'лимит превышен', 'ошибка', 'error',
+                        'не добавлен', 'не является админом', 'bot is not a member',
+                        'нет доступа', 'недоступен', 'инструмент недоступен',
+                        'письмо не отправлено', 'email не отправлен',
+                        'не могу опубликовать', 'публикация не удалась',
+                        'не нашёл', 'не найден', 'без результата',
+                    ]
+                    _step_text_lower = _cleaned.lower() if _cleaned else ''
+                    _critical_tools_failed = [
+                        t for t in _real_action_tools
+                        if t in ('publish_to_telegram', 'publish_to_discord', 'send_outreach_email',
+                                 'send_email', 'create_issue', 'comment_on_issue')
+                        and any(phrase in _step_text_lower for phrase in _failure_phrases)
+                    ]
+                    if _critical_tools_failed and len(_real_action_tools) == len(_critical_tools_failed):
+                        # Все реальные инструменты зафейлились → partial
+                        _task_status = 'in_progress'
+                        _prev_steps_context += (
+                            f"• {_ag_name}: вызвал {', '.join(_critical_tools_failed)}, "
+                            f"но все они вернули ошибку/лимит. Нужно исправить в следующем цикле.\n"
+                        )
 
                 # ── Помечаем задачу ──
                 if _step_task_id:

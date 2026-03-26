@@ -4431,7 +4431,16 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
             return f"Цель \"{goal_title}\" не найдена. Активные цели: {titles}"
         
         changes = []
-        
+
+        # Авто-определение metric_target из названия цели, если оно None
+        if not matched.metric_target:
+            import re as _re_ugp
+            _numbers = _re_ugp.findall(r'\b(\d{1,4})\b', matched.title + ' ' + (matched.description or ''))
+            _plausible = [int(n) for n in _numbers if 2 <= int(n) <= 10000]
+            if _plausible:
+                matched.metric_target = float(_plausible[0])
+                session.commit()
+
         # Обработка metric_current — автоматический расчёт процента
         if metric_current is not None and not matched.metric_target:
             # metric_target не задан — сохраняем metric_current, но не можем рассчитать процент
@@ -4579,6 +4588,22 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                     actual_pct = int((matched.metric_current or 0) / matched.metric_target * 100)
                     if abs(pct - actual_pct) >= 5:
                         return f"У цели '{matched.title}' есть числовая метрика ({int(matched.metric_current or 0)}/{int(matched.metric_target)}). Обновляй через metric_current, а не progress."
+                # GUARD: если нет metric_target — прогресс нельзя ставить без notes (подтверждения)
+                # И прирост не более +5% за один вызов
+                if not matched.metric_target or matched.metric_target <= 0:
+                    if not notes:
+                        return (
+                            f"⛔ Нельзя изменить progress цели '{matched.title}' без обоснования.\n"
+                            f"Укажи notes= с описанием КОНКРЕТНОГО результата, который даёт этот прогресс.\n"
+                            f"Например: notes='Получен ответ от Иван Иванов — подтвердил участие'"
+                        )
+                    _old_pct = matched.progress_percentage or 0
+                    if pct - _old_pct > 5:
+                        return (
+                            f"⛔ Нельзя увеличить прогресс цели '{matched.title}' сразу на +{pct - _old_pct}% (с {_old_pct}% до {pct}%).\n"
+                            f"Максимальный прирост: +5% за один вызов.\n"
+                            f"Обновляй прогресс только на основе РЕАЛЬНЫХ подтверждённых результатов."
+                        )
                 # GUARD: прогресс не может уменьшаться (агент может ошибочно занизить)
                 if matched.progress_percentage and pct < matched.progress_percentage:
                     pct = matched.progress_percentage
@@ -4677,7 +4702,27 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         
         if not changes:
             return f"Укажи что обновить: progress (0-100), status (active/completed/paused/cancelled), или notes."
-        
+
+        # Rate-limit: notes-only обновления не чаще раза в 30 минут
+        if changes == ["добавлена заметка"]:
+            try:
+                from models import AgentActivityLog as _AAL_rl
+                from datetime import timedelta as _td_rl
+                _cutoff_rl = datetime.now() - _td_rl(minutes=30)
+                _recent_rl = session.query(_AAL_rl).filter(
+                    _AAL_rl.user_id == user.id,
+                    _AAL_rl.ref_id == matched.id,
+                    _AAL_rl.activity_type == 'goal_updated',
+                    _AAL_rl.created_at >= _cutoff_rl,
+                ).first()
+                if _recent_rl:
+                    return (
+                        f"ℹ️ Цель '{matched.title}': заметка уже обновлялась менее 30 минут назад. "
+                        f"Не нужно добавлять одни и те же заметки повторно — это шум в логах."
+                    )
+            except Exception as _rl_e:
+                logger.debug("rate-limit check failed: %s", _rl_e)
+
         session.commit()
 
         # === Лог активности ===
