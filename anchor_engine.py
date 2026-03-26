@@ -5643,6 +5643,10 @@ class AnchorEngine:
             n_contacts > 0 and not has_unsent
             and len(already_sent) >= max(1, n_contacts) * 0.85
         )
+        # Daily email limit awareness
+        _sent_today = data.get('emails_sent_today', 0)
+        _daily_limit = data.get('email_daily_limit', 20)
+        _email_limit_exhausted = _sent_today >= _daily_limit
 
         # ── Broader need keywords ──
         _OUTREACH_KW = (
@@ -5710,6 +5714,18 @@ class AnchorEngine:
                             'tool': 'reply_to_outreach_email',
                             'task': 'Есть ответы на письма. check_emails → reply_to_outreach_email.',
                             'reason': 'есть ответы на письма',
+                        })
+                    elif _email_limit_exhausted:
+                        # Лимит исчерпан — НЕ назначаем send_outreach_email
+                        directives.append({
+                            'goal': title, 'agent_domain': 'any',
+                            'tool': 'research_topic',
+                            'task': (
+                                f'Дневной лимит email исчерпан ({_sent_today}/{_daily_limit}). '
+                                f'НЕ отправляй письма. Вместо этого: research_topic или web_search по цели «{title[:40]}», '
+                                f'подготовь контент, найди новые контакты через find_relevant_contacts_for_task → save_email_contact.'
+                            ),
+                            'reason': f'email лимит исчерпан ({_sent_today}/{_daily_limit})',
                         })
                     elif has_unsent:
                         _names = ', '.join(c.split('<')[0].strip() for c in unsent_from_data[:3])
@@ -6204,7 +6220,16 @@ class AnchorEngine:
 
             # Блок несотправленных контактов — критический приоритет
             _unsent_contacts_str = ''
-            if _unsent_contacts_data:
+            _coord_sent_today = data.get('emails_sent_today', 0)
+            _coord_daily_limit = data.get('email_daily_limit', 20)
+            _coord_email_limit_hit = _coord_sent_today >= _coord_daily_limit
+            if _coord_email_limit_hit:
+                _unsent_contacts_str = (
+                    f"\n⛔ ЛИМИТ EMAIL ИСЧЕРПАН: отправлено сегодня {_coord_sent_today}/{_coord_daily_limit}. "
+                    "НЕ назначай задачи на send_outreach_email / send_email. "
+                    "Переключи агентов на: research_topic, web_search, find_relevant_contacts_for_task, create_post, save_note.\n"
+                )
+            elif _unsent_contacts_data:
                 _uc_names = [
                     _c.split('<')[0].strip() if '<' in _c else _c[:40]
                     for _c in _unsent_contacts_data[:5]
@@ -7620,14 +7645,18 @@ class AnchorEngine:
                             + "; ".join(f'«{g["title"][:40]}»' for g in _uncovered_goals[:3]) + "\n"
                             if _uncovered_goals else ''
                         )
-                        # Если email-лимит выбит — подсказываем переключиться, но не запрещаем
-                        _email_limit_hit = any(
-                            w in (_prev_steps_context or '').lower()
-                            for w in ('лимит', 'исчерпан', 'limit exceeded', '30 писем', 'daily limit')
+                        # Если email-лимит выбит — подсказываем переключиться
+                        _email_limit_hit = (
+                            data.get('emails_sent_today', 0) >= data.get('email_daily_limit', 20)
+                            or any(
+                                w in (_prev_steps_context or '').lower()
+                                for w in ('лимит', 'исчерпан', 'limit exceeded', 'daily limit')
+                            )
                         )
                         _email_limit_note = (
-                            "💡 Дневной лимит email выбит — сейчас лучше заняться другими целями."
-                            " Используй research_topic, web_search или другие инструменты.\n"
+                            f"⛔ Дневной лимит email исчерпан ({data.get('emails_sent_today', 0)}/{data.get('email_daily_limit', 20)}). "
+                            "НЕ назначай send_outreach_email / send_email. "
+                            "Используй research_topic, web_search, find_relevant_contacts_for_task, create_post.\n"
                             if _email_limit_hit else ''
                         )
                         _next_prompt = (
@@ -10617,6 +10646,19 @@ class AnchorEngine:
             EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
         ).count()
 
+        # Отправлено СЕГОДНЯ и дневной лимит — для предотвращения бесполезных email-задач
+        _today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        _emails_sent_today = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            EmailOutreach.sent_at >= _today_start,
+        ).count()
+        _email_daily_limit = 20  # default
+        if email_campaigns:
+            _max_dl = max((c.daily_limit or 20) for c in email_campaigns)
+            if _max_dl > 0:
+                _email_daily_limit = _max_dl
+
         # ── Определяем исчерпанные стратегии (все инструменты категории провалились) ──
         _STRATEGY_TOOLS = {
             'search': {'web_search', 'research_topic', 'quick_topic_search', 'find_relevant_contacts_for_task', 'find_and_message_relevant_users'},
@@ -10958,6 +11000,8 @@ class AnchorEngine:
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
+            'emails_sent_today': _emails_sent_today,
+            'email_daily_limit': _email_daily_limit,
             'failed_tools': {k: v for k, v in _failed_tools.items() if v >= 2},
             'tool_frequency': _tool_freq,
             'exhausted_strategies': exhausted_strategies,
