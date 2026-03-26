@@ -4890,7 +4890,12 @@ class AnchorEngine:
                             if _cap_warns:
                                 _esc_lines.extend(_cap_warns[:2])
                             if _esc_lines:
-                                _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard\nИли напиши мне — я перенастрою агентов.")
+                                # Адаптивный CTA: если всё подключено — не навязываем дашборд, а предлагаем действия
+                                _has_missing = bool(_miss_intg_esc) if _stag_warn else bool(_cap_warns)
+                                if _has_missing:
+                                    _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard\nИли напиши мне — я перенастрою агентов.")
+                                else:
+                                    _esc_lines.append("Напиши мне — я скорректирую стратегию или перенастрою агентов.")
                             _esc_text = '\n\n'.join(_esc_lines)
                             await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
