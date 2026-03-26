@@ -3990,7 +3990,14 @@ class AnchorEngine:
                         for g in data.get('goals', [])[:2]
                     ) if data.get('goals') else ''
                     # Fallback без шаблонных скобок и «Жду отчёт»
-                    _coord_text = f"{_chosen_name}, займись текущими задачами."
+                    import random as _rnd_fallback_c
+                    _coord_text = _rnd_fallback_c.choice([
+                        f'{_chosen_name}, посмотри что можно сделать прямо сейчас по нашим целям.',
+                        f'{_chosen_name}, нам нужен реальный шаг вперёд — выбери то, что реально можешь сделать сегодня.',
+                        f'{_chosen_name}, давай продвинем цели — начни с любого конкретного действия.',
+                        f'{_chosen_name}, что у нас с прогрессом? Возьмись за то, где можешь помочь прямо сейчас.',
+                        f'{_chosen_name}, нам важен результат — войди в активные задачи и сделай что можно.',
+                    ])
                     try:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
                         # Суть задания — передаём реальный текст из координатора, 
@@ -4010,7 +4017,18 @@ class AnchorEngine:
                                 _AAL_coord_ctx.result.isnot(None),
                             ).order_by(_AAL_coord_ctx.created_at.desc()).limit(5).all()
                             if _last_aals_c:
-                                _last_cycle_ctx_c = (_last_aals_c[0].result or '')[:180].strip()
+                                # Строим структурированный контекст из последних 3 циклов разных агентов
+                                _cycle_parts_c = []
+                                _seen_agents_c = set()
+                                for _aal_ci in _last_aals_c[:5]:
+                                    _aal_agent_c = (_aal_ci.title or '').replace(' — обзор целей', '').strip()[:25]
+                                    _aal_res_c = (_aal_ci.result or '').strip()
+                                    if _aal_res_c and _aal_agent_c not in _seen_agents_c:
+                                        _seen_agents_c.add(_aal_agent_c)
+                                        _cycle_parts_c.append(f'{_aal_agent_c}: {_aal_res_c[:350]}')
+                                    if len(_cycle_parts_c) >= 3:
+                                        break
+                                _last_cycle_ctx_c = '\n'.join(_cycle_parts_c)[:700].strip()
                                 # Детектор зацикливания: считаем упоминания каналов в последних циклах
                                 _all_recent_text_c = ' '.join((a.result or '') for a in _last_aals_c).lower()
                                 _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
@@ -7846,17 +7864,19 @@ class AnchorEngine:
                             _assign_templates = [
                                 f'{_ag_name}, пожалуйста {_t}.',
                                 f'{_ag_name}, можешь {_t}?',
-                                f'{_ag_name}, займись {_t if not _t.startswith("займ") else _task_short[:80]}.',
-                                f'{_ag_name}, сделай пожалуйста: {_t}.',
                                 f'{_ag_name}, возьмись за {_t}.',
+                                f'{_ag_name}, было бы здорово если ты {_t}.',
+                                f'{_ag_name}, нужна твоя помощь — {_t}.',
+                                f'{_ag_name}, давай ты займёшься: {_t}.',
                             ]
                         else:
                             _assign_templates = [
                                 f'{_ag_name}, пожалуйста {_t}.',
                                 f'{_ag_name}, можешь {_t}?',
+                                f'{_ag_name}, возьми на себя {_t}.',
+                                f'{_ag_name}, давай ты {_t}.',
+                                f'{_ag_name}, нужна твоя помощь — {_t}.',
                                 f'{_ag_name}, займись {_t if not _t.startswith("займ") else _task_short[:80]}.',
-                                f'{_ag_name}, сделай пожалуйста: {_t}.',
-                                f'{_ag_name}, возьмись за {_t}.',
                             ]
                         _asi_assign_text = _rnd_assign.choice(_assign_templates)
                         if _step_reason and len(_step_reason) > 10:
@@ -7869,7 +7889,15 @@ class AnchorEngine:
                         _tfl_l = _tfl_short.lower() if _tfl_short and _tfl_short[0].isupper() else _tfl_short
                         _asi_assign_text = f'{_ag_name}, пожалуйста {_tfl_l}.'
                 except Exception as _aac_err:
-                    _asi_assign_text = f"{_ag_name}, пожалуйста займись: {(_ag_task.split(chr(10))[0] or 'новое задание')[:80]}."
+                    import random as _rnd_aac
+                    _aac_raw = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:80]
+                    _aac_t = _aac_raw.lower() if _aac_raw[:1].isupper() else _aac_raw
+                    _asi_assign_text = _rnd_aac.choice([
+                        f'{_ag_name}, пожалуйста {_aac_t}.',
+                        f'{_ag_name}, возьмись за {_aac_t}.',
+                        f'{_ag_name}, нам нужно {_aac_t}.',
+                        f'{_ag_name}, можешь {_aac_t}?',
+                    ])
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # Сохраняем живое поручение в чат
                 try:
