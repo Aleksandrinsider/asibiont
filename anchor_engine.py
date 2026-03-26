@@ -54,6 +54,171 @@ logger = logging.getLogger(__name__)
 _TG_MAX_LEN = 4096
 
 
+# ═══════════════════════════════════════════════════════
+# UNIFIED CAPABILITY CLASSIFICATION
+# ═══════════════════════════════════════════════════════
+# Единая классификация возможностей агента.
+# Принимает output _parse_agent_integrations() и возвращает структурированный dict.
+# Используется во ВСЕХ промптах: автопилот, координатор, план координатора.
+
+# Маппинг: подстроки в label (lowercase) → категория
+_CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
+    # Email / почта
+    (('mail', 'почт', 'email', 'imap', 'smtp', 'gmail', 'yandex', 'mailru', 'resend', 'sendgrid', 'mailgun', 'sparkpost'), 'email'),
+    # GitHub/GitLab
+    (('github', 'gitlab'), 'git'),
+    # RSS
+    (('rss', 'feed', 'лент'), 'rss'),
+    # Telegram
+    (('telegram',), 'telegram'),
+    # Discord
+    (('discord',), 'discord'),
+    # CRM
+    (('crm', 'amocrm', 'битрикс', 'bitrix', 'hubspot', 'salesforce'), 'crm'),
+    # Маркетплейсы
+    (('ozon', 'wildberries', 'shopify', 'авито', 'avito', 'маркетплейс', 'яндекс.маркет'), 'marketplace'),
+    # Проджект-менеджмент
+    (('jira', 'trello', 'asana', 'clickup', 'linear', 'todoist'), 'pm'),
+    # Notion / Wiki
+    (('notion',), 'notion'),
+    # Google Sheets / Таблицы
+    (('sheets', 'gsheets', 'spreadsheet', 'google sheets'), 'sheets'),
+    # Крипто-биржи
+    (('binance', 'bybit', 'coinbase', 'крипт'), 'crypto'),
+    # Финансовые данные
+    (('alpha vantage', 'alphavantage', 'биржевые', 'котировк'), 'finance'),
+    # Новостные API
+    (('newsapi', 'тасс'), 'news'),
+    # Slack
+    (('slack',), 'slack'),
+    # Соцсети
+    (('twitter', 'x.com', 'instagram', 'linkedin', 'youtube', 'вконтакт', 'vk'), 'social'),
+    # Платежи
+    (('stripe', 'юкасс', 'yookassa', 'платеж'), 'payments'),
+    # Календарь / Встречи
+    (('calendar', 'календар', 'zoom', 'google calendar'), 'calendar'),
+    # Телефония / Звонки
+    (('twilio', 'sms', 'звонк', 'call', 'sipuni', 'voip', 'phone'), 'calls'),
+    # Python / HTTP / Custom
+    (('python', 'http', 'скрипт', 'run_agent', 'все инструменты', 'custom api'), 'script'),
+    # Генерация изображений
+    (('replicate', 'генерация изображен', 'изображен'), 'image_gen'),
+    # Хранилища
+    (('s3', 'amazon', 'azure', 'google drive', 'яндекс.диск'), 'storage'),
+    # Аналитика
+    (('google analytics', 'яндекс.метрик', 'ga4'), 'analytics'),
+    # Мессенджеры / Команда
+    (('ms teams', 'microsoft teams', 'microsoft graph'), 'ms_teams'),
+    # Webhook / Автоматизация
+    (('webhook', 'n8n', 'zapier', 'make'), 'automation'),
+    # БД
+    (('postgresql', 'mysql', 'mongodb', 'sqlite', 'redis'), 'database'),
+]
+
+# Русские названия для категорий (для вывода в промптах)
+_CAP_CATEGORY_NAMES: dict[str, str] = {
+    'email': 'Email', 'git': 'GitHub/GitLab', 'rss': 'RSS', 'telegram': 'Telegram',
+    'discord': 'Discord', 'crm': 'CRM', 'marketplace': 'Маркетплейс', 'pm': 'Трекер задач',
+    'notion': 'Notion', 'sheets': 'Google Sheets', 'crypto': 'Крипто-биржа',
+    'finance': 'Финансовые данные', 'news': 'Новости', 'slack': 'Slack',
+    'social': 'Соцсети', 'payments': 'Платежи', 'calendar': 'Календарь/Zoom',
+    'calls': 'Звонки/SMS', 'script': 'Python/HTTP', 'image_gen': 'Генерация изображений',
+    'storage': 'Облачное хранилище', 'analytics': 'Аналитика', 'ms_teams': 'MS Teams',
+    'automation': 'Webhook/Автоматизация', 'database': 'БД',
+}
+
+# Инструменты по категории (для координатора)
+_CAP_TOOL_HINTS: dict[str, str] = {
+    'email': 'check_emails, send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task',
+    'git': 'run_agent_action(search_users/search_repos/list_issues/comment_on_issue), save_email_contact',
+    'rss': 'run_agent_action(get_latest/search), get_news_trends, create_post',
+    'telegram': 'publish_to_telegram, create_post',
+    'discord': 'publish_to_discord',
+    'crm': 'run_agent_action(CRM-операции: контакты/сделки/воронка)',
+    'marketplace': 'run_agent_action(товары/заказы/статистика)',
+    'pm': 'run_agent_action(тикеты/спринты/канбан)',
+    'notion': 'run_agent_action(страницы/базы)',
+    'sheets': 'run_agent_action(таблицы/отчёты)',
+    'crypto': 'run_agent_action(баланс/ордера/котировки)',
+    'finance': 'run_agent_action(get_price/get_stock), get_stock_price',
+    'news': 'run_agent_action(get_news), get_news_trends',
+    'slack': 'run_agent_action(post_message/list_channels)',
+    'social': 'run_agent_action(публикация/мониторинг)',
+    'payments': 'run_agent_action(платежи/подписки)',
+    'calendar': 'run_agent_action(расписание/встречи)',
+    'calls': 'run_agent_action(звонки/SMS)',
+    'script': 'run_agent_action (кастомные скрипты)',
+    'image_gen': 'generate_image',
+    'storage': 'run_agent_action(загрузка/выгрузка файлов)',
+    'analytics': 'run_agent_action(метрики/отчёты)',
+    'ms_teams': 'run_agent_action(сообщения/каналы)',
+    'automation': 'run_agent_action(webhook/триггеры)',
+    'database': 'run_agent_action(запросы/данные)',
+}
+
+
+def _classify_agent_caps(detected_labels: list[str]) -> dict:
+    """Классифицирует output _parse_agent_integrations() в структурированный словарь.
+
+    Returns:
+        {
+            'categories': set of category keys (e.g. {'email', 'git', 'rss'}),
+            'labels': original detected_labels,
+            'labels_str': comma-joined labels,
+            'categories_str': comma-joined category names,
+            'tool_hints': dict mapping categories → tool hint strings,
+        }
+    """
+    cats: set[str] = set()
+    labels_lower = [str(l).lower() for l in (detected_labels or [])]
+
+    for kws, cat in _CAP_CATEGORY_MAP:
+        if any(kw in label for label in labels_lower for kw in kws):
+            cats.add(cat)
+
+    # Channels from user (telegram_channel, discord_webhook) — добавляются caller'ом отдельно
+    tool_hints = {c: _CAP_TOOL_HINTS.get(c, '') for c in cats if c in _CAP_TOOL_HINTS}
+
+    return {
+        'categories': cats,
+        'labels': detected_labels or [],
+        'labels_str': ', '.join(detected_labels[:8]) if detected_labels else '',
+        'categories_str': ', '.join(_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(cats)),
+        'tool_hints': tool_hints,
+    }
+
+
+def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
+    """Генерирует текстовый блок возможностей агента для любого промпта.
+
+    Используется в:
+    - _build_autopilot_prompt (промпт самого агента)
+    - _coord_prompt (поручение координатора агенту)
+    - _cap_rules_lines (план координатора)
+    """
+    cats = caps.get('categories', set())
+    labels = caps.get('labels', [])
+    if not labels and not cats:
+        return ''
+
+    lines = []
+    for cat in sorted(cats):
+        name = _CAP_CATEGORY_NAMES.get(cat, cat)
+        hint = _CAP_TOOL_HINTS.get(cat, '')
+        lines.append(f'  ✅ {name}: {hint}' if hint else f'  ✅ {name}')
+
+    # Всегда доступные
+    lines.append('  ✅ web_search, research_topic, add_task, create_goal — всегда доступны')
+
+    result = '\nИНТЕГРАЦИИ АГЕНТА (используй ТОЛЬКО из этого списка):\n'
+    result += '\n'.join(lines) + '\n'
+    result += (
+        '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Если для цели нужна интеграция, которой нет — '
+        'скажи пользователю что подключить (Настройки → Агенты → API-ключи).\n'
+    )
+    return result
+
+
 async def _safe_send(bot, chat_id: int, text: str):
     """Send a message, splitting into chunks if it exceeds Telegram's 4096 char limit."""
     if not text or not text.strip():
@@ -764,24 +929,33 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _caps_lower = [c.lower() for c in (agent_caps or [])]
     _caps_str = ', '.join(agent_caps or [])
 
-    # ── Детектируем реальные интеграции агента ──
-    _has_imap = any(w in c for c in _caps_lower for w in ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru'))
-    _has_script = any(w in c for c in _caps_lower for w in ('python', 'http', 'скрипт', 'run_agent', 'все инструменты'))
-    _has_rss    = any(w in c for c in _caps_lower for w in ('rss', 'feed', 'лент'))
-    _has_github = any(w in c for c in _caps_lower for w in ('github', 'gitlab'))
-    _has_content = any(w in c for c in _caps_lower for w in ('telegram', 'discord', 'контент', 'smm')) or bool(getattr(user, 'telegram_channel', None)) or bool(getattr(user, 'discord_webhook', None))
-    _has_alpha  = any(w in c for c in _caps_lower for w in ('alpha_vantage', 'alphavantage', 'alpha vantage', 'котировк', 'биржа', 'биржевые'))
-    _has_news   = any(w in c for c in _caps_lower for w in ('newsapi', 'news api', 'news_api'))
-    _has_notion = any(w in c for c in _caps_lower for w in ('notion',))
-    _has_slack  = any(w in c for c in _caps_lower for w in ('slack',))
-    _has_sheets = any(w in c for c in _caps_lower for w in ('google sheets', 'gsheets', 'spreadsheet'))
-    _has_stripe = any(w in c for c in _caps_lower for w in ('stripe', 'юкасс', 'yookassa', 'платеж'))
-    _has_crm    = any(w in c for c in _caps_lower for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'salesforce'))
-    _has_market = any(w in c for c in _caps_lower for w in ('ozon', 'wildberries', 'shopify', 'авито'))
-    _has_crypto = any(w in c for c in _caps_lower for w in ('binance', 'bybit', 'coinbase', 'крипт'))
-    _has_social = any(w in c for c in _caps_lower for w in ('twitter', 'instagram', 'linkedin', 'youtube', 'вконтакт'))
-    _has_pm     = any(w in c for c in _caps_lower for w in ('jira', 'trello', 'asana', 'clickup', 'linear', 'todoist'))
-    _has_cal    = any(w in c for c in _caps_lower for w in ('calendar', 'календар', 'zoom'))
+    # ── Классифицируем интеграции агента (универсально через _classify_agent_caps) ──
+    _caps_classified = _classify_agent_caps(agent_caps or [])
+    _caps_cats = _caps_classified['categories']
+
+    # Shorthand-флаги для совместимости с нижележащим кодом (loop detector, tactic wheel)
+    _has_imap    = 'email'       in _caps_cats
+    _has_github  = 'git'         in _caps_cats
+    _has_rss     = 'rss'         in _caps_cats
+    _has_script  = 'script'      in _caps_cats
+    _has_alpha   = 'finance'     in _caps_cats
+    _has_news    = 'news'        in _caps_cats
+    _has_notion  = 'notion'      in _caps_cats
+    _has_slack   = 'slack'       in _caps_cats
+    _has_sheets  = 'sheets'      in _caps_cats
+    _has_stripe  = 'payments'    in _caps_cats
+    _has_crm     = 'crm'         in _caps_cats
+    _has_market  = 'marketplace' in _caps_cats
+    _has_crypto  = 'crypto'      in _caps_cats
+    _has_social  = 'social'      in _caps_cats
+    _has_pm      = 'pm'          in _caps_cats
+    _has_cal     = 'calendar'    in _caps_cats
+    _has_calls   = 'calls'       in _caps_cats
+    _has_content = (
+        'telegram' in _caps_cats or 'discord' in _caps_cats
+        or bool(getattr(user, 'telegram_channel', None))
+        or bool(getattr(user, 'discord_webhook', None))
+    )
 
     # ── Блок: что подключено у агента, что доступно для целей ──
     _goals_text_all = ' '.join(
@@ -789,7 +963,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     ).lower()
 
     # ── Тип цели: research / outreach / content / dev / learning / health / personal / general ──
-    # Определяем чтобы показывать ТОЛЬКО релевантные инструменты, не засорять промпт
     _RESEARCH_KW = ('анализ', 'исследован', 'мониторинг', 'обзор', 'рынок', 'нефт', 'газ',
                     'биржа', 'котировк', 'тренды', 'данные', 'аналитик', 'прогноз',
                     'статистик', 'oil', 'stock', 'commodity', 'forex', 'сырьё', 'металл', 'отчёт')
@@ -799,7 +972,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     'вакансия', 'кандидат', 'найм', 'нанять', 'hr', 'стаж',
                     'инвест', 'инвестор', 'финансиров', 'раунд', 'фандрейзинг',
                     'участник', 'комьюнити', 'member', 'contributor', 'беты', 'регистрац',
-                    # Продвижение / маркетинг
                     'продвижен', 'маркетинг', 'реклам', 'раскрутк', 'охват', 'брендинг',
                     'популяризац', 'пиар', ' pr ', 'growth', 'запуск', 'launch', 'promotion',
                     'диджитал', 'digital', 'осведомлённост', 'осведомленност')
@@ -827,31 +999,32 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _best_gtype = max(_gtype_scores.items(), key=lambda x: x[1])
     _goal_type = _best_gtype[0] if _best_gtype[1] > 0 else 'general'
 
+    # ── Блок интеграций: универсально из _classify_agent_caps ──
     _intg_connected = []
-    _intg_missing = []
+    for _cat in sorted(_caps_cats):
+        _cat_name = _CAP_CATEGORY_NAMES.get(_cat, _cat)
+        _cat_hint = _CAP_TOOL_HINTS.get(_cat, '')
+        # GitHub — расширенная подсказка с цепочками
+        if _cat == 'git':
+            _intg_connected.append(
+                '✅ GitHub/GitLab — search_users(query="language:python followers:>5"), '
+                'search_repos, list_issues, comment_on_issue, star_repo\n'
+                '  🔗 Цепочки: search_users → save_email_contact → send_outreach_email | '
+                'list_issues → comment_on_issue (нетворкинг) | search_repos → research_topic → create_post\n'
+                '  🔄 Пагинация: page=2,3... если все contacted. Меняй query каждый цикл.'
+            )
+        elif _cat == 'email':
+            _intg_connected.append(
+                '✅ Email — check_emails (только этот агент может читать входящие!), '
+                'reply_to_outreach_email, send_outreach_email, find_relevant_contacts_for_task\n'
+                '  ⚠️ Если контакт предлагает созвон — НЕ назначай сам, сначала спроси пользователя: send_message_to_user'
+            )
+        elif _cat_hint:
+            _intg_connected.append(f'✅ {_cat_name}: {_cat_hint}')
+        else:
+            _intg_connected.append(f'✅ {_cat_name}')
 
-    if _has_imap:    _intg_connected.append('✅ Email (IMAP/Gmail/Яндекс) — читать входящие, отвечать')
-    if _has_github:  _intg_connected.append('✅ GitHub — ПОЛНЫЙ ДОСТУП к GitHub API:\n  🔍 search_users(query="language:python followers:>5", page=1) — поиск людей (ТОЛЬКО квалификаторы: language: repos: followers: location:)\n  🔍 search_repos(query="topic:ai-agents stars:>10") — поиск проектов, трендов, конкурентов\n  📋 list_issues / list_pulls — мониторинг issues/PR в подключённом репозитории\n  📝 create_issue(title, body) — создать issue (баг, идея, предложение о сотрудничестве)\n  💬 comment_on_issue(issue_number, body) — комментировать issues для нетворкинга\n  ⭐ star_repo(repo) — отметить интересный проект (видимость через activity)\n  🔗 ЦЕПОЧКА ПОИСКА ЛЮДЕЙ: search_users → save_email_contact → send_outreach_email\n  🔗 ЦЕПОЧКА АНАЛИЗА РЫНКА: search_repos → research_topic → create_post/save_note\n  🔗 ЦЕПОЧКА НЕТВОРКИНГА: list_issues → comment_on_issue → создать goodwill → save_email_contact\n  💡 ДУМАЙ ШИРЕ: GitHub — не только поиск контактов. Комментируй issues = нетворкинг. Анализируй репо = исследование рынка. Создавай issues = предложения о партнёрстве.\n  🔄 ПАГИНАЦИЯ search_users: page=2,3... если все contacted. Меняй query каждый цикл.')
-    if _has_rss:     _intg_connected.append('✅ RSS — мониторинг новостей через run_agent_action(get_latest). Используй для контента/аналитики, НЕ для поиска людей.')
-    if _has_alpha:   _intg_connected.append('✅ Alpha Vantage — котировки акций/нефти/металлов')
-    if _has_news:    _intg_connected.append('✅ NewsAPI — агрегатор новостей (100+ источников)')
-    if _has_notion:  _intg_connected.append('✅ Notion — записи, базы знаний')
-    if _has_slack:   _intg_connected.append('✅ Slack — коммуникация с командой')
-    if _has_sheets:  _intg_connected.append('✅ Google Sheets — таблицы, аналитика')
-    if _has_stripe:  _intg_connected.append('✅ Stripe/ЮКасса — платёжные данные')
-    if _has_content: _intg_connected.append('✅ Telegram/Discord — публикация контента')
-    if _has_script:  _intg_connected.append('✅ Python / HTTP — кастомные скрипты через run_agent_action')
-    if _has_crm:     _intg_connected.append('✅ CRM — управление контактами и сделками через run_agent_action')
-    if _has_market:  _intg_connected.append('✅ Маркетплейс — статистика продаж через run_agent_action')
-    if _has_crypto:  _intg_connected.append('✅ Крипто-биржа — котировки и торговые данные через run_agent_action')
-    if _has_social:  _intg_connected.append('✅ Соцсети — публикация и мониторинг через run_agent_action')
-    if _has_pm:      _intg_connected.append('✅ Трекер задач — управление проектами через run_agent_action')
-    if _has_cal:     _intg_connected.append('✅ Календарь/Zoom — расписание и встречи через run_agent_action')
-
-    # ── Авто-обнаружение ACTION-хендлеров из python_code ──────────────────────
-    # Извлекаем все action-имена из конструкций ACTION == '...'
-    # Это позволяет AI знать точные названия, не угадывать их.
-    # Работает автоматически для ЛЮБОГО агента любого пользователя.
+    # ── Авто-обнаружение ACTION-хендлеров из python_code ──
     _py_actions: list = []
     if python_code:
         import re as _re_bap_act
@@ -864,7 +1037,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             f'  → Используй: run_agent_action(action="<одно из выше>", params={{...}})'
         )
 
-    # Рекомендации: смотрим на темы целей и чего нет у агента
+    # ── Рекомендации: что подключить под текущие цели ──
+    _intg_missing = []
     import os as _os_bap
     _fin_kw = ('нефт', 'газ', 'рынок', 'биржа', 'акции', 'финанс', 'трейд', 'инвест', 'криптo', 'oil', 'stock', 'forex', 'валют')
     _dev_kw = ('разработ', 'программ', 'github', 'code', 'репозитор', 'деплой')
@@ -880,61 +1054,58 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _data_kw = ('отчёт', 'аналитик', 'kpi', 'дашборд', 'таблиц', 'excel', 'sheets', 'данн')
 
     if any(w in _goals_text_all for w in _fin_kw):
-        if not _has_alpha:
+        if 'finance' not in _caps_cats:
             _intg_missing.append('⚡ Alpha Vantage — котировки нефти/акций/металлов (ALPHAVANTAGE_API_KEY в настройках агента)')
-        if not _has_news and not _os_bap.getenv('NEWSAPI_KEY'):
+        if 'news' not in _caps_cats and not _os_bap.getenv('NEWSAPI_KEY'):
             _intg_missing.append('⚡ NewsAPI — поток финансовых новостей (NEWSAPI_KEY в настройках агента)')
     if any(w in _goals_text_all for w in _news_kw):
-        if not _has_news and not _os_bap.getenv('NEWSAPI_KEY'):
+        if 'news' not in _caps_cats and not _os_bap.getenv('NEWSAPI_KEY'):
             _intg_missing.append('⚡ NewsAPI — 100+ источников новостей (NEWSAPI_KEY в настройках агента)')
-        if not _has_rss:
+        if 'rss' not in _caps_cats:
             _intg_missing.append('⚡ RSS — добавь RSS_URL= в API-ключи агента для мониторинга лент')
     if any(w in _goals_text_all for w in _dev_kw):
-        if not _has_github and not _os_bap.getenv('GITHUB_TOKEN'):
+        if 'git' not in _caps_cats and not _os_bap.getenv('GITHUB_TOKEN'):
             _intg_missing.append('⚡ GitHub Token — поиск разработчиков/контрибьюторов (GITHUB_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _ppl_kw):
-        if not _has_imap:
+        if 'email' not in _caps_cats:
             _intg_missing.append('⚡ Email — добавь GMAIL_USER + пароль приложения в настройки агента для охвата')
     if any(w in _goals_text_all for w in _cnt_kw):
         if not _has_content:
             _intg_missing.append('⚡ Telegram Bot Token — публикация постов в канал (TELEGRAM_BOT_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _team_kw):
-        if not _has_slack:
+        if 'slack' not in _caps_cats:
             _intg_missing.append('⚡ Slack — координация с командой (SLACK_BOT_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _proj_kw):
-        _has_pm = any(x in ' '.join(_caps_lower) for x in ('trello', 'jira', 'asana', 'todoist'))
-        if not _has_pm:
+        if 'pm' not in _caps_cats:
             _intg_missing.append('⚡ Trello/Jira/Asana — управление проектами и задачами (ключи в настройках агента)')
     if any(w in _goals_text_all for w in _doc_kw):
-        if not _has_notion:
+        if 'notion' not in _caps_cats:
             _intg_missing.append('⚡ Notion — база знаний и документация (NOTION_TOKEN в настройках агента)')
     if any(w in _goals_text_all for w in _crm_kw):
-        _has_crm = any(x in ' '.join(_caps_lower) for x in ('amocrm', 'bitrix', 'hubspot'))
-        if not _has_crm:
+        if 'crm' not in _caps_cats:
             _intg_missing.append('⚡ CRM (AmoCRM/Bitrix24/HubSpot) — воронка продаж и лиды (ключи в настройках)')
     if any(w in _goals_text_all for w in _ecom_kw):
-        _has_ecom = any(x in ' '.join(_caps_lower) for x in ('wildberries', 'ozon', 'shopify'))
-        if not _has_ecom:
+        if 'marketplace' not in _caps_cats:
             _intg_missing.append('⚡ Маркетплейс (WB/Ozon) — статистика продаж и позиций (API-ключ в настройках)')
     if any(w in _goals_text_all for w in _crypto_kw2):
-        _has_crypto = any(x in ' '.join(_caps_lower) for x in ('binance', 'bybit'))
-        if not _has_crypto:
+        if 'crypto' not in _caps_cats:
             _intg_missing.append('⚡ Binance/Bybit — криптовалютные данные и трейдинг (API-ключ в настройках)')
     if any(w in _goals_text_all for w in _data_kw):
-        if not _has_sheets:
+        if 'sheets' not in _caps_cats:
             _intg_missing.append('⚡ Google Sheets — автоматические отчёты и дашборды (GOOGLE_SHEETS_KEY в настройках)')
 
     _intg_block = ''
     if _intg_connected or _intg_missing:
-        _intg_block = '\nИНТЕГРАЦИИ АГЕНТА:\n'
+        _intg_block = '\nИНТЕГРАЦИИ АГЕНТА (используй ТОЛЬКО из этого списка):\n'
         if _intg_connected:
             _intg_block += '\n'.join(f'  {x}' for x in _intg_connected) + '\n'
+        _intg_block += '  ✅ web_search, research_topic, add_task — всегда доступны\n'
+        _intg_block += '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Если для цели нужна интеграция, которой нет — скажи пользователю что подключить.\n'
         if _intg_missing:
             _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
             _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
         # Goal-type-aware первый шаг
         if _goal_type == 'research' and _has_alpha:
-            # Определяем символ на основе ключевых слов цели
             _goals_text_lower = ' '.join(
                 (g.get('title', '') + ' ' + (g.get('description', '') or '')).lower()
                 for g in goals_summary
@@ -2041,50 +2212,30 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_rd
             _log_rd.getLogger(__name__).debug('[AUTOPILOT] recent dialog block: %s', _e_rd)
 
-    # ── ⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ — адаптивный блок по интеграциям агента ──
-    # Запрещаем только то, на что РЕАЛЬНО нет инструментов/интеграций
-    _limits = []
-    if not any(w in c for c in _caps_lower for w in ('telegram', 'клиент', 'telethon', 'pyrogram')):
-        _limits.append("• НЕ МОЖЕШЬ вступать/просматривать Telegram-каналы/группы/чаты — нет Telegram-клиента (но publish_to_telegram РАБОТАЕТ)")
-    if not any(w in c for c in _caps_lower for w in ('discord client',)):
-        _limits.append("• НЕ МОЖЕШЬ вступать/просматривать Discord-серверы (но publish_to_discord РАБОТАЕТ)")
-    _limits.append("• НЕ МОЖЕШЬ постить в ЧУЖИЕ каналы — только в канал пользователя")
-    # Если у агента нет Telegram-интеграции — publish_to_telegram НЕДОСТУПЕН
-    if not _has_content:
-        _limits.append("• ⛔ publish_to_telegram / publish_to_discord НЕДОСТУПНЫ — нет TELEGRAM_BOT_TOKEN или webhook в настройках агента. НЕ СОЗДАВАЙ задачи на публикацию в Telegram/Discord!")
+    # ── ВОЗМОЖНОСТИ АГЕНТА — универсальный блок (на основе _classify_agent_caps) ──
+    # Строим карточку возможностей из уже-распознанных _detected (output _parse_agent_integrations)
+    # НЕ хардкодим что «нельзя» — показываем что ЕСТЬ. Чего нет → не предлагай.
+    _caps_classified = _classify_agent_caps(agent_caps or [])
+    _caps_cats = _caps_classified['categories']
 
-    # Соцсети: запрещаем только если нет соответствующих интеграций
-    _social_blocked = []
-    if not any(w in c for c in _caps_lower for w in ('twitter', 'x.com', 'tweet')):
-        _social_blocked.append('Twitter/X')
-    if not any(w in c for c in _caps_lower for w in ('linkedin',)):
-        _social_blocked.append('LinkedIn')
-    if not any(w in c for c in _caps_lower for w in ('instagram',)):
-        _social_blocked.append('Instagram')
-    if not any(w in c for c in _caps_lower for w in ('vk', 'вконтакте')):
-        _social_blocked.append('VK')
-    if _social_blocked:
-        _limits.append(f"• НЕТ прямого API к: {', '.join(_social_blocked)} — используй run_agent_action если есть скрипт/ключи")
-    if not any(w in c for c in _caps_lower for w in ('twilio', 'sms', 'звонк', 'call')):
-        _limits.append("• НЕ МОЖЕШЬ звонить/отправлять SMS — нет Twilio")
-    _limits.append("• НЕ МОЖЕШЬ заходить на сайты требующие авторизацию/логин")
-    # run_agent_action — всегда доступен в автопилоте
-    _can_do = ["web_search", "research_topic", "email (IMAP/Resend)", "publish в канал", "add_task", "delegate", "goals"]
-    if _has_script:
-        _can_do.append("run_agent_action (Python-скрипты)")
-    if _has_github:
-        _can_do.append("GitHub API")
-    if _has_rss:
-        _can_do.append("RSS")
+    # Платформенные ограничения — только технические факты платформы (не зависят от интеграций)
+    _platform_limits = [
+        "• НЕ МОЖЕШЬ вступать/просматривать чужие Telegram/Discord-каналы — нет клиентского токена",
+        "• НЕ МОЖЕШЬ постить в ЧУЖИЕ каналы — только в канал пользователя",
+        "• НЕ МОЖЕШЬ заходить на сайты требующие авторизацию/логин",
+    ]
+    # Предупреждение если нет контент-каналов
+    if 'telegram' not in _caps_cats and 'discord' not in _caps_cats and not getattr(user, 'telegram_channel', None) and not getattr(user, 'discord_webhook', None):
+        _platform_limits.append("• publish_to_telegram / publish_to_discord НЕДОСТУПНЫ — нет TELEGRAM_BOT_TOKEN или webhook")
+
     _capability_limits_block = (
-        "\n\n⛔ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ (ОБЯЗАТЕЛЬНО УЧИТЫВАЙ):\n"
-        + '\n'.join(f"  {l}" for l in _limits) + '\n'
-        f"  ✅ МОЖЕШЬ: {', '.join(_can_do)}\n"
-        "  → ПЕРЕД созданием задачи спроси себя: 'ЕСТЬ ЛИ У МЕНЯ ИНСТРУМЕНТ для этого?'\n"
-        "    Если нет — НЕ СОЗДАВАЙ задачу, а выбери другой подход с доступными инструментами.\n"
-        "  → ПРОГРЕСС = РЕАЛЬНЫЕ ДЕЙСТВИЯ. Если задача выполнена, но результата нет — это НЕ выполнено.\n"
-        "    Например: 'написал пост' без публикации = 0. 'Нашёл контакт' без отправки письма = 0.\n"
-        "  → update_goal_progress: НЕ ВЫЗЫВАЙ чаще 1 раза в 30 минут. НЕ указывай progress= без реального доказательства.\n"
+        "\n\n⛔ ТЕХНИЧЕСКИЕ ОГРАНИЧЕНИЯ ПЛАТФОРМЫ:\n"
+        + '\n'.join(f"  {l}" for l in _platform_limits) + '\n'
+        "→ ПРАВИЛО: используй ТОЛЬКО интеграции из блока ИНТЕГРАЦИИ АГЕНТА выше.\n"
+        "  Если чего-то нет в списке — не предлагай это. Предложи подключить, если нужно для цели.\n"
+        "  ПЕРЕД созданием задачи: 'Есть ли у меня инструмент для этого?'\n"
+        "→ ПРОГРЕСС = РЕАЛЬНЫЕ ДЕЙСТВИЯ. Написал пост без публикации = 0. Нашёл контакт без письма = 0.\n"
+        "→ update_goal_progress: только при ПОДТВЕРЖДЁННОМ результате, не чаще 1 раза в 30 минут.\n"
     )
 
     # ── ⛔ ОТМЕНЁННЫЕ ЗАДАЧИ — не повторяй провальные подходы ──
@@ -3988,43 +4139,24 @@ class AnchorEngine:
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
                     _gl_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:3]]
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
-                    _intg_list = ', '.join(str(d).split('(')[0].strip() for d in _detected[:6]) if _detected else ''
                     _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
-                    # ── Универсальный блок: что подключено у агента + каналы юзера ──
-                    _connected_c = []
-                    if _intg_list:
-                        _connected_c.append(_intg_list)
+                    # ── Карточка возможностей агента через универсальный _classify_agent_caps ──
+                    _caps_c = _classify_agent_caps(_detected or [])
+                    _cats_c = _caps_c['categories'].copy()
+                    # Добавляем каналы, подключённые у пользователя
                     if getattr(user, 'telegram_channel', None):
-                        _connected_c.append('Telegram-канал')
+                        _cats_c.add('telegram')
                     if getattr(user, 'discord_webhook', None):
-                        _connected_c.append('Discord')
-                    _connected_c.append('web_search (всегда доступен)')
-                    _channels_info_c = f"✅ Подключено у {_chosen_name}: {', '.join(_connected_c)}."
-                    _channels_info_c += (
-                        f"\n💡 Если для цели нужна интеграция, которой нет в этом списке — "
-                        f"попроси пользователя подключить её в Настройках → Агенты → API-ключи."
+                        _cats_c.add('discord')
+
+                    # Строим список "Подключено" из категорий
+                    _connected_names = [_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_c)]
+                    _connected_names.append('web_search (всегда)')
+                    _channels_info_c = (
+                        f"✅ Подключено у {_chosen_name}: {', '.join(_connected_names)}.\n"
+                        f"💡 Назначай ТОЛЬКО действия с этими инструментами. "
+                        f"Если для цели нужна другая интеграция — скажи пользователю что подключить."
                     )
-                    # ── Что НЕ подключено у агента (динамически из реальных ключей) ──
-                    _unavailable_c = []
-                    _agent_caps_lower = [str(c).lower() for c in (_detected or [])]
-                    _agent_keys_str = (agent_data.get('user_api_keys') or '').lower()
-                    _all_caps_str = ' '.join(_agent_caps_lower) + ' ' + _agent_keys_str
-                    # Соцсети без API
-                    for _sn, _keys in [('Twitter/X', ('twitter', 'x.com')), ('LinkedIn', ('linkedin',)),
-                                       ('Instagram', ('instagram',)), ('VK', ('vk', 'вконтакте'))]:
-                        if not any(k in _all_caps_str for k in _keys):
-                            _unavailable_c.append(_sn)
-                    # Telegram канал
-                    if not getattr(user, 'telegram_channel', None) and 'telegram_bot_token' not in _all_caps_str:
-                        _unavailable_c.append('Telegram-канал')
-                    # Discord
-                    if not getattr(user, 'discord_webhook', None):
-                        _unavailable_c.append('Discord')
-                    if _unavailable_c:
-                        _channels_info_c += (
-                            f"\n❌ Не подключено у {_chosen_name}: {', '.join(_unavailable_c)}. "
-                            f"Предложи только то, что есть в списке ✅."
-                        )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
                     _project_c = (_user_prof_c.get('company') or '').strip()
@@ -4079,8 +4211,9 @@ class AnchorEngine:
                                 _gh_count_c = _all_recent_text_c.count('github')
                                 # Альтернативы: интеграции агента + универсальные через web_search
                                 _alt_channels_c = ['hh.ru', 'Хабр']
-                                if _intg_list:
-                                    _alt_channels_c.append(_intg_list)
+                                _intg_list_c = ', '.join(_connected_names[:4]) if '_connected_names' in dir() else ''
+                                if _intg_list_c:
+                                    _alt_channels_c.append(_intg_list_c)
                                 _alt_str_c = ', '.join(_alt_channels_c)
                                 if _tg_count_c >= 4:
                                     _loop_channel_hint_c = (
@@ -6459,96 +6592,52 @@ class AnchorEngine:
             _profiles_str = '\n'.join(_profiles_lines)
 
             # ── Строгие правила матчинга возможностей агентов (чтобы LLM не назначал бесполезные задачи) ──
+            # Используем _classify_agent_caps + _parse_agent_integrations — универсально для любых интеграций.
             _cap_rules_lines = []
             for _p_cr in _profiles:
                 _ag_cr_obj = next((a for a in real_agents if a.name == _p_cr['name']), None)
-                _keys_cr = (getattr(_ag_cr_obj, 'user_api_keys', '') or '').lower() if _ag_cr_obj else ''
-                _py_cr = (getattr(_ag_cr_obj, 'python_code', '') or '').lower() if _ag_cr_obj else ''
-                _has_email_cr = ('gmail_user=' in _keys_cr or 'imap_' in _keys_cr or 'yandex_user=' in _keys_cr or 'mailru_user=' in _keys_cr)
-                _is_rss_agent = 'rss_url=' in _keys_cr
-                _is_github_agent = ('github_token=' in _keys_cr or 'github_access_token=' in _keys_cr)
-                _is_email_only = _has_email_cr and not _is_rss_agent and not _is_github_agent
-                _has_tg_channel = 'telegram_channel' in _keys_cr or bool(getattr(user, 'telegram_channel', None))
-                _has_discord_wh = 'discord_webhook' in _keys_cr or bool(getattr(user, 'discord_webhook', None))
-                _has_crm = any(w in _keys_cr for w in ('amocrm', 'hubspot', 'bitrix', 'crm'))
-                _has_marketplace = any(w in _keys_cr for w in ('ozon', 'wildberries', 'wb_api', 'shopify'))
-                _has_jira = any(w in _keys_cr for w in ('jira', 'trello'))
-                _has_notion = 'notion' in _keys_cr
-                _has_sheets = any(w in _keys_cr for w in ('gsheets', 'google_sheets', 'spreadsheet'))
-                _has_crypto = any(w in _keys_cr for w in ('binance', 'bybit'))
-                _has_alpha = 'alphavantage' in _keys_cr or 'alpha_vantage' in _keys_cr
-                _has_calls = any(w in _keys_cr for w in ('twilio', 'sipuni', 'voip', 'phone_api'))
+                if _ag_cr_obj:
+                    try:
+                        from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_cr
+                        _detected_cr = _pai_cr(
+                            getattr(_ag_cr_obj, 'user_api_keys', '') or '',
+                            getattr(_ag_cr_obj, 'python_code', '') or '',
+                            getattr(_ag_cr_obj, 'tools_allowed', '') or '',
+                        )
+                    except Exception:
+                        _detected_cr = []
+                else:
+                    _detected_cr = []
 
-                # Собираем все каналы агента
-                _channels = []
-                if _has_email_cr: _channels.append('email')
-                if _is_github_agent: _channels.append('GitHub')
-                if _is_rss_agent: _channels.append('RSS')
-                if _has_tg_channel: _channels.append('Telegram')
-                if _has_discord_wh: _channels.append('Discord')
-                if _has_crm: _channels.append('CRM')
-                if _has_marketplace: _channels.append('Маркетплейс')
-                if _has_jira: _channels.append('Jira')
-                if _has_notion: _channels.append('Notion')
-                if _has_sheets: _channels.append('Sheets')
-                if _has_crypto: _channels.append('Crypto')
-                if _has_alpha: _channels.append('Finance')
+                # Добавляем каналы пользователя к детекции
+                _caps_cr = _classify_agent_caps(_detected_cr)
+                _cats_cr = _caps_cr['categories'].copy()
+                if bool(getattr(user, 'telegram_channel', None)):
+                    _cats_cr.add('telegram')
+                if bool(getattr(user, 'discord_webhook', None)):
+                    _cats_cr.add('discord')
 
-                # Универсальная генерация правил
-                if len(_channels) >= 2:
-                    _ch_str = '+'.join(_channels)
-                    _tool_hints = []
-                    if 'email' in _channels: _tool_hints.append('check_emails/send_outreach_email/reply_to_outreach_email')
-                    if 'GitHub' in _channels: _tool_hints.append("run_agent_action(search_users/search_repos)")
-                    if 'RSS' in _channels: _tool_hints.append('run_agent_action(get_latest)/get_news_trends')
-                    if 'Telegram' in _channels: _tool_hints.append('publish_to_telegram/create_post')
-                    if 'Discord' in _channels: _tool_hints.append('publish_to_discord')
-                    if 'CRM' in _channels: _tool_hints.append('run_agent_action(CRM-операции)')
-                    if 'Маркетплейс' in _channels: _tool_hints.append('run_agent_action(товары/заказы)')
-                    if 'Jira' in _channels: _tool_hints.append('run_agent_action(тикеты/спринты)')
-                    if 'Notion' in _channels: _tool_hints.append('run_agent_action(страницы)')
-                    if 'Sheets' in _channels: _tool_hints.append('run_agent_action(таблицы)')
-                    if 'Crypto' in _channels: _tool_hints.append('run_agent_action(баланс/ордера)')
-                    if 'Finance' in _channels: _tool_hints.append('get_stock_price')
+                if not _cats_cr:
+                    # Нет интеграций — базовые инструменты платформы
                     _cap_rules_lines.append(
-                        f"  🔀 {_p_cr['name']} [{_ch_str}]: "
-                        f"МОЖЕТ: {', '.join(_tool_hints)}. "
-                        f"Назначай задачи ТОЛЬКО с инструментами из этого списка."
+                        f"  🔧 {_p_cr['name']} [базовые]: web_search, research_topic, add_task, create_goal, send_message_to_user."
                     )
-                elif len(_channels) == 1:
-                    _ch = _channels[0]
-                    if _ch == 'email':
-                        _cap_rules_lines.append(
-                            f"  ✉️ {_p_cr['name']} [ТОЛЬКО email]: "
-                            f"ТОЛЬКО: check_emails, send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task."
-                        )
-                    elif _ch == 'RSS':
-                        _cap_rules_lines.append(
-                            f"  📰 {_p_cr['name']} [RSS/контент]: "
-                            f"run_agent_action(get_latest), get_news_trends, web_search, research_topic, create_post, publish_to_telegram. "
-                            f"⛔ НЕ назначай: check_emails, send_outreach_email, reply_to_outreach_email — у {'неё' if _p_cr['name'][-1] in 'аяАЯ' else 'него'} НЕТ email!"
-                        )
-                    elif _ch == 'GitHub':
-                        _cap_rules_lines.append(
-                            f"  💻 {_p_cr['name']} [GitHub]: "
-                            f"run_agent_action(search_users/search_repos), save_email_contact."
-                        )
-                    else:
-                        _cap_rules_lines.append(
-                            f"  🔧 {_p_cr['name']} [{_ch}]: run_agent_action для {_ch}-операций."
-                        )
-                elif not _channels and _py_cr:
+                else:
+                    # Строим карточку из категорий
+                    _ch_str = '+'.join(_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_cr))
+                    _tool_hints = [_CAP_TOOL_HINTS[c] for c in sorted(_cats_cr) if c in _CAP_TOOL_HINTS and _CAP_TOOL_HINTS[c]]
+                    _tool_hints.append('web_search, research_topic, add_task')
                     _cap_rules_lines.append(
-                        f"  🐍 {_p_cr['name']} [custom code]: run_agent_action с пользовательским Python-кодом."
-                    )
-                # Показываем что ЕСТЬ у агента по звонкам/телефонии
-                if _has_calls:
-                    _cap_rules_lines.append(
-                        f"  📞 {_p_cr['name']}: МОЖЕТ делать звонки/SMS (есть Twilio/SIP)."
+                        f"  {'📞' if 'calls' in _cats_cr else '🔀'} {_p_cr['name']} [{_ch_str}]: "
+                        f"МОЖЕТ: {', '.join(_tool_hints[:5])}. "
+                        f"Назначай задачи ТОЛЬКО с инструментами из этого списка. "
+                        f"Чего нет — НЕ НАЗНАЧАЙ."
                     )
             _cap_rules_str = (
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
                 + '\n'.join(_cap_rules_lines) + '\n'
+                "  → Используй ТОЛЬКО то что есть у агента. Нет интеграции — нет задачи на неё.\n"
+                "  → Нужна интеграция → предложи пользователю подключить в Настройки → Агенты → API-ключи.\n"
                 if _cap_rules_lines else ''
             )
 
