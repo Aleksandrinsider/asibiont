@@ -4841,7 +4841,41 @@ class AnchorEngine:
                                 # --- Собираем сообщение ---
                                 _stag_header = f"⚠️ Автопилот застрял на цели {_stag_goal_str}\n\nПрогресс: {_stag_prog}."
                                 _stag_body_parts = []
-                                if _tried_str:
+
+                                # --- Диагностика узких мест (конкретные причины стагнации) ---
+                                _bottlenecks = []
+                                _sent_today = data.get('emails_sent_today', 0)
+                                _daily_lim = data.get('email_daily_limit', 20)
+                                _total_sent = data.get('total_emails_sent', 0)
+                                _pending = data.get('pending_replies', [])
+                                _unsent = data.get('unsent_contacts', [])
+                                _n_contacts = data.get('n_total_email_contacts', 0)
+
+                                # Email: лимит исчерпан
+                                if _sent_today >= _daily_lim and _daily_lim > 0:
+                                    _bottlenecks.append(f"📧 Email-лимит исчерпан ({_sent_today}/{_daily_lim} в день). Рассылка продолжится завтра.")
+                                # Email: отправлено много, но 0 ответов
+                                elif _total_sent >= 10 and not _pending:
+                                    _bottlenecks.append(f"📧 Отправлено {_total_sent} писем, но ответов пока нет. Возможно стоит пересмотреть тему/текст писем.")
+                                # Email: нет контактов для рассылки
+                                elif any('mail' in c for c in _esc_caps_all) and _n_contacts == 0:
+                                    _bottlenecks.append("📧 Email подключён, но база контактов пуста. Агент ищет контакты через web_search.")
+                                # Email: все контакты уже отработаны
+                                elif any('mail' in c for c in _esc_caps_all) and _n_contacts > 0 and not _unsent:
+                                    _bottlenecks.append(f"📧 Все {_n_contacts} контактов уже получили письма. Нужны новые контакты.")
+
+                                # Ожидание ответов
+                                if _pending:
+                                    _bottlenecks.append(f"⏳ Ждём ответа от {len(_pending)} адресатов.")
+
+                                # Исчерпанные стратегии
+                                if _ex_strats:
+                                    _bottlenecks.append(f"🔄 Исчерпаны стратегии: {', '.join(_ex_strats[:3])}")
+
+                                if _bottlenecks:
+                                    _stag_body_parts.append("Узкие места:\n" + '\n'.join(_bottlenecks))
+
+                                if _tried_str and not _bottlenecks:
                                     _stag_body_parts.append(f"Что пробовали: {_tried_str}")
                                 if _failed_str:
                                     _stag_body_parts.append(f"Не сработало: {_failed_str}")
@@ -4849,7 +4883,7 @@ class AnchorEngine:
                                 if _miss_intg_esc:
                                     _miss_str_esc = '\n'.join(f"  • {m}" for m in _miss_intg_esc[:3])
                                     _stag_body_parts.append(f"Рекомендую подключить:\n{_miss_str_esc}")
-                                elif not _failed_t and not _ex_strats:
+                                elif not _bottlenecks and not _failed_t and not _ex_strats:
                                     _stag_body_parts.append("Попробуй уточнить цель или сменить стратегию.")
                                 _esc_lines.append(_stag_header + '\n' + '\n'.join(_stag_body_parts))
 
