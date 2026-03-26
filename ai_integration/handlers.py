@@ -738,48 +738,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     except Exception as _e:
         logger.warning(f"[ADD_TASK] Activity log failed: {_e}")
 
-    # Automation: Real-time триггер для задач (доступно всем, оплата токенами)
-    try:
-        from ai_integration.premium_simple import trigger_premium_automation_realtime
-        import asyncio
-        
-        logger.info(f"[ADD_TASK] Triggering automation for task {task_id}")
-        asyncio.create_task(
-            trigger_premium_automation_realtime(
-                premium_user_id=user.telegram_id,
-                task_id=task_id,
-                task_description=f"{title}. {description}" if description else title
-            )
-        )
-        logger.info(f"[ADD_TASK] Automation triggered for task {task_id}")
-        
-        # Проверяем рекомендации от других пользователей
-        from ai_integration.premium_simple import save_partner_progress_notification
-        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
-        if profile and profile.pending_premium_recommendations:
-            try:
-                recommendations = json.loads(profile.pending_premium_recommendations)
-                if isinstance(recommendations, list):
-                    recommender_ids = set()
-                    for rec in recommendations:
-                        if rec.get('type') == 'task_created' and rec.get('premium_user_id'):
-                            recommender_ids.add(rec.get('premium_user_id'))
-                    
-                    for recommender_id in recommender_ids:
-                        save_partner_progress_notification(
-                            session=session,
-                            premium_user_id=recommender_id,
-                            partner_username=user.username or f"User_{user.telegram_id}",
-                            partner_telegram_id=user.telegram_id,
-                            action_type='started',
-                            task_title=title,
-                            original_goal=None
-                        )
-                        logger.info(f"[ADD_TASK] Notified {recommender_id} about partner {user.telegram_id} starting task")
-            except Exception as e:
-                logger.warning(f"[ADD_TASK] Failed to notify about partner progress: {e}")
-    except Exception as e:
-        logger.warning(f"[ADD_TASK] Failed to trigger automation: {e}")
+    # (trigger_premium_automation_realtime removed — was dead code: always returned skipped_no_analyzer)
 
     # Save to long-term memory for project context
     try:

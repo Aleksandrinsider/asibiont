@@ -473,27 +473,9 @@ def _get_cached_heavy_insights(user_id: int, session: SessionType) -> List[Dict[
     # Кэш устарел или нет — собираем заново
     logger.info(f"[PREMIUM_RT] Collecting fresh heavy insights for {user_id}")
     
+    # find_market_opportunities / find_reverse_matching were removed — no heavy insights available
     insights = []
     
-    # Market opportunities (тяжёлый - анализ всех задач за неделю)
-    try:
-        import asyncio
-        market = asyncio.create_task(find_market_opportunities(user_id, session))
-        # Не ждём результат, но можем попробовать быстро
-    except Exception as e:
-        logger.warning(f"Failed to create market opportunities task: {e}")
-    
-    # Reverse matching (средний - поиск по недавним задачам)
-    try:
-        import asyncio  
-        reverse = asyncio.create_task(find_reverse_matching(user_id, session))
-    except Exception as e:
-        logger.warning(f"Failed to create reverse matching task: {e}")
-    
-    # Пока не блокируем — в следующий раз будет в кэше
-    # Для первого вызова возвращаем пустой список, кэшируем на будущее
-    
-    # Сохраняем в кэш (даже пустой)
     _INSIGHTS_CACHE[user_id] = {
         'insights': insights,
         'timestamp': now
@@ -635,15 +617,10 @@ async def collect_premium_insights(user_id: int, mode: str = 'collect', session:
             logger.warning(f"[PREMIUM_INSIGHTS] Error loading saved insights: {e}")
 
         if mode == 'collect':
-            # Режим сбора - сохраняем новые инсайты
+            # Режим сбора — только deadline/stuck инсайты (market/reverse/trends были удалены)
             heavy_insights = []
             try:
-                # Собираем тяжёлые инсайты для сохранения
-                deadlines_stuck = await check_deadlines_and_stuck_tasks(user_id, session)
-                market_ops = await find_market_opportunities(user_id, session)
-                reverse = await find_reverse_matching(user_id, session)
-                trends = await analyze_community_trends(user_id, session)
-                heavy_insights = deadlines_stuck + market_ops + reverse + trends
+                heavy_insights = _check_deadlines_and_stuck_quick(user_id, session)
             except Exception as e:
                 logger.warning(f"[PREMIUM_INSIGHTS] Error collecting heavy insights: {e}")
 
