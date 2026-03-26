@@ -238,6 +238,53 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
     return result
 
 
+# ═══════════════════════════════════════════════════════
+# FINE-GRAINED CATALOG TYPE DETECTION
+# ═══════════════════════════════════════════════════════
+# Маппинг подстрок в label (output _parse_agent_integrations) → тип каталога
+# Используется для проактивного советника по интеграциям (_FULL_CATALOG)
+_CATALOG_TYPE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
+    (('gmail', 'imap', 'smtp', 'яндекс почт', 'mail.ru', 'email', 'почта', 'resend', 'sendgrid', 'mailgun', 'sparkpost'), 'email'),
+    (('github', 'gitlab'), 'github'),
+    (('rss', 'лента', 'feed'), 'rss'),
+    (('alpha vantage', 'alphavantage', 'биржевые'), 'alphavantage'),
+    (('newsapi', 'новости (news',), 'newsapi'),
+    (('notion',), 'notion'),
+    (('slack',), 'slack'),
+    (('trello', 'jira', 'asana', 'todoist', 'clickup', 'linear'), 'pm'),
+    (('amocrm', 'битрикс', 'hubspot', 'salesforce', 'crm'), 'crm'),
+    (('wildberries', 'ozon', 'shopify', 'маркетплейс', 'яндекс.маркет'), 'ecommerce'),
+    (('binance', 'bybit', 'coinbase', 'крипт'), 'crypto'),
+    (('google sheets', 'gspread', 'spreadsheet', 'airtable', 'таблиц'), 'sheets'),
+    (('stripe', 'юкасса', 'yookassa', 'платеж'), 'payments'),
+    (('telegram',), 'tg_channel'),
+    (('discord',), 'discord'),
+    (('whatsapp', 'waba', '360dialog'), 'whatsapp'),
+    (('calendar', 'календар', 'calendly'), 'calendar'),
+    (('sms', 'smsc', 'unisender'), 'sms'),
+    (('вконтакте', 'vk'), 'vk'),
+    (('авито', 'avito', 'циан', 'cian'), 'avito'),
+    (('youtube',), 'youtube'),
+    (('linkedin',), 'linkedin'),
+    (('google maps', '2gis', 'gmaps'), 'maps'),
+    (('typeform', 'tally', 'google forms'), 'forms'),
+]
+
+
+def _detect_catalog_types(detected_labels: list[str]) -> set[str]:
+    """Определяет fine-grained типы каталога из лейблов _parse_agent_integrations.
+
+    В отличие от _classify_agent_caps (coarse categories для промптов),
+    здесь возвращаются точные типы для фильтрации _FULL_CATALOG.
+    """
+    types: set[str] = set()
+    labels_lower = [str(l).lower() for l in (detected_labels or [])]
+    for kws, ctype in _CATALOG_TYPE_KEYWORDS:
+        if any(kw in label for label in labels_lower for kw in kws):
+            types.add(ctype)
+    return types
+
+
 async def _safe_send(bot, chat_id: int, text: str):
     """Send a message, splitting into chunks if it exceeds Telegram's 4096 char limit."""
     if not text or not text.strip():
@@ -1084,13 +1131,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _intg_missing.append('⚡ RSS — добавь RSS_URL= в API-ключи агента для мониторинга лент')
     if any(w in _goals_text_all for w in _dev_kw):
         if 'git' not in _caps_cats and not _os_bap.getenv('GITHUB_TOKEN'):
-            _intg_missing.append('⚡ GitHub Token — поиск разработчиков/контрибьюторов (GITHUB_TOKEN в настройках агента)')
+            _intg_missing.append('⚡ GitHub Token — поиск разработчиков/контрибьюторов (GITHUB_TOKEN в дашборде: https://asibiont.com/dashboard)')
     if any(w in _goals_text_all for w in _ppl_kw):
         if 'email' not in _caps_cats:
-            _intg_missing.append('⚡ Email — добавь GMAIL_USER + пароль приложения в настройки агента для охвата')
+            _intg_missing.append('⚡ Email — добавь GMAIL_USER + пароль приложения в дашборде: https://asibiont.com/dashboard')
     if any(w in _goals_text_all for w in _cnt_kw):
         if not _has_content:
-            _intg_missing.append('⚡ Telegram Bot Token — публикация постов в канал (TELEGRAM_BOT_TOKEN в настройках агента)')
+            _intg_missing.append('⚡ Telegram Bot Token — публикация постов в канал (TELEGRAM_BOT_TOKEN в дашборде: https://asibiont.com/dashboard)')
     if any(w in _goals_text_all for w in _team_kw):
         if 'slack' not in _caps_cats:
             _intg_missing.append('⚡ Slack — координация с командой (SLACK_BOT_TOKEN в настройках агента)')
@@ -3750,7 +3797,7 @@ class AnchorEngine:
                     _missing_intg_notes.append(
                         f"⚠️ {_ag_chk.name}: внешние API-ключи не добавлены — "
                         f"расширенные интеграции недоступны. "
-                        f"Сообщи пользователю: Дашборд → Настройки агента → API-ключи "
+                        f"Сообщи пользователю: подключить интеграции в дашборде https://asibiont.com/dashboard "
                         f"(Gmail, GitHub, Slack, Notion, Trello, HubSpot и др.)"
                     )
             # 2. Email-анкер но email-отправка не настроена на платформе
@@ -3777,7 +3824,7 @@ class AnchorEngine:
                 _missing_intg_notes.append(
                     "⚠️ GitHub-интеграция не настроена — поиск разработчиков ограничен. "
                     "Используй find_relevant_contacts_for_task или web_search. "
-                    "Сообщи пользователю: Дашборд → Настройки агента → API-ключи → GitHub."
+                    "Сообщи пользователю: подключить GitHub в дашборде https://asibiont.com/dashboard."
                 )
             if _missing_intg_notes:
                 task_text += (
@@ -4170,13 +4217,9 @@ class AnchorEngine:
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
                     _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
                     # ── Карточка возможностей агента через универсальный _classify_agent_caps ──
+                    # _detected уже обогащён user-level каналами через _enrich_caps_with_user_channels
                     _caps_c = _classify_agent_caps(_detected or [])
                     _cats_c = _caps_c['categories'].copy()
-                    # Добавляем каналы, подключённые у пользователя
-                    if getattr(user, 'telegram_channel', None):
-                        _cats_c.add('telegram')
-                    if getattr(user, 'discord_webhook', None):
-                        _cats_c.add('discord')
 
                     # Строим список "Подключено" из категорий
                     _connected_names = [_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_c)]
@@ -4601,9 +4644,9 @@ class AnchorEngine:
                     'задачу принял', 'задачу приняла',
                 }
                 # Шаблонные ответы, которые noise даже если инструменты были вызваны
+                # НЕ включаем 'обновил прогресс' — это реальное действие (update_goal_progress)
                 _GENERIC_TOOL_PATTERNS = (
                     'выполнил поиск', 'выполнила поиск',
-                    'обновил прогресс', 'обновила прогресс',
                     'провёл поиск', 'провела поиск',
                     'запустил поиск', 'запустила поиск',
                     'проверил данные', 'проверила данные',
@@ -4619,8 +4662,8 @@ class AnchorEngine:
                     # Шум: ответ содержит ТОЛЬКО техническую ошибку без полезной информации
                     or (not _has_real_actions and len(_result_clean) < 80
                         and any(w in _result_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно', 'ошибка подключения')))
-                    # Шум: инструменты вызваны, но текст короткий и шаблонный (нет фактов)
-                    or (_has_real_actions and len(_result_clean) < 100
+                    # Шум: инструменты вызваны, но текст ОЧЕНЬ короткий и шаблонный (нет фактов)
+                    or (_has_real_actions and len(_result_clean) < 60
                         and any(p in _result_lower for p in _GENERIC_TOOL_PATTERNS))
                     # Утечки делегаций: ответ начинается с обращения к другому агенту
                     or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
@@ -6647,19 +6690,17 @@ class AnchorEngine:
                             getattr(_ag_cr_obj, 'user_api_keys', '') or '',
                             getattr(_ag_cr_obj, 'python_code', '') or '',
                             getattr(_ag_cr_obj, 'tools_allowed', '') or '',
+                            getattr(_ag_cr_obj, 'search_scope', '') or '',
                         )
+                        _detected_cr = _enrich_caps_with_user_channels(_detected_cr, user)
                     except Exception:
-                        _detected_cr = []
+                        _detected_cr = _enrich_caps_with_user_channels([], user)
                 else:
-                    _detected_cr = []
+                    _detected_cr = _enrich_caps_with_user_channels([], user)
 
-                # Добавляем каналы пользователя к детекции
+                # _detected_cr уже обогащён user-level каналами через _enrich_caps_with_user_channels
                 _caps_cr = _classify_agent_caps(_detected_cr)
                 _cats_cr = _caps_cr['categories'].copy()
-                if bool(getattr(user, 'telegram_channel', None)):
-                    _cats_cr.add('telegram')
-                if bool(getattr(user, 'discord_webhook', None)):
-                    _cats_cr.add('discord')
 
                 if not _cats_cr:
                     # Нет интеграций — базовые инструменты платформы
@@ -6834,14 +6875,14 @@ class AnchorEngine:
                                 _finance_rss_missing = True
                 _missing_intg_coord.append(
                     "💡 Для котировок и рыночных данных (цены нефти, акций, крипты): "
-                    "Дашборд → Настройки агента → API-ключи → Alpha Vantage (alphavantage.co, бесплатно 25 req/день). "
+                    "https://asibiont.com/dashboard → API-ключи → Alpha Vantage (alphavantage.co, бесплатно 25 req/день). "
                     "Это основной источник числовых данных рынка."
                     + (" ⚠️ RSS агента сейчас не финансовый — web_search будет основным." if _finance_rss_missing else '')
                 )
             if _has_any and not _os_coord.getenv('NEWSAPI_KEY'):
                 _missing_intg_coord.append(
                     "💡 Дополнительно для новостного фона: NewsAPI (newsapi.org) даёт 100+ новостных источников. "
-                    "Дашборд → Настройки агента → API-ключи → NewsAPI. Без него — web_search."
+                    "https://asibiont.com/dashboard → API-ключи → NewsAPI. Без него — web_search."
                 )
             # Без GitHub-интеграции при поиске разработчиков
             _has_github_c_agent = any(
@@ -6852,7 +6893,7 @@ class AnchorEngine:
             if any(w in _goals_lower_c for w in ('разработ', 'developer', 'github', 'программист')) and not _has_github_c_agent:
                 _missing_intg_coord.append(
                     "⚠️ GitHub-интеграция не настроена — используй find_relevant_contacts_for_task или web_search. "
-                    "Добавить GitHub: Дашборд → Настройки агента → API-ключи → GitHub."
+                    "Добавить GitHub: https://asibiont.com/dashboard → API-ключи."
                 )
             # Telegram-канал: цели связанные с контентом/аудиторией, но нет канала
             _content_kw_c = ('контент', 'smm', 'пост', 'публикац', 'канал', 'аудитор', 'подписчик', 'продвижен')
@@ -6885,7 +6926,7 @@ class AnchorEngine:
                 if not _has_email_c:
                     _missing_intg_coord.append(
                         "💡 Email не настроен у агентов. Для outreach: "
-                        "Дашборд → Настройки агента → API-ключи → Gmail (вход + пароль приложения)."
+                        "https://asibiont.com/dashboard → API-ключи → Gmail (вход + пароль приложения)."
                     )
             # Google Sheets / Airtable: аналитика и отчёты
             _data_kw_c = ('отчёт', 'аналитик', 'таблиц', 'данные', 'мониторинг продаж', 'crm')
@@ -6899,7 +6940,7 @@ class AnchorEngine:
                 if not _has_sheets_c:
                     _missing_intg_coord.append(
                         "💡 Google Sheets / Airtable не подключены. "
-                        "Для автоотчётов: Google Cloud Console → Service Account → credentials.json → в настройки агента."
+                        "Для автоотчётов: Google Cloud Console → Service Account → credentials.json → https://asibiont.com/dashboard."
                     )
             # CRM: продажи, лиды, сделки, воронка, клиенты (e.g. риелтор, B2B, услуги)
             _sales_kw_c = ('продаж', 'лид', 'сделк', 'воронк', 'клиент', 'покупател', 'партнёр', 'b2b', 'переговор', 'договор')
@@ -6912,7 +6953,7 @@ class AnchorEngine:
                 if not _has_crm_c:
                     _missing_intg_coord.append(
                         "💡 CRM не подключена. Для трекинга сделок и лидов: "
-                        "AmoCRM или Bitrix24 → Настройки агента → API-ключи → CRM. "
+                        "AmoCRM или Bitrix24 → https://asibiont.com/dashboard → API-ключи. "
                         "Без CRM агент ведёт контакты в Google Sheets или задачах."
                     )
             # WhatsApp: продажи, клиентский сервис, недвижимость, услуги
@@ -6927,7 +6968,7 @@ class AnchorEngine:
                     _missing_intg_coord.append(
                         "💡 WhatsApp Business API не подключён. "
                         "Для клиентов в России WhatsApp — основной канал коммуникации. "
-                        "Подключить: Дашборд → Настройки агента → API-ключи → WhatsApp (через 360dialog или WABA)."
+                        "Подключить: https://asibiont.com/dashboard → API-ключи → WhatsApp (через 360dialog или WABA)."
                     )
             # Google Calendar / запись на встречи
             _meet_kw_c = ('встреч', 'показ', 'запись', 'консультац', 'онбординг', 'демо', 'созвон', 'звонок', 'просмотр')
@@ -6941,68 +6982,27 @@ class AnchorEngine:
                     _missing_intg_coord.append(
                         "💡 Google Calendar / Calendly не подключены. "
                         "Для записи на показы/консультации агент мог бы управлять расписанием. "
-                        "Дашборд → Настройки агента → API-ключи → Google Calendar (OAuth)."
+                        "https://asibiont.com/dashboard → API-ключи → Google Calendar (OAuth)."
                     )
             _missing_intg_str_c = ('\n\n⚠️ ВАЖНО для планирования (отсутствующие интеграции):\n'
                                    + '\n'.join(_missing_intg_coord)) if _missing_intg_coord else ''
 
             # ── Проактивный советник по интеграциям ──
-            # Помимо целевых подсказок выше, добавляем ПОЛНЫЙ каталог доступных интеграций,
-            # чтобы координатор мог проактивно предложить пользователю подключить что-то новое
+            # Собираем подключённые типы через единую систему _parse_agent_integrations + _enrich
             _all_connected_types: set = set()
             for _a_cat in real_agents:
-                _k_cat = (getattr(_a_cat, 'user_api_keys', '') or '').lower()
-                _p_cat = (getattr(_a_cat, 'python_code', '') or '').lower()
-                if 'gmail_user=' in _k_cat or 'imap_' in _k_cat or 'yandex_user=' in _k_cat or 'mailru_user=' in _k_cat:
-                    _all_connected_types.add('email')
-                if 'github_token=' in _k_cat or 'github_access_token=' in _k_cat:
-                    _all_connected_types.add('github')
-                if 'rss_url=' in _k_cat:
-                    _all_connected_types.add('rss')
-                if 'alphavantage' in _k_cat or 'alpha_vantage' in _k_cat:
-                    _all_connected_types.add('alphavantage')
-                if 'newsapi' in _k_cat:
-                    _all_connected_types.add('newsapi')
-                if 'notion' in _k_cat:
-                    _all_connected_types.add('notion')
-                if 'slack' in _k_cat:
-                    _all_connected_types.add('slack')
-                if 'trello' in _k_cat or 'jira' in _k_cat or 'asana' in _k_cat or 'todoist' in _k_cat:
-                    _all_connected_types.add('pm')
-                if 'amocrm' in _k_cat or 'bitrix' in _k_cat or 'hubspot' in _k_cat:
-                    _all_connected_types.add('crm')
-                if 'wildberries' in _k_cat or 'ozon' in _k_cat or 'shopify' in _k_cat:
-                    _all_connected_types.add('ecommerce')
-                if 'binance' in _k_cat or 'bybit' in _k_cat:
-                    _all_connected_types.add('crypto')
-                if 'google_sheets' in _k_cat or 'gspread' in _k_cat or 'airtable' in _k_cat or 'gspread' in _p_cat:
-                    _all_connected_types.add('sheets')
-                if 'stripe' in _k_cat or 'юкасс' in _k_cat or 'yookassa' in _k_cat:
-                    _all_connected_types.add('payments')
-                if 'telegram_bot_token=' in _k_cat:
-                    _all_connected_types.add('tg_channel')
-                if 'whatsapp' in _k_cat or 'waba_' in _k_cat or '360dialog' in _k_cat:
-                    _all_connected_types.add('whatsapp')
-                if 'google_calendar' in _k_cat or 'calendly' in _k_cat or 'gcal_' in _k_cat:
-                    _all_connected_types.add('calendar')
-                if 'sms_' in _k_cat or 'smsc' in _k_cat or 'unisender' in _k_cat:
-                    _all_connected_types.add('sms')
-                if 'vk_' in _k_cat or 'vkontakte' in _k_cat:
-                    _all_connected_types.add('vk')
-                if 'avito' in _k_cat or 'cian' in _k_cat or 'циан' in _k_cat:
-                    _all_connected_types.add('avito')
-                if 'youtube' in _k_cat or 'yt_api' in _k_cat:
-                    _all_connected_types.add('youtube')
-                if 'linkedin' in _k_cat:
-                    _all_connected_types.add('linkedin')
-                if 'google_maps' in _k_cat or '2gis' in _k_cat or 'gmaps' in _k_cat:
-                    _all_connected_types.add('maps')
-                if 'typeform' in _k_cat or 'tally' in _k_cat or 'google_forms' in _k_cat:
-                    _all_connected_types.add('forms')
-            if getattr(user, 'telegram_channel', None):
-                _all_connected_types.add('tg_channel')
-            if getattr(user, 'discord_webhook', None):
-                _all_connected_types.add('discord')
+                try:
+                    from ai_integration.autonomous_agent import _parse_agent_integrations as _pai_cat
+                    _det_cat = _pai_cat(
+                        getattr(_a_cat, 'user_api_keys', '') or '',
+                        getattr(_a_cat, 'python_code', '') or '',
+                        getattr(_a_cat, 'tools_allowed', '') or '',
+                        getattr(_a_cat, 'search_scope', '') or '',
+                    )
+                    _det_cat = _enrich_caps_with_user_channels(_det_cat, user)
+                except Exception:
+                    _det_cat = _enrich_caps_with_user_channels([], user)
+                _all_connected_types |= _detect_catalog_types(_det_cat)
 
             _FULL_CATALOG = [
                 ('email', 'Email (Gmail/Яндекс/Mail.ru)', 'чтение входящих + отправка', 'поиск людей, outreach, переговоры'),
@@ -7039,7 +7039,7 @@ class AnchorEngine:
                     + '\n'.join(_advisor_lines)
                     + '\n→ Если текущие подходы не дают результата — ПРЕДЛОЖИ пользователю подключить '
                     'новую интеграцию через Телеграм: "Подключите [интеграцию] для [цели] — '
-                    'инструкция в Дашборде → Настройки агента → API-ключи".\n'
+                    'инструкция в дашборде: https://asibiont.com/dashboard".\n'
                     '→ Включи это как один из шагов плана с tool="send_message_to_user" если считаешь подключение полезным.\n'
                     '→ ВАЖНО: список выше — только то что уже ВСТРОЕНО в систему. Если для целей пользователя '
                     'нужен инструмент которого нет в списке — ВСЁ РАВНО предложи его через send_message_to_user. '
@@ -11191,9 +11191,9 @@ class AnchorEngine:
                 if _action_count >= _stag_threshold and _no_progress:
                     _mt_str = f"/{_mt_int}" if _mt_int else ""
                     _stagnation_warn = (
-                        f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, но реальный прогресс = {_mc_int}{_mt_str}. "
-                        f"Текущая стратегия не работает. ПОПРОСИ пользователя подключить недостающие интеграции "
-                        f"или предложи конкретно другой подход в отчёте."
+                        f"🔴 СТАГНАЦИЯ: {_action_count} dispatch'ей за 48ч, реальный прогресс = {_mc_int}{_mt_str}. "
+                        f"Текущая стратегия не работает. Смени подход: предложи конкретные альтернативные шаги "
+                        f"или сообщи пользователю какие интеграции помогут (https://asibiont.com/dashboard)."
                     )
                     _feasibility_warnings.append(_stagnation_warn)
                     # Отправляем Telegram-уведомление пользователю если прошло >24ч с последнего стагнации-алёрта
@@ -14251,7 +14251,7 @@ class AnchorEngine:
                     if _is_tech and not _has_github_tok:
                         _suggestions = (
                             f"💡 Вижу что цель связана с tech-аудиторией.\n"
-                            f"Чтобы найти разработчиков через GitHub — добавь в настройки агента:\n"
+                            f"Чтобы найти разработчиков через GitHub — добавь в дашборде (https://asibiont.com/dashboard):\n"
                             f"  GITHUB_TOKEN=ghp_xxx (создай на github.com → Settings → Developer settings → Tokens)\n"
                             f"Это даёт 5000 запросов/час вместо 60 — агент найдёт сотни email.\n\n"
                             f"Или напиши агенту с GitHub: \"найди мне 10 Python-разработчиков\""

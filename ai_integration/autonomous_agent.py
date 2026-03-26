@@ -264,11 +264,21 @@ def _wrap_agent_code(code: str) -> str:
     # Собираем блоки: что до первого маркера (если есть) + каждая секция
     blocks = []
     pre = code[:matches[0].start()].strip()
+    _merge_pre = False
     if pre:
-        blocks.append(('# (инициализация)', pre))
+        # Если pre заканчивается незавершённым compound statement (else:, if ...:, for ...:)
+        # — объединяем с первой секцией, чтобы не разрывать блок
+        _last_line = pre.rstrip().split('\n')[-1].strip()
+        if _last_line.endswith(':'):
+            _merge_pre = True
+        else:
+            blocks.append(('# (инициализация)', pre))
     for i, m in enumerate(matches):
         end = matches[i + 1].start() if i + 1 < len(matches) else len(code)
-        blocks.append((m.group(0).strip(), code[m.start():end].strip()))
+        _block_code = code[m.start():end].strip()
+        if i == 0 and _merge_pre:
+            _block_code = pre + '\n' + _block_code
+        blocks.append((m.group(0).strip(), _block_code))
 
     lines = [_SECTION_RUNNER]
     for title, block in blocks:
@@ -1668,6 +1678,19 @@ class HybridAutonomousAgent:
             # Приводим email к нижнему регистру и убираем лишние слэши
             if 'recipient_email' in params and isinstance(params['recipient_email'], str):
                 params['recipient_email'] = params['recipient_email'].strip().lower().lstrip('/')
+            # GUARD: блокируем фейковые/placeholder email-адреса
+            _rcpt = params.get('recipient_email', '')
+            _FAKE_DOMAINS = (
+                '@example.com', '@example.org', '@example.net',
+                '@test.com', '@test.org', '@placeholder.',
+                '@email.com', '@mail.test', '@fake.',
+                '@domain.com', '@company.com', '@org.com',
+                '@sample.com', '@demo.com',
+            )
+            if _rcpt and any(_rcpt.endswith(d) or d in _rcpt for d in _FAKE_DOMAINS):
+                return [{"tool": tool_name, "success": False,
+                         "error": f"⛔ Email {_rcpt} — placeholder/фейковый адрес. "
+                                  "Найди реальный email через web_search или используй другой метод контакта."}]
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:
@@ -5889,11 +5912,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _only_research = _prior_tools_set and _prior_tools_set.issubset(_RESEARCH_ONLY_TOOLS)
                     # Разрешаем update_goal_progress БЕЗ действий если агент НЕ повышает числовой прогресс
                     # (т.е. это фиксация итога сессии-поиска, а не накрутка метрики)
+                    # metric_current НЕ проверяем здесь — handler имеет свои guard'ы
+                    # (delta >= 1, people-goals: inbox_reply для +4, replied outreach для +11)
                     _ugp_progress = _targs.get('progress')
-                    _ugp_metric = _targs.get('metric_current')
                     _is_progress_increase = (
-                        (_ugp_progress is not None and float(_ugp_progress) > 0)
-                        or (_ugp_metric is not None and float(_ugp_metric) > 0)
+                        _ugp_progress is not None and float(_ugp_progress) > 10
                     )
                     if _only_research and not _had_outgoing and _is_progress_increase:
                         _tc_result = json.dumps({
