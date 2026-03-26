@@ -4004,6 +4004,30 @@ class AnchorEngine:
                         f"\n💡 Если для цели нужна интеграция, которой нет в этом списке — "
                         f"попроси пользователя подключить её в Настройках → Агенты → API-ключи."
                     )
+                    # ── Блок жёстких ограничений по возможностям агента ──
+                    _hard_limits_c = []
+                    _agent_caps_lower = [str(c).lower() for c in (_detected or [])]
+                    _agent_keys_str = (agent_data.get('user_api_keys') or '').lower()
+                    _all_caps_str = ' '.join(_agent_caps_lower) + ' ' + _agent_keys_str
+                    # Звонки / SMS
+                    if not any(w in _all_caps_str for w in ('twilio', 'sms', 'звонк', 'sipuni', 'voip', '+7', 'phone_api')):
+                        _hard_limits_c.append("звонки/холодные звонки/обзвон (нет телефонной интеграции)")
+                    # Соцсети без API
+                    for _sn, _keys in [('Twitter/X', ('twitter', 'x.com')), ('LinkedIn', ('linkedin',)),
+                                       ('Instagram', ('instagram',)), ('VK', ('vk', 'вконтакте'))]:
+                        if not any(k in _all_caps_str for k in _keys):
+                            _hard_limits_c.append(f"публикации в {_sn}")
+                    # Telegram канал
+                    if not getattr(user, 'telegram_channel', None) and 'telegram_bot_token' not in _all_caps_str:
+                        _hard_limits_c.append("публикация в Telegram-канал")
+                    # Discord
+                    if not getattr(user, 'discord_webhook', None):
+                        _hard_limits_c.append("публикация в Discord")
+                    if _hard_limits_c:
+                        _channels_info_c += (
+                            f"\n🚫 ФИЗИЧЕСКИ НЕДОСТУПНО для {_chosen_name} (НЕ НАЗНАЧАЙ ЭТИ ЗАДАЧИ): "
+                            + ', '.join(_hard_limits_c) + "."
+                        )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
                     _project_c = (_user_prof_c.get('company') or '').strip()
@@ -6456,6 +6480,7 @@ class AnchorEngine:
                 _has_sheets = any(w in _keys_cr for w in ('gsheets', 'google_sheets', 'spreadsheet'))
                 _has_crypto = any(w in _keys_cr for w in ('binance', 'bybit'))
                 _has_alpha = 'alphavantage' in _keys_cr or 'alpha_vantage' in _keys_cr
+                _has_calls = any(w in _keys_cr for w in ('twilio', 'sipuni', 'voip', 'phone_api'))
 
                 # Собираем все каналы агента
                 _channels = []
@@ -6518,6 +6543,11 @@ class AnchorEngine:
                 elif not _channels and _py_cr:
                     _cap_rules_lines.append(
                         f"  🐍 {_p_cr['name']} [custom code]: run_agent_action с пользовательским Python-кодом."
+                    )
+                # Явный запрет звонков для агентов без телефонной интеграции
+                if not _has_calls:
+                    _cap_rules_lines.append(
+                        f"  🚫 {_p_cr['name']}: ЗАПРЕЩЕНО назначать звонки/холодные звонки/обзвон — нет Twilio/SIP."
                     )
             _cap_rules_str = (
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
@@ -7425,7 +7455,8 @@ class AnchorEngine:
                 "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя.\n"
                 "• ⛔ НЕТ Telegram/Discord-клиента — агенты НЕ МОГУТ вступать/постить в ЧУЖИЕ каналы.\n"
                 "• ⛔ Хабр и VC.ru — публичного API нет, публикация невозможна. Только поиск: web_search('site:habr.com ...').\n"
-                "• Reddit/Medium — публикация возможна ТОЛЬКО если агент настроен с python_code-скриптом и API-ключом пользователя. Без этого — только поиск.\n\n"
+                "• Reddit/Medium — публикация возможна ТОЛЬКО если агент настроен с python_code-скриптом и API-ключом пользователя. Без этого — только поиск.\n"
+                "• ⛔ Звонки/холодные звонки/обзвон — ТОЛЬКО если у агента есть Twilio/SIP в ключах. Без этого назначать НЕЛЬЗЯ — агенты не имеют доступа к телефонии.\n\n"
 
                 "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
                 "• Генерируй СВОИ уникальные стратегии — контент-магниты, партнёрства, community building.\n"
