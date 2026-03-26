@@ -7396,12 +7396,12 @@ async def api_interactions_handler(request):
         )
         # Internal coordinator/assignment anchor types — saved for AI context, hidden from user
         _HIDDEN_ANCHOR_TYPES = {
-            # coordinator_plan — ВИДИМ (стартовый анонс «Запускаю автопилот…»)
-            # coordinator_result — ВИДИМ (результаты шагов агентов)
-            # coordinator_summary — ВИДИМ (итоговый отчёт цикла)
-            # agent_chain_transfer — ВИДИМ (межагентское общение: агент передаёт задачу другому)
-            # agent_chain_continue — ВИДИМ (агент продолжает и отчитывается о прогрессе)
-            'coordinator_assignment',     # задание координатора агенту (внутреннее)
+            # coordinator_plan        — ВИДИМ (стартовый анонс «Запускаю автопилот…»)
+            # coordinator_assignment  — ВИДИМ (ASI даёт задание агентам — показываем как директиву)
+            # coordinator_result      — ВИДИМ (результаты шагов агентов)
+            # coordinator_summary     — ВИДИМ (итоговый отчёт цикла)
+            # agent_chain_transfer    — ВИДИМ (межагентское общение)
+            # agent_chain_continue    — ВИДИМ (агент продолжает работу)
             'coordinator_agent_request',  # запрос агента на интеграцию (внутренний)
             'coordinator_intg_recommend', # рекомендация интеграции (внутренний)
             'goal_autopilot_review',      # проверка результата цикла (внутренний)
@@ -7430,9 +7430,8 @@ async def api_interactions_handler(request):
                         # Hide internal coordinator/assignment messages from user
                         if _jp.get('__anchor_type') in _HIDDEN_ANCHOR_TYPES:
                             continue
-                        # agent_delegation from ASI = internal task assignment to agent, hide it
-                        if _jp.get('__anchor_type') == 'agent_delegation' and _jp.get('__agent', {}).get('name') == 'ASI':
-                            continue
+                        # agent_delegation from ASI = показываем (это директива агенту)
+                        # coordinator_assignment = показываем (ASI даёт задание агенту — видна «жизнь» офиса)
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
             # Skip noise messages (very short AI/agent messages with template text)

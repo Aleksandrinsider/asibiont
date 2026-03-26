@@ -1933,11 +1933,12 @@
                     }
                 } catch(e) { /* обычный текст — продолжаем */ }
             }
-            // Скрываем внутренние задания координатора агентам — пользователю не нужны
+            // Скрываем только техническо-шумовые типы
             if (_anchorType === 'coordinator_agent_request') return;
-            if (_anchorType === 'coordinator_assignment') return;
-            // agent_delegation от ASI = внутреннее задание координатора агенту
-            if (_anchorType === 'agent_delegation' && agentInfo && agentInfo.name === 'ASI') return;
+            // coordinator_assignment и agent_delegation от ASI — ПОКАЗЫВАЕМ (задания агентам)
+            // Это создаёт ощущение живого общения агентов в чате
+            if (_anchorType === 'asi_self_analysis') return;
+            if (_anchorType === 'asi_director_review') return;
             // Директивы директора (agent_msg без __agent): показываем с именем "Директор"
             if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
                 agentInfo = { name: 'Директор', avatar_url: '' };
