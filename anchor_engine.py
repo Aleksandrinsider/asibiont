@@ -4477,14 +4477,15 @@ class AnchorEngine:
                 _tf_esc = data.get('tool_frequency', {})
                 _tot_disp = sum(_tf_esc.values())
                 _blocker_in_result = bool(result and 'БЛОКЕР:' in result.upper())
+                _intg_need_in_result = bool(result and 'НУЖНА ИНТЕГРАЦИЯ:' in result.upper())
                 _stag_warn = next((w for w in _fw_esc if 'СТАГНАЦИЯ' in w.upper()), '')
                 _cap_warns = [w for w in _fw_esc if '⚠️' in w or '💡' in w]
-                # Escalation: отправляем при стагнации ИЛИ БЛОКЕРЕ — независимо от шумности результата
+                # Escalation: отправляем при стагнации, БЛОКЕРЕ или НУЖНА ИНТЕГРАЦИЯ — независимо от шумности
                 # cap_warns (интеграционные советы) отправляем отдельно если есть, даже без стагнации
-                if self.bot and (_stag_warn or _blocker_in_result or _cap_warns):
+                if self.bot and (_stag_warn or _blocker_in_result or _intg_need_in_result or _cap_warns):
                     try:
-                        # БЛОКЕР/стагнация: cooldown 3ч; только интеграционные советы: cooldown 24ч
-                        _esc_cooldown_h = 3 if (_stag_warn or _blocker_in_result) else 24
+                        # БЛОКЕР/стагнация: cooldown 3ч; НУЖНА ИНТЕГРАЦИЯ/советы: cooldown 12ч
+                        _esc_cooldown_h = 3 if (_stag_warn or _blocker_in_result) else 12
                         _esc_recent = session.query(Interaction).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'proactive',
@@ -4497,11 +4498,25 @@ class AnchorEngine:
                                 _bl_line = next((ln for ln in result.splitlines() if 'БЛОКЕР:' in ln.upper()), '')
                                 if _bl_line:
                                     _esc_lines.append(f"🔴 {_bl_line.strip()}")
+                            # Извлекаем все строки НУЖНА ИНТЕГРАЦИЯ: из отчёта агента
+                            if _intg_need_in_result and result:
+                                _intg_lines = [
+                                    ln.strip() for ln in result.splitlines()
+                                    if 'НУЖНА ИНТЕГРАЦИЯ:' in ln.upper() and ln.strip()
+                                ]
+                                for _il in _intg_lines[:3]:
+                                    # Нормализуем формат: убираем дублирующий prefix если есть
+                                    _il_clean = _il if _il.upper().startswith('НУЖНА') else f"НУЖНА ИНТЕГРАЦИЯ: {_il}"
+                                    _esc_lines.append(f"🔌 {_il_clean}")
                             if _stag_warn:
                                 _esc_lines.append(_stag_warn)
                             if _cap_warns:
                                 _esc_lines.extend(_cap_warns[:2])
-                            _esc_lines.append("💬 Напиши мне — что добавить или попробовать. Я перенастрою агентов.")
+                            if _esc_lines:
+                                if _intg_need_in_result or _cap_warns:
+                                    _esc_lines.append("⚙️ Добавить интеграцию: Настройки → твой агент → API-ключи\n💬 Напиши мне — что добавить или попробовать. Я перенастрою задачи.")
+                                else:
+                                    _esc_lines.append("💬 Напиши мне — что добавить или попробовать. Я перенастрою агентов.")
                             _esc_text = '\n\n'.join(_esc_lines)
                             await self.bot.send_message(chat_id=user.telegram_id, text=_esc_text)
                             session.add(Interaction(
@@ -4514,8 +4529,8 @@ class AnchorEngine:
                                 }, ensure_ascii=False),
                             ))
                             session.commit()
-                            logger.info("[ANCHOR-AUTOPILOT] escalation sent user %d (%d dispatches, blocker=%s)",
-                                        user.id, _tot_disp, _blocker_in_result)
+                            logger.info("[ANCHOR-AUTOPILOT] escalation sent user %d (%d dispatches, blocker=%s, intg_need=%s)",
+                                        user.id, _tot_disp, _blocker_in_result, _intg_need_in_result)
                     except Exception as _esc_err:
                         logger.debug("[ANCHOR-AUTOPILOT] escalation send failed: %s", _esc_err)
                         try:
@@ -10757,6 +10772,15 @@ class AnchorEngine:
                 if not _has_content_cap and _gap > 20:
                     _feasibility_warnings.append(
                         f"💡 Для '{g['title']}' ({_gap} осталось) полезен Telegram-канал или Discord для массового охвата."
+                    )
+
+            # Цель без metric_target — агент не знает когда остановиться
+            if not _mt and (g.get('progress_percentage') or 0) < 90:
+                if actions_history and len(actions_history) >= 4:
+                    _feasibility_warnings.append(
+                        f"💡 Цель '{g.get('title', '')[:50]}' не имеет числового таргета. "
+                        f"Агентам сложно понять когда цель достигнута. "
+                        f"Напиши мне сколько человек/единиц ты хочешь привлечь — я обновлю цель."
                     )
 
             # Стагнация: >12ч без реального прогресса → уведомляем пользователя в Telegram
