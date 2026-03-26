@@ -4718,7 +4718,21 @@ class AnchorEngine:
                                     _il_clean = _il if _il.upper().startswith('НУЖНА') else f"НУЖНА ИНТЕГРАЦИЯ: {_il}"
                                     _esc_lines.append(f"🔌 {_il_clean}")
                             if _stag_warn:
-                                _esc_lines.append(_stag_warn)
+                                # Строим понятное сообщение для пользователя (не агент-инструкцию)
+                                _stag_goals = data.get('goals', [])
+                                _stag_active = [g for g in _stag_goals if g.get('status') not in ('completed', 'deleted')]
+                                _stag_g_title = _stag_active[0].get('title', '')[:60] if _stag_active else ''
+                                _stag_mc = int(_stag_active[0].get('metric_current', 0) or 0) if _stag_active else 0
+                                _stag_mt = int(_stag_active[0].get('metric_target', 0) or 0) if _stag_active else 0
+                                _stag_mu = str(_stag_active[0].get('metric_unit', '') or '') if _stag_active else ''
+                                _stag_prog = f"{_stag_mc}/{_stag_mt} {_stag_mu}".strip() if _stag_mt else (
+                                    f"{int(_stag_active[0].get('progress_percentage', 0) or 0)}%" if _stag_active else "0%"
+                                )
+                                _stag_goal_str = f"«{_stag_g_title}»" if _stag_g_title else "текущей цели"
+                                _esc_lines.append(
+                                    f"⚠️ По {_stag_goal_str} прогресс не растёт ({_stag_prog}).\n"
+                                    f"Агенты пробуют разные подходы, но результата пока нет."
+                                )
                             if _cap_warns:
                                 _esc_lines.extend(_cap_warns[:2])
                             if _esc_lines:
