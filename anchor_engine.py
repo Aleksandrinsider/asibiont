@@ -4095,7 +4095,7 @@ class AnchorEngine:
                             "  «[Имя], если дневной лимит сегодня исчерпан — не жди, напиши пришедшим ответам "
                             "и найди 2 контакта на dev.to. Завтра продолжим рассылку.»"
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=200)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=400)
                         if _gen and len(_gen.strip()) > 15:
                             _coord_text = _gen.strip()
                     except Exception as _cgen_err:
@@ -7630,6 +7630,21 @@ class AnchorEngine:
             # Накапливаем контекст между шагами — используется в финальном отчёте
             _bridge_notes: list = []
 
+            # ── Снапшот метрик целей ДО цикла — для сравнения после ──
+            _metrics_before: dict = {}
+            try:
+                from models import Goal as _Goal_snap
+                for _g_snap in session.query(_Goal_snap).filter(
+                    _Goal_snap.user_id == user.id,
+                    _Goal_snap.status == 'active',
+                ).all():
+                    _metrics_before[_g_snap.id] = {
+                        'progress': _g_snap.progress_percentage or 0,
+                        'metric_current': _g_snap.metric_current or 0,
+                    }
+            except Exception as _snap_err:
+                logger.debug('[COORD] metrics snapshot error: %s', _snap_err)
+
             # Стартовый анонс "Продолжаю работу..." убран — не несёт полезной информации.
             # Пользователь увидит конкретные поручения агентам и финальный отчёт.
 
@@ -8403,6 +8418,21 @@ class AnchorEngine:
                     if _intg_live_lines else ''
                 )
 
+                # ── Долгосрочная память агента: записанные провалы предыдущих циклов ──
+                _agent_failure_memory = ''
+                try:
+                    _ag_sys_note = (getattr(_target_ag, 'system_note', '') or '').strip()
+                    if _ag_sys_note:
+                        _note_lines = [l for l in _ag_sys_note.split('\n') if l.startswith('[')]
+                        if _note_lines:
+                            _agent_failure_memory = (
+                                "\n\n📋 ТВОЯ ИСТОРИЯ НЕУДАЧНЫХ ЦИКЛОВ (анализируй и меняй подход):\n"
+                                + '\n'.join(f"  {l}" for l in _note_lines[-5:]) + '\n'
+                                "  → Если видишь повтор тех же инструментов — выбери ДРУГОЙ подход!\n"
+                            )
+                except Exception as _afm_err:
+                    logger.debug('[COORD] agent failure memory read: %s', _afm_err)
+
                 _agent_prompt = (
                     f"Твоё задание:\n{_ag_task}\n"
                     + (f"\n🎯 Работаешь НА ЦЕЛЬ: «{_ag_goal_title}»\n"
@@ -8426,6 +8456,7 @@ class AnchorEngine:
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\nИзвестные контакты (есть в системе, вызови list_email_contacts для полных данных):\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
+                    + _agent_failure_memory
                     + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
                     + _agent_seen_block
                     + (f"\n\nЭТИ инструменты ЛОМАЛИСЬ (не повторяй): {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
@@ -8835,6 +8866,81 @@ class AnchorEngine:
                     _bridge_notes.append(f"{_ag_name}: {_bn_text}{_next_hint}")
 
                 await asyncio.sleep(0.5)  # небольшая пауза между агентами
+
+            # ── Сравниваем метрики ДО/ПОСЛЕ цикла — детектируем реальный прогресс ──
+            try:
+                from models import Goal as _Goal_delta
+                _any_real_progress = False
+                _delta_lines = []
+                for _g_d in session.query(_Goal_delta).filter(
+                    _Goal_delta.user_id == user.id,
+                    _Goal_delta.status == 'active',
+                ).all():
+                    _before_d = _metrics_before.get(_g_d.id, {})
+                    _prog_before = _before_d.get('progress', 0)
+                    _prog_after = _g_d.progress_percentage or 0
+                    _mc_before = _before_d.get('metric_current', 0)
+                    _mc_after = _g_d.metric_current or 0
+                    if _prog_after > _prog_before or _mc_after > _mc_before:
+                        _any_real_progress = True
+                        _delta_lines.append(
+                            f"{_g_d.title[:50]}: {_prog_before}%→{_prog_after}% "
+                            f"({int(_mc_before)}→{int(_mc_after)} {(getattr(_g_d,'metric_unit','') or '')})"
+                        )
+                if _delta_lines:
+                    logger.info('[COORD] real progress in cycle: %s', '; '.join(_delta_lines))
+
+                # Если цикл не дал никакого прогресса → записываем неудачные стратегии в память агентов
+                if not _any_real_progress and _all_tools:
+                    _fail_tools_str = ', '.join(sorted(set(_all_tools)))
+                    _fail_goals_str = '; '.join(g.get('title', '')[:40] for g in _goals[:2])
+                    try:
+                        import json as _json_mem
+                        from models import UserAgent as _UA_mem, Session as _UA_Sess_mem
+                        _ua_sess_mem = _UA_Sess_mem()
+                        try:
+                            _failed_agents = [p.get('name') for p in _profiles if p.get('name')]
+                            for _ag_nm_mem in _failed_agents:
+                                _ag_obj_mem = _ua_sess_mem.query(_UA_mem).filter(
+                                    _UA_mem.user_id == user.id,
+                                    _UA_mem.name == _ag_nm_mem,
+                                ).first()
+                                if not _ag_obj_mem:
+                                    continue
+                                try:
+                                    _cur_note = (_ag_obj_mem.system_note or '').strip()
+                                    _fail_note = (
+                                        f"[{__import__('datetime').datetime.utcnow().strftime('%d.%m')}] "
+                                        f"Цикл без прогресса: использовал {_fail_tools_str} для «{_fail_goals_str}» — "
+                                        f"метрики не изменились. Попробуй другой подход."
+                                    )
+                                    # Храним только последние 5 подобных заметок
+                                    _NOTE_MARKER = '[' 
+                                    _existing_notes = [l for l in _cur_note.split('\n') if l.startswith(_NOTE_MARKER)]
+                                    _kept_notes = _existing_notes[-4:] if len(_existing_notes) >= 5 else _existing_notes
+                                    _no_marker_lines = [l for l in _cur_note.split('\n') if not l.startswith(_NOTE_MARKER)]
+                                    _new_note = '\n'.join(_no_marker_lines + _kept_notes + [_fail_note]).strip()
+                                    _ua_sess_mem.execute(
+                                        __import__('sqlalchemy').text(
+                                            'UPDATE user_agents SET system_note=:n WHERE id=:id'
+                                        ),
+                                        {'n': _new_note[:2000], 'id': _ag_obj_mem.id}
+                                    )
+                                    logger.info('[COORD] recorded failed strategy for agent %s', _ag_nm_mem)
+                                except Exception as _mn_err:
+                                    logger.debug('[COORD] mem note write: %s', _mn_err)
+                            _ua_sess_mem.commit()
+                        except Exception as _ua_m_err:
+                            logger.debug('[COORD] agent memory session: %s', _ua_m_err)
+                            try: _ua_sess_mem.rollback()
+                            except Exception: pass
+                        finally:
+                            try: _ua_sess_mem.close()
+                            except Exception: pass
+                    except Exception as _mem_outer:
+                        logger.debug('[COORD] failed strategy recording outer: %s', _mem_outer)
+            except Exception as _delta_err:
+                logger.debug('[COORD] delta metrics error: %s', _delta_err)
 
             # ── Обновляем AAL ──
             if _aal_id_c:
