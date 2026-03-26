@@ -16338,6 +16338,46 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
     if user_id not in agent._active_agent_data:
         return " Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
 
+    # Нормализуем action по реальным возможностям скрипта агента.
+    # Это снижает шум ошибок вида "не поддерживает действие get_latest".
+    try:
+        import re as _re_ra
+        _adata = agent._active_agent_data.get(user_id) or {}
+        _py_code = (_adata.get('python_code') or '').strip()
+        _supported = []
+        if _py_code:
+            for _m in _re_ra.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _py_code):
+                _a = _m.group(1).strip()
+                if _a and _a not in _supported:
+                    _supported.append(_a)
+            for _m in _re_ra.finditer(r"ACTION\s+in\s*\(([^)]+)\)", _py_code):
+                for _part in _m.group(1).split(','):
+                    _a = _part.strip().strip("'\" ").strip()
+                    if _a and _a not in _supported:
+                        _supported.append(_a)
+
+        _supported_l = [s.lower() for s in _supported]
+        _orig_action = (action or '').strip()
+        _action_l = _orig_action.lower()
+
+        if _orig_action and _supported and _action_l not in _supported_l:
+            _alias_map = {
+                'get_latest': ['check_news_and_markets', 'read_rss', 'get_latest_news', 'get_news'],
+                'check_emails': ['check_email', 'check_inbox', 'read_inbox'],
+                'read_rss': ['check_news_and_markets', 'get_latest_news', 'get_news'],
+            }
+            _replacement = ''
+            for _cand in _alias_map.get(_action_l, []):
+                if _cand.lower() in _supported_l:
+                    _replacement = _cand
+                    break
+            if not _replacement:
+                _replacement = _supported[0]
+            logger.info("[RUN_AGENT_ACTION] normalize action: %s -> %s (user=%s)", _orig_action, _replacement, user_id)
+            action = _replacement
+    except Exception as _norm_e:
+        logger.debug("[RUN_AGENT_ACTION] action normalize skipped: %s", _norm_e)
+
     raw_params = {'action': action, 'params': params or {}}
     result = await agent._run_external_action(raw_params, user_id)
 
