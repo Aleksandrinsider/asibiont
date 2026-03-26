@@ -15153,6 +15153,15 @@ async def save_email_contact(
             session.commit()
             return f" Контакт {email_clean} обновлён"
 
+        # Авто-определение source по контексту (если агент не указал)
+        _effective_source = source or 'manual'
+        if _effective_source in ('manual', 'outreach'):
+            _all_fields = f"{notes or ''} {company or ''} {position or ''}".lower()
+            if 'github' in _all_fields or 'repos,' in _all_fields or 'followers' in _all_fields:
+                _effective_source = 'github'
+            elif 'web_search' in _all_fields or 'найден через поиск' in _all_fields:
+                _effective_source = 'web_search'
+
         contact = EmailContact(
             user_id=user.id,
             email=email_clean,
@@ -15160,7 +15169,7 @@ async def save_email_contact(
             company=(company or '').strip() or None,
             position=(position or '').strip() or None,
             notes=(notes or '').strip() or None,
-            source=source or 'manual',
+            source=_effective_source,
             # Дефолт 'new' — агент сохраняет найденный контакт, это НЕ означает что он ответил
             status=status or 'new',
         )

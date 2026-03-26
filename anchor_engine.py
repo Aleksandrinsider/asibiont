@@ -4864,6 +4864,28 @@ class AnchorEngine:
                                 elif any('mail' in c for c in _esc_caps_all) and _n_contacts > 0 and not _unsent:
                                     _bottlenecks.append(f"📧 Все {_n_contacts} контактов уже получили письма. Нужны новые контакты.")
 
+                                # Конверсия по каналам (GitHub vs web_search vs другое)
+                                try:
+                                    from models import EmailOutreach as _EO_esc
+                                    _all_sent_esc = session.query(_EO_esc).filter(
+                                        _EO_esc.user_id == user.id,
+                                        _EO_esc.status.in_(['sent', 'replied']),
+                                    ).all()
+                                    _gh_sent = [e for e in _all_sent_esc if e.recipient_context and 'github' in (e.recipient_context or '').lower()]
+                                    _gh_replied = [e for e in _gh_sent if e.status == 'replied']
+                                    _other_sent = [e for e in _all_sent_esc if e not in _gh_sent]
+                                    _other_replied = [e for e in _other_sent if e.status == 'replied']
+                                    if _gh_sent and len(_gh_sent) >= 3:
+                                        _gh_rate = int(len(_gh_replied) / len(_gh_sent) * 100)
+                                        _other_rate = int(len(_other_replied) / max(len(_other_sent), 1) * 100) if _other_sent else 0
+                                        if _gh_rate > _other_rate and _gh_replied:
+                                            _bottlenecks.append(
+                                                f"📊 GitHub-контакты конвертируются лучше всего: {len(_gh_replied)}/{len(_gh_sent)} ({_gh_rate}%) vs остальные {len(_other_replied)}/{len(_other_sent)} ({_other_rate}%). "
+                                                f"Продолжай искать через GitHub search_users."
+                                            )
+                                except Exception as _conv_err:
+                                    logger.debug("[ESCALATION] conversion stats: %s", _conv_err)
+
                                 # Ожидание ответов
                                 if _pending:
                                     _bottlenecks.append(f"⏳ Ждём ответа от {len(_pending)} адресатов.")

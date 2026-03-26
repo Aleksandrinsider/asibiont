@@ -1064,7 +1064,7 @@ TOOLS = [
                     },
                     "source": {
                         "type": "string",
-                        "description": "Источник: manual / campaign / import / imap_reply / rss"
+                        "description": "Источник: manual / campaign / import / imap_reply / rss / github / web_search. При сохранении из GitHub search_users ставь 'github', при web_search — 'web_search'."
                     },
                     "status": {
                         "type": "string",
