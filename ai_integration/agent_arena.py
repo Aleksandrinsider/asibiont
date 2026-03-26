@@ -254,7 +254,7 @@ def _load_all_public_agents_for_avatars() -> list:
                     .limit(60).all())
             result = []
             for a, u in rows:
-                color = '#6C727F'
+                color = '#F6F8FA'
                 initials = (a.name or '?')[:2].upper()
                 result.append({
                     'id': f'mkt_{a.id}',
@@ -285,7 +285,7 @@ def _load_marketplace_agents() -> list:
                     .limit(30).all())
             result = []
             for a, u in rows:
-                color = '#6C727F'
+                color = '#F6F8FA'
                 initials = (a.name or '?')[:2].upper()
                 _desc = a.description or ''
                 if a.personality:
@@ -1841,7 +1841,7 @@ async def run_arena_loop(arena_id: str = "default", max_turns: int = 40):
         "id": f"open_{int(time.time())}",
         "agent_id": "system",
         "agent_name": "МОДЕРАТОР",
-        "color": "#6C727F",
+        "color": "#F6F8FA",
         "initials": "МД",
         "text": f"Тема сегодняшней дискуссии: «{arena['topic']}» — Начинаем.",
         "ts": datetime.utcnow().isoformat(),

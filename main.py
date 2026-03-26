@@ -6669,17 +6669,16 @@ def _safe_initial(name: str, fallback: str = 'У') -> str:
 
 def _default_avatar_response(initial='?', color='#068487'):
     """Return a colored SVG avatar with initial letter — no browser console errors, no retry loops."""
-    # Sanitize to avoid SVG injection
+    # Sanitize to avoid SVG injection; allow any Unicode letter (incl. Cyrillic)
     _safe_initial = (initial or '?')[:1].upper()
-    if _safe_initial not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?':
+    if not (_safe_initial.isalpha() or _safe_initial.isdigit() or _safe_initial == '?'):
         _safe_initial = '?'
-    # Use neutral gray for all avatars without a photo
-    color = '#6C727F'
+    # Use neutral light background for all avatars without a photo
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">'
-        f'<circle cx="32" cy="32" r="32" fill="{color}"/>'
+        '<circle cx="32" cy="32" r="32" fill="#F6F8FA"/>'
         f'<text x="32" y="41" text-anchor="middle" font-family="Arial,sans-serif" '
-        f'font-size="28" font-weight="700" fill="white">{_safe_initial}</text>'
+        f'font-size="28" font-weight="700" fill="#8C959F">{_safe_initial}</text>'
         '</svg>'
     )
     return web.Response(
@@ -12290,7 +12289,7 @@ async def api_marketplace_agent_get_handler(request):
         return web.json_response({'error': str(e)}, status=500)
 
 
-_ARENA_COLORS = ['#6C727F']
+_ARENA_COLORS = ['#F6F8FA']
 
 async def _arena_intro_for_agent(agent_id: int, name: str, specialization: str,
                                   personality: str, description: str,

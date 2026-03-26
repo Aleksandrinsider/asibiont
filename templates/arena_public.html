@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -396,7 +396,7 @@
             if (parentDiv) {
                 const cmtContainer = parentDiv.querySelector('[id^="pcmts-"]');
                 if (cmtContainer) {
-                    const color = escapeHtml(msg.color || '#6C727F');
+                    const color = escapeHtml(msg.color || '#F6F8FA');
                     const initials = escapeHtml(msg.initials || '?');
                     const agentName = escapeHtml(msg.agent_name || '');
                     const agentTitle = escapeHtml(_pubAgentTitleMap[msg.agent_id] || msg.agent_title || '');
@@ -415,8 +415,8 @@
                               .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
                         : '';
                     const avatarHtmlReply = avatarUrl
-                        ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;flex-shrink:0;cursor:pointer;" onclick="window.location.href='/'"><div style="width:24px;height:24px;border-radius:50%;background:${color};display:none;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;cursor:pointer;" onclick="window.location.href='/'">${initials}</div>`
-                        : `<div style="width:24px;height:24px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;cursor:pointer;" onclick="window.location.href='/'">${initials}</div>`;
+                        ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;flex-shrink:0;cursor:pointer;" onclick="window.location.href='/'"><div style="width:24px;height:24px;border-radius:50%;background:${color};display:none;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#8C959F;flex-shrink:0;border:2px solid #E8ECEF;cursor:pointer;" onclick="window.location.href='/'">${initials}</div>`
+                        : `<div style="width:24px;height:24px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#8C959F;flex-shrink:0;border:2px solid #E8ECEF;cursor:pointer;" onclick="window.location.href='/'">${initials}</div>`;
                     replyDiv.innerHTML = `
                         ${avatarHtmlReply}
                         <div style="flex:1;min-width:0;">
@@ -452,7 +452,7 @@
                 ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
                       .toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'})
                 : '';
-            const color = escapeHtml(msg.color || '#6C727F');
+            const color = escapeHtml(msg.color || '#F6F8FA');
             const initials = escapeHtml(msg.initials || '?');
             const agentName = escapeHtml(msg.agent_name || '');
             const agentTitle = escapeHtml(_pubAgentTitleMap[msg.agent_id] || msg.agent_title || '');
@@ -470,8 +470,8 @@
             div.dataset.serverId = msg.id || '';
             div.dataset.agentId = msg.agent_id || '';
             const avatarHtmlPost = avatarUrl
-                ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;flex-shrink:0;${_pubCursor}" ${_pubOnClick}><div style="display:none;width:38px;height:38px;border-radius:50%;background:${color};align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;${_pubCursor}" ${_pubOnClick}>${initials}</div>`
-                : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:white;flex-shrink:0;border:2px solid #E8ECEF;${_pubCursor}" ${_pubOnClick}>${initials}</div>`;
+                ? `<img src="${escapeHtml(avatarUrl)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;background:#F6F8FA;flex-shrink:0;${_pubCursor}" ${_pubOnClick}><div style="display:none;width:38px;height:38px;border-radius:50%;background:${color};align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#8C959F;flex-shrink:0;border:2px solid #E8ECEF;${_pubCursor}" ${_pubOnClick}>${initials}</div>`
+                : `<div style="width:38px;height:38px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#8C959F;flex-shrink:0;border:2px solid #E8ECEF;${_pubCursor}" ${_pubOnClick}>${initials}</div>`;
             div.innerHTML = `
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #F6F8FA;">
@@ -637,7 +637,7 @@
         userDiv.id = _cmtId;
         userDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
         userDiv.innerHTML = `
-            <div style="width:24px;height:24px;border-radius:50%;background:#068487;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:white;border:2px solid #E8ECEF;flex-shrink:0;">Я</div>
+            <div style="width:24px;height:24px;border-radius:50%;background:#F6F8FA;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#8C959F;border:2px solid #E8ECEF;flex-shrink:0;">Я</div>
             <div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
                     <span style="font-size:12px;font-weight:400;color:#374151;">Вы</span>
@@ -663,7 +663,7 @@
         }).then(r => r.json()).then(reply => {
             if (reply._reply_id) _pubRenderedIds.add(reply._reply_id);
             if (reply._user_cmt_id) _pubRenderedIds.add(reply._user_cmt_id);
-            const rc = escapeHtml(reply.color || '#6C727F');
+            const rc = escapeHtml(reply.color || '#F6F8FA');
             const ri = escapeHtml(reply.initials || '?');
             const _rNow = new Date();
             const _rDate = _rNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
@@ -672,7 +672,7 @@
             agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;animation:arenaFadeIn 0.3s ease;';
             agentDiv.dataset.agentReply = '1';
             agentDiv.innerHTML = `
-                <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:white;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
+                <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#8C959F;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
                         <span style="font-size:12px;font-weight:600;color:#1F2328;">${escapeHtml(reply.agent_name||'')}</span>
@@ -703,7 +703,7 @@
         div.style.cssText = 'display:flex;gap:14px;margin-bottom:8px;padding:8px;animation:arenaFadeIn 0.35s ease;';
         div.dataset.postText = text;
         div.innerHTML = `
-            <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#068487,#05696c);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:white;flex-shrink:0;border:2px solid #E8ECEF;">Я</div>
+            <div style="width:38px;height:38px;border-radius:50%;background:#F6F8FA;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#8C959F;flex-shrink:0;border:2px solid #E8ECEF;">Я</div>
             <div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #F6F8FA;">
                     <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
@@ -810,8 +810,8 @@
         if (!content) return;
         const initial = (agent.name || '?').substring(0, 2).toUpperCase();
         const avHtml = agent.avatar_url
-            ? `<img src="${escapeHtml(agent.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;margin-bottom:8px;"><div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:none;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`
-            : `<div style="width:64px;height:64px;border-radius:50%;background:#068487;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`;
+            ? `<img src="${escapeHtml(agent.avatar_url)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid #E8ECEF;margin-bottom:8px;"><div style="width:64px;height:64px;border-radius:50%;background:#F6F8FA;color:#8C959F;display:none;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`
+            : `<div style="width:64px;height:64px;border-radius:50%;background:#F6F8FA;color:#8C959F;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:20px;border:2px solid #E8ECEF;margin-bottom:8px;">${escapeHtml(initial)}</div>`;
         let html = `<div style="display:flex;flex-direction:column;align-items:center;margin-bottom:16px;">${avHtml}`;
         html += `<p style="margin:0;font-weight:600;color:#374151;font-size:15px;">${escapeHtml(agent.name || '')}</p>`;
         if (agent.specialization) html += `<p style="margin:4px 0 0;font-size:13px;color:#068487;">${escapeHtml(agent.specialization)}</p>`;
