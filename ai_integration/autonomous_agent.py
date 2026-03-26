@@ -593,21 +593,20 @@ class HybridAutonomousAgent:
         # Profile / rules
         'update_profile', 'save_user_rule',
         # Research & search — always useful
-        'research_topic', 'web_search', 'quick_topic_search', 'research_and_plan',
-        'get_news_trends', 'analyze_situation_and_suggest_tasks',
+        'research_topic', 'web_search',
+        'get_news_trends',
         # Contacts / outreach
-        'find_relevant_contacts_for_task', 'set_contact_alert', 'find_partners',
+        'find_relevant_contacts_for_task', 'set_contact_alert',
         'save_email_contact', 'list_email_contacts',
         # Content creation
-        'create_post', 'generate_image', 'generate_marketing_content',
+        'create_post', 'generate_image',
         'publish_to_telegram', 'publish_to_discord',
         # Email (commonly requested even without keyword)
         'send_email', 'check_emails',
         # Delegation & agents
         'delegate_task', 'run_agent_action',
         # Campaigns — conversation can span multiple turns
-        'start_content_campaign', 'manage_content_campaign',
-        'start_delegation_campaign', 'start_email_campaign',
+        'start_delegation_campaign',
         # Scheduling & background
         'schedule_background_task',
         # System
@@ -622,7 +621,7 @@ class HybridAutonomousAgent:
                          'outreach', 'аутрич', 'холодн'],
             'tools': {'send_email', 'negotiate_by_email', 'list_email_contacts',
                       'save_email_contact', 'send_outreach_email', 'reply_to_outreach_email',
-                      'send_follow_up_email', 'start_email_campaign', 'add_email_leads'},
+                      'send_follow_up_email'},
         },
         'delegation': {
             'keywords': ['делегир', 'delegat', 'поруч', 'назнач', 'аутсорс',
@@ -1543,7 +1542,7 @@ class HybridAutonomousAgent:
 
                     # ── Decision Log (#6): записываем стратегические решения ──
                     _STRATEGIC_TOOLS = {
-                        'send_outreach_email', 'start_email_campaign', 'run_agent_action',
+                        'send_outreach_email', 'run_agent_action',
                         'save_email_contact', 'check_emails', 'update_goal_progress',
                         'negotiate_by_email', 'reply_to_outreach_email', 'web_search',
                         'research_topic', 'delegate_task',
