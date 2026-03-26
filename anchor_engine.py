@@ -8376,7 +8376,11 @@ class AnchorEngine:
                     + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
                     + _agent_seen_block
                     + (f"\n\nЭТИ инструменты ЛОМАЛИСЬ (не повторяй): {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
-                    + (f"\n\nУже сделано командой (используй):\n{_prev_steps_context}" if _prev_steps_context else '')
+                    + (f"\n\nУже сделано командой (используй эти данные в своей работе):\n{_prev_steps_context}" if _prev_steps_context else '')
+                    + (f"\n\n💬 РЕАГИРУЙ НА КОЛЛЕГ: если коллега выше нашёл данные/контакты — "
+                       f"используй их. Если передал тебе задачу через DELEGATE — выполни. "
+                       f"Общайся как в рабочем чате: «О, отлично, {_ag_name} подготовил{'а' if _ag_is_fem else ''} — беру в работу!»"
+                       if _prev_steps_context and _executed > 1 else '')
                     + (f"\n\nКоманда:\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
                     + f"\n\n🧠 ТЫ — СОТРУДНИК В КОМАНДЕ ({_ag_name}, {_ag_role_str}):"
@@ -8402,7 +8406,9 @@ class AnchorEngine:
                     f"\n  Ответ без единого tool-вызова (кроме web_search) = ПРОВАЛ."
                 )
 
-                # Кросс-агентная "реакция" убрана — "Принял, продолжаю работу" не несёт пользы.
+                # Кросс-агентное общение: если предыдущие агенты уже выполнили шаги,
+                # их результаты передаются как «сообщения коллег» — текущий агент видит их
+                # и реагирует естественно, как в рабочем чате.
 
                 try:
                     _raw = await asyncio.wait_for(
@@ -8642,7 +8648,7 @@ class AnchorEngine:
                 # Отправляем результат шага агента в Telegram — пользователь видит прогресс
                 if self.bot and _cleaned and len(_cleaned.strip()) > 20:
                     try:
-                        _tg_text = f"� {_ag_name}:\n\n{_cleaned[:3500]}"
+                        _tg_text = f"{_ag_name}:\n{_cleaned[:3500]}"
                         await self.bot.send_message(
                             chat_id=user.telegram_id,
                             text=_tg_text,
@@ -8653,8 +8659,9 @@ class AnchorEngine:
                 _results_summary.append(
                     f"{_ag_name}: {_cleaned[:150]}"
                 )
-                # Накапливаем контекст для следующих агентов в цепочке
-                _prev_steps_context += f"• {_ag_name}: {_cleaned[:300]}\n"
+                # Накапливаем контекст для следующих агентов в цепочке — как сообщение от коллеги
+                _tools_label = f" [инструменты: {', '.join(_step_tools[:5])}]" if _step_tools else ''
+                _prev_steps_context += f"💬 {_ag_name}{_tools_label}:\n  {_cleaned[:400]}\n\n"
 
                 # ── Same-cycle pipeline: если агент сохранил новые контакты → email-агент должен писать им СЕЙЧАС ──
                 # Не ждём следующего цикла — вводим шаг прямо сейчас
