@@ -8364,7 +8364,7 @@ class AnchorEngine:
                        f"      ❌ find_relevant_contacts_for_task — контакты ИЗ БАЗЫ, уже учтены ранее. НЕ обновляй metric_current!\n"
                        f"      ❌ start_email_campaign — запуск кампании не = новый пользователь. НЕ обновляй metric_current!\n"
                        if _ag_goal_title else '')
-                    + (f"� Рекомендованный старт: {_tool_hint} — оцени сам, подходит ли он, или выбери лучше исходя из задания.\n" if _tool_hint else '')
+                    + (f"Рекомендованный старт: {_tool_hint} — оцени сам, подходит ли он, или выбери лучше исходя из задания.\n" if _tool_hint else '')
                     + _rap_note
                     + _dedup_hint
                     + _intg_live_block
