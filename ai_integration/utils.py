@@ -555,8 +555,10 @@ def clean_technical_details(text):
     # Удаляем ведущие ": " или ": " артефакты (после clean срезается слово перед двоеточием)
     text = re.sub(r'^:\s+', '', text)
     # Нормализуем отступы: \n\n\n+ → \n\n, а \n\n → \n (мессенджер-стиль, без лишних пустых строк)
-    text = re.sub(r'\n{3,}', '\n\n', text)  # тройные+ → двойные
-    text = re.sub(r'\n\n', '\n', text)       # двойные → одинарные
+    text = re.sub(r'[ \t]+\n', '\n', text)   # trailing whitespace на строках
+    text = re.sub(r'\n[ \t]+\n', '\n', text) # строки из одних пробелов/tab → пустые
+    text = re.sub(r'\n{3,}', '\n\n', text)   # тройные+ → двойные
+    text = re.sub(r'\n\n', '\n', text)        # двойные → одинарные
     
     # Декодируем HTML entities ПЕРЕД очисткой email-артефактов
     text = re.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', text)

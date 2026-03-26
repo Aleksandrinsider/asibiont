@@ -50,6 +50,38 @@ from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEN
 
 logger = logging.getLogger(__name__)
 
+# Telegram message limit
+_TG_MAX_LEN = 4096
+
+
+async def _safe_send(bot, chat_id: int, text: str):
+    """Send a message, splitting into chunks if it exceeds Telegram's 4096 char limit."""
+    if not text or not text.strip():
+        return
+    text = text.strip()
+    if len(text) <= _TG_MAX_LEN:
+        await bot.send_message(chat_id=chat_id, text=text)
+        return
+    # Split by double newlines first, then single newlines, then hard-cut
+    chunks = []
+    remaining = text
+    while remaining:
+        if len(remaining) <= _TG_MAX_LEN:
+            chunks.append(remaining)
+            break
+        # Find best split point
+        cut = _TG_MAX_LEN
+        for sep in ('\n\n', '\n', '. ', ' '):
+            pos = remaining.rfind(sep, 0, _TG_MAX_LEN)
+            if pos > _TG_MAX_LEN // 3:
+                cut = pos + len(sep)
+                break
+        chunks.append(remaining[:cut].rstrip())
+        remaining = remaining[cut:].lstrip()
+    for chunk in chunks:
+        if chunk.strip():
+            await bot.send_message(chat_id=chat_id, text=chunk)
+
 
 def _safe_avatar(url: str | None, agent_id: int | None = None) -> str:
     """Return avatar proxy URL. NEVER store raw base64 data URIs in DB interactions."""
@@ -4141,9 +4173,9 @@ class AnchorEngine:
                             try:
                                 from ai_integration.utils import clean_technical_details as _ctd_coord
                                 _coord_text_clean = _ctd_coord(_coord_text) if _coord_text else _coord_text
-                                await self.bot.send_message(
-                                    chat_id=user.telegram_id,
-                                    text=_coord_text_clean or _coord_text,
+                                await _safe_send(
+                                    self.bot, user.telegram_id,
+                                    _coord_text_clean or _coord_text,
                                 )
                             except Exception as _e:
                                 logger.debug("suppressed: %s", _e)
@@ -4533,7 +4565,7 @@ class AnchorEngine:
                                 else:
                                     _esc_lines.append("💬 Напиши мне — что добавить или попробовать. Я перенастрою агентов.")
                             _esc_text = '\n\n'.join(_esc_lines)
-                            await self.bot.send_message(chat_id=user.telegram_id, text=_esc_text)
+                            await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
                                 user_id=user.id,
                                 message_type='proactive',
@@ -4567,9 +4599,9 @@ class AnchorEngine:
                             await asyncio.sleep(1)
                         except Exception as _e:
                             logger.debug("suppressed: %s", _e)
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=_cleaned_result,
+                        await _safe_send(
+                            self.bot, user.telegram_id,
+                            _cleaned_result,
                         )
                         # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                         # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
@@ -4656,7 +4688,7 @@ class AnchorEngine:
                         )
                         if _dir_resp and len(_dir_resp.strip()) > 20:
                             _dir_txt = _dir_resp.strip()
-                            await self.bot.send_message(chat_id=user.telegram_id, text=_dir_txt)
+                            await _safe_send(self.bot, user.telegram_id, _dir_txt)
                             session.add(Interaction(
                                 user_id=user.id,
                                 message_type='proactive',
