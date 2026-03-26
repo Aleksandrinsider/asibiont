@@ -1765,8 +1765,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _escalation_block = (
                 f"\nЕСЛИ НЕТ ОТВЕТОВ (холодный outreach не работает) — варианты которые ты ещё не пробовал:\n"
                 + _esc_suggestions
-                + "\n⛔ У агентов НЕТ инструмента публикации в чужих Telegram/Discord/Reddit/Хабр/Medium-каналах!\n"
-                "   Хабр, Reddit, Medium и т.д. — только ПОИСК контактов через web_search('site:X ...').\n"
+                + "\n⚠️ Публикация на внешних платформах (Хабр, Reddit, Medium, VC.ru) доступна ТОЛЬКО если подключена интеграция/API.\n"
+                "   Без интеграции — используй web_search('site:X ...') для ПОИСКА контактов на этих платформах.\n"
                 "→ Выбери что лучше подходит для ЭТОЙ цели и ЦА.\n"
             )
         else:
@@ -7392,7 +7392,7 @@ class AnchorEngine:
                 + "• Агент БЕЗ интеграций: web_search, research_topic, create_post, publish_to_telegram, save_email_contact, DELEGATE[].\n"
                 "• ⛔ publish_to_telegram — ТОЛЬКО в канал пользователя.\n"
                 "• ⛔ НЕТ Telegram/Discord-клиента — агенты НЕ МОГУТ вступать/постить в ЧУЖИЕ каналы.\n"
-                "• ⛔ НЕТ инструмента публикации на Хабре, Reddit, Medium, VC.ru и т.д. — только ПОИСК контактов через web_search('site:habr.com ...').\n\n"
+                "• ⚠️ Публикация на внешних платформах (Хабр, Reddit, Medium, VC.ru) — доступна если есть интеграция. Без неё — ПОИСК контактов через web_search('site:habr.com ...').\n\n"
 
                 "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
                 "• Генерируй СВОИ уникальные стратегии — контент-магниты, партнёрства, community building.\n"
