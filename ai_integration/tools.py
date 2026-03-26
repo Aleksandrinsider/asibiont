@@ -1768,7 +1768,7 @@ TOOLS = [
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "Название действия (должно совпадать с тем, что обрабатывает скрипт агента). Примеры: send_message, create_issue, create_card, add_row, send_email, create_record"
+                        "description": "Название действия (должно совпадать с тем, что обрабатывает скрипт агента). Примеры: send_message, create_issue, create_card, add_row, create_record. Для email используй send_email или send_outreach_email напрямую (НЕ через run_agent_action)."
                     },
                     "params": {
                         "type": "object",

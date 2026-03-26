@@ -1221,6 +1221,47 @@ class HybridAutonomousAgent:
         if not action:
             return {"error": "Параметр action не указан"}
 
+        # ── Перехват send_email: перенаправляем на платформенный handler ──
+        # Raw SMTP (python_code subprocess) заблокирован на Railway ("Network is unreachable").
+        # Используем платформенный send_email с Resend API fallback.
+        if action == 'send_email':
+            try:
+                from . import handlers as _h_email
+                _to = str(action_params.get('to', '')).strip()
+                _subject = str(action_params.get('subject', '')).strip()
+                _body = str(action_params.get('body', action_params.get('body_text', ''))).strip()
+                _sender = agent_data.get('name', 'Агент')
+                if not _to or not _subject:
+                    return {"status": "error", "error": "Параметры to и subject обязательны для send_email"}
+                _email_result = await _h_email.send_email(
+                    to=_to, subject=_subject, body=_body,
+                    sender_name=_sender, user_id=user_id
+                )
+                # Log activity
+                try:
+                    from models import AgentActivityLog as _AALE, Session as _SessE, User as _UserE
+                    _s_e = _SessE()
+                    try:
+                        _u_e = _s_e.query(_UserE).filter_by(telegram_id=user_id).first()
+                        if _u_e:
+                            _out_e = str(_email_result)[:600]
+                            _s_e.add(_AALE(
+                                user_id=_u_e.id, activity_type='run_agent_action',
+                                title=f'{agent_data.get("name", "Агент")} · send_email',
+                                content=_out_e, target=agent_data.get('name', 'Агент'),
+                                status='completed' if 'error' not in str(_email_result).lower() else 'failed',
+                                result=_out_e,
+                            ))
+                            _s_e.commit()
+                    finally:
+                        _s_e.close()
+                except Exception:
+                    pass
+                return _email_result if isinstance(_email_result, dict) else {"status": "success", "output": str(_email_result)}
+            except Exception as _se_err:
+                logger.warning("[ACTION] send_email platform redirect failed: %s", _se_err)
+                return {"status": "error", "error": f"Ошибка отправки email: {_se_err}"}
+
         # ── Валидация query для GitHub search_users ──
         # AI иногда передаёт email-адреса или названия задач как query → 0 результатов.
         # Перехватываем здесь и заменяем на валидный дефолт.
