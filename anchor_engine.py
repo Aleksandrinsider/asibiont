@@ -7833,25 +7833,31 @@ class AnchorEngine:
                     _step_reason = (_step.get('reason') or '').strip()
                     if _step_reason and len(_step_reason) > 80:
                         _step_reason = _step_reason[:80].rsplit(' ', 1)[0]
+                    # Короткая версия задачи для живого обращения (до 90 символов, по слову)
+                    _task_short = _task_clean
+                    if len(_task_short) > 90:
+                        _task_short = _task_short[:90].rsplit(' ', 1)[0].rstrip('.,;:')
                     # Формируем естественное обращение вместо тикета
                     _ag_is_fem_c = (_ag_name or '')[-1:] in 'аяАЯ'
-                    if _task_clean and len(_task_clean) > 15:
+                    if _task_short and len(_task_short) > 15:
                         # Генерируем из шаблонов живого обращения
                         import random as _rnd_assign
+                        _verb = 'займись' if not _ag_is_fem_c else 'займись'
                         _assign_templates = [
-                            f'{_ag_name}, {_task_clean[:200].lower() if _task_clean[0].isupper() and not _task_clean[:3].isupper() else _task_clean[:200]}.',
-                            f'{_ag_name}, {"займись" if not _ag_is_fem_c else "займись"}: {_task_clean[:200]}.',
-                            f'{_ag_name}, нужно {_task_clean[:200].lower() if _task_clean[0].isupper() else _task_clean[:200]}.',
+                            f'{_ag_name}, {_task_short[:80].lower() if _task_short[0].isupper() and not _task_short[:3].isupper() else _task_short[:80]}.',
+                            f'{_ag_name}, {_verb}: {_task_short[:80]}.',
+                            f'{_ag_name}, нужно {_task_short[:80].lower() if _task_short[0].isupper() else _task_short[:80]}.',
                         ]
                         _asi_assign_text = _rnd_assign.choice(_assign_templates)
                         if _step_reason and len(_step_reason) > 10:
                             _asi_assign_text = _asi_assign_text.rstrip('.') + f' — {_step_reason.lower()}.'
                     elif _step_reason:
-                        _asi_assign_text = f'{_ag_name}, {_step_reason[:200]}.'
+                        _asi_assign_text = f'{_ag_name}, {_step_reason[:90].rsplit(" ", 1)[0] if len(_step_reason) > 90 else _step_reason}.'
                     else:
-                        _asi_assign_text = f'{_ag_name}, {_task_first_line[:200]}.'
+                        _tfl_short = _task_first_line[:90].rsplit(' ', 1)[0] if len(_task_first_line) > 90 else _task_first_line
+                        _asi_assign_text = f'{_ag_name}, {_tfl_short}.'
                 except Exception as _aac_err:
-                    _asi_assign_text = f"{_ag_name}, {(_ag_task or 'новое задание')[:200]}."
+                    _asi_assign_text = f"{_ag_name}, займись: {(_ag_task.split(chr(10))[0] or 'новое задание')[:80]}."
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # Сохраняем живое поручение в чат
                 try:
