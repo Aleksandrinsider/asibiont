@@ -214,7 +214,7 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
     result += '\n'.join(lines) + '\n'
     result += (
         '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Если для цели нужна интеграция, которой нет — '
-        'скажи пользователю что подключить (Настройки → Агенты → API-ключи).\n'
+        'предложи пользователю подключить в дашборде: https://asibiont.com/dashboard.\n'
     )
     return result
 
@@ -4737,9 +4737,9 @@ class AnchorEngine:
                                 _esc_lines.extend(_cap_warns[:2])
                             if _esc_lines:
                                 if _intg_need_in_result or _cap_warns:
-                                    _esc_lines.append("⚙️ Добавить интеграцию: Настройки → твой агент → API-ключи\n💬 Напиши мне — что добавить или попробовать. Я перенастрою задачи.")
+                                    _esc_lines.append("Подключить интеграции можно в дашборде:\nhttps://asibiont.com/dashboard\n\nИли напиши мне что попробовать — я перенастрою агентов.")
                                 else:
-                                    _esc_lines.append("💬 Напиши мне — что добавить или попробовать. Я перенастрою агентов.")
+                                    _esc_lines.append("Можешь подключить новые интеграции в дашборде:\nhttps://asibiont.com/dashboard\n\nИли напиши мне — я скорректирую стратегию.")
                             _esc_text = '\n\n'.join(_esc_lines)
                             await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
@@ -6659,7 +6659,7 @@ class AnchorEngine:
                 "\n🔒 СТРОГИЕ ПРАВИЛА (нарушение = план невалиден):\n"
                 + '\n'.join(_cap_rules_lines) + '\n'
                 "  → Используй ТОЛЬКО то что есть у агента. Нет интеграции — нет задачи на неё.\n"
-                "  → Нужна интеграция → предложи пользователю подключить в Настройки → Агенты → API-ключи.\n"
+                "  → Нужна интеграция → предложи пользователю подключить в дашборде: https://asibiont.com/dashboard.\n"
                 if _cap_rules_lines else ''
             )
 
@@ -11228,11 +11228,11 @@ class AnchorEngine:
                             _miss_str = '\n'.join(f"  • {m}" for m in _miss_intg) if _miss_intg else ''
                             _stag_msg = (
                                 f"⚠️ Автопилот застрял на цели «{_stag_goal_title}»\n\n"
-                                f"Запусков: {_action_count} за 48ч, прогресс = {int(_mc)}/{int(_mt)}.\n"
+                                f"Прогресс: {int(_mc)}/{int(_mt)}.\n"
                                 f"Подключено: {_connected_str}.\n"
                                 + (f"\nДля этой цели полезно подключить:\n{_miss_str}\n\n" if _miss_str else
                                    "\nПопробуй скорректировать цель или сменить стратегию.\n\n")
-                                + "Настройки → Агенты → API-ключи для подключения."
+                                + "Подключить интеграции: https://asibiont.com/dashboard"
                             )
                             try:
                                 import asyncio as _asyncio_stag
