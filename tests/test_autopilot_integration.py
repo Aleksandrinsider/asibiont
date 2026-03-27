@@ -217,6 +217,143 @@ def test_d5_agent_add_task_without_reminder_time():
         assert task.source == 'agent', f"source должен быть 'agent': {task.source}"
         assert task.created_by_agent_id == AGENT_ID
 
+def test_d34_reply_to_outreach_email_blocks_language_mismatch(monkeypatch):
+    """reply_to_outreach_email блокирует латиницу если контакт ответил на кириллице."""
+    from ai_integration.handlers import reply_to_outreach_email
+
+    with TestSession() as s:
+        u = s.query(models.User).filter_by(telegram_id=UID).first()
+        campaign = models.EmailCampaign(
+            user_id=u.id,
+            name="D34-Кампания",
+            goal="Проверка language guard",
+            sender_name="ASI",
+            sender_email="outreach@asibiont.com",
+            status='active',
+        )
+        s.add(campaign)
+        s.flush()
+
+        outreach = models.EmailOutreach(
+            campaign_id=campaign.id,
+            user_id=u.id,
+            recipient_email='contact@example.com',
+            recipient_name='Иван',
+            subject='Привет',
+            body='Здравствуйте! Хотела бы обсудить сотрудничество.',
+            status='replied',
+            reply_text='Здравствуйте! Спасибо за письмо, давайте обсудим подробнее на следующей неделе.',
+        )
+        s.add(outreach)
+        s.commit()
+
+        result = run(reply_to_outreach_email(
+            outreach_id=outreach.id,
+            reply_body='Hello! Thank you for your reply, happy to discuss this next week.',
+            user_id=UID,
+            session=s,
+            close_session=False,
+        ))
+
+        assert 'Язык reply_body' in str(result), f"Должен сработать language guard: {result}"
+        assert 'кириллица' in str(result).lower(), f"Ожидали указание на кириллицу: {result}"
+
+
+def test_d35_email_reply_anchor_retries_language_mismatch_and_hides_raw_guard(monkeypatch):
+    """email_reply_received делает retry после language mismatch и не шлёт в TG сырой guard-текст."""
+    from anchor_engine import AnchorEngine
+    import ai_integration.api_client as api_client_mod
+    import ai_integration.handlers as handlers_mod
+
+    class _FakeBot:
+        def __init__(self):
+            self.messages = []
+
+        async def send_message(self, chat_id, text, **kwargs):
+            self.messages.append({'chat_id': chat_id, 'text': text, 'kwargs': kwargs})
+
+    class _FakeApi:
+        def __init__(self):
+            self.calls = 0
+
+        async def deepseek_analyze(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return json.dumps({'body': 'Hello! Thanks for your reply. Happy to discuss.'}, ensure_ascii=False)
+            return json.dumps({'body': 'Здравствуйте! Спасибо за ваш ответ. Буду рада обсудить детали.'}, ensure_ascii=False)
+
+    _send_calls = []
+
+    async def _fake_reply_to_outreach_email(outreach_id=None, reply_body=None, user_id=None, session=None, close_session=True, **kwargs):
+        _send_calls.append(reply_body)
+        if len(_send_calls) == 1:
+            return '⚠ Язык reply_body (латиница) не совпадает с языком ответа контакта (кириллица). ПЕРЕПИШИ reply_body на кириллица — контакт ожидает ответ на своём языке!'
+        return 'Ответ отправлен'
+
+    monkeypatch.setattr(api_client_mod, 'get_api_client', lambda: _FakeApi())
+    monkeypatch.setattr(handlers_mod, 'reply_to_outreach_email', _fake_reply_to_outreach_email)
+
+    bot = _FakeBot()
+    ae = AnchorEngine(bot=bot)
+
+    with TestSession() as s:
+        u = s.query(models.User).filter_by(telegram_id=UID).first()
+        campaign = models.EmailCampaign(
+            user_id=u.id,
+            name='D35-Кампания',
+            goal='Ответить на входящий email',
+            sender_name='ASI',
+            sender_email='outreach@asibiont.com',
+            status='active',
+        )
+        s.add(campaign)
+        s.flush()
+
+        outreach = models.EmailOutreach(
+            campaign_id=campaign.id,
+            user_id=u.id,
+            recipient_email='contact@example.com',
+            recipient_name='Иван',
+            recipient_company='ООО Ромашка',
+            subject='Привет',
+            body='Здравствуйте! Я Кристина из PR службы ASI Biont.',
+            status='replied',
+            reply_text='Здравствуйте! Спасибо за письмо, давайте обсудим подробнее.',
+        )
+        s.add(outreach)
+        s.flush()
+
+        anchor = models.Anchor(
+            user_id=u.id,
+            anchor_type='email_reply_received',
+            source=f'email:{outreach.id}',
+            topic='Получен ответ на outreach',
+            data=json.dumps({
+                'outreach_id': outreach.id,
+                'recipient_email': outreach.recipient_email,
+                'recipient_name': outreach.recipient_name,
+                'recipient_company': outreach.recipient_company,
+                'original_subject': outreach.subject,
+                'original_body': outreach.body,
+                'reply_text': outreach.reply_text,
+                'campaign_name': campaign.name,
+                'campaign_goal': campaign.goal,
+            }, ensure_ascii=False),
+        )
+        s.add(anchor)
+        s.commit()
+
+        run(ae._process_email_silent_anchor(u, anchor, s))
+
+        assert len(_send_calls) == 2, f"Ожидали 2 попытки отправки, получили {len(_send_calls)}"
+        assert any('Hello' in (msg or '') for msg in _send_calls), f"Первая попытка должна быть на латинице: {_send_calls}"
+        assert any('Здравствуйте' in (msg or '') for msg in _send_calls), f"Вторая попытка должна быть на кириллице: {_send_calls}"
+        assert bot.messages, "Пользователь должен получить уведомление в Telegram"
+        final_text = bot.messages[-1]['text']
+        assert 'ПЕРЕПИШИ reply_body' not in final_text, f"Сырой guard-текст не должен уходить в TG: {final_text}"
+        assert 'ответ отправлен' in final_text.lower() or 'автоматически ответил' in final_text.lower(), \
+            f"Ожидали успешное уведомление после retry: {final_text}"
+
 
 def test_d6_agent_add_task_source_and_id():
     """add_task с created_by_agent_id устанавливает source='agent' и created_by_agent_id."""

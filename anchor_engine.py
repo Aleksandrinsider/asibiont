@@ -14974,58 +14974,83 @@ class AnchorEngine:
                     campaign_goal=campaign_goal,
                 )
 
-                compose_prompt = (
-                    f"You need to compose a reply to an incoming email response from a person "
-                    f"who replied to our outreach campaign.\n\n"
-                    f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n\n"
-                    f"Original outreach subject: {original_subject}\n"
-                    f"Original outreach body:\n{original_body}\n\n"
-                    f"Their reply:\n{reply_text}\n\n"
-                    + (f"Our previous AI reply:\n{ai_previous_reply}\n\n" if ai_previous_reply else "")
-                    + f"Recipient: {recipient_email} ({recipient_name})"
-                    + (f" from {recipient_company}" if recipient_company else "") + "\n\n"
-                    f"Language: {lang_hint} — write ENTIRELY in {lang_hint} (detected from recipient's reply language).\n\n"
-                    f"RULES:\n"
-                    f"- Read their reply carefully. If it's a QUESTION — answer it specifically and honestly.\n"
-                    f"- If it's a REFUSAL or OPT-OUT — do NOT reply (return empty body).\n"
-                    f"- Keep it short: 3-5 sentences, conversational tone.\n"
-                    f"- Be helpful, genuine, not pushy. Answer what they asked.\n"
-                    f"- Do NOT repeat what was already said in previous replies.\n"
-                    f"- No HTML, no markdown, no signatures.\n"
-                    f"- PARAGRAPH BREAKS: separate paragraphs with blank lines (\\n\\n).\n\n"
-                    f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
-                    f"If the reply is opt-out/unsubscribe/refusal, return: {{\"body\": \"\"}}"
-                )
-
-                _reply_body = ''
-                ai_result = None
-                try:
-                    ai_result = await api.deepseek_analyze(
-                        prompt=compose_prompt,
-                        system_prompt="You compose email replies to inbound messages. Return ONLY valid JSON with body field.",
-                        max_tokens=400,
-                        temperature=0.7,
+                def _build_compose_prompt(_force_language=None, _force_script=None, _retry_reason=''):
+                    _language = _force_language or lang_hint or 'English'
+                    _strict_line = ''
+                    if _force_script:
+                        _strict_line = (
+                            f"Script requirement: use {_force_script} for the reply body. "
+                            f"Do not transliterate Russian words into Latin and do not mix scripts in normal sentences.\n"
+                        )
+                    _retry_line = f"Retry reason: {_retry_reason}\n" if _retry_reason else ''
+                    return (
+                        f"You need to compose a reply to an incoming email response from a person "
+                        f"who replied to our outreach campaign.\n\n"
+                        f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n\n"
+                        f"Original outreach subject: {original_subject}\n"
+                        f"Original outreach body:\n{original_body}\n\n"
+                        f"Their reply:\n{reply_text}\n\n"
+                        + (f"Our previous AI reply:\n{ai_previous_reply}\n\n" if ai_previous_reply else "")
+                        + f"Recipient: {recipient_email} ({recipient_name})"
+                        + (f" from {recipient_company}" if recipient_company else "") + "\n\n"
+                        + _retry_line
+                        + f"Language: {_language} — write ENTIRELY in {_language} (detected from recipient's reply language).\n"
+                        + _strict_line
+                        + "CRITICAL: match the CONTACT'S language and script exactly. "
+                          "If the contact wrote in Russian/Cyrillic, your reply must be fully Russian/Cyrillic. "
+                          "If the contact wrote in English/Latin, your reply must be fully English/Latin.\n\n"
+                        f"RULES:\n"
+                        f"- Read their reply carefully. If it's a QUESTION — answer it specifically and honestly.\n"
+                        f"- If it's a REFUSAL or OPT-OUT — do NOT reply (return empty body).\n"
+                        f"- Keep it short: 3-5 sentences, conversational tone.\n"
+                        f"- Be helpful, genuine, not pushy. Answer what they asked.\n"
+                        f"- Do NOT repeat what was already said in previous replies.\n"
+                        f"- No HTML, no markdown, no signatures.\n"
+                        f"- PARAGRAPH BREAKS: separate paragraphs with blank lines (\\n\\n).\n\n"
+                        f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
+                        f"If the reply is opt-out/unsubscribe/refusal, return: {{\"body\": \"\"}}"
                     )
-                    if ai_result:
-                        import json as _json_reply
-                        text = ai_result.strip()
-                        if '```' in text:
-                            for part in text.split('```'):
-                                part = part.strip()
-                                if part.startswith('json'):
-                                    part = part[4:].strip()
-                                if part.startswith('{'):
-                                    text = part
-                                    break
-                        try:
-                            parsed = _json_reply.loads(text)
-                            _reply_body = (parsed.get('body') or '') if isinstance(parsed, dict) else ''
-                        except Exception:
-                            # Fallback: treat entire response as reply body if not JSON
-                            if text and not text.lower().startswith('{') and len(text) > 20:
-                                _reply_body = text
-                except Exception as _compose_err:
-                    logger.error(f"[ANCHOR] email_reply_received compose error: {_compose_err}")
+
+                async def _compose_reply(_force_language=None, _force_script=None, _retry_reason='', _temperature=0.7):
+                    _reply_body_local = ''
+                    _ai_result_local = None
+                    try:
+                        _ai_result_local = await api.deepseek_analyze(
+                            prompt=_build_compose_prompt(
+                                _force_language=_force_language,
+                                _force_script=_force_script,
+                                _retry_reason=_retry_reason,
+                            ),
+                            system_prompt=(
+                                "You compose email replies to inbound messages. "
+                                "Return ONLY valid JSON with body field. "
+                                "Obey the required language and script exactly."
+                            ),
+                            max_tokens=400,
+                            temperature=_temperature,
+                        )
+                        if _ai_result_local:
+                            import json as _json_reply
+                            text = _ai_result_local.strip()
+                            if '```' in text:
+                                for part in text.split('```'):
+                                    part = part.strip()
+                                    if part.startswith('json'):
+                                        part = part[4:].strip()
+                                    if part.startswith('{'):
+                                        text = part
+                                        break
+                            try:
+                                parsed = _json_reply.loads(text)
+                                _reply_body_local = (parsed.get('body') or '') if isinstance(parsed, dict) else ''
+                            except Exception:
+                                if text and not text.lower().startswith('{') and len(text) > 20:
+                                    _reply_body_local = text
+                    except Exception as _compose_err:
+                        logger.error(f"[ANCHOR] email_reply_received compose error: {_compose_err}")
+                    return _reply_body_local, _ai_result_local
+
+                _reply_body, ai_result = await _compose_reply()
 
                 logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: ai_result={(ai_result or '')[:80]!r}, _reply_body_len={len(_reply_body)}")
 
@@ -15039,6 +15064,28 @@ class AnchorEngine:
                             session=session,
                             close_session=False,
                         )
+                        if _send_result and 'Язык reply_body' in _send_result:
+                            _retry_script = 'Cyrillic' if 'кириллица' in _send_result.lower() else ('Latin' if 'латиница' in _send_result.lower() else None)
+                            _retry_language = 'Russian' if _retry_script == 'Cyrillic' else ('English' if _retry_script == 'Latin' else lang_hint)
+                            logger.info(
+                                f"[ANCHOR] email_reply_received #{anchor.id}: language mismatch, retry with {_retry_language}/{_retry_script}"
+                            )
+                            _reply_body_retry, ai_result_retry = await _compose_reply(
+                                _force_language=_retry_language,
+                                _force_script=_retry_script,
+                                _retry_reason=_send_result[:250],
+                                _temperature=0.2,
+                            )
+                            if _reply_body_retry:
+                                _reply_body = _reply_body_retry
+                                ai_result = ai_result_retry or ai_result
+                                _send_result = await reply_to_outreach_email(
+                                    outreach_id=outreach_id,
+                                    reply_body=_reply_body,
+                                    user_id=user.telegram_id,
+                                    session=session,
+                                    close_session=False,
+                                )
                         logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: reply sent to {redact_email(recipient_email)}: {(_send_result or '')[:120]}")
                     except Exception as _send_err:
                         logger.error(f"[ANCHOR] email_reply_received send error: {_send_err}")
@@ -15050,6 +15097,8 @@ class AnchorEngine:
                 try:
                     _contact_label = recipient_name or recipient_email
                     _reply_preview = reply_text[:200].strip()
+                    _send_result_lower = (_send_result or '').lower()
+                    _lang_mismatch = 'язык reply_body' in _send_result_lower
                     if _reply_body and _send_result and ('отправлен' in _send_result.lower() or 'sent' in _send_result.lower() or 'reply sent' in _send_result.lower()):
                         _notify_msg = (
                             f"📩 Получен ответ от {_contact_label}"
@@ -15058,13 +15107,22 @@ class AnchorEngine:
                             f"💬 Их письмо:\n{_reply_preview}\n\n"
                             f"✅ Я автоматически ответил(а) — ответ отправлен."
                         )
+                    elif _lang_mismatch:
+                        _notify_msg = (
+                            f"📩 Получен ответ от {_contact_label}"
+                            + (f" ({recipient_company})" if recipient_company else "")
+                            + f" — кампания «{campaign_name}»\n\n"
+                            f"💬 Их письмо:\n{_reply_preview}\n\n"
+                            f"⚠️ Автоответ пока не отправлен: AI написал черновик не на языке контакта. "
+                            f"Письмо сохранено, нужен ручной ответ или повторный запуск."
+                        )
                     elif _reply_body:
                         _notify_msg = (
                             f"📩 Получен ответ от {_contact_label}"
                             + (f" ({recipient_company})" if recipient_company else "")
                             + f" — кампания «{campaign_name}»\n\n"
                             f"💬 Их письмо:\n{_reply_preview}\n\n"
-                            f"⚠️ Попытка автоответа: {(_send_result or 'ошибка')[:200]}"
+                            f"⚠️ Автоответ не отправлен: {(_send_result or 'ошибка')[:200]}"
                         )
                     else:
                         _notify_msg = (
