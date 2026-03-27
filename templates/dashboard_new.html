@@ -9421,7 +9421,12 @@ else:
             const inp = document.getElementById('note-input');
             if (!inp) return;
             const text = inp.value.trim();
-            if (!text) return;
+            if (!text) {
+                inp.focus();
+                inp.style.borderColor = '#DC2626';
+                setTimeout(() => { inp.style.borderColor = ''; }, 1500);
+                return;
+            }
             try {
                 const resp = await fetch('/api/notes', {
                     method: 'POST',
@@ -9433,6 +9438,10 @@ else:
                     inp.value = '';
                     showNotification(t('note-saved'), 'success');
                     loadNotes();
+                } else {
+                    let errMsg = resp.status + ' ' + resp.statusText;
+                    try { const d = await resp.json(); if (d.error) errMsg = d.error; } catch (_) {}
+                    showNotification(t('err-prefix') + ' ' + errMsg, 'error');
                 }
             } catch (e) {
                 showNotification(t('err-prefix') + ' ' + e.message, 'error');
@@ -9464,6 +9473,10 @@ else:
                             if (resp.ok) {
                                 showNotification(t('note-saved'), 'success');
                                 loadNotes();
+                            } else {
+                                let errMsg = resp.status + ' ' + resp.statusText;
+                                try { const d = await resp.json(); if (d.error) errMsg = d.error; } catch (_) {}
+                                showNotification(t('err-prefix') + ' ' + errMsg, 'error');
                             }
                         } catch (err) {
                             showNotification(t('err-prefix') + ' ' + err.message, 'error');
@@ -9487,6 +9500,10 @@ else:
                 if (resp.ok) {
                     showNotification(t('note-saved'), 'success');
                     if (_notesLoaded) loadNotes();
+                } else {
+                    let errMsg = resp.status + ' ' + resp.statusText;
+                    try { const d = await resp.json(); if (d.error) errMsg = d.error; } catch (_) {}
+                    showNotification(t('err-prefix') + ' ' + errMsg, 'error');
                 }
             } catch (e) {
                 showNotification(t('err-prefix') + ' ' + e.message, 'error');
