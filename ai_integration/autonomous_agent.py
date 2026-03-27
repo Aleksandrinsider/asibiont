@@ -6738,6 +6738,48 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _fb_err:
             logger.debug("[DIRECTOR-EXEC] autopilot fallback expansion failed: %s", _fb_err)
 
+    # ── Consistency guard: не разрешаем репортить "письмо отправлено", если tool вернул ошибку ──
+    # Это защищает от ложных отчётов в чате вида "отправила письмо", когда send_outreach_email
+    # фактически вернул "Некорректный email" или другой блокирующий error.
+    if _final_text:
+        import re as _re_cons
+        _tool_payloads = [str(_m.get('content') or '') for _m in _messages if _m.get('role') == 'tool']
+        _tool_blob = '\n'.join(_tool_payloads).lower()
+        _email_error_markers = (
+            'некорректный email', 'invalid email', 'self-reply detected',
+            'ошибка resend api', 'ошибка отправки', 'blocked', 'не найдено письмо для ответа',
+        )
+        _email_success_markers = (
+            'письмо отправлено', 'ответ отправлен', 'email sent', 'reply sent',
+            'sent via', '"status":"sent"', '"status": "sent"',
+        )
+        _has_email_error = any(_m in _tool_blob for _m in _email_error_markers)
+        _has_email_success = any(_m in _tool_blob for _m in _email_success_markers)
+
+        # Мягкая нормализация маркера из safety-scrub
+        _final_text = _final_text.replace('[некорректный email]', '[email скрыт]')
+
+        if _has_email_error and not _has_email_success:
+            _before_text = _final_text
+            # Удаляем предложения, где агент утверждает успешную отправку
+            _final_text = _re_cons.sub(
+                r'[^.!?\n]*(?:отправил(?:а)?|отправлено|sent|emailed|написал(?:а)?\s+письмо)[^.!?\n]*[.!?]?',
+                '',
+                _final_text,
+                flags=_re_cons.IGNORECASE,
+            )
+            _final_text = _re_cons.sub(r'\n{2,}', '\n', _final_text).strip(' \n.,;:-')
+            _safe_note = (
+                'Письмо пока не отправлено: адрес или канал отправки вернул ошибку. '
+                'Проверю корректный email и повторю попытку.'
+            )
+            if not _final_text:
+                _final_text = _safe_note
+            elif _safe_note.lower() not in _final_text.lower():
+                _final_text = f"{_final_text}\n{_safe_note}".strip()
+            if _before_text != _final_text:
+                logger.info('[DIRECTOR-EXEC] consistency guard adjusted final text after email send error')
+
     # Для автопилота без инструментов: если текст содержательный (>100 символов) — пропускаем как аналитику,
     # если короткий/шаблонный — noise-фильтр в _dispatch_agent_for_anchor отсечёт
     if _is_autopilot_task and not _tools_used and len((_final_text or '').strip()) < 100:

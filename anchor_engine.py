@@ -4491,7 +4491,7 @@ class AnchorEngine:
                             )
                             _coord_text = re.sub(
                                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
-                                '[некорректный email]',
+                                '[email скрыт]',
                                 _coord_text,
                                 flags=re.IGNORECASE,
                             )
@@ -5114,7 +5114,7 @@ class AnchorEngine:
                         )
                         _cleaned_result = re.sub(
                             r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
-                            '[некорректный email]',
+                            '[email скрыт]',
                             _cleaned_result,
                             flags=re.IGNORECASE,
                         )
@@ -5991,7 +5991,7 @@ class AnchorEngine:
             )
             _transfer_text = re.sub(
                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
-                '[некорректный email]',
+                '[email скрыт]',
                 _transfer_text,
                 flags=re.IGNORECASE,
             )
@@ -6072,7 +6072,7 @@ class AnchorEngine:
             )
             _next_result = re.sub(
                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
-                '[некорректный email]',
+                '[email скрыт]',
                 _next_result,
                 flags=re.IGNORECASE,
             )
