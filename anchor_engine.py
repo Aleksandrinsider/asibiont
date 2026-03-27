@@ -568,13 +568,13 @@ _INTEGRATION_PLANS = [
     # RSS лента / Feedparser
     (lambda c: any(w in c for w in ('rss', 'feed', 'лент')),
      'rss',
-     "Твоя RSS-лента — источник аналитики и контентных идей. Твоя роль: анализировать тренды и передавать идеи/зацепки email-агенту для outreach. НЕ ищи контакты сам — поиск людей (GitHub, web) это работа агента с email/GitHub-интеграцией.",
-         ["A) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → выдели 2-3 актуальных тренда → DELEGATE[email-агент]: идеи/зацепки для outreach-письма",
-            "B) run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди релевантную статью/сигнал → DELEGATE[email-агент]: используй этот инсайт как персонализацию в письме",
-      "C) research_topic(query=тема) → анализ рынка/настроений → add_task с инсайтами для кампании",
-            "D) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → тренд-анализ → create_post (краткий обзор для Telegram-канала)",
-      "E) Если автор статьи явно релевантен цели И есть публичный контакт → save_email_contact (исключение, не правило — только очевидно подходящие)",
-      "F) web_search (что волнует ЦА прямо сейчас по теме цели) → DELEGATE[email-агент]: ключевой инсайт для персонализации письма",
+     "Твоя RSS-лента — источник контента и аналитики. ОБЯЗАТЕЛЬНО: каждый раз когда читаешь RSS — создай пост (create_post → publish_to_telegram/discord) с инсайтом. Аналитика без публикации = не засчитана. Также передавай зацепки email-агенту для outreach.",
+         ["A) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → create_post (краткий инсайт/обзор по тренду) → publish_to_telegram → DELEGATE[email-агент]: используй этот инсайт в outreach-письме",
+            "B) run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → create_post (разбор интересной статьи с мнением) → publish_to_discord",
+      "C) research_topic(query=тема из RSS) → create_post (экспертный разбор) → publish_to_telegram → update_goal_progress",
+            "D) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди автора с email → save_email_contact → DELEGATE[email-агент]: напиши ему персональное письмо",
+      "E) web_search (что волнует ЦА по теме из RSS) → create_post (адаптированный под аудиторию) → publish_to_discord + publish_to_telegram",
+            "F) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → generate_image (визуализация данных/тренда) → create_post с картинкой → publish_to_telegram",
             "G) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → schedule_background_task (мониторинг темы через 24ч)"]),
     # Slack
     (lambda c: 'slack' in c,
@@ -649,12 +649,12 @@ _INTEGRATION_PLANS = [
     # Telegram-канал / Discord / Контент
     (lambda c: any(w in c for w in ('telegram', 'discord', 'smm', 'контент', 'публик')),
      'content',
-     "Твои инструменты: создание и публикация контента.",
-     ["A) research_topic → create_post (актуальный оффер) → publish_to_telegram",
-      "B) research_topic → create_post по тренду → publish_to_discord",
-      "C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию",
-      "D) web_search (вирусные форматы по теме) → create_post (нестандартный формат) → publish_to_telegram",
-      "E) generate_image (визуал) → create_post с картинкой → publish_to_telegram",
+     "Твои инструменты: создание и публикация контента. ПРАВИЛО: каждый пост публикуется минимум в 2 канала (TG + Discord). После публикации — делегируй email-рассылку с ссылкой.",
+     ["A) research_topic → create_post (актуальный оффер) → publish_to_telegram → publish_to_discord (адаптированная версия)",
+      "B) research_topic → create_post по тренду → publish_to_discord → publish_to_telegram (кросс-пост)",
+      "C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию → publish_to_telegram + DELEGATE[email-агент]: разошли пост контактам",
+      "D) web_search (вирусные форматы по теме) → create_post (нестандартный формат) → publish_to_telegram → publish_to_discord",
+      "E) generate_image (визуал) → create_post с картинкой → publish_to_telegram → publish_to_discord",
       "F) find_and_message_relevant_users (пригласи ЦА в канал) → update_goal_progress",
       "G) schedule_background_task (серийный контент по расписанию) → update_goal_progress"]),
     # HH.ru / LinkedIn / HeadHunter (НР)
@@ -847,7 +847,7 @@ _UNIVERSAL_PATTERNS: dict = {
     ),
     'content_attract': (
         '🧲 КОНТЕНТ-МАГНИТ',
-        'create_post → publish_to_telegram/discord. Прогресс публично = мотивация + привлечение.',
+        'create_post → publish_to_telegram + publish_to_discord (кросс-пост!). DELEGATE email-рассылку с контентом. Прогресс публично = мотивация + привлечение.',
     ),
     'research_discover': (
         '🔍 ПЕРЕОСМЫСЛИТЬ ПОДХОД',
@@ -3832,6 +3832,23 @@ class AnchorEngine:
             known_contacts = data.get('known_contacts', [])
             if known_contacts:
                 task_text += f"\n\nИзвестные контакты:\n" + '\n'.join(f"  {c}" for c in known_contacts[:8])
+
+            # Последние посты в каналы + подсказки для кросс-постинга
+            _recent_posts_ctx = data.get('recent_posts', [])
+            _crosspost_hints_ctx = data.get('crosspost_hints', [])
+            if _recent_posts_ctx:
+                task_text += f"\n\n📢 Последние посты (48ч):\n" + '\n'.join(f"  {p}" for p in _recent_posts_ctx)
+            if _crosspost_hints_ctx:
+                task_text += (
+                    f"\n\n🔴 КРОСС-ПОСТИНГ ОБЯЗАТЕЛЕН:\n"
+                    + '\n'.join(f"  → {h}" for h in _crosspost_hints_ctx)
+                    + "\nСоздай адаптированную версию поста и опубликуй в недостающий канал!"
+                )
+            if not _recent_posts_ctx:
+                task_text += (
+                    "\n\n📢 За 48ч НЕТ публикаций в каналы. "
+                    "Приоритет: создай полезный контент (create_post) и опубликуй в TG + Discord."
+                )
 
             # Уже отправленные письма — не дублировать
             _already_sent_str_ctx = data.get('already_sent_emails', [])
@@ -8155,6 +8172,14 @@ class AnchorEngine:
                 "• Любой агент → research_topic + create_post + publish_to_telegram = экспертный контент\n"
                 "Не ограничивай агента одним инструментом — давай КОМБИНИРОВАННЫЕ задачи.\n\n"
 
+                "КРОСС-ПОСТИНГ И ПРОДВИЖЕНИЕ КОНТЕНТА:\n"
+                "После публикации пост НЕ ДОЛЖЕН оставаться без продвижения:\n"
+                "• Опубликовал в Discord → ОБЯЗАТЕЛЬНО адаптируй и опубликуй в Telegram (и наоборот)\n"
+                "• Опубликовал пост → DELEGATE[email-агент]: 'Вот пост [тема]. Отправь его как дайджест/инсайт контактам которые интересовались этой темой'\n"
+                "• RSS-агент прочитал новости → ОБЯЗАН создать пост (create_post → publish_to_telegram/discord), не просто отчёт\n"
+                "• Каждый пост = минимум 2 канала распространения (TG + Discord, или канал + email-рассылка)\n"
+                "• НЕ ЗАСЧИТЫВАЕТСЯ: прочитал RSS и написал отчёт без публикации. Это 0 пользы.\n\n"
+
                 "ОДИН API — РАЗНЫЕ РЕЖИМЫ (обязательно учитывай):\n"
                 "• run_agent_action: не только поиск людей. Это также мониторинг, обновление данных, постинг, комментарии, тикеты — выбирай режим под цель.\n"
                 "• check_emails: не только 'есть/нет писем'. Это triage входящих, выделение горячих лидов, follow-up и подготовка следующего шага.\n"
@@ -12174,6 +12199,27 @@ class AnchorEngine:
         except Exception as _rpt_err:
             logger.debug(f"[AUTOPILOT] recent_proactive_topics extraction: {_rpt_err}")
 
+        # ── Последние посты в каналы (для кросс-постинга) ──
+        _recent_posts_raw = session.query(_AAL_scan).filter(
+            _AAL_scan.user_id == user.id,
+            _AAL_scan.activity_type.in_(['post_telegram', 'post_discord']),
+            _AAL_scan.created_at >= now_utc - timedelta(hours=48),
+        ).order_by(_AAL_scan.created_at.desc()).limit(5).all()
+        _recent_posts = []
+        _crosspost_hints = []
+        _posted_channels = set()
+        for _rp in _recent_posts_raw:
+            _ch = 'TG' if _rp.activity_type == 'post_telegram' else 'Discord'
+            _posted_channels.add(_rp.activity_type)
+            _rp_title = ((_rp.title or '')[:80])
+            _recent_posts.append(f"[{_rp.created_at.strftime('%d.%m %H:%M')}] {_ch}: {_rp_title}")
+        # Определяем, в какие каналы НЕ были сделаны кросс-посты
+        if _recent_posts_raw:
+            if 'post_telegram' in _posted_channels and 'post_discord' not in _posted_channels:
+                _crosspost_hints.append('Посты были в TG, но НЕ в Discord → кросс-постнуть в Discord')
+            elif 'post_discord' in _posted_channels and 'post_telegram' not in _posted_channels:
+                _crosspost_hints.append('Посты были в Discord, но НЕ в TG → кросс-постнуть в Telegram')
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -12199,6 +12245,8 @@ class AnchorEngine:
             'per_agent_history': _per_agent_history,
             'already_sent_emails': _already_sent_emails,
             'negotiation_emails': list(_negotiation_emails),  # email-адреса в активных переговорах (replied)
+            'recent_posts': _recent_posts,
+            'crosspost_hints': _crosspost_hints,
             'pending_replies': _pending_replies,
             'skipped_3plus_replies': _skipped_3plus,
             'overworked_goals': _overworked_goals,
