@@ -4921,7 +4921,7 @@ class AnchorEngine:
                                     _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard\nИли напиши мне — я перенастрою агентов.")
                                 else:
                                     _esc_lines.append("Напиши мне — я скорректирую стратегию или перенастрою агентов.")
-                            _esc_text = '\n\n'.join(_esc_lines)
+                            _esc_text = '\n'.join(_esc_lines)
                             await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
                                 user_id=user.id,
@@ -8328,6 +8328,7 @@ class AnchorEngine:
                             f"⚠️ ПРАВИЛО: в поле task пиши задачу ТОЛЬКО через интеграции из [интеграции: ...] агента. "
                             f"НЕ упоминай Discord/Slack/GitHub/Telegram если их нет в интеграциях агента. "
                             f"Нет нужной интеграции у агента — назначь другого или пропусти шаг.\n"
+                            f"В поле task пиши одну строку без переносов. НЕ используй \\n\\n в task — только пробел между предложениями.\n"
                             f"Если все ключевые цели получили прогресс — верни {{\"done\": true}}.\n"
                             f"Если нужен ещё шаг — верни ОДИН JSON-объект:\n"
                             f'[{{"agent": "имя_агента", "task": "конкретная задача исходя из интеграций агента", '
@@ -8384,7 +8385,7 @@ class AnchorEngine:
                 # ── Уточнение задания: подставляем контекст без лишнего LLM-вызова ──
                 # Контекст предыдущих шагов уже передаётся в _agent_prompt через _prev_steps_context
                 if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
-                    _ag_task = f'{_ag_task}\n\nКонтекст — уже сделано командой:\n{_prev_steps_context[:400]}'
+                    _ag_task = f'{_ag_task}\nКонтекст — уже сделано командой:\n{_prev_steps_context[:400]}'
 
                 # Ищем агента в команде
                 _target_ag = next(
@@ -9083,6 +9084,8 @@ class AnchorEngine:
                     f"\n  [МАКСИМУМ] Даже без интеграции ты можешь: create_post + publish_to_telegram, save_email_contact, research_topic → контент."
                     f"\n\n⚠️ ВАЖНО: Не пиши 'отправлю позже' без tool-вызова. Нет инструмента — нет обещания."
                     f"\n  Ответ без единого tool-вызова (кроме web_search) = ПРОВАЛ."
+                    f"\n  ⛔ НЕ ИЗОБРЕТАЙ ДАННЫЕ: пиши только то что реально вернул tool в этой сессии."
+                    f" Нет результата от tool → 'ничего не найдено'. Числа, имена, кампании #N — только из tool-ответа."
                 )
 
                 # Кросс-агентное общение: если предыдущие агенты уже выполнили шаги,
