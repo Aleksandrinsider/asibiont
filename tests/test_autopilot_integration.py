@@ -355,6 +355,85 @@ def test_d35_email_reply_anchor_retries_language_mismatch_and_hides_raw_guard(mo
             f"Ожидали успешное уведомление после retry: {final_text}"
 
 
+def test_d36_reply_to_outreach_email_blocks_self_reply():
+    """reply_to_outreach_email не должен отвечать на письмо самому sender_email кампании."""
+    from ai_integration.handlers import reply_to_outreach_email
+
+    with TestSession() as s:
+        u = s.query(models.User).filter_by(telegram_id=UID).first()
+        campaign = models.EmailCampaign(
+            user_id=u.id,
+            name="D36-Кампания",
+            goal="Проверка self-reply guard",
+            sender_name="ASI",
+            sender_email="outreach@asibiont.com",
+            status='active',
+        )
+        s.add(campaign)
+        s.flush()
+
+        outreach = models.EmailOutreach(
+            campaign_id=campaign.id,
+            user_id=u.id,
+            recipient_email='outreach@asibiont.com',
+            recipient_name='ASI Biont',
+            subject='Self reply',
+            body='Тестовое письмо',
+            status='replied',
+            reply_text='Это почему-то письмо от нас же.',
+        )
+        s.add(outreach)
+        s.commit()
+
+        result = run(reply_to_outreach_email(
+            outreach_id=outreach.id,
+            reply_body='Здравствуйте! Спасибо за ответ.',
+            user_id=UID,
+            session=s,
+            close_session=False,
+        ))
+
+        assert 'Self-reply detected' in str(result), f"Self-reply должен блокироваться: {result}"
+
+
+def test_d37_scan_email_outreach_skips_self_reply_anchor():
+    """_scan_email_outreach не должен создавать email_reply_received якорь для self-reply."""
+    from anchor_engine import AnchorEngine
+
+    ae = AnchorEngine()
+    now = datetime.now(timezone.utc)
+
+    with TestSession() as s:
+        u = s.query(models.User).filter_by(telegram_id=UID).first()
+        campaign = models.EmailCampaign(
+            user_id=u.id,
+            name='D37-Кампания',
+            goal='Проверка scanner self-reply guard',
+            sender_name='ASI',
+            sender_email='outreach@asibiont.com',
+            status='active',
+        )
+        s.add(campaign)
+        s.flush()
+
+        self_outreach = models.EmailOutreach(
+            campaign_id=campaign.id,
+            user_id=u.id,
+            recipient_email='outreach@asibiont.com',
+            recipient_name='ASI Biont',
+            subject='Self reply',
+            body='Тест',
+            status='replied',
+            reply_text='Это письмо пришло от нашего же адреса.',
+        )
+        s.add(self_outreach)
+        s.commit()
+
+        anchors = ae._scan_email_outreach(u, s, now)
+        assert not any((a.anchor_type == 'email_reply_received' and a.source == f'email:{self_outreach.id}:reply') for a in anchors), \
+            f"Self-reply не должен создавать email_reply_received anchor: {anchors}"
+
+
 def test_d6_agent_add_task_source_and_id():
     """add_task с created_by_agent_id устанавливает source='agent' и created_by_agent_id."""
     from ai_integration.handlers import add_task

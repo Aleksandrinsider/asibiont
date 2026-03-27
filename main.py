@@ -10901,6 +10901,12 @@ async def resend_webhook_handler(request):
 
                 to_raw = payload.get('to', '') or data.get('to', '')
                 to_email = to_raw[0] if isinstance(to_raw, list) and to_raw else str(to_raw)
+                try:
+                    import re as _re_to
+                    _to_match = _re_to.search(r'<([^>]+@[^>]+)>', to_email)
+                    to_email = (_to_match.group(1) if _to_match else to_email).strip().lower()
+                except Exception:
+                    to_email = str(to_email or '').strip().lower()
                 logger.info(f"[RESEND_WEBHOOK] Parsed: from_email={redact_email(from_email)}, to={redact_email(to_email)}, subject={subject[:80] if subject else ''}, body_len={len(text_body or '')}")
 
                 if from_email:
@@ -10946,6 +10952,14 @@ async def resend_webhook_handler(request):
                             logger.info(f"[RESEND_WEBHOOK] Found outreach #{outreach.id} with status={outreach.status} via broader search")
 
                     if outreach:
+                        campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+                        _campaign_sender = ((campaign.sender_email or '').strip().lower() if campaign else '')
+                        if (to_email and from_email == to_email) or (_campaign_sender and from_email == _campaign_sender):
+                            logger.warning(
+                                f"[RESEND_WEBHOOK] Ignoring self-reply: from={redact_email(from_email)}, to={redact_email(to_email)}, campaign_sender={redact_email(_campaign_sender)}"
+                            )
+                            return web.json_response({'status': 'ignored', 'reason': 'self_reply'})
+
                         was_replied = outreach.status == 'replied'
                         outreach.status = 'replied'
                         if outreach.reply_text:
@@ -10954,7 +10968,6 @@ async def resend_webhook_handler(request):
                             outreach.reply_text = (text_body or '') or None
                         outreach.reply_at = datetime.now(dt_timezone.utc)
                         if not was_replied:
-                            campaign = session_db.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
                             if campaign:
                                 campaign.emails_replied = (campaign.emails_replied or 0) + 1
                         session_db.commit()

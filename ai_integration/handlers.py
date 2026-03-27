@@ -12176,6 +12176,11 @@ async def reply_to_outreach_email(
         if not campaign:
             return " Кампания не найдена."
 
+        _sender_addr_norm = (campaign.sender_email or '').strip().lower()
+        _user_email_norm = (getattr(user, 'email', '') or '').strip().lower()
+        if _reply_rcpt and ((_sender_addr_norm and _reply_rcpt == _sender_addr_norm) or (_user_email_norm and _reply_rcpt == _user_email_norm)):
+            return f"⛔ Self-reply detected: {_reply_rcpt} — автоответ самому себе заблокирован."
+
         if not reply_body:
             return " Нужен текст ответа (reply_body)."
 

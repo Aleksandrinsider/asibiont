@@ -12592,6 +12592,11 @@ class AnchorEngine:
                     if o.status == 'replied' and o.reply_text and not o.ai_reply_text
                 ]
                 for email in unreplied:
+                    _rcpt_norm = (email.recipient_email or '').strip().lower()
+                    _sender_norm = (campaign.sender_email or '').strip().lower()
+                    if _rcpt_norm and ((_sender_norm and _rcpt_norm == _sender_norm) or _rcpt_norm == 'outreach@asibiont.com'):
+                        logger.info(f"[ANCHOR] Skip self-reply personal email #{email.id} to {redact_email(_rcpt_norm)}")
+                        continue
                     # Dedup: проверяем нет ли уже якоря
                     _existing_anchor = session.query(Anchor).filter(
                         Anchor.user_id == user.id,
@@ -12735,6 +12740,11 @@ class AnchorEngine:
             ]
 
             for email in unreplied:
+                _rcpt_norm = (email.recipient_email or '').strip().lower()
+                _sender_norm = (campaign.sender_email or '').strip().lower()
+                if _rcpt_norm and ((_sender_norm and _rcpt_norm == _sender_norm) or _rcpt_norm == 'outreach@asibiont.com'):
+                    logger.info(f"[ANCHOR] Skip self-reply campaign email #{email.id} to {redact_email(_rcpt_norm)}")
+                    continue
                 # Dedup: проверяем нет ли уже якоря для этого email
                 _existing_anchor = session.query(Anchor).filter(
                     Anchor.user_id == user.id,
