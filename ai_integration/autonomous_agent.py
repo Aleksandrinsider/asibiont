@@ -1300,6 +1300,13 @@ class HybridAutonomousAgent:
                     'code': ('github', 'repo', 'commit', 'issue', 'pull', 'код', 'разработ'),
                 }
 
+                for _cand in _supported_actions:
+                    _cand_tokens = tuple(sorted(_tok(_cand)))
+                    if not _cand_tokens:
+                        continue
+                    _family_key = (_cand.lower().split('_', 1)[0] or 'action').strip()
+                    _signal_map.setdefault(_family_key, _cand_tokens)
+
                 def _sig(_txt: str) -> set:
                     _res = set()
                     _low = (_txt or '').lower()
@@ -1321,7 +1328,8 @@ class HybridAutonomousAgent:
                     _j = _inter / _union
                     _lex = _SM_ea(None, _orig_l, _cand_l).ratio()
                     _sov = len(_req_s & _sig(_cand_l))
-                    _sc = (_lex * 0.6) + (_j * 0.25) + (_sov * 0.2)
+                    _prefix = 1.0 if (_orig_l.split('_', 1)[0] == _cand_l.split('_', 1)[0]) else 0.0
+                    _sc = (_lex * 0.45) + (_j * 0.3) + (_sov * 0.2) + (_prefix * 0.15)
                     if _sc > _best_sc:
                         _best = _cand
                         _best_sc = _sc
@@ -3096,7 +3104,17 @@ class HybridAutonomousAgent:
         final = clean_technical_details(content or '').strip()
         if not final:
             _lang = get_user_lang(user_id)
-            final = "Done!" if _lang == 'en' else "Готово!"
+            
+            # Проверяем — может это стратегическое указание? (изменение целей, аудитории, интеграций)
+            _user_msg_lower = (user_message or '').lower()
+            _strategy_keywords = ['ищем', 'search for', 'ищи', 'не', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals']
+            _is_strategy_cmd = any(kw in _user_msg_lower for kw in _strategy_keywords) and any(verb in _user_msg_lower for verb in ['можем', 'можно', 'может', 'should', 'надо', 'нужно', 'need'])
+            
+            if _is_strategy_cmd:
+                # Это указание по стратегии — переформулируем вместо простого "Готово!"
+                final = f"Понял! Меняю стратегию поиска.\n\n{user_message}\n\nПерестраиваю фильтры и переориентирую агентов на новую целевую аудиторию. Результаты будут видны в следующем цикле автопилота."
+            else:
+                final = "Done!" if _lang == 'en' else "Готово!"
 
         # Биллинг кастомного агента
         try:
@@ -3163,6 +3181,43 @@ class HybridAutonomousAgent:
 
     def _save_and_learn(self, user_message, user_id, execution_results, response):
         """Сохраняет в историю, обучается на результатах, обновляет паттерны."""
+        
+        # === Обновление стратегии / целевой аудитории если это управляющее указание ===
+        try:
+            _msg_lower = (user_message or '').lower()
+            _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'search', 'find'])
+            _has_not_keywords = any(w in _msg_lower for w in ['не ', 'не,', ' не', 'instead', 'вместо', 'except'])
+            
+            if _has_search_keywords and _has_not_keywords:
+                # Похоже на стратегическое указание типа "ищем [не_это] [а_то]"
+                # Например: "ищем не тестировщиков а бизнесменов"
+                from models import Session, Goal
+                session = Session()
+                try:
+                    # Ищем активные цели на поиск/привлечение контактов
+                    active_goals = session.query(Goal).filter(
+                        Goal.user_id == user_id,
+                        Goal.status == 'active'
+                    ).all()
+                    for goal in active_goals:
+                        _gtitle_lower = (goal.title or '').lower()
+                        _gdesc_lower = (goal.description or '').lower()
+                        # Если цель про привлечение/поиск — обновляем её описание
+                        if any(w in _gtitle_lower or w in _gdesc_lower for w in ['привлеч', 'поиск', 'найти', 'search', 'find']):
+                            # Добавляем указание пользователя в описание цели
+                            _old_desc = goal.description or ''
+                            _new_desc = f"{_old_desc}\n\n[СТРАТЕГИЯ 27.03.2026 - 06:45] {user_message}".strip()
+                            goal.description = _new_desc
+                            goal.updated_at = datetime.utcnow()
+                            logger.info(f"[STRATEGY UPDATE] Goal {goal.id} updated with user strategy: {user_message[:80]}")
+                    session.commit()
+                except Exception as _gu_err:
+                    logger.debug(f"[STRATEGY UPDATE] Failed to update goals: {_gu_err}")
+                    session.rollback()
+                finally:
+                    session.close()
+        except Exception as _strat_err:
+            logger.debug(f"[STRATEGY] Strategy detection error: {_strat_err}")
         
         # === Запись в execution_history ===
         tools_used = [r['tool'] for r in execution_results if r.get('success')]

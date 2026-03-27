@@ -207,6 +207,120 @@ def _classify_agent_caps(detected_labels: list[str]) -> dict:
     }
 
 
+def _extract_python_actions(python_code: str | None) -> list[str]:
+    if not python_code:
+        return []
+    actions: list[str] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", python_code):
+        action = (match.group(1) or '').strip()
+        action_lower = action.lower()
+        if action and action_lower not in seen:
+            actions.append(action)
+            seen.add(action_lower)
+    for match in re.finditer(r"ACTION\s+in\s*\(([^)]+)\)", python_code):
+        for part in match.group(1).split(','):
+            action = part.strip().strip("'\" ")
+            action_lower = action.lower()
+            if action and action_lower not in seen:
+                actions.append(action)
+                seen.add(action_lower)
+    return actions
+
+
+def _tokenize_semantic_text(text_value: str) -> set[str]:
+    return {
+        token for token in re.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (text_value or '').lower())
+        if len(token) >= 3
+    }
+
+
+def _build_capability_profiles(detected_labels: list[str] | None,
+                               python_code: str | None = None) -> list[dict]:
+    caps = _classify_agent_caps(detected_labels or [])
+    labels = detected_labels or []
+    labels_lower = [str(label).lower() for label in labels]
+    py_actions = _extract_python_actions(python_code)
+    profiles: list[dict] = []
+    matched_labels: set[str] = set()
+
+    for category in sorted(caps.get('categories', set())):
+        category_name = _CAP_CATEGORY_NAMES.get(category, category)
+        tool_hint = _CAP_TOOL_HINTS.get(category, '')
+        category_keywords = next((kws for kws, cat in _CAP_CATEGORY_MAP if cat == category), tuple())
+        related_labels = [label for label, low in zip(labels, labels_lower) if any(kw in low for kw in category_keywords)]
+        matched_labels.update(related_labels)
+        related_actions = [
+            action for action in py_actions
+            if any(kw in action.lower() for kw in category_keywords)
+        ]
+        route = tool_hint or (
+            f"run_agent_action(action=\"{related_actions[0]}\")"
+            if related_actions else
+            'run_agent_action(точное action-имя из профиля агента)'
+        )
+        score_text = ' '.join(filter(None, [category_name, tool_hint, ' '.join(related_labels), ' '.join(related_actions)]))
+        profiles.append({
+            'key': category,
+            'display': category_name,
+            'route': route,
+            'score_text': score_text,
+            'matched_labels': related_labels,
+            'actions': related_actions,
+        })
+
+    for label in labels:
+        if label in matched_labels:
+            continue
+        profiles.append({
+            'key': f'label:{label.lower()}',
+            'display': label,
+            'route': 'run_agent_action(точное action-имя из профиля агента)',
+            'score_text': label,
+            'matched_labels': [label],
+            'actions': [],
+        })
+
+    if py_actions:
+        profiles.append({
+            'key': 'custom_actions',
+            'display': 'Кастомные action',
+            'route': 'run_agent_action(action="...") по точным action-именам скрипта',
+            'score_text': ' '.join(py_actions),
+            'matched_labels': [],
+            'actions': py_actions,
+        })
+
+    return profiles
+
+
+def _rank_goal_capabilities(goal_text: str,
+                            detected_labels: list[str] | None = None,
+                            python_code: str | None = None) -> list[tuple[float, str, str, str]]:
+    goal_tokens = _tokenize_semantic_text(goal_text)
+    if not goal_tokens:
+        return []
+
+    ranked: list[tuple[float, str, str, str]] = []
+    for profile in _build_capability_profiles(detected_labels or [], python_code=python_code):
+        profile_tokens = _tokenize_semantic_text(profile.get('score_text', ''))
+        if not profile_tokens:
+            continue
+        overlap = len(goal_tokens & profile_tokens)
+        coverage = overlap / max(1, len(goal_tokens))
+        precision = overlap / max(1, len(profile_tokens))
+        score = (overlap * 2.0) + (coverage * 2.5) + (precision * 1.5)
+        if profile.get('matched_labels'):
+            score += 0.25 * len(profile['matched_labels'])
+        if profile.get('actions'):
+            score += min(1.0, 0.15 * len(profile['actions']))
+        if score > 0:
+            ranked.append((score, profile['display'], profile['route'], profile['key']))
+
+    ranked.sort(key=lambda item: (-item[0], item[1]))
+    return ranked
+
+
 def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
     """Генерирует текстовый блок возможностей агента для любого промпта.
 
@@ -599,7 +713,9 @@ def _match_best_integration(goal_title: str,
                              has_imap: bool, has_github: bool, has_rss: bool,
                              has_alpha: bool, has_content: bool, has_news: bool,
                              has_notion: bool, has_slack: bool, has_sheets: bool,
-                             has_stripe: bool) -> list[tuple[int, str, str]]:
+                             has_stripe: bool,
+                             caps_labels: list[str] | None = None,
+                             python_code: str | None = None) -> list[tuple[float, str, str]]:
     """Для конкретной цели возвращает список (score, emoji+name, цепочка инструментов)
     отсортированный по убыванию релевантности.  Только те интеграции, что реально есть у агента."""
     t = goal_title.lower()
@@ -686,6 +802,16 @@ def _match_best_integration(goal_title: str,
         if score > 0 and key in _CHAINS:
             emoji_name, chain = _CHAINS[key]
             result.append((score, emoji_name, chain))
+
+    existing_names = {name for _, name, _ in result}
+    dynamic_ranked = _rank_goal_capabilities(goal_title, caps_labels or [], python_code=python_code)
+    for dyn_score, dyn_name, dyn_route, dyn_key in dynamic_ranked:
+        if dyn_key == 'custom_actions' and not python_code:
+            continue
+        if dyn_name in existing_names:
+            continue
+        result.append((dyn_score, f"🧩 {dyn_name}", dyn_route))
+
     result.sort(key=lambda x: -x[0])
     return result
 
@@ -839,7 +965,9 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                                has_news: bool, has_notion: bool, has_slack: bool,
                                has_sheets: bool, has_stripe: bool, used_tools: set,
                                goal_type: str = 'general',
-                               agent_history: list | None = None) -> str:
+                               agent_history: list | None = None,
+                               caps_labels: list[str] | None = None,
+                               python_code: str | None = None) -> str:
     """Универсальный фрейм рассуждения — НЕ keyword-сценарии.
     Агент сам думает: что значит прогресс по ЭТОЙ цели? какие инструменты дают ПРЯМОЙ результат?
     Включает тактическую матрицу 5 подходов с трекингом что уже пробовалось.
@@ -870,7 +998,9 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         _gtitle = (g.get('title', '') or '')[:70]
         _ranked = _match_best_integration(
             _gtitle, has_imap, has_github, has_rss, has_alpha,
-            has_content, has_news, has_notion, has_slack, has_sheets, has_stripe
+            has_content, has_news, has_notion, has_slack, has_sheets, has_stripe,
+            caps_labels=caps_labels,
+            python_code=python_code,
         )
         if _ranked:
             # Показываем топ-2 интеграции для цели
@@ -910,6 +1040,14 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         avail.append("  💬 Slack: run_agent_action(action='post_message', channel='#X') ← команда получает уведомление")
     if has_stripe:
         avail.append("  💳 Stripe: run_agent_action(action='get_charges') ← реальные данные платежей")
+
+    _goal_text_all = ' '.join(
+        (g.get('title', '') or '') + ' ' + (g.get('description', '') or '')
+        for g in goals_summary[:3]
+    )
+    _dynamic_cap_rank = _rank_goal_capabilities(_goal_text_all, caps_labels or [], python_code=python_code)
+    _dynamic_top_keys = [item[3] for item in _dynamic_cap_rank[:3]]
+
     # Всегда доступно
     # Добавляем системные инструменты с учётом типа цели — не засориваем аналитические цели email-outreach
     _sys_always = [
@@ -1536,63 +1674,52 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + _td('send_message_to_user') + '\n'
     )
 
-    # ── Порядок секций зависит от типа цели ──
-    if _goal_type == 'research':
-        # Research/analytics: сначала реальные данные (интеграции), потом LLM-поиск,
-        # потом публикация итогов. Email-outreach — только если IMAP есть.
-        _catalog = (
-            "ИНСТРУМЕНТЫ (порядок = приоритет для АНАЛИТИЧЕСКОЙ цели):\n"
-            + _sec_integrations
-            + _sec_research
-            + _sec_content
-            + _sec_tasks
-            + _sec_delegate
-            + (_sec_email if _has_imap else
-               "\n📧 Email не настроен — используй Telegram/Discord для публикации аналитики.\n")
-        )
+    _dynamic_cap_rank = _rank_goal_capabilities(_goals_text_all, agent_caps or [], python_code=python_code)
+    _dynamic_top_keys = [item[3] for item in _dynamic_cap_rank[:3]]
+
+    _section_blocks = {
+        'integrations': _sec_integrations,
+        'research': _sec_research,
+        'content': _sec_content,
+        'email': _sec_email,
+        'tasks': _sec_tasks,
+        'delegate': _sec_delegate,
+    }
+
+    if _goal_type in ('learning', 'health', 'personal'):
+        _catalog_order = ['tasks', 'research', 'content', 'integrations', 'delegate']
+    elif any(key in _dynamic_top_keys for key in ('email', 'crm', 'calendar', 'calls', 'hr')):
+        _catalog_order = ['email', 'integrations', 'research', 'delegate', 'tasks', 'content']
+    elif any(key in _dynamic_top_keys for key in ('telegram', 'discord', 'social', 'image_gen', 'automation')):
+        _catalog_order = ['content', 'integrations', 'research', 'delegate', 'tasks', 'email']
+    elif any(key in _dynamic_top_keys for key in ('finance', 'rss', 'news', 'git', 'sheets', 'database', 'analytics', 'custom_actions', 'script')):
+        _catalog_order = ['integrations', 'research', 'content', 'tasks', 'delegate', 'email']
     elif _goal_type == 'dev':
-        _catalog = (
-            "ИНСТРУМЕНТЫ (порядок = приоритет для задачи с разработчиками):\n"
-            + _sec_integrations
-            + _sec_research
-            + _sec_email
-            + _sec_tasks
-            + _sec_delegate
-            + _sec_content
-        )
-    elif _goal_type == 'content':
-        _catalog = (
-            "ИНСТРУМЕНТЫ (порядок = приоритет для контентной цели):\n"
-            + _sec_content
-            + _sec_integrations
-            + _sec_research
-            + _sec_tasks
-            + _sec_delegate
-            + _sec_email
-        )
-    elif _goal_type in ('learning', 'health', 'personal'):
+        _catalog_order = ['integrations', 'research', 'email', 'tasks', 'delegate', 'content']
+    else:
+        _catalog_order = ['email', 'research', 'integrations', 'content', 'delegate', 'tasks']
+
+    # ── Порядок секций: capability-first, goal_type только корректирует guardrails ──
+    if _goal_type in ('learning', 'health', 'personal'):
         _catalog = (
             "ИНСТРУМЕНТЫ (порядок = приоритет для ЛИЧНОЙ/ОБУЧАЮЩЕЙ цели):\n"
             "⛔ НЕ запускай массовые email-рассылки — "
             "это ЛИЧНАЯ цель, а не продажи. Единственное исключение: negotiate_by_email конкретному ментору/эксперту.\n"
-            + _sec_tasks
-            + _sec_research
-            + _sec_content
-            + _sec_integrations
-            + _sec_delegate
+            + ''.join(_section_blocks[name] for name in _catalog_order if name in _section_blocks)
             + "\n📧 Email: только для negotiate_by_email с конкретным ментором/наставником по теме цели.\n"
         )
     else:
-        # outreach / general — стандарт: email первым
+        _catalog_header = {
+            'research': 'ИНСТРУМЕНТЫ (порядок = capability-first для аналитической цели):\n',
+            'dev': 'ИНСТРУМЕНТЫ (порядок = capability-first для цели с разработкой/нетворкингом):\n',
+            'content': 'ИНСТРУМЕНТЫ (порядок = capability-first для контентной цели):\n',
+        }.get(_goal_type, 'ИНСТРУМЕНТЫ (порядок = capability-first под текущую цель):\n')
         _catalog = (
-            "ИНСТРУМЕНТЫ (выбери лучшую цепочку под цель):\n"
-            + _sec_email
-            + _sec_research
-            + _sec_integrations
-            + _sec_content
-            + _sec_delegate
-            + _sec_tasks
+            _catalog_header
+            + ''.join(_section_blocks[name] for name in _catalog_order if name in _section_blocks)
         )
+        if _goal_type == 'research' and not _has_imap:
+            _catalog += "\n📧 Email не настроен — для распространения выводов используй публикацию, делегирование или сохранение в базе знаний.\n"
 
     # ── Матрица умного выбора инструментов (только для outreach/content/general/dev) ──
     _tool_matrix = ''
@@ -1792,6 +1919,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _has_sheets, _has_stripe, _used_tools,
         goal_type=_goal_type,
         agent_history=_agent_hist_for_scaffold,
+        caps_labels=agent_caps or [],
+        python_code=python_code,
     )
 
     # ── Outreach effectiveness stats ──
@@ -4355,6 +4484,12 @@ class AnchorEngine:
                             _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(
+                                r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
+                                '',
+                                _coord_text,
+                                flags=re.IGNORECASE,
+                            )
+                            _coord_text = re.sub(
                                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
                                 '[некорректный email]',
                                 _coord_text,
@@ -4803,9 +4938,17 @@ class AnchorEngine:
                                 _stag_mc = int(_stag_active[0].get('metric_current', 0) or 0) if _stag_active else 0
                                 _stag_mt = int(_stag_active[0].get('metric_target', 0) or 0) if _stag_active else 0
                                 _stag_mu = str(_stag_active[0].get('metric_unit', '') or '') if _stag_active else ''
-                                _stag_prog = f"{_stag_mc}/{_stag_mt} {_stag_mu}".strip() if _stag_mt else (
-                                    f"{int(_stag_active[0].get('progress_percentage', 0) or 0)}%" if _stag_active else "0%"
-                                )
+                                _stag_pct = int(_stag_active[0].get('progress_percentage', 0) or 0) if _stag_active else 0
+                                # Выбираем лучший способ отобразить прогресс: если есть metrics, показываем оба; если нет — проценты
+                                if _stag_mt and _stag_mc > 0:
+                                    _stag_prog = f"{_stag_mc}/{_stag_mt} {_stag_mu}".strip()
+                                elif _stag_mt and _stag_pct > 0:
+                                    # metric_current не обновился, но progress_percentage есть — используем оба
+                                    _stag_prog = f"{_stag_pct}% (примерно {int(_stag_pct * _stag_mt / 100)}/{_stag_mt} {_stag_mu})".strip()
+                                elif _stag_pct > 0:
+                                    _stag_prog = f"{_stag_pct}%"
+                                else:
+                                    _stag_prog = "0%"
                                 _stag_goal_str = f"«{_stag_g_title}»" if _stag_g_title else "текущей цели"
 
                                 # --- Что уже пробовали (exhausted_strategies + recent_actions) ---
@@ -4963,6 +5106,12 @@ class AnchorEngine:
                         _cleaned_result = re.sub(r'\n{2,}', '\n', _cleaned_result).strip()
                         _cleaned_result = re.sub(r'через\s+—', 'через другой канал —', _cleaned_result, flags=re.IGNORECASE)
                         _cleaned_result = re.sub(r'через\s{2,}', 'через ', _cleaned_result, flags=re.IGNORECASE)
+                        _cleaned_result = re.sub(
+                            r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
+                            '',
+                            _cleaned_result,
+                            flags=re.IGNORECASE,
+                        )
                         _cleaned_result = re.sub(
                             r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
                             '[некорректный email]',
@@ -5835,6 +5984,12 @@ class AnchorEngine:
             _transfer_text = re.sub(r'через\s+—', 'через другой канал —', _transfer_text, flags=re.IGNORECASE)
             _transfer_text = re.sub(r'через\s{2,}', 'через ', _transfer_text, flags=re.IGNORECASE)
             _transfer_text = re.sub(
+                r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
+                '',
+                _transfer_text,
+                flags=re.IGNORECASE,
+            )
+            _transfer_text = re.sub(
                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
                 '[некорректный email]',
                 _transfer_text,
@@ -5909,6 +6064,12 @@ class AnchorEngine:
             _next_result = re.sub(r'\n{2,}', '\n', (_next_result or '')).strip()
             _next_result = re.sub(r'через\s+—', 'через другой канал —', _next_result, flags=re.IGNORECASE)
             _next_result = re.sub(r'через\s{2,}', 'через ', _next_result, flags=re.IGNORECASE)
+            _next_result = re.sub(
+                r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
+                '',
+                _next_result,
+                flags=re.IGNORECASE,
+            )
             _next_result = re.sub(
                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
                 '[некорректный email]',
