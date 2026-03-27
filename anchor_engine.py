@@ -4349,6 +4349,14 @@ class AnchorEngine:
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=400)
                         if _gen and len(_gen.strip()) > 15:
                             _coord_text = _gen.strip()
+                            _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
+                            _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
+                            _coord_text = re.sub(
+                                r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
+                                '[некорректный email]',
+                                _coord_text,
+                                flags=re.IGNORECASE,
+                            )
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     try:
@@ -4950,6 +4958,14 @@ class AnchorEngine:
                         if not _cleaned_result or len(_cleaned_result.strip()) < 10:
                             _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
                         _cleaned_result = re.sub(r'\n{2,}', '\n', _cleaned_result).strip()
+                        _cleaned_result = re.sub(r'через\s+—', 'через другой канал —', _cleaned_result, flags=re.IGNORECASE)
+                        _cleaned_result = re.sub(r'через\s{2,}', 'через ', _cleaned_result, flags=re.IGNORECASE)
+                        _cleaned_result = re.sub(
+                            r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
+                            '[некорректный email]',
+                            _cleaned_result,
+                            flags=re.IGNORECASE,
+                        )
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
                         await asyncio.sleep(2)
                         try:
@@ -5813,6 +5829,14 @@ class AnchorEngine:
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
             _transfer_text = re.sub(r'\n{2,}', '\n', _transfer_text).strip()
+            _transfer_text = re.sub(r'через\s+—', 'через другой канал —', _transfer_text, flags=re.IGNORECASE)
+            _transfer_text = re.sub(r'через\s{2,}', 'через ', _transfer_text, flags=re.IGNORECASE)
+            _transfer_text = re.sub(
+                r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
+                '[некорректный email]',
+                _transfer_text,
+                flags=re.IGNORECASE,
+            )
             # Dedup: пропускаем уведомление если совсем недавно было проактивное сообщение (≤5 мин)
             _chain_transfer_gap_ok = True
             try:
@@ -5880,6 +5904,14 @@ class AnchorEngine:
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
             _next_result = re.sub(r'\n{2,}', '\n', (_next_result or '')).strip()
+            _next_result = re.sub(r'через\s+—', 'через другой канал —', _next_result, flags=re.IGNORECASE)
+            _next_result = re.sub(r'через\s{2,}', 'через ', _next_result, flags=re.IGNORECASE)
+            _next_result = re.sub(
+                r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
+                '[некорректный email]',
+                _next_result,
+                flags=re.IGNORECASE,
+            )
             _chain_tools_used = list(_next_raw[1]) if isinstance(_next_raw, (tuple, list)) and len(_next_raw) > 1 else []
 
             # Сохраняем результат в лог
