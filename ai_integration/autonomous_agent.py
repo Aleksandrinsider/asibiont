@@ -5679,6 +5679,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "❗ Чистый текст без вызова инструментов = ОШИБКА и провал задачи.\n"
             "1. В задаче написан ПЛАН ДЕЙСТВИЙ — вызови первый подходящий инструмент прямо сейчас.\n"
             "2. ЦЕПОЧКА за цикл: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress(goal_title='...', progress=N, note='...').\n"
+            "   В notes ОБЯЗАТЕЛЬНО добавляй proof: какой инструмент дал результат, id/email/факт.\n"
             "   ⚠️ progress — АБСОЛЮТНОЕ значение % в (0-100), НЕ дельта. Считай сам по факту: \n"
             "   - Нашёл/отправил контакты: (кол-во_найденных / цель) * 100\n"
             "   - Получил реальный ответ 'да/буду пользоваться' = +8-10% к текущему\n"
@@ -5734,11 +5735,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
+    _action_evidence: list[str] = []  # короткие доказательства из результатов инструментов
     _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
     _max_iters = 5 if _is_autopilot_task else 4  # autopilot: search + save + send + update + summary; regular: до 4 итераций для сложных задач
+    _ACTION_EVIDENCE_TOOLS = {
+        'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
+        'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
+        'publish_to_discord', 'create_post', 'send_email', 'add_email_leads',
+        'check_emails',
+    }
 
     # ── Универсальная история действий агента за 24ч (anti-repeat для ВСЕХ интеграций) ──
     if _is_autopilot_task and agent.get('id'):
@@ -6095,14 +6103,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _prior_tools_set = set(_tools_used[:-1])  # exclude current
                     _had_outgoing = bool(_prior_tools_set & _OUTGOING_ACTION_TOOLS)
                     _only_research = _prior_tools_set and _prior_tools_set.issubset(_RESEARCH_ONLY_TOOLS)
-                    # Разрешаем update_goal_progress БЕЗ действий если агент НЕ повышает числовой прогресс
-                    # (т.е. это фиксация итога сессии-поиска, а не накрутка метрики)
-                    # metric_current НЕ проверяем здесь — handler имеет свои guard'ы
-                    # (delta >= 1, people-goals: inbox_reply для +4, replied outreach для +11)
                     _ugp_progress = _targs.get('progress')
-                    _is_progress_increase = (
-                        _ugp_progress is not None and float(_ugp_progress) > 10
-                    )
+                    _ugp_metric_current = _targs.get('metric_current')
+                    _is_numeric_update = (_ugp_progress is not None or _ugp_metric_current is not None)
+                    _is_progress_increase = False
+                    try:
+                        _is_progress_increase = _ugp_progress is not None and float(_ugp_progress) > 0
+                    except Exception:
+                        _is_progress_increase = bool(_ugp_progress)
                     if _only_research and not _had_outgoing and _is_progress_increase:
                         _tc_result = json.dumps({
                             "error": (
@@ -6117,6 +6125,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
                         _tool_call_count += 1
                         continue
+
+                    if _is_numeric_update and not _had_outgoing and not _action_evidence:
+                        _tc_result = json.dumps({
+                            "error": (
+                                "⛔ Нет доказательств для update_goal_progress. "
+                                "Сначала выполни реальное действие инструментом и получи результат "
+                                "(email/outreach/reply/contact/post), затем обновляй метрику."
+                            )
+                        }, ensure_ascii=False)
+                        _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                        _tool_call_count += 1
+                        continue
+
+                    if _is_numeric_update:
+                        _notes_existing = (_targs.get('notes') or _targs.get('note') or '').strip()
+                        _proof_tools = ','.join(sorted(_prior_tools_set & _OUTGOING_ACTION_TOOLS)[:3]) or 'n/a'
+                        _proof_evidence = '; '.join(_action_evidence[-2:]) if _action_evidence else 'n/a'
+                        _proof_block = f"[proof tools={_proof_tools}; evidence={_proof_evidence}]"
+                        if _proof_block not in _notes_existing:
+                            _targs['notes'] = (_notes_existing + ' ' + _proof_block).strip()
 
                 # Задачи создаваемые агентом помечаются source='agent'
                 if _tname == 'add_task' and agent.get('id'):
@@ -6133,6 +6161,25 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     if _r0.get('success'):
                         _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)
                         _tc_result = _tc_result[:1500]
+                        if _tname in _ACTION_EVIDENCE_TOOLS:
+                            import re as _re_ev
+                            _email_ev = ''
+                            _id_ev = ''
+                            _m_email = _re_ev.search(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', _tc_result or '')
+                            if _m_email:
+                                _email_ev = _m_email.group(0)[:64]
+                            _m_id = _re_ev.search(r'(?:outreach_id|contact_id|id)\"?\s*[:=]\s*\"?([A-Za-z0-9_-]{2,32})', _tc_result or '', _re_ev.IGNORECASE)
+                            if _m_id:
+                                _id_ev = _m_id.group(1)
+                            _fact_parts = []
+                            if _id_ev:
+                                _fact_parts.append(f"id={_id_ev}")
+                            if _email_ev:
+                                _fact_parts.append(f"email={_email_ev}")
+                            _fact = ','.join(_fact_parts) if _fact_parts else 'ok'
+                            _action_evidence.append(f"{_tname}:{_fact}")
+                            if len(_action_evidence) > 6:
+                                _action_evidence = _action_evidence[-6:]
                         try: get_learner().record_tool_result(user_id, _tname, True)
                         except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                     else:

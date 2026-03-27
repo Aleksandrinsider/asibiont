@@ -7397,6 +7397,10 @@ class AnchorEngine:
                 'content': {'create_post', 'publish_to_telegram', 'publish_to_discord'},
                 'data_save': {'save_note', 'save_email_contact'},
                 'task_mgmt': {'add_task', 'delegate_task', 'update_goal_progress'},
+                'followup_retention': {'send_follow_up_email', 'check_emails', 'reply_to_outreach_email'},
+                'community_leverage': {'publish_to_telegram', 'publish_to_discord', 'find_and_message_relevant_users'},
+                'partnership_motion': {'delegate_task', 'start_delegation_campaign', 'manage_delegation_campaign'},
+                'offer_experiment': {'send_outreach_email', 'create_post', 'publish_to_telegram'},
             }
             # Подсчитываем сколько раз каждая стратегия использовалась ВСЕМИ агентами
             _strategy_usage: dict = {}  # {strategy_name: count}
@@ -7441,6 +7445,10 @@ class AnchorEngine:
                         'content': 'создание контента (посты, статьи)',
                         'data_save': 'сохранение данных/контактов',
                         'task_mgmt': 'управление задачами/делегирование',
+                        'followup_retention': 'follow-up и удержание контактов',
+                        'community_leverage': 'рост через сообщества и каналы',
+                        'partnership_motion': 'партнерства и кооперация агентов',
+                        'offer_experiment': 'тест офферов и гипотез',
                     }
                     _nt_nice = [_nice_names.get(s, s) for s in _strategy_never_tried]
                     _strategy_lines.append(f"\n  💡 ЕЩЁ НЕ ПРОБОВАЛИ: {', '.join(_nt_nice)}")
@@ -7454,13 +7462,16 @@ class AnchorEngine:
                     _last_cycle_tools[_pn_lr] = _cycles_lr[-1]
 
             _TOOL_ALTERNATIVES = {
-                'run_agent_action': ['research_topic', 'web_search', 'get_news_trends', 'find_relevant_contacts_for_task'],
-                'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action'],
-                'web_search':       ['research_topic', 'get_news_trends', 'find_relevant_contacts_for_task'],
-                'get_news_trends':  ['research_topic', 'web_search', 'run_agent_action'],
-                'find_relevant_contacts_for_task': ['web_search', 'research_topic', 'run_agent_action'],
-                'check_emails':     ['send_outreach_email', 'find_relevant_contacts_for_task'],
-                'send_outreach_email': ['check_emails', 'reply_to_outreach_email', 'find_relevant_contacts_for_task'],
+                'run_agent_action': ['research_topic', 'web_search', 'get_news_trends', 'find_relevant_contacts_for_task', 'create_post', 'save_note'],
+                'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action', 'create_post', 'add_task'],
+                'web_search':       ['research_topic', 'get_news_trends', 'find_relevant_contacts_for_task', 'run_agent_action', 'create_post'],
+                'get_news_trends':  ['research_topic', 'web_search', 'run_agent_action', 'create_post'],
+                'find_relevant_contacts_for_task': ['web_search', 'research_topic', 'run_agent_action', 'find_and_message_relevant_users'],
+                'check_emails':     ['send_follow_up_email', 'reply_to_outreach_email', 'send_outreach_email', 'find_relevant_contacts_for_task', 'create_post'],
+                'send_outreach_email': ['check_emails', 'reply_to_outreach_email', 'send_follow_up_email', 'find_relevant_contacts_for_task', 'create_post'],
+                'reply_to_outreach_email': ['send_follow_up_email', 'negotiate_by_email', 'check_emails', 'add_task'],
+                'create_post': ['publish_to_telegram', 'publish_to_discord', 'send_outreach_email', 'save_note', 'add_task'],
+                'publish_to_telegram': ['create_post', 'web_search', 'get_news_trends', 'find_and_message_relevant_users'],
             }
             _agent_tools_map = {
                 _p_tm['name'].lower(): {str(t).strip().lower() for t in (_p_tm.get('tools') or [])}
@@ -7886,6 +7897,13 @@ class AnchorEngine:
                 "• Только GitHub → search_users → save_email_contact → DELEGATE письма коллеге\n"
                 "• Любой агент → research_topic + create_post + publish_to_telegram = экспертный контент\n"
                 "Не ограничивай агента одним инструментом — давай КОМБИНИРОВАННЫЕ задачи.\n\n"
+
+                "ОДИН API — РАЗНЫЕ РЕЖИМЫ (обязательно учитывай):\n"
+                "• run_agent_action: не только поиск людей. Это также мониторинг, обновление данных, постинг, комментарии, тикеты — выбирай режим под цель.\n"
+                "• check_emails: не только 'есть/нет писем'. Это triage входящих, выделение горячих лидов, follow-up и подготовка следующего шага.\n"
+                "• web_search/research_topic: не только отчёт. Конвертируй в действие: контакт, пост, делегирование, задача.\n"
+                "• create_post/publish: не только продвижение. Используй как инструмент воронки (лид-магнит, прогрев, сбор обратной связи).\n"
+                "• Один и тот же API в разных циклах используй в РАЗНЫХ режимах, не повторяй один паттерн.\n\n"
 
                 "ПРАВИЛА:\n"
                 "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
@@ -8325,6 +8343,8 @@ class AnchorEngine:
                             f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
                             f"Важно: выбери НОВЫЙ тип результата, а не повтор прошлого шага "
                             f"(например: данные → контакты, контакты → действия, действия → контент/обучение, и т.д.).\n"
+                            f"Если 2 шага подряд по цели без роста метрики — ОБЯЗАТЕЛЬНО смени КЛАСС стратегии: "
+                            f"поиск ↔ outreach ↔ follow-up ↔ контент ↔ партнерства/делегирование.\n"
                             f"⚠️ ПРАВИЛО: в поле task пиши задачу ТОЛЬКО через интеграции из [интеграции: ...] агента. "
                             f"НЕ упоминай Discord/Slack/GitHub/Telegram если их нет в интеграциях агента. "
                             f"Нет нужной интеграции у агента — назначь другого или пропусти шаг.\n"
