@@ -3182,14 +3182,54 @@ class HybridAutonomousAgent:
     def _save_and_learn(self, user_message, user_id, execution_results, response):
         """Сохраняет в историю, обучается на результатах, обновляет паттерны."""
         
-        # === Обновление стратегии / целевой аудитории если это управляющее указание ===
+        # === Распознавание и сохранение глобальных правил vs целевых стратегий ===
         try:
             _msg_lower = (user_message or '').lower()
-            _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'search', 'find'])
-            _has_not_keywords = any(w in _msg_lower for w in ['не ', 'не,', ' не', 'instead', 'вместо', 'except'])
             
-            if _has_search_keywords and _has_not_keywords:
-                # Похоже на стратегическое указание типа "ищем [не_это] [а_то]"
+            # ── ГЛОБАЛЬНЫЕ ПРАВИЛА (покрывают все цели/инструменты) ──
+            _global_rule_keywords = ['никогда', 'всегда', 'только', 'не используй', 'исключи', 'игнорируй', 
+                                     'пропускай', 'избегай', 'never', 'always', 'don\'t use', 'exclude']
+            _is_global_rule = any(kw in _msg_lower for kw in _global_rule_keywords)
+            
+            # ── Попытка сохранить как глобальное правило если нашли признаки ──
+            if _is_global_rule:
+                # Это выглядит как команда для всей системы а не для одной цели
+                # Сохраняем как пользовательское правило
+                try:
+                    from models import Session, User
+                    session = Session()
+                    user = session.query(User).filter_by(id=user_id).first()
+                    if user:
+                        from .memory import store_encrypted_memory
+                        # Получаем текущие правила
+                        _current_mem = user.memory or '{}'
+                        if _current_mem.startswith('{'):
+                            import json as _j_mem
+                            _mem_dict = _j_mem.loads(_current_mem)
+                        else:
+                            _mem_dict = {'notes': _current_mem}
+                        
+                        _existing_rules = _mem_dict.get('rules', [])
+                        # Проверяем что это правило еще не сохранено
+                        if user_message not in _existing_rules:
+                            _existing_rules.append(user_message)
+                            _mem_dict['rules'] = _existing_rules
+                            
+                            # Сохраняем обновленную память
+                            import json as _j_final
+                            user.memory = _j_final.dumps(_mem_dict, ensure_ascii=False)
+                            session.commit()
+                            logger.info(f"[GLOBAL RULE] Added rule for user {user_id}: {user_message[:80]}")
+                        session.close()
+                except Exception as _gr_err:
+                    logger.debug(f"[GLOBAL RULE] Failed to save as rule: {_gr_err}")
+            
+            # ── ЦЕЛЕВЫЕ СТРАТЕГИИ (специфичные для текущих целей) ──
+            _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'search', 'find', 'целевой', 'аудиторий'])
+            _has_not_keywords = any(w in _msg_lower for w in ['не ', 'не,', ' не', 'instead', 'вместо', 'except', 'а не'])
+            
+            if _has_search_keywords and _has_not_keywords and not _is_global_rule:
+                # Похоже на целевое указание типа "ищем [не_это] [а_то]" для текущего проекта
                 # Например: "ищем не тестировщиков а бизнесменов"
                 from models import Session, Goal
                 session = Session()
@@ -3206,7 +3246,9 @@ class HybridAutonomousAgent:
                         if any(w in _gtitle_lower or w in _gdesc_lower for w in ['привлеч', 'поиск', 'найти', 'search', 'find']):
                             # Добавляем указание пользователя в описание цели
                             _old_desc = goal.description or ''
-                            _new_desc = f"{_old_desc}\n\n[СТРАТЕГИЯ 27.03.2026 - 06:45] {user_message}".strip()
+                            import datetime as _dt_strat
+                            _ts = _dt_strat.datetime.utcnow().strftime('%d.%m.%Y - %H:%M')
+                            _new_desc = f"{_old_desc}\n\n[СТРАТЕГИЯ {_ts}] {user_message}".strip()
                             goal.description = _new_desc
                             goal.updated_at = datetime.utcnow()
                             logger.info(f"[STRATEGY UPDATE] Goal {goal.id} updated with user strategy: {user_message[:80]}")
