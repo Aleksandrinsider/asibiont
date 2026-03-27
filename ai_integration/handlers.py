@@ -14807,6 +14807,33 @@ async def send_email(
         if not to_clean or '@' not in to_clean:
             return f" Некорректный email получателя: {to!r}. Укажи адрес в формате name@domain.com"
 
+        # ── GUARD: фейковый / generic / сервисный email ──
+        if _is_generic_email(to_clean):
+            return f"⛔ {to_clean} — фейковый или generic email. Найди реальный email получателя через поиск или контакты."
+
+        # ── GUARD: дубликат — не слать тому же адресату чаще 1 раза за 4 часа ──
+        try:
+            from models import EmailOutreach as _EO_dup
+            _dup_cut = datetime.now(timezone.utc) - timedelta(hours=4)
+            _dup_sess = session
+            _dup_close = False
+            if _dup_sess is None:
+                _dup_sess = Session()
+                _dup_close = True
+            try:
+                _dup_cnt = _dup_sess.query(func.count(_EO_dup.id)).filter(
+                    _EO_dup.user_id == user.id,
+                    func.lower(_EO_dup.recipient_email) == to_clean,
+                    _EO_dup.sent_at >= _dup_cut,
+                ).scalar() or 0
+            finally:
+                if _dup_close:
+                    _dup_sess.close()
+            if _dup_cnt > 0:
+                return f"⛔ {to_clean} уже получал письмо менее 4ч назад. Подожди или выбери другого получателя."
+        except Exception as _dup_e:
+            logger.debug("send_email dup check: %s", _dup_e)
+
         # ── Gmail OAuth: прямая отправка через Gmail API ──────────────────────
         if _chosen_integration.get('type') == 'gmail_oauth':
             _goa_ok, _goa_result = await _send_via_gmail_api(
@@ -16464,6 +16491,38 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
 
     if user_id not in agent._active_agent_data:
         return " Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
+
+    # ── GUARD: cooldown для перегретых action (>4x за 48ч) ──
+    try:
+        from models import AgentActivityLog as _AAL_cd, User as _User_cd
+        _cd_cut = datetime.now(timezone.utc) - timedelta(hours=48)
+        _cd_action_l = (action or '').strip().lower()
+        _cd_sess = session or Session()
+        _cd_close = session is None
+        try:
+            # user_id в run_agent_action — telegram_id, AAL.user_id — internal id
+            _cd_user = _cd_sess.query(_User_cd.id).filter_by(telegram_id=user_id).first()
+            _cd_uid = _cd_user[0] if _cd_user else None
+            if _cd_uid:
+                # title в AAL: "AgentName · action_name", ищем по суффиксу
+                _cd_count = _cd_sess.query(func.count(_AAL_cd.id)).filter(
+                    _AAL_cd.user_id == _cd_uid,
+                    _AAL_cd.activity_type == 'run_agent_action',
+                    func.lower(_AAL_cd.title).like(f'%· {_cd_action_l}%'),
+                    _AAL_cd.created_at >= _cd_cut,
+                ).scalar() or 0
+            else:
+                _cd_count = 0
+        finally:
+            if _cd_close:
+                _cd_sess.close()
+        if _cd_count >= 4:
+            return (
+                f"⛔ Действие «{action}» заблокировано: уже вызывалось {_cd_count}x за 48ч. "
+                f"Используй ДРУГОЙ инструмент или стратегию."
+            )
+    except Exception as _cd_e:
+        logger.debug("run_agent_action cooldown check: %s", _cd_e)
 
     # Адаптивная нормализация action под конкретного пользователя/агента/интеграции.
     # Без жёстких правил: комбинируем similarity + сигналы интеграций + эмпирику DecisionLog.

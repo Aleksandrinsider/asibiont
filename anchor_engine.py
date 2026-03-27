@@ -3872,6 +3872,15 @@ class AnchorEngine:
             if _tool_freq:
                 _freq_str = ', '.join(f"{t}: {n}x" for t, n in sorted(_tool_freq.items(), key=lambda x: -x[1])[:8])
                 task_text += f"\n\nСтатистика инструментов за 48ч: {_freq_str}. Попробуй другой."
+                # Жёсткая блокировка перегретых инструментов (>4 вызовов за 48ч)
+                _overused = [t for t, n in _tool_freq.items() if n >= 4]
+                if _overused:
+                    _ban_list = ', '.join(_overused)
+                    task_text += (
+                        f"\n\n⛔ ЗАПРЕЩЕНО вызывать: {_ban_list} — перегрев (>{4-1}x за 48ч). "
+                        f"Используй ДРУГОЙ инструмент или стратегию. "
+                        f"Вызов запрещённого инструмента будет заблокирован системой."
+                    )
 
             # ── Исчерпанные стратегии — принудительная смена подхода ──
             _exhausted = data.get('exhausted_strategies', [])
