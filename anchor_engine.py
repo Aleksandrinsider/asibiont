@@ -3967,8 +3967,9 @@ class AnchorEngine:
             _feasibility = data.get('feasibility_warnings', [])
             if _feasibility:
                 task_text += (
-                    "\n\n[СИСТЕМНАЯ АНАЛИТИКА — НЕ пересказывай пользователю дословно, "
-                    "используй для планирования своих действий]:\n"
+                    "\n\n[СИСТЕМНАЯ АНАЛИТИКА — СТРОГО ВНУТРЕННЯЯ, НЕ пересказывай пользователю! "
+                    "НЕ пиши '🔴 СТАГНАЦИЯ', НЕ повторяй цифры dispatch'ей. "
+                    "Используй эту информацию ТОЛЬКО для корректировки своих действий]:\n"
                     + '\n'.join(f"  {w}" for w in _feasibility)
                 )
 
@@ -4827,8 +4828,8 @@ class AnchorEngine:
                         _recent_proactives = session.query(Interaction.content).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type.in_(['proactive', 'agent_msg']),
-                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
-                        ).order_by(Interaction.created_at.desc()).limit(6).all()
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
+                        ).order_by(Interaction.created_at.desc()).limit(8).all()
                         _new_words = set(_result_clean.lower().split())
                         for (_rp_content,) in _recent_proactives:
                             try:
@@ -4838,10 +4839,10 @@ class AnchorEngine:
                             if not _rp_text:
                                 continue
                             _old_words = set(_rp_text.lower().split())
-                            # Dedup: >60% совпадение слов (антиэхо)
+                            # Dedup: >55% совпадение слов (антиэхо, ужесточено для борьбы с повторами)
                             _common = len(_new_words & _old_words)
                             _total = max(len(_new_words | _old_words), 1)
-                            if _common / _total > 0.60:
+                            if _common / _total > 0.55:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup'
                                 logger.info("[ANCHOR-AUTOPILOT] dedup: %.0f%% overlap with recent msg from %s",
@@ -4906,14 +4907,32 @@ class AnchorEngine:
                 # cap_warns (интеграционные советы) отправляем отдельно если есть, даже без стагнации
                 if self.bot and (_stag_warn or _blocker_in_result or _intg_need_in_result or _cap_warns):
                     try:
-                        # БЛОКЕР/стагнация: cooldown 3ч; НУЖНА ИНТЕГРАЦИЯ/советы: cooldown 12ч
-                        _esc_cooldown_h = 3 if (_stag_warn or _blocker_in_result) else 12
+                        # БЛОКЕР: cooldown 3ч; стагнация: cooldown 8ч; советы: cooldown 12ч
+                        _esc_cooldown_h = 3 if _blocker_in_result else (8 if _stag_warn else 12)
                         _esc_recent = session.query(Interaction).filter(
                             Interaction.user_id == user.id,
-                            Interaction.message_type == 'proactive',
+                            Interaction.message_type.in_(['proactive', 'stagnation_alert']),
                             Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=_esc_cooldown_h),
                         ).all()
                         _esc_sent = any('autopilot_escalation' in (i.content or '') for i in _esc_recent)
+                        # Также считаем stagnation_alert от второй системы
+                        _esc_sent = _esc_sent or any(i.message_type == 'stagnation_alert' for i in _esc_recent)
+                        # Прогрессивная эскалация: считаем СКОЛЬКО стагнация-алертов уже ушло за 48ч
+                        _esc_stage = 0
+                        if _stag_warn and not _esc_sent:
+                            _esc_48h = session.query(Interaction).filter(
+                                Interaction.user_id == user.id,
+                                Interaction.message_type.in_(['proactive', 'stagnation_alert']),
+                                Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=48),
+                            ).all()
+                            _esc_stage = sum(
+                                1 for i in _esc_48h
+                                if 'autopilot_escalation' in (i.content or '') or i.message_type == 'stagnation_alert'
+                            )
+                            # После 3 алертов за 48ч — больше не спамим, агенты работают молча
+                            if _esc_stage >= 3:
+                                _esc_sent = True
+                                logger.info("[ANCHOR-AUTOPILOT] escalation suppressed: stage=%d (>=3 in 48h)", _esc_stage)
                         if not _esc_sent:
                             _esc_lines = []
                             if _blocker_in_result and result:
@@ -4996,7 +5015,13 @@ class AnchorEngine:
                                             _miss_intg_esc.append(_label)
 
                                 # --- Собираем сообщение ---
-                                _stag_header = f"⚠️ Автопилот застрял на цели {_stag_goal_str}\n\nПрогресс: {_stag_prog}."
+                                # Прогрессивная эскалация: stage 0 — подробный отчёт, stage 1 — краткий апдейт, stage 2 — финальный
+                                if _esc_stage == 0:
+                                    _stag_header = f"⚠️ Автопилот застрял на цели {_stag_goal_str}\n\nПрогресс: {_stag_prog}."
+                                elif _esc_stage == 1:
+                                    _stag_header = f"📊 Обновление по {_stag_goal_str}: прогресс {_stag_prog}."
+                                else:
+                                    _stag_header = f"🔄 {_stag_goal_str} — прогресс {_stag_prog}, продолжаю работу."
                                 _stag_body_parts = []
 
                                 # --- Диагностика узких мест (конкретные причины стагнации) ---
@@ -5081,14 +5106,22 @@ class AnchorEngine:
                                 # Автокоординация: autopilot сам меняет стратегию а не ждёт пользователя
                                 _auto_actions = []
                                 if _stag_warn:
-                                    if _ex_strats:
-                                        _auto_actions.append("🔄 Переключаю агентов на альтернативные стратегии.")
-                                    if _total_sent >= 20 and _total_replied == 0:
-                                        _auto_actions.append("✏️ Корректирую тему и текст писем для повышения конверсии.")
-                                    elif _total_replied > 0 and not _pending:
-                                        _auto_actions.append("📨 Все ответы обработаны. Продолжаю рассылку новым контактам.")
-                                    if not _auto_actions:
-                                        _auto_actions.append("🔄 Корректирую стратегию и перенастраиваю агентов.")
+                                    if _esc_stage == 0:
+                                        # Первый алерт — полная информация о действиях
+                                        if _ex_strats:
+                                            _auto_actions.append("🔄 Переключаю агентов на альтернативные стратегии.")
+                                        if _total_sent >= 20 and _total_replied == 0:
+                                            _auto_actions.append("✏️ Корректирую тему и текст писем для повышения конверсии.")
+                                        elif _total_replied > 0 and not _pending:
+                                            _auto_actions.append("📨 Все ответы обработаны. Продолжаю рассылку новым контактам.")
+                                        if not _auto_actions:
+                                            _auto_actions.append("🔄 Корректирую стратегию и перенастраиваю агентов.")
+                                    elif _esc_stage == 1:
+                                        # Второй алерт — новые подходы
+                                        _auto_actions.append("🔄 Тестирую другой формат писем и новые каналы поиска контактов.")
+                                    else:
+                                        # Третий+ — краткий статус, больше не повторять детали
+                                        _auto_actions.append("Агенты продолжают работу. Следующий отчёт — при изменении прогресса.")
                                 if _auto_actions:
                                     _esc_lines.append('\n'.join(_auto_actions))
                             _esc_text = '\n'.join(_esc_lines)
@@ -11851,17 +11884,27 @@ class AnchorEngine:
                     )
                     _feasibility_warnings.append(_stagnation_warn)
                     # Отправляем Telegram-уведомление пользователю если прошло >24ч с последнего стагнации-алёрта
+                    # Проверяем ОБА типа: stagnation_alert И autopilot_escalation (из системы А)
                     try:
                         _last_stag_warn = session.query(Interaction).filter(
                             Interaction.user_id == user.id,
-                            Interaction.message_type == 'stagnation_alert',
-                        ).order_by(Interaction.created_at.desc()).first()
+                            Interaction.message_type.in_(['stagnation_alert', 'proactive']),
+                        ).order_by(Interaction.created_at.desc()).limit(20).all()
+                        # Ищем последний стагнация-алерт любого типа
+                        _last_stag_ts = None
+                        for _lsw in _last_stag_warn:
+                            if _lsw.message_type == 'stagnation_alert':
+                                _last_stag_ts = _lsw.created_at
+                                break
+                            if 'autopilot_escalation' in (_lsw.content or ''):
+                                _last_stag_ts = _lsw.created_at
+                                break
                         _stag_cutoff = now_utc - timedelta(hours=24)
                         _should_notify = (
-                            not _last_stag_warn
-                            or (_last_stag_warn.created_at.replace(tzinfo=timezone.utc)
-                                if _last_stag_warn.created_at.tzinfo is None
-                                else _last_stag_warn.created_at) < _stag_cutoff
+                            not _last_stag_ts
+                            or (_last_stag_ts.replace(tzinfo=timezone.utc)
+                                if _last_stag_ts.tzinfo is None
+                                else _last_stag_ts) < _stag_cutoff
                         )
                         if _should_notify and self.bot and user.telegram_id:
                             _stag_goal_title = g.get('title', '')[:60]

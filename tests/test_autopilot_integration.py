@@ -1476,3 +1476,46 @@ def test_d46_missing_integration_hint_scans_agent_response():
         )
         assert hint, "Should warn about LinkedIn when agent mentions it in response"
         assert 'LinkedIn' in hint, f"Hint should mention LinkedIn: {hint}"
+
+
+def test_d47_escalation_cooldown_stagnation_is_8h():
+    """Escalation cooldown для стагнации должен быть 8ч, не 3ч."""
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
+    # Ищем строку с cooldown для стагнации — должна быть 8 (не 3)
+    m = re.search(r'_esc_cooldown_h\s*=\s*3\s+if\s+_blocker_in_result\s+else\s+\((\d+)\s+if\s+_stag_warn', src)
+    assert m, "Expected pattern: _esc_cooldown_h = 3 if _blocker else (N if _stag_warn..."
+    assert m.group(1) == '8', f"Stagnation cooldown should be 8h, got {m.group(1)}h"
+
+
+def test_d48_escalation_stage_limit_3_per_48h():
+    """Система эскалации должна ограничивать до 3 алертов за 48ч."""
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
+    assert '_esc_stage >= 3' in src, "Expected stage limit >= 3 in escalation code"
+    assert 'timedelta(hours=48)' in src, "Expected 48h window for stage counting"
+
+
+def test_d49_escalation_progressive_headers():
+    """Прогрессивная эскалация: разные заголовки для stage 0/1/2."""
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
+    # Stage 0: предупреждение
+    assert '⚠️ Автопилот застрял' in src, "Stage 0 should have ⚠️ header"
+    # Stage 1: обновление (не тревога)
+    assert '📊 Обновление по' in src, "Stage 1 should have 📊 update header"
+    # Stage 2: краткий статус
+    assert 'продолжаю работу' in src, "Stage 2 should have brief status"
+
+
+def test_d50_feasibility_warnings_not_echoed():
+    """Системная аналитика не должна пересказываться пользователю дословно."""
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
+    assert 'СТРОГО ВНУТРЕННЯЯ' in src, "Feasibility warnings instruction must be СТРОГО ВНУТРЕННЯЯ"
+    assert "НЕ пиши '🔴 СТАГНАЦИЯ'" in src, "Agent must be told NOT to echo СТАГНАЦИЯ"
+
+
+def test_d51_escalation_cross_system_check():
+    """System A проверяет и stagnation_alert, и autopilot_escalation."""
+    src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
+    # System A должна проверять оба типа сообщений
+    assert "message_type.in_(['proactive', 'stagnation_alert'])" in src, \
+        "Escalation system A should check both proactive AND stagnation_alert"
