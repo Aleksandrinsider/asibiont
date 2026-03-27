@@ -14219,6 +14219,37 @@ async def check_emails(
                                 break
                 except Exception as _e_auto_gp:
                     logger.debug(f'[CHECK_EMAILS] auto update_goal_progress failed: {_e_auto_gp}')
+            else:
+                # Reconciliation: metric_current=0 но replied-контакты уже есть → синхронизировать
+                try:
+                    from models import Goal as _Goal_rec, EmailOutreach as _EO_rec
+                    _ppl_kw_rec = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт',
+                                   'заинтересован', 'привлеч', 'клиент', 'партнёр', 'лиц ')
+                    _ppl_goals_rec = session.query(_Goal_rec).filter(
+                        _Goal_rec.user_id == user.id,
+                        _Goal_rec.status == 'active',
+                        _Goal_rec.metric_target.isnot(None),
+                    ).all()
+                    for _g_rec in _ppl_goals_rec:
+                        if float(_g_rec.metric_current or 0) > 0:
+                            continue  # уже синхронизирована
+                        _g_text_rec = (_g_rec.title + ' ' + (_g_rec.description or '') + ' ' + (_g_rec.metric_unit or '')).lower()
+                        if not any(w in _g_text_rec for w in _ppl_kw_rec):
+                            continue
+                        _total_replied_rec = session.query(_EO_rec).filter(
+                            _EO_rec.user_id == user.id,
+                            _EO_rec.status == 'replied',
+                        ).count()
+                        if _total_replied_rec > 0:
+                            update_goal_progress(
+                                goal_title=_g_rec.title,
+                                metric_current=_total_replied_rec,
+                                notes=f'check_emails reconciliation: {_total_replied_rec} replied контактов',
+                                user_id=user_id,
+                            )
+                            logger.info(f'[CHECK_EMAILS] Reconciled metric: {_g_rec.title} → {_total_replied_rec}')
+                except Exception as _e_rec:
+                    logger.debug(f'[CHECK_EMAILS] reconciliation failed: {_e_rec}')
 
             # Аннотируем результат: показываем агенту предпочтения контактов
             # (только что найденные + ранее сохранённые в EmailContact.notes)

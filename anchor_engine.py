@@ -11886,19 +11886,27 @@ class AnchorEngine:
                     # Отправляем Telegram-уведомление пользователю если прошло >24ч с последнего стагнации-алёрта
                     # Проверяем ОБА типа: stagnation_alert И autopilot_escalation (из системы А)
                     try:
-                        _last_stag_warn = session.query(Interaction).filter(
-                            Interaction.user_id == user.id,
-                            Interaction.message_type.in_(['stagnation_alert', 'proactive']),
-                        ).order_by(Interaction.created_at.desc()).limit(20).all()
-                        # Ищем последний стагнация-алерт любого типа
+                        # Ищем последний стагнация-алерт любого типа за 48ч
+                        # Два отдельных запроса: stagnation_alert + autopilot_escalation
                         _last_stag_ts = None
-                        for _lsw in _last_stag_warn:
-                            if _lsw.message_type == 'stagnation_alert':
-                                _last_stag_ts = _lsw.created_at
-                                break
-                            if 'autopilot_escalation' in (_lsw.content or ''):
-                                _last_stag_ts = _lsw.created_at
-                                break
+                        _last_stag_rec = session.query(Interaction.created_at).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'stagnation_alert',
+                            Interaction.created_at >= now_utc - timedelta(hours=48),
+                        ).order_by(Interaction.created_at.desc()).first()
+                        if _last_stag_rec:
+                            _last_stag_ts = _last_stag_rec[0]
+                        # Также ищем autopilot_escalation (System A) — может быть свежее
+                        _last_esc_rec = session.query(Interaction.created_at).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'proactive',
+                            Interaction.content.like('%autopilot_escalation%'),
+                            Interaction.created_at >= now_utc - timedelta(hours=48),
+                        ).order_by(Interaction.created_at.desc()).first()
+                        if _last_esc_rec:
+                            _esc_ts = _last_esc_rec[0]
+                            if not _last_stag_ts or _esc_ts > _last_stag_ts:
+                                _last_stag_ts = _esc_ts
                         _stag_cutoff = now_utc - timedelta(hours=24)
                         _should_notify = (
                             not _last_stag_ts
