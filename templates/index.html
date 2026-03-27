@@ -369,11 +369,16 @@
         }
         .autopilot-points {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 8px 24px;
             margin: 0;
             padding: 0;
             list-style: none;
+        }
+        @media (max-width: 1024px) {
+            .autopilot-points {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
         .autopilot-points li {
             font-size: 13px;
@@ -856,43 +861,43 @@
                     <div class="feature-description">{% if lang == 'en' %}Set a goal — your agents figure out the rest. Email agent reaches out to leads, GitHub agent triages developer issues, analyst tracks market shifts. They coordinate autonomously, hand off results to each other, and report back. One goal — a whole team working on it 24/7.{% else %}Поставьте цель — агенты сами разберутся. Email-агент связывается с лидами, GitHub-агент разбирает задачи, аналитик следит за рынком. Они координируются автономно, передают результаты друг другу и отчитываются. Одна цель — целая команда работает на неё 24/7.{% endif %}</div>
                     <ul class="autopilot-points">
 {% if lang == 'en' %}
-                        <li>Sales & leads — email outreach, follow-ups, CRM sync</li>
-                        <li>Marketing — content, social media, newsletters, SEO</li>
-                        <li>Recruiting — candidate search on hh.ru, GitHub, LinkedIn</li>
-                        <li>E-commerce — marketplace monitoring, pricing, inventory</li>
-                        <li>Real estate — listings on Avito/ЦИАН, client communication</li>
-                        <li>Finance — portfolio tracking, market analytics, alerts</li>
-                        <li>Education — course management, student engagement, forms</li>
-                        <li>Customer service — WhatsApp, SMS, email support automation</li>
-                        <li>Development — GitHub issues, code reviews, CI/CD monitoring</li>
-                        <li>Analytics — data collection, reports, dashboards, KPIs</li>
-                        <li>Health & medicine — symptoms log, doctor reminders, lab results</li>
-                        <li>Sport & fitness — workout plan, progress tracking, nutrition diary</li>
-                        <li>Travel — tickets, hotels, routes, weather at destination</li>
-                        <li>Personal assistant — morning digest, reminders, shopping lists</li>
-                        <li>Content & blog — YouTube, Telegram channel, reach analytics</li>
-                        <li>Logistics & warehouse — shipment tracking, stock levels, orders</li>
-                        <li>Startups — market trends, competitor monitoring, investor outreach</li>
-                        <li>Legal — law changes monitoring, deadlines, document reminders</li>
+                        <li>Sales & leads</li>
+                        <li>Marketing</li>
+                        <li>Recruiting</li>
+                        <li>E-commerce</li>
+                        <li>Real estate</li>
+                        <li>Finance</li>
+                        <li>Education</li>
+                        <li>Customer service</li>
+                        <li>Development</li>
+                        <li>Analytics</li>
+                        <li>Health & medicine</li>
+                        <li>Sport & fitness</li>
+                        <li>Travel</li>
+                        <li>Personal assistant</li>
+                        <li>Content & blog</li>
+                        <li>Logistics & warehouse</li>
+                        <li>Startups</li>
+                        <li>Legal services</li>
 {% else %}
-                        <li>Продажи и лиды — email-рассылки, follow-up, синхронизация с CRM</li>
-                        <li>Маркетинг — контент, соцсети, рассылки, SEO-мониторинг</li>
-                        <li>Рекрутинг — поиск кандидатов на hh.ru, GitHub, LinkedIn</li>
-                        <li>E-commerce — мониторинг маркетплейсов, цены, остатки</li>
-                        <li>Недвижимость — объявления на Авито/ЦИАН, связь с клиентами</li>
-                        <li>Финансы — портфель, аналитика рынка, оповещения по котировкам</li>
-                        <li>Образование — управление курсами, вовлечение студентов, формы</li>
-                        <li>Клиентский сервис — WhatsApp, SMS, автоматизация поддержки</li>
-                        <li>Разработка — GitHub Issues, код-ревью, мониторинг CI/CD</li>
-                        <li>Аналитика — сбор данных, отчёты, дашборды, KPI</li>
-                        <li>Здоровье и медицина — дневник симптомов, напоминания о приёме, результаты анализов</li>
-                        <li>Спорт и фитнес — план тренировок, прогресс, дневник питания, соревнования</li>
-                        <li>Путешествия — билеты, отели, маршруты, погода в точке назначения</li>
-                        <li>Личный ассистент — утренний дайджест, напоминания, списки покупок</li>
-                        <li>Контент и блог — YouTube, Telegram-канал, аналитика охватов</li>
-                        <li>Логистика и склад — трекинг посылок, остатки, движение заказов</li>
-                        <li>Стартапы — тренды рынка, мониторинг конкурентов, outreach к инвесторам</li>
-                        <li>Юридические услуги — изменения в законах, дедлайны, напоминания по документам</li>
+                        <li>Продажи и лиды</li>
+                        <li>Маркетинг</li>
+                        <li>Рекрутинг</li>
+                        <li>E-commerce</li>
+                        <li>Недвижимость</li>
+                        <li>Финансы</li>
+                        <li>Образование</li>
+                        <li>Клиентский сервис</li>
+                        <li>Разработка</li>
+                        <li>Аналитика</li>
+                        <li>Здоровье и медицина</li>
+                        <li>Спорт и фитнес</li>
+                        <li>Путешествия</li>
+                        <li>Личный ассистент</li>
+                        <li>Контент и блог</li>
+                        <li>Логистика и склад</li>
+                        <li>Стартапы</li>
+                        <li>Юридические услуги</li>
 {% endif %}
                     </ul>
                 </div>
