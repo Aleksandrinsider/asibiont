@@ -398,6 +398,18 @@ class ContextBuilder:
                         if linked_tasks:
                             task_titles = ', '.join(t.title for t in linked_tasks)
                             line += f" [задачи: {task_titles}]"
+                    
+                    # ── Извлекаем последние стратегические указания из описания ──
+                    _strategy_note = None
+                    if g.description:
+                        import re as _re_strat
+                        _match = _re_strat.search(r'\[СТРАТЕГИЯ.*?\](.*?)(?:\[|$)', g.description, _re_strat.DOTALL)
+                        if _match:
+                            _strategy_note = _match.group(1).strip()[:150]
+                    
+                    if _strategy_note:
+                        line += f" 📌 СТРАТЕГИЯ: {_strategy_note}"
+                    
                     goal_lines.append(line)
                 hints.append("Проекты/цели: " + "; ".join(goal_lines))
             else:
