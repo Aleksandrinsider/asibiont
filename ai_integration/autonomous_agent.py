@@ -2920,7 +2920,11 @@ class HybridAutonomousAgent:
                              'измени', 'сделай', 'найди', 'найти', 'research',
                              'email', 'пост', 'опубли', 'делегир', 'исследу',
                              'task', 'goal', 'remind', 'create', 'delete', 'search',
-                             'расписани', 'план', 'schedule', 'plan', 'campaign')
+                             'расписани', 'план', 'schedule', 'plan', 'campaign',
+                             'поиск', 'поищ', 'ищем', 'ищи', 'искат', 'подбер',
+                             'подбир', 'автоматиз', 'предприниматель', 'клиент',
+                             'аудитори', 'контакт', 'лид', 'lead', 'find',
+                             'стратеги', 'analyz', 'анализ', 'отправ', 'send')
             _is_fast_convo = (
                 initial_tool_choice == 'auto'
                 and not _agent_tools_allowed  # агент может требовать инструменты
@@ -2934,7 +2938,7 @@ class HybridAutonomousAgent:
                     messages, use_tools=False, max_tokens=500,
                     api_timeout=API_TIMEOUT_NORMAL)
                 _fc_content = _fc_resp['choices'][0]['message'].get('content', '')
-                return self._finalize_response(
+                return await self._finalize_response(
                     _fc_content, user_message, user_id, [])
 
             _auto_saved_notes = []  # заголовки исследований, сохранённых в заметки в этом turn
@@ -3005,7 +3009,7 @@ class HybridAutonomousAgent:
 
                 if not tool_calls:
                     # AI ответил текстом → сразу возвращаем (retry убран для скорости)
-                    return self._finalize_response(
+                    return await self._finalize_response(
                         content, user_message, user_id, all_execution_results)
 
                 # AI вызвал tools → добавляем assistant message в цепочку
@@ -3216,7 +3220,7 @@ class HybridAutonomousAgent:
             except Exception as _safety_err:
                 logger.warning(f"[AGENT] Safety-net AI call failed: {_safety_err}")
                 final_text = ''
-            return self._finalize_response(
+            return await self._finalize_response(
                 final_text, user_message, user_id, all_execution_results)
 
         except Exception as e:
@@ -3224,7 +3228,7 @@ class HybridAutonomousAgent:
             # Если инструменты уже отработали — формируем ответ из результатов вместо ошибки
             if all_execution_results and any(r.get('success') for r in all_execution_results):
                 logger.info("[AGENT] Tools succeeded before crash — building response from results")
-                return self._finalize_response(
+                return await self._finalize_response(
                     '', user_message, user_id, all_execution_results)
             if user_lang == 'en':
                 error_responses = [
@@ -3246,7 +3250,7 @@ class HybridAutonomousAgent:
 
     # ===== КОГНИТИВНАЯ ФИНАЛИЗАЦИЯ =====
 
-    def _finalize_response(self, content, user_message, user_id, execution_results):
+    async def _finalize_response(self, content, user_message, user_id, execution_results):
         """Clean → validate → save → return.
         
         Единая точка выхода: чистка тех. деталей, когнитивная валидация
@@ -3263,12 +3267,45 @@ class HybridAutonomousAgent:
             
             # Проверяем — может это стратегическое указание? (изменение целей, аудитории, интеграций)
             _user_msg_lower = (user_message or '').lower()
-            _strategy_keywords = ['ищем', 'search for', 'ищи', 'искат', 'не', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals', 'привлеч']
-            _is_strategy_cmd = any(kw in _user_msg_lower for kw in _strategy_keywords) and any(verb in _user_msg_lower for verb in ['можем', 'можно', 'может', 'should', 'надо', 'нужно', 'need'])
-            
+            _strategy_keywords = ['ищем', 'search for', 'ищи', 'искат', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals', 'привлеч', 'поищем', 'поиск', 'подбер']
+            _is_strategy_cmd = any(kw in _user_msg_lower for kw in _strategy_keywords) and any(verb in _user_msg_lower for verb in ['можем', 'можно', 'может', 'should', 'надо', 'нужно', 'need', 'давай'])
+
             if _is_strategy_cmd:
-                # Это указание по стратегии — переформулируем вместо простого "Готово!"
-                final = f"Понял! Меняю стратегию поиска.\n\n{user_message}\n\nПерестраиваю фильтры и переориентирую агентов на новую целевую аудиторию. Результаты будут видны в следующем цикле автопилота."
+                # AI вернул пустой ответ на стратегическое указание — 
+                # повторяем с явной инструкцией вызвать инструменты
+                try:
+                    _retry_msgs = list(messages) if messages else []
+                    _retry_msgs.append({
+                        'role': 'user',
+                        'content': f'Пользователь просит: "{user_message}". '
+                                   f'Не обещай — ДЕЙСТВУЙ прямо сейчас. '
+                                   f'Вызови web_search или find_relevant_contacts_for_task или research_topic для выполнения запроса.'
+                    })
+                    _retry_resp = await self.call_ai(
+                        _retry_msgs, use_tools=True, max_tokens=1000,
+                        api_timeout=API_TIMEOUT_NORMAL)
+                    _rc = _retry_resp['choices'][0]['message']
+                    if _rc.get('tool_calls'):
+                        # Есть вызовы инструментов — обработаем их
+                        _retry_results = await self._process_tool_calls(
+                            _rc['tool_calls'], user_id, db_session=db_session)
+                        _retry_msgs.append(_rc)
+                        for _rr in _retry_results:
+                            _retry_msgs.append({
+                                'role': 'tool',
+                                'tool_call_id': _rr['tool_call_id'],
+                                'content': str(_rr.get('result', ''))[:3000]
+                            })
+                        _final_resp = await self.call_ai(
+                            _retry_msgs, use_tools=False, max_tokens=800,
+                            api_timeout=API_TIMEOUT_NORMAL)
+                        final = (_final_resp['choices'][0]['message'].get('content', '') or '').strip()
+                    elif _rc.get('content', '').strip():
+                        final = _rc['content'].strip()
+                except Exception as _retry_err:
+                    logger.warning(f"[STRATEGY_RETRY] failed: {_retry_err}")
+                if not final:
+                    final = "Принял! Запускаю поиск — результаты покажу через минуту." if _lang != 'en' else "Got it! Starting search — I'll show results shortly."
             else:
                 final = "Done!" if _lang == 'en' else "Готово!"
 
