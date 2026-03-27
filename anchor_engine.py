@@ -4949,6 +4949,7 @@ class AnchorEngine:
                         _cleaned_result = _ctd(result.strip())
                         if not _cleaned_result or len(_cleaned_result.strip()) < 10:
                             _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
+                        _cleaned_result = re.sub(r'\n{2,}', '\n', _cleaned_result).strip()
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
                         await asyncio.sleep(2)
                         try:
@@ -5811,6 +5812,7 @@ class AnchorEngine:
                     _transfer_text = _tr_gen.strip()
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
+            _transfer_text = re.sub(r'\n{2,}', '\n', _transfer_text).strip()
             # Dedup: пропускаем уведомление если совсем недавно было проактивное сообщение (≤5 мин)
             _chain_transfer_gap_ok = True
             try:
@@ -5877,6 +5879,7 @@ class AnchorEngine:
                 timeout=300,
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
+            _next_result = re.sub(r'\n{2,}', '\n', (_next_result or '')).strip()
             _chain_tools_used = list(_next_raw[1]) if isinstance(_next_raw, (tuple, list)) and len(_next_raw) > 1 else []
 
             # Сохраняем результат в лог
