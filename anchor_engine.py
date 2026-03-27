@@ -5007,12 +5007,17 @@ class AnchorEngine:
                                 _pending = data.get('pending_replies', [])
                                 _unsent = data.get('unsent_contacts', [])
                                 _n_contacts = data.get('n_total_email_contacts', 0)
+                                _total_replied = data.get('total_emails_replied', 0) or len(data.get('negotiation_emails', []))
 
                                 # Email: лимит исчерпан
                                 if _sent_today >= _daily_lim and _daily_lim > 0:
                                     _bottlenecks.append(f"📧 Email-лимит исчерпан ({_sent_today}/{_daily_lim} в день). Рассылка продолжится завтра.")
-                                # Email: отправлено много, но 0 ответов
-                                elif _total_sent >= 10 and not _pending:
+                                # Email: отправлено много, есть ответы — показываем реальную картину
+                                elif _total_sent >= 10 and _total_replied > 0:
+                                    _reply_rate = int(_total_replied / _total_sent * 100) if _total_sent else 0
+                                    _bottlenecks.append(f"📧 Отправлено {_total_sent} писем, получено {_total_replied} ответов ({_reply_rate}%). Переписки ведутся.")
+                                # Email: отправлено много, реально 0 ответов
+                                elif _total_sent >= 10 and _total_replied == 0:
                                     _bottlenecks.append(f"📧 Отправлено {_total_sent} писем, но ответов пока нет. Возможно стоит пересмотреть тему/текст писем.")
                                 # Email: нет контактов для рассылки
                                 elif any('mail' in c for c in _esc_caps_all) and _n_contacts == 0:
@@ -5069,12 +5074,23 @@ class AnchorEngine:
                             if _cap_warns:
                                 _esc_lines.extend(_cap_warns[:2])
                             if _esc_lines:
-                                # Адаптивный CTA: если всё подключено — не навязываем дашборд, а предлагаем действия
+                                # Автопилот сам координирует — не просит пользователя
                                 _has_missing = bool(_miss_intg_esc) if _stag_warn else bool(_cap_warns)
                                 if _has_missing:
-                                    _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard\nИли напиши мне — я перенастрою агентов.")
-                                else:
-                                    _esc_lines.append("Напиши мне — я скорректирую стратегию или перенастрою агентов.")
+                                    _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard")
+                                # Автокоординация: autopilot сам меняет стратегию а не ждёт пользователя
+                                _auto_actions = []
+                                if _stag_warn:
+                                    if _ex_strats:
+                                        _auto_actions.append("🔄 Переключаю агентов на альтернативные стратегии.")
+                                    if _total_sent >= 20 and _total_replied == 0:
+                                        _auto_actions.append("✏️ Корректирую тему и текст писем для повышения конверсии.")
+                                    elif _total_replied > 0 and not _pending:
+                                        _auto_actions.append("📨 Все ответы обработаны. Продолжаю рассылку новым контактам.")
+                                    if not _auto_actions:
+                                        _auto_actions.append("🔄 Корректирую стратегию и перенастраиваю агентов.")
+                                if _auto_actions:
+                                    _esc_lines.append('\n'.join(_auto_actions))
                             _esc_text = '\n'.join(_esc_lines)
                             await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
@@ -11711,6 +11727,12 @@ class AnchorEngine:
             EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
         ).count()
 
+        # Всего получено ответов — для корректной статистики в стагнации
+        _total_emails_replied = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.status == 'replied',
+        ).count()
+
         # Отправлено СЕГОДНЯ и дневной лимит — для предотвращения бесполезных email-задач
         _today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
         _emails_sent_today = session.query(EmailOutreach).filter(
@@ -11881,13 +11903,29 @@ class AnchorEngine:
                             _connected_intg = list(_team_caps_all)[:6] if _team_caps_all else []
                             _connected_str = ', '.join(_connected_intg) if _connected_intg else 'только web_search'
                             _miss_str = '\n'.join(f"  • {m}" for m in _miss_intg) if _miss_intg else ''
+                            # Подсчёт реальных ответов (negotiation_emails из outreach replied)
+                            _stag_replied_count = 0
+                            try:
+                                _stag_replied_count = session.query(EmailOutreach).filter(
+                                    EmailOutreach.user_id == user.id,
+                                    EmailOutreach.status == 'replied',
+                                ).count()
+                            except Exception:
+                                pass
+                            _stag_total_sent = _total_emails_sent if _total_emails_sent else 0
+                            _email_stat_str = ''
+                            if _stag_total_sent >= 10 and _stag_replied_count > 0:
+                                _email_stat_str = f"\nEmail: {_stag_total_sent} отправлено, {_stag_replied_count} ответов. Переписки ведутся.\n"
+                            elif _stag_total_sent >= 10:
+                                _email_stat_str = f"\nEmail: {_stag_total_sent} отправлено, ответов пока нет.\n"
                             _stag_msg = (
                                 f"⚠️ Автопилот застрял на цели «{_stag_goal_title}»\n\n"
                                 f"Прогресс: {int(_mc)}/{int(_mt)}.\n"
                                 f"Подключено: {_connected_str}.\n"
-                                + (f"\nДля этой цели полезно подключить:\n{_miss_str}\n\n" if _miss_str else
-                                   "\nПопробуй скорректировать цель или сменить стратегию.\n\n")
-                                + "Подключить интеграции: https://asibiont.com/dashboard"
+                                + _email_stat_str
+                                + (f"\nДля этой цели полезно подключить:\n{_miss_str}\n\n" if _miss_str else "\n")
+                                + "🔄 Корректирую стратегию и перенастраиваю агентов."
+                                + ("\nПодключить интеграции: https://asibiont.com/dashboard" if _miss_str else "")
                             )
                             try:
                                 import asyncio as _asyncio_stag
@@ -12090,6 +12128,7 @@ class AnchorEngine:
             'user_rules': user_rules[:10],
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
+            'total_emails_replied': _total_emails_replied,
             'emails_sent_today': _emails_sent_today,
             'email_daily_limit': _email_daily_limit,
             'failed_tools': {k: v for k, v in _failed_tools.items() if v >= 2},

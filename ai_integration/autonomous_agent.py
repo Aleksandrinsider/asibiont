@@ -102,6 +102,13 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     # HH.ru
     ("hh_api_token не",
      "💡 HH.ru не подключён. hh.ru/oauth/authorize → добавь HH_API_TOKEN в настройки агента"),
+    # LinkedIn
+    ("linkedin access token",
+     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента в дашборде: https://asibiont.com/dashboard"),
+    ("linkedin_api_key не",
+     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента в дашборде: https://asibiont.com/dashboard"),
+    ("linkedin не настроен",
+     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента в дашборде: https://asibiont.com/dashboard"),
 ]
 
 
@@ -123,6 +130,152 @@ def _extract_intg_hints(messages: list) -> list[str]:
                 seen.add(hint)
                 hints.append(hint)
     return hints
+
+
+def _get_active_agent_integration_snapshot(user_id: int) -> dict:
+    """Возвращает срез интеграций активного агента для проверки доступности сервисов."""
+    try:
+        from .user_agents import get_user_active_agent, load_agent_personality
+
+        _aid = get_user_active_agent(user_id)
+        if not _aid:
+            return {'labels': [], 'caps_text': '', 'keys_text': ''}
+        _adata = load_agent_personality(_aid) or {}
+        _keys = _adata.get('user_api_keys') or ''
+        _tools = _adata.get('tools_allowed') or ''
+        if isinstance(_tools, list):
+            _tools = json.dumps(_tools, ensure_ascii=False)
+        _code = _adata.get('python_code') or ''
+        _caps = _parse_agent_integrations(_keys, _code, _tools)
+        return {
+            'labels': _caps,
+            'caps_text': ' '.join(str(c).lower() for c in _caps),
+            'keys_text': str(_keys).lower(),
+        }
+    except Exception as _ih_err:
+        logger.debug("[INTG HINT] integration check failed: %s", _ih_err)
+        return {'labels': [], 'caps_text': '', 'keys_text': ''}
+
+
+_INTEGRATION_REQUEST_RULES: list[dict] = [
+    {
+        'label': 'LinkedIn',
+        'keywords': ('linkedin', 'линкедин', 'линкед'),
+        'presence': ('linkedin', 'linkedin_access_token'),
+        'setup': 'LINKEDIN_ACCESS_TOKEN',
+    },
+    {
+        'label': 'GitHub',
+        'keywords': ('github', 'гитхаб'),
+        'presence': ('github', 'github_token'),
+        'setup': 'GITHUB_TOKEN',
+    },
+    {
+        'label': 'Slack',
+        'keywords': ('slack',),
+        'presence': ('slack', 'slack_bot_token', 'slack_token'),
+        'setup': 'SLACK_BOT_TOKEN',
+    },
+    {
+        'label': 'Discord',
+        'keywords': ('discord',),
+        'presence': ('discord', 'discord_webhook'),
+        'setup': 'DISCORD_WEBHOOK_URL',
+    },
+    {
+        'label': 'Notion',
+        'keywords': ('notion',),
+        'presence': ('notion', 'notion_token'),
+        'setup': 'NOTION_TOKEN',
+    },
+    {
+        'label': 'Google Sheets',
+        'keywords': ('google sheets', 'sheets', 'гугл таблиц', 'таблиц'),
+        'presence': ('google sheets', 'google_sheets', 'gspread', 'sheets'),
+        'setup': 'GOOGLE_SHEETS_CREDENTIALS',
+    },
+    {
+        'label': 'Jira',
+        'keywords': ('jira',),
+        'presence': ('jira',),
+        'setup': 'JIRA_URL/JIRA_EMAIL/JIRA_TOKEN',
+    },
+    {
+        'label': 'Trello',
+        'keywords': ('trello',),
+        'presence': ('trello',),
+        'setup': 'TRELLO_API_KEY/TRELLO_TOKEN',
+    },
+    {
+        'label': 'HubSpot',
+        'keywords': ('hubspot',),
+        'presence': ('hubspot',),
+        'setup': 'HUBSPOT_API_KEY',
+    },
+    {
+        'label': 'AmoCRM',
+        'keywords': ('amocrm', 'амоcrm', 'амо срм', 'amo crm'),
+        'presence': ('amocrm', 'amo'),
+        'setup': 'AMO_SUBDOMAIN/AMO_ACCESS_TOKEN',
+    },
+    {
+        'label': 'Битрикс24',
+        'keywords': ('битрикс', 'bitrix'),
+        'presence': ('битрикс', 'bitrix'),
+        'setup': 'BITRIX24_WEBHOOK',
+    },
+    {
+        'label': 'Twitter/X',
+        'keywords': ('twitter', 'x.com', 'твиттер'),
+        'presence': ('twitter', 'x_api_key', 'x api'),
+        'setup': 'X_API_KEY/X_API_SECRET',
+    },
+    {
+        'label': 'hh.ru',
+        'keywords': ('hh.ru', 'headhunter', 'хх.ру'),
+        'presence': ('hh.ru', 'hh_', 'headhunter', 'hh_api_token'),
+        'setup': 'HH_API_TOKEN',
+    },
+]
+
+
+def _build_missing_integration_hint(user_id: int, user_message: str, final_text: str) -> str:
+    """Формирует подсказку о недостающих интеграциях по содержанию запроса пользователя."""
+    _msg_l = (user_message or '').lower()
+    if not _msg_l.strip():
+        return ''
+
+    _snapshot = _get_active_agent_integration_snapshot(user_id)
+    _caps_l = (_snapshot.get('caps_text') or '').lower()
+    _keys_l = (_snapshot.get('keys_text') or '').lower()
+    _final_l = (final_text or '').lower()
+
+    _missing_rules = []
+    for _rule in _INTEGRATION_REQUEST_RULES:
+        _asked = any(_kw in _msg_l for _kw in _rule['keywords'])
+        if not _asked:
+            continue
+        _has_it = any((_p in _caps_l) or (_p in _keys_l) for _p in _rule['presence'])
+        if _has_it:
+            continue
+        _already_hinted = (_rule['label'].lower() in _final_l) and ('подключ' in _final_l)
+        if not _already_hinted:
+            _missing_rules.append(_rule)
+
+    if not _missing_rules:
+        return ''
+
+    _missing_services = ', '.join(_r['label'] for _r in _missing_rules[:2])
+    _setup_vars = ' или '.join(_r['setup'] for _r in _missing_rules[:2])
+    _connected = _snapshot.get('labels') or []
+    _connected_short = ', '.join(_connected[:3]) if _connected else 'пока нет активных'
+
+    return (
+        f"Для этой задачи не хватает интеграции: {_missing_services}. "
+        f"Сейчас у активного агента подключено: {_connected_short}. "
+        f"Интеграции подключаются только пользователем: добавь {_setup_vars} в дашборде "
+        f"https://asibiont.com/dashboard, а я подстрою план и выполню задачу через нужный канал."
+    )
 
 
 # ── SSRF-защита: преамбула, которая инжектируется перед кодом агента ─────────
@@ -3134,6 +3287,15 @@ class HybridAutonomousAgent:
         final, issues = CognitiveEngine.validate_response(final, user_message)
         if issues:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
+
+        # Превентивная подсказка: если пользователь просит сервис, который не подключён,
+        # явно подсказываем что именно подключить вместо молчаливых обещаний.
+        try:
+            _missing_hint = _build_missing_integration_hint(user_id, user_message or '', final or '')
+            if _missing_hint:
+                final = f"{final}\n\n{_missing_hint}".strip()
+        except Exception as _lh_err:
+            logger.debug("[INTG HINT] proactive missing-integration hint skipped: %s", _lh_err)
 
         # Встраиваем картинку в ответ если generate_image отработал успешно
         import re as _re

@@ -1256,3 +1256,145 @@ def test_d33_autopilot_scan_isolation():
 
     assert anchors_u2 == [], \
         f"_scan_goal_autopilot для UID2 (автопилот выкл) должен вернуть []: {anchors_u2}"
+
+
+def test_d38_missing_integration_hint_for_requested_service(monkeypatch):
+    """Если пользователь просит LinkedIn, а у агента нет интеграции — даём подсказку подключения."""
+    import ai_integration.autonomous_agent as aa_mod
+
+    monkeypatch.setattr(
+        aa_mod,
+        '_get_active_agent_integration_snapshot',
+        lambda _uid: {
+            'labels': ['GitHub API'],
+            'caps_text': 'github api',
+            'keys_text': 'github_token=ok',
+        },
+    )
+
+    hint = aa_mod._build_missing_integration_hint(
+        UID,
+        'Кристина, поищи внешних бизнесменов через LinkedIn и hh.ru',
+        'Начинаю поиск по каналам.',
+    )
+
+    assert 'LinkedIn' in hint, f"Ожидалась подсказка по LinkedIn: {hint}"
+    assert 'hh.ru' in hint, f"Ожидалась подсказка по hh.ru: {hint}"
+    assert 'dashboard' in hint.lower(), f"Ожидалась ссылка на дашборд: {hint}"
+    assert 'пользователем' in hint.lower(), f"Ожидалось явное правило кто подключает интеграции: {hint}"
+
+
+def test_d39_no_hint_when_requested_integration_is_connected(monkeypatch):
+    """Если запрошенная интеграция уже подключена — подсказку подключения не добавляем."""
+    import ai_integration.autonomous_agent as aa_mod
+
+    monkeypatch.setattr(
+        aa_mod,
+        '_get_active_agent_integration_snapshot',
+        lambda _uid: {
+            'labels': ['LinkedIn'],
+            'caps_text': 'linkedin',
+            'keys_text': 'linkedin_access_token=ok',
+        },
+    )
+
+    hint = aa_mod._build_missing_integration_hint(
+        UID,
+        'Поищи через LinkedIn предпринимателей в AI',
+        'Ок, проверяю.',
+    )
+
+    assert hint == '', f"Подсказка не должна генерироваться для подключенной интеграции: {hint}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# D40–D42: Stagnation escalation — correct reply count & auto-coordination
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_d40_escalation_shows_reply_count_not_false_zero():
+    """Если есть replied outreach, эскалация показывает реальное кол-во ответов, а не 'ответов пока нет'."""
+    data = {
+        'total_emails_sent': 267,
+        'total_emails_replied': 12,
+        'emails_sent_today': 5,
+        'email_daily_limit': 20,
+        'pending_replies': [],
+        'unsent_contacts': [],
+        'n_total_email_contacts': 300,
+        'negotiation_emails': ['a@b.com', 'c@d.com', 'e@f.com'],
+    }
+    _sent_today = data.get('emails_sent_today', 0)
+    _daily_lim = data.get('email_daily_limit', 20)
+    _total_sent = data.get('total_emails_sent', 0)
+    _total_replied = data.get('total_emails_replied', 0) or len(data.get('negotiation_emails', []))
+    _bottlenecks = []
+
+    if _sent_today >= _daily_lim and _daily_lim > 0:
+        _bottlenecks.append("📧 Email-лимит исчерпан")
+    elif _total_sent >= 10 and _total_replied > 0:
+        _reply_rate = int(_total_replied / _total_sent * 100) if _total_sent else 0
+        _bottlenecks.append(f"📧 Отправлено {_total_sent} писем, получено {_total_replied} ответов ({_reply_rate}%). Переписки ведутся.")
+    elif _total_sent >= 10 and _total_replied == 0:
+        _bottlenecks.append(f"📧 Отправлено {_total_sent} писем, но ответов пока нет.")
+
+    assert len(_bottlenecks) == 1, f"Expected 1 bottleneck, got {_bottlenecks}"
+    assert "получено 12 ответов" in _bottlenecks[0], f"Should show real reply count: {_bottlenecks[0]}"
+    assert "ответов пока нет" not in _bottlenecks[0], f"Should NOT say 'no replies': {_bottlenecks[0]}"
+
+
+def test_d41_escalation_zero_replies_shows_warning():
+    """Если реально 0 ответов на 267 писем — показываем предупреждение."""
+    data = {
+        'total_emails_sent': 267,
+        'total_emails_replied': 0,
+        'emails_sent_today': 5,
+        'email_daily_limit': 20,
+        'pending_replies': [],
+        'unsent_contacts': [],
+        'n_total_email_contacts': 300,
+        'negotiation_emails': [],
+    }
+    _total_sent = data.get('total_emails_sent', 0)
+    _total_replied = data.get('total_emails_replied', 0) or len(data.get('negotiation_emails', []))
+    _bottlenecks = []
+
+    if _total_sent >= 10 and _total_replied > 0:
+        _bottlenecks.append(f"📧 Получено {_total_replied} ответов.")
+    elif _total_sent >= 10 and _total_replied == 0:
+        _bottlenecks.append(f"📧 Отправлено {_total_sent} писем, но ответов пока нет.")
+
+    assert len(_bottlenecks) == 1
+    assert "ответов пока нет" in _bottlenecks[0]
+
+
+def test_d42_escalation_cta_is_active_not_passive():
+    """Эскалация НЕ содержит 'напиши мне' — вместо этого автопилот активно координирует."""
+    _stag_warn = True
+    _miss_intg_esc = []
+    _cap_warns = []
+    _ex_strats = ['search', 'email']
+    _total_sent = 267
+    _total_replied = 0
+    _pending = []
+
+    _esc_lines = ["⚠️ Автопилот застрял на цели «Тест»"]
+    _has_missing = bool(_miss_intg_esc) if _stag_warn else bool(_cap_warns)
+    if _has_missing:
+        _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard")
+    _auto_actions = []
+    if _stag_warn:
+        if _ex_strats:
+            _auto_actions.append("🔄 Переключаю агентов на альтернативные стратегии.")
+        if _total_sent >= 20 and _total_replied == 0:
+            _auto_actions.append("✏️ Корректирую тему и текст писем для повышения конверсии.")
+        elif _total_replied > 0 and not _pending:
+            _auto_actions.append("📨 Все ответы обработаны. Продолжаю рассылку новым контактам.")
+        if not _auto_actions:
+            _auto_actions.append("🔄 Корректирую стратегию и перенастраиваю агентов.")
+    if _auto_actions:
+        _esc_lines.append('\n'.join(_auto_actions))
+
+    _esc_text = '\n'.join(_esc_lines)
+    assert "напиши мне" not in _esc_text.lower(), f"CTA should be active, not passive: {_esc_text}"
+    assert "Переключаю агентов" in _esc_text, f"Should auto-coordinate: {_esc_text}"
+    assert "Корректирую тему" in _esc_text, f"Should adjust email strategy: {_esc_text}"

@@ -58,6 +58,7 @@ def _prompt_ru():
 ## ИНСТРУМЕНТЫ
 Ты сам решаешь что и когда вызвать. Параметры — в JSON-schema каждого инструмента.
 Ключевые правила:
+- Подключение сервисов делает только пользователь в дашборде. Ты не подключаешь интеграции сам: только честно подсказываешь, что подключить и зачем это улучшит результат.
 - «Запиши/запомни/в заметки» БЕЗ времени → save_note. «Напомни в 14:00» → add_task.
 - «Сделал/готово/выполнил» → complete_task по смыслу.
 - Посты: create_post (блог), publish_to_telegram (TG), publish_to_discord (Discord). Перед TG/Discord → generate_image.
@@ -134,6 +135,7 @@ After confirming a meeting → add_task(title="Call with [name]", time=[date]) M
 ## TOOLS
 You decide what and when to call. Parameters in each tool's JSON schema.
 Key rules:
+- Services are connected only by the user in dashboard settings. You cannot connect integrations yourself: only suggest what to connect and why it will improve results.
 - "Write down/remember/save" WITHOUT time → save_note. "Remind at 2pm" → add_task.
 - "Done/finished/completed" → complete_task by meaning.
 - Posts: create_post (blog), publish_to_telegram (TG), publish_to_discord (Discord). Before TG/Discord → generate_image.
