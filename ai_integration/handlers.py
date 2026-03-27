@@ -8110,14 +8110,14 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         ).count()
         
         total_channel_posts_today = auto_channel_today + manual_channel_today
-        if total_channel_posts_today >= 1 and not force:
+        # Мягкий anti-spam: 3 поста/день — предохранитель, не жёсткий блок
+        if total_channel_posts_today >= 3 and not force:
             channel = user.telegram_channel or 'канал'
             if not channel.startswith('@') and not channel.startswith('-'):
                 channel = f"@{channel}"
             return (
-                f" Сегодня пост в {channel} уже был опубликован.\n"
-                f"Лимит — 1 пост в канал в день, чтобы не спамить подписчиков.\n"
-                f"Следующий пост можно опубликовать завтра."
+                f" Сегодня в {channel} уже {total_channel_posts_today} постов.\n"
+                f"Anti-spam лимит — 3 поста в канал в день."
             )
         
         # Если content это JSON строка от generate_marketing_content, парсим
@@ -15492,8 +15492,8 @@ async def publish_to_discord(
                     _AAL.created_at >= _today_dc,
                     _AAL.status == 'published',
                 ).count()
-                if _discord_today >= 1:
-                    return " Сегодня пост в Discord уже опубликован (лимит — 1 в день). Следующий можно завтра."
+                if _discord_today >= 3:
+                    return f" Сегодня в Discord уже {_discord_today} постов (anti-spam лимит — 3 в день)."
             except Exception as _lim_e:
                 logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
 

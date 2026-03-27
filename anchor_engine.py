@@ -459,8 +459,8 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
-MAX_FEED_PER_DAY = 1
-MAX_CHANNEL_PER_DAY = 1
+MAX_FEED_PER_DAY = 3
+MAX_CHANNEL_PER_DAY = 3
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22
@@ -568,14 +568,14 @@ _INTEGRATION_PLANS = [
     # RSS лента / Feedparser
     (lambda c: any(w in c for w in ('rss', 'feed', 'лент')),
      'rss',
-     "Твоя RSS-лента — источник контента и аналитики. ОБЯЗАТЕЛЬНО: каждый раз когда читаешь RSS — создай пост (create_post → publish_to_telegram/discord) с инсайтом. Аналитика без публикации = не засчитана. Также передавай зацепки email-агенту для outreach.",
-         ["A) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → create_post (краткий инсайт/обзор по тренду) → publish_to_telegram → DELEGATE[email-агент]: используй этот инсайт в outreach-письме",
-            "B) run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → create_post (разбор интересной статьи с мнением) → publish_to_discord",
-      "C) research_topic(query=тема из RSS) → create_post (экспертный разбор) → publish_to_telegram → update_goal_progress",
-            "D) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди автора с email → save_email_contact → DELEGATE[email-агент]: напиши ему персональное письмо",
-      "E) web_search (что волнует ЦА по теме из RSS) → create_post (адаптированный под аудиторию) → publish_to_discord + publish_to_telegram",
-            "F) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → generate_image (визуализация данных/тренда) → create_post с картинкой → publish_to_telegram",
-            "G) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → schedule_background_task (мониторинг темы через 24ч)"]),
+     "Твоя RSS-лента — источник мониторинга, контента и аналитики. Решай сам: инсайт стоит поста? Публикуй. Стоит outreach? Делегируй email-агенту. Стоит мониторинга? Запланируй. Важно: не повторяй один и тот же паттерн — чередуй подходы.",
+         ["A) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → оцени: если материал контентно ценный → create_post → publish_to_telegram/discord",
+            "B) run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди релевантный инсайт → DELEGATE[email-агент]: персонализация для outreach",
+      "C) research_topic(query=тема из RSS) → экспертный разбор → create_post или add_task — что полезнее для цели",
+            "D) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди автора с email → save_email_contact",
+      "E) web_search (развитие темы из RSS) → create_post для аудитории → publish_to_telegram/discord",
+            "F) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → generate_image (визуализация тренда) → create_post",
+            "G) schedule_background_task (мониторинг темы через 24ч)"]),
     # Slack
     (lambda c: 'slack' in c,
      'slack',
@@ -649,12 +649,12 @@ _INTEGRATION_PLANS = [
     # Telegram-канал / Discord / Контент
     (lambda c: any(w in c for w in ('telegram', 'discord', 'smm', 'контент', 'публик')),
      'content',
-     "Твои инструменты: создание и публикация контента. ПРАВИЛО: каждый пост публикуется минимум в 2 канала (TG + Discord). После публикации — делегируй email-рассылку с ссылкой.",
-     ["A) research_topic → create_post (актуальный оффер) → publish_to_telegram → publish_to_discord (адаптированная версия)",
-      "B) research_topic → create_post по тренду → publish_to_discord → publish_to_telegram (кросс-пост)",
-      "C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию → publish_to_telegram + DELEGATE[email-агент]: разошли пост контактам",
-      "D) web_search (вирусные форматы по теме) → create_post (нестандартный формат) → publish_to_telegram → publish_to_discord",
-      "E) generate_image (визуал) → create_post с картинкой → publish_to_telegram → publish_to_discord",
+     "Твои инструменты: создание и публикация контента. Каналы: Telegram, Discord. Подумай: где сейчас твоя аудитория, какой формат лучше для каждого канала, стоит ли адаптировать контент для другого канала.",
+     ["A) research_topic → create_post (актуальный оффер) → выбери лучший канал → подумай о другом канале",
+      "B) research_topic → create_post по тренду → publish_to_discord/telegram → адаптируй под другой канал если уместно",
+      "C) find_relevant_contacts_for_task → create_post нацеленный на аудиторию → publish + DELEGATE[email-агент] если есть контакты",
+      "D) web_search (вирусные форматы по теме) → create_post (нестандартный формат) → выбери каналы",
+      "E) generate_image (визуал) → create_post с картинкой → publish",
       "F) find_and_message_relevant_users (пригласи ЦА в канал) → update_goal_progress",
       "G) schedule_background_task (серийный контент по расписанию) → update_goal_progress"]),
     # HH.ru / LinkedIn / HeadHunter (НР)
@@ -847,7 +847,7 @@ _UNIVERSAL_PATTERNS: dict = {
     ),
     'content_attract': (
         '🧲 КОНТЕНТ-МАГНИТ',
-        'create_post → publish_to_telegram + publish_to_discord (кросс-пост!). DELEGATE email-рассылку с контентом. Прогресс публично = мотивация + привлечение.',
+        'create_post → publish в подходящие каналы (TG/Discord). При наличии контактов — подумай о email-рассылке. Публичный прогресс = мотивация + привлечение.',
     ),
     'research_discover': (
         '🔍 ПЕРЕОСМЫСЛИТЬ ПОДХОД',
@@ -3840,14 +3840,14 @@ class AnchorEngine:
                 task_text += f"\n\n📢 Последние посты (48ч):\n" + '\n'.join(f"  {p}" for p in _recent_posts_ctx)
             if _crosspost_hints_ctx:
                 task_text += (
-                    f"\n\n🔴 КРОСС-ПОСТИНГ ОБЯЗАТЕЛЕН:\n"
-                    + '\n'.join(f"  → {h}" for h in _crosspost_hints_ctx)
-                    + "\nСоздай адаптированную версию поста и опубликуй в недостающий канал!"
+                    f"\n\n� Контент-контекст (для принятия решения):\n"
+                    + '\n'.join(f"  • {h}" for h in _crosspost_hints_ctx)
+                    + "\nПодумай: стоит ли адаптировать контент для другого канала или аудитории."
                 )
             if not _recent_posts_ctx:
                 task_text += (
-                    "\n\n📢 За 48ч НЕТ публикаций в каналы. "
-                    "Приоритет: создай полезный контент (create_post) и опубликуй в TG + Discord."
+                    "\n\n📋 За 48ч нет публикаций в каналы. "
+                    "Учти это при планировании — если есть что сказать аудитории, самое время."
                 )
 
             # Уже отправленные письма — не дублировать
@@ -8172,13 +8172,12 @@ class AnchorEngine:
                 "• Любой агент → research_topic + create_post + publish_to_telegram = экспертный контент\n"
                 "Не ограничивай агента одним инструментом — давай КОМБИНИРОВАННЫЕ задачи.\n\n"
 
-                "КРОСС-ПОСТИНГ И ПРОДВИЖЕНИЕ КОНТЕНТА:\n"
-                "После публикации пост НЕ ДОЛЖЕН оставаться без продвижения:\n"
-                "• Опубликовал в Discord → ОБЯЗАТЕЛЬНО адаптируй и опубликуй в Telegram (и наоборот)\n"
-                "• Опубликовал пост → DELEGATE[email-агент]: 'Вот пост [тема]. Отправь его как дайджест/инсайт контактам которые интересовались этой темой'\n"
-                "• RSS-агент прочитал новости → ОБЯЗАН создать пост (create_post → publish_to_telegram/discord), не просто отчёт\n"
-                "• Каждый пост = минимум 2 канала распространения (TG + Discord, или канал + email-рассылка)\n"
-                "• НЕ ЗАСЧИТЫВАЕТСЯ: прочитал RSS и написал отчёт без публикации. Это 0 пользы.\n\n"
+                "КОНТЕНТ И ПРОДВИЖЕНИЕ (думай, а не выполняй шаблон):\n"
+                "• Создал пост? Подумай: кому ещё он полезен? В каком канале его ещё нет?\n"
+                "• Прочитал RSS/новости? Реши: стоит ли это поста, outreach, задачи или мониторинга.\n"
+                "• Опубликовал в один канал? Если контент подходит другому — адаптируй и опубликуй.\n"
+                "• Есть контакты по теме? Подумай: делегировать email-рассылку или нет.\n"
+                "• Цени разнообразие: чередуй RSS→пост, research→outreach, analytics→задача.\n\n"
 
                 "ОДИН API — РАЗНЫЕ РЕЖИМЫ (обязательно учитывай):\n"
                 "• run_agent_action: не только поиск людей. Это также мониторинг, обновление данных, постинг, комментарии, тикеты — выбирай режим под цель.\n"
