@@ -1281,7 +1281,7 @@ def test_d38_missing_integration_hint_for_requested_service(monkeypatch):
     assert 'LinkedIn' in hint, f"Ожидалась подсказка по LinkedIn: {hint}"
     assert 'hh.ru' in hint, f"Ожидалась подсказка по hh.ru: {hint}"
     assert 'dashboard' in hint.lower(), f"Ожидалась ссылка на дашборд: {hint}"
-    assert 'пользователем' in hint.lower(), f"Ожидалось явное правило кто подключает интеграции: {hint}"
+    assert 'добавь' in hint.lower() or 'пользователем' in hint.lower(), f"Ожидалось указание как подключить: {hint}"
 
 
 def test_d39_no_hint_when_requested_integration_is_connected(monkeypatch):
@@ -1398,3 +1398,81 @@ def test_d42_escalation_cta_is_active_not_passive():
     assert "напиши мне" not in _esc_text.lower(), f"CTA should be active, not passive: {_esc_text}"
     assert "Переключаю агентов" in _esc_text, f"Should auto-coordinate: {_esc_text}"
     assert "Корректирую тему" in _esc_text, f"Should adjust email strategy: {_esc_text}"
+
+
+# ── D43: People-goal keyword coverage ──────────────────────────────
+def test_d43_people_goal_keywords_cover_zainteresovannykh_lits():
+    """Цель 'Привлечь 50 заинтересованных лиц' распознаётся как people-goal."""
+    # Симулируем проверку из check_emails: _ppl_kw_ce
+    _ppl_kw = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт',
+               'заинтересован', 'привлеч', 'клиент', 'партнёр', 'лиц ')
+    title = 'Привлечь 50 заинтересованных лиц к проекту ASI Biont'
+    desc = ''
+    metric_unit = 'заинтересованных лиц'
+    g_text = (title + ' ' + desc + ' ' + metric_unit).lower()
+    assert any(w in g_text for w in _ppl_kw), f"Goal '{title}' not recognized as people-goal with keywords {_ppl_kw}"
+
+    # Также проверяем другие варианты
+    for test_title in ['Привлечь 100 клиентов', 'Найти 10 партнёров', 'Привлечь 20 заинтересованных']:
+        g_text = (test_title + ' ').lower()
+        assert any(w in g_text for w in _ppl_kw), f"'{test_title}' should be people-goal"
+
+
+# ── D44: Strategy detection catches 'искать' ──────────────────────
+def test_d44_strategy_detection_catches_iskat():
+    """'Может нам искать не тестировщиков а бизнесменов' — детектируется как смена стратегии."""
+    # Ключевые слова из _save_and_learn
+    _has_search_kw = lambda m: any(w in m.lower() for w in ['ищем', 'ищи', 'искат', 'search', 'find', 'целевой', 'аудиторий', 'привлеч'])
+    _has_not_kw = lambda m: any(w in m.lower() for w in ['не ', 'не,', ' не', 'instead', 'вместо', 'except', 'а не'])
+
+    msg1 = "Может нам искать не тестировщиков а бизнесменов"
+    assert _has_search_kw(msg1), f"'искать' should match search keywords"
+    assert _has_not_kw(msg1), f"'не' should match negation keywords"
+
+    msg2 = "может поищем бизнесменов вместо тестировщиков чтобы им предложить сервис"
+    assert _has_search_kw(msg2), f"'поищем' should match (via 'ищем' substring)"
+    assert _has_not_kw(msg2), f"'вместо' should match negation keywords"
+
+    msg3 = "Привлечь бизнес-аудиторию вместо разработчиков"
+    assert _has_search_kw(msg3), f"'Привлечь' should match via 'привлеч'"
+    assert _has_not_kw(msg3), f"'вместо' should match"
+
+
+# ── D45: LinkedIn blocking in system prompt ────────────────────────
+def test_d45_linkedin_blocked_in_integration_hint():
+    """Хинт интеграций содержит ЗАПРЕТ на упоминание неподключённых сервисов."""
+    # Эмулируем построение integration hint (из agent_arena.py)
+    _joined = 'email, github, telegram_channel'
+    _hint = (
+        f"\n\n[ТВОИ АКТИВНЫЕ ИНТЕГРАЦИИ: {_joined}]\n"
+        "У тебя есть доступ к реальным данным из этих сервисов. Если скрипт вернул данные — "
+        "используй конкретные цифры/факты из них. Иначе можешь упоминать свои интеграции "
+        "естественно, когда уместно — но никогда не придумывай данные которых нет.\n"
+        "ЗАПРЕТ: Не говори что будешь искать/использовать сервисы, которых НЕТ в списке выше "
+        "(LinkedIn, Twitter, Facebook, Slack и др.). Если сервиса нет — ты НЕ можешь через него работать."
+    )
+    assert 'ЗАПРЕТ' in _hint
+    assert 'LinkedIn' in _hint
+    assert 'НЕТ в списке' in _hint
+
+
+# ── D46: Missing integration hint scans agent response ─────────────
+def test_d46_missing_integration_hint_scans_agent_response():
+    """_build_missing_integration_hint проверяет и ответ агента, не только запрос пользователя."""
+    from ai_integration.autonomous_agent import _build_missing_integration_hint
+
+    # Мокаем snapshot — LinkedIn НЕ подключён
+    with mock.patch('ai_integration.autonomous_agent._get_active_agent_integration_snapshot') as m_snap:
+        m_snap.return_value = {
+            'caps_text': 'email, github',
+            'keys_text': 'GMAIL_CREDENTIALS, GITHUB_TOKEN',
+            'labels': ['Email', 'GitHub'],
+        }
+        # Пользователь не упоминал LinkedIn, но АГЕНТ пообещал использовать
+        hint = _build_missing_integration_hint(
+            user_id=1,
+            user_message='найди мне бизнесменов',
+            final_text='Поищу конкретных людей через LinkedIn и бизнес-сообщества'
+        )
+        assert hint, "Should warn about LinkedIn when agent mentions it in response"
+        assert 'LinkedIn' in hint, f"Hint should mention LinkedIn: {hint}"

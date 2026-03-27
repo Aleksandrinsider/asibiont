@@ -4505,8 +4505,10 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 # GUARD: для people-целей — запрет крупного прироста без подтверждённых ответов
                 # Агент НЕ должен ставить metric_current = N_contacts_in_db (это не тестировщики!)
                 _ppl_units_chk = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
-                                  'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
-                _ppl_kw_chk = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                                  'человек', 'участник', 'участников', 'подписчик', 'подписчиков',
+                                  'лиц', 'клиент', 'клиентов', 'партнёр', 'партнёров')
+                _ppl_kw_chk = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ',
+                               'заинтересован', 'привлеч', 'клиент', 'партнёр')
                 _gfull_chk = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
                 _is_ppl_chk = (
                     any(u in (matched.metric_unit or '').lower() for u in _ppl_units_chk)
@@ -4573,8 +4575,10 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 if pct >= 100 and matched.status == 'active':
                     # GUARD: people-goals требуют подтверждённого участия перед закрытием
                     _mc_people_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
-                                        'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
-                    _mc_people_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                                        'человек', 'участник', 'участников', 'подписчик', 'подписчиков',
+                                        'лиц', 'клиент', 'клиентов', 'партнёр', 'партнёров')
+                    _mc_people_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ',
+                                     'заинтересован', 'привлеч', 'клиент', 'партнёр')
                     _mc_gfull = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
                     _mc_is_ppl = (
                         any(u in (matched.metric_unit or '').lower() for u in _mc_people_units)
@@ -4666,8 +4670,10 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                         logger.debug(f"[UPDATE_GOAL] Vector memory pct achievement skipped: {_vm_err}")
                     # Та же проверка участия для people-целей
                     _p_units = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
-                                'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
-                    _p_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ')
+                                'человек', 'участник', 'участников', 'подписчик', 'подписчиков',
+                                'лиц', 'клиент', 'клиентов', 'партнёр', 'партнёров')
+                    _p_kw = ('тестировщик', 'пользовател', 'участник', 'tester', 'user ',
+                             'заинтересован', 'привлеч', 'клиент', 'партнёр')
                     _g_full = (matched.title + ' ' + (matched.description or '') + ' ' + (matched.metric_unit or '')).lower()
                     _is_ppl = (
                         any(u in (matched.metric_unit or '').lower() for u in _p_units)
@@ -14176,7 +14182,8 @@ async def check_emails(
             if _newly_replied_this_call > 0:
                 try:
                     from models import Goal as _Goal_ce
-                    _ppl_kw_ce = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт')
+                    _ppl_kw_ce = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт',
+                                  'заинтересован', 'привлеч', 'клиент', 'партнёр', 'лиц ')
                     _ppl_goals_ce = session.query(_Goal_ce).filter(
                         _Goal_ce.user_id == user.id,
                         _Goal_ce.status == 'active',

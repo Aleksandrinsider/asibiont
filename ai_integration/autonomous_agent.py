@@ -240,20 +240,24 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
 
 
 def _build_missing_integration_hint(user_id: int, user_message: str, final_text: str) -> str:
-    """Формирует подсказку о недостающих интеграциях по содержанию запроса пользователя."""
+    """Формирует подсказку о недостающих интеграциях по содержанию запроса пользователя ИЛИ ответа агента."""
     _msg_l = (user_message or '').lower()
-    if not _msg_l.strip():
+    _final_l = (final_text or '').lower()
+    # Проверяем и запрос пользователя, и ответ агента
+    _combined_l = _msg_l + ' ' + _final_l
+    if not _combined_l.strip():
         return ''
 
     _snapshot = _get_active_agent_integration_snapshot(user_id)
     _caps_l = (_snapshot.get('caps_text') or '').lower()
     _keys_l = (_snapshot.get('keys_text') or '').lower()
-    _final_l = (final_text or '').lower()
 
     _missing_rules = []
     for _rule in _INTEGRATION_REQUEST_RULES:
+        # Проверяем упоминание в запросе пользователя ИЛИ в ответе агента
         _asked = any(_kw in _msg_l for _kw in _rule['keywords'])
-        if not _asked:
+        _agent_promised = any(_kw in _final_l for _kw in _rule['keywords'])
+        if not _asked and not _agent_promised:
             continue
         _has_it = any((_p in _caps_l) or (_p in _keys_l) for _p in _rule['presence'])
         if _has_it:
@@ -271,10 +275,9 @@ def _build_missing_integration_hint(user_id: int, user_message: str, final_text:
     _connected_short = ', '.join(_connected[:3]) if _connected else 'пока нет активных'
 
     return (
-        f"Для этой задачи не хватает интеграции: {_missing_services}. "
-        f"Сейчас у активного агента подключено: {_connected_short}. "
-        f"Интеграции подключаются только пользователем: добавь {_setup_vars} в дашборде "
-        f"https://asibiont.com/dashboard, а я подстрою план и выполню задачу через нужный канал."
+        f"⚠️ {_missing_services} не подключён. "
+        f"Подключено: {_connected_short}. "
+        f"Добавь {_setup_vars} в дашборде https://asibiont.com/dashboard"
     )
 
 
@@ -3260,7 +3263,7 @@ class HybridAutonomousAgent:
             
             # Проверяем — может это стратегическое указание? (изменение целей, аудитории, интеграций)
             _user_msg_lower = (user_message or '').lower()
-            _strategy_keywords = ['ищем', 'search for', 'ищи', 'не', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals']
+            _strategy_keywords = ['ищем', 'search for', 'ищи', 'искат', 'не', 'вместо', 'instead of', 'целевая', 'target', 'аудитория', 'audience', 'стратеги', 'strategy', 'целей', 'goals', 'привлеч']
             _is_strategy_cmd = any(kw in _user_msg_lower for kw in _strategy_keywords) and any(verb in _user_msg_lower for verb in ['можем', 'можно', 'может', 'should', 'надо', 'нужно', 'need'])
             
             if _is_strategy_cmd:
@@ -3387,7 +3390,7 @@ class HybridAutonomousAgent:
                     logger.debug(f"[GLOBAL RULE] Failed to save as rule: {_gr_err}")
             
             # ── ЦЕЛЕВЫЕ СТРАТЕГИИ (специфичные для текущих целей) ──
-            _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'search', 'find', 'целевой', 'аудиторий'])
+            _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'искат', 'search', 'find', 'целевой', 'аудиторий', 'привлеч'])
             _has_not_keywords = any(w in _msg_lower for w in ['не ', 'не,', ' не', 'instead', 'вместо', 'except', 'а не'])
             
             if _has_search_keywords and _has_not_keywords and not _is_global_rule:
@@ -3414,6 +3417,24 @@ class HybridAutonomousAgent:
                             goal.description = _new_desc
                             goal.updated_at = datetime.utcnow()
                             logger.info(f"[STRATEGY UPDATE] Goal {goal.id} updated with user strategy: {user_message[:80]}")
+                            # Обновляем target_audience активных кампаний этого юзера
+                            try:
+                                from models import EmailCampaign as _EC_strat, DelegationCampaign as _DC_strat
+                                _strat_note = f"[СТРАТЕГИЯ {_ts}] {user_message}"
+                                for _ec in session.query(_EC_strat).filter(
+                                    _EC_strat.user_id == user_id,
+                                    _EC_strat.status == 'active'
+                                ).all():
+                                    _ec.target_audience = ((_ec.target_audience or '') + '\n' + _strat_note).strip()
+                                    logger.info(f"[STRATEGY] Updated EmailCampaign {_ec.id} target_audience")
+                                for _dc in session.query(_DC_strat).filter(
+                                    _DC_strat.user_id == user_id,
+                                    _DC_strat.status == 'active'
+                                ).all():
+                                    _dc.target_audience = ((_dc.target_audience or '') + '\n' + _strat_note).strip()
+                                    logger.info(f"[STRATEGY] Updated DelegationCampaign {_dc.id} target_audience")
+                            except Exception as _ec_err:
+                                logger.debug(f"[STRATEGY] Campaign update failed: {_ec_err}")
                     session.commit()
                 except Exception as _gu_err:
                     logger.debug(f"[STRATEGY UPDATE] Failed to update goals: {_gu_err}")
@@ -5341,7 +5362,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Смотри в раздел «ТВОИ ИНТЕГРАЦИИ» — там перечислено что у тебя РЕАЛЬНО подключено. "
         "Если что-то перечислено — ты УМЕЕШЬ это делать, используй run_agent_action. "
         "Если пользователь просит интеграцию, которой НЕТ в «Твои интеграции» — "
-        "скажи конкретно: «Для этого нужна интеграция с X. Добавь ключи в настройках агента.»\n\n"
+        "скажи конкретно: «Для этого нужна интеграция с X. Добавь ключи в настройках агента.»\n"
+        "ЗАПРЕТ: Не говори что будешь искать/использовать сервисы, которых НЕТ в «Твои интеграции» "
+        "(LinkedIn, Twitter, Facebook, Slack и др.). Если сервиса нет — ты НЕ можешь через него работать.\n\n"
 
         "EMAIL-АДРЕСА:\n"
         "Копируй email ПОСИМВОЛЬНО из входных данных (IMAP, From, To, заголовки писем). "
