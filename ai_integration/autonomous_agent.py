@@ -558,30 +558,58 @@ class HybridAutonomousAgent:
          _max_retries = 1 if (api_timeout and api_timeout < 40) else 2
          for _attempt in range(_max_retries):
           try:
-            session = await _get_shared_ai_session()
-            async with session.post(url, headers=headers, json=data,
-                                    timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
-                if resp.status == 200:
-                    result = await resp.json()
-                    _usage = result.get('usage', {})
-                    _pt = _usage.get('prompt_tokens', 0)
-                    _ct = _usage.get('completion_tokens', 0)
-                    _cached = _usage.get('prompt_cache_hit_tokens', 0)
-                    logger.info(f"[DEEPSEEK] call_ai prompt={_pt}(cache={_cached}) compl={_ct} model={chosen_model}")
-                    if use_tools:
-                        msg = result.get('choices', [{}])[0].get('message', {})
-                        tcs = msg.get('tool_calls', [])
-                        if tcs:
-                            logger.info(f"[AI] Called {len(tcs)} tools: "
-                                        f"{[tc['function']['name'] for tc in tcs]}")
-                        else:
-                            logger.info(f"[AI] No tools called, text response")
-                    return result
-                error = await resp.text()
-                if resp.status < 500 or _attempt >= _max_retries - 1:
-                    raise Exception(f"AI call failed: {resp.status} {error[:200]}")
-                logger.warning(f"[AI] Server error {resp.status}, retrying...")
-                await asyncio.sleep(2)
+            # В тестах используем временную сессию, чтобы не оставлять shared session
+            # при закрытии event loop pytest.
+            if os.getenv('PYTEST_CURRENT_TEST'):
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120, connect=10)) as _tmp_session:
+                    async with _tmp_session.post(url, headers=headers, json=data,
+                                                 timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
+                        if resp.status == 200:
+                            result = await resp.json()
+                            _usage = result.get('usage', {})
+                            _pt = _usage.get('prompt_tokens', 0)
+                            _ct = _usage.get('completion_tokens', 0)
+                            _cached = _usage.get('prompt_cache_hit_tokens', 0)
+                            logger.info(f"[DEEPSEEK] call_ai prompt={_pt}(cache={_cached}) compl={_ct} model={chosen_model}")
+                            if use_tools:
+                                msg = result.get('choices', [{}])[0].get('message', {})
+                                tcs = msg.get('tool_calls', [])
+                                if tcs:
+                                    logger.info(f"[AI] Called {len(tcs)} tools: "
+                                                f"{[tc['function']['name'] for tc in tcs]}")
+                                else:
+                                    logger.info(f"[AI] No tools called, text response")
+                            return result
+                        error = await resp.text()
+                        if resp.status < 500 or _attempt >= _max_retries - 1:
+                            raise Exception(f"AI call failed: {resp.status} {error[:200]}")
+                        logger.warning(f"[AI] Server error {resp.status}, retrying...")
+                        await asyncio.sleep(2)
+            else:
+                session = await _get_shared_ai_session()
+                async with session.post(url, headers=headers, json=data,
+                                        timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
+                    if resp.status == 200:
+                        result = await resp.json()
+                        _usage = result.get('usage', {})
+                        _pt = _usage.get('prompt_tokens', 0)
+                        _ct = _usage.get('completion_tokens', 0)
+                        _cached = _usage.get('prompt_cache_hit_tokens', 0)
+                        logger.info(f"[DEEPSEEK] call_ai prompt={_pt}(cache={_cached}) compl={_ct} model={chosen_model}")
+                        if use_tools:
+                            msg = result.get('choices', [{}])[0].get('message', {})
+                            tcs = msg.get('tool_calls', [])
+                            if tcs:
+                                logger.info(f"[AI] Called {len(tcs)} tools: "
+                                            f"{[tc['function']['name'] for tc in tcs]}")
+                            else:
+                                logger.info(f"[AI] No tools called, text response")
+                        return result
+                    error = await resp.text()
+                    if resp.status < 500 or _attempt >= _max_retries - 1:
+                        raise Exception(f"AI call failed: {resp.status} {error[:200]}")
+                    logger.warning(f"[AI] Server error {resp.status}, retrying...")
+                    await asyncio.sleep(2)
           except asyncio.TimeoutError:
             if _attempt >= _max_retries - 1:
                 raise
@@ -1219,7 +1247,8 @@ class HybridAutonomousAgent:
 
     async def _run_external_action(self, params: dict, user_id: int) -> dict:
         """Re-runs agent python_code with AGENT_ACTION env vars to perform write operations."""
-        import os as _os_ea, sys as _sys_ea, asyncio as _aio_ea
+        import os as _os_ea, sys as _sys_ea, asyncio as _aio_ea, re as _re_ea
+        from difflib import SequenceMatcher as _SM_ea
         agent_data = self._active_agent_data.get(user_id)
         if not agent_data or not agent_data.get('python_code', '').strip():
             return {"error": "Агент не имеет подключённого скрипта"}
@@ -1229,6 +1258,83 @@ class HybridAutonomousAgent:
             action_params = {}
         if not action:
             return {"error": "Параметр action не указан"}
+
+        # ── Адаптивная нормализация action по реальным возможностям скрипта ──
+        # Этот путь нужен, т.к. run_agent_action в execute_actions может идти напрямую
+        # в _run_external_action (мимо handlers.run_agent_action).
+        try:
+            _py_src = (agent_data.get('python_code') or '').strip()
+            _supported_actions = []
+            for _m in _re_ea.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _py_src):
+                _a = _m.group(1).strip()
+                if _a and _a.lower() not in {x.lower() for x in _supported_actions}:
+                    _supported_actions.append(_a)
+            for _m in _re_ea.finditer(r"ACTION\s+in\s*\(([^)]+)\)", _py_src):
+                for _p in _m.group(1).split(','):
+                    _a = _p.strip().strip("'\" ")
+                    if _a and _a.lower() not in {x.lower() for x in _supported_actions}:
+                        _supported_actions.append(_a)
+
+            _orig_action = action
+            _orig_l = _orig_action.lower().strip()
+            _supported_l = [s.lower().strip() for s in _supported_actions]
+
+            if _orig_action and _supported_actions and _orig_l not in _supported_l:
+                _api_keys = (agent_data.get('user_api_keys') or '').lower()
+                _ctx = ' '.join([
+                    _orig_action,
+                    str(action_params or ''),
+                    (agent_data.get('name') or ''),
+                    (agent_data.get('specialization') or ''),
+                    _api_keys,
+                ]).lower()
+
+                def _tok(_txt: str) -> set:
+                    return {t for t in _re_ea.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (_txt or '').lower())}
+
+                _signal_map = {
+                    'email': ('email', 'gmail', 'imap', 'inbox', 'outreach', 'reply', 'письм', 'почт'),
+                    'rss': ('rss', 'news', 'feed', 'хабр', 'новост', 'стать'),
+                    'market': ('market', 'finance', 'alpha', 'vantage', 'stock', 'crypto', 'рын', 'котиров'),
+                    'social': ('telegram', 'discord', 'post', 'publish', 'канал', 'пост', 'публик'),
+                    'code': ('github', 'repo', 'commit', 'issue', 'pull', 'код', 'разработ'),
+                }
+
+                def _sig(_txt: str) -> set:
+                    _res = set()
+                    _low = (_txt or '').lower()
+                    for _k, _kws in _signal_map.items():
+                        if any(_kw in _low for _kw in _kws):
+                            _res.add(_k)
+                    return _res
+
+                _req_t = _tok(_ctx)
+                _req_s = _sig(_ctx)
+
+                _best = _supported_actions[0]
+                _best_sc = -1.0
+                for _cand in _supported_actions:
+                    _cand_l = _cand.lower().strip()
+                    _cand_t = _tok(_cand_l)
+                    _inter = len(_req_t & _cand_t)
+                    _union = max(1, len(_req_t | _cand_t))
+                    _j = _inter / _union
+                    _lex = _SM_ea(None, _orig_l, _cand_l).ratio()
+                    _sov = len(_req_s & _sig(_cand_l))
+                    _sc = (_lex * 0.6) + (_j * 0.25) + (_sov * 0.2)
+                    if _sc > _best_sc:
+                        _best = _cand
+                        _best_sc = _sc
+
+                action = _best
+                logger.info(
+                    "[ACTION] adaptive normalize in _run_external_action: %s -> %s (user=%s)",
+                    _orig_action,
+                    action,
+                    user_id,
+                )
+        except Exception as _norm_err:
+            logger.debug("[ACTION] normalize skipped: %s", _norm_err)
 
         # ── Перехват send_email: перенаправляем на платформенный handler ──
         # Raw SMTP (python_code subprocess) заблокирован на Railway ("Network is unreachable").
@@ -1349,18 +1455,65 @@ class HybridAutonomousAgent:
             if _is_linux:
                 _kwargs['preexec_fn'] = _resource_limits
             proc = await _aio_ea.create_subprocess_exec(_sys_ea.executable, '-c', py_code, **_kwargs)
+            _comm_task = _aio_ea.create_task(proc.communicate())
             try:
-                stdout, stderr = await _aio_ea.wait_for(proc.communicate(), timeout=float(API_TIMEOUT_SCRIPT))
+                stdout, stderr = await _aio_ea.wait_for(_comm_task, timeout=float(API_TIMEOUT_SCRIPT))
                 out = stdout.decode('utf-8', errors='replace').strip()[:2000]
                 err = stderr.decode('utf-8', errors='replace').strip()[:500]
             except _aio_ea.TimeoutError:
                 proc.kill()
+                try:
+                    await _comm_task
+                except BaseException:
+                    pass
+                try:
+                    await proc.wait()
+                except Exception:
+                    pass
                 return {"status": "error", "error": f"Timeout ({API_TIMEOUT_SCRIPT}s) — скрипт выполнялся слишком долго"}
             # Prepend fix note if query was replaced
             if _fix_note and out:
                 out = _fix_note + out
             elif _fix_note:
                 out = _fix_note
+
+            # Self-heal: если скрипт вернул "не поддерживает действие" и подсказал
+            # список поддерживаемых, делаем 1 ретрай с первым поддерживаемым action.
+            _unsupported_text = (out or err or '').lower()
+            if 'не поддерживает действие' in _unsupported_text and 'поддерживаемые действия' in _unsupported_text:
+                try:
+                    _m_sup = _re_ea.search(r'поддерживаемые\s+действия\s*:\s*([^\n\r]+)', (out or err), _re_ea.IGNORECASE)
+                    _cand_raw = (_m_sup.group(1).strip() if _m_sup else '')
+                    _cand_parts = [p.strip().strip('"\' ').strip() for p in _re_ea.split(r'[,;/|]+', _cand_raw) if p.strip()]
+                    _retry_action = _cand_parts[0] if _cand_parts else ''
+                    if _retry_action and _retry_action.lower() != action.lower():
+                        _retry_env = dict(env)
+                        _retry_env['AGENT_ACTION'] = _retry_action
+                        _proc2 = await _aio_ea.create_subprocess_exec(
+                            _sys_ea.executable, '-c', py_code,
+                            stdout=_aio_ea.subprocess.PIPE,
+                            stderr=_aio_ea.subprocess.PIPE,
+                            env=_retry_env,
+                            **({'preexec_fn': _resource_limits} if _is_linux else {}),
+                        )
+                        try:
+                            _so2, _se2 = await _aio_ea.wait_for(_proc2.communicate(), timeout=float(API_TIMEOUT_SCRIPT))
+                            _out2 = _so2.decode('utf-8', errors='replace').strip()[:2000]
+                            _err2 = _se2.decode('utf-8', errors='replace').strip()[:500]
+                            if _out2 and 'не поддерживает действие' not in _out2.lower():
+                                logger.info("[ACTION] self-heal retry: %s -> %s", action, _retry_action)
+                                action = _retry_action
+                                out = _out2
+                                err = _err2
+                        except _aio_ea.TimeoutError:
+                            _proc2.kill()
+                            try:
+                                await _proc2.communicate()
+                            except Exception:
+                                pass
+                except Exception as _heal_err:
+                    logger.debug("[ACTION] self-heal retry skipped: %s", _heal_err)
+
             logger.info(f"[ACTION] {action} output={out[:100]} err={err[:100]}")
             # Лог в хронологию агента
             try:
@@ -2365,13 +2518,22 @@ class HybridAutonomousAgent:
                             _sys_pc.executable, '-c', _py_code,
                             **_kwargs,
                         )
+                        _comm_task_pc = _aio_pc.create_task(proc.communicate())
                         try:
-                            stdout, stderr = await _aio_pc.wait_for(proc.communicate(), timeout=float(API_TIMEOUT_QUICK))
+                            stdout, stderr = await _aio_pc.wait_for(_comm_task_pc, timeout=float(API_TIMEOUT_QUICK))
                             out = stdout.decode('utf-8', errors='replace').strip()[:2000]
                             err = stderr.decode('utf-8', errors='replace').strip()[:500]
                             return out, err
                         except _aio_pc.TimeoutError:
                             proc.kill()
+                            try:
+                                await _comm_task_pc
+                            except BaseException:
+                                pass
+                            try:
+                                await proc.wait()
+                            except Exception:
+                                pass
                             return '', f'Тайм-аут выполнения скрипта ({API_TIMEOUT_QUICK} сек)'
                     _code_output, _code_stderr = await _run_agent_code()
                     if _code_output:

@@ -1495,6 +1495,10 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
                     _out_pm = _out_pm.decode('utf-8', errors='replace').strip()[:2000]
                 except _aio_pm.TimeoutError:
                     _proc_pm.kill()
+                    try:
+                        await _proc_pm.communicate()
+                    except Exception:
+                        pass
                     _out_pm = ''
                 if _out_pm:
                     _svc_pm = _a_data.get('service_label') or _a_data.get('name', 'Агент')

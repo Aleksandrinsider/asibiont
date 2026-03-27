@@ -2253,8 +2253,7 @@ async def chat_progress_handler(request):
 
 async def chat_handler(request):
     try:
-        session = await get_session(request)
-        user_id = session.get('user_id')
+        user_id = await get_user_id_from_request(request)
         logger.info(f"Chat handler called, session user_id: {user_id}")
 
         if not user_id:
@@ -2398,8 +2397,8 @@ async def transcribe_handler(request):
     """
     from config import GROQ_API_KEY
     try:
-        session = await get_session(request)
-        if not session.get('user_id'):
+        user_id = await get_user_id_from_request(request)
+        if not user_id:
             return web.json_response({'error': 'Not authenticated'}, status=401)
 
         data = await request.post()
@@ -2447,8 +2446,7 @@ async def transcribe_handler(request):
 async def api_send_message_handler(request):
     """API endpoint for sending messages from frontend (delegation, task actions)"""
     try:
-        session = await get_session(request)
-        user_id = session.get('user_id')
+        user_id = await get_user_id_from_request(request)
         logger.info(f"[API_SEND_MESSAGE] Called, session user_id: {user_id}")
 
         if not user_id:
@@ -11592,6 +11590,11 @@ async def api_agent_test_code_handler(request):
                 'env_summary': env_summary,
             })
         except _aio_t.TimeoutError:
+            try:
+                proc.kill()
+                await proc.communicate()
+            except Exception:
+                pass
             return web.json_response({'error': 'Тайм-аут (15 сек)', 'stdout': '', 'stderr': ''})
         except Exception as e:
             return web.json_response({'error': str(e), 'stdout': '', 'stderr': ''})

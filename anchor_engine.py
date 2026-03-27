@@ -149,8 +149,8 @@ _CAP_CATEGORY_NAMES: dict[str, str] = {
 # Инструменты по категории (для координатора)
 _CAP_TOOL_HINTS: dict[str, str] = {
     'email': 'check_emails, send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task',
-    'git': 'run_agent_action(search_users/search_repos/list_issues/comment_on_issue), save_email_contact',
-    'rss': 'run_agent_action(get_latest/search), get_news_trends, create_post',
+    'git': 'run_agent_action(точное action-имя GitHub-скрипта агента), save_email_contact',
+    'rss': 'run_agent_action(точное action-имя RSS-скрипта агента), get_news_trends, create_post',
     'telegram': 'publish_to_telegram, create_post',
     'discord': 'publish_to_discord',
     'crm': 'run_agent_action(CRM-операции: контакты/сделки/воронка)',
@@ -455,13 +455,13 @@ _INTEGRATION_PLANS = [
     (lambda c: any(w in c for w in ('rss', 'feed', 'лент')),
      'rss',
      "Твоя RSS-лента — источник аналитики и контентных идей. Твоя роль: анализировать тренды и передавать идеи/зацепки email-агенту для outreach. НЕ ищи контакты сам — поиск людей (GitHub, web) это работа агента с email/GitHub-интеграцией.",
-     ["A) run_agent_action(action='get_latest') → выдели 2-3 актуальных тренда → DELEGATE[email-агент]: идеи/зацепки для outreach-письма",
-      "B) run_agent_action(action='search', query=тема_цели) → найди релевантную статью → DELEGATE[email-агент]: используй этот инсайт как персонализацию в письме",
+         ["A) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → выдели 2-3 актуальных тренда → DELEGATE[email-агент]: идеи/зацепки для outreach-письма",
+            "B) run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди релевантную статью/сигнал → DELEGATE[email-агент]: используй этот инсайт как персонализацию в письме",
       "C) research_topic(query=тема) → анализ рынка/настроений → add_task с инсайтами для кампании",
-      "D) run_agent_action(action='get_latest') → тренд-анализ → create_post (краткий обзор для Telegram-канала)",
+            "D) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → тренд-анализ → create_post (краткий обзор для Telegram-канала)",
       "E) Если автор статьи явно релевантен цели И есть публичный контакт → save_email_contact (исключение, не правило — только очевидно подходящие)",
       "F) web_search (что волнует ЦА прямо сейчас по теме цели) → DELEGATE[email-агент]: ключевой инсайт для персонализации письма",
-      "G) run_agent_action(action='get_latest') → schedule_background_task (мониторинг темы через 24ч)"]),
+            "G) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → schedule_background_task (мониторинг темы через 24ч)"]),
     # Slack
     (lambda c: 'slack' in c,
      'slack',
@@ -668,7 +668,7 @@ def _match_best_integration(goal_title: str,
         'alpha':  ("📈 Alpha Vantage",
                    "run_agent_action(get_price, symbol='BRENT') → анализ → update_goal_progress"),
         'rss':    ("📰 RSS",
-                   "run_agent_action(get_latest) → save_email_contact (автора) → send_outreach_email"),
+                   "run_agent_action(точное_RSS_action_из_профиля) → инсайт/контент/делегирование"),
         'content':("📢 Telegram/Discord",
                    "create_post → publish_to_telegram / publish_to_discord"),
         'notion': ("📝 Notion",
@@ -897,7 +897,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     if has_github:
         avail.append("  🐙 GitHub: ПОЛНЫЙ НАБОР действий через run_agent_action:\n    • search_users(query='language:python followers:>5', page=1) → save_email_contact → send_outreach_email ← поиск + письмо в одном цикле\n    • search_repos(query='topic:ai stars:>10') ← анализ рынка, конкурентов, трендов\n    • list_issues / list_pulls ← мониторинг активности подключённого репо\n    • create_issue(title, body) ← предложить коллаборацию, сообщить о баге, идея\n    • comment_on_issue(issue_number, body) ← нетворкинг через участие в обсуждениях\n    • star_repo(repo) ← отметить проект, повысить видимость\n  ДУМАЙ ШИРЕ: GitHub ≠ только поиск email. Это платформа для анализа рынка, нетворкинга, партнёрств.\n  ⚠️ QUERY search_users: ТОЛЬКО квалификаторы (language: repos: followers: location:), НЕ свободный текст!\n  🔄 ПАГИНАЦИЯ: page=2,3... Меняй query каждый цикл.")
     if has_rss:
-        avail.append("  📰 RSS: run_agent_action(action='get_latest') ← свежие данные и инфоповоды из источника")
+        avail.append("  📰 RSS: run_agent_action(action='[ТОЧНОЕ action-имя RSS-скрипта]') ← свежие данные и инфоповоды из источника")
     if has_alpha:
         avail.append("  📈 Alpha Vantage: run_agent_action(action='get_price', symbol='XYZ') ← числовые рыночные данные")
     if has_content:
@@ -1198,7 +1198,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
         elif _goal_type == 'research' and _has_rss:
             _intg_block += (
-                '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_latest") '
+                '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="[ТОЧНОЕ_RSS_ACTION_ИЗ_СПИСКА_АГЕНТА]") '
                 '— получи данные из RSS-ленты агента, затем извлеки суть.\n'
             )
         else:
@@ -1479,7 +1479,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            if _has_alpha else '')
         + ("  Новости:       action='get_news' query='oil market 2026' — NewsAPI 100+ источников\n"
            if _has_news and not _has_alpha else '')
-        + ("  RSS:           action='get_latest' — свежие посты из RSS-ленты агента\n"
+        + ("  RSS:           action='[ТОЧНОЕ_RSS_ACTION_ИЗ_СПИСКА_АГЕНТА]' — свежие посты/сигналы из RSS-ленты агента\n"
+              "                 ⚠️ Используй ТОЛЬКО точные action-имена из списка агента выше; НЕ выдумывай get_latest/search/read_rss_feed.\n"
            if _has_rss else '')
         + ("  GitHub:        action='search_users' query='language:python followers:>5' — поиск разработчиков\n"
            "                 ⚠️ QUERY: используй ТОЛЬКО GitHub-квалификаторы, НЕ свободный текст!\n"
@@ -1712,7 +1713,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             # Предлагаем конкретные альтернативы с учётом типа агента и типа цели
             _ALTS_RSS_ONLY = [
                 # Для RSS-only агента: меняй action, формат вывода, делегируй
-                "run_agent_action(action='search', query=НОВЫЙ_ЗАПРОС)",
+                "run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_СПИСКА_ВЫШЕ]')",
                 'create_post', 'web_search', 'research_topic',
                 'add_task', 'schedule_background_task',
                 'get_news_trends', 'DELEGATE[email-агент]: передай идеи/инсайты email-агенту',
@@ -1972,8 +1973,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _has_rss and not _has_github:
         _rss_rules = (
             "\n📰 ТВОЯ РОЛЬ — КОНТЕНТ И АНАЛИТИКА. У тебя НЕТ GitHub API и Email API.\n"
-            "  • Доступные инструменты: run_agent_action(get_latest), web_search, research_topic,\n"
+            "  • Доступные инструменты: run_agent_action(только точные RSS action-имена из списка выше), web_search, research_topic,\n"
             "    create_post, publish_to_telegram, get_news_trends\n"
+            "  • НЕ ВЫДУМЫВАЙ generic action-имена вроде get_latest, search, read_rss_feed, если их нет в списке агента.\n"
             "\n⛔ ЧЕГО НЕЛЬЗЯ (у тебя нет этих инструментов):\n"
             "  • НЕ искать контакты/людей — нет инструментов GitHub/Email для save_email_contact\n"
             "  • НЕ предлагать outreach (рассылки, отправка писем)\n"

@@ -1647,10 +1647,6 @@ async def delegate_task(
         logger.error("[DELEGATE] title is empty or None")
         return "ERROR: Название задачи не может быть пустым"
     
-    if not delegated_to_username or delegated_to_username.strip() == "":
-        logger.error("[DELEGATE] delegated_to_username is empty or None")
-        return "ERROR: Получатель не указан"
-    
     session = Session()
     try:
         # Делегирование доступно всем (оплата токенами)
@@ -1664,20 +1660,14 @@ async def delegate_task(
         # ── Получатель — суб-агент пользователя (UserAgent) ─────────────────────
         # Выполняем СИНХРОННО inline: результат возвращается в тот же tool-calling
         # цикл → ASI видит ответ агента и принимает решение (доработка / другой агент / ответ).
-        _recip_check = delegated_to_username.replace("@", "").lower().strip()
         try:
             from models import UserAgent as _UA_chk, AgentSubscription as _AS_chk
             import json as _jj
             import re as _ren
+            from difflib import SequenceMatcher as _SM_del
             from .autonomous_agent import _exec_agent_for_director as _exec_dir
             from .autonomous_agent import _save_interaction_for_director as _save_ifd
             import json as _json_ag
-
-            # Поддержка нескольких имён: "Кристина и Марк", "Кристина, Марк" → ['кристина', 'марк']
-            _name_parts = [p.strip() for p in _ren.split(r'\s+и\s+|\s+and\s+|,\s*|;\s*', _recip_check) if p.strip() and len(p.strip()) > 1]
-            if not _name_parts:
-                _name_parts = [_recip_check]
-            logger.info(f"[DELEGATE] Looking for agents: {_name_parts} (user_db_id={delegator.id})")
 
             _subscribed_ids = [r[0] for r in session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id).all()]
             # Загружаем агентов: подписки ИЛИ собственные агенты пользователя
@@ -1692,6 +1682,100 @@ async def delegate_task(
                 .filter(*_agent_filter)
                 .all()
             )
+
+            # ── Адаптивный выбор получателя, если имя не передано явно ───────────
+            _delegated_raw = (delegated_to_username or '').strip()
+            if not _delegated_raw:
+                _request_text = ' '.join(filter(None, [title, description, delegation_details])).strip()
+                _request_l = _request_text.lower()
+
+                # 1) Прямая подсказка в тексте: DELEGATE[Имя], @имя, "для Имя"
+                _direct_names = []
+                _m_del = _ren.findall(r'DELEGATE\[([^\]]+)\]|@([A-Za-zА-Яа-я0-9_\-]+)|(?:для|to)\s+([A-Za-zА-Яа-я0-9_\-]{2,})', _request_text, flags=_ren.IGNORECASE)
+                for _m in _m_del:
+                    _nm = (_m[0] or _m[1] or _m[2] or '').strip()
+                    if _nm:
+                        _direct_names.append(_nm)
+
+                _direct_names_norm = [n.replace('@', '').lower().strip() for n in _direct_names if n.strip()]
+                _picked_agent = None
+
+                if _direct_names_norm:
+                    for _hint in _direct_names_norm:
+                        for _ag in _all_agents:
+                            _slug_ok = bool(_ag.slug and _hint in _ag.slug.lower())
+                            _name_ok = bool(_ag.name and _hint in _ag.name.lower())
+                            if _slug_ok or _name_ok:
+                                _picked_agent = _ag
+                                break
+                        if _picked_agent:
+                            break
+
+                # 2) Если прямого имени нет — выбираем по смыслу запроса и интеграциям агента
+                if not _picked_agent and _all_agents:
+                    _domain_map = {
+                        'email': ('email', 'gmail', 'imap', 'inbox', 'outreach', 'reply', 'letter', 'почт', 'письм', 'отправ'),
+                        'rss': ('rss', 'news', 'trend', 'хабр', 'новост', 'стать', 'feed'),
+                        'market': ('market', 'alpha vantage', 'finance', 'stock', 'crypto', 'рын', 'акц', 'котиров'),
+                        'social': ('telegram', 'discord', 'post', 'канал', 'пост', 'публик'),
+                        'code': ('github', 'repo', 'pull request', 'commit', 'код', 'разработ', 'issue'),
+                    }
+
+                    def _domain_signals(_txt: str) -> set:
+                        _res = set()
+                        _t = (_txt or '').lower()
+                        for _dn, _kws in _domain_map.items():
+                            if any(_kw in _t for _kw in _kws):
+                                _res.add(_dn)
+                        return _res
+
+                    _req_signals = _domain_signals(_request_l)
+                    _req_tokens = {t for t in _ren.findall(r'[A-Za-zА-Яа-я0-9_]{3,}', _request_l)}
+                    _best_score = -1.0
+                    for _ag in _all_agents:
+                        _ag_text = ' '.join([
+                            _ag.name or '',
+                            _ag.slug or '',
+                            _ag.job_title or '',
+                            _ag.specialization or '',
+                            _ag.description or '',
+                            _ag.user_api_keys or '',
+                            _ag.tools_allowed or '',
+                            _ag.python_code or '',
+                        ]).lower()
+                        _ag_signals = _domain_signals(_ag_text)
+                        _signal_overlap = len(_req_signals & _ag_signals)
+                        _ag_tokens = {t for t in _ren.findall(r'[A-Za-zА-Яа-я0-9_]{3,}', _ag_text)}
+                        _tok_overlap = len(_req_tokens & _ag_tokens)
+                        _name_sim = _SM_del(None, _request_l[:120], (_ag.name or '').lower()).ratio()
+                        _score = (_signal_overlap * 1.4) + min(2.0, _tok_overlap * 0.15) + (_name_sim * 0.6)
+                        if _score > _best_score:
+                            _best_score = _score
+                            _picked_agent = _ag
+
+                # 3) Финальный fallback: если агент один — выбираем его; иначе первого по score
+                if not _picked_agent and len(_all_agents) == 1:
+                    _picked_agent = _all_agents[0]
+
+                if _picked_agent:
+                    delegated_to_username = _picked_agent.name or _picked_agent.slug or ''
+                    logger.info(
+                        "[DELEGATE] adaptive recipient selected: %s (user=%s)",
+                        delegated_to_username,
+                        user_id,
+                    )
+
+            _recip_check = (delegated_to_username or '').replace("@", "").lower().strip()
+            if not _recip_check:
+                logger.error("[DELEGATE] delegated_to_username unresolved (user=%s)", user_id)
+                return "ERROR: Получатель не указан"
+
+            # Поддержка нескольких имён: "Кристина и Марк", "Кристина, Марк" → ['кристина', 'марк']
+            _name_parts = [p.strip() for p in _ren.split(r'\s+и\s+|\s+and\s+|,\s*|;\s*', _recip_check) if p.strip() and len(p.strip()) > 1]
+            if not _name_parts:
+                _name_parts = [_recip_check]
+            logger.info(f"[DELEGATE] Looking for agents: {_name_parts} (user_db_id={delegator.id})")
+
             _found_agents = []
             _used_ag_ids: set = set()
             for _np in _name_parts:
@@ -16338,12 +16422,18 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
     if user_id not in agent._active_agent_data:
         return " Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
 
-    # Нормализуем action по реальным возможностям скрипта агента.
-    # Это снижает шум ошибок вида "не поддерживает действие get_latest".
+    # Адаптивная нормализация action под конкретного пользователя/агента/интеграции.
+    # Без жёстких правил: комбинируем similarity + сигналы интеграций + эмпирику DecisionLog.
     try:
         import re as _re_ra
+        from difflib import SequenceMatcher as _SM_ra
+        from models import DecisionLog as _DL_ra
+
         _adata = agent._active_agent_data.get(user_id) or {}
+        _agent_name = (_adata.get('name') or '').strip()
         _py_code = (_adata.get('python_code') or '').strip()
+        _tools_allowed_raw = (_adata.get('tools_allowed') or '').strip()
+        _api_keys_raw = (_adata.get('user_api_keys') or '').strip()
         _supported = []
         if _py_code:
             for _m in _re_ra.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _py_code):
@@ -16361,19 +16451,94 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
         _action_l = _orig_action.lower()
 
         if _orig_action and _supported and _action_l not in _supported_l:
-            _alias_map = {
-                'get_latest': ['check_news_and_markets', 'read_rss', 'get_latest_news', 'get_news'],
-                'check_emails': ['check_email', 'check_inbox', 'read_inbox'],
-                'read_rss': ['check_news_and_markets', 'get_latest_news', 'get_news'],
+            _context_hint = ' '.join([
+                _orig_action,
+                str(params or ''),
+                _agent_name,
+                _tools_allowed_raw,
+                _api_keys_raw,
+                _py_code[:1200],
+            ]).lower()
+
+            def _tokens(_txt: str) -> set:
+                return {t for t in _re_ra.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (_txt or '').lower())}
+
+            _signal_map = {
+                'email': ('email', 'gmail', 'imap', 'inbox', 'outreach', 'reply', 'письм', 'почт'),
+                'rss': ('rss', 'news', 'feed', 'хабр', 'новост', 'стать'),
+                'market': ('market', 'finance', 'alpha', 'vantage', 'stock', 'crypto', 'рын', 'котиров'),
+                'social': ('telegram', 'discord', 'post', 'publish', 'канал', 'пост', 'публик'),
+                'code': ('github', 'repo', 'commit', 'issue', 'pull', 'код', 'разработ'),
             }
-            _replacement = ''
-            for _cand in _alias_map.get(_action_l, []):
-                if _cand.lower() in _supported_l:
-                    _replacement = _cand
-                    break
-            if not _replacement:
-                _replacement = _supported[0]
-            logger.info("[RUN_AGENT_ACTION] normalize action: %s -> %s (user=%s)", _orig_action, _replacement, user_id)
+
+            def _signals(_txt: str) -> set:
+                _s = set()
+                _low = (_txt or '').lower()
+                for _k, _kws in _signal_map.items():
+                    if any(_kw in _low for _kw in _kws):
+                        _s.add(_k)
+                return _s
+
+            _req_tokens = _tokens(_action_l)
+            _req_signals = _signals(_context_hint)
+            _cand_score_map = {}
+
+            for _cand in _supported:
+                _cand_l = _cand.lower().strip()
+                _cand_tokens = _tokens(_cand_l)
+                _inter = len(_req_tokens & _cand_tokens)
+                _union = max(1, len(_req_tokens | _cand_tokens))
+                _token_jacc = _inter / _union
+                _lex_sim = _SM_ra(None, _action_l, _cand_l).ratio()
+                _cand_signals = _signals(_cand_l)
+                _signal_overlap = len(_req_signals & _cand_signals)
+                _score = (_lex_sim * 0.55) + (_token_jacc * 0.30) + (_signal_overlap * 0.20)
+                _cand_score_map[_cand_l] = _score
+
+            # Эмпирический буст: что у этого пользователя и этого агента реально работало
+            _hist_session = session
+            _hist_close = False
+            try:
+                if _hist_session is None:
+                    _hist_session = Session()
+                    _hist_close = True
+                _cut = datetime.now(timezone.utc) - timedelta(days=30)
+                _q = _hist_session.query(
+                    _DL_ra.chosen_action,
+                    func.avg(_DL_ra.outcome_score).label('avg_score'),
+                    func.count(_DL_ra.id).label('n_rows'),
+                ).filter(
+                    _DL_ra.user_id == user_id,
+                    _DL_ra.decision_type == 'tool_selection',
+                    _DL_ra.outcome_score.isnot(None),
+                    _DL_ra.created_at >= _cut,
+                )
+                if _agent_name:
+                    _q = _q.filter(_DL_ra.context_summary.ilike(f"{_agent_name}:%"))
+                _hist_rows = _q.group_by(_DL_ra.chosen_action).all()
+
+                for _chosen, _avg, _n in _hist_rows:
+                    _chosen_l = (_chosen or '').strip().lower()
+                    if '·' in _chosen_l:
+                        _chosen_l = _chosen_l.split('·', 1)[-1].strip().lower()
+                    if _chosen_l in _cand_score_map:
+                        _weight = min(1.0, float(_n or 0) / 8.0)
+                        _emp_adj = (float(_avg or 0.5) - 0.5) * 0.8 * _weight
+                        _cand_score_map[_chosen_l] += _emp_adj
+            finally:
+                if _hist_close and _hist_session is not None:
+                    _hist_session.close()
+
+            _replacement_l = max(_cand_score_map, key=lambda _k: _cand_score_map.get(_k, -1.0))
+            _replacement = next((s for s in _supported if s.lower() == _replacement_l), _supported[0])
+            logger.info(
+                "[RUN_AGENT_ACTION] adaptive normalize: %s -> %s (user=%s agent=%s score=%.3f)",
+                _orig_action,
+                _replacement,
+                user_id,
+                _agent_name or '?',
+                _cand_score_map.get(_replacement_l, 0.0),
+            )
             action = _replacement
     except Exception as _norm_e:
         logger.debug("[RUN_AGENT_ACTION] action normalize skipped: %s", _norm_e)
