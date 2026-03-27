@@ -450,34 +450,86 @@ def clean_technical_details(text):
     )
     if before != text:
         pass
-    # Удаляем НАЗВАНИЯ инструментов как plain text (без скобок) — AI иногда упоминает их в тексте
+    # Заменяем НАЗВАНИЯ инструментов на человеко-понятные описания
+    # AI иногда упоминает tool names в тексте — заменяем чтобы текст оставался связным
+    _TOOL_HUMAN_NAMES = {
+        'web_search': 'поиск в интернете',
+        'quick_topic_search': 'быстрый поиск',
+        'research_topic': 'исследование темы',
+        'research_and_plan': 'исследование и планирование',
+        'find_and_message_relevant_users': 'поиск контактов',
+        'find_relevant_contacts_for_task': 'поиск контактов',
+        'find_partners': 'поиск партнёров',
+        'search_users': 'поиск людей',
+        'send_email': 'отправка письма',
+        'send_outreach_email': 'отправка письма',
+        'reply_to_outreach_email': 'ответ на письмо',
+        'send_follow_up_email': 'отправка напоминания',
+        'check_emails': 'проверка почты',
+        'negotiate_by_email': 'переписка по email',
+        'delegate_task': 'делегирование задачи',
+        'add_task': 'создание задачи',
+        'complete_task': 'завершение задачи',
+        'delete_task': 'удаление задачи',
+        'edit_task': 'редактирование задачи',
+        'list_tasks': 'список задач',
+        'get_task_details': 'детали задачи',
+        'create_goal': 'создание цели',
+        'update_goal': 'обновление цели',
+        'update_goal_progress': 'обновление прогресса',
+        'complete_goal': 'завершение цели',
+        'list_goals': 'список целей',
+        'delete_goal': 'удаление цели',
+        'get_goal_progress': 'прогресс цели',
+        'create_post': 'создание поста',
+        'publish_to_telegram': 'публикация в Telegram',
+        'publish_to_discord': 'публикация в Discord',
+        'generate_image': 'генерация изображения',
+        'generate_marketing_content': 'создание контента',
+        'run_agent_action': 'действие агента',
+        'set_reminder': 'напоминание',
+        'get_weather_info': 'прогноз погоды',
+        'get_news_trends': 'анализ новостей',
+        'analyze_situation_and_suggest_tasks': 'анализ ситуации',
+        'analyze_group_opportunities': 'анализ возможностей',
+        'start_delegation_campaign': 'запуск кампании делегирования',
+        'start_content_campaign': 'запуск контент-кампании',
+        'start_email_campaign': 'запуск email-кампании',
+        'manage_content_campaign': 'управление контент-кампанией',
+        'manage_delegation_campaign': 'управление кампанией',
+        'get_delegation_progress': 'статус делегирования',
+        'send_message_to_user': 'сообщение пользователю',
+        'save_email_contact': 'сохранение контакта',
+        'list_email_contacts': 'список контактов',
+        'update_profile': 'обновление профиля',
+        'update_user_memory': 'обновление заметок',
+    }
+    # Сначала заменяем tool names с вызовом (...) — полный формат
+    for _tname, _thuman in _TOOL_HUMAN_NAMES.items():
+        text = re.sub(r'\b' + re.escape(_tname) + r'\s*\([^)]*\)', _thuman, text, flags=re.IGNORECASE)
+    # Затем заменяем plain tool names (без скобок) на человеко-понятные
+    for _tname, _thuman in _TOOL_HUMAN_NAMES.items():
+        text = re.sub(r'\b' + re.escape(_tname) + r'\b', _thuman, text, flags=re.IGNORECASE)
+    # Оставшиеся tool names без человеко-понятного аналога — удаляем вместе с предлогом
     _ALL_TOOL_NAMES = (
-        r'research_topic|start_delegation_campaign|start_content_campaign|'
-        r'delegate_task|add_task|complete_task|delete_task|list_tasks|'
-        r'web_search|quick_topic_search|find_relevant_contacts_for_task|'
-        r'create_post|publish_to_telegram|publish_to_discord|generate_image|'
-        r'send_email|send_outreach_email|send_message_to_user|run_agent_action|'
-        r'set_reminder|create_goal|update_goal|list_goals|delete_goal|'
-        r'get_delegation_progress|negotiate_by_email|manage_content_campaign|'
-        r'manage_delegation_campaign|schedule_background_task|'
-        r'find_and_message_relevant_users|reply_to_outreach_email|'
-        r'send_follow_up_email|set_contact_alert|find_partners|'
-        r'get_news_trends|analyze_situation_and_suggest_tasks|'
-        r'update_goal_progress|complete_goal|edit_task|get_task_details|'
-        r'check_time_conflicts|cancel_delegation|get_weather_info|'
-        r'research_and_plan|analyze_group_opportunities|'
-        r'generate_marketing_content|get_message_status|reschedule_task|'
+        r'start_delegation_campaign|start_content_campaign|'
+        r'schedule_background_task|'
+        r'set_contact_alert|'
+        r'check_time_conflicts|cancel_delegation|'
+        r'get_message_status|reschedule_task|'
         r'restore_task|accept_delegated_task|reject_delegated_task|'
-        r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
-        r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
-        r'get_incoming_messages|reply_to_user_message|update_user_memory|'
-        r'start_email_campaign|add_email_leads|update_email_campaign|'
-        r'check_emails|decrypt_token|encrypt_token|install_script|skip_task|'
+        r'set_content_strategy|edit_post|get_posts|delete_post|'
+        r'list_marketplace|get_system_status|'
+        r'get_incoming_messages|reply_to_user_message|'
+        r'add_email_leads|update_email_campaign|'
+        r'decrypt_token|encrypt_token|install_script|skip_task|'
         r'run_user_script|toggle_autonomous_feature|save_user_rule|'
         r'get_email_campaign_status|pause_email_campaign|resume_email_campaign|'
-        r'get_goal_progress|set_goal_deadline|assign_task_to_agent'
+        r'set_goal_deadline|assign_task_to_agent'
     )
-    text = re.sub(r'\b(?:' + _ALL_TOOL_NAMES + r')\b', '', text, flags=re.IGNORECASE)
+    _tool_re = r'\b(?:' + _ALL_TOOL_NAMES + r')\b'
+    text = re.sub(r'(?:через|используя|использую|использовать|запущу|запускаю|инструмент|функцию?|вызову?)\s+' + _tool_re, '', text, flags=re.IGNORECASE)
+    text = re.sub(_tool_re, '', text, flags=re.IGNORECASE)
     # Удаляем оставшиеся ТЕХНИЧЕСКИЕ вызовы функций (только snake_case с минимум 2 частями)
     # НЕ трогаем обычный текст вроде "Python (язык)" или "AI (artificial intelligence)"
     before = text
@@ -554,6 +606,10 @@ def clean_technical_details(text):
     text = re.sub(r'^ВРЕМЯ НЕ УКАЗАНО\..*$', '', text, flags=re.MULTILINE)
     # Удаляем ведущие ": " или ": " артефакты (после clean срезается слово перед двоеточием)
     text = re.sub(r'^:\s+', '', text)
+    # Убираем висячие предлоги/артефакты после удаления tool names: "через ." → "."
+    text = re.sub(r'\b(через|используя|использую|инструмент|функцию?)\s+([.!?,;:\n])', r'\2', text, flags=re.IGNORECASE)
+    # Убираем двойные пробелы после замен
+    text = re.sub(r'  +', ' ', text)
     # Нормализуем отступы: \n\n\n+ → \n\n, а \n\n → \n (мессенджер-стиль, без лишних пустых строк)
     text = re.sub(r'[ \t]+\n', '\n', text)   # trailing whitespace на строках
     text = re.sub(r'\n[ \t]+\n', '\n', text) # строки из одних пробелов/tab → пустые
