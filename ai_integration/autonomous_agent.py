@@ -6178,9 +6178,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Выбери следующий логичный шаг из доступных интеграций. "
                     "Не повторяй то же действие — выбери новый подход или заверши цепочку."
                 )})
-        # Adaptive tokens: tool-calling iterations only need short JSON output (400),
-        # text-only final summary iterations need full response space (1200)
-        _iter_max_tokens = 400 if _use_tools_now else 1200
+        # Adaptive tokens: tool-calling iterations need room for both JSON tool-calls
+        # AND occasional text responses (summary/report). 800 covers both.
+        # Text-only final summary iterations need full response space (1200).
+        _iter_max_tokens = 800 if _use_tools_now else 1200
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
@@ -6204,6 +6205,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _msg = _resp['choices'][0]['message']
         _content = _msg.get('content') or ''
         _tool_calls = _msg.get('tool_calls') or []
+        _finish_reason = _resp['choices'][0].get('finish_reason', '')
 
         if not _tool_calls:
             # Агент ответил текстом — парсим паттерн DELEGATE[Имя]: задача
@@ -6687,7 +6689,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # ── Обрезка длинных ответов (без доп. LLM-вызова — экономит ~5с) ──
     # Если текст слишком короткий после tool-вызовов (для автопилота) — доп. вызов для итога
     # Включаем _done_fb: агент вызвал инструменты но не написал отчёт — форсируем summary
-    if _is_autopilot_task and _tools_used and (len(_final_text) < 100 or _final_text == _done_fb):
+    # Также ловим обрезанные ответы: finish_reason=='length' или текст обрывается на полуслове
+    _looks_truncated = (
+        _final_text
+        and len(_final_text) > 80
+        and not _final_text.rstrip()[-1:] in '.!?»"\')'
+    )
+    if _is_autopilot_task and _tools_used and (
+        len(_final_text) < 100
+        or _final_text == _done_fb
+        or _looks_truncated
+    ):
         try:
             # Собираем результаты инструментов для контекста
             _tool_data_ctx = []
@@ -6698,24 +6710,37 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _tool_data_ctx.append(_td)
             _tool_data_str = '\n'.join(_tool_data_ctx[-2:]) if _tool_data_ctx else ''
             _messages.append({"role": "assistant", "content": _final_text})
-            _messages.append({"role": "user", "content": (
-                "Ты написал слишком коротко. Пользователь получит это сообщение в чате — "
-                "ему нужно понять что произошло. Вот данные из инструментов:\n"
-                f"{_tool_data_str}\n\n"
-                "Перескажи эти данные СВОИМИ СЛОВАМИ для пользователя: что нашлось, "
-                "какие конкретные факты, имена, цифры, и что ты думаешь делать дальше. "
-                "СТИЛЬ: как сообщение коллеге в чате — живо, с эмоциями, со своим характером. "
-                "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк."
-            )})
+            if _looks_truncated and len(_final_text) > 80:
+                # Text was cut off mid-sentence — ask to rewrite completely
+                _messages.append({"role": "user", "content": (
+                    "Твой ответ оборвался на полуслове! Пользователь увидит обрезанный текст. "
+                    "Вот данные из инструментов:\n"
+                    f"{_tool_data_str}\n\n"
+                    "Перепиши ВЕСЬ отчёт заново, ПОЛНОСТЬЮ — от начала до конца. "
+                    "Включи все факты, имена, цифры из инструментов. "
+                    "СТИЛЬ: как сообщение коллеге в чате — живо, со своим характером. "
+                    "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк."
+                )})
+            else:
+                _messages.append({"role": "user", "content": (
+                    "Ты написал слишком коротко. Пользователь получит это сообщение в чате — "
+                    "ему нужно понять что произошло. Вот данные из инструментов:\n"
+                    f"{_tool_data_str}\n\n"
+                    "Перескажи эти данные СВОИМИ СЛОВАМИ для пользователя: что нашлось, "
+                    "какие конкретные факты, имена, цифры, и что ты думаешь делать дальше. "
+                    "СТИЛЬ: как сообщение коллеге в чате — живо, с эмоциями, со своим характером. "
+                    "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк."
+                )})
             _summary_resp = await asyncio.wait_for(
                 _agent_inst.call_ai(_messages, use_tools=False, max_tokens=800, api_timeout=30),
                 timeout=35,
             )
             if _summary_resp and _summary_resp.get('choices'):
                 _summary_text = (_summary_resp['choices'][0]['message'].get('content') or '').strip()
-                if _summary_text and (not _final_text or len(_final_text) < 80):
+                if _summary_text and (_looks_truncated or not _final_text or len(_final_text) < 80):
                     _final_text = _summary_text
-                    logger.info("[DIRECTOR-EXEC] autopilot summary filled (was empty): %d chars", len(_final_text))
+                    logger.info("[DIRECTOR-EXEC] autopilot summary filled (%s): %d chars",
+                                'truncated' if _looks_truncated else 'was_empty', len(_final_text))
         except Exception as _sum_err:
             logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
 
