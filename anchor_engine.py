@@ -4421,7 +4421,7 @@ class AnchorEngine:
                                 _AAL_coord_ctx.activity_type.in_(['agent_task', 'coordinator_summary']),
                                 _AAL_coord_ctx.created_at >= _cc_cutoff,
                                 _AAL_coord_ctx.result.isnot(None),
-                            ).order_by(_AAL_coord_ctx.created_at.desc()).limit(5).all()
+                            ).order_by(_AAL_coord_ctx.created_at.desc()).limit(10).all()
                             if _last_aals_c:
                                 # Строим структурированный контекст из последних 3 циклов разных агентов
                                 _cycle_parts_c = []
@@ -4435,6 +4435,18 @@ class AnchorEngine:
                                     if len(_cycle_parts_c) >= 3:
                                         break
                                 _last_cycle_ctx_c = '\n'.join(_cycle_parts_c)[:700].strip()
+                                # ── История конкретного агента: чтобы координатор видел паттерн ──
+                                _chosen_hist_parts = []
+                                for _aal_ci2 in _last_aals_c:
+                                    _aal_ag2 = (_aal_ci2.title or '').replace(' — обзор целей', '').strip()[:25]
+                                    _aal_res2 = (_aal_ci2.result or '').strip()
+                                    if _aal_res2 and _chosen_name.lower() in _aal_ag2.lower():
+                                        _chosen_hist_parts.append(_aal_res2[:150])
+                                if len(_chosen_hist_parts) >= 2:
+                                    _last_cycle_ctx_c += (
+                                        f"\n\nПоследние действия {_chosen_name} (видишь паттерн?):\n"
+                                        + '\n'.join(f'  — {p}' for p in _chosen_hist_parts[:3])
+                                    )
                                 # Детектор зацикливания: считаем упоминания каналов в последних циклах
                                 _all_recent_text_c = ' '.join((a.result or '') for a in _last_aals_c).lower()
                                 _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
@@ -4473,7 +4485,11 @@ class AnchorEngine:
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
-                            + f"\nПодумай: давал ли ты уже похожее поручение {_chosen_name}? Если прошлые попытки не дали результата — придумай принципиально другой подход, другой канал, другую аудиторию.\n"
+                            + f"\nПрежде чем дать поручение — подумай:"
+                            f"\n  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в последний раз (см. «Последний результат»)?"
+                            f"\n  2) Чем это ОТЛИЧАЕТСЯ от того, что было ДО ЭТОГО? Если ничем — это петля."
+                            f"\n  3) Если петля — дай КОНКРЕТНО ДРУГОЕ задание: другой ИНСТРУМЕНТ, другой ЗАПРОС, другая АУДИТОРИЯ, другой КАНАЛ."
+                            f"\n  4) НЕ говори «смени тактику» абстрактно — скажи ЧТО конкретно сделать иначе.\n"
                             + f"\nНапиши 2-3 предложения. Обратись по имени. ТРЕБОВАНИЯ:\n"
                             "1. КОНКРЕТНОЕ действие — не 'займись целями', а 'проверь ответы в почте' или 'найди 3 контакта на hh.ru'\n"
                             "2. СТРАТЕГИЯ — объясни ПОЧЕМУ именно этот подход: 'в прошлый раз Telegram не дал результатов, давай попробуем email-рассылку'\n"
@@ -9390,9 +9406,14 @@ class AnchorEngine:
                     f"\n  Написал текст? → publish_to_telegram / send_outreach_email"
                     f"\n  Нет интеграции? → DELEGATE[коллега]: передай ему КОНКРЕТНЫЕ данные для действия"
                     f"\n\n🧩 КРИТИЧЕСКОЕ МЫШЛЕНИЕ:"
+                    f"\n  [НОВИЗНА] Перед тем как отчитаться — спроси себя: «Есть ли в моём результате хоть что-то,"
+                    f" чего НЕ БЫЛО в моей истории выше?» Если нет — это не результат. Не пиши «нашла контакт X»"
+                    f" если X уже есть в твоей истории. Не пиши «проверила входящие — нет писем» если ты это уже сообщала."
+                    f" Вместо этого: попробуй ДРУГОЙ инструмент, ДРУГОЙ запрос, ДРУГУЮ нишу."
                     f"\n  [ЧЕСТНОСТЬ] Прочитай свои интеграции. Составь: «Для задачи нужно X. У меня есть Y. Делаю X∩Y.»"
                     f"\n  [КОЛЛАБОРАЦИЯ] Если нужна интеграция коллеги → DELEGATE[Имя]: конкретные данные для него."
-                    f"\n  [МАКСИМУМ] Даже без интеграции ты можешь: create_post + publish_to_telegram, save_email_contact, research_topic → контент."
+                    f"\n  [НЕ ПЛАНИРУЙ — ДЕЛАЙ] Не пиши «думаю, стоит...», «собираюсь...», «планирую...»."
+                    f" Вместо этого — вызови инструмент и покажи результат."
                     f"\n\n⚠️ ВАЖНО: Не пиши 'отправлю позже' без tool-вызова. Нет инструмента — нет обещания."
                     f"\n  Ответ без единого tool-вызова (кроме web_search) = ПРОВАЛ."
                     f"\n  ⛔ НЕ ИЗОБРЕТАЙ ДАННЫЕ: пиши только то что реально вернул tool в этой сессии."
