@@ -9358,10 +9358,11 @@ class AnchorEngine:
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
                     + f"\nАктивные цели:\n{_agent_goals_block}"
-                    + (f"\n\nИзвестные контакты (есть в системе, вызови list_email_contacts для полных данных):\n{_agent_contacts_block}" if _agent_contacts_block else '')
+                    + (f"\n\n📋 Люди, которых ты уже нашла и добавила в систему (это твоя прошлая работа, не новые находки):\n{_agent_contacts_block}\n"
+                       "   Подумай: если find_relevant_contacts_for_task вернул кого-то из этого списка — они уже обработаны. Ищи НОВЫХ людей с другими ключевыми словами, другой нишей или через другой канал." if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + _agent_failure_memory
-                    + (f"\n\nТвоя история — изучи и подумай, не повторяешься ли ты. Если делал то же самое и не получил нового результата — смени подход, попробуй другой инструмент, запрос или аудиторию:\n{_agent_memory_block}" if _agent_memory_block else '')
+                    + (f"\n\nТвоя история — прочитай и честно ответь себе: что из этого дало РЕАЛЬНО НОВЫЙ результат? Если какое-то действие повторялось и ничего нового не принесло — это петля. Выйди из неё: другой запрос, другая аудитория, другой инструмент:\n{_agent_memory_block}" if _agent_memory_block else '')
                     + _agent_seen_block
                     + (f"\n\nЭТИ инструменты ЛОМАЛИСЬ (не повторяй): {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
                     + (f"\n\nУже сделано командой (используй эти данные в своей работе):\n{_prev_steps_context}" if _prev_steps_context else '')
