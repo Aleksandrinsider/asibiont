@@ -4464,34 +4464,6 @@ class AnchorEngine:
                         except Exception as _cc_err:
                             logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
 
-                        # ── История координатора: что ASI уже говорил ЭТОМУ агенту ──
-                        _coord_own_history = ''
-                        try:
-                            _recent_coord_msgs = session.query(Interaction.content).filter(
-                                Interaction.user_id == user.id,
-                                Interaction.message_type.in_(['agent_msg', 'proactive']),
-                                Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
-                            ).order_by(Interaction.created_at.desc()).limit(15).all()
-                            _coord_said: list = []  # тексты поручений координатора этому агенту
-                            for (_rc_c,) in _recent_coord_msgs:
-                                try:
-                                    _rc_j = json.loads(_rc_c or '{}')
-                                    _rc_ag = _rc_j.get('__agent', {}).get('name', '')
-                                    _rc_txt = (_rc_j.get('text', '') or '')[:150]
-                                    # ASI messages that mention this agent's name
-                                    if _rc_ag == 'ASI' and _chosen_name.lower() in _rc_txt.lower():
-                                        _coord_said.append(_rc_txt[:120])
-                                except Exception:
-                                    pass
-                            if _coord_said:
-                                _coord_own_history = (
-                                    f"\n⚠️ ТЫ УЖЕ ДАВАЛ ТАКИЕ ПОРУЧЕНИЯ {_chosen_name} (не повторяй ту же стратегию!):\n"
-                                    + '\n'.join(f'  — {s}' for s in _coord_said[:3]) + '\n'
-                                    "→ Если они не дали результата — предложи ПРИНЦИПИАЛЬНО ДРУГОЙ подход.\n"
-                                )
-                        except Exception:
-                            pass
-
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
@@ -4501,7 +4473,7 @@ class AnchorEngine:
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
-                            + _coord_own_history
+                            + f"\nПодумай: давал ли ты уже похожее поручение {_chosen_name}? Если прошлые попытки не дали результата — придумай принципиально другой подход, другой канал, другую аудиторию.\n"
                             + f"\nНапиши 2-3 предложения. Обратись по имени. ТРЕБОВАНИЯ:\n"
                             "1. КОНКРЕТНОЕ действие — не 'займись целями', а 'проверь ответы в почте' или 'найди 3 контакта на hh.ru'\n"
                             "2. СТРАТЕГИЯ — объясни ПОЧЕМУ именно этот подход: 'в прошлый раз Telegram не дал результатов, давай попробуем email-рассылку'\n"
@@ -4573,7 +4545,7 @@ class AnchorEngine:
                                             _new_words = set((_coord_text or '').lower().split())
                                             if _rc_words and _new_words:
                                                 _overlap = len(_rc_words & _new_words) / max(len(_rc_words | _new_words), 1)
-                                                if _overlap > 0.50:
+                                                if _overlap > 0.65:
                                                     _skip_coord = True
                                                     logger.info("[ANCHOR-AUTOPILOT] coord-assign DEDUP: %.0f%% overlap with recent, skip sending", _overlap * 100)
                                                     break
@@ -4887,7 +4859,6 @@ class AnchorEngine:
                             Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
                         ).order_by(Interaction.created_at.desc()).limit(8).all()
                         _new_words = set(_result_clean.lower().split())
-                        _new_prefix = _result_clean[:80].lower().strip()
                         for (_rp_content,) in _recent_proactives:
                             try:
                                 _rp_text = json.loads(_rp_content).get('text', '')
@@ -4896,23 +4867,9 @@ class AnchorEngine:
                             if not _rp_text:
                                 continue
                             _old_words = set(_rp_text.lower().split())
-                            # Dedup Level 1: начало сообщения совпадает → явный повтор паттерна
-                            _old_prefix = _rp_text[:80].lower().strip()
-                            if _new_prefix and _old_prefix and len(_new_prefix) > 20:
-                                _pref_words_new = set(_new_prefix.split())
-                                _pref_words_old = set(_old_prefix.split())
-                                _pref_common = len(_pref_words_new & _pref_words_old)
-                                _pref_total = max(len(_pref_words_new | _pref_words_old), 1)
-                                if _pref_common / _pref_total > 0.7:
-                                    _is_noise_result = True
-                                    _filter_reason = 'dedup_prefix'
-                                    logger.info("[ANCHOR-AUTOPILOT] prefix dedup: %.0f%% prefix overlap from %s: '%.60s'",
-                                                _pref_common / _pref_total * 100, agent_name, _new_prefix)
-                                    break
-                            # Dedup Level 2: >45% совпадение слов целого сообщения
                             _common = len(_new_words & _old_words)
                             _total = max(len(_new_words | _old_words), 1)
-                            if _common / _total > 0.45:
+                            if _common / _total > 0.55:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup'
                                 logger.info("[ANCHOR-AUTOPILOT] dedup: %.0f%% overlap with recent msg from %s",
@@ -4923,7 +4880,7 @@ class AnchorEngine:
 
                 # ── Dedup для tool-based результатов: RSS/новости не должны повторяться ──
                 # Даже если агент использовал инструменты, один и тот же материал отсылается многократно.
-                # Проверяем по порогу 50% за последние 4 часа + prefix dedup.
+                # Проверяем по порогу 65% за последние 4 часа.
                 if not _is_noise_result and _result_clean and _has_real_actions:
                     try:
                         _recent_tool_msgs = session.query(Interaction.content).filter(
@@ -4932,7 +4889,6 @@ class AnchorEngine:
                             Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
                         ).order_by(Interaction.created_at.desc()).limit(8).all()
                         _new_words_t = set(_result_clean.lower().split())
-                        _new_prefix_t = _result_clean[:80].lower().strip()
                         for (_rt_content,) in _recent_tool_msgs:
                             try:
                                 _rt_j = json.loads(_rt_content or '{}')
@@ -4941,23 +4897,10 @@ class AnchorEngine:
                                 _rt_text = ''
                             if not _rt_text or len(_rt_text) < 30:
                                 continue
-                            # Prefix dedup for tool messages too
-                            _old_prefix_t = _rt_text[:80].lower().strip()
-                            if _new_prefix_t and _old_prefix_t and len(_new_prefix_t) > 20:
-                                _pref_w_new_t = set(_new_prefix_t.split())
-                                _pref_w_old_t = set(_old_prefix_t.split())
-                                _pref_c_t = len(_pref_w_new_t & _pref_w_old_t)
-                                _pref_t_t = max(len(_pref_w_new_t | _pref_w_old_t), 1)
-                                if _pref_c_t / _pref_t_t > 0.7:
-                                    _is_noise_result = True
-                                    _filter_reason = 'dedup_tools_prefix'
-                                    logger.info("[ANCHOR-AUTOPILOT] tools prefix dedup: %.0f%% from %s",
-                                                _pref_c_t / _pref_t_t * 100, agent_name)
-                                    break
                             _old_words_t = set(_rt_text.lower().split())
                             _common_t = len(_new_words_t & _old_words_t)
                             _total_t = max(len(_new_words_t | _old_words_t), 1)
-                            if _common_t / _total_t > 0.50:
+                            if _common_t / _total_t > 0.65:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup_tools'
                                 logger.info("[ANCHOR-AUTOPILOT] tools dedup: %.0f%% overlap with recent tool msg from %s",
@@ -9117,44 +9060,7 @@ class AnchorEngine:
                 _this_agent_hist = _per_agent_history.get(_ag_name, [])
                 _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:5])
 
-                # ── Детектор повторяющихся паттернов — предупреждаем агента ──
                 _repetition_warning = ''
-                try:
-                    if len(_this_agent_hist) >= 3:
-                        # Считаем повторяющиеся "начала" сообщений (первые 40 символов)
-                        _hist_prefixes: dict = {}  # prefix -> count
-                        _hist_contacts_mentioned: dict = {}  # contact -> count
-                        import re as _re_rep
-                        for _hh in _this_agent_hist[:10]:
-                            # Убираем дату/время и инструмент из начала
-                            _hh_clean = _re_rep.sub(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s*(\[.*?\])?\s*', '', _hh).strip()
-                            _hh_pref = _hh_clean[:40].lower()
-                            if _hh_pref and len(_hh_pref) > 15:
-                                _hist_prefixes[_hh_pref] = _hist_prefixes.get(_hh_pref, 0) + 1
-                            # Находим @упоминания контактов
-                            _mentions = _re_rep.findall(r'@\w+', _hh)
-                            for _m in _mentions:
-                                _hist_contacts_mentioned[_m.lower()] = _hist_contacts_mentioned.get(_m.lower(), 0) + 1
-                        # Если одно и то же начало >2 раз — это петля
-                        _rep_patterns = [(p, c) for p, c in _hist_prefixes.items() if c >= 2]
-                        _rep_contacts = [(ct, c) for ct, c in _hist_contacts_mentioned.items() if c >= 3]
-                        if _rep_patterns or _rep_contacts:
-                            _rep_lines = []
-                            if _rep_patterns:
-                                _rep_lines.append(
-                                    "  Повторяющееся действие: «" + _rep_patterns[0][0][:50] + f"» ({_rep_patterns[0][1]}x)")
-                            if _rep_contacts:
-                                _rc_str = ', '.join(f'{ct} ({c}x)' for ct, c in _rep_contacts[:3])
-                                _rep_lines.append(f"  Одни и те же контакты: {_rc_str}")
-                            _repetition_warning = (
-                                "\n🔴 ОБНАРУЖЕНЫ ПОВТОРЕНИЯ В ТВОЕЙ ИСТОРИИ:\n"
-                                + '\n'.join(_rep_lines) + "\n"
-                                "  → ДУМАЙ: раз предыдущие попытки не дали нового результата — "
-                                "СМЕНИ СТРАТЕГИЮ. Попробуй другой инструмент, другой запрос, другую аудиторию.\n"
-                                "  → НЕ делай то же самое с теми же параметрами.\n"
-                            )
-                except Exception:
-                    pass
 
                 # Память: что агент уже сообщал (email, контакты, действия) — НЕ повторяй!
                 _agent_seen_block = ''
@@ -9455,8 +9361,7 @@ class AnchorEngine:
                     + (f"\n\nИзвестные контакты (есть в системе, вызови list_email_contacts для полных данных):\n{_agent_contacts_block}" if _agent_contacts_block else '')
                     + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + _agent_failure_memory
-                    + (f"\n\nТвоя история (не повторяй):\n{_agent_memory_block}" if _agent_memory_block else '')
-                    + _repetition_warning
+                    + (f"\n\nТвоя история — изучи и подумай, не повторяешься ли ты. Если делал то же самое и не получил нового результата — смени подход, попробуй другой инструмент, запрос или аудиторию:\n{_agent_memory_block}" if _agent_memory_block else '')
                     + _agent_seen_block
                     + (f"\n\nЭТИ инструменты ЛОМАЛИСЬ (не повторяй): {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
                     + (f"\n\nУже сделано командой (используй эти данные в своей работе):\n{_prev_steps_context}" if _prev_steps_context else '')
