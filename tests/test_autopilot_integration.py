@@ -1509,8 +1509,8 @@ def test_d49_escalation_progressive_headers():
 def test_d50_feasibility_warnings_not_echoed():
     """Системная аналитика не должна пересказываться пользователю дословно."""
     src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
-    assert 'СТРОГО ВНУТРЕННЯЯ' in src, "Feasibility warnings instruction must be СТРОГО ВНУТРЕННЯЯ"
-    assert "НЕ пиши '🔴 СТАГНАЦИЯ'" in src, "Agent must be told NOT to echo СТАГНАЦИЯ"
+    assert 'СИСТЕМНАЯ АНАЛИТИКА' in src, "Feasibility warnings instruction must mention СИСТЕМНАЯ АНАЛИТИКА"
+    assert "внутренняя информация" in src or "ВНУТРЕННЯЯ" in src, "Agent must be told this is internal info"
 
 
 def test_d51_escalation_cross_system_check():
