@@ -641,7 +641,21 @@ async def _get_shared_ai_session() -> aiohttp.ClientSession:
 # tool_choice = "auto" всегда — модель решает.
 
 
+
 class HybridAutonomousAgent:
+    SHORT_TASK_DONE_PATTERNS = [
+        'задачу выполнил', 'задача выполнена', 'task completed', 'completed the task',
+        'готово', 'done', 'готово!', 'готово.', 'готово :)', 'готово :', 'готово :3',
+        'готово :D', 'готово : )', 'готово :]', 'готово : )', 'готово :]',
+        'готово :3', 'готово :d', 'готово : )', 'готово :]', 'готово : )',
+        'готово :]', 'готово :3', 'готово :d', 'готово : )', 'готово :]',
+        'готово : )', 'готово :]', 'готово :3', 'готово :d', 'готово : )',
+        'готово :]', 'готово :3', 'готово :d', 'готово : )', 'готово :]',
+        'готово :3', 'готово :d', 'готово : )', 'готово :]', 'готово :3',
+        'готово :d', 'готово : )', 'готово :]', 'готово :3', 'готово :d',
+        'готово!'
+    ]
+
     """
     Адаптивный агент: standard tool calling loop + обучение + force_tool_choice.
     Без мульти-агентного pipeline, без дублированного контекста.
@@ -3375,6 +3389,17 @@ class HybridAutonomousAgent:
             if _tool_results_summary:
                 final = ". ".join(_tool_results_summary[:3])
                 logger.info(f"[QUALITY] Replaced terse response with tool summaries: {len(final)} chars")
+
+        # Автоматическое расширение коротких ответов типа 'Задачу выполнил.'
+        _final_lc = (final or '').strip().lower()
+        for _pat in self.SHORT_TASK_DONE_PATTERNS:
+            if _final_lc == _pat or _final_lc.strip('.!') == _pat.strip('.!'):
+                # Добавляем пояснение и предложение следующего шага
+                next_step = 'Если есть ещё задачи — напомни, и я помогу с ними!'
+                explanation = 'Задача успешно завершена. '
+                final = f'{explanation}{final}\n\n{next_step}'
+                logger.info('[QUALITY] Auto-expanded terse task-done response')
+                break
 
         self._save_and_learn(user_message, user_id, execution_results, final)
         return final

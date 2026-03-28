@@ -554,8 +554,26 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None, d
             web_context=web_context
         )
         
+
         if response_data and 'response' in response_data:
             logger.info(f"[CHAT_WITH_AI] Response length: {len(response_data['response'])} chars")
+
+        # === integration_hint_hook: динамически подсказывает о недостающих интеграциях ===
+        try:
+            from .autonomous_agent import _build_missing_integration_hint
+            user_message = message if isinstance(message, str) else (message.get('text') if isinstance(message, dict) else str(message))
+            # response_data может содержать 'text' или 'response' — используем оба варианта
+            final_text = response_data.get('text') or response_data.get('response', '')
+            integration_hint = _build_missing_integration_hint(user_id, user_message, final_text)
+            if integration_hint and integration_hint not in (final_text or ''):
+                # Добавляем подсказку к тексту ответа, если её ещё нет
+                if 'text' in response_data:
+                    response_data['text'] = (final_text + '\n\n' + integration_hint).strip()
+                elif 'response' in response_data:
+                    response_data['response'] = (final_text + '\n\n' + integration_hint).strip()
+        except Exception as _intg_exc:
+            import logging
+            logging.getLogger(__name__).debug(f"[integration_hint_hook] failed: {_intg_exc}")
 
         return response_data
 
