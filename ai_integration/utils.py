@@ -874,10 +874,17 @@ def preload_common_data():
     logger.info("[CACHE] Starting preload of common data")
     # Популярные города для предварительной загрузки погоды
     common_cities = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
+    from ai_integration.api_client import get_api_client
+    import asyncio
+    client = get_api_client()
     for city in common_cities:
         try:
             logger.info(f"[CACHE] Preloading weather for {city}")
-            get_weather_info(city)
+            asyncio.run(client.get_weather(city))
+        except RuntimeError:
+            # Уже внутри event loop (например, в тестах) — пропускаем preload
+            logger.debug("[CACHE] Skipping weather preload — event loop already running")
+            break
         except Exception as e:
             logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
     # NewsAPI preload removed — dev quota too small (100/day),

@@ -9081,8 +9081,20 @@ async def send_message_to_user(
         
         if sent_today >= 3:
             return f" Лимит: максимум 3 сообщения в день одному пользователю. Уже отправлено: {sent_today}"
-        
-        # Генерируем сообщение через AI
+
+        # Дедупликация по intent: тот же intent тому же получателю за последние 6 часов
+        # Предотвращает дубли от агентов, запущенных несколько раз за цикл
+        six_hours_ago = datetime.utcnow() - timedelta(hours=6)
+        same_intent_recent = session.query(UserMessage).filter(
+            UserMessage.sender_id == sender.id,
+            UserMessage.recipient_id == recipient.id,
+            UserMessage.intent == intent,
+            UserMessage.created_at >= six_hours_ago
+        ).first()
+        if same_intent_recent:
+            sent_str = same_intent_recent.created_at.strftime('%H:%M') if same_intent_recent.created_at else '?'
+            return (f"⏸ Агент уже отправлял сообщение @{recipient_clean} с целью «{intent_labels.get(intent, intent)}» "
+                    f"в {sent_str} (меньше 6 часов назад). Повторная отправка заблокирована.")
         import asyncio
         
         sender_info = f"{sender_name}"
@@ -9096,13 +9108,6 @@ async def send_message_to_user(
         
         recipient_name = recipient.first_name or recipient.username or "Пользователь"
         
-        intent_labels = {
-            'meeting': 'согласование встречи',
-            'collaboration': 'предложение сотрудничества',
-            'idea': 'обмен идеей / предложение',
-            'project_invite': 'приглашение в проект',
-            'question': 'вопрос'
-        }
         intent_label = intent_labels.get(intent, intent)
         
         # Генерируем через DeepSeek

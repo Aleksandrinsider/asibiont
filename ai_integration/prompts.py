@@ -63,17 +63,11 @@ def get_extended_system_prompt(user_now, current_time_str, current_date_str, use
     if lang == 'en':
         tier_info = f"""\n## TOKEN SYSTEM
 All features are available. User pays tokens for each action.{token_balance_info}
-
-Costs (1 token = 1₽):
-• Message: {msg_cost}₽ • Task: {task_cost_min}-{task_cost_max}₽ • Delegation: {delegate_cost}₽ • Research: {research_cost}₽
-If balance is low — warn and suggest /buy."""
+Costs (1 token = 1 rub): message {msg_cost}, task {task_cost_min}-{task_cost_max}, delegation {delegate_cost}, research {research_cost}. If balance is low — warn and suggest /buy."""
     else:
         tier_info = f"""\n## СИСТЕМА ТОКЕНОВ
 Все функции открыты. Пользователь платит токенами за каждое действие.{token_balance_info}
-
-Стоимость (1 токен = 1₽):
-• Сообщение: {msg_cost}₽ • Задача: {task_cost_min}-{task_cost_max}₽ • Делегирование: {delegate_cost}₽ • Исследование: {research_cost}₽
-Если баланс низкий — предупреди и предложи /buy."""
+Стоимость (1 токен = 1₽): сообщение {msg_cost}, задача {task_cost_min}-{task_cost_max}, делегирование {delegate_cost}, исследование {research_cost}. Если баланс низкий — предупреди и предложи /buy."""
 
     # Context data
     weather = f"\n{'Weather' if lang == 'en' else 'Погода'}: {weather_info}" if weather_info else ""
@@ -147,7 +141,7 @@ If balance is low — warn and suggest /buy."""
             recommendations = generate_unified_recommendations('personalized', user_id=user_id_param)
             if recommendations:
                 header = "SEARCH HISTORY:" if lang == 'en' else "ИСТОРИЯ ПОИСКОВ:"
-                search_context = "\n" + header + "\n" + "\n".join(f"• {rec}" for rec in recommendations[:3])
+                search_context = "\n" + header + "\n" + "\n".join(rec for rec in recommendations[:3])
         except Exception as e:
             logger.warning(f"[PROMPTS] Failed to get search context: {e}")
 
@@ -351,6 +345,18 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
         _dyn_parts.append(str(proactive_context).strip())
     if task_section:
         _dyn_parts.append(task_section.strip())
+
+    # Напоминание о формате — в конец dynamic_context (не кешируется → всегда видно AI)
+    if lang == 'en':
+        _dyn_parts.append(
+            "FORMAT REMINDER: Plain text only. No lists, bullets (-, *, •), bold, headers, code blocks. "
+            "Paragraphs separated by single newline. Max 2 emojis."
+        )
+    else:
+        _dyn_parts.append(
+            "НАПОМИНАНИЕ О ФОРМАТЕ: только сплошной текст. ЗАПРЕЩЕНЫ списки, буллеты (-, *, •), "
+            "жирный (** / __), заголовки (## / #), блоки кода. Абзацы через одиночный \\n. Максимум 2 эмодзи."
+        )
 
     dynamic_context = '\n'.join(_dyn_parts)
 

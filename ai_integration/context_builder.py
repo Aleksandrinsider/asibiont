@@ -514,6 +514,30 @@ class ContextBuilder:
                         s_name = f"@{s.username}" if s and s.username else "Пользователь"
                         reply_lines.append(f"  {s_name}: {r.message_text[:80]}...")
                     hints.append(f"НОВЫЕ ОТВЕТЫ ({len(new_replies)}): пользователи ответили на сообщения\n" + "\n".join(reply_lines))
+
+                # ── ИСХОДЯЩИЕ: кому агент уже писал за последние 24 часа ──
+                from datetime import datetime as _dt_ob, timedelta as _td_ob
+                _ob_since = _dt_ob.utcnow() - _td_ob(hours=24)
+                outgoing_msgs = session.query(UM).filter(
+                    UM.sender_id == user.id,
+                    UM.created_at >= _ob_since,
+                ).order_by(UM.created_at.desc()).limit(10).all()
+                if outgoing_msgs:
+                    _ob_rcpt_ids = list({m.recipient_id for m in outgoing_msgs})
+                    _ob_rcpts = session.query(User).filter(User.id.in_(_ob_rcpt_ids)).all()
+                    _ob_rcpt_by_id = {u.id: u for u in _ob_rcpts}
+                    intent_map_out = {'meeting': 'встреча', 'collaboration': 'сотрудничество',
+                                      'idea': 'идея', 'project_invite': 'проект', 'question': 'вопрос'}
+                    ob_lines = []
+                    for m in outgoing_msgs:
+                        r = _ob_rcpt_by_id.get(m.recipient_id)
+                        r_name = f"@{r.username}" if r and r.username else "?"
+                        ts = m.created_at.strftime('%H:%M') if m.created_at else ''
+                        intent_str = intent_map_out.get(m.intent, m.intent or '')
+                        ob_lines.append(f"  {r_name} ({intent_str}) в {ts}")
+                    hints.append(
+                        "УЖЕ НАПИСАНО (агент отправил за последние 24ч) — НЕ дублируй:\n" + "\n".join(ob_lines)
+                    )
             except Exception as e:
                 logger.warning(f"[INBOX_CTX] Error: {e}")
 

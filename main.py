@@ -12588,7 +12588,8 @@ app.router.add_get('/api/autopilot-status', api_autopilot_status_handler)
 app.router.add_get('/health', health_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
 app.router.add_get('/', login_handler)
-app.router.add_get('/admin/index.html', lambda r: web.HTTPFound('/dashboard'))  # Redirect old admin URL
+async def _redirect_admin_index(r): return web.HTTPFound('/dashboard')
+app.router.add_get('/admin/index.html', _redirect_admin_index)  # Redirect old admin URL
 app.router.add_get('/tg_auth', auth_handler)
 app.router.add_get('/telegram_auth', auth_handler)  # Keep old route for compatibility
 app.router.add_post('/api/register', email_register_handler)
@@ -12938,12 +12939,17 @@ app.router.add_get('/subscription-tiers', subscription_tiers_handler)  # Alias w
 app.router.add_get('/create_payment', create_payment_handler)
 app.router.add_get('/direct_login', direct_login_handler)
 # SEO: verification files
-app.router.add_get('/yandex_48ffa2026650f03f.html', lambda r: web.FileResponse('static/yandex_48ffa2026650f03f.html'))
-app.router.add_get('/yandex_05efc1780770a3e1.html', lambda r: web.FileResponse('static/yandex_05efc1780770a3e1.html'))
-app.router.add_get('/BingSiteAuth.xml', lambda r: web.FileResponse('static/BingSiteAuth.xml'))
+async def _static_yandex1(r): return web.FileResponse('static/yandex_48ffa2026650f03f.html')
+async def _static_yandex2(r): return web.FileResponse('static/yandex_05efc1780770a3e1.html')
+async def _static_bing(r): return web.FileResponse('static/BingSiteAuth.xml')
+async def _static_robots(r): return web.FileResponse('static/robots.txt', headers={'Content-Type': 'text/plain; charset=utf-8'})
+async def _static_sitemap(r): return web.FileResponse('static/sitemap.xml', headers={'Content-Type': 'application/xml; charset=utf-8'})
+app.router.add_get('/yandex_48ffa2026650f03f.html', _static_yandex1)
+app.router.add_get('/yandex_05efc1780770a3e1.html', _static_yandex2)
+app.router.add_get('/BingSiteAuth.xml', _static_bing)
 # SEO: robots.txt и sitemap.xml в корне (поисковые ищут именно тут)
-app.router.add_get('/robots.txt', lambda r: web.FileResponse('static/robots.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
-app.router.add_get('/sitemap.xml', lambda r: web.FileResponse('static/sitemap.xml', headers={'Content-Type': 'application/xml; charset=utf-8'}))
+app.router.add_get('/robots.txt', _static_robots)
+app.router.add_get('/sitemap.xml', _static_sitemap)
 # PWA: Service Worker из корня с разрешённым scope /
 async def sw_handler(request):
     return web.FileResponse('static/sw.js', headers={
@@ -12953,11 +12959,16 @@ async def sw_handler(request):
     })
 app.router.add_get('/sw.js', sw_handler)
 # SEO: IndexNow key file
-app.router.add_get('/d6193b04262141bba808b1279123715b.txt', lambda r: web.FileResponse('static/d6193b04262141bba808b1279123715b.txt'))
+async def _static_indexnow(r): return web.FileResponse('static/d6193b04262141bba808b1279123715b.txt')
 # AI SEO: llms.txt for AI crawlers (ChatGPT, Perplexity, Yandex GPT)
-app.router.add_get('/llms.txt', lambda r: web.FileResponse('static/llms.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
-app.router.add_get('/llms-full.txt', lambda r: web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
-app.router.add_get('/llms-en.txt', lambda r: web.FileResponse('static/llms-en.txt', headers={'Content-Type': 'text/plain; charset=utf-8'}))
+async def _static_llms(r): return web.FileResponse('static/llms.txt', headers={'Content-Type': 'text/plain; charset=utf-8'})
+async def _static_llms_full(r): return web.FileResponse('static/llms-full.txt', headers={'Content-Type': 'text/plain; charset=utf-8'})
+async def _static_llms_en(r): return web.FileResponse('static/llms-en.txt', headers={'Content-Type': 'text/plain; charset=utf-8'})
+app.router.add_get('/d6193b04262141bba808b1279123715b.txt', _static_indexnow)
+# AI SEO: llms.txt for AI crawlers (ChatGPT, Perplexity, Yandex GPT)
+app.router.add_get('/llms.txt', _static_llms)
+app.router.add_get('/llms-full.txt', _static_llms_full)
+app.router.add_get('/llms-en.txt', _static_llms_en)
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
 app.router.add_get('/arena', arena_public_handler)

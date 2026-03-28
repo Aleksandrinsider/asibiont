@@ -470,7 +470,7 @@ AUTOPILOT_DEEP_NIGHT_START = 0  # Ночная блокировка отключ
 AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
-MIN_PROACTIVE_GAP_MINUTES = 10
+MIN_PROACTIVE_GAP_MINUTES = 30
 MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
@@ -10268,7 +10268,9 @@ class AnchorEngine:
                     try:
                         _oid = int(a.source.split(':')[1])
                         _eo = session.query(EmailOutreach).get(_oid)
-                        if _eo and not _eo.ai_reply_text:
+                        # Allow new anchor only if BOTH ai_reply_text and ai_reply_sent_at are empty
+                        # (checking both prevents re-sending when text saved but timestamp failed or vice versa)
+                        if _eo and not _eo.ai_reply_text and not _eo.ai_reply_sent_at:
                             continue  # reply not sent — allow new anchor
                     except (ValueError, IndexError):
                         pass
@@ -15086,10 +15088,10 @@ class AnchorEngine:
                     session.commit()
                     return
 
-                # Проверяем что ответ ещё не отправлен (ai_reply_text пустой)
+                # Проверяем что ответ ещё не отправлен (ai_reply_text или ai_reply_sent_at пустые)
                 _eo_check = session.query(EmailOutreach).filter_by(id=outreach_id).first()
-                if _eo_check and _eo_check.ai_reply_text:
-                    logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: ai_reply_text already set, skip")
+                if _eo_check and (_eo_check.ai_reply_text or _eo_check.ai_reply_sent_at):
+                    logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: already replied (ai_reply_text/sent_at set), skip")
                     anchor.delivered_at = datetime.now(timezone.utc)
                     session.commit()
                     return
