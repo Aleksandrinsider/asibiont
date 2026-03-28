@@ -6176,12 +6176,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _messages.append({"role": "user", "content": (
                     f"Уже использовал: {_used_str}. "
                     "Выбери следующий логичный шаг из доступных интеграций. "
-                    "Не повторяй то же действие — выбери новый подход или заверши цепочку."
+                    "Не повторяй то же действие — выбери новый подход или заверши цепочку. "
+                    "Подумай: что НОВОГО я могу сделать с результатами? Другая аудитория? Другой канал?"
                 )})
         # Adaptive tokens: tool-calling iterations need room for both JSON tool-calls
-        # AND occasional text responses (summary/report). 800 covers both.
-        # Text-only final summary iterations need full response space (1200).
-        _iter_max_tokens = 800 if _use_tools_now else 1200
+        # AND occasional text responses (summary/report). 1200 prevents mid-sentence truncation.
+        # Text-only final summary iterations need full response space (1600).
+        _iter_max_tokens = 1200 if _use_tools_now else 1600
         try:
             _resp = await asyncio.wait_for(
                 _agent_inst.call_ai(
@@ -6719,7 +6720,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Перепиши ВЕСЬ отчёт заново, ПОЛНОСТЬЮ — от начала до конца. "
                     "Включи все факты, имена, цифры из инструментов. "
                     "СТИЛЬ: как сообщение коллеге в чате — живо, со своим характером. "
-                    "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк."
+                    "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк. "
+                    "ЗАПРЕЩЕНО: «думаю, стоит», «давай», «планирую», «собираюсь»."
                 )})
             else:
                 _messages.append({"role": "user", "content": (
@@ -6729,10 +6731,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Перескажи эти данные СВОИМИ СЛОВАМИ для пользователя: что нашлось, "
                     "какие конкретные факты, имена, цифры, и что ты думаешь делать дальше. "
                     "СТИЛЬ: как сообщение коллеге в чате — живо, с эмоциями, со своим характером. "
-                    "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк."
+                    "ЗАПРЕЩЕНО: списки (• – 1.), нумерация, заголовки, двойные переносы строк. "
+                    "ЗАПРЕЩЕНО: «думаю, стоит», «давай», «планирую», «собираюсь»."
                 )})
             _summary_resp = await asyncio.wait_for(
-                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=800, api_timeout=30),
+                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=1200, api_timeout=30),
                 timeout=35,
             )
             if _summary_resp and _summary_resp.get('choices'):
