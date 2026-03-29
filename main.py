@@ -13409,19 +13409,27 @@ if __name__ == "__main__":
                 except Exception as e:
                     logger.error(f"Server interrupted: {e}")
                 finally:
-                    # Cancel background tasks
+                    # Cancel background tasks and await them so in-flight
+                    # aiohttp connections can close before we dispose shared sessions
+                    _bg_tasks = []
                     if auto_post_task and not auto_post_task.done():
                         logger.info("Cancelling auto-post service...")
                         auto_post_task.cancel()
+                        _bg_tasks.append(auto_post_task)
                     if auto_marketing_task and not auto_marketing_task.done():
                         logger.info("Cancelling auto-marketing service...")
                         auto_marketing_task.cancel()
+                        _bg_tasks.append(auto_marketing_task)
                     if contact_alerts_task and not contact_alerts_task.done():
                         logger.info("Cancelling contact alerts service...")
                         contact_alerts_task.cancel()
+                        _bg_tasks.append(contact_alerts_task)
                     if anchor_engine_task and not anchor_engine_task.done():
                         logger.info("Cancelling AnchorEngine...")
                         anchor_engine_task.cancel()
+                        _bg_tasks.append(anchor_engine_task)
+                    if _bg_tasks:
+                        await asyncio.gather(*_bg_tasks, return_exceptions=True)
                     await runner.cleanup()
                     logger.info("Server shut down")
 
