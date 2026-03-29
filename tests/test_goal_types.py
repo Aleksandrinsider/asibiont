@@ -147,6 +147,7 @@ from anchor_engine import (
     _build_autopilot_prompt,
     _build_reasoning_scaffold,
     _match_best_integration,
+    _normalize_coordinator_assignment_by_capabilities,
 )
 # _compute_state_directives — статический метод AnchorEngine
 from anchor_engine import AnchorEngine
@@ -779,3 +780,31 @@ def test_g33_autopilot_prompt_marks_external_telegram_chats_impossible():
     assert "ЧУЖИЕ Telegram-группы/чаты/сообщества" in prompt, prompt[:1600]
     assert "publish_to_telegram — недоступен" in prompt, prompt[:1600]
     assert "Telegram публикация (нет бота агента / канала пользователя)" in prompt, prompt[:1600]
+
+
+def test_g34_coordinator_guard_rewrites_external_telegram_chat_task():
+    """Координатор не должен оставлять задачу на общение в чужих Telegram-чатах."""
+    tool, task, note = _normalize_coordinator_assignment_by_capabilities(
+        tool="run_agent_action",
+        task="Найди 5-7 Telegram бизнес-чатов и пообщайся там от лица проекта",
+        categories={"email", "git"},
+        has_user_tg_channel=False,
+        has_user_discord_webhook=False,
+    )
+    assert tool == "web_search", (tool, task, note)
+    assert "Внешние Telegram-чаты/группы недоступны" in task, task
+    assert "недоступны" in note.lower(), note
+
+
+def test_g35_coordinator_guard_publish_without_channel_falls_back_to_create_post():
+    """Если publish_to_telegram недоступен — переводим задачу в create_post + сообщение пользователю."""
+    tool, task, note = _normalize_coordinator_assignment_by_capabilities(
+        tool="publish_to_telegram",
+        task="Опубликуй пост о проекте в Telegram",
+        categories={"email"},
+        has_user_tg_channel=False,
+        has_user_discord_webhook=False,
+    )
+    assert tool == "create_post", (tool, task, note)
+    assert "Канал Telegram не подключён" in task, task
+    assert "недоступен" in note.lower(), note

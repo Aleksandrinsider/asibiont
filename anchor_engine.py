@@ -342,6 +342,61 @@ def _rank_goal_capabilities(goal_text: str,
     return ranked
 
 
+def _normalize_coordinator_assignment_by_capabilities(
+    tool: str,
+    task: str,
+    categories: set[str] | None,
+    has_user_tg_channel: bool = False,
+    has_user_discord_webhook: bool = False,
+) -> tuple[str, str, str]:
+    """Нормализует назначение координатора под реальные возможности агента.
+
+    Возвращает (tool, task, note). note пустой если изменений нет.
+    """
+    cats = set(categories or set())
+    tool_norm = (tool or '').strip().lower()
+    task_norm = (task or '').strip()
+    task_l = task_norm.lower()
+
+    # publish_* без канала пользователя/агента → переводим в подготовку контента
+    if tool_norm == 'publish_to_telegram' and ('telegram' not in cats and not has_user_tg_channel):
+        return (
+            'create_post',
+            (task_norm + ' Канал Telegram не подключён: подготовь контент и передай пользователю через send_message_to_user.').strip(),
+            'publish_to_telegram недоступен без Telegram-канала/бота',
+        )
+    if tool_norm == 'publish_to_discord' and ('discord' not in cats and not has_user_discord_webhook):
+        return (
+            'create_post',
+            (task_norm + ' Discord webhook не подключён: подготовь контент и передай пользователю через send_message_to_user.').strip(),
+            'publish_to_discord недоступен без Discord webhook',
+        )
+
+    # Внешние Telegram-чаты/группы недоступны без userbot (его нет в платформе)
+    _tg_platform_words = ('telegram', 'тг', 'телеграм')
+    _tg_external_words = (
+        'чат', 'чаты', 'групп', 'сообществ', 'community',
+        'вступ', 'join', 'пообщ', 'общени', 'написать в', 'писать в',
+    )
+    _asks_external_tg = (
+        any(w in task_l for w in _tg_platform_words)
+        and any(w in task_l for w in _tg_external_words)
+    )
+    if _asks_external_tg:
+        return (
+            'web_search',
+            (
+                'Внешние Telegram-чаты/группы недоступны в платформе. '
+                'Сделай web_search по нишевым сообществам и публичным контактам, '
+                'собери релевантные точки входа и сформируй план outreach через доступные каналы '
+                '(email, контент в канале пользователя, DELEGATE агенту с нужной интеграцией).'
+            ),
+            'внешние Telegram-чаты недоступны, задача переведена в выполнимый формат',
+        )
+
+    return tool_norm, task_norm, ''
+
+
 def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
     """Генерирует текстовый блок возможностей агента для любого промпта.
 
@@ -7413,6 +7468,7 @@ class AnchorEngine:
             # ── Строгие правила матчинга возможностей агентов (чтобы LLM не назначал бесполезные задачи) ──
             # Используем _classify_agent_caps + _parse_agent_integrations — универсально для любых интеграций.
             _cap_rules_lines = []
+            _agent_caps_categories: dict[str, set[str]] = {}
             for _p_cr in _profiles:
                 _ag_cr_obj = next((a for a in real_agents if a.name == _p_cr['name']), None)
                 if _ag_cr_obj:
@@ -7433,6 +7489,7 @@ class AnchorEngine:
                 # _detected_cr уже обогащён user-level каналами через _enrich_caps_with_user_channels
                 _caps_cr = _classify_agent_caps(_detected_cr)
                 _cats_cr = _caps_cr['categories'].copy()
+                _agent_caps_categories[_p_cr['name']] = set(_cats_cr)
 
                 if not _cats_cr:
                     # Нет интеграций — базовые инструменты платформы
@@ -8516,7 +8573,7 @@ class AnchorEngine:
                 "• GitHub search query: меняй параметры каждый цикл.\n"
                 + (f"• GitHub запросы уже использованные (контекст): {'; '.join(_used_github_queries[:4])}\n"
                    if _used_github_queries else '')
-                + "• Агент БЕЗ интеграций: web_search, research_topic, create_post, publish_to_telegram, save_email_contact, DELEGATE[].\n"
+                     + "• Агент БЕЗ интеграций: web_search, research_topic, create_post, save_email_contact, send_message_to_user, DELEGATE[].\n"
                 "• Хабр/VC.ru — только поиск через web_search.\n"
                 "• Если нужная интеграция отсутствует — предложи: 'Для этого полезно подключить [интеграция] в Настройках → API-ключи.'\n\n"
 
@@ -8633,6 +8690,20 @@ class AnchorEngine:
                         else:
                             _safe_action = _allowed_actions[0]
                             _p_norm['task'] = (_task_norm + f" Используй run_agent_action(action='{_safe_action}').").strip()
+
+                _cats_norm = _agent_caps_categories.get(_ag_norm, set())
+                _tool_after, _task_after, _note_after = _normalize_coordinator_assignment_by_capabilities(
+                    tool=_p_norm.get('tool') or _tool_norm,
+                    task=_p_norm.get('task') or _task_norm,
+                    categories=_cats_norm,
+                    has_user_tg_channel=bool(getattr(user, 'telegram_channel', None)),
+                    has_user_discord_webhook=bool(getattr(user, 'discord_webhook', None)),
+                )
+                if _note_after:
+                    logger.info("[COORD] capability-guard: %s/%s -> %s (%s)",
+                                _ag_norm, _tool_norm or (_p_norm.get('tool') or ''), _tool_after, _note_after)
+                    _p_norm['tool'] = _tool_after
+                    _p_norm['task'] = _task_after
 
                 _plan_normalized.append(_p_norm)
 
