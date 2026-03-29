@@ -11795,11 +11795,23 @@ async def send_outreach_email(
                 pass
 
             if not _expected_lang:
-                # Определяем по домену/имени
+                # Определяем по домену/имени/контексту (согласованно с _detect_recipient_lang)
                 _ru_domains = ('.ru', '.by', '.ua', '.kz', '.рф')
-                _ru_providers = ('yandex.com', 'mail.ru', 'bk.ru', 'rambler.ru', 'inbox.ru', 'list.ru')
+                _ru_providers = ('yandex.com', 'yandex.ru', 'ya.ru', 'mail.ru', 'bk.ru',
+                                 'rambler.ru', 'inbox.ru', 'list.ru', 'tut.by')
                 _domain_oe = _rcpt.split('@')[-1].lower() if '@' in _rcpt else ''
-                if any(_domain_oe.endswith(d) for d in _ru_domains) or _domain_oe in _ru_providers:
+                def _has_cyr_oe(s):
+                    return any('\u0400' <= c <= '\u04ff' for c in (s or ''))
+                _cyr_in_name_oe = _has_cyr_oe(f"{recipient_name or ''} {recipient_company or ''}")
+                _ctx_lower_oe = (recipient_context or '').lower()
+                _ru_ctx_oe = any(p in _ctx_lower_oe for p in [
+                    'habr', 'vc.ru', 'хабр', 'pikabu', 'mail.ru',
+                    'rambler', 'yandex.ru', 'vk.com', 't.me', 'ok.ru',
+                ])
+                if (any(_domain_oe.endswith(d) for d in _ru_domains)
+                        or _domain_oe in _ru_providers
+                        or _cyr_in_name_oe
+                        or _ru_ctx_oe):
                     _expected_lang = 'ru'
                 else:
                     _expected_lang = 'en'

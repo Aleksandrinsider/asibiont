@@ -490,6 +490,7 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
+MAX_AGENT_PERSONA_MSG_PER_DAY = 1  # Не больше 1 сообщения/день от одного агента-персоны
 MAX_FEED_PER_DAY = 3
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -2849,6 +2850,45 @@ class AnchorEngine:
         self.running = False
         logger.info("[ANCHOR] Stopped")
 
+    def _user_day_start_utc(self, user) -> datetime:
+        """Начало текущего дня пользователя в UTC."""
+        try:
+            _tz = pytz.timezone(user.timezone or 'Europe/Moscow')
+        except Exception:
+            _tz = pytz.timezone('Europe/Moscow')
+        _local_now = datetime.now(_tz)
+        return _local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+
+    def _agent_persona_daily_cap_reached(self, session, user, agent_name: str, limit: int = MAX_AGENT_PERSONA_MSG_PER_DAY) -> bool:
+        """Проверяет, достигнут ли дневной лимит сообщений от конкретного агента-персоны."""
+        _name = (agent_name or '').strip()
+        if not _name or _name.upper() == 'ASI' or limit <= 0:
+            return False
+
+        _today_start = self._user_day_start_utc(user)
+        _recent_msgs = session.query(Interaction.content).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type.in_(['proactive', 'agent_msg']),
+            Interaction.created_at >= _today_start,
+        ).all()
+
+        _count = 0
+        _name_l = _name.lower()
+        for (_content,) in _recent_msgs:
+            try:
+                _p = json.loads(_content) if isinstance(_content, str) else _content
+                if not isinstance(_p, dict):
+                    continue
+                _ag = _p.get('__agent') if isinstance(_p.get('__agent'), dict) else None
+                _ag_name = ((_ag or {}).get('name') or '').strip().lower()
+                if _ag_name == _name_l:
+                    _count += 1
+                    if _count >= limit:
+                        return True
+            except Exception:
+                continue
+        return False
+
     async def _scan_all_users(self):
         """Двухфазный пайплайн: bulk pre-filter → parallel scan+eval
         
@@ -3379,6 +3419,22 @@ class AnchorEngine:
                 if not src_goal or src_goal.status in ('completed', 'paused', 'cancelled', 'deleted'):
                     a.delivered_at = datetime.now(timezone.utc)
                     stale_ids.append(a.id)
+                elif a.anchor_type == 'goal_progress':
+                    # Дополнительная проверка для goal_progress:
+                    # если прогресс достиг 100% — якорь устарел
+                    if src_goal.progress_percentage >= 100:
+                        a.delivered_at = datetime.now(timezone.utc)
+                        stale_ids.append(a.id)
+                    else:
+                        # Если сохранённый прогресс в якоре отличается >= 10 пунктов — данные устарели
+                        try:
+                            _anc_d = json.loads(a.data) if a.data else {}
+                            _stored_prog = _anc_d.get('progress', 0)
+                            if abs(src_goal.progress_percentage - _stored_prog) >= 10:
+                                a.delivered_at = datetime.now(timezone.utc)
+                                stale_ids.append(a.id)
+                        except Exception:
+                            pass
         if stale_ids:
             session.commit()
             ready = [a for a in ready if a.id not in stale_ids]
@@ -4783,19 +4839,28 @@ class AnchorEngine:
                                 try:
                                     _ack_sv = Session()
                                     try:
-                                        _ack_sv.add(Interaction(
-                                            user_id=user.id,
-                                            message_type='agent_msg',
-                                            content=json.dumps({
-                                                '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
-                                                'text': _ack_text,
-                                                '__anchor_type': 'goal_autopilot_ack',
-                                            }, ensure_ascii=False),
-                                        ))
-                                        _ack_sv.commit()
+                                        _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
+                                        if not _skip_ack_cap:
+                                            _ack_sv.add(Interaction(
+                                                user_id=user.id,
+                                                message_type='agent_msg',
+                                                content=json.dumps({
+                                                    '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
+                                                    'text': _ack_text,
+                                                    '__anchor_type': 'goal_autopilot_ack',
+                                                }, ensure_ascii=False),
+                                            ))
+                                            _ack_sv.commit()
+                                        else:
+                                            logger.info(
+                                                "[ANCHOR-AUTOPILOT] user %d: skip ack from %s (daily cap=%d)",
+                                                user.id,
+                                                _chosen_name,
+                                                MAX_AGENT_PERSONA_MSG_PER_DAY,
+                                            )
                                     finally:
                                         _ack_sv.close()
-                                    # Ack сохранён в БД для веб-чата — в Telegram НЕ шлём (уменьшаем шум)
+                                    # Ack сохраняем только если не превышен лимит — в Telegram НЕ шлём
                                 except Exception as _ack_sv_err:
                                     logger.debug("[ANCHOR-AUTOPILOT] ack save/send: %s", _ack_sv_err)
                     except Exception as _ack_err:
@@ -4819,23 +4884,34 @@ class AnchorEngine:
                     if _goals_summary and self.bot:
                         _goal_lines = ', '.join(g.get('title', '')[:50] for g in _goals_summary[:3])
                         _fallback_msg = f"Работаю над целями: {_goal_lines}. Анализирую возможные шаги."
-                        try:
-                            await self.bot.send_message(chat_id=user.telegram_id, text=_fallback_msg)
-                            session.add(Interaction(
-                                user_id=user.id,
-                                message_type='proactive',
-                                content=json.dumps({
-                                    '__agent': {'name': agent_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
-                                    'text': _fallback_msg,
-                                    '__anchor_type': 'goal_autopilot_review',
-                                }, ensure_ascii=False),
-                            ))
-                            session.commit()
-                        except Exception:
+                        _skip_fallback_cap = (
+                            _chosen_id != 0 and self._agent_persona_daily_cap_reached(session, user, agent_name)
+                        )
+                        if _skip_fallback_cap:
+                            logger.info(
+                                "[ANCHOR-AUTOPILOT] user %d: skip fallback from %s (daily cap=%d)",
+                                user.id,
+                                agent_name,
+                                MAX_AGENT_PERSONA_MSG_PER_DAY,
+                            )
+                        else:
                             try:
-                                session.rollback()
+                                await self.bot.send_message(chat_id=user.telegram_id, text=_fallback_msg)
+                                session.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='proactive',
+                                    content=json.dumps({
+                                        '__agent': {'name': agent_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
+                                        'text': _fallback_msg,
+                                        '__anchor_type': 'goal_autopilot_review',
+                                    }, ensure_ascii=False),
+                                ))
+                                session.commit()
                             except Exception:
-                                pass
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
                     _raw = ('', [])
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
@@ -5272,40 +5348,52 @@ class AnchorEngine:
                             await asyncio.sleep(1)
                         except Exception as _e:
                             logger.debug("suppressed: %s", _e)
-                        await _safe_send(
-                            self.bot, user.telegram_id,
-                            _cleaned_result,
+                        _skip_persona_send = (
+                            _chosen_id != 0
+                            and self._agent_persona_daily_cap_reached(session, user, _chosen_name)
                         )
-                        # Оборачиваем в __agent JSON для корректного отображения в веб-чате
-                        # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
-                        # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
-                        _result_anchor_type = (
-                            'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
-                        )
-                        _agent_content = json.dumps({
-                            '__agent': {
-                                'name': _chosen_name,
-                                'id': _chosen_id,
-                                'avatar_url': _chosen_avatar,
-                            },
-                            'text': _strip_html(_cleaned_result),
-                            '__tools_used': _tools_used,
-                            '__anchor_type': _result_anchor_type,
-                        }, ensure_ascii=False)
-                        # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
-                        # ASI сохраняем как proactive — координаторская инициатива
-                        _msg_type_result = 'agent_msg' if _chosen_id != 0 else 'proactive'
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type=_msg_type_result,
-                            content=_agent_content,
-                        ))
-                        session.commit()
-                        try:
-                            from ai_integration.conversation_history import save_message_to_history as _smh_r
-                            _smh_r(user.telegram_id, 'assistant', result.strip(), session=session)
-                        except Exception as _e:
-                            logger.debug("suppressed: %s", _e)
+                        if _skip_persona_send:
+                            logger.info(
+                                "[ANCHOR-AUTOPILOT] user %d: skip result from %s (daily cap=%d)",
+                                user.id,
+                                _chosen_name,
+                                MAX_AGENT_PERSONA_MSG_PER_DAY,
+                            )
+                        else:
+                            await _safe_send(
+                                self.bot, user.telegram_id,
+                                _cleaned_result,
+                            )
+                            # Оборачиваем в __agent JSON для корректного отображения в веб-чате
+                            # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
+                            # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
+                            _result_anchor_type = (
+                                'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
+                            )
+                            _agent_content = json.dumps({
+                                '__agent': {
+                                    'name': _chosen_name,
+                                    'id': _chosen_id,
+                                    'avatar_url': _chosen_avatar,
+                                },
+                                'text': _strip_html(_cleaned_result),
+                                '__tools_used': _tools_used,
+                                '__anchor_type': _result_anchor_type,
+                            }, ensure_ascii=False)
+                            # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
+                            # ASI сохраняем как proactive — координаторская инициатива
+                            _msg_type_result = 'agent_msg' if _chosen_id != 0 else 'proactive'
+                            session.add(Interaction(
+                                user_id=user.id,
+                                message_type=_msg_type_result,
+                                content=_agent_content,
+                            ))
+                            session.commit()
+                            try:
+                                from ai_integration.conversation_history import save_message_to_history as _smh_r
+                                _smh_r(user.telegram_id, 'assistant', result.strip(), session=session)
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
@@ -9695,17 +9783,26 @@ class AnchorEngine:
                             pass
 
                 try:
-                    _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
-                    session.add(Interaction(
-                        user_id=user.id,
-                        message_type=_msg_type_c2,
-                        content=json.dumps({
-                            '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
-                            'text': _strip_html(_cleaned),
-                            '__tools_used': _step_tools,
-                            '__anchor_type': 'coordinator_result',
-                        }, ensure_ascii=False),
-                    ))
+                    _skip_step_cap = (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name))
+                    if not _skip_step_cap:
+                        _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type=_msg_type_c2,
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
+                                'text': _strip_html(_cleaned),
+                                '__tools_used': _step_tools,
+                                '__anchor_type': 'coordinator_result',
+                            }, ensure_ascii=False),
+                        ))
+                    else:
+                        logger.info(
+                            "[COORD] user %d: skip coordinator_result from %s (daily cap=%d)",
+                            user.id,
+                            _ag_name,
+                            MAX_AGENT_PERSONA_MSG_PER_DAY,
+                        )
                     # Также логируем agent_task в AAL — для контекста ASI (context_builder читает AAL)
                     from ai_integration.utils import normalize_task_title as _ntt_aal
                     _aal_task_title, _ = _ntt_aal(_step.get('task') or 'задача', agent_name=_ag_name)
@@ -9728,7 +9825,7 @@ class AnchorEngine:
                         pass
 
                 # Отправляем результат шага агента в Telegram — пользователь видит прогресс
-                if self.bot and _cleaned and len(_cleaned.strip()) > 20:
+                if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
                     try:
                         _tg_text = f"{_ag_name}:\n{_cleaned}"
                         await _safe_send(self.bot, user.telegram_id, _tg_text)
@@ -9802,19 +9899,28 @@ class AnchorEngine:
                             ])
                             _hf_sess = Session()
                             try:
-                                _hf_sess.add(Interaction(
-                                    user_id=user.id,
-                                    message_type='agent_msg',
-                                    content=json.dumps({
-                                        '__agent': {'name': _email_sender_name, 'id': 0, 'avatar_url': ''},
-                                        'text': _hf_tmpl,
-                                        '__anchor_type': 'goal_autopilot_handoff',
-                                    }, ensure_ascii=False),
-                                ))
-                                _hf_sess.commit()
+                                _skip_handoff_cap = self._agent_persona_daily_cap_reached(_hf_sess, user, _email_sender_name)
+                                if not _skip_handoff_cap:
+                                    _hf_sess.add(Interaction(
+                                        user_id=user.id,
+                                        message_type='agent_msg',
+                                        content=json.dumps({
+                                            '__agent': {'name': _email_sender_name, 'id': 0, 'avatar_url': ''},
+                                            'text': _hf_tmpl,
+                                            '__anchor_type': 'goal_autopilot_handoff',
+                                        }, ensure_ascii=False),
+                                    ))
+                                    _hf_sess.commit()
+                                else:
+                                    logger.info(
+                                        "[COORD] user %d: skip handoff from %s (daily cap=%d)",
+                                        user.id,
+                                        _email_sender_name,
+                                        MAX_AGENT_PERSONA_MSG_PER_DAY,
+                                    )
                             finally:
                                 _hf_sess.close()
-                            if self.bot:
+                            if self.bot and not _skip_handoff_cap:
                                 await self.bot.send_message(chat_id=user.telegram_id, text=_hf_tmpl)
                         except Exception as _hf_err:
                             logger.debug("[COORD] handoff msg failed: %s", _hf_err)
@@ -14946,6 +15052,15 @@ class AnchorEngine:
 
                 logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(live_drafts)} for campaign #{campaign_id}")
 
+                # ── 0-sent loop guard: если ни одно письмо не ушло — снузим якорь на 2ч ──
+                # Вместо delivered_at=now ставим suppress_until, чтобы dedup-фильтр
+                # не создал новый якорь с тем же source раньше времени (избегаем tight retry loop).
+                if sent_count == 0:
+                    anchor.suppress_until = datetime.now(timezone.utc) + timedelta(hours=2)
+                    session.commit()
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: 0 sent — snoozed 2h (suppress_until)")
+                    return
+
                 # Списываем токены: по одному за каждое реально отправленное письмо
                 if not FREE_ACCESS_MODE and sent_count > 0:
                     from token_service import spend_tokens as _sp_bulk
@@ -16351,6 +16466,28 @@ class AnchorEngine:
 
             # Определяем anchor_type для метаданных — первый непустой тип из якорей
             _deliver_anchor_type = anchor_types[0] if anchor_types else ''
+
+            # Жёсткий антиспам по агентам-персонам: не более N сообщений/день от каждого.
+            if _agent_name and self._agent_persona_daily_cap_reached(session, user, _agent_name):
+                log = AnchorDeliveryLog(
+                    user_id=user.id,
+                    anchor_ids=json.dumps(anchor_ids),
+                    message_text=(
+                        f'[AGENT_DAILY_CAP] skipped delivery from {_agent_name}: '
+                        f'limit {MAX_AGENT_PERSONA_MSG_PER_DAY}/day reached'
+                    ),
+                    anchor_types=json.dumps(anchor_types),
+                )
+                session.add(log)
+                session.commit()
+                logger.info(
+                    "[ANCHOR] User %d: skipped %s anchor(s) from %s due to daily cap=%d",
+                    user.telegram_id,
+                    len(anchors),
+                    _agent_name,
+                    MAX_AGENT_PERSONA_MSG_PER_DAY,
+                )
+                return
 
             # Оборачиваем контент в __agent JSON, если есть агент
             interaction_content = message
