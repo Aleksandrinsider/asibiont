@@ -11843,6 +11843,8 @@ async def send_outreach_email(
                 from_header = f"{campaign.sender_name} <{_from_addr}>"
                 # reply_to указывает на реальный адрес пользователя (может быть gmail)
                 _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
+                # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
+                _body_with_footer = body + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
                 resp = await http.post(
                     'https://api.resend.com/emails',
                     headers={
@@ -11854,8 +11856,8 @@ async def send_outreach_email(
                         'to': [recipient_email],
                         'reply_to': [_reply_to_addr] if _reply_to_addr else None,
                         'subject': subject,
-                        'text': body,
-                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
+                        'text': _body_with_footer,
+                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
                     },
                     timeout=_aiohttp.ClientTimeout(total=15),
                 )
@@ -12391,6 +12393,7 @@ async def reply_to_outreach_email(
 
         outreach.ai_reply_text = reply_body
         outreach.ai_reply_sent_at = dt.now(tz.utc)
+        outreach.ai_reply_count = (outreach.ai_reply_count or 0) + 1
         outreach.success = True  # конверсия: двусторонний диалог состоялся
 
         # Продвигаем EmailContact в статус 'interested' — двусторонний контакт состоялся.
