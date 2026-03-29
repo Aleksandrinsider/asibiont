@@ -1946,6 +1946,13 @@
             
             // Normalize sender: 'agent', 'ai', 'agent_msg', 'proactive', 'reminder' -> 'ai' for consistent styling
             const normalizedSender = ['agent', 'ai', 'agent_msg', 'proactive', 'reminder'].includes(sender) ? 'ai' : sender;
+
+            // Prefer ID-based deduplication: if message with this interactionId is already rendered,
+            // skip safely (avoids hiding different messages with similar text).
+            if (interactionId != null) {
+                const _existingById = messages.querySelector(`.message[data-interaction-id="${String(interactionId)}"]`);
+                if (_existingById) return;
+            }
             
             let date;
             if (timestamp) {
@@ -1962,16 +1969,20 @@
             // Рендерим Markdown для AI-сообщений, для user — только escape + linkify
             if (normalizedSender === 'ai' && typeof marked !== 'undefined') {
                 try {
+                    if (typeof text !== 'string') text = String(text);
                     // Очистка email-артефактов из IMAP перед markdown-рендером
                     text = text.replace(/@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
                     text = text.replace(/mailto:[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)/g, '');
-                    // Схлопываем 2+ пустых строк в одну (убираем большие зазоры)
-                    text = text.replace(/\n{2,}/g, '\n');
+                    // Схлопываем только чрезмерные разрывы, но сохраняем абзацы
+                    text = text.replace(/\n{3,}/g, '\n\n');
                     // Убираем строки из одних пробелов/tab (они тоже дают пустые <p>)
-                    text = text.replace(/\n[ \t]+\n/g, '\n');
+                    text = text.replace(/\n[ \t]+\n/g, '\n\n');
                     marked.setOptions({ breaks: true, gfm: true });
                     // Отключаем raw HTML из AI-ответа (безопасность)
                     const renderer = new marked.Renderer();
+                    renderer.html = function(rawHtml) {
+                        return escapeHtml(rawHtml);
+                    };
                     const html = marked.parse(text, { renderer });
                     processedText = html;
                 } catch(e) {
@@ -1985,23 +1996,21 @@
                 // Только сохраняем переносы строк как <br>
                 processedText = processedText.replace(/\n/g, '<br>');
             }
-            // Убираем лишние пробелы в начале и конце
-            processedText = processedText.trim();
-            
-            // Проверка на дубликаты только для AI-сообщений
-            if (normalizedSender === 'ai') {
-            const existingMessages = Array.from(messages.querySelectorAll('.message'));
-            const lastFiveMessages = existingMessages.slice(-5);
-            const plainText = text.replace(/\n/g, ' ').trim();  // для сравнения без форматирования
-            for (const msg of lastFiveMessages) {
-                const msgText = (msg.querySelector('.message-text')?.textContent || '').trim();
-                const msgSender = msg.classList.contains('ai') ? 'ai' : 'user';
-                
-                // Если найдено AI-сообщение с таким же текстом - это дубликат
-                if (msgText === plainText && msgSender === 'ai') {
-                    return; // Не добавляем дубликат
-                }
+            // Убираем только хвостовые пробелы — не ломаем структуру в начале сообщения
+            if (typeof processedText === 'string') {
+                processedText = processedText.replace(/[ \t\n\r]+$/g, '');
             }
+            
+            // Fallback-дедуп только для сообщений БЕЗ ID (стрим/временные),
+            // чтобы не скрывать легитимные новые ответы с похожим началом.
+            if (normalizedSender === 'ai' && interactionId == null) {
+                const existingMessages = Array.from(messages.querySelectorAll('.message.ai'));
+                const lastAi = existingMessages.length ? existingMessages[existingMessages.length - 1] : null;
+                const plainText = String(text || '').replace(/\s+/g, ' ').trim();
+                const lastText = (lastAi?.querySelector('.message-text')?.textContent || '').replace(/\s+/g, ' ').trim();
+                if (plainText && lastText && plainText === lastText) {
+                    return;
+                }
             }
             
             if (normalizedSender === 'ai') {
@@ -2029,6 +2038,9 @@
 
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${normalizedSender}`;
+            if (interactionId != null) {
+                messageDiv.dataset.interactionId = String(interactionId);
+            }
             
             // Имя агента: из agentInfo (пер-сообщение), или глобальный (window._activeAgentData), или ASI
             const _resolvedAgent = agentInfo || null;  // не берём window._activeAgentData — ASI по умолчанию

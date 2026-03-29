@@ -7374,10 +7374,26 @@ async def api_interactions_handler(request):
         if not user:
             return web.json_response({'error': 'User not found'}, status=404)
 
-        # Load last 200 interactions for the chat (increased from 100 to show more history)
-        interactions = session_db.query(Interaction).filter_by(
-            user_id=user.id).order_by(
-            Interaction.created_at.desc()).limit(200).all()
+        # Optional pagination controls for large histories.
+        # limit: 1..500 (default 200)
+        # before_id: return messages with id < before_id
+        try:
+            _limit = int(request.query.get('limit', '200'))
+        except Exception:
+            _limit = 200
+        _limit = max(1, min(_limit, 500))
+
+        try:
+            _before_id_raw = request.query.get('before_id')
+            _before_id = int(_before_id_raw) if _before_id_raw is not None else None
+        except Exception:
+            _before_id = None
+
+        # Load interactions for the chat (with optional pagination window)
+        _iq = session_db.query(Interaction).filter_by(user_id=user.id)
+        if _before_id is not None:
+            _iq = _iq.filter(Interaction.id < _before_id)
+        interactions = _iq.order_by(Interaction.created_at.desc()).limit(_limit).all()
         interactions.reverse()  # Back to chronological order
         
         logger.info(f"Loaded last {len(interactions)} interactions for user {user.id}")
@@ -7439,8 +7455,10 @@ async def api_interactions_handler(request):
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
             # Skip noise messages (very short AI/agent messages with template text)
-            if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text) < 60:
-                if any(n in _check_text for n in _NOISE_PATTERNS):
+            _check_text_norm = _check_text.strip().lower()
+            if i.message_type in ('ai', 'agent_msg', 'proactive') and len(_check_text_norm) < 80:
+                # Be strict: hide only exact short placeholders, not meaningful short statuses.
+                if _check_text_norm in {n.lower() for n in _NOISE_PATTERNS}:
                     continue
             # All agent messages (including inter-agent) are now shown in chat
             # Time-window dedup: skip if exact same content appeared in last 5 minutes
@@ -7532,7 +7550,12 @@ async def api_interactions_handler(request):
             })
 
         logger.info(f"Returning {len(interactions_data)} interactions to frontend")
-        return web.json_response({'interactions': interactions_data})
+        _next_before_id = interactions_data[0]['id'] if interactions_data else None
+        return web.json_response({
+            'interactions': interactions_data,
+            'has_more': len(interactions) == _limit,
+            'next_before_id': _next_before_id,
+        })
     except Exception as e:
         logger.error(f"Error fetching interactions: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)
