@@ -872,26 +872,32 @@ def preload_common_data():
     Вызывается при старте бота для заполнения кэша.
     """
     logger.info("[CACHE] Starting preload of common data")
-    # Популярные города для предварительной загрузки погоды
     common_cities = ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"]
     from ai_integration.api_client import get_api_client
     import asyncio
     client = get_api_client()
-    for city in common_cities:
-        try:
-            logger.info(f"[CACHE] Preloading weather for {city}")
-            asyncio.run(client.get_weather(city))
-            # asyncio.run() closes its event loop — the aiohttp session created inside
-            # is now bound to a closed loop. Reset it so _get_session() re-creates it
-            # fresh in the main application event loop.
-            client._session = None
-        except RuntimeError:
-            # Уже внутри event loop (например, в тестах) — пропускаем preload
-            logger.debug("[CACHE] Skipping weather preload — event loop already running")
-            break
-        except Exception as e:
-            logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
-            client._session = None  # сброс на случай ошибки тоже
+
+    async def _run_preload():
+        for city in common_cities:
+            try:
+                logger.info(f"[CACHE] Preloading weather for {city}")
+                await client.get_weather(city)
+            except Exception as e:
+                logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
+        # Properly close the session so asyncio.run() doesn't leave unclosed connectors
+        await client.close()
+
+    try:
+        asyncio.run(_run_preload())
+    except RuntimeError:
+        # Already inside an event loop (e.g. tests) — skip preload
+        logger.debug("[CACHE] Skipping weather preload — event loop already running")
+    except Exception as e:
+        logger.warning(f"[CACHE] Preload failed: {e}")
+    finally:
+        # Ensure _session is reset so _get_session() re-creates it in the main app loop
+        client._session = None
+
     # NewsAPI preload removed — dev quota too small (100/day),
     # news loaded lazily with 6h cache via api_client.get_news()
     logger.info("[CACHE] Preload completed (weather only, news lazy)")
