@@ -4745,6 +4745,24 @@ def _build_user_context_sync(user_db_id: int) -> str:
             task_lines.append(line)
         parts.append('АКТИВНЫЕ ЗАДАЧИ:\n' + '\n'.join(task_lines))
 
+    # --- Правила пользователя (из user.memory) ---
+    try:
+        if user and user.memory:
+            import json as _rj
+            _mem = user.memory.strip()
+            if _mem.startswith('{'):
+                _mj = _rj.loads(_mem)
+                _rules = _mj.get('rules', [])
+                if _rules:
+                    _rules_lines = '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_rules))
+                    parts.append(
+                        '🔴 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (соблюдай ВСЕГДА, в каждом действии и ответе):\n'
+                        + _rules_lines
+                        + '\nЭти правила отменяют любое поведение по умолчанию. Нарушение = провал.'
+                    )
+    except Exception:
+        pass
+
     return '\n\n'.join(parts)
 
 
@@ -7390,7 +7408,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         _hs.query(_Itr)
                         .filter(_Itr.user_id == user_db_id)
                         .order_by(_Itr.id.desc())
-                        .limit(3)
+                        .limit(5)
                         .all()
                     )
                     for _r in reversed(_recent):
@@ -7654,7 +7672,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
 
         # ── Начальное решение ASI ──────────────────────────────────────────────────
         # Урезаем до 400 символов — для решения о делегировании достаточно имени, должности, целей
-        _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:400]}" if _user_full_ctx else ''
+        _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:700]}" if _user_full_ctx else ''
 
         # Строим компактный список агентов: имя | должность | специализация | умеет
         _agent_caps_lines = []
@@ -7707,7 +7725,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
             "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
             "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
-            "director_message: живое КОРОТКОЕ обращение — 'Имя, глагол + суть' (10-15 слов, без копипаста agent_task).\n"
+            "director_message: живое личное обращение к агенту — разговорный стиль, как в рабочем чате. Имя + глагол + контекст. До 25 слов.\n"
             "director_message — пример: 'Марк, найди 5 площадок где сидят AI-энтузиасты и напиши им'. НЕ: 'Марк, Найти и привлечь тестировщиков'.\n"
             "ПРАВИЛО: после запятой — глагол в повелительном наклонении строчными: найди, подготовь, напиши, исследуй.\n\n"
             "JSON без ```:\n"
@@ -7814,14 +7832,41 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 decision['director_message'] = ''
             action = 'delegate'
         elif action == 'multi_delegate':
-            # Конвертируем multi_delegate → delegate (первый агент из списка)
+            # Запускаем всех агентов последовательно, передавая результаты как контекст
             _tasks_list = decision.get('tasks') or []
-            if _tasks_list:
-                _first_t = _tasks_list[0]
-                decision['agent_name'] = _first_t.get('agent_name', '')
-                decision['agent_task'] = _first_t.get('agent_task', '')
-                decision['director_message'] = _first_t.get('director_message', '')
-            action = 'delegate'
+            if not _tasks_list:
+                return None
+            _md_ctx_parts = []
+            if _user_full_ctx:
+                _md_ctx_parts.append(_user_full_ctx)
+            if _history_block.strip():
+                _md_ctx_parts.append(_history_block.strip())
+            _md_prev_results: list[str] = []
+            for _md_idx, _md_t in enumerate(_tasks_list):
+                _md_agent_name = _md_t.get('agent_name', '')
+                _md_agent_task = _md_t.get('agent_task', '')
+                _md_dm = _md_t.get('director_message', '')
+                _md_ag = _find_agent(_md_agent_name)
+                if not _md_ag or not _md_agent_task:
+                    continue
+                # Добавляем результаты предыдущих агентов как контекст
+                if _md_prev_results:
+                    _prev_block = '\n\n--- Результаты предыдущих агентов ---\n' + '\n\n'.join(_md_prev_results)
+                    _md_full_ctx = '\n\n'.join(_md_ctx_parts) + _prev_block
+                else:
+                    _md_full_ctx = '\n\n'.join(_md_ctx_parts)
+                # Уведомление пользователя о начале работы агента
+                if _md_dm:
+                    _ag_n = _md_ag.get('name', 'Агент')
+                    _md_dm_display = _md_dm if _ag_n.lower() in _md_dm.lower()[:len(_ag_n)+3] else f"{_ag_n}, {_md_dm}"
+                    _save_interaction_for_director(user_id, _md_dm_display, message_type='agent_msg')
+                _md_resp = await _exec_agent_for_director(_md_ag, _md_agent_task, user_id, dialog_context=_md_full_ctx)
+                _md_resp_text = _md_resp[0] if isinstance(_md_resp, tuple) else str(_md_resp or '')
+                if _md_resp_text:
+                    _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_resp_text[:400]}")
+                    await _send_visible(_md_resp_text)
+                    _save_interaction_for_director(user_id, _md_resp_text, message_type='ai')
+            return '__agent_handled__'
 
         # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
         if action != 'delegate':
