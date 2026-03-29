@@ -2994,20 +2994,20 @@ class HybridAutonomousAgent:
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
-                            "Summarize results briefly (2-3 sentences, max 400 chars). "
+                            "Summarize results briefly (3-5 sentences, up to 1000 chars). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses."
                             + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
-                            "Кратко подытожь (2-3 предложения, до 400 символов). "
+                            "Кратко подытожь результаты (3-5 предложений, до 1000 символов). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task."
                             + _note_hint_ru
                         )})
 
                 # Text-only call (no tools) uses shorter timeout + fewer tokens
                 _timeout = API_TIMEOUT_NORMAL if not _allow_tools else None
-                _max_tok = 300 if _is_last_iter and all_execution_results else 500
+                _max_tok = 800 if _is_last_iter and all_execution_results else 600
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,
@@ -3666,7 +3666,7 @@ class HybridAutonomousAgent:
                 "Empty list_tasks = no tasks. Empty list_goals = no goals."
             )
             _NO_HALLUCINATE_RU = (
-                "\nФОРМАТ: сплошной текст 300–500 символов, 2–3 абзаца через одинарный перенос. "
+                "\nФОРМАТ: сплошной текст, 2–3 абзаца через одинарный перенос. "
                 "ЗАПРЕЩЕНО: маркеры (•, -, *), нумерация, заголовки, двойные переносы строк.\n"
                 "🚫 НЕ упоминай сервисы (Discord, Slack, GitHub, Telegram и т.д.) если они не "
                 "в разделе «Подключено у тебя». Не обещай «проверю в X» без реальной интеграции."

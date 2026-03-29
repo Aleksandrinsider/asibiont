@@ -16091,7 +16091,7 @@ class AnchorEngine:
                 mode=_ai_mode,
                 instruction=_ai_instruction,
                 extra_context=full_prompt,
-                max_tokens=600,
+                max_tokens=1000,
                 max_iterations=_ai_max_iter
             )
 
