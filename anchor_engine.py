@@ -9369,6 +9369,29 @@ class AnchorEngine:
                     _step_reason = (_step.get('reason') or '').strip()
                     if _step_reason and len(_step_reason) > 80:
                         _step_reason = _step_reason[:80].rsplit(' ', 1)[0]
+                    # Анти-повтор техпричин: не дублировать "таймаут/сбой" в каждом поручении.
+                    try:
+                        _reason_l = _step_reason.lower()
+                        _is_tech_reason = any(_k in _reason_l for _k in (
+                            'таймаут', 'timeout', 'сбой', 'ошибк', 'нестабил', 'exec_error'
+                        ))
+                        if _is_tech_reason:
+                            _since_tech = datetime.now(timezone.utc) - timedelta(hours=6)
+                            _recent_tech = session.query(Interaction.id).filter(
+                                Interaction.user_id == user.id,
+                                Interaction.created_at >= _since_tech,
+                                Interaction.message_type == 'agent_msg',
+                                (
+                                    Interaction.content.ilike('%таймаут%') |
+                                    Interaction.content.ilike('%timeout%') |
+                                    Interaction.content.ilike('%техническ%') |
+                                    Interaction.content.ilike('%ошибк%')
+                                )
+                            ).first() is not None
+                            if _recent_tech:
+                                _step_reason = 'переключаемся на рабочий сценарий, чтобы сохранить темп'
+                    except Exception:
+                        pass
                     # Короткая версия задачи для живого обращения (до 90 символов, по слову)
                     _task_short = _task_clean
                     if len(_task_short) > 90:
