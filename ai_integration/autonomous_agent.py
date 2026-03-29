@@ -2310,9 +2310,10 @@ class HybridAutonomousAgent:
                 "\nПользователь рассказывает о себе/проекте → ДАЙ ЭКСПЕРТНЫЕ СОВЕТЫ по его нише + update_profile + research_topic(тренды в нише)."
                 "\nПользователь упоминает навыки/технологии → update_profile + research_topic(тренды)."
                 "\nПользователь говорит о достижении → complete_task + update_goal_progress + предложи create_post."
-                "\n🌐 НЕТВОРКИНГ (УСЛОВНОЕ): Если обсуждают маркетинг/продвижение/рост → СНАЧАЛА check [NETWORKING_STATUS] в контексте:\n   • Если [NETWORKING_READY]=YES → research_topic + find_relevant_contacts_for_task + start_content_campaign\n   • Если [NETWORKING_READY]=NO → дай причину (профиль не заполнен / нет контактов) и рекомендацию что заполнить сначала. ТОЛЬКО ПОТОМ -> research_topic(альтернативные каналы) без find_relevant_contacts_for_task"
-                "\n🌐 НЕТВОРКИНГ (УСЛОВНОЕ): Если обсуждают команду/найм/поиск людей → СНАЧАЛА check [NETWORKING_STATUS] в контексте:\n   • Если [NETWORKING_READY]=YES → find_relevant_contacts_for_task + set_contact_alert + start_delegation_campaign\n   • Если [NETWORKING_READY]=NO → дай причину и рекомендацию. Предложи альтернативный подход найма (заявки, тесты, интервью)"
-                "\nЗадача связана с людьми → СНАЧАЛА check [NETWORKING_STATUS]: если YES → find_relevant_contacts_for_task + set_contact_alert; если NO → дай альтернативные способы поиска"
+                "\n🌐 НЕТВОРКИНГ (УСЛОВНОЕ): Если обсуждают маркетинг/продвижение/рост → СНАЧАЛА check [NETWORKING_STATUS] в контексте:\n   • Если [NETWORKING_READY]=YES → research_topic + find_relevant_contacts_for_task + start_content_campaign\n   • Если [NETWORKING_READY]=NO и есть [SUGGESTED_INTEGRATIONS] → ПРЕДЛОЖИ подключить нужную интеграцию (LinkedIn, GitHub, Gmail и т.д.), дай инструкцию как её включить. ТОЛЬКО ПОТОМ -> research_topic(альтернативные каналы) без find_relevant_contacts_for_task"
+                "\n🌐 НЕТВОРКИНГ (УСЛОВНОЕ): Если обсуждают команду/найм/поиск людей → СНАЧАЛА check [NETWORKING_STATUS] в контексте:\n   • Если [NETWORKING_READY]=YES → find_relevant_contacts_for_task + set_contact_alert + start_delegation_campaign\n   • Если [NETWORKING_READY]=NO и есть [SUGGESTED_INTEGRATIONS] → ПРЕДЛОЖИ подключить LinkedIn или контакты. Дай шаг за шагом как подключить. Предложи альтернативный подход найма (заявки, тесты, интервью)"
+                "\n🔌 ИНТЕГРАЦИИ УЛУЧШАЮТ РАБОТУ: Если пользователь по любой причине говорит что-то типа 'давай улучшим', 'хочу лучше', 'можно ли быстрее', 'это работает плохо' → check контекст на [SUGGESTED_INTEGRATIONS] в [NETWORKING_STATUS] или используй свою логику:\n   • Email не подключена + обсуждают outreach → предложи Gmail/Resend\n   • LinkedIn не подключена + обсуждают контакты → предложи LinkedIn\n   • GitHub не подключена + обсуждают разработку → предложи GitHub для auto-fill интересов\n   Для каждой: объясни (1) что будет, (2) как включить за 30 сек, (3) какой результат ожидать"
+                "\n🚀 ИНКРЕМЕНТАЛЬНОЕ УЛУЧШЕНИЕ: Не давай все сразу. Когда пользователь сообщает проблему (нет контактов, нет оutreach-а, нет идей) → предложи ОДНУ интеграцию решающую именно эту проблему, потом ждёшь результата. Это лучше чем бомбить 5 интеграциями зразу."
                 "\nЦЕЛИ: «хочу набрать X», «заработать Y», «достичь Z за N месяцев», конкретная цифра или срок → СРАЗУ create_goal без спроса. Не обсуждай цель — СОЗДАЙ ЕЁ."
                 "\nНАПОМИНАНИЯ: «напомни через X минут/часов», «поставь напоминание», «напомни в 15:00» → СРАЗУ add_task с reminder_time. НЕ спрашивай подтверждение — пользователь УЖЕ попросил. Название = суть напоминания из запроса. reminder_time ОБЯЗАТЕЛЕН: передай ТОЧНО как сказал пользователь, например reminder_time='через 5 минут' или reminder_time='в 15:00' или reminder_time='завтра в 10:00'. ⛔ СТРОЖАЙШИЙ ЗАПРЕТ: если пользователь сказал 'через 15 минут' ночью — НЕ ПЕРЕНОСИ на утро! Он РЕШИЛ сам. Ставь ночью. 'через 30 минут' в 02:40 → reminder_time='через 30 минут' (будет 03:10). ЕСЛИ НЕ ПЕРЕДАШЬ reminder_time — задача НЕ СОЗДАСТСЯ."
                 "\nНЕЯВНЫЕ ЗАДАЧИ: Пользователь упоминает событие/дело с временем («у меня встреча в 15:00», «завтра дедлайн», «записан к врачу на 10», «в среду презентация») → ПРОВЕРЬ список задач (get_tasks). Если такой задачи НЕТ → ПРЕДЛОЖИ поставить напоминание с конкретным временем (за 15 мин до события). Пример: «Вижу, задачи про встречу нет. Поставить напоминание на 14:45?». Создавай add_task ТОЛЬКО после подтверждения пользователя (да, давай, ок, поставь). Если время неточное («после обеда», «вечером») — сначала уточни конкретное время, потом предложи."
@@ -2329,13 +2330,24 @@ class HybridAutonomousAgent:
     def _get_networking_readiness(user_id: int, session=None) -> dict:
         """
         Check if user profile is ready for networking actions.
-        Returns: {"ready": bool, "reason": str, "missing": [list of missing items]}
+        Returns: {
+            "ready": bool, 
+            "reason": str, 
+            "missing": [list of missing items],
+            "suggested_integrations": [list of integration suggestions]
+        }
         
         Networking requires:
         1. Non-empty profile (interests, skills, goals, or city)
         2. At least one contact in network
         
-        This guard prevents recommending find_relevant_contacts_for_task when it will fail.
+        If not ready, suggests integrations to fix the problems:
+        - No profile → suggest GitHub/Twitter to auto-fill interests
+        - No contacts → suggest LinkedIn to import contacts
+        - No email tools → suggest Gmail/Resend for outreach
+        
+        This guard prevents recommending find_relevant_contacts_for_task when it will fail,
+        and helps users upgrade service incrementally.
         """
         close_sess = False
         if session is None:
@@ -2348,11 +2360,13 @@ class HybridAutonomousAgent:
                 return {
                     "ready": False,
                     "reason": "Пользователь не найден",
-                    "missing": ["profile"]
+                    "missing": ["profile"],
+                    "suggested_integrations": []
                 }
             
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             missing = []
+            suggested_intgs = []
             
             # Check profile completeness
             has_interests = profile and profile.interests and len(str(profile.interests)) > 5
@@ -2363,6 +2377,19 @@ class HybridAutonomousAgent:
             profile_complete = has_interests or has_skills or has_goals or has_city
             if not profile_complete:
                 missing.append("profile_incomplete")
+                # Suggest integrations to auto-fill profile
+                suggested_intgs.extend([
+                    {
+                        "name": "GitHub",
+                        "reason": "импортировать интересы из профиля (языки, темы проектов)",
+                        "benefit": "автоматически заполнит навыки и интересы"
+                    },
+                    {
+                        "name": "Twitter",
+                        "reason": "импортировать интересы из подписок и постов",
+                        "benefit": "поймёт твою область и интересы"
+                    },
+                ])
             
             # Check if user has contacts in network
             from .handlers import get_partners_list
@@ -2370,6 +2397,43 @@ class HybridAutonomousAgent:
             has_contacts = bool(partners and len(partners) > 0)
             if not has_contacts:
                 missing.append("no_contacts_in_network")
+                # Suggest integrations to build network
+                suggested_intgs.extend([
+                    {
+                        "name": "LinkedIn",
+                        "reason": "импортировать профессиональные контакты",
+                        "benefit": "получишь доступ к сотням контактов для сотрудничества"
+                    },
+                    {
+                        "name": "Google Contacts",
+                        "reason": "импортировать контакты из почты",
+                        "benefit": "быстро заполнишь сеть известными тебе людьми"
+                    },
+                ])
+            
+            # Check if has email tools for outreach capability (only if profile is ready, but would help with outreach)
+            if profile_complete and has_contacts:
+                has_email_tools = (
+                    (user.get_api_key('GMAIL_USER') or user.get_api_key('IMAP_HOST')) or
+                    user.get_api_key('RESEND_API_KEY') or
+                    user.get_api_key('SENDGRID_API_KEY')
+                )
+                if not has_email_tools and "email" in str(profile.specialization or "").lower():
+                    # Only suggest email if they're sales/marketing focused
+                    suggested_intgs.append({
+                        "name": "Gmail / Resend",
+                        "reason": "отправлять персональные письма контактам",
+                        "benefit": "автоматически будешь отправлять outreach и follow-ups"
+                    })
+            
+            # Deduplicate suggestions (keep only unique by name)
+            _seen_names = set()
+            dedup_intgs = []
+            for intg in suggested_intgs:
+                if intg['name'] not in _seen_names:
+                    dedup_intgs.append(intg)
+                    _seen_names.add(intg['name'])
+            suggested_intgs = dedup_intgs
             
             if missing:
                 reason_parts = []
@@ -2378,20 +2442,24 @@ class HybridAutonomousAgent:
                 if "no_contacts_in_network" in missing:
                     reason_parts.append("в сети нет контактов")
                 
+                recommendation = "Заполни профиль (интересы, навыки, город) и добавь контакты в сеть"
+                if suggested_intgs:
+                    intg_suggestions = " или ".join([f"подключи {i['name']}" for i in suggested_intgs[:2]])
+                    recommendation = f"Быстрый способ: {intg_suggestions}"
+                
                 return {
                     "ready": False,
                     "reason": "Нетворкинг недоступен: " + " и ".join(reason_parts),
                     "missing": missing,
-                    "recommendation": (
-                        "Заполни профиль (интересы, навыки, город) и добавь контакты в сеть, "
-                        "тогда сможешь искать партнёров для сотрудничества."
-                    )
+                    "recommendation": recommendation,
+                    "suggested_integrations": suggested_intgs
                 }
             
             return {
                 "ready": True,
                 "reason": "Нетворкинг доступен",
-                "missing": []
+                "missing": [],
+                "suggested_integrations": []
             }
             
         except Exception as e:
@@ -2399,11 +2467,13 @@ class HybridAutonomousAgent:
             return {
                 "ready": False,
                 "reason": f"Ошибка проверки: {e}",
-                "missing": ["error"]
+                "missing": ["error"],
+                "suggested_integrations": []
             }
         finally:
             if close_sess:
                 session.close()
+
 
     # ===== ОСНОВНОЙ FLOW =====
 
@@ -2486,15 +2556,28 @@ class HybridAutonomousAgent:
                         missing_str = ", ".join(networking_status.get('missing', []))
                         dynamic_context += f"\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=NO\nПричина: {networking_status.get('reason', 'неизвестна')}\n"
                         if networking_status.get('recommendation'):
-                            dynamic_context += f"Рекомендация: {networking_status['recommendation']}"
+                            dynamic_context += f"Рекомендация: {networking_status['recommendation']}\n"
+                        # Add suggested integrations as actionable options
+                        if networking_status.get('suggested_integrations'):
+                            dynamic_context += "\n[SUGGESTED_INTEGRATIONS]\n"
+                            for intg in networking_status['suggested_integrations'][:3]:  # Top 3 suggestions
+                                dynamic_context += f"• {intg['name']}: {intg['reason']} → {intg['benefit']}\n"
+                            dynamic_context += "\nЕсли пользователь спросит про интеграции или улучшение, предложи подключить одну из этих интеграций напрямую."
                 else:
                     if networking_status['ready']:
                         dynamic_context += "\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=YES (profile filled, contacts in network)"
                     else:
-                        dynamic_context += f"\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=NO\nReason: {networking_status.get('reason', 'unknown')}"
+                        dynamic_context += f"\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=NO\nReason: {networking_status.get('reason', 'unknown')}\n"
+                        if networking_status.get('recommendation'):
+                            dynamic_context += f"Recommendation: {networking_status['recommendation']}\n"
+                        if networking_status.get('suggested_integrations'):
+                            dynamic_context += "\n[SUGGESTED_INTEGRATIONS]\n"
+                            for intg in networking_status['suggested_integrations'][:3]:
+                                dynamic_context += f"• {intg['name']}: {intg['reason']} → {intg['benefit']}\n"
             except Exception as e:
                 logger.debug(f"[NETWORKING_CHECK] Background check skipped: {e}")
                 # Not critical — networking check is optional
+
 
             # ═══ МУЛЬТИАГЕНТНЫЙ АНАЛИЗ ═══
             try:
