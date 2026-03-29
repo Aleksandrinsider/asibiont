@@ -1198,19 +1198,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _user_tg_ch       = bool(getattr(user, 'telegram_channel', None))
     _user_discord_wh  = bool(getattr(user, 'discord_webhook', None))
     _py_actions = _extract_python_actions(python_code)
+    _cap_profiles = _build_capability_profiles(agent_caps or [], python_code=python_code)
 
     # ── Карточка «ЧТО Я УМЕЮ» — reasoning-ready capability card ──
     # Агент должен ДУМАТЬ из интеграций, а не угадывать по описанию роли.
-    # Блок строится универсально: из категорий _classify_agent_caps + точных ACTION из python_code.
+    # Блок строится универсально: из capability-profiles + точных ACTION из python_code.
     _aic_can: list = []
     _aic_cannot: list = []
-    for _cat in sorted(_caps_cats):
-        _cat_name = _CAP_CATEGORY_NAMES.get(_cat, _cat)
-        _cat_hint = _CAP_TOOL_HINTS.get(_cat, '')
-        if _cat_hint:
-            _aic_can.append(f"{_cat_name}: {_cat_hint}")
-        else:
-            _aic_can.append(_cat_name)
+    for _profile in _cap_profiles:
+        _display = _profile.get('display', '')
+        _route = _profile.get('route', '')
+        _matched = _profile.get('matched_labels', [])[:2]
+        if not _display:
+            continue
+        _line = _display
+        if _matched:
+            _line += f" (источник: {', '.join(_matched)})"
+        if _route:
+            _line += f": {_route}"
+        _aic_can.append(_line)
     if _py_actions:
         _aic_can.append(
             "Кастомные ACTION агента: " + ', '.join(_py_actions[:12])
@@ -1236,21 +1242,37 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _aic_cannot.append("📱 DM незнакомым людям в Telegram/WhatsApp/VK/Instagram — невозможно без userbot")
     _aic_cannot.append("🔐 Сайты за логином/авторизацией — не могу войти в чужие аккаунты")
     _agent_name_display = agent_name or "агент"
+
+    # ── Блок: что подключено у агента, что доступно для целей ──
+    _goals_text_all = ' '.join(
+        g.get('title', '') + ' ' + (g.get('description', '') or '') for g in goals_summary
+    ).lower()
+
+    _goal_cap_rank = _rank_goal_capabilities(_goals_text_all, agent_caps or [], python_code=python_code)
+    _goal_fit_lines = []
+    for _score, _display, _route, _key in _goal_cap_rank[:4]:
+        if _key == 'custom_actions':
+            continue
+        _goal_fit_lines.append(f"  ▶ {_display}: {_route}")
+    _goal_fit_block = ''
+    if _goal_fit_lines:
+        _goal_fit_block = (
+            "\nСНАЧАЛА ПРОВЕРЬ САМЫЕ РЕЛЕВАНТНЫЕ ДЛЯ ЭТОЙ ЦЕЛИ ВОЗМОЖНОСТИ:\n"
+            + "\n".join(_goal_fit_lines)
+            + "\n"
+        )
+
     _agent_identity_block = (
         f"\n🎯 ЧТО Я УМЕЮ [{_agent_name_display}] — рассуждай отсюда перед каждым шагом:\n"
         "ДОСТУПНО (есть интеграция / инструмент):\n"
         + "\n".join(f"  ✅ {l}" for l in _aic_can)
+        + _goal_fit_block
         + "\nНЕДОСТУПНО (нет ключей / физически невозможно):\n"
         + "\n".join(f"  ❌ {l}" for l in _aic_cannot)
         + "\n→ Если получил задачу с недоступным каналом (напр. «найди Telegram-чаты и пообщайся там») — "
         "НЕ выполняй буквально. Спроси себя: какой ДОСТУПНЫЙ мне инструмент даёт похожий результат?\n"
         "→ ПРИНЦИП: планируй только то, что есть в ДОСТУПНО. Нужен недоступный канал — DELEGATE[агент] или сообщи пользователю.\n"
     )
-
-    # ── Блок: что подключено у агента, что доступно для целей ──
-    _goals_text_all = ' '.join(
-        g.get('title', '') + ' ' + (g.get('description', '') or '') for g in goals_summary
-    ).lower()
 
     # ── Тип цели: research / outreach / content / dev / learning / health / personal / general ──
     _RESEARCH_KW = ('анализ', 'исследован', 'мониторинг', 'обзор', 'рынок', 'нефт', 'газ',
@@ -1744,6 +1766,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         from ai_integration.tools import EXCLUDED_TOOLS as _ET
         if name in _ET:
             return ''
+        if name == 'publish_to_telegram' and not (_agent_has_tg or _user_tg_ch):
+            return '  ℹ️ publish_to_telegram — недоступен (нет Telegram-бота агента или канала пользователя)'
+        if name == 'publish_to_discord' and not (_agent_has_discord or _user_discord_wh):
+            return '  ℹ️ publish_to_discord — недоступен (нет Discord webhook/канала пользователя)'
         desc = _tool_descs.get(name, '')
         base = f"{_ti(name)}" + (f" — {desc}" if desc else '')
         return f"  {base}"
@@ -2628,12 +2654,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         # Email лимит
         "📧 send_outreach_email вернул «лимит исчерпан» или «daily limit»:\n"
         "  → НЕ пытайся снова. Сразу: find_and_message_relevant_users (внутри платформы)\n"
-        "  → ИЛИ: create_post + publish_to_telegram (охват аудитории без email)\n"
-        "  → ИЛИ: DELEGATE[другой агент с email]: отправь эти контакты — список: ...\n"
-        "  → ИЛИ: add_task('завтра отправить письма [список]') — зафиксируй на завтра.\n"
+        + (
+            "  → ИЛИ: create_post + publish_to_telegram (охват аудитории без email)\n"
+            if (_agent_has_tg or _user_tg_ch) else
+            "  → ИЛИ: create_post + send_message_to_user('Контент готов, опубликуй в своём канале')\n"
+        )
+        + "  → ИЛИ: DELEGATE[другой агент с email]: отправь эти контакты — список: ...\n"
+        + "  → ИЛИ: add_task('завтра отправить письма [список]') — зафиксируй на завтра.\n"
 
         # create_post / publish требует канал
-        "📢 create_post или publish_to_telegram вернул ошибку (нет канала / нет получателя):\n"
+        "📢 create_post или publish-инструмент вернул ошибку (нет канала / нет получателя):\n"
         "  → Сохрани контент через add_task('Контент готов: [текст]', source='agent')\n"
         "  → Сообщи пользователю через send_message_to_user: 'Контент готов — скажи куда публиковать'\n"
         "  → ИЛИ: DELEGATE[коллега с Telegram-ботом]: опубликуй этот контент: [текст]\n"

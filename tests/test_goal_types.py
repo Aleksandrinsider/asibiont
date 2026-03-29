@@ -722,3 +722,60 @@ def test_g30_finance_goal_no_rss_fallback():
     task_texts = " ".join(d.get("task", "") for d in directives)
     assert "send_outreach_email" not in task_texts, \
         f"Финансовая цель не должна форсировать email outreach: {task_texts[:200]}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# G31-G33 — capability reasoning from exact actions and goal relevance
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_g31_autopilot_prompt_shows_exact_python_actions():
+    """Промпт должен показывать exact ACTION из python_code, а не только общую категорию."""
+    goals = [_goal("Найти кандидатов Python developer", progress=5)]
+    python_code = """
+if ACTION == 'search_vacancies':
+    return {}
+if ACTION == 'get_resumes':
+    return {}
+"""
+    prompt = _build_autopilot_prompt(
+        goals,
+        agent_caps=["hh.ru API"],
+        agent_name="HR-агент",
+        python_code=python_code,
+    )
+    assert "search_vacancies" in prompt and "get_resumes" in prompt, prompt[:1200]
+    assert "Кастомные ACTION агента" in prompt, prompt[:1200]
+
+
+def test_g32_autopilot_prompt_ranks_goal_relevant_capabilities():
+    """Промпт должен подсказывать наиболее релевантные под цель возможности агента."""
+    goals = [_goal("Нанять Python backend разработчика", progress=0)]
+    python_code = """
+if ACTION == 'search_vacancies':
+    return {}
+if ACTION == 'search_users':
+    return {}
+"""
+    prompt = _build_autopilot_prompt(
+        goals,
+        agent_caps=["hh.ru API", "GitHub API Token"],
+        agent_name="Рекрутер",
+        python_code=python_code,
+    )
+    assert "СНАЧАЛА ПРОВЕРЬ САМЫЕ РЕЛЕВАНТНЫЕ ДЛЯ ЭТОЙ ЦЕЛИ ВОЗМОЖНОСТИ" in prompt, prompt[:1600]
+    assert "HR / Работа" in prompt or "hh.ru API" in prompt, prompt[:1600]
+    assert "search_vacancies" in prompt, prompt[:1600]
+
+
+def test_g33_autopilot_prompt_marks_external_telegram_chats_impossible():
+    """Промпт должен явно различать публикацию в свой канал и чужие Telegram-чаты."""
+    goals = [_goal("Привлечь 50 предпринимателей в проект", progress=34)]
+    prompt = _build_autopilot_prompt(
+        goals,
+        agent_caps=["GMAIL_USER", "GITHUB_TOKEN"],
+        agent_name="Кристина",
+        python_code="if ACTION == 'search_users':\n    return {}\n",
+    )
+    assert "ЧУЖИЕ Telegram-группы/чаты/сообщества" in prompt, prompt[:1600]
+    assert "publish_to_telegram — недоступен" in prompt, prompt[:1600]
+    assert "Telegram публикация (нет бота агента / канала пользователя)" in prompt, prompt[:1600]
