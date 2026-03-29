@@ -10299,8 +10299,13 @@ class AnchorEngine:
                 ~Anchor.anchor_type.in_(list(_DEDUP_WITH_DELIVERED)),  # email_reply_received handled above
             ).all()
             for _cd_a in _cooldown_delivered:
-                _cd_h = (_cd_a.cooldown_hours if _cd_a.cooldown_hours and _cd_a.cooldown_hours > 0
-                         else PRIORITY_COOLDOWN.get(_cd_a.priority, 4))
+                # goal_autopilot_review: always use MIN_AUTOPILOT_GAP_MINUTES regardless of
+                # stored cooldown_hours (old records may have 2.0h which blocks the 15min cycle)
+                if _cd_a.anchor_type == 'goal_autopilot_review':
+                    _cd_h = MIN_AUTOPILOT_GAP_MINUTES / 60
+                else:
+                    _cd_h = (_cd_a.cooldown_hours if _cd_a.cooldown_hours and _cd_a.cooldown_hours > 0
+                             else PRIORITY_COOLDOWN.get(_cd_a.priority, 4))
                 _da = _cd_a.delivered_at
                 if _da.tzinfo is None:
                     _da = _da.replace(tzinfo=timezone.utc)
