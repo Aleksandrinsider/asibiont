@@ -7414,7 +7414,7 @@ async def api_interactions_handler(request):
             'asi_self_analysis',          # «Анализирую цели…» (внутренний)
         }
         filtered_interactions = []
-        # Dedup window: (message_type, content[:200]) → last seen timestamp
+        # Dedup window: (message_type, full-content-hash) → last seen timestamp
         _dedup_recent: dict = {}  # key → timestamp of last occurrence
         _DEDUP_WINDOW_SECS = 300  # 5 minutes — only dedup bursts, not across cycles
         for i in interactions:
@@ -7446,7 +7446,10 @@ async def api_interactions_handler(request):
             # Time-window dedup: skip if exact same content appeared in last 5 minutes
             # User messages are NEVER deduplicated (always show what the user wrote)
             if i.message_type != 'user':
-                _dedup_key = f"{i.message_type}:{_ct[:200]}"
+                # Use full content hash to avoid false positives when different messages
+                # share the same first 200 chars (which previously hid newer, fuller outputs).
+                _dedup_sig = __import__('hashlib').sha1(_ct.encode('utf-8', errors='ignore')).hexdigest()
+                _dedup_key = f"{i.message_type}:{_dedup_sig}"
                 _ts = i.created_at.replace(tzinfo=dt_timezone.utc).timestamp()
                 _last_ts = _dedup_recent.get(_dedup_key)
                 if _last_ts is not None and (_ts - _last_ts) < _DEDUP_WINDOW_SECS:
