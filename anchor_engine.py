@@ -1192,6 +1192,81 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         or bool(getattr(user, 'telegram_channel', None))
         or bool(getattr(user, 'discord_webhook', None))
     )
+    # Флаги публикации (разделяем: агентский токен vs канал пользователя)
+    _agent_has_tg     = 'telegram' in _caps_cats
+    _agent_has_discord = 'discord' in _caps_cats
+    _user_tg_ch       = bool(getattr(user, 'telegram_channel', None))
+    _user_discord_wh  = bool(getattr(user, 'discord_webhook', None))
+
+    # ── Карточка «ЧТО Я УМЕЮ» — reasoning-ready capability card ──
+    # Агент должен ДУМАТЬ из интеграций, а не угадывать по описанию роли.
+    _aic_can: list = []
+    _aic_cannot: list = []
+    if _has_imap:
+        _aic_can.append("📧 Email: send_outreach_email, check_emails, reply_to_outreach_email, find_contacts")
+    else:
+        _aic_cannot.append("📧 Email/Gmail (нет ключей) → DELEGATE[агент с Email] для писем и проверки почты")
+    if _has_github:
+        _aic_can.append("🐙 GitHub: search_users(query=), search_repos, list_issues, comment_on_issue")
+    else:
+        _aic_cannot.append("🐙 GitHub (нет токена) → DELEGATE[агент с GitHub] для поиска разработчиков")
+    if _has_rss:
+        _aic_can.append("📡 RSS: run_agent_action(get_feed), get_news_trends — мониторинг лент")
+    if _has_slack:
+        _aic_can.append("💬 Slack: run_agent_action(post_message) — корпоративный воркспейс")
+    if _has_notion:
+        _aic_can.append("📓 Notion: run_agent_action(create_page, update_page, query_db)")
+    if _has_sheets:
+        _aic_can.append("📊 Sheets: run_agent_action(update_sheet, append_row, read_range)")
+    if _has_crm:
+        _aic_can.append("🗂 CRM: run_agent_action(get_contacts, create_deal, update_lead, add_note)")
+    if _has_market:
+        _aic_can.append("🛒 Маркетплейс: run_agent_action(get_products, check_stock, update_price)")
+    if _has_pm:
+        _aic_can.append("📋 Tracker (Jira/Trello): run_agent_action(list_issues, create_task, update_status)")
+    if _has_alpha or _has_crypto:
+        _aic_can.append("📈 Финансы/Крипто: run_agent_action(get_price, get_balance)")
+    if _has_news:
+        _aic_can.append("📰 Новости API: run_agent_action(get_news, query=...)")
+    if _has_cal:
+        _aic_can.append("📅 Календарь: run_agent_action(list_events, create_event, find_free_slot)")
+    if _has_calls:
+        _aic_can.append("📞 Звонки/SMS: run_agent_action(send_sms, make_call)")
+    if _has_social:
+        _aic_can.append("🌐 Соцсети API: run_agent_action(post, get_stats, search)")
+    if _has_hr:
+        _aic_can.append("👥 HR/hh.ru: run_agent_action(search_vacancies, get_resumes)")
+    if _has_script:
+        _aic_can.append("⚙️ Кастомный скрипт Python: run_agent_action(action=<из профиля>)")
+    # publish_to_telegram: доступно если есть бот агента ИЛИ канал пользователя
+    if _agent_has_tg or _user_tg_ch:
+        _aic_can.append(
+            "📢 publish_to_telegram: постинг в ЛИЧНЫЙ КАНАЛ ПОЛЬЗОВАТЕЛЯ"
+            + (" (канал настроен)" if _user_tg_ch else " (через бот агента)")
+        )
+    else:
+        _aic_cannot.append("📢 Telegram публикация (нет бота агента / канала пользователя)")
+    if _agent_has_discord or _user_discord_wh:
+        _aic_can.append("📢 publish_to_discord: отправка webhook в Discord-сервер пользователя")
+    _aic_can.append("🔍 web_search, research_topic, add_task — всегда доступны")
+    # Платформенные ограничения: одинаковы для ВСЕХ агентов, не зависят от интеграций
+    _aic_cannot.append(
+        "💬 ЧУЖИЕ Telegram-группы/чаты/сообщества — участие НЕВОЗМОЖНО "
+        "(это требует Telegram UserBot API — его в платформе НЕТ)"
+    )
+    _aic_cannot.append("📱 DM незнакомым людям в Telegram/WhatsApp/VK/Instagram — невозможно без userbot")
+    _aic_cannot.append("🔐 Сайты за логином/авторизацией — не могу войти в чужие аккаунты")
+    _agent_name_display = agent_name or "агент"
+    _agent_identity_block = (
+        f"\n🎯 ЧТО Я УМЕЮ [{_agent_name_display}] — рассуждай отсюда перед каждым шагом:\n"
+        "ДОСТУПНО (есть интеграция / инструмент):\n"
+        + "\n".join(f"  ✅ {l}" for l in _aic_can)
+        + "\nНЕДОСТУПНО (нет ключей / физически невозможно):\n"
+        + "\n".join(f"  ❌ {l}" for l in _aic_cannot)
+        + "\n→ Если получил задачу с недоступным каналом (напр. «найди Telegram-чаты и пообщайся там») — "
+        "НЕ выполняй буквально. Спроси себя: какой ДОСТУПНЫЙ мне инструмент даёт похожий результат?\n"
+        "→ ПРИНЦИП: планируй только то, что есть в ДОСТУПНО. Нужен недоступный канал — DELEGATE[агент] или сообщи пользователю.\n"
+    )
 
     # ── Блок: что подключено у агента, что доступно для целей ──
     _goals_text_all = ' '.join(
@@ -1831,10 +1906,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "Для ПРОДВИЖЕНИЯ — один из лучших инструментов. "
             "find_relevant_contacts_for_task → save_email_contact → send_outreach_email."
         )
-        _tm_rows.append(
-            "  📢 Контент-пост (Telegram/Discord) → когда: цель = узнаваемость, охват широкой аудитории. "
-            "Комбо: сначала пост → потом email тем кто заинтересовался."
-        )
+        if _has_content:
+            _tm_rows.append(
+                "  📢 Контент-пост (publish_to_telegram / publish_to_discord) → "
+                "когда: цель = узнаваемость, охват. "
+                "⚠️ Это постинг в ЛИЧНЫЙ КАНАЛ ПОЛЬЗОВАТЕЛЯ — НЕ в чужие группы/чаты!\n"
+                "  Комбо: пост → email тем кто заинтересовался."
+            )
+        else:
+            _tm_rows.append(
+                "  📢 Контент (Telegram/Discord) — нет настроенного канала. "
+                "Альтернатива: create_post заготовит текст, затем send_message_to_user чтобы пользователь опубликовал сам."
+            )
         _tm_rows.append(
             "  👥 Пользователи платформы (find_and_message_relevant_users) → когда: нужны быстрые первые "
             "пользователи/бета-тестеры среди уже зарегистрированных. Быстрее холодного email."
@@ -2515,9 +2598,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     # Платформенные ограничения — только технические факты платформы (не зависят от интеграций)
     _platform_limits = [
-        "• НЕ МОЖЕШЬ вступать/просматривать чужие Telegram/Discord-каналы — нет клиентского токена",
-        "• НЕ МОЖЕШЬ постить в ЧУЖИЕ каналы — только в канал пользователя",
-        "• НЕ МОЖЕШЬ заходить на сайты требующие авторизацию/логин",
+        "• ЧУЖИЕ Telegram-группы/чаты/сообщества: НЕЛЬЗЯ писать, вступать, искать людей там — "
+        "для этого нужен Telegram UserBot API (Telethon-класс), которого в платформе НЕТ. "
+        "publish_to_telegram = постинг в ЛИЧНЫЙ канал пользователя, не в чужие чаты.",
+        "• DM Telegram/WhatsApp/Instagram незнакомым людям: НЕВОЗМОЖНО — нет прямого клиентского API",
+        "• Страницы за логином/авторизацией: не могу войти в чужие аккаунты",
     ]
     # Предупреждение если нет контент-каналов
     if 'telegram' not in _caps_cats and 'discord' not in _caps_cats and not getattr(user, 'telegram_channel', None) and not getattr(user, 'discord_webhook', None):
@@ -2628,6 +2713,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     return (
         f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
+        f"{_agent_identity_block}"
         f"{'Интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
@@ -3382,7 +3468,22 @@ class AnchorEngine:
 
         # ── STALENESS CHECK: задача/цель могла быть выполнена/удалена после создания якоря ──
         task_anchor_types = {'task_overdue', 'task_deadline_soon', 'task_stale', 'task_reminder', 'task_result_check'}
-        goal_anchor_types = {'goal_stagnation', 'goal_progress', 'goal_deadline', 'goal_decomposition'}
+        goal_anchor_types = {'goal_stagnation', 'goal_progress', 'goal_deadline', 'goal_decomposition', 'goal_milestone'}
+
+        def _extract_goal_id_for_stale(anchor) -> int | None:
+            source = getattr(anchor, 'source', '') or ''
+            if source.startswith('goal:') or source.startswith('goal_milestone:'):
+                try:
+                    return int(source.split(':')[1])
+                except (ValueError, IndexError):
+                    pass
+            try:
+                anchor_data = json.loads(anchor.data) if anchor.data else {}
+                goal_id = anchor_data.get('goal_id')
+                return int(goal_id) if goal_id is not None else None
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return None
+
         # Batch-load all referenced tasks (avoid N+1 per anchor)
         _stale_tids = []
         _stale_gids = []
@@ -3392,11 +3493,10 @@ class AnchorEngine:
                     _stale_tids.append(int(_sa.source.split(':')[1]))
                 except (ValueError, IndexError):
                     pass
-            elif _sa.anchor_type in goal_anchor_types and _sa.source and _sa.source.startswith('goal:'):
-                try:
-                    _stale_gids.append(int(_sa.source.split(':')[1]))
-                except (ValueError, IndexError):
-                    pass
+            elif _sa.anchor_type in goal_anchor_types:
+                _gid = _extract_goal_id_for_stale(_sa)
+                if _gid is not None:
+                    _stale_gids.append(_gid)
         _src_task_by_id = {t.id: t for t in session.query(Task).filter(Task.id.in_(_stale_tids)).all()} if _stale_tids else {}
         _src_goal_by_id = {g.id: g for g in session.query(Goal).filter(Goal.id.in_(_stale_gids)).all()} if _stale_gids else {}
         stale_ids = []
@@ -3410,10 +3510,9 @@ class AnchorEngine:
                 if not src_task or src_task.status in ('completed', 'deleted', 'cancelled'):
                     a.delivered_at = datetime.now(timezone.utc)  # auto-expire
                     stale_ids.append(a.id)
-            elif a.anchor_type in goal_anchor_types and a.source and a.source.startswith('goal:'):
-                try:
-                    gid = int(a.source.split(':')[1])
-                except (ValueError, IndexError):
+            elif a.anchor_type in goal_anchor_types:
+                gid = _extract_goal_id_for_stale(a)
+                if gid is None:
                     continue
                 src_goal = _src_goal_by_id.get(gid)
                 if not src_goal or src_goal.status in ('completed', 'paused', 'cancelled', 'deleted'):
