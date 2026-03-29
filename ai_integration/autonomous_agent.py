@@ -5655,6 +5655,7 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         "Ты — коллега ASI. Прочитал этот разговор и хочешь добавить короткую реплику со своей стороны.\n"
         f"Режим ответа: {'отчёт по делегированной задаче' if _has_delegation_evidence else 'комментарий по экспертизе'}.\n"
         "НЕ выдумывай факты (письма, суммы, статусы), которых нет в текущем обмене.\n"
+        "ФОРМАТ ЖЁСТКИЙ: 1-2 предложения, БЕЗ списков, БЕЗ маркеров (•, -, *), БЕЗ нумерации, БЕЗ заголовков, БЕЗ пустых строк.\n"
         "Учитывай кто этот пользователь и чем он занимается — отвечай релевантно его контексту.\n"
         "1-2 предложения макс. Живо, как рабочая чатуха. Если нечего добавить — пустая строка."
     )
@@ -5684,6 +5685,17 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
     except Exception as _e:
         logger.debug("[CHIME] AI error: %s", _e)
         return
+
+    # Нормализация chime-ответа: без списков/пустых строк/многострочности.
+    try:
+        from .utils import clean_technical_details as _clean_chime
+        _reply = _clean_chime(_reply or '').strip()
+    except Exception:
+        _reply = (_reply or '').strip()
+    _reply = re.sub(r'^\s*[•\-*]\s+', '', _reply, flags=re.MULTILINE)
+    _reply = re.sub(r'^\s*\d+[\.)]\s+', '', _reply, flags=re.MULTILINE)
+    _reply = ' '.join([_ln.strip() for _ln in _reply.splitlines() if _ln.strip()])
+    _reply = re.sub(r'\s{2,}', ' ', _reply).strip()
 
     if not _reply or len(_reply) < 5:
         return
