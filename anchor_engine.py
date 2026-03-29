@@ -16111,6 +16111,11 @@ class AnchorEngine:
             _result = _re_anc_fmt.sub(r'\n\s*\d+[.)\]]\s+', '\n', _result)
             _result = _re_anc_fmt.sub(r'\n\s*#{1,4}\s+', '\n', _result)
             _result = _re_anc_fmt.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _result)
+            # @mention — desc построчный список → объединяем в прозу через запятую
+            _at_lines = _re_anc_fmt.findall(r'(?:^|\n)(@\S+[^\n]*)', _result)
+            if len(_at_lines) >= 2:
+                _inline = ', '.join(l.strip() for l in _at_lines)
+                _result = _re_anc_fmt.sub(r'(@\S+[^\n]*\n?)+', _inline + ' ', _result, count=1)
             _result = _re_anc_fmt.sub(r'\n{2,}', '\n', _result)
             return _result.strip()
 
