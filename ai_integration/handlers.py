@@ -10295,10 +10295,16 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
             _lang_instruction = (
                 "Аудитория русскоязычная. ОБЯЗАТЕЛЬНО используй российские платформы (.ru домены).\n"
                 "Не используй LinkedIn, Facebook, reddit — они недоступны или требуют авторизацию.\n\n"
-                "ГЛАВНЫЙ КРИТЕРИЙ: выбирай платформы, где САМИ СПЕЦИАЛИСТЫ публикуют свои "
+                "КРИТИЧЕСКОЕ ПРАВИЛО: целевые люди — это ПОКУПАТЕЛИ/КЛИЕНТЫ продукта, "
+                "а НЕ эксперты в домене самого продукта.\n"
+                "Пример: если продукт = 'AI-платформа для автоматизации бизнеса', "
+                "то ищи ПРЕДПРИНИМАТЕЛЕЙ из любых отраслей (розница, общепит, строительство, "
+                "услуги, медицина, логистика и т.д.) — НЕ AI-разработчиков и НЕ AI-стартапы.\n"
+                "Интерес аудитории к технологии ≠ работа в этой технологии.\n\n"
+                "ГЛАВНЫЙ КРИТЕРИЙ: выбирай платформы, где САМИ СПЕЦИАЛИСТЫ/ПРЕДПРИНИМАТЕЛИ публикуют свои "
                 "контакты (email, сайт), потому что хотят быть нанятыми или найденными клиентами.\n"
                 "Это НЕ биржи вакансий (hh.ru, superjob) — там только HR.\n"
-                "НУЖНЫ: каталоги специалистов, фриланс-биржи, профессиональные соцсети.\n\n"
+                "НУЖНЫ: каталоги специалистов, фриланс-биржи, профессиональные соцсети, бизнес-каталоги.\n\n"
                 "Примеры платформ по нишам (используй как образец, адаптируй под аудиторию):\n"
                 "  QA/тестировщики → career.habr.com/resumes?q=qa, fl.ru/users/?skills=тестирование, kwork.ru/search?query=qa+тестирование&type=seller;\n"
                 "  разработчики/IT → career.habr.com/resumes, fl.ru/users, habr.com/ru/search/?target_type=users;\n"
@@ -10306,12 +10312,21 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
                 "  психологи/коучи → b17.ru/specialists, psycabi.net/psy, profi.ru/psiholog;\n"
                 "  маркетологи/SMM → tenchat.ru, cossa.ru/people, vc.ru/@;\n"
                 "  дизайнеры → behance.net/search, tenchat.ru, kwork.ru/search?query=дизайн&type=seller;\n"
-                "  предприниматели → spark.ru/startup/search, vc.ru/search, tenchat.ru;\n"
+                "  предприниматели (ЛЮБЫЕ отрасли) → spark.ru/startup/search, vc.ru/search?q=предпринимател, "
+                "tenchat.ru, e-xecutive.ru/community/members, 2gis.ru/search (местный бизнес), "
+                "cataloxy.ru, yell.ru, zoon.ru, flamp.ru (отзовики с контактами владельцев);\n"
+                "  малый бизнес / МСП → business.ru, mybiz.ru, regtime.ru, opora-credit.ru/catalog;\n"
                 "  любые специалисты → profi.ru/search, youdo.com/user, repetitors.info."
             )
         else:
             _lang_instruction = (
                 "Audience is English-speaking. Use international platforms.\n\n"
+                "CRITICAL RULE: The target people are BUYERS/CUSTOMERS of the offer, "
+                "NOT experts who work IN the offer's domain.\n"
+                "Example: if offer = 'AI automation platform for businesses', "
+                "search for ENTREPRENEURS from any industry (retail, food, construction, services) "
+                "who WANT to automate — NOT AI developers or AI startups.\n"
+                "Interest in a technology ≠ working in that technology.\n\n"
                 "KEY CRITERION: choose platforms where SPECIALISTS THEMSELVES publish their "
                 "email/contact because they want to be hired or found by clients.\n"
                 "NOT job boards (indeed, glassdoor) — those only have HR contacts.\n"
@@ -10323,6 +10338,9 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
                 "  lawyers → avvo.com/find-a-lawyer, martindale.com;\n"
                 "  designers → behance.net/search, dribbble.com/designers;\n"
                 "  marketers → clarity.fm/search, marketingprofs.com/experts;\n"
+                "  entrepreneurs (ANY industry) → clutch.co/companies (SMB), manta.com/mb, "
+                "yellowpages.com, yelp.com/search (local business owners), "
+                "angel.co/people (startup founders), crunchbase.com/people;\n"
                 "  any professionals → bark.com/professionals, thumbtack.com/pro, about.me/search."
             )
         _prompt = (
@@ -10330,6 +10348,8 @@ async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
             f"Campaign goal: {goal[:150]}\n"
             f"Offer/product: {offer[:150]}\n\n"
             f"{_lang_instruction}\n\n"
+            f"IMPORTANT: The audience description says WHO YOU ARE SELLING TO (their occupation/role), "
+            f"not what your product does. Do NOT confuse product domain with buyer domain.\n\n"
             f"Analyze the audience and generate 10 direct search/listing URLs where people "
             f"of THIS EXACT audience type have PUBLIC email addresses on their profiles.\n"
             f"Think about: what platforms do THESE PEOPLE use? Where do they list their contacts?\n"
@@ -10437,33 +10457,51 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     import re as _re_al
     all_emails_raw = set()  # email найденные напрямую — инициализируем ДО всех пассов
 
-    # Определяем, техническая ли аудитория (GitHub полезен только для tech)
-    _all_text = f"{target_audience} {goal} {offer}".lower()
+    # Определяем, техническая ли аудитория (GitHub полезен ТОЛЬКО если сам ЧЕЛОВЕК — тех. спец.)
+    # ВАЖНО: проверяем ТОЛЬКО target_audience, а НЕ goal/offer.
+    # Продукт может быть AI-платформой, но ПОКУПАТЕЛИ могут быть предпринимателями из любых отраслей.
+    # Меченые слова должны описывать ПРОФЕССИЮ/РОЛЬ целевого человека, а не характеристики продукта.
+    _audience_text = target_audience.lower()
     _tech_markers = [
+        # Языки программирования и фреймворки — явные индикаторы разработчика
         'python', 'javascript', 'typescript', 'react', 'node', 'django',
-        'fastapi', 'flask', 'telegram', 'bot', 'ai', 'ml', 'machine learning',
-        'data science', 'blockchain', 'web3', 'devops', 'mobile', 'ios',
-        'android', 'rust', 'golang', 'java', 'php', 'ruby', 'swift',
-        'flutter', 'vue', 'angular', 'nextjs', 'developer', 'разработ',
-        'программист', 'engineer', 'инженер', 'api', 'backend', 'frontend',
-        'fullstack', 'open source', 'github', 'code', 'coding', 'software',
-        # QA / тестировщики — IT-роль, GitHub и Habr Career релевантны
+        'fastapi', 'flask', 'blockchain', 'web3', 'devops',
+        'rust', 'golang', 'java', 'php', 'ruby', 'swift',
+        'flutter', 'vue', 'angular', 'nextjs',
+        # Роли разработчиков
+        'developer', 'разработ', 'программист', 'engineer', 'инженер',
+        'backend', 'frontend', 'fullstack', 'open source', 'github',
+        'code', 'coding', 'software',
+        # QA / тестировщики
         'тестировщ', 'tester', 'testing', 'qa ', 'quality assurance',
-        'автоматизац', 'selenium', 'cypress', 'appium', 'pytest',
-        # Аналитики / продуктовые роли
-        'аналитик', 'analyst', 'продуктолог', 'product manager', 'agile', 'scrum',
-        # Общие IT-маркеры
-        'it-', 'it специал', 'ит специал', 'технолог', 'startup', 'стартап',
-        'saas', 'app ', 'приложен', 'платформ', 'сервис для',
-        # Дополнительные маркеры AI/automation платформ (для продуктов вроде ASI Biont)
-        'автоматизация', 'автопилот', 'интеграц', 'integration', 'workflow',
-        'automat', 'no-code', 'low-code', 'webhook', 'zapier', 'make.com',
-        'openai', 'gpt', 'chatgpt', 'langchain', 'llm', 'prompt',
-        'notion', 'airtable', 'crm', 'erp', 'bi ', 'analytics',
-        'founder', 'инди', 'indie', 'соло.разраб', 'соло разраб',
+        'selenium', 'cypress', 'appium', 'pytest',
+        # Аналитики / продуктовые роли (IT-контекст)
+        'продуктолог', 'product manager',
+        # IT-роли
+        'it-', 'it специал', 'ит специал',
+        # Инди/соло разработчики
+        'инди разраб', 'indie dev', 'соло.разраб', 'соло разраб',
         'npm', 'pypi', 'open-source', 'contributor', 'maintainer',
+        # AI/ML инженеры (роль, не интерес к продукту)
+        'ml engineer', 'ai engineer', 'data scientist', 'data science',
+        'machine learning', 'langchain', 'llm developer', 'llm engineer',
+        # SaaS-строители / tech-founders (явный код/продуктовый контекст)
+        'saas founder', 'tech founder', 'технический директор',
     ]
-    _is_tech_audience = any(t in _all_text for t in _tech_markers)
+    _is_tech_audience = any(t in _audience_text for t in _tech_markers)
+    # Предпринимательский контекст без явно технической роли → НЕ ищем на GitHub
+    _business_markers = [
+        'предпринимател', 'бизнесмен', 'владелец бизнеса', 'собственник бизнеса',
+        'entrepreneur', 'business owner', 'малый бизнес', 'средний бизнес',
+        'розница', 'ритейл', 'ресторан', 'кафе', 'услуги', 'торговл',
+        'директор', 'генеральный директор', 'руководитель компании',
+    ]
+    _is_business_audience = any(b in _audience_text for b in _business_markers)
+    if _is_business_audience and not any(
+        t in _audience_text for t in ['developer', 'разработ', 'программист', 'engineer', 'инженер',
+                                       'backend', 'frontend', 'fullstack', 'тестировщ', 'tester']
+    ):
+        _is_tech_audience = False
 
     # ══════════════════════════════════════════════════════════════════════
     # PASS 0: GitHub API — ТОЛЬКО для технической аудитории
@@ -10807,12 +10845,20 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                 f"Generate 6 web search queries to find personal email addresses of people matching:\n"
                 f"Target audience: {target_audience[:200]}\n"
                 f"Goal: {goal[:150]}\n"
-                f"Language preference: {_q_lang}\n"
+                f"Language preference: {_q_lang}\n\n"
+                f"CRITICAL RULE: You are searching for BUYERS/CUSTOMERS of the offer, "
+                f"NOT for experts who work IN the offer's domain.\n"
+                f"Example: if offer = 'AI automation platform for businesses', "
+                f"the target is ENTREPRENEURS across all industries (retail, construction, food, "
+                f"services, manufacturing, etc.) who WANT to automate — "
+                f"NOT AI developers, NOT automation engineers, NOT AI startups.\n"
+                f"The audience's INTEREST in a technology does NOT mean they work IN that technology.\n\n"
                 f"Rules:\n"
                 f"- Each query must target pages where people show their email (personal sites, portfolios, contact pages)\n"
                 f"- Include: site:about.me, личный блог, portfolio, 'email' or 'написать мне', профессиональные профили\n"
                 f"- Mix direct audience-type searches with platform-specific ones\n"
                 f"- If Russian-speaking audience, use both Russian and English queries\n"
+                f"- Focus on the OCCUPATION/ROLE of the target person, not the product's domain\n"
                 f"Return ONLY valid JSON array of 6 query strings: [\"q1\", \"q2\", ...]"
             )
             _ai_q_raw = await api.deepseek_analyze(
