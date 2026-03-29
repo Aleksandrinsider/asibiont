@@ -3163,6 +3163,61 @@ class AnchorEngine:
             logger.debug('[COORD] KPI health failed: %s', _kpi_err)
             return {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
 
+    def _recent_tech_failure_health(self, session, user_id: int, agent_name: str, task_title: str,
+                                    lookback_hours: int = 24) -> dict:
+        """Детектирует технестабильность похожих шагов (timeout/exec_error) для агента."""
+        try:
+            _name_l = (agent_name or '').strip().lower()
+            if not _name_l:
+                return {'sample': 0, 'tech_fail': 0, 'fail_ratio': 0.0, 'block': False}
+
+            _title_tokens = {
+                t for t in re.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (task_title or '').lower())
+                if t not in {'для', 'это', 'как', 'что', 'когда', 'через', 'задача', 'цель', 'цели', 'шаг'}
+            }
+            if not _title_tokens:
+                return {'sample': 0, 'tech_fail': 0, 'fail_ratio': 0.0, 'block': False}
+
+            _cutoff = datetime.now(timezone.utc) - timedelta(hours=max(6, lookback_hours))
+            _rows = session.query(Task.title, Task.status, Task.skipped_reason, Task.delegated_to_username).filter(
+                Task.user_id == user_id,
+                Task.source == 'agent',
+                Task.created_at >= _cutoff,
+                Task.delegated_to_username.isnot(None),
+            ).all()
+
+            _sample = 0
+            _tech_fail = 0
+            for _row_title, _row_status, _row_reason, _row_agent in _rows:
+                if (_row_agent or '').strip().lower() != _name_l:
+                    continue
+                _row_tokens = set(re.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (_row_title or '').lower()))
+                if not _row_tokens:
+                    continue
+                _overlap = len(_title_tokens & _row_tokens) / max(len(_title_tokens), 1)
+                if _overlap < 0.35:
+                    continue
+                _sample += 1
+                _rs = (_row_reason or '').lower()
+                _st = (_row_status or '').lower()
+                if _st == 'cancelled' and (_rs in ('timeout_300s', 'exec_error') or 'timeout' in _rs):
+                    _tech_fail += 1
+
+            if _sample == 0:
+                return {'sample': 0, 'tech_fail': 0, 'fail_ratio': 0.0, 'block': False}
+            _ratio = _tech_fail / _sample
+            # Блокируем только при устойчивом паттерне, чтобы не резать одиночные сбои сети.
+            _block = _sample >= 2 and _tech_fail >= 2 and _ratio >= 0.6
+            return {
+                'sample': _sample,
+                'tech_fail': _tech_fail,
+                'fail_ratio': _ratio,
+                'block': _block,
+            }
+        except Exception as _te:
+            logger.debug('[COORD] tech failure health failed: %s', _te)
+            return {'sample': 0, 'tech_fail': 0, 'fail_ratio': 0.0, 'block': False}
+
     def _summarize_cancelled_tasks_this_cycle(self, session, user_id: int, cycle_start_time: datetime) -> dict:
         """Анализирует отменённые agent-задачи цикла с кодами причин и рекомендациями."""
         try:
@@ -9476,6 +9531,8 @@ class AnchorEngine:
                 _step_task_id = None
                 _kpi_block_step = False
                 _kpi_health = {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
+                _tech_block_step = False
+                _tech_health = {'sample': 0, 'tech_fail': 0, 'fail_ratio': 0.0, 'block': False}
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
@@ -9501,6 +9558,8 @@ class AnchorEngine:
                         _task_title_short = ' '.join(_ag_task.split()[:20])
                     _kpi_health = self._recent_task_kpi_health(session, user.id, _task_title_short, lookback_hours=72)
                     _kpi_block_step = bool(_kpi_health.get('block'))
+                    _tech_health = self._recent_tech_failure_health(session, user.id, _ag_name, _task_title_short, lookback_hours=24)
+                    _tech_block_step = bool(_tech_health.get('block'))
                     # Guard: если задание расплывчатое → переформулируем в конкретное действие
                     _is_vague_task = False
                     if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:200]:
@@ -9590,6 +9649,32 @@ class AnchorEngine:
                             float(_kpi_health.get('cancel_ratio', 0.0)) * 100,
                             float(_kpi_health.get('completion_ratio', 0.0)) * 100,
                         )
+                    elif _tech_block_step:
+                        _step_task = _Task_c2(
+                            user_id=user.id,
+                            title=_task_title_short[:200],
+                            description=(_ag_task[:2000] or None),
+                            status='cancelled',
+                            source='agent',
+                            created_by_agent_id=_target_ag.id if _target_ag else None,
+                            delegated_to_username=_ag_name,
+                            skipped_reason='tech_unstable_recent',
+                            recommendations=json.dumps([
+                                'Не повторять этот же канал/инструмент в следующем цикле',
+                                'Переключить задачу на альтернативный инструмент или ручной сценарий',
+                                'Декомпозировать задачу в 1 короткий шаг без тяжёлых API-вызовов',
+                            ], ensure_ascii=False),
+                        )
+                        session.add(_step_task)
+                        session.commit()
+                        _step_task_id = _step_task.id
+                        logger.info(
+                            "[COORD] TECH guard: block unstable step for %s (sample=%d tech_fail=%d ratio=%.0f%%)",
+                            _ag_name,
+                            int(_tech_health.get('sample', 0)),
+                            int(_tech_health.get('tech_fail', 0)),
+                            float(_tech_health.get('fail_ratio', 0.0)) * 100,
+                        )
                     else:
                         # Описание = полный текст только если отличается от заголовка
                         _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
@@ -9649,6 +9734,13 @@ class AnchorEngine:
                     _prev_steps_context += (
                         f"• {_ag_name}: шаг отменён (kpi_low_conversion, выборка={int(_kpi_health.get('sample', 0))}) — "
                         "повторяющиеся похожие задачи дают низкую конверсию. Выбери новый подход.\n"
+                    )
+                    continue
+
+                if _tech_block_step:
+                    _prev_steps_context += (
+                        f"• {_ag_name}: шаг отменён (tech_unstable_recent, выборка={int(_tech_health.get('sample', 0))}) — "
+                        "этот сценарий недавно упирался в техсбои. Нужен альтернативный канал/инструмент.\n"
                     )
                     continue
 
@@ -10742,6 +10834,11 @@ class AnchorEngine:
                                         f"По '{_tasks[0]['title'][:50]}...' был таймаут/технический сбой -- "
                                         f"переключаюсь на альтернативный канал."
                                     )
+                            elif _reason == 'tech_unstable_recent':
+                                _adapt_lines.append(
+                                    f"Сценарий '{_tasks[0]['title'][:50]}...' уже показывал техсбои в последних циклах -- "
+                                    f"сразу перехожу на альтернативный маршрут без повторного прогона."
+                                )
                             elif _reason == 'empty_result':
                                 if _tasks[0].get('recs'):
                                     _adapt_lines.append(f"Рекомендация: {_tasks[0]['recs'][0]}")
