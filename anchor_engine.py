@@ -130,8 +130,24 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('ms teams', 'microsoft teams', 'microsoft graph'), 'ms_teams'),
     # Webhook / Автоматизация
     (('webhook', 'n8n', 'zapier', 'make'), 'automation'),
-    # БД
-    (('postgresql', 'mysql', 'mongodb', 'sqlite', 'redis'), 'database'),
+    # БД (включает Firebase/Firestore)
+    (('postgresql', 'mysql', 'mongodb', 'sqlite', 'redis', 'firebase', 'firestore'), 'database'),
+    # HR / Биржи труда
+    (('hh.ru', 'headhunter', 'superjob', 'hh_query', 'hh_area'), 'hr'),
+    # Реклама
+    (('яндекс.директ', 'yandex_direct', 'direct_token', 'yandex direct'), 'advertising'),
+    # Web Scraping
+    (('playwright', 'selenium', 'scrape_url', 'scraping'), 'scraping'),
+    # AI/LLM API (внешние, не DeepSeek платформы)
+    (('openai_api', 'openai_key', 'openai', 'gemini', 'anthropic', 'claude', 'gpt'), 'ai_api'),
+    # Airtable (расширение категории sheets)
+    (('airtable',), 'sheets'),
+    # CoinGecko (крипто-данные)
+    (('coingecko', 'coingeck'), 'crypto'),
+    # МойСклад (маркетплейс/склад)
+    (('мойсклад', 'moysklad'), 'marketplace'),
+    # Calendly (встречи/расписание)
+    (('calendly',), 'calendar'),
 ]
 
 # Русские названия для категорий (для вывода в промптах)
@@ -144,6 +160,7 @@ _CAP_CATEGORY_NAMES: dict[str, str] = {
     'calls': 'Звонки/SMS', 'script': 'Python/HTTP', 'image_gen': 'Генерация изображений',
     'storage': 'Облачное хранилище', 'analytics': 'Аналитика', 'ms_teams': 'MS Teams',
     'automation': 'Webhook/Автоматизация', 'database': 'БД',
+    'hr': 'HR / Работа', 'advertising': 'Реклама', 'scraping': 'Web Scraping', 'ai_api': 'AI/LLM API',
 }
 
 # Инструменты по категории (для координатора)
@@ -153,26 +170,30 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'rss': 'run_agent_action(точное action-имя RSS-скрипта агента), get_news_trends, create_post',
     'telegram': 'publish_to_telegram, create_post',
     'discord': 'publish_to_discord',
-    'crm': 'run_agent_action(CRM-операции: контакты/сделки/воронка)',
-    'marketplace': 'run_agent_action(товары/заказы/статистика)',
-    'pm': 'run_agent_action(тикеты/спринты/канбан)',
-    'notion': 'run_agent_action(страницы/базы)',
-    'sheets': 'run_agent_action(таблицы/отчёты)',
-    'crypto': 'run_agent_action(баланс/ордера/котировки)',
-    'finance': 'run_agent_action(get_price/get_stock), get_stock_price',
-    'news': 'run_agent_action(get_news), get_news_trends',
-    'slack': 'run_agent_action(post_message/list_channels)',
-    'social': 'run_agent_action(публикация/мониторинг)',
-    'payments': 'run_agent_action(платежи/подписки)',
-    'calendar': 'run_agent_action(расписание/встречи)',
-    'calls': 'run_agent_action(звонки/SMS)',
-    'script': 'run_agent_action (кастомные скрипты)',
-    'image_gen': 'generate_image',
-    'storage': 'run_agent_action(загрузка/выгрузка файлов)',
-    'analytics': 'run_agent_action(метрики/отчёты)',
-    'ms_teams': 'run_agent_action(сообщения/каналы)',
-    'automation': 'run_agent_action(webhook/триггеры)',
-    'database': 'run_agent_action(запросы/данные)',
+    'crm': 'run_agent_action(action="get_contacts"|"create_deal"|"update_lead"|"add_note", params={...})',
+    'marketplace': 'run_agent_action(action="get_products"|"check_stock"|"update_price"|"get_orders")',
+    'pm': 'run_agent_action(action="list_issues"|"create_task"|"update_status", params={"project":"..."})',
+    'notion': 'run_agent_action(action="create_page"|"update_page"|"query_db")',
+    'sheets': 'run_agent_action(action="update_sheet"|"append_row"|"read_range", params={"row":[...]})',
+    'crypto': 'run_agent_action(action="get_price"|"get_balance"|"get_ticker", params={"symbol":"BTC"})',
+    'finance': 'run_agent_action(action="get_price", symbol="BRENT"|"LKOH.MCX"), get_stock_price',
+    'news': 'run_agent_action(action="get_news", query="..."), get_news_trends',
+    'slack': 'run_agent_action(action="post_message"|"list_channels", params={"channel":"#general"})',
+    'social': 'run_agent_action(action="post"|"get_stats"|"search", params={"text":"..."})',
+    'payments': 'run_agent_action(action="get_charges"|"list_invoices"|"get_revenue")',
+    'calendar': 'run_agent_action(action="list_events"|"create_event"|"find_free_slot", params={"date":"2026-04-01"})',
+    'calls': 'run_agent_action(action="send_sms"|"make_call", params={"to":"+7...", "message":"..."})',
+    'script': 'run_agent_action(action="[точное имя ACTION из python_code агента]")',
+    'image_gen': 'generate_image(prompt="...")',
+    'storage': 'run_agent_action(action="upload"|"download"|"list_files", params={"path":"..."})',
+    'analytics': 'run_agent_action(action="get_metrics"|"get_report", params={"period":"7d"})',
+    'ms_teams': 'run_agent_action(action="post_message"|"list_channels", params={"channel":"..."})',
+    'automation': 'run_agent_action(action="trigger"|"send_webhook", params={"event":"..."})',
+    'database': 'run_agent_action(action="query"|"insert"|"update", params={"query":"SELECT ..."})',
+    'hr': 'run_agent_action(action="search_vacancies"|"get_resumes", params={"query":"...","area":1})',
+    'advertising': 'run_agent_action(action="get_stats"|"pause_campaign"|"update_bid", params={"login":"..."})',
+    'scraping': 'run_agent_action(action="scrape"|"parse", params={"url":"...","selector":"..."})',
+    'ai_api': 'run_agent_action(action="generate"|"analyze"|"summarize", params={"prompt":"..."})',
 }
 
 
@@ -382,6 +403,16 @@ _CATALOG_TYPE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
     (('linkedin',), 'linkedin'),
     (('google maps', '2gis', 'gmaps'), 'maps'),
     (('typeform', 'tally', 'google forms'), 'forms'),
+    # Новые типы
+    (('hh.ru', 'headhunter', 'superjob', 'hh_query'), 'hr'),
+    (('openai', 'gemini', 'anthropic', 'claude', 'gpt'), 'ai_api'),
+    (('firebase', 'firestore'), 'firebase'),
+    (('playwright', 'selenium', 'scraping'), 'scraping'),
+    (('яндекс.директ', 'yandex_direct', 'direct_token'), 'advertising'),
+    (('airtable',), 'airtable'),
+    (('coingecko', 'coingeсko'), 'coingecko'),
+    (('мойсклад', 'moysklad'), 'moysklad'),
+    (('calendly',), 'calendly'),
 ]
 
 
@@ -1223,6 +1254,54 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 'reply_to_outreach_email, send_outreach_email, find_relevant_contacts_for_task\n'
                 '  ⚠️ Если контакт предлагает созвон — НЕ назначай сам, сначала спроси пользователя: send_message_to_user'
             )
+        elif _cat == 'crm':
+            _intg_connected.append(
+                '✅ CRM — run_agent_action(action="get_contacts") — просмотреть базу контактов\n'
+                '  run_agent_action(action="create_deal", params={"title":"...", "contact_id":...})\n'
+                '  run_agent_action(action="update_lead", params={"id":..., "status":"qualified"})\n'
+                '  run_agent_action(action="add_note", params={"contact_id":..., "text":"..."})\n'
+                '  🔗 Цепочки: get_contacts → add_note (фоллоу-ап) | create_deal → update_lead (воронка)\n'
+                '  ⚠️ action-имена точно из python_code агента — проверь список доступных action выше.'
+            )
+        elif _cat == 'marketplace':
+            _intg_connected.append(
+                '✅ Маркетплейс — run_agent_action(action="get_products") — каталог/список товаров\n'
+                '  run_agent_action(action="check_stock", params={"sku":"..."}) — остатки\n'
+                '  run_agent_action(action="get_orders") — последние заказы\n'
+                '  run_agent_action(action="update_price", params={"sku":"...", "price":...})\n'
+                '  🔗 Цепочки: check_stock → send_message_to_user (алерт) | get_orders → save_note → research_topic\n'
+                '  ⚠️ action-имена точно из python_code агента.'
+            )
+        elif _cat == 'pm':
+            _intg_connected.append(
+                '✅ Трекер задач (Jira/Trello) — run_agent_action(action="list_issues", params={"project":"..."})\n'
+                '  run_agent_action(action="create_task", params={"title":"...", "assignee":"..."})\n'
+                '  run_agent_action(action="update_status", params={"id":"...", "status":"done"})\n'
+                '  🔗 Цепочки: list_issues → add_task (платформа) | create_task → delegate_task\n'
+                '  ⚠️ action-имена точно из python_code агента.'
+            )
+        elif _cat == 'hr':
+            _intg_connected.append(
+                '✅ HR / Работа (hh.ru/SuperJob) — run_agent_action(action="search_vacancies", params={"query":"Python developer", "area":1})\n'
+                '  run_agent_action(action="get_resumes", params={"query":"...", "experience":"between3And6"})\n'
+                '  🔗 Цепочки: search_vacancies → add_task | get_resumes → save_email_contact → send_outreach_email\n'
+                '  ℹ️ area: 1=Москва, 2=Санкт-Петербург, 113=Россия. Меняй query каждый цикл.'
+            )
+        elif _cat == 'database':
+            _intg_connected.append(
+                '✅ БД (PostgreSQL/MongoDB/Firebase) — run_agent_action(action="query", params={"query":"SELECT ..."})\n'
+                '  run_agent_action(action="insert", params={"table":"...", "data":{...}})\n'
+                '  run_agent_action(action="update", params={"table":"...", "condition":{...}, "data":{...}})\n'
+                '  🔗 Цепочки: query → research_topic (анализ) | insert → update_goal_progress\n'
+                '  ⚠️ Используй параметризованные запросы, НЕ конкатенируй строки SQL.'
+            )
+        elif _cat == 'ai_api':
+            _intg_connected.append(
+                '✅ AI/LLM API — run_agent_action(action="generate", params={"prompt":"..."})\n'
+                '  run_agent_action(action="analyze", params={"text":"...", "task":"classify|summarize|extract"})\n'
+                '  run_agent_action(action="summarize", params={"text":"..."})\n'
+                '  🔗 Цепочки: get_news → analyze → create_post | web_search → summarize → publish_to_telegram'
+            )
         elif _cat_hint:
             _intg_connected.append(f'✅ {_cat_name}: {_cat_hint}')
         else:
@@ -1248,14 +1327,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _dev_kw = ('разработ', 'программ', 'github', 'code', 'репозитор', 'деплой')
     _news_kw = ('новост', 'мониторинг', 'тренды', 'медиа', 'сми', 'пресс', 'обзор рынка')
     _ppl_kw  = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг')
+    _hr_kw   = ('вакансия', 'кандидат', 'найм', 'нанять', 'рекрутинг', 'резюме', 'подбор персонал', 'hr менедж', 'найти сотрудник')
     _cnt_kw  = ('контент', 'smm', 'публикац', 'канал', 'посты')
     _team_kw = ('команд', 'сотрудник', 'коллег', 'менеджер', 'hr', 'координац')
     _proj_kw = ('проект', 'задач', 'sprint', 'kanban', 'agile', 'трекер', 'backlog')
     _doc_kw  = ('документ', 'wiki', 'база знаний', 'заметк', 'confluence', 'notion')
     _crm_kw  = ('продаж', 'лид', 'сделк', 'воронк', 'crm', 'клиентск')
-    _ecom_kw = ('маркетплейс', 'wildberries', 'ozon', 'shopify', 'товар', 'карточк', 'остатк')
-    _crypto_kw2 = ('биткоин', 'bitcoin', 'btc', 'eth', 'крипто', 'crypto', 'binance', 'bybit', 'трейдинг')
+    _ecom_kw = ('маркетплейс', 'wildberries', 'ozon', 'shopify', 'товар', 'карточк', 'остатк', 'склад', 'инвентар')
+    _crypto_kw2 = ('биткоин', 'bitcoin', 'btc', 'eth', 'крипто', 'crypto', 'binance', 'bybit', 'трейдинг', 'coingecko')
     _data_kw = ('отчёт', 'аналитик', 'kpi', 'дашборд', 'таблиц', 'excel', 'sheets', 'данн')
+    _adv_kw  = ('реклам', 'директ', 'контекстн', 'рекламн кампан', 'яндекс директ', 'cpc', 'cpm', 'объявлен')
 
     if any(w in _goals_text_all for w in _fin_kw):
         if 'finance' not in _caps_cats:
@@ -1273,6 +1354,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if any(w in _goals_text_all for w in _ppl_kw):
         if 'email' not in _caps_cats:
             _intg_missing.append('⚡ Email — добавь GMAIL_USER + пароль приложения в дашборде: https://asibiont.com/dashboard')
+    if any(w in _goals_text_all for w in _hr_kw):
+        if 'hr' not in _caps_cats:
+            _intg_missing.append('⚡ hh.ru / SuperJob — поиск кандидатов и резюме (HH_QUERY + HH_AREA в настройках агента)')
     if any(w in _goals_text_all for w in _cnt_kw):
         if not _has_content:
             _intg_missing.append('⚡ Telegram Bot Token — публикация постов в канал (TELEGRAM_BOT_TOKEN в дашборде: https://asibiont.com/dashboard)')
@@ -1290,13 +1374,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _intg_missing.append('⚡ CRM (AmoCRM/Bitrix24/HubSpot) — воронка продаж и лиды (ключи в настройках)')
     if any(w in _goals_text_all for w in _ecom_kw):
         if 'marketplace' not in _caps_cats:
-            _intg_missing.append('⚡ Маркетплейс (WB/Ozon) — статистика продаж и позиций (API-ключ в настройках)')
+            _intg_missing.append('⚡ Маркетплейс (WB/Ozon/МойСклад) — статистика продаж и остатков (API-ключ в настройках)')
     if any(w in _goals_text_all for w in _crypto_kw2):
         if 'crypto' not in _caps_cats:
-            _intg_missing.append('⚡ Binance/Bybit — криптовалютные данные и трейдинг (API-ключ в настройках)')
+            _intg_missing.append('⚡ Binance/Bybit/CoinGecko — криптовалютные данные и трейдинг (API-ключ в настройках)')
     if any(w in _goals_text_all for w in _data_kw):
         if 'sheets' not in _caps_cats:
-            _intg_missing.append('⚡ Google Sheets — автоматические отчёты и дашборды (GOOGLE_SHEETS_KEY в настройках)')
+            _intg_missing.append('⚡ Google Sheets / Airtable — автоматические отчёты и дашборды (ключи в настройках)')
+    if any(w in _goals_text_all for w in _adv_kw):
+        if 'advertising' not in _caps_cats:
+            _intg_missing.append('⚡ Яндекс.Директ — управление рекламными кампаниями (YANDEX_DIRECT_TOKEN в настройках агента)')
 
     _intg_block = ''
     if _intg_connected or _intg_missing:
