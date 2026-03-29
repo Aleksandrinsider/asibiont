@@ -10680,6 +10680,21 @@ class AnchorEngine:
                     # ── Анализ смены стратегий: какие подходы были отменены и почему ──
                     _cancel_info = self._summarize_cancelled_tasks_this_cycle(session, user.id, anchor.created_at)
                     _strategy_adaptation = ''
+                    _recent_timeout_mentioned = False
+                    try:
+                        _since_tmo = datetime.now(timezone.utc) - timedelta(hours=6)
+                        _recent_timeout_mentioned = session.query(Interaction.id).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.created_at >= _since_tmo,
+                            Interaction.message_type.in_(['ai', 'proactive']),
+                            (
+                                Interaction.content.ilike('%таймаут%') |
+                                Interaction.content.ilike('%timeout%') |
+                                Interaction.content.ilike('%технические ошибки%')
+                            )
+                        ).first() is not None
+                    except Exception:
+                        _recent_timeout_mentioned = False
                     if _cancel_info.get('by_reason'):
                         _adapt_lines = []
                         for _reason, _tasks in _cancel_info['by_reason'].items():
@@ -10694,10 +10709,16 @@ class AnchorEngine:
                                     f"перенаправляю работу другому специалисту."
                                 )
                             elif _reason in ('timeout_300s', 'exec_error'):
-                                _adapt_lines.append(
-                                    f"Инструмент для '{_tasks[0]['title'][:50]}...' даёт технические ошибки -- "
-                                    f"переключаюсь на альтернативный канал."
-                                )
+                                if _recent_timeout_mentioned:
+                                    _adapt_lines.append(
+                                        f"По '{_tasks[0]['title'][:50]}...' автоканал сработал нестабильно -- "
+                                        f"переключаюсь на ручной сценарий, чтобы не терять темп."
+                                    )
+                                else:
+                                    _adapt_lines.append(
+                                        f"По '{_tasks[0]['title'][:50]}...' был таймаут/технический сбой -- "
+                                        f"переключаюсь на альтернативный канал."
+                                    )
                             elif _reason == 'empty_result':
                                 if _tasks[0].get('recs'):
                                     _adapt_lines.append(f"Рекомендация: {_tasks[0]['recs'][0]}")
@@ -10717,6 +10738,7 @@ class AnchorEngine:
                         f"- Пиши как друг-менеджер в мессенджере — живо, коротко, по делу.\n"
                         f"- Называй агентов по именам как живых людей: '[Имя] проверила почту...', '[Имя] нашёл 3 контакта...'.\n"
                         f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
+                        f"- Не зацикливайся на слове 'таймаут': если это уже недавно упоминалось, пиши мягко 'автоканал нестабилен, переключились'.\n"
                         f"- Оценка прогресса: одним предложением — движемся вперёд или застряли?\n"
                         f"  Если застряли — предложи что изменить.\n"
                         f"- Если агент не привёл конкретного результата — не упоминай его.\n"
