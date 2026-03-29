@@ -4631,7 +4631,10 @@ def _build_user_context_sync(user_db_id: int) -> str:
                      .order_by(_G.priority.desc())
                      .limit(5).all())
             agents = (_s.query(_UA)
-                      .filter_by(author_id=user_db_id, status='active')
+                      .filter(
+                          _UA.author_id == user_db_id,
+                          _UA.status.in_(['active', 'paused']),
+                      )
                       .limit(10).all())
             contacts = (_s.query(_EC)
                         .filter_by(user_id=user_db_id)
