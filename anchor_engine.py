@@ -28,6 +28,7 @@ AnchorEngine — единая событийная система автоном
 
 import asyncio
 import json
+import os
 import time
 import logging
 import re
@@ -545,7 +546,12 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
-MAX_AGENT_PERSONA_MSG_PER_DAY = 1  # Не больше 1 сообщения/день от одного агента-персоны
+MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '2'))
+# Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
+_AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
+    'goal_autopilot_ack',
+    'goal_autopilot_handoff',
+}
 MAX_FEED_PER_DAY = 3
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -3025,6 +3031,9 @@ class AnchorEngine:
                     continue
                 _ag = _p.get('__agent') if isinstance(_p.get('__agent'), dict) else None
                 _ag_name = ((_ag or {}).get('name') or '').strip().lower()
+                _anchor_type = str(_p.get('__anchor_type') or '').strip().lower()
+                if _anchor_type in _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES:
+                    continue
                 if _ag_name == _name_l:
                     _count += 1
                     if _count >= limit:

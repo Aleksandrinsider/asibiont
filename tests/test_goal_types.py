@@ -49,6 +49,7 @@
 import sys
 import os
 import asyncio
+import json
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -808,3 +809,53 @@ def test_g35_coordinator_guard_publish_without_channel_falls_back_to_create_post
     assert tool == "create_post", (tool, task, note)
     assert "Канал Telegram не подключён" in task, task
     assert "недоступен" in note.lower(), note
+
+
+def test_g36_agent_persona_cap_ignores_ack_message():
+    """Технический goal_autopilot_ack не должен съедать дневной лимит персоны."""
+    s = TestSession()
+    try:
+        u = models.User(telegram_id=910001, username='cap_ack_user', timezone='Europe/Moscow')
+        s.add(u)
+        s.commit()
+
+        s.add(models.Interaction(
+            user_id=u.id,
+            message_type='agent_msg',
+            content=json.dumps({
+                '__agent': {'name': 'Кристина', 'id': 14, 'avatar_url': ''},
+                'text': 'Ок, беру задачу',
+                '__anchor_type': 'goal_autopilot_ack',
+            }, ensure_ascii=False),
+        ))
+        s.commit()
+
+        eng = AnchorEngine()
+        assert eng._agent_persona_daily_cap_reached(s, u, 'Кристина', limit=1) is False
+    finally:
+        s.close()
+
+
+def test_g37_agent_persona_cap_counts_real_result_message():
+    """Реальный coordinator_result должен учитываться в дневном лимите персоны."""
+    s = TestSession()
+    try:
+        u = models.User(telegram_id=910002, username='cap_result_user', timezone='Europe/Moscow')
+        s.add(u)
+        s.commit()
+
+        s.add(models.Interaction(
+            user_id=u.id,
+            message_type='agent_msg',
+            content=json.dumps({
+                '__agent': {'name': 'Кристина', 'id': 14, 'avatar_url': ''},
+                'text': 'Нашла 6 контактов и отправила 6 писем',
+                '__anchor_type': 'coordinator_result',
+            }, ensure_ascii=False),
+        ))
+        s.commit()
+
+        eng = AnchorEngine()
+        assert eng._agent_persona_daily_cap_reached(s, u, 'Кристина', limit=1) is True
+    finally:
+        s.close()
