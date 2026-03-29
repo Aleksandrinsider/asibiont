@@ -3285,33 +3285,64 @@ class HybridAutonomousAgent:
             _is_strategy_cmd = any(kw in _user_msg_lower for kw in _strategy_keywords) and any(verb in _user_msg_lower for verb in ['можем', 'можно', 'может', 'should', 'надо', 'нужно', 'need', 'давай'])
 
             if _is_strategy_cmd:
-                # AI вернул пустой ответ на стратегическое указание — 
-                # повторяем с явной инструкцией вызвать инструменты
+                # AI вернул пустой ответ на стратегическое указание —
+                # делаем безопасный retry без зависимости от внешних переменных.
                 try:
-                    _retry_msgs = list(messages) if messages else []
-                    _retry_msgs.append({
-                        'role': 'user',
-                        'content': f'Пользователь просит: "{user_message}". '
-                                   f'Не обещай — ДЕЙСТВУЙ прямо сейчас. '
-                                   f'Вызови web_search или find_relevant_contacts_for_task или research_topic для выполнения запроса.'
-                    })
+                    _retry_msgs = [
+                        {
+                            'role': 'system',
+                            'content': (
+                                'Ты ассистент по достижению целей. Если запрос стратегический, '
+                                'не обещай, а сделай один реальный шаг через инструмент.'
+                            ),
+                        },
+                        {
+                            'role': 'user',
+                            'content': (
+                                f'Пользователь просит: "{user_message}". '
+                                f'Не обещай — ДЕЙСТВУЙ прямо сейчас. '
+                                f'Вызови web_search или find_relevant_contacts_for_task или research_topic.'
+                            ),
+                        },
+                    ]
                     _retry_resp = await self.call_ai(
-                        _retry_msgs, use_tools=True, max_tokens=1000,
+                        _retry_msgs, use_tools=True, max_tokens=900,
                         api_timeout=API_TIMEOUT_NORMAL)
                     _rc = _retry_resp['choices'][0]['message']
-                    if _rc.get('tool_calls'):
-                        # Есть вызовы инструментов — обработаем их
-                        _retry_results = await self._process_tool_calls(
-                            _rc['tool_calls'], user_id, db_session=db_session)
+                    _retry_tool_calls = _rc.get('tool_calls') or []
+                    if _retry_tool_calls:
                         _retry_msgs.append(_rc)
-                        for _rr in _retry_results:
+                        _retry_exec_results = []
+                        for _tc in _retry_tool_calls[:3]:
+                            _func = _tc.get('function', {})
+                            _tname = _func.get('name', '')
+                            try:
+                                _targs = json.loads(_func.get('arguments', '{}'))
+                            except Exception:
+                                _targs = {}
+                            if not isinstance(_targs, dict):
+                                _targs = {}
+                            _res_arr = await self.execute_actions(
+                                [{"tool": _tname, "params": _targs, "reason": "strategy_retry"}],
+                                user_id,
+                                session=None,
+                                user_message=user_message,
+                            )
+                            _res = _res_arr[0] if _res_arr else {"success": False, "error": "no result", "tool": _tname}
+                            _retry_exec_results.append(_res)
+                            if _res.get('success'):
+                                _tc_content = json.dumps(_res.get('result', ''), ensure_ascii=False, default=str)
+                            else:
+                                _tc_content = json.dumps({"error": str(_res.get('error', ''))}, ensure_ascii=False)
                             _retry_msgs.append({
                                 'role': 'tool',
-                                'tool_call_id': _rr['tool_call_id'],
-                                'content': str(_rr.get('result', ''))[:3000]
+                                'tool_call_id': _tc.get('id'),
+                                'content': _tc_content[:3000],
                             })
+                        if _retry_exec_results:
+                            execution_results.extend(_retry_exec_results)
                         _final_resp = await self.call_ai(
-                            _retry_msgs, use_tools=False, max_tokens=800,
+                            _retry_msgs, use_tools=False, max_tokens=700,
                             api_timeout=API_TIMEOUT_NORMAL)
                         final = (_final_resp['choices'][0]['message'].get('content', '') or '').strip()
                     elif _rc.get('content', '').strip():
@@ -3425,7 +3456,10 @@ class HybridAutonomousAgent:
                 try:
                     from models import Session, User
                     session = Session()
-                    user = session.query(User).filter_by(id=user_id).first()
+                    try:
+                        user = session.query(User).filter_by(telegram_id=user_id).first()
+                    except Exception:
+                        user = None
                     if user:
                         from .memory import store_encrypted_memory
                         # Получаем текущие правила
@@ -3447,7 +3481,7 @@ class HybridAutonomousAgent:
                             user.memory = _j_final.dumps(_mem_dict, ensure_ascii=False)
                             session.commit()
                             logger.info(f"[GLOBAL RULE] Added rule for user {user_id}: {user_message[:80]}")
-                        session.close()
+                    session.close()
                 except Exception as _gr_err:
                     logger.debug(f"[GLOBAL RULE] Failed to save as rule: {_gr_err}")
             
@@ -3458,14 +3492,19 @@ class HybridAutonomousAgent:
             if _has_search_keywords and _has_not_keywords and not _is_global_rule:
                 # Похоже на целевое указание типа "ищем [не_это] [а_то]" для текущего проекта
                 # Например: "ищем не тестировщиков а бизнесменов"
-                from models import Session, Goal
+                from models import Session, Goal, User
                 session = Session()
                 try:
+                    _u_sl = session.query(User).filter_by(telegram_id=user_id).first()
+                    if not _u_sl:
+                        _db_user_id = None
+                    else:
+                        _db_user_id = _u_sl.id
                     # Ищем активные цели на поиск/привлечение контактов
                     active_goals = session.query(Goal).filter(
-                        Goal.user_id == user_id,
+                        Goal.user_id == _db_user_id,
                         Goal.status == 'active'
-                    ).all()
+                    ).all() if _db_user_id else []
                     for goal in active_goals:
                         _gtitle_lower = (goal.title or '').lower()
                         _gdesc_lower = (goal.description or '').lower()
@@ -3484,13 +3523,13 @@ class HybridAutonomousAgent:
                                 from models import EmailCampaign as _EC_strat, DelegationCampaign as _DC_strat
                                 _strat_note = f"[СТРАТЕГИЯ {_ts}] {user_message}"
                                 for _ec in session.query(_EC_strat).filter(
-                                    _EC_strat.user_id == user_id,
+                                    _EC_strat.user_id == _db_user_id,
                                     _EC_strat.status == 'active'
                                 ).all():
                                     _ec.target_audience = ((_ec.target_audience or '') + '\n' + _strat_note).strip()
                                     logger.info(f"[STRATEGY] Updated EmailCampaign {_ec.id} target_audience")
                                 for _dc in session.query(_DC_strat).filter(
-                                    _DC_strat.user_id == user_id,
+                                    _DC_strat.user_id == _db_user_id,
                                     _DC_strat.status == 'active'
                                 ).all():
                                     _dc.target_audience = ((_dc.target_audience or '') + '\n' + _strat_note).strip()
