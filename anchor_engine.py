@@ -460,7 +460,7 @@ def _strip_html(text: str) -> str:
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
 MAX_FEED_PER_DAY = 3
-MAX_CHANNEL_PER_DAY = 3
+MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
 NIGHT_START_HOUR = PROACTIVE_NO_SEND_START_HOUR  # Общая настройка: 22

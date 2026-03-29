@@ -8093,24 +8093,6 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(pytz.UTC)
         
-        # Cooldown 30 мин: не публиковать повторно если недавно уже был пост
-        from datetime import timedelta as _td
-        _30min_ago = datetime.now(pytz.UTC) - _td(minutes=30)
-        recent_anchor_post = session.query(AnchorDeliveryLog).filter(
-            AnchorDeliveryLog.user_id == user.id,
-            AnchorDeliveryLog.created_at >= _30min_ago,
-            AnchorDeliveryLog.anchor_types.contains('channel_post')
-        ).first()
-        from models import Task as _Task
-        recent_task_post = session.query(_Task).filter(
-            _Task.user_id == user.id,
-            _Task.title.like('%Пост опубликован в%'),
-            _Task.status == 'completed',
-            _Task.actual_completion_time >= _30min_ago
-        ).first()
-        if (recent_anchor_post or recent_task_post) and not force:
-            return f" Пост в канал уже публиковался менее 30 минут назад. Попробуй позже."
-
         # Проверяем по AnchorDeliveryLog (автоматические публикации)
         auto_channel_today = session.query(AnchorDeliveryLog).filter(
             AnchorDeliveryLog.user_id == user.id,
@@ -8128,14 +8110,14 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         ).count()
         
         total_channel_posts_today = auto_channel_today + manual_channel_today
-        # Мягкий anti-spam: 3 поста/день — предохранитель, не жёсткий блок
-        if total_channel_posts_today >= 3 and not force:
+        # 1 пост в канал в день
+        if total_channel_posts_today >= 1 and not force:
             channel = user.telegram_channel or 'канал'
             if not channel.startswith('@') and not channel.startswith('-'):
                 channel = f"@{channel}"
             return (
-                f" Сегодня в {channel} уже {total_channel_posts_today} постов.\n"
-                f"Anti-spam лимит — 3 поста в канал в день."
+                f" Сегодня в {channel} уже был пост.\n"
+                f"Лимит — 1 пост в канал в день."
             )
         
         # Если content это JSON строка от generate_marketing_content, парсим
