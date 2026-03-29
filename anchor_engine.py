@@ -12275,7 +12275,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=2.0,
+            cooldown_hours=0.2,  # ~12min — реальный rate limit задаётся MIN_AUTOPILOT_GAP_MINUTES=15
             batch_group='goals',
         )]
 
