@@ -1549,13 +1549,17 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     finally:
                         _sess_gs.close()
                     if _gs_replied > 0:
-                        _prog_est = min(75, _gs_replied * 5)
                         _g0t = goals_summary[0].get('title', '') if goals_summary else ''
+                        _g0_target = goals_summary[0].get('metric_target') if goals_summary else None
+                        _g0_mc = goals_summary[0].get('metric_current', 0) or 0
+                        # Используем metric_current (реальные ответы), а не произвольный % через progress
+                        # progress=N% без metric_current обходит guard и даёт ложный % относительно target
                         _goal_state_hint += (
                             f"\n📊 РЕАЛЬНЫЙ РЕЗУЛЬТАТ: {_gs_replied} человек ответили на outreach!\n"
-                            f"→ Это значительный прогресс. Вызови update_goal_progress("
-                            f"goal_title=\"{_g0t[:40]}\", progress={_prog_est}, "
-                            f"notes=\"{_gs_replied} людей откликнулись\" ) чтобы зафиксировать.\n"
+                            f"→ Ответ на письмо ≠ подтверждённый интерес. Уточни с каждым готовность участвовать.\n"
+                            f"→ Если подтверждение получено → update_goal_progress("
+                            f"goal_title=\"{_g0t[:40]}\", metric_current={int(_g0_mc) + _gs_replied}, "
+                            f"notes=\"{_gs_replied} откликнулись на outreach\" )\n"
                             f"→ С заинтересованными — продолжай диалог, отправляй ссылку https://asibiont.com.\n"
                         )
                     else:
@@ -9317,6 +9321,8 @@ class AnchorEngine:
                        f"      ✅ check_emails вернул «+N новых ответов» → metric_current += N (уже сделано авто!)\n"
                        f"      ✅ получил ОТВЕТ/подтверждение интереса от нового контакта СНАРУЖИ → metric_current += 1\n"
                        f"      ✅ отправил письмо/сообщение ЧЕЛОВЕКУ → обновляй notes\n"
+                       f"      ❌ НЕ используй progress=N% для целей с людьми/тестировщиками — только metric_current!\n"
+                       f"         progress=% в обход metric_current даёт ложный % и не привязан к реальному target.\n"
                        f"      ❌ check_emails сказал «уже сделано авто» → НЕ вызывай update_goal_progress повторно!\n"
                        f"      ❌ прочитал RSS / сделал web_search / вызвал run_agent_action — НЕ обновлять прогресс!\n"
                        f"      ❌ RSS/поиск вернул НЕРЕЛЕВАНТНЫЕ данные (не по теме цели) — НЕ обновлять прогресс!\n"
