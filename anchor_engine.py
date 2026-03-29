@@ -3187,8 +3187,8 @@ class AnchorEngine:
             Anchor.created_at.asc()
         ).limit(20).all()
 
-        # ── STUCK ANCHOR RECOVERY: если autopilot-якорь висит >15 мин без delivered_at ──
-        _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=15)
+        # ── STUCK ANCHOR RECOVERY: если autopilot-якорь висит >60 мин без delivered_at ──
+        _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=60)
         _stuck_cleared = 0
         for _sa in deliverable:
             if _sa.anchor_type == 'goal_autopilot_review':
@@ -3200,7 +3200,7 @@ class AnchorEngine:
         if _stuck_cleared:
             session.commit()
             deliverable = [a for a in deliverable if a.delivered_at is None]
-            logger.warning("[ANCHOR] User %d: cleared %d stuck autopilot anchors (>15min)", user_id, _stuck_cleared)
+            logger.warning("[ANCHOR] User %d: cleared %d stuck autopilot anchors (>60min)", user_id, _stuck_cleared)
 
         # ── 0. BACKGROUND RESEARCH — выполнить отложенные исследования ──
         _bg_now = datetime.utcnow()  # naive UTC для сравнения с triggered_at из PostgreSQL (naive)
@@ -10277,6 +10277,31 @@ class AnchorEngine:
                 existing_keys.add((a.anchor_type, a.source))
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
+
+        # Block re-creation of any recently-delivered anchor whose cooldown has NOT expired.
+        # This prevents the "deliver → re-create instantly" loop (e.g. email_outreach_send
+        # cooldown=0.3h created 60+ times/day, goal_autopilot_review 38+ times/day).
+        # Safety window: look back max 48h to cover the longest cooldown (72h types clamp at 48).
+        try:
+            _MAX_LOOKBACK_H = 48
+            _cooldown_delivered = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.delivered_at.isnot(None),
+                Anchor.delivered_at >= now_utc - timedelta(hours=_MAX_LOOKBACK_H),
+                Anchor.source.isnot(None),
+                ~Anchor.anchor_type.in_(list(_DEDUP_WITH_DELIVERED)),  # email_reply_received handled above
+            ).all()
+            for _cd_a in _cooldown_delivered:
+                _cd_h = (_cd_a.cooldown_hours if _cd_a.cooldown_hours and _cd_a.cooldown_hours > 0
+                         else PRIORITY_COOLDOWN.get(_cd_a.priority, 4))
+                _da = _cd_a.delivered_at
+                if _da.tzinfo is None:
+                    _da = _da.replace(tzinfo=timezone.utc)
+                if _da >= now_utc - timedelta(hours=_cd_h):
+                    existing_keys.add((_cd_a.anchor_type, _cd_a.source))
+        except Exception as _ecd:
+            logger.debug("[ANCHOR] cooldown-dedup error (non-critical): %s", _ecd)
+
         # Singleton types: only one undelivered anchor per type (regardless of source)
         _SINGLETON_TYPES = {
             'service_degraded', 'token_low_balance', 'weather_extreme',
