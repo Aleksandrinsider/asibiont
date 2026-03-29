@@ -2325,9 +2325,352 @@ class HybridAutonomousAgent:
                 "\n🕐 ВРЕМЯ ПРИ ПРЕДЛОЖЕНИИ ЗАДАЧ — ДВА ЧЁТКИХ ПРАВИЛА:\n1) ПОЛЬЗОВАТЕЛЬ САМ УКАЗАЛ ВРЕМЯ ('через 15 минут', 'в 3 ночи', 'через час', 'в 02:30') → СТАВЬ ТОЧНО КАК СКАЗАЛ, даже ночью. НЕ переноси! Хоть 02:00 ночи — если он говорит 'через 15 минут', ставишь на 02:15. Это его выбор, уважай его.\n2) ВРЕМЯ НЕ УКАЗАНО (ты сам предлагаешь) → до 01:00: предлагай через 15-30 минут; после 01:00: предложи завтра утром.\nЕсли пользователь говорит 'сейчас/прямо сейчас' → reminder_time='сейчас'.\n🚨 ПРОВЕРКА КОНФЛИКТОВ: ПЕРЕД предложением времени ПОСМОТРИ секцию СЕГОДНЯ в контексте. Там видны все задачи с временем (например 'Задача1 (14:00), Задача2 (15:00)'). Если в 14:00 уже занято — НЕ предлагай 14:00, предложи 14:30 или следующий свободный слот. Минимум 15 минут между задачами."
             )
 
-    # ===== HELPER: Check if networking is available for user ═════════════════════════════════
+    # ===== HELPER: Detect which integrations user already has ══════════════════════════════
     @staticmethod
-    def _get_networking_readiness(user_id: int, session=None) -> dict:
+    def _detect_user_integrations(user_id: int, session=None) -> dict:
+        """
+        Scan user's API keys and profile to detect which integrations are already activated.
+        Returns: {
+            "active": ["Gmail", "GitHub", "Notion"],
+            "available": ["LinkedIn", "Slack", "Gmail", ...],  # all 60+ integrations
+            "missing": ["LinkedIn", "Slack", ...],  # available but not connected
+            "integration_status": {
+                "Gmail": {"status": "connected", "since": "2026-01-15"},
+                "LinkedIn": {"status": "not_connected", "setup": "LINKEDIN_ACCESS_TOKEN"},
+                ...
+            }
+        }
+        """
+        close_sess = False
+        if session is None:
+            session = Session()
+            close_sess = True
+        
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return {
+                    "active": [],
+                    "available": [],
+                    "missing": [],
+                    "integration_status": {}
+                }
+            
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            
+            # Полный каталог всех поддерживаемых интеграций
+            # (извлечено из anchor_engine._INTEGRATION_PLANS и других источников)
+            all_integrations = {
+                "Gmail": {
+                    "env_vars": ["GMAIL_USER", "GMAIL_PASS", "IMAP_HOST"],
+                    "keywords": ("gmail", "mail", "imap", "smtp", "почт", "email"),
+                    "category": "Email"
+                },
+                "Resend": {
+                    "env_vars": ["RESEND_API_KEY"],
+                    "keywords": ("resend", "outreach"),
+                    "category": "Email"
+                },
+                "SendGrid": {
+                    "env_vars": ["SENDGRID_API_KEY"],
+                    "keywords": ("sendgrid", "email"),
+                    "category": "Email"
+                },
+                "Mailgun": {
+                    "env_vars": ["MAILGUN_API_KEY"],
+                    "keywords": ("mailgun",),
+                    "category": "Email"
+                },
+                "GitHub": {
+                    "env_vars": ["GITHUB_TOKEN"],
+                    "keywords": ("github", "гитхаб", "gitlab"),
+                    "category": "Development"
+                },
+                "LinkedIn": {
+                    "env_vars": ["LINKEDIN_ACCESS_TOKEN"],
+                    "keywords": ("linkedin", "линкедин"),
+                    "category": "HR/Networking"
+                },
+                "Twitter/X": {
+                    "env_vars": ["X_API_KEY", "X_API_SECRET"],
+                    "keywords": ("twitter", "x_api", "твиттер"),
+                    "category": "Content"
+                },
+                "Telegram": {
+                    "env_vars": ["TELEGRAM_BOT_TOKEN"],
+                    "keywords": ("telegram", "телеграм"),
+                    "category": "Content"
+                },
+                "Discord": {
+                    "env_vars": ["DISCORD_WEBHOOK_URL", "DISCORD_TOKEN"],
+                    "keywords": ("discord",),
+                    "category": "Content"
+                },
+                "Slack": {
+                    "env_vars": ["SLACK_BOT_TOKEN"],
+                    "keywords": ("slack",),
+                    "category": "Collaboration"
+                },
+                "Notion": {
+                    "env_vars": ["NOTION_TOKEN"],
+                    "keywords": ("notion",),
+                    "category": "Productivity"
+                },
+                "Google Sheets": {
+                    "env_vars": ["GOOGLE_SHEETS_CREDENTIALS"],
+                    "keywords": ("sheets", "google sheets", "pandas"),
+                    "category": "Data"
+                },
+                "Airtable": {
+                    "env_vars": ["AIRTABLE_API_KEY"],
+                    "keywords": ("airtable",),
+                    "category": "Data"
+                },
+                "Trello": {
+                    "env_vars": ["TRELLO_API_KEY", "TRELLO_TOKEN"],
+                    "keywords": ("trello",),
+                    "category": "PM"
+                },
+                "Jira": {
+                    "env_vars": ["JIRA_URL", "JIRA_EMAIL", "JIRA_TOKEN"],
+                    "keywords": ("jira",),
+                    "category": "PM"
+                },
+                "Asana": {
+                    "env_vars": ["ASANA_TOKEN"],
+                    "keywords": ("asana",),
+                    "category": "PM"
+                },
+                "Todoist": {
+                    "env_vars": ["TODOIST_TOKEN"],
+                    "keywords": ("todoist",),
+                    "category": "PM"
+                },
+                "AmoCRM": {
+                    "env_vars": ["AMOCRM_TOKEN", "AMOCRM_URL"],
+                    "keywords": ("amocrm", "амокр"),
+                    "category": "CRM"
+                },
+                "Bitrix24": {
+                    "env_vars": ["BITRIX24_TOKEN", "BITRIX24_URL"],
+                    "keywords": ("bitrix", "битрикс"),
+                    "category": "CRM"
+                },
+                "HubSpot": {
+                    "env_vars": ["HUBSPOT_API_KEY"],
+                    "keywords": ("hubspot",),
+                    "category": "CRM"
+                },
+                "Stripe": {
+                    "env_vars": ["STRIPE_SECRET_KEY"],
+                    "keywords": ("stripe",),
+                    "category": "Payments"
+                },
+                "Yookassa": {
+                    "env_vars": ["YOOKASSA_API_KEY"],
+                    "keywords": ("yookassa", "юкасса"),
+                    "category": "Payments"
+                },
+                "Binance": {
+                    "env_vars": ["BINANCE_API_KEY"],
+                    "keywords": ("binance", "крипто"),
+                    "category": "Finance"
+                },
+                "Bybit": {
+                    "env_vars": ["BYBIT_API_KEY"],
+                    "keywords": ("bybit",),
+                    "category": "Finance"
+                },
+                "Alpha Vantage": {
+                    "env_vars": ["ALPHAVANTAGE_API_KEY"],
+                    "keywords": ("alphavantage", "stock"),
+                    "category": "Finance"
+                },
+                "OpenWeatherMap": {
+                    "env_vars": ["OPENWEATHERMAP_API_KEY"],
+                    "keywords": ("weather", "погод"),
+                    "category": "Data"
+                },
+                "NewsAPI": {
+                    "env_vars": ["NEWSAPI_KEY"],
+                    "keywords": ("newsapi", "новост"),
+                    "category": "Data"
+                },
+                "Wildberries": {
+                    "env_vars": ["WILDBERRIES_API_KEY"],
+                    "keywords": ("wildberries",),
+                    "category": "E-commerce"
+                },
+                "Ozon": {
+                    "env_vars": ["OZON_API_KEY"],
+                    "keywords": ("ozon",),
+                    "category": "E-commerce"
+                },
+                "Shopify": {
+                    "env_vars": ["SHOPIFY_API_KEY", "SHOPIFY_STORE"],
+                    "keywords": ("shopify",),
+                    "category": "E-commerce"
+                },
+                "Яндекс.Маркет": {
+                    "env_vars": ["YANDEX_MARKET_API_KEY"],
+                    "keywords": ("yandex", "маркет", "яндекс"),
+                    "category": "E-commerce"
+                },
+                "Avito": {
+                    "env_vars": ["AVITO_API_KEY"],
+                    "keywords": ("avito", "авито"),
+                    "category": "E-commerce"
+                },
+                "HH.ru": {
+                    "env_vars": ["HH_API_TOKEN"],
+                    "keywords": ("hh.ru", "headhunter"),
+                    "category": "HR"
+                },
+                "Firebase": {
+                    "env_vars": ["FIREBASE_CONFIG"],
+                    "keywords": ("firebase",),
+                    "category": "Development"
+                },
+                "CoinGecko": {
+                    "env_vars": ["COINGECKO_API_KEY"],
+                    "keywords": ("coingecko",),
+                    "category": "Finance"
+                },
+                "OpenAI": {
+                    "env_vars": ["OPENAI_API_KEY"],
+                    "keywords": ("openai", "gpt"),
+                    "category": "AI"
+                },
+                "DeepSeek": {
+                    "env_vars": ["DEEPSEEK_API_KEY"],
+                    "keywords": ("deepseek",),
+                    "category": "AI"
+                },
+                "Anthropic": {
+                    "env_vars": ["ANTHROPIC_API_KEY"],
+                    "keywords": ("anthropic", "claude"),
+                    "category": "AI"
+                },
+                "Google Cloud": {
+                    "env_vars": ["GOOGLE_CLOUD_KEY"],
+                    "keywords": ("google cloud", "gcp"),
+                    "category": "Development"
+                },
+                "AWS": {
+                    "env_vars": ["AWS_ACCESS_KEY_ID"],
+                    "keywords": ("aws", "amazon"),
+                    "category": "Development"
+                },
+                "Playwright": {
+                    "env_vars": ["PLAYWRIGHT_CONFIG"],
+                    "keywords": ("playwright", "browser"),
+                    "category": "Development"
+                },
+                "MoySklad": {
+                    "env_vars": ["MOYSKLAD_API_KEY"],
+                    "keywords": ("moysklad", "мой склад"),
+                    "category": "ERP"
+                },
+                "1C": {
+                    "env_vars": ["1C_API_KEY"],
+                    "keywords": ("1c", "1с"),
+                    "category": "ERP"
+                },
+                "SAP": {
+                    "env_vars": ["SAP_API_KEY"],
+                    "keywords": ("sap",),
+                    "category": "ERP"
+                },
+                "Salesforce": {
+                    "env_vars": ["SALESFORCE_TOKEN"],
+                    "keywords": ("salesforce",),
+                    "category": "CRM"
+                },
+                "Mailchimp": {
+                    "env_vars": ["MAILCHIMP_API_KEY"],
+                    "keywords": ("mailchimp",),
+                    "category": "Email"
+            },
+                "Brevo": {
+                    "env_vars": ["BREVO_API_KEY"],
+                    "keywords": ("brevo", "sendinblue"),
+                    "category": "Email"
+                },
+                "Advertising (Google Ads)": {
+                    "env_vars": ["GOOGLE_ADS_API_KEY"],
+                    "keywords": ("google ads", "advertising"),
+                    "category": "Marketing"
+                },
+                "Advertising (Facebook)": {
+                    "env_vars": ["FACEBOOK_ADS_TOKEN"],
+                    "keywords": ("facebook ads", "meta ads"),
+                    "category": "Marketing"
+                },
+                "RSS Feeds": {
+                    "env_vars": ["RSS_FEEDS"],
+                    "keywords": ("rss", "feed", "лент"),
+                    "category": "Content"
+                },
+            }
+            
+            # Получаем API ключи пользователя (если есть функция get_api_key)
+            active_intgs = []
+            intg_status = {}
+            
+            for intg_name, intg_config in all_integrations.items():
+                env_vars = intg_config.get("env_vars", [])
+                has_key = False
+                
+                # Проверяем наличие хотя бы одного из env_vars
+                for var in env_vars:
+                    if hasattr(user, 'get_api_key'):
+                        api_key = user.get_api_key(var)
+                    else:
+                        # Fallback: check user_api_keys field directly
+                        api_keys_str = str(getattr(user, 'user_api_keys', '') or '')
+                        api_key = var in api_keys_str.upper()
+                    
+                    if api_key:
+                        has_key = True
+                        break
+                
+                if has_key:
+                    active_intgs.append(intg_name)
+                    intg_status[intg_name] = {
+                        "status": "connected",
+                        "category": intg_config.get("category", "Other")
+                    }
+                else:
+                    intg_status[intg_name] = {
+                        "status": "not_connected",
+                        "category": intg_config.get("category", "Other"),
+                        "setup": env_vars[0] if env_vars else "Unknown"
+                    }
+            
+            missing_intgs = [name for name in all_integrations.keys() if name not in active_intgs]
+            
+            return {
+                "active": sorted(active_intgs),
+                "available": sorted(all_integrations.keys()),
+                "missing": sorted(missing_intgs),
+                "integration_status": intg_status,
+                "count_active": len(active_intgs),
+                "count_available": len(all_integrations),
+            }
+            
+        except Exception as e:
+            logger.warning(f"[INTEGRATION_DETECTION] Error: {e}")
+            return {
+                "active": [],
+                "available": [],
+                "missing": [],
+                "integration_status": {},
+                "error": str(e)
+            }
+        finally:
+            if close_sess:
+                session.close()
+
         """
         Check if user profile is ready for networking actions.
         Returns: {
@@ -2577,6 +2920,55 @@ class HybridAutonomousAgent:
             except Exception as e:
                 logger.debug(f"[NETWORKING_CHECK] Background check skipped: {e}")
                 # Not critical — networking check is optional
+
+            # ═══ ИНТЕГРАЦИИ (какие уже подключены, какие доступны) ═══
+            try:
+                intg_detection = self._detect_user_integrations(user_id)
+                if intg_detection.get('active'):
+                    if user_lang == 'ru':
+                        dynamic_context += f"\n\n[USER_INTEGRATIONS]\nПодключены ({len(intg_detection['active'])} шт): {', '.join(intg_detection['active'][:10])}"
+                        if len(intg_detection['active']) > 10:
+                            dynamic_context += f" и ещё {len(intg_detection['active']) - 10}"
+                        available_by_category = {}
+                        for intg, status in intg_detection.get('integration_status', {}).items():
+                            if status.get('status') == 'not_connected':
+                                cat = status.get('category', 'Other')
+                                if cat not in available_by_category:
+                                    available_by_category[cat] = []
+                                available_by_category[cat].append(intg)
+                        if available_by_category:
+                            dynamic_context += f"\n\nДоступно для подключения ({len(intg_detection['missing'])} шт):\n"
+                            for category, intgs in sorted(available_by_category.items())[:5]:  # Top 5 categories
+                                dynamic_context += f"  • {category}: {', '.join(intgs[:3])}"
+                                if len(intgs) > 3:
+                                    dynamic_context += f" + ещё {len(intgs) - 3}"
+                                dynamic_context += "\n"
+                        dynamic_context += "\n[INTEGRATION_LOGIC]: Когда пользователь говорит что-то типа 'давай улучшим', 'хочу быстрее', 'не работает' → предложи ОДНУ интеграцию из 'Доступно для подключения', которая решит конкретную проблему. Не предлагай уже подключённые!"
+                    else:
+                        dynamic_context += f"\n\n[USER_INTEGRATIONS]\nConnected ({len(intg_detection['active'])} total): {', '.join(intg_detection['active'][:10])}"
+                        if len(intg_detection['active']) > 10:
+                            dynamic_context += f" and {len(intg_detection['active']) - 10} more"
+                        available_by_category = {}
+                        for intg, status in intg_detection.get('integration_status', {}).items():
+                            if status.get('status') == 'not_connected':
+                                cat = status.get('category', 'Other')
+                                if cat not in available_by_category:
+                                    available_by_category[cat] = []
+                                available_by_category[cat].append(intg)
+                        if available_by_category:
+                            dynamic_context += f"\n\nAvailable to connect ({len(intg_detection['missing'])} total):\n"
+                            for category, intgs in sorted(available_by_category.items())[:5]:
+                                dynamic_context += f"  • {category}: {', '.join(intgs[:3])}"
+                                if len(intgs) > 3:
+                                    dynamic_context += f" + {len(intgs) - 3} more"
+                                dynamic_context += "\n"
+                else:
+                    if user_lang == 'ru':
+                        dynamic_context += "\n\n[USER_INTEGRATIONS]\nПока нет подключённых интеграций. Всего доступно более 60 интеграций, включая: Email, GitHub, LinkedIn, CRM, Маркетплейсы и т.д."
+                        dynamic_context += "\nЕсли пользователь обсуждает проблему → предложи начать с одной нужной интеграции."
+            except Exception as e:
+                logger.debug(f"[INTEGRATION_DETECTION] Background check skipped: {e}")
+                # Not critical — this is supplementary information
 
 
             # ═══ МУЛЬТИАГЕНТНЫЙ АНАЛИЗ ═══
@@ -5217,30 +5609,34 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         f"\nТвои подключённые сервисы: {', '.join(_integrations)}." if _integrations else ''
     )
 
-    _asi_identity = (
-        "Ты — персональный агент ASI Biont. Мыслящий партнёр, не автоответчик. "
-        "Прямой, энергичный, действуешь проактивно. Пишешь живо, как опытный друг в мессенджере. "
-        "Ты ДЕЛАЕШЬ, а не просто советуешь. Отвечаешь кратко, без списков и заголовков."
+    # ┌─ ВАЖНО: Чтобы агент НЕ начал выдавать себя за реально выполнившего работу,
+    #           система должна сказать ему не "ты - это агент", а
+    #           "ты комментируешь от лица агента" с явным стоп-словом на действия
+    _system = (
+        "Ты один из команды персональных агентов внутри ASI Biont. "
+        "В этом разговоре твоя роль — добавить экспертный комментарий со своей стороны.\n\n"
+        f"Твоя специализация: {_agent.get('specialization', 'специалист')}.\n"
+        f"Твоё имя в команде: {_agent['name']}.\n"
+        f"Описание: {_agent.get('description', '')}\n\n"
+        "ЖЁСТКОЕ ПРАВИЛО: Ты не выполняла задачу, которую видишь в чате. "
+        "Ты просто комментируешь. Говоришь то как: "
+        "'Это в моей компетенции, вот мой взгляд...' или 'Я помогу если позовут'.\n"
+        "Никогда не говори 'я сделала', 'я запустила', 'я проверила' или 'я уже'."
     )
-    _persona = (
-        _agent.get('personality') or
-        f"Ты действуешь как {_agent['name']} — {_agent.get('specialization', 'специалист')}. "
-        f"{_agent.get('description', '')}"
-    )
-    _ctx_block = f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_ctx}" if _user_ctx else ''
-    _system = f"{_asi_identity}\n\nРОЛЬ В ЭТОМ КОНТЕКСТЕ:\n{_persona}{_integrations_hint}{_ctx_block}"
+    if _user_ctx:
+        _system += f"\n\nКОНТЕКСТ О ПОЛЬЗОВАТЕЛЕ:\n{_user_ctx}"
 
     _user_content = (
-        f"В чате только что написали:\n"
-        f"[Пользователь]: {user_message[:200]}\n"
-        f"[ASI]: {asi_response[:300]}\n\n"
+        f"В чате происходит разговор:\n"
+        f"Пользователь: {user_message[:200]}\n"
+        f"ASI ответила: {asi_response[:300]}\n\n"
         "Ты — коллега ASI. Прочитал этот разговор и хочешь добавить короткую реплику со своей стороны.\n"
         "ВАЖНО: ты только ЧИТАЕШЬ разговор — НЕ делай вид, что запустил скрипт, проверил почту, "
         "получил данные или выполнил задачу. Ты комментируешь, а не действуешь.\n"
-        "Можно: добавить экспертное мнение из своей области, упомянуть что можешь помочь если пользователь обратится.\n"
-        "НЕ выдумывай данные (письма, новости, задачи) — только то, что реально в этом разговоре.\n"
+        f"Можно говорить от первого лица: 'К тебе вопрос по {_agent.get('specialization', 'моей области')}? Я помогу'.\n"
+        "НЕ говори: 'я отправила', 'я нашла', 'я выполнила'. Только комментарий!\n"
         "Учитывай кто этот пользователь и чем он занимается — отвечай релевантно его контексту.\n"
-        "1-2 предложения. Живо, без официоза. Если нечего добавить — ответь пустой строкой."
+        "1-2 предложения макс. Живо, как рабочая чатуха. Если нечего добавить — пустая строка."
     )
 
     try:
