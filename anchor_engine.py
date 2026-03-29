@@ -1197,47 +1197,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _agent_has_discord = 'discord' in _caps_cats
     _user_tg_ch       = bool(getattr(user, 'telegram_channel', None))
     _user_discord_wh  = bool(getattr(user, 'discord_webhook', None))
+    _py_actions = _extract_python_actions(python_code)
 
     # ── Карточка «ЧТО Я УМЕЮ» — reasoning-ready capability card ──
     # Агент должен ДУМАТЬ из интеграций, а не угадывать по описанию роли.
+    # Блок строится универсально: из категорий _classify_agent_caps + точных ACTION из python_code.
     _aic_can: list = []
     _aic_cannot: list = []
-    if _has_imap:
-        _aic_can.append("📧 Email: send_outreach_email, check_emails, reply_to_outreach_email, find_contacts")
-    else:
-        _aic_cannot.append("📧 Email/Gmail (нет ключей) → DELEGATE[агент с Email] для писем и проверки почты")
-    if _has_github:
-        _aic_can.append("🐙 GitHub: search_users(query=), search_repos, list_issues, comment_on_issue")
-    else:
-        _aic_cannot.append("🐙 GitHub (нет токена) → DELEGATE[агент с GitHub] для поиска разработчиков")
-    if _has_rss:
-        _aic_can.append("📡 RSS: run_agent_action(get_feed), get_news_trends — мониторинг лент")
-    if _has_slack:
-        _aic_can.append("💬 Slack: run_agent_action(post_message) — корпоративный воркспейс")
-    if _has_notion:
-        _aic_can.append("📓 Notion: run_agent_action(create_page, update_page, query_db)")
-    if _has_sheets:
-        _aic_can.append("📊 Sheets: run_agent_action(update_sheet, append_row, read_range)")
-    if _has_crm:
-        _aic_can.append("🗂 CRM: run_agent_action(get_contacts, create_deal, update_lead, add_note)")
-    if _has_market:
-        _aic_can.append("🛒 Маркетплейс: run_agent_action(get_products, check_stock, update_price)")
-    if _has_pm:
-        _aic_can.append("📋 Tracker (Jira/Trello): run_agent_action(list_issues, create_task, update_status)")
-    if _has_alpha or _has_crypto:
-        _aic_can.append("📈 Финансы/Крипто: run_agent_action(get_price, get_balance)")
-    if _has_news:
-        _aic_can.append("📰 Новости API: run_agent_action(get_news, query=...)")
-    if _has_cal:
-        _aic_can.append("📅 Календарь: run_agent_action(list_events, create_event, find_free_slot)")
-    if _has_calls:
-        _aic_can.append("📞 Звонки/SMS: run_agent_action(send_sms, make_call)")
-    if _has_social:
-        _aic_can.append("🌐 Соцсети API: run_agent_action(post, get_stats, search)")
-    if _has_hr:
-        _aic_can.append("👥 HR/hh.ru: run_agent_action(search_vacancies, get_resumes)")
-    if _has_script:
-        _aic_can.append("⚙️ Кастомный скрипт Python: run_agent_action(action=<из профиля>)")
+    for _cat in sorted(_caps_cats):
+        _cat_name = _CAP_CATEGORY_NAMES.get(_cat, _cat)
+        _cat_hint = _CAP_TOOL_HINTS.get(_cat, '')
+        if _cat_hint:
+            _aic_can.append(f"{_cat_name}: {_cat_hint}")
+        else:
+            _aic_can.append(_cat_name)
+    if _py_actions:
+        _aic_can.append(
+            "Кастомные ACTION агента: " + ', '.join(_py_actions[:12])
+            + " → run_agent_action(action=<одно из этих имён>)"
+        )
     # publish_to_telegram: доступно если есть бот агента ИЛИ канал пользователя
     if _agent_has_tg or _user_tg_ch:
         _aic_can.append(
@@ -1250,6 +1228,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _aic_can.append("📢 publish_to_discord: отправка webhook в Discord-сервер пользователя")
     _aic_can.append("🔍 web_search, research_topic, add_task — всегда доступны")
     # Платформенные ограничения: одинаковы для ВСЕХ агентов, не зависят от интеграций
+    _aic_cannot.append("Любая интеграция, которой нет в блоке ДОСТУПНО, для этого агента недоступна прямо сейчас")
     _aic_cannot.append(
         "💬 ЧУЖИЕ Telegram-группы/чаты/сообщества — участие НЕВОЗМОЖНО "
         "(это требует Telegram UserBot API — его в платформе НЕТ)"
@@ -1384,12 +1363,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _intg_connected.append(f'✅ {_cat_name}')
 
     # ── Авто-обнаружение ACTION-хендлеров из python_code ──
-    _py_actions: list = []
-    if python_code:
-        import re as _re_bap_act
-        _py_actions = list(dict.fromkeys(
-            _re_bap_act.findall(r"""ACTION\s*==\s*['"]([^'"]{1,60})['"]""", python_code)
-        ))
     if _py_actions:
         _intg_connected.append(
             f'✅ Кастомные action (из скрипта агента): {", ".join(_py_actions[:12])}\n'
