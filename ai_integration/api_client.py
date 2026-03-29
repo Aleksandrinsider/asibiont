@@ -486,13 +486,20 @@ class ExternalAPIClient:
             import asyncio as _aio
 
             def _sync_search():
-                with DDGS(timeout=10) as ddgs:
-                    raw = list(ddgs.text(query, region=region, max_results=num))
-                    return [{
-                        'title': r.get('title', ''),
-                        'snippet': r.get('body', ''),
-                        'link': r.get('href', ''),
-                    } for r in raw]
+                import logging as _lg
+                # Suppress ConnectError INFO lines from ddgs internals
+                _lg.getLogger('ddgs').setLevel(_lg.WARNING)
+                _lg.getLogger('ddgs.ddgs').setLevel(_lg.WARNING)
+                try:
+                    with DDGS(timeout=10) as ddgs:
+                        raw = list(ddgs.text(query, region=region, max_results=num))
+                        return [{
+                            'title': r.get('title', ''),
+                            'snippet': r.get('body', ''),
+                            'link': r.get('href', ''),
+                        } for r in raw]
+                except Exception:
+                    raise  # propagate to outer handler
 
             loop = _aio.get_running_loop()
             sem = self._get_ddg_semaphore()

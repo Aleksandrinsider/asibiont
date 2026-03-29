@@ -125,6 +125,12 @@ def normalize_city(city):
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Suppress verbose INFO noise from third-party search libraries
+logging.getLogger('ddgs').setLevel(logging.WARNING)
+logging.getLogger('ddgs.ddgs').setLevel(logging.WARNING)
+logging.getLogger('duckduckgo_search').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
+
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
