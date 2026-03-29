@@ -9616,13 +9616,14 @@ class AnchorEngine:
                     # Также логируем agent_task в AAL — для контекста ASI (context_builder читает AAL)
                     from ai_integration.utils import normalize_task_title as _ntt_aal
                     _aal_task_title, _ = _ntt_aal(_step.get('task') or 'задача', agent_name=_ag_name)
+                    _aal_result = (_cleaned or '')[:600]
                     session.add(AgentActivityLog(
                         user_id=user.id,
                         activity_type='agent_task',
                         title=f'{_ag_name}: {_aal_task_title[:150]}',
                         target=f'agent:{_ag_name}',
-                        content=_cleaned[:600],
-                        result=_cleaned[:600],
+                        content=_aal_result,
+                        result=_aal_result,
                         status='completed',
                     ))
                     session.commit()
@@ -12268,7 +12269,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.25,
+            cooldown_hours=2.0,
             batch_group='goals',
         )]
 

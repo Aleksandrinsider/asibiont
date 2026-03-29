@@ -243,6 +243,7 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
                 activity_type='agent_task',
                 title=f'{agent_name}: выполнено',
                 content=task_title[:500],
+                result=task_title[:500],
                 target=f'agent:{agent_name}',
                 status='completed',
             ))
