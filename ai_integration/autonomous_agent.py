@@ -2310,14 +2310,9 @@ class HybridAutonomousAgent:
                 "\nПользователь рассказывает о себе/проекте → ДАЙ ЭКСПЕРТНЫЕ СОВЕТЫ по его нише + update_profile + research_topic(тренды в нише)."
                 "\nПользователь упоминает навыки/технологии → update_profile + research_topic(тренды)."
                 "\nПользователь говорит о достижении → complete_task + update_goal_progress + предложи create_post."
-                "\nОбсуждают маркетинг, продвижение, рост, привлечение → research_topic(тренды канала/рынка) + find_relevant_contacts_for_task + предложи start_content_campaign."
-                "\nОбсуждают конкурентов, рынок, нишу, позиционирование → research_topic + дай экспертный анализ с конкретными альтернативами."
-                "\nПользователь жалуется что что-то не работает или топчется на месте → предложи АЛЬТЕРНАТИВНЫЙ подход, исследуй через research_topic, НЕ повторяй те же советы что уже давал."
-                "\nПользователь говорит о финансах, доходе, монетизации → research_topic(монетизация/инструменты) + предложи конкретные варианты под его профиль."
-                "\nОбсуждают команду, найм, поиск людей → find_relevant_contacts_for_task + set_contact_alert + предложи start_delegation_campaign."
-                "\nЕсли пользователь в третий раз возвращается к той же теме без прогресса → СМЕНИ подход: дай принципиально другое предложение, изучи через research_topic свежие данные, предложи другой канал или инструмент."
-                "\n🔑 НЕЯВНОЕ ЗАВЕРШЕНИЕ ЗАДАЧ (ПРИОРИТЕТ №1): когда пользователь сообщает что ОН СДЕЛАЛ что-то (заказал, купил, оплатил, настроил, написал, отправил, закончил, разобрался, договорился, позвонил, прошёл, запустил, забрал, получил, починил, установил, собрал, приготовил, убрал — ЛЮБОЙ глагол совершённого вида) — СРАЗУ СРАВНИ с КАЖДОЙ задачей из секций ПРОСРОЧЕНО/СЕГОДНЯ/ЗАВТРА. Если есть задача по СМЫСЛУ совпадающая с тем что он описал — НЕМЕДЛЕННО вызови complete_task(task_id=ID) БЕЗ вопросов. Примеры: 'Я заказал продукты' + задача 'Заказать продукты на завтрак [id=42]' → complete_task(task_id=42). 'Настроил сайт' + задача 'Настроить сайт' → complete_task. 'Позвонил врачу' + задача 'Записаться к врачу' → complete_task. ⚠️ Это ГЛАВНЫЙ способ как люди закрывают задачи. Пропустить сигнал = КРИТИЧЕСКАЯ ОШИБКА."
-                "\nЗадача связана с людьми → find_relevant_contacts_for_task + set_contact_alert."
+                "\n🌐 НЕТВОРКИНГ (УСЛОВНОЕ): Если обсуждают маркетинг/продвижение/рост → СНАЧАЛА check [NETWORKING_STATUS] в контексте:\n   • Если [NETWORKING_READY]=YES → research_topic + find_relevant_contacts_for_task + start_content_campaign\n   • Если [NETWORKING_READY]=NO → дай причину (профиль не заполнен / нет контактов) и рекомендацию что заполнить сначала. ТОЛЬКО ПОТОМ -> research_topic(альтернативные каналы) без find_relevant_contacts_for_task"
+                "\n🌐 НЕТВОРКИНГ (УСЛОВНОЕ): Если обсуждают команду/найм/поиск людей → СНАЧАЛА check [NETWORKING_STATUS] в контексте:\n   • Если [NETWORKING_READY]=YES → find_relevant_contacts_for_task + set_contact_alert + start_delegation_campaign\n   • Если [NETWORKING_READY]=NO → дай причину и рекомендацию. Предложи альтернативный подход найма (заявки, тесты, интервью)"
+                "\nЗадача связана с людьми → СНАЧАЛА check [NETWORKING_STATUS]: если YES → find_relevant_contacts_for_task + set_contact_alert; если NO → дай альтернативные способы поиска"
                 "\nЦЕЛИ: «хочу набрать X», «заработать Y», «достичь Z за N месяцев», конкретная цифра или срок → СРАЗУ create_goal без спроса. Не обсуждай цель — СОЗДАЙ ЕЁ."
                 "\nНАПОМИНАНИЯ: «напомни через X минут/часов», «поставь напоминание», «напомни в 15:00» → СРАЗУ add_task с reminder_time. НЕ спрашивай подтверждение — пользователь УЖЕ попросил. Название = суть напоминания из запроса. reminder_time ОБЯЗАТЕЛЕН: передай ТОЧНО как сказал пользователь, например reminder_time='через 5 минут' или reminder_time='в 15:00' или reminder_time='завтра в 10:00'. ⛔ СТРОЖАЙШИЙ ЗАПРЕТ: если пользователь сказал 'через 15 минут' ночью — НЕ ПЕРЕНОСИ на утро! Он РЕШИЛ сам. Ставь ночью. 'через 30 минут' в 02:40 → reminder_time='через 30 минут' (будет 03:10). ЕСЛИ НЕ ПЕРЕДАШЬ reminder_time — задача НЕ СОЗДАСТСЯ."
                 "\nНЕЯВНЫЕ ЗАДАЧИ: Пользователь упоминает событие/дело с временем («у меня встреча в 15:00», «завтра дедлайн», «записан к врачу на 10», «в среду презентация») → ПРОВЕРЬ список задач (get_tasks). Если такой задачи НЕТ → ПРЕДЛОЖИ поставить напоминание с конкретным временем (за 15 мин до события). Пример: «Вижу, задачи про встречу нет. Поставить напоминание на 14:45?». Создавай add_task ТОЛЬКО после подтверждения пользователя (да, давай, ок, поставь). Если время неточное («после обеда», «вечером») — сначала уточни конкретное время, потом предложи."
@@ -2328,6 +2323,87 @@ class HybridAutonomousAgent:
                 "\n⚠️ ЗАДАЧИ БЕЗ ВРЕМЕНИ: Если в списке задач пользователя есть задачи с пометкой '⚠️ БЕЗ ВРЕМЕНИ' — предложи время через 15-30 минут от текущего момента: 'У задачи X нет времени — поставить на HH:MM?'. Задача без напоминания = задача которую забудут."
                 "\n🕐 ВРЕМЯ ПРИ ПРЕДЛОЖЕНИИ ЗАДАЧ — ДВА ЧЁТКИХ ПРАВИЛА:\n1) ПОЛЬЗОВАТЕЛЬ САМ УКАЗАЛ ВРЕМЯ ('через 15 минут', 'в 3 ночи', 'через час', 'в 02:30') → СТАВЬ ТОЧНО КАК СКАЗАЛ, даже ночью. НЕ переноси! Хоть 02:00 ночи — если он говорит 'через 15 минут', ставишь на 02:15. Это его выбор, уважай его.\n2) ВРЕМЯ НЕ УКАЗАНО (ты сам предлагаешь) → до 01:00: предлагай через 15-30 минут; после 01:00: предложи завтра утром.\nЕсли пользователь говорит 'сейчас/прямо сейчас' → reminder_time='сейчас'.\n🚨 ПРОВЕРКА КОНФЛИКТОВ: ПЕРЕД предложением времени ПОСМОТРИ секцию СЕГОДНЯ в контексте. Там видны все задачи с временем (например 'Задача1 (14:00), Задача2 (15:00)'). Если в 14:00 уже занято — НЕ предлагай 14:00, предложи 14:30 или следующий свободный слот. Минимум 15 минут между задачами."
             )
+
+    # ===== HELPER: Check if networking is available for user ═════════════════════════════════
+    @staticmethod
+    def _get_networking_readiness(user_id: int, session=None) -> dict:
+        """
+        Check if user profile is ready for networking actions.
+        Returns: {"ready": bool, "reason": str, "missing": [list of missing items]}
+        
+        Networking requires:
+        1. Non-empty profile (interests, skills, goals, or city)
+        2. At least one contact in network
+        
+        This guard prevents recommending find_relevant_contacts_for_task when it will fail.
+        """
+        close_sess = False
+        if session is None:
+            session = Session()
+            close_sess = True
+        
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return {
+                    "ready": False,
+                    "reason": "Пользователь не найден",
+                    "missing": ["profile"]
+                }
+            
+            profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+            missing = []
+            
+            # Check profile completeness
+            has_interests = profile and profile.interests and len(str(profile.interests)) > 5
+            has_skills = profile and profile.skills and len(str(profile.skills)) > 5
+            has_goals = profile and profile.goals and len(str(profile.goals)) > 5
+            has_city = profile and profile.city and len(str(profile.city).strip()) > 2
+            
+            profile_complete = has_interests or has_skills or has_goals or has_city
+            if not profile_complete:
+                missing.append("profile_incomplete")
+            
+            # Check if user has contacts in network
+            from .handlers import get_partners_list
+            partners = get_partners_list(user.id, session)
+            has_contacts = bool(partners and len(partners) > 0)
+            if not has_contacts:
+                missing.append("no_contacts_in_network")
+            
+            if missing:
+                reason_parts = []
+                if "profile_incomplete" in missing:
+                    reason_parts.append("профиль не заполнен (добавьте интересы, навыки или город)")
+                if "no_contacts_in_network" in missing:
+                    reason_parts.append("в сети нет контактов")
+                
+                return {
+                    "ready": False,
+                    "reason": "Нетворкинг недоступен: " + " и ".join(reason_parts),
+                    "missing": missing,
+                    "recommendation": (
+                        "Заполни профиль (интересы, навыки, город) и добавь контакты в сеть, "
+                        "тогда сможешь искать партнёров для сотрудничества."
+                    )
+                }
+            
+            return {
+                "ready": True,
+                "reason": "Нетворкинг доступен",
+                "missing": []
+            }
+            
+        except Exception as e:
+            logger.warning(f"[NETWORKING_CHECK] Error checking networking readiness: {e}")
+            return {
+                "ready": False,
+                "reason": f"Ошибка проверки: {e}",
+                "missing": ["error"]
+            }
+        finally:
+            if close_sess:
+                session.close()
 
     # ===== ОСНОВНОЙ FLOW =====
 
@@ -2399,6 +2475,26 @@ class HybridAutonomousAgent:
             
             if cognitive_hints:
                 dynamic_context += cognitive_hints
+
+            # ═══ СЕТЕВОЙ СТАТУС (для условной рекомендации нетворкинга) ═══
+            try:
+                networking_status = self._get_networking_readiness(user_id)
+                if user_lang == 'ru':
+                    if networking_status['ready']:
+                        dynamic_context += "\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=YES (профиль заполнен, есть контакты в сети)"
+                    else:
+                        missing_str = ", ".join(networking_status.get('missing', []))
+                        dynamic_context += f"\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=NO\nПричина: {networking_status.get('reason', 'неизвестна')}\n"
+                        if networking_status.get('recommendation'):
+                            dynamic_context += f"Рекомендация: {networking_status['recommendation']}"
+                else:
+                    if networking_status['ready']:
+                        dynamic_context += "\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=YES (profile filled, contacts in network)"
+                    else:
+                        dynamic_context += f"\n\n[NETWORKING_STATUS]\n[NETWORKING_READY]=NO\nReason: {networking_status.get('reason', 'unknown')}"
+            except Exception as e:
+                logger.debug(f"[NETWORKING_CHECK] Background check skipped: {e}")
+                # Not critical — networking check is optional
 
             # ═══ МУЛЬТИАГЕНТНЫЙ АНАЛИЗ ═══
             try:
