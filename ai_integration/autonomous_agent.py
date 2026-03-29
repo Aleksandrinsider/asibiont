@@ -8212,7 +8212,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     f"{_rework_hint}"
                     f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
                     f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
-                    f"Минимум 200 символов, 2-3 абзаца, без markdown."
+                    f"Минимум 180 символов, 2-4 предложения в ОДНОМ абзаце, без markdown, без списков и нумерации."
                 ),
             }], max_tokens=300)
             if _fallback_resp and len(_fallback_resp) > 50:
