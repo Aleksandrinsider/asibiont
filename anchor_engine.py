@@ -4912,7 +4912,29 @@ class AnchorEngine:
                                     session.rollback()
                                 except Exception:
                                     pass
-                    _raw = ('', [])
+                    # ВАЖНО: якорь уже был помечен delivered до AI-вызова для crash-safety.
+                    # Если сам AI-вызов упал, возвращаем якорь в очередь с snooze,
+                    # чтобы он был ретраен позже и не терялся навсегда.
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                    try:
+                        anchor.delivered_at = None
+                        anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=45)
+                        session.commit()
+                        logger.info(
+                            "[ANCHOR-AUTOPILOT] user %d: requeued anchor #%d after AI failure (retry in 45m)",
+                            user.id,
+                            anchor.id,
+                        )
+                    except Exception as _rq_err:
+                        logger.warning("[ANCHOR-AUTOPILOT] requeue failed for anchor #%d: %s", anchor.id, _rq_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                    return
                 result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
                 _cycle_tokens = int(_raw[2]) if isinstance(_raw, (tuple, list)) and len(_raw) > 2 else 0

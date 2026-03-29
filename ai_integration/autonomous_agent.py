@@ -3453,6 +3453,7 @@ class HybridAutonomousAgent:
             if _is_global_rule:
                 # Это выглядит как команда для всей системы а не для одной цели
                 # Сохраняем как пользовательское правило
+                session = None
                 try:
                     from models import Session, User
                     session = Session()
@@ -3481,9 +3482,14 @@ class HybridAutonomousAgent:
                             user.memory = _j_final.dumps(_mem_dict, ensure_ascii=False)
                             session.commit()
                             logger.info(f"[GLOBAL RULE] Added rule for user {user_id}: {user_message[:80]}")
-                    session.close()
                 except Exception as _gr_err:
                     logger.debug(f"[GLOBAL RULE] Failed to save as rule: {_gr_err}")
+                finally:
+                    if session is not None:
+                        try:
+                            session.close()
+                        except Exception:
+                            pass
             
             # ── ЦЕЛЕВЫЕ СТРАТЕГИИ (специфичные для текущих целей) ──
             _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'искат', 'search', 'find', 'целевой', 'аудиторий', 'привлеч'])
