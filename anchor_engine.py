@@ -4504,15 +4504,6 @@ class AnchorEngine:
                                 _coord_text,
                                 flags=re.IGNORECASE,
                             )
-                            # Удаляем структурные заголовки — AI должен говорить как живой коллега
-                            _coord_text = re.sub(
-                                r'^(?:\d+[\.\)]\s*)?(?:КОНКРЕТНОЕ ДЕЙСТВИЕ|СТРАТЕГИЯ|ОЖИДАНИЕ В ОТЧЁТЕ|КАНАЛЫ|АУДИТОРИЯ|ОЖИДАНИЕ|ДЕЙСТВИЕ|РЕЗУЛЬТАТ)\s*[:—]\s*',
-                                '',
-                                _coord_text,
-                                flags=re.IGNORECASE | re.MULTILINE,
-                            )
-                            # Схлопываем множественные переносы строк → один
-                            _coord_text = re.sub(r'\n{2,}', '\n', _coord_text).strip()
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     try:
