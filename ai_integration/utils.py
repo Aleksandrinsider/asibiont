@@ -881,12 +881,17 @@ def preload_common_data():
         try:
             logger.info(f"[CACHE] Preloading weather for {city}")
             asyncio.run(client.get_weather(city))
+            # asyncio.run() closes its event loop — the aiohttp session created inside
+            # is now bound to a closed loop. Reset it so _get_session() re-creates it
+            # fresh in the main application event loop.
+            client._session = None
         except RuntimeError:
             # Уже внутри event loop (например, в тестах) — пропускаем preload
             logger.debug("[CACHE] Skipping weather preload — event loop already running")
             break
         except Exception as e:
             logger.warning(f"[CACHE] Failed to preload weather for {city}: {e}")
+            client._session = None  # сброс на случай ошибки тоже
     # NewsAPI preload removed — dev quota too small (100/day),
     # news loaded lazily with 6h cache via api_client.get_news()
     logger.info("[CACHE] Preload completed (weather only, news lazy)")
