@@ -5078,6 +5078,42 @@ class AnchorEngine:
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
 
+                # ── Contact-repeat guard: не присылать снова те же email в одном дне ──
+                # Исключение: обработка входящих/переговоров (там повтор адреса нормален).
+                if not _is_noise_result and _result_clean:
+                    try:
+                        _skip_contact_guard = any(
+                            t in ('check_emails', 'reply_to_outreach_email', 'negotiate_by_email')
+                            for t in (_tools_used or [])
+                        )
+                        if not _skip_contact_guard:
+                            _email_re = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
+                            _res_emails = {e.lower() for e in _email_re.findall(_result_clean or '')}
+                            if _res_emails:
+                                _day_start = self._user_day_start_utc(user)
+                                _today_rows = session.query(Interaction.content).filter(
+                                    Interaction.user_id == user.id,
+                                    Interaction.message_type.in_(['proactive', 'agent_msg']),
+                                    Interaction.created_at >= _day_start,
+                                ).all()
+                                _mentioned_today = set()
+                                for (_tc,) in _today_rows:
+                                    try:
+                                        _txt = json.loads(_tc or '{}').get('text', '')
+                                    except Exception:
+                                        _txt = _tc or ''
+                                    _mentioned_today.update(e.lower() for e in _email_re.findall(_txt or ''))
+
+                                if _res_emails and not (_res_emails - _mentioned_today):
+                                    _is_noise_result = True
+                                    _filter_reason = 'repeat_contacts_day'
+                                    logger.info(
+                                        "[ANCHOR-AUTOPILOT] repeat_contacts_day: all %d email(s) already mentioned today",
+                                        len(_res_emails),
+                                    )
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+
                 # ── Watchdog: если >3ч без AP-сообщения — форсировать доставку ──
                 # Работает ПОСЛЕ noise + dedup фильтров — обходит оба
                 if _is_noise_result and _force_delivery and len(_result_clean) > 50:
@@ -8373,6 +8409,8 @@ class AnchorEngine:
                 "ПРАВИЛА:\n"
                 "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
                 "• Каждая задача продвигает активную цель.\n"
+                "• РАСПРЕДЕЛЕНИЕ: если активных агентов 2+ — в плане должны быть минимум 2 разных агента.\n"
+                "• АНТИ-ПОВТОР КОНТАКТОВ: одних и тех же людей/контакты не крути каждый цикл; после первого упоминания ищи новый сегмент/канал.\n"
                 "• GitHub search query: меняй параметры каждый цикл.\n"
                 + (f"• GitHub запросы уже использованные (контекст): {'; '.join(_used_github_queries[:4])}\n"
                    if _used_github_queries else '')
@@ -8562,6 +8600,60 @@ class AnchorEngine:
                     _qf_step['task'] = _qf_task + ' (используй инструменты для конкретного результата — данные, контакты, действия)'
                     logger.info("[COORD] quality-hint: appended hint for %s: %s",
                                 _qf_step.get('agent'), _qf_step['task'][:80])
+
+            # ── Fair assignment backfill: если часть активных агентов пропущена, добавляем им шаги ──
+            # Универсально для всех пользователей: снижает перекос, когда один агент выполняет всё.
+            try:
+                _agents_in_plan_l = {
+                    (p.get('agent') or '').strip().lower()
+                    for p in _plan if (p.get('agent') or '').strip()
+                }
+                _missing_profiles = [
+                    p for p in _profiles
+                    if p.get('name')
+                    and p.get('name', '').strip().lower() not in _agents_in_plan_l
+                    and p.get('name') not in _fully_blocked_agents
+                ]
+
+                for _mp in _missing_profiles[:2]:
+                    _goal_counts = {}
+                    for _ps in _plan:
+                        _gg = (_ps.get('goal') or '').strip()
+                        if _gg:
+                            _goal_counts[_gg] = _goal_counts.get(_gg, 0) + 1
+                    _target_goal = None
+                    if _goals:
+                        _goal_titles = [g.get('title', '') for g in _goals if g.get('title', '').strip()]
+                        if _goal_titles:
+                            _target_goal = min(_goal_titles, key=lambda g: _goal_counts.get(g, 0))
+                    if not _target_goal:
+                        _target_goal = _goals[0]['title'] if _goals else 'активные цели'
+
+                    _mp_tools = [str(t).strip().lower() for t in (_mp.get('tools') or []) if str(t).strip()]
+                    _mp_actions = [str(a).strip().lower() for a in (_mp.get('script_actions') or []) if str(a).strip()]
+
+                    if 'run_agent_action' in _mp_tools or _mp_actions:
+                        _tool_fb = 'run_agent_action'
+                    elif 'find_relevant_contacts_for_task' in _mp_tools:
+                        _tool_fb = 'find_relevant_contacts_for_task'
+                    elif 'check_emails' in _mp_tools:
+                        _tool_fb = 'check_emails'
+                    else:
+                        _tool_fb = 'research_topic'
+
+                    _plan.append({
+                        'agent': _mp['name'],
+                        'tool': _tool_fb,
+                        'goal': _target_goal,
+                        'task': (
+                            f"Эксплорация по цели «{_target_goal}»: найди НОВЫЙ рабочий угол через свои интеграции, "
+                            f"без повтора уже обработанных контактов/каналов."
+                        ),
+                        'reason': 'fair_assignment diversification',
+                    })
+                    logger.info("[COORD] fairness backfill: added step for %s via %s", _mp['name'], _tool_fb)
+            except Exception as _fa_err:
+                logger.debug("[COORD] fairness backfill skipped: %s", _fa_err)
 
             logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan])
 
