@@ -3042,6 +3042,160 @@ class AnchorEngine:
                 continue
         return False
 
+    def _cancel_agent_task(self, session, task_id: int | None, reason_code: str, message: str, recommendations: list[str] | None = None):
+        """Единообразно помечает агентскую задачу отменённой с кодом причины."""
+        if not task_id:
+            return
+        try:
+            _rec_json = json.dumps(recommendations or [], ensure_ascii=False)
+            session.execute(
+                text(
+                    "UPDATE tasks SET status='cancelled', completion_notes=:n, skipped_reason=:r, "
+                    "recommendations=:rec, actual_completion_time=:t WHERE id=:id"
+                ),
+                {
+                    'n': (message or '')[:1000],
+                    'r': (reason_code or 'cancelled')[:255],
+                    'rec': _rec_json,
+                    't': datetime.now(timezone.utc),
+                    'id': task_id,
+                }
+            )
+            session.commit()
+        except Exception as _ce:
+            logger.debug("[COORD] cancel task %s failed (%s): %s", task_id, reason_code, _ce)
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+    def _recent_assignment_result_health(self, session, user_id: int, agent_name: str, hours: int = 8) -> dict:
+        """Оценивает, насколько поручения агенту превращаются в результаты."""
+        _name_l = (agent_name or '').strip().lower()
+        if not _name_l:
+            return {'assignments': 0, 'results': 0, 'gap': 0, 'stalled': False}
+
+        _cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, hours))
+        _rows = session.query(Interaction.content).filter(
+            Interaction.user_id == user_id,
+            Interaction.message_type.in_(['agent_msg', 'proactive']),
+            Interaction.created_at >= _cutoff,
+        ).all()
+
+        _assignments = 0
+        _results = 0
+        for (_content,) in _rows:
+            try:
+                _p = json.loads(_content or '{}') if isinstance(_content, str) else (_content or {})
+                if not isinstance(_p, dict):
+                    continue
+                _anchor_type = str(_p.get('__anchor_type') or '').strip().lower()
+                _to_agent = str(_p.get('__to_agent') or '').strip().lower()
+                _agent = _p.get('__agent') if isinstance(_p.get('__agent'), dict) else {}
+                _agent_l = str(_agent.get('name') or '').strip().lower()
+
+                if _anchor_type == 'coordinator_assignment' and _to_agent == _name_l:
+                    _assignments += 1
+                if _anchor_type in ('coordinator_result', 'goal_autopilot_result') and _agent_l == _name_l:
+                    _results += 1
+            except Exception:
+                continue
+
+        _gap = max(_assignments - _results, 0)
+        return {
+            'assignments': _assignments,
+            'results': _results,
+            'gap': _gap,
+            'stalled': _assignments >= 3 and _gap >= 2,
+        }
+
+    def _recent_task_kpi_health(self, session, user_id: int, task_title: str, lookback_hours: int = 72) -> dict:
+        """Считает KPI по похожим агентским задачам и сигнализирует о неэффективной петле."""
+        try:
+            _title_tokens = {
+                t for t in re.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (task_title or '').lower())
+                if t not in {
+                    'для', 'это', 'как', 'что', 'когда', 'здесь', 'через', 'проверить', 'сделать', 'задача',
+                    'цель', 'цели', 'анализ', 'анализировать', 'найти', 'провести', 'используя', 'текущей',
+                }
+            }
+            if not _title_tokens:
+                return {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
+
+            _cutoff = datetime.now(timezone.utc) - timedelta(hours=max(24, lookback_hours))
+            _rows = session.query(Task.title, Task.status, Task.skipped_reason).filter(
+                Task.user_id == user_id,
+                Task.source == 'agent',
+                Task.created_at >= _cutoff,
+            ).all()
+
+            _sample = 0
+            _cancelled = 0
+            _completed = 0
+            for _row_title, _row_status, _row_reason in _rows:
+                _row_tokens = set(re.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (_row_title or '').lower()))
+                if not _row_tokens:
+                    continue
+                _overlap = len(_title_tokens & _row_tokens) / max(len(_title_tokens), 1)
+                if _overlap < 0.4:
+                    continue
+                _sample += 1
+                _st = (_row_status or '').lower()
+                _rs = (_row_reason or '').lower()
+                if _st == 'completed':
+                    _completed += 1
+                elif _st == 'cancelled' or 'timeout' in _rs or 'loop' in _rs or 'no_result' in _rs:
+                    _cancelled += 1
+
+            if _sample == 0:
+                return {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
+
+            _cancel_ratio = _cancelled / _sample
+            _completion_ratio = _completed / _sample
+            _block = _sample >= 4 and _cancel_ratio >= 0.6 and _completion_ratio <= 0.25
+            return {
+                'sample': _sample,
+                'cancel_ratio': _cancel_ratio,
+                'completion_ratio': _completion_ratio,
+                'block': _block,
+            }
+        except Exception as _kpi_err:
+            logger.debug('[COORD] KPI health failed: %s', _kpi_err)
+            return {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
+
+    def _summarize_cancelled_tasks_this_cycle(self, session, user_id: int, cycle_start_time: datetime) -> dict:
+        """Анализирует отменённые agent-задачи цикла с кодами причин и рекомендациями."""
+        try:
+            _rows = session.query(Task.skipped_reason, Task.recommendations, Task.delegated_to_username, Task.title).filter(
+                Task.user_id == user_id,
+                Task.source == 'agent',
+                Task.status == 'cancelled',
+                Task.created_at >= cycle_start_time,
+            ).all()
+
+            _by_reason: dict = defaultdict(list)
+            for _reason, _recs, _agent, _title in _rows:
+                _rkey = (_reason or 'unknown').lower()
+                _rec_list = []
+                try:
+                    if _recs:
+                        _rec_list = json.loads(_recs) if isinstance(_recs, str) else (_recs or [])
+                except Exception:
+                    _rec_list = []
+                _by_reason[_rkey].append({
+                    'agent': _agent or '?',
+                    'title': (_title or '')[:80],
+                    'recs': _rec_list[:2],
+                })
+
+            return {
+                'total_cancelled': len(_rows),
+                'by_reason': dict(_by_reason),
+            }
+        except Exception as _e:
+            logger.debug('[COORD] cancelled tasks summary: %s', _e)
+            return {'total_cancelled': 0, 'by_reason': {}}
+
     async def _scan_all_users(self):
         """Двухфазный пайплайн: bulk pre-filter → parallel scan+eval
         
@@ -9008,6 +9162,7 @@ class AnchorEngine:
 
             # ── Выполняем шаги в режиме ReAct: дать задание → дождаться результата → решить следующий шаг ──
             _results_summary = []
+            _minor_updates_summary = []
             _all_tools = []
             _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
             # Масштабируем лимит шагов с размером команды: больше агентов → больше действий за цикл.
@@ -9263,18 +9418,28 @@ class AnchorEngine:
                     ])
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # Сохраняем живое поручение в чат
+                _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)
+                _skip_step_due_loop = bool(_assignment_health.get('stalled'))
                 try:
-                    session.add(Interaction(
-                        user_id=user.id,
-                        message_type='agent_msg',
-                        content=json.dumps({
-                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': _asi_assign_text,
-                            '__to_agent': _ag_name,
-                            '__anchor_type': 'coordinator_assignment',
-                        }, ensure_ascii=False),
-                    ))
-                    session.commit()
+                    if _skip_step_due_loop:
+                        logger.info(
+                            "[COORD] assignment guard: skip %s due to assignment/result gap (%s/%s)",
+                            _ag_name,
+                            _assignment_health.get('assignments', 0),
+                            _assignment_health.get('results', 0),
+                        )
+                    else:
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                'text': _asi_assign_text,
+                                '__to_agent': _ag_name,
+                                '__anchor_type': 'coordinator_assignment',
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
                 except Exception as _aas_err:
                     logger.debug("[COORD] asi assign save error: %s", _aas_err)
                     try:
@@ -9286,6 +9451,8 @@ class AnchorEngine:
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
+                _kpi_block_step = False
+                _kpi_health = {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
@@ -9309,6 +9476,8 @@ class AnchorEngine:
                     _task_title_short = (_ag_task.split('\n')[0])[:200].strip()
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:20])
+                    _kpi_health = self._recent_task_kpi_health(session, user.id, _task_title_short, lookback_hours=72)
+                    _kpi_block_step = bool(_kpi_health.get('block'))
                     # Guard: если задание расплывчатое → переформулируем в конкретное действие
                     _is_vague_task = False
                     if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:200]:
@@ -9372,6 +9541,32 @@ class AnchorEngine:
                         # Дубль задачи — не создаём Task, но агент ВЫПОЛНЯЕТСЯ
                         # (LLM каждый раз генерирует похожие формулировки → dedup не должен
                         #  блокировать выполнение, только предотвращать спам задач в UI)
+                    elif _kpi_block_step:
+                        _step_task = _Task_c2(
+                            user_id=user.id,
+                            title=_task_title_short[:200],
+                            description=(_ag_task[:2000] or None),
+                            status='cancelled',
+                            source='agent',
+                            created_by_agent_id=_target_ag.id if _target_ag else None,
+                            delegated_to_username=_ag_name,
+                            skipped_reason='kpi_low_conversion',
+                            recommendations=json.dumps([
+                                'Сменить тип канала/инструмента для этой цели',
+                                'Не повторять похожее поручение в следующем цикле',
+                                'Назначить альтернативного агента или стратегию',
+                            ], ensure_ascii=False),
+                        )
+                        session.add(_step_task)
+                        session.commit()
+                        _step_task_id = _step_task.id
+                        logger.info(
+                            "[COORD] KPI guard: block similar task for %s (sample=%d cancel=%.0f%% complete=%.0f%%)",
+                            _ag_name,
+                            int(_kpi_health.get('sample', 0)),
+                            float(_kpi_health.get('cancel_ratio', 0.0)) * 100,
+                            float(_kpi_health.get('completion_ratio', 0.0)) * 100,
+                        )
                     else:
                         # Описание = полный текст только если отличается от заголовка
                         _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
@@ -9408,6 +9603,31 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
+
+                if _skip_step_due_loop:
+                    _gap = int(_assignment_health.get('gap', 0) or 0)
+                    self._cancel_agent_task(
+                        session,
+                        _step_task_id,
+                        'no_result_loop',
+                        f'Пропущено: у агента {_ag_name} накопилось {_gap} назначений без подтверждённого результата.',
+                        [
+                            'Сменить исполнителя или инструмент',
+                            'Назначать новый шаг только после явного результата',
+                        ],
+                    )
+                    _prev_steps_context += (
+                        f"• {_ag_name}: шаг пропущен (no_result_loop) — слишком много назначений без результата. "
+                        "Нужна смена стратегии/исполнителя.\n"
+                    )
+                    continue
+
+                if _kpi_block_step:
+                    _prev_steps_context += (
+                        f"• {_ag_name}: шаг отменён (kpi_low_conversion, выборка={int(_kpi_health.get('sample', 0))}) — "
+                        "повторяющиеся похожие задачи дают низкую конверсию. Выбери новый подход.\n"
+                    )
+                    continue
 
                 # Собираем agent_data для _exec_agent_for_director
                 _coord_company = (_user_profile_coord or {}).get('company', '') or ''
@@ -9858,18 +10078,13 @@ class AnchorEngine:
                 except asyncio.TimeoutError:
                     _ae_msg = f'Таймаут 300с — агент не успел выполнить задачу'
                     logger.warning("[COORD] agent %s timeout after 300s", _ag_name)
-                    if _step_task_id:
-                        try:
-                            from sqlalchemy import text as _sql_t_ae
-                            session.execute(_sql_t_ae(
-                                "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
-                            ), {'n': _ae_msg, 'id': _step_task_id})
-                            session.commit()
-                        except Exception:
-                            try:
-                                session.rollback()
-                            except Exception:
-                                pass
+                    self._cancel_agent_task(
+                        session,
+                        _step_task_id,
+                        'timeout_300s',
+                        _ae_msg,
+                        ['Сократить задачу до 1 конкретного действия', 'Сменить инструмент или канал'],
+                    )
                     # Уведомляем пользователя о причине провала агента
                     _fail_explain = (
                         f"{_ag_name} не смог завершить задачу за отведённое время. "
@@ -9881,19 +10096,14 @@ class AnchorEngine:
                     continue
                 except Exception as _ae:
                     logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
-                    if _step_task_id:
-                        try:
-                            from sqlalchemy import text as _sql_t_ae2
-                            _ae_detail = str(_ae)[:200].strip() or type(_ae).__name__
-                            session.execute(_sql_t_ae2(
-                                "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
-                            ), {'n': f'Ошибка выполнения: {_ae_detail}', 'id': _step_task_id})
-                            session.commit()
-                        except Exception:
-                            try:
-                                session.rollback()
-                            except Exception:
-                                pass
+                    _ae_detail = str(_ae)[:200].strip() or type(_ae).__name__
+                    self._cancel_agent_task(
+                        session,
+                        _step_task_id,
+                        'exec_error',
+                        f'Ошибка выполнения: {_ae_detail}',
+                        ['Проверить доступность интеграции/ключей', 'Попробовать другой инструмент'],
+                    )
                     _prev_steps_context += f"• {_ag_name}: ОШИБКА — {str(_ae)[:100]}\n"
                     continue
 
@@ -9939,18 +10149,13 @@ class AnchorEngine:
                     if _result_stripped not in _DONE_FB_SET:
                         # Пустой результат после retry: отменяем задачу + объясняем пользователю
                         logger.info(f"[COORD] agent {_ag_name}: empty result after retry")
-                        if _step_task_id:
-                            try:
-                                from sqlalchemy import text as _sql_t_empty
-                                session.execute(_sql_t_empty(
-                                    "UPDATE tasks SET status='cancelled', completion_notes=:n WHERE id=:id"
-                                ), {'n': 'Агент вернул пустой результат', 'id': _step_task_id})
-                                session.commit()
-                            except Exception:
-                                try:
-                                    session.rollback()
-                                except Exception:
-                                    pass
+                        self._cancel_agent_task(
+                            session,
+                            _step_task_id,
+                            'empty_result',
+                            'Агент вернул пустой результат',
+                            ['Переформулировать задачу как конкретное действие', 'Назначить другой канал/агента'],
+                        )
                         # Объясняем провал в контексте для следующих агентов
                         _prev_steps_context += f"• {_ag_name}: не выполнил задачу (пустой результат для «{_ag_task[:80]}»)\n"
                     # _done_fb: агент выполнил задачу без детального отчёта — тихо пропускаем
@@ -10078,9 +10283,20 @@ class AnchorEngine:
                         except Exception:
                             pass
 
+                _is_minor_update = (
+                    _task_status != 'completed'
+                    and len((_cleaned or '').strip()) < 220
+                    and len(_real_action_tools) <= 1
+                    and not re.search(r'\d{2,}|@|https?://', _cleaned or '', flags=re.IGNORECASE)
+                )
+                if _is_minor_update:
+                    _minor_updates_summary.append(f"{_ag_name}: {_cleaned[:120]}")
+
                 try:
                     _skip_step_cap = (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name))
-                    if not _skip_step_cap:
+                    if _is_minor_update:
+                        logger.info("[COORD] minor update compressed for %s", _ag_name)
+                    elif not _skip_step_cap:
                         _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,
@@ -10121,16 +10337,19 @@ class AnchorEngine:
                         pass
 
                 # Отправляем результат шага агента в Telegram — пользователь видит прогресс
-                if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
+                if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not _is_minor_update and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
                     try:
                         _tg_text = f"{_ag_name}:\n{_cleaned}"
                         await _safe_send(self.bot, user.telegram_id, _tg_text)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
 
-                _results_summary.append(
-                    f"{_ag_name}: {_cleaned[:150]}"
-                )
+                if _is_minor_update:
+                    _results_summary.append(f"{_ag_name}: промежуточный апдейт (сжат в итог цикла)")
+                else:
+                    _results_summary.append(
+                        f"{_ag_name}: {_cleaned[:150]}"
+                    )
                 # Накапливаем контекст для следующих агентов в цепочке — как сообщение от коллеги
                 _tools_label = f" [инструменты: {', '.join(_step_tools[:5])}]" if _step_tools else ''
                 _prev_steps_context += f"💬 {_ag_name}{_tools_label}:\n  {_cleaned[:400]}\n\n"
@@ -10352,6 +10571,11 @@ class AnchorEngine:
                 r for r in _results_summary
                 if not any(p in r.lower() for p in _BORING_RESULT_PHRASES)
             ]
+            if _minor_updates_summary:
+                _minor_digest = '; '.join(_minor_updates_summary[:3])
+                if len(_minor_updates_summary) > 3:
+                    _minor_digest += f"; +ещё {len(_minor_updates_summary) - 3}"
+                _results_for_report.append(f"Промежуточные апдейты (сжато): {_minor_digest[:500]}")
             if _results_summary and not _results_for_report:
                 # Все результаты — placeholder'ы (таймауты, нет данных). Сохраняем минимальный итог в хронологию.
                 try:
@@ -10452,10 +10676,42 @@ class AnchorEngine:
                         f"- Агент(ы) {', '.join(_saved_note_agents)} сохранили подробный отчёт в раздел Заметки — напомни об этом пользователю одной фразой.\n"
                         if _saved_note_agents else ''
                     )
+
+                    # ── Анализ смены стратегий: какие подходы были отменены и почему ──
+                    _cancel_info = self._summarize_cancelled_tasks_this_cycle(session, user.id, anchor.created_at)
+                    _strategy_adaptation = ''
+                    if _cancel_info.get('by_reason'):
+                        _adapt_lines = []
+                        for _reason, _tasks in _cancel_info['by_reason'].items():
+                            if _reason == 'kpi_low_conversion':
+                                _adapt_lines.append(
+                                    f"Подход '{_tasks[0]['title'][:50]}...' и похожие не дали результата -- "
+                                    f"переключаюсь на новую стратегию."
+                                )
+                            elif _reason == 'no_result_loop':
+                                _adapt_lines.append(
+                                    f"У агента {_tasks[0]['agent']} много незавершённых назначений -- "
+                                    f"перенаправляю работу другому специалисту."
+                                )
+                            elif _reason in ('timeout_300s', 'exec_error'):
+                                _adapt_lines.append(
+                                    f"Инструмент для '{_tasks[0]['title'][:50]}...' даёт технические ошибки -- "
+                                    f"переключаюсь на альтернативный канал."
+                                )
+                            elif _reason == 'empty_result':
+                                if _tasks[0].get('recs'):
+                                    _adapt_lines.append(f"Рекомендация: {_tasks[0]['recs'][0]}")
+                        if _adapt_lines:
+                            _strategy_adaptation = (
+                                "Адаптация стратегии этого цикла:\n"
+                                + '\n'.join(f"  • {a}" for a in _adapt_lines[:3]) + "\n\n"
+                            )
+
                     _report_prompt = (
                         f"Ты — ASI, координатор. Пишешь короткий отчёт пользователю в чате.\n\n"
                         f"Что сделала команда:\n{_report_items}\n\n"
                         + (f"Ход работы:\n{_bridge_flow}\n\n" if _bridge_flow else '')
+                        + _strategy_adaptation
                         + f"Состояние целей:\n{_goals_state_now}\n\n"
                         f"Правила:\n"
                         f"- Пиши как друг-менеджер в мессенджере — живо, коротко, по делу.\n"
