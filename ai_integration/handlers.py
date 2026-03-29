@@ -8093,6 +8093,24 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         today_start = user_now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(pytz.UTC)
         
+        # Cooldown 30 мин: не публиковать повторно если недавно уже был пост
+        from datetime import timedelta as _td
+        _30min_ago = datetime.now(pytz.UTC) - _td(minutes=30)
+        recent_anchor_post = session.query(AnchorDeliveryLog).filter(
+            AnchorDeliveryLog.user_id == user.id,
+            AnchorDeliveryLog.created_at >= _30min_ago,
+            AnchorDeliveryLog.anchor_types.contains('channel_post')
+        ).first()
+        from models import Task as _Task
+        recent_task_post = session.query(_Task).filter(
+            _Task.user_id == user.id,
+            _Task.title.like('%Пост опубликован в%'),
+            _Task.status == 'completed',
+            _Task.actual_completion_time >= _30min_ago
+        ).first()
+        if (recent_anchor_post or recent_task_post) and not force:
+            return f" Пост в канал уже публиковался менее 30 минут назад. Попробуй позже."
+
         # Проверяем по AnchorDeliveryLog (автоматические публикации)
         auto_channel_today = session.query(AnchorDeliveryLog).filter(
             AnchorDeliveryLog.user_id == user.id,
