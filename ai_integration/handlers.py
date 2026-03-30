@@ -15485,27 +15485,45 @@ async def save_email_contact(
                 existing.status = status
             session.commit()
             _cur_status = existing.status or _prev_status
-            # Информативный ответ: агент должен знать реальное состояние контакта
-            if _cur_status in ('contacted',):
+            # Информативный ответ: агент видит реальное состояние и знает следующий шаг
+            _contact_label = f"{existing.name or email_clean} ({email_clean})"
+            if _cur_status == 'contacted':
+                try:
+                    import datetime as _dt_ec
+                    _age = (
+                        _dt_ec.datetime.now(_dt_ec.timezone.utc) -
+                        (existing.updated_at or existing.created_at).replace(
+                            tzinfo=getattr((existing.updated_at or existing.created_at), 'tzinfo', None) or _dt_ec.timezone.utc
+                        )
+                    ).days
+                except Exception:
+                    _age = 0
+                if _age >= 3:
+                    return (
+                        f"ℹ️ {_contact_label} — статус contacted, уже {_age} д. без ответа. "
+                        f"Стоит отправить follow-up: новый угол/ценность, не копия первого письма. "
+                        f"Используй send_outreach_email с другой темой."
+                    )
                 return (
-                    f"ℹ️ {email_clean} уже в базе (статус: contacted — письмо уже отправлено). "
-                    f"НЕ повторяй этот контакт повторно. "
-                    f"Найди НОВОГО человека или используй send_outreach_email для тех, у кого статус 'new'."
+                    f"ℹ️ {_contact_label} — статус contacted (письмо отправлено {_age} д. назад). "
+                    f"Подожди ответа. Если не ответит через {3 - _age} д. — отправь follow-up с иным pitch."
                 )
             if _cur_status in ('replied', 'interested'):
                 return (
-                    f"✅ {email_clean} (статус: {_cur_status}) — этот контакт ответил/заинтересован. "
-                    f"Используй negotiate_by_email для персонального диалога, не обычный outreach."
+                    f"✅ {_contact_label} — статус {_cur_status}, уже в диалоге! "
+                    f"Это твой приоритет: negotiate_by_email — développe личный диалог, "
+                    f"выясни потребность, предложи конкретный следующий шаг."
                 )
             if _cur_status == 'unsubscribed':
                 return (
-                    f"⛔ {email_clean} отписался (статус: unsubscribed). "
-                    f"Никаких писем этому контакту — найди другого."
+                    f"🔕 {_contact_label} — статус unsubscribed. "
+                    f"Прямые письма не нужны. Если контакт ценен — взаимодействуй через другой канал "
+                    f"(LinkedIn, сообщество, пост) или оставь для органического интереса."
                 )
-            # Статус 'new' или другой: контакт в базе, ещё не написали
+            # Статус 'new' или другой: контакт в базе, ещё не написали — это приоритет
             return (
-                f"ℹ️ {email_clean} уже в базе (статус: {_cur_status}). "
-                f"Можно отправить письмо через send_outreach_email — контакт ещё не получал outreach."
+                f"ℹ️ {_contact_label} уже в базе (статус: {_cur_status} — письмо не отправлялось). "
+                f"→ Следующий шаг: send_outreach_email с персональным питчем."
             )
 
         # Авто-определение source по контексту (если агент не указал)

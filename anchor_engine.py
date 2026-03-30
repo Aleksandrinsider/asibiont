@@ -8080,18 +8080,60 @@ class AnchorEngine:
             _unsent_contacts_data = data.get('unsent_contacts', [])
             _overworked_goals = data.get('overworked_goals', [])
             _neglected_goals = data.get('neglected_goals', [])
-            _known_identifiers_data = data.get('known_identifiers', [])
+            _status_counts_data = data.get('status_counts', {})
+            _new_contacts_info_data = data.get('new_contacts_info', [])
+            _no_reply_info_data = data.get('no_reply_info', [])
+            _hot_contacts_info_data = data.get('hot_contacts_info', [])
+            _corp_new_info_data = data.get('corp_new_info', [])
 
-            # Блок "не ищи этих" — имена/домены уже в базе, чтобы агенты не тратили циклы повторно
+            # Умный аналитический блок по базе контактов — учит агентов работать умнее
             _known_dedup_str = ''
-            if _known_identifiers_data:
-                _ki_sample = _known_identifiers_data[:25]
-                _known_dedup_str = (
-                    f"\n🚫 УЖЕ В БАЗЕ ({_known_contacts} контактов) — НЕ ищи повторно: "
-                    + ', '.join(_ki_sample)
-                    + ('...' if len(_known_identifiers_data) > 25 else '')
-                    + "\n→ Если web_search возвращает кого-то из этого списка — пропускай, ищи НОВЫХ.\n"
+            if _known_contacts > 0:
+                _n_new = _status_counts_data.get('new', 0)
+                _n_contacted = _status_counts_data.get('contacted', 0)
+                _n_replied = _status_counts_data.get('replied', 0)
+                _n_interested = _status_counts_data.get('interested', 0)
+                _n_unsub = _status_counts_data.get('unsubscribed', 0)
+                _kd_lines = [
+                    f"\n📊 БАЗА КОНТАКТОВ ({_known_contacts} чел.): "
+                    f"new={_n_new}, contacted={_n_contacted}, replied={_n_replied}, "
+                    f"interested={_n_interested}, unsub={_n_unsub}",
+                ]
+                # Горячие — отвечали/заинтересованы
+                if _hot_contacts_info_data:
+                    _kd_lines.append(
+                        f"  🔥 ГОРЯЧИЕ ({len(_hot_contacts_info_data)}) — ответили или заинтересованы: "
+                        + ', '.join(_hot_contacts_info_data[:5])
+                        + "\n     → negotiate_by_email: персональный диалог, развивай отношения!"
+                    )
+                # Не ответили давно
+                if _no_reply_info_data:
+                    _kd_lines.append(
+                        f"  ⏰ БЕЗ ОТВЕТА >3Д ({len(_no_reply_info_data)}): "
+                        + ', '.join(_no_reply_info_data[:5])
+                        + "\n     → send_outreach_email: follow-up с новым углом (не копируй первое письмо)!"
+                    )
+                # Новые персональные — ещё не писали
+                if _new_contacts_info_data:
+                    _kd_lines.append(
+                        f"  👤 НОВЫЕ ЛИЧНЫЕ ({len(_new_contacts_info_data)}) — ещё не получили письма: "
+                        + ', '.join(_new_contacts_info_data[:5])
+                        + "\n     → send_outreach_email: первичный питч"
+                    )
+                # Новые корп. — ещё не писали
+                if _corp_new_info_data:
+                    _kd_lines.append(
+                        f"  🏢 НОВЫЕ КОРПОРАТИВНЫЕ ({len(_corp_new_info_data)}) — B2B без письма: "
+                        + ', '.join(_corp_new_info_data[:5])
+                        + "\n     → send_outreach_email: B2B питч (ASI Biont как AI-инструмент для бизнеса: "
+                        "автоматизация, снижение затрат, AI-команда под ключ)"
+                    )
+                _kd_lines.append(
+                    "  💡 Если web_search нашёл кого-то из базы — это сигнал что человек релевантен: "
+                    "проверь его статус и действуй по логике выше (follow-up или pitch), "
+                    "не тренируй поиск на уже охваченных.\n"
                 )
+                _known_dedup_str = '\n'.join(_kd_lines)
             _unsent_contacts_str = ''
             _coord_sent_today = data.get('emails_sent_today', 0)
             _coord_daily_limit = data.get('email_daily_limit', 20)
@@ -13107,18 +13149,39 @@ class AnchorEngine:
             for c in contacts
         ] if contacts else []
 
-        # Компактный список уже известных имён/компаний — чтобы агенты не искали их повторно
-        _known_identifiers: list[str] = []
-        for _kc in _contacts_raw[:80]:  # все недавние 50+
-            _kc_parts = []
-            if _kc.name:
-                _kc_parts.append(_kc.name.strip())
-            if _kc.company:
-                _kc_parts.append(_kc.company.strip())
-            if _kc.email:
-                _kc_parts.append(_kc.email.split('@')[1].replace('.ru', '').replace('.com', '').replace('.ai', ''))
-            if _kc_parts:
-                _known_identifiers.append(' / '.join(_kc_parts[:2]))
+        # Статистика базы по статусам + структура для умного блока
+        import re as _re_ec
+        _PERSONAL_EC = _re_ec.compile(
+            r'@(gmail|yahoo|outlook|hotmail|mail\.ru|yandex|icloud|proton|bk\.ru|list\.ru|inbox\.ru)', _re_ec.I
+        )
+        _status_counts: dict = {}
+        _new_contacts_info: list[str] = []   # статус new — не писали
+        _no_reply_info: list[str] = []        # contacted >3д без ответа
+        _hot_contacts_info: list[str] = []   # replied/interested
+        _corp_new_info: list[str] = []        # корп. email, статус new
+        _now_for_ec = now_utc
+        for _kc in _contacts_raw:
+            _st = _kc.status or 'new'
+            _status_counts[_st] = _status_counts.get(_st, 0) + 1
+            _em_kc = (_kc.email or '').lower()
+            _nm_kc = (_kc.name or _em_kc.split('@')[0])[:30]
+            _is_personal = bool(_PERSONAL_EC.search(_em_kc))
+            if _st == 'new':
+                _tag = f'{_nm_kc} <{_em_kc}>'
+                if not _is_personal:
+                    _corp_new_info.append(_tag)
+                else:
+                    _new_contacts_info.append(_tag)
+            elif _st == 'contacted' and _kc.updated_at:
+                try:
+                    _age_days = (_now_for_ec - _kc.updated_at.replace(tzinfo=_kc.updated_at.tzinfo or datetime.timezone.utc)).days
+                except Exception:
+                    _age_days = 0
+                if _age_days >= 3:
+                    _no_reply_info.append(f'{_nm_kc} <{_em_kc}> ({_age_days}д)')
+            elif _st in ('replied', 'interested'):
+                _hot_contacts_info.append(f'{_nm_kc} <{_em_kc}> [{_st}]')
+        _known_identifiers = list(_status_counts.keys())  # placeholder — computed above instead
 
         # Per-agent action memory — чтобы каждый агент не зацикливался и не повторял своё
         _per_agent_history: dict = {}  # {agent_name: [action_str, ...]}
@@ -13864,7 +13927,11 @@ class AnchorEngine:
                 {e.lower() for e in _already_sent_emails} and
                 c.split('<')[1].split('>')[0].strip().lower() not in _negotiation_emails
             ],
-            'known_identifiers': _known_identifiers,
+            'status_counts': _status_counts,
+            'new_contacts_info': _new_contacts_info,
+            'no_reply_info': _no_reply_info,
+            'hot_contacts_info': _hot_contacts_info,
+            'corp_new_info': _corp_new_info,
         }
 
         return [Anchor(
