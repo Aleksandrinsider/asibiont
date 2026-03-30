@@ -7251,23 +7251,41 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         m.get('content', '') for m in _messages
                         if m.get('role') == 'tool'
                     ]
-                    _sent_blocked_count = sum(
+                    # ── Детектор повторного таймаута скрипта ──
+                    # Если run_agent_action упал по тайм-ауту 2+ раз подряд — блокируем его,
+                    # форсируем переключение на web_search / research_topic
+                    _script_timeout_count = sum(
                         1 for t in _intg_result_texts
-                        if 'уже отправлено' in t or 'already sent' in t.lower() or 'Cooldown' in t
+                        if any(w in t.lower() for w in (
+                            'тайм-аут', 'timeout', 'tool timeout', 'скрипт не верн', 'timed out'
+                        ))
                     )
-                    if _sent_blocked_count >= 3:
+                    if _script_timeout_count >= 2:
                         _messages.append({"role": "user", "content": (
-                            "Все контакты уже получали письма (cooldown). "
-                            "Попробуй: 1) другой query, 2) page=2/3 для текущего запроса, "
-                            "3) другую интеграцию для поиска контактов."
+                            f"⚠️ run_agent_action вернул тайм-аут уже {_script_timeout_count} раза подряд — "
+                            "скрипт перегружен или источник недоступен прямо сейчас. "
+                            "⛔ НЕ ВЫЗЫВАЙ run_agent_action снова в этой сессии! "
+                            "Немедленно переключись: web_search('[твоя ЦА] email contact site:linkedin.com OR site:habr.com') "
+                            "→ save_email_contact → send_outreach_email"
                         )})
                     else:
-                        _messages.append({"role": "user", "content": (
-                            "Данные поиска получены. Конвертируй результаты в действия:\n"
-                            "— Нашёл email → save_email_contact + send_outreach_email\n"
-                            "— 0 результатов → другой query или другая интеграция\n"
-                            "НЕ пиши отчёт — вызови инструмент!"
-                        )})
+                        _sent_blocked_count = sum(
+                            1 for t in _intg_result_texts
+                            if 'уже отправлено' in t or 'already sent' in t.lower() or 'Cooldown' in t
+                        )
+                        if _sent_blocked_count >= 3:
+                            _messages.append({"role": "user", "content": (
+                                "Все контакты уже получали письма (cooldown). "
+                                "Попробуй: 1) другой query, 2) page=2/3 для текущего запроса, "
+                                "3) другую интеграцию для поиска контактов."
+                            )})
+                        else:
+                            _messages.append({"role": "user", "content": (
+                                "Данные поиска получены. Конвертируй результаты в действия:\n"
+                                "— Нашёл email → save_email_contact + send_outreach_email\n"
+                                "— 0 результатов → другой query или другая интеграция\n"
+                                "НЕ пиши отчёт — вызови инструмент!"
+                            )})
                 elif _is_search_tool:
                     # Обычный поиск: мягкое требование
                     _messages.append({"role": "user", "content": (

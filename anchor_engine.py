@@ -12939,7 +12939,12 @@ class AnchorEngine:
                     f"[{a.created_at.strftime('%H:%M')}] [run_agent_action] {_action_name}: {_res[:800]}"
                 )
                 # Считаем partial failure для run_agent_action
-                if _res and 'error' in _res.lower():
+                if _res and (
+                    'error' in _res.lower()
+                    or 'тайм-аут' in _res.lower()
+                    or 'timeout' in _res.lower()
+                    or 'скрипт не верн' in _res.lower()
+                ):
                     _failed_tools['run_agent_action'] = _failed_tools.get('run_agent_action', 0) + 1
                 else:
                     _tool_freq['run_agent_action'] = _tool_freq.get('run_agent_action', 0) + 1
