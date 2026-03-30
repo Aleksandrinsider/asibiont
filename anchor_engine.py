@@ -1059,6 +1059,220 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
     return '\n'.join(lines) + '\n'
 
 
+def _build_personalized_strategy(
+    goals_summary: list,
+    caps_cats: set,
+    goal_type: str,
+    goal_cap_rank: list,
+    used_tools: set,
+    has_imap: bool,
+    has_github: bool,
+    has_rss: bool,
+    has_content: bool,
+    has_crm: bool = False,
+    has_market: bool = False,
+    has_slack: bool = False,
+    has_news: bool = False,
+    has_alpha: bool = False,
+    py_actions: list | None = None,
+) -> str:
+    """Синтезирует конкретную цепочку под КОНКРЕТНЫЕ цели + КОНКРЕТНЫЕ интеграции пользователя.
+    Не показывает все варианты — выводит 1 рекомендацию + 1 альтернативу.
+    """
+    if not goals_summary:
+        return ''
+
+    # ── Выбираем самую актуальную цель ──
+    _best_goal = None
+    for g in goals_summary:
+        prog = g.get('progress', 0) or 0
+        if prog >= 100:
+            continue
+        if _best_goal is None:
+            _best_goal = g
+        else:
+            _prev_prog = _best_goal.get('progress', 0) or 0
+            # Приоритет: есть метрика + прогресс 10-80% (есть ход, но не завершена)
+            if g.get('metric_target') and not _best_goal.get('metric_target'):
+                _best_goal = g
+            elif 10 <= prog <= 80 and not (10 <= _prev_prog <= 80):
+                _best_goal = g
+
+    if not _best_goal and goals_summary:
+        _best_goal = goals_summary[0]
+    if not _best_goal:
+        return ''
+
+    _goal_title = _best_goal.get('title', '?')
+    _goal_prog  = _best_goal.get('progress', 0) or 0
+    _metric_cur = _best_goal.get('metric_current', 0) or 0
+    _metric_tgt = _best_goal.get('metric_target', '')
+    _metric_str = f"{_metric_cur}/{_metric_tgt}" if _metric_tgt else f"{_goal_prog}%"
+
+    # ── Определяем комбинацию интеграций → строим цепочку ──
+    _chain: list[str] = []
+    _alt   = ''
+    _why   = ''
+
+    # Самая мощная комбинация: GitHub + IMAP → нетворкинг с полным циклом
+    if has_github and has_imap:
+        _chain = [
+            "run_agent_action(action='search_users', query='language:[стек ЦА] repos:>3 location:Russia')",
+            "→ save_email_contact (5-10 человек, меняй query каждый цикл!)",
+            "→ send_outreach_email (персонализируй: упомяни их конкретный проект/стек)",
+            "→ check_emails → ИНТЕРЕС: reply_to_outreach_email + ссылка → negotiate_by_email",
+            "→ НЕТ ОТВЕТОВ >3д: send_follow_up_email → update_goal_progress",
+        ]
+        _alt = "Habr: web_search('site:habr.com [тема] contact email') → save_email_contact → send_outreach_email"
+        _why = "GitHub + Email (IMAP): нашёл людей — сразу видишь и обрабатываешь ответы. Полный цикл в одном агенте."
+
+    # GitHub без IMAP — sourcing без чтения ответов
+    elif has_github and not has_imap:
+        _chain = [
+            "run_agent_action(action='search_users', query='language:[стек] repos:>5') — меняй query каждый цикл",
+            "→ save_email_contact → send_outreach_email",
+            "→ send_follow_up_email (тем кто не ответил >3 дней)",
+            "→ update_goal_progress",
+        ]
+        _alt = "Подключи IMAP-ключи → сможешь читать ответы → конверсия вырастет"
+        _why = "GitHub: лучший sourcing для tech-аудитории. Без IMAP только отправляешь — не видишь ответы."
+
+    # IMAP без GitHub — фокус на переработке уже имеющихся контактов
+    elif has_imap and not has_github:
+        _chain = [
+            "check_emails → есть ответы? ИНТЕРЕС → reply_to_outreach_email + negotiate_by_email",
+            "→ НЕТ новых: list_email_contacts(status='sent') → send_follow_up_email (>3 дней без ответа)",
+            "→ Новые контакты: web_search('[ЦА] email contact site:habr.com ИЛИ site:dev.to') → save_email_contact → send_outreach_email",
+            "→ update_goal_progress при получении интереса/регистрации",
+        ]
+        _alt = "find_and_message_relevant_users → пользователи внутри платформы, быстрый первый отклик"
+        _why = "IMAP: начни с check_emails — возможно уже есть тёплые ответы. Дожимай их перед новой волной."
+
+    # Content + IMAP — связка пост → email
+    elif has_content and has_imap:
+        _chain = [
+            "create_post(тема, полезная для твоей ЦА) → publish_to_telegram",
+            "→ list_email_contacts(status='replied'|'interested') → send_follow_up_email с P.S.: ссылка на пост",
+            "→ check_emails → reply тем кто ответил → update_goal_progress",
+        ]
+        _alt = "find_and_message_relevant_users с ссылкой на опубликованный пост"
+        _why = "Контент + Email: пост греет аудиторию, email конвертирует уже тёплых. Замкнутый цикл."
+
+    # Content без email
+    elif has_content and not has_imap:
+        _chain = [
+            "create_post(экспертная тема или инсайт по теме цели)",
+            "→ publish_to_telegram",
+            "→ find_and_message_relevant_users(описание ЦА) — напиши им с ссылкой на пост",
+            "→ web_search('[ЦА, интересующаяся темой поста] email contact') → save_email_contact → send_outreach_email",
+        ]
+        _alt = "Добавь Email-интеграцию → аутрич к внешней аудитории"
+        _why = "Контент — точка входа. Пост создаёт доверие, find_and_message и email конвертируют интерес."
+
+    # RSS — аналитика и контент-машина
+    elif has_rss:
+        _chain = [
+            "run_agent_action(action='[ТОЧНОЕ_ACTION_ИЗ_ПРОФИЛЯ]') — получи свежие данные",
+            "→ выдели 1-2 ключевых инсайта (НЕ пересказ — твоя оценка значимости)",
+            "→ create_post(инсайт + вывод + CTA) → publish_to_telegram",
+            "→ DELEGATE[email-агент]: 'найди авторов релевантных материалов и напиши им о коллаборации'",
+        ]
+        _alt = "research_topic(тема из RSS) → аналитический вывод → save_note или create_post"
+        _why = "RSS: твоя суперсила — реальные свежие данные. Превращай каждый инсайт в действие или контент."
+
+    # CRM — разогрев воронки
+    elif has_crm:
+        _chain = [
+            "run_agent_action(action='get_contacts') → найди контакты без активности 7+ дней",
+            "→ ТЁПЛЫЕ: negotiate_by_email (конкретное предложение / следующий шаг)",
+            "→ ХОЛОДНЫЕ: send_follow_up_email (новый angle — другая боль/польза)",
+            "→ run_agent_action(action='update_lead', params={'status':'contacted'}) → update_goal_progress",
+        ]
+        _alt = "Новые лиды: web_search([ЦА] email) → save_email_contact → run_agent_action(action='create_deal')"
+        _why = "CRM: уже имеющиеся контакты теплее холодного outreach. Начни с разогрева своей базы."
+
+    # Маркетплейс — мониторинг + прогресс
+    elif has_market:
+        _chain = [
+            "run_agent_action(action='check_stock') → предупреди если остатки <10 ед.",
+            "→ run_agent_action(action='get_orders') → проанализируй топ-3 позиции за 7 дней",
+            "→ research_topic('[конкуренты] [твоя ниша] WB/Ozon цена стратегия 2026') → вывод",
+            "→ update_goal_progress (если метрика = выручка/заказы — внеси актуальные данные)",
+        ]
+        _alt = "create_post(топ-N товаров по продажам + почему покупают) → publish_to_telegram"
+        _why = "Маркетплейс: операционные данные (остатки, заказы) — твои ключевые метрики. Мониторь и действуй быстро."
+
+    # Alpha Vantage / финансы — аналитика в реальном времени
+    elif has_alpha:
+        _chain = [
+            "run_agent_action(action='get_price', symbol='[ТИКЕР]') → актуальные котировки",
+            "→ research_topic('[тикер/сырьё] прогноз тренды 2026') → контекст",
+            "→ create_post(факты + вывод + что это значит для твоей аудитории) → publish_to_telegram",
+            "→ update_goal_progress",
+        ]
+        _alt = "run_agent_action(action='get_news') → новостной контекст → аналитический пост"
+        _why = "Alpha Vantage: реальные рыночные данные в реальном времени. Комбинируй с контентом."
+
+    # NewsAPI
+    elif has_news:
+        _chain = [
+            "run_agent_action(action='get_news', query='[тема цели]') → 5-7 свежих материалов",
+            "→ выдели главный инсайт + его значение для твоей аудитории",
+            "→ create_post(дайджест + твой вывод) → publish_to_telegram",
+            "→ DELEGATE[email-агент]: 'найди экспертов по [теме] и напиши им о коллаборации'",
+        ]
+        _alt = "web_search('[тема] эксперт email contact') → save_email_contact → send_outreach_email"
+        _why = "NewsAPI: 100+ источников → преврати аналитику в контент-стратегию и нетворкинг."
+
+    # Slack — командная координация
+    elif has_slack:
+        _chain = [
+            "research_topic('[тема цели] прогресс и следующий шаг') → выдели конкретный блокер",
+            "→ run_agent_action(action='post_message', params={'channel':'#general', 'text':'...'}) → команда в курсе",
+            "→ add_task(следующий конкретный шаг с дедлайном) → update_goal_progress",
+        ]
+        _alt = "run_agent_action(action='list_channels') → найди правильный канал для отчёта"
+        _why = "Slack: держи команду в курсе. Прозрачность прогресса = быстрее движение."
+
+    # Заглушка: нет специфических интеграций
+    else:
+        _chain = [
+            "research_topic('[тема цели] лучшие практики 2026 + конкретные ресурсы/люди')",
+            "→ найди 3-5 конкретных человека / ресурса / контакта",
+            "→ find_and_message_relevant_users('[описание ЦА]') ИЛИ web_search → save_email_contact",
+            "→ add_task(следующий шаг с дедлайном) → update_goal_progress",
+        ]
+        _alt = "Подключи интеграцию под цель → https://asibiont.com/dashboard"
+        _why = "Нет специфических интеграций → платформенный охват + исследование. Тем не менее двигай цель."
+
+    # ── Примечание если подход уже пробовался ──
+    _first_tool = _chain[0].split('(')[0].strip().lower() if _chain else ''
+    _is_tried = any(_first_tool in t.lower() for t in used_tools) if _first_tool else False
+    _tried_note = ''
+    if _is_tried:
+        _tried_note = (
+            "\n  ⚡ Этот подход уже применялся → обязательно ВАРЬИРУЙ: "
+            "другой query / другой сегмент ЦА / другой subject line"
+        )
+
+    lines = [
+        f"\n🧭 СТРАТЕГИЯ ДЛЯ ТЕБЯ (цель × интеграции × текущий прогресс):",
+        f"  Цель: «{_goal_title}» — {_metric_str} | тип: {goal_type}",
+        f"  Почему эта цепочка: {_why}",
+        f"  Цепочка:",
+    ]
+    for step in _chain:
+        lines.append(f"    {step}")
+    if _tried_note:
+        lines.append(_tried_note)
+    lines.append(f"  Альтернатива: {_alt}")
+    lines.append(
+        "  → Цепочка не работает? Задай себе: «Какой ЕЩЁ канал использует моя ЦА?»"
+        " и переключись на непробованный паттерн из 5 ПАТТЕРНОВ ниже."
+    )
+    return '\n'.join(lines) + '\n'
+
+
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                                has_imap: bool, has_github: bool, has_rss: bool,
                                has_alpha: bool, has_script: bool, has_content: bool,
@@ -2176,6 +2390,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         python_code=python_code,
     )
 
+    # ── Персонализированная стратегия: цель × интеграции → конкретная цепочка ──
+    _personalized_strategy_block = _build_personalized_strategy(
+        goals_summary=goals_summary,
+        caps_cats=_caps_cats,
+        goal_type=_goal_type,
+        goal_cap_rank=_goal_cap_rank,
+        used_tools=_used_tools,
+        has_imap=_has_imap,
+        has_github=_has_github,
+        has_rss=_has_rss,
+        has_content=_has_content,
+        has_crm=_has_crm,
+        has_market=_has_market,
+        has_slack=_has_slack,
+        has_news=_has_news,
+        has_alpha=_has_alpha,
+        py_actions=_py_actions,
+    )
+
     # ── Outreach effectiveness stats ──
     _outreach_stats = ''
     if user and (_has_imap or _has_github):
@@ -2806,6 +3039,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{'Интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
+        f"{_personalized_strategy_block}"
         f"{_personal_guard}"
         f"{_campaign_directive}"
         f"{_goal_state_hint}"
