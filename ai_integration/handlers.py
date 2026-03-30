@@ -1942,6 +1942,7 @@ async def delegate_task(
                     }
 
                     # Логируем передачу задачи агенту
+                    _aal_delegation_id = None
                     try:
                         from models import AgentActivityLog as _AAL_d
                         _log = _AAL_d(
@@ -1956,6 +1957,7 @@ async def delegate_task(
                         )
                         session.add(_log)
                         session.commit()
+                        _aal_delegation_id = _log.id
                     except Exception as _log_err:
                         logger.warning(f"[DELEGATE] activity log error: {_log_err}")
                         try:
@@ -2070,6 +2072,35 @@ async def delegate_task(
 
                     if not _result or not _result.strip():
                         _results_parts.append(f"[{_agent_name}]: не удалось выполнить задачу — нужна доработка")
+                        # Помечаем задачу как отменённую (не оставляем в pending)
+                        if _agent_task_id:
+                            try:
+                                _at_fail = session.query(Task).get(_agent_task_id)
+                                if _at_fail and _at_fail.status == 'pending':
+                                    _at_fail.status = 'cancelled'
+                                    _at_fail.skipped_reason = 'agent_exec_failed'
+                                    _at_fail.completion_notes = 'Агент не вернул результат'
+                                    session.commit()
+                            except Exception as _tf:
+                                logger.debug("[DELEGATE] task cancel failed: %s", _tf)
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
+                        # Помечаем AAL как failed
+                        if _aal_delegation_id:
+                            try:
+                                from sqlalchemy import text as _aal_fail_text
+                                session.execute(_aal_fail_text(
+                                    "UPDATE agent_activity_log SET status='failed', result='Агент не вернул результат' WHERE id=:id"
+                                ), {'id': _aal_delegation_id})
+                                session.commit()
+                            except Exception as _af:
+                                logger.debug("[DELEGATE] aal fail update: %s", _af)
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
                         continue
 
                     # ── Критическая оценка результата (эвристика без лишнего LLM-вызова) ──

@@ -6024,7 +6024,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   Нет ответа от tool → 'ничего не найдено'. НЕ придумывай кампании #N, имена контактов,\n"
             "   числа ('получил 5 ответов'), email — если tool это не вернул. Выдумка = доверие 0.\n\n"
 
-            "📊 ФИНАЛ: update_goal_progress — ОБЯЗАТЕЛЬНО последний инструмент в сессии.\n\n"
+            "� PLACEHOLDER EMAIL: если send_outreach_email/send_email вернул ошибку о 'фейковый или generic email' —\n"
+            "   STOP. Сделай web_search по имени + компании чтобы найти реальный email. Примеры ЗАПРЕЩЁННЫХ\n"
+            "   placeholder emails: mark@example.com, test@test.com, name@company.com, info@example.org.\n"
+            "   Если real email найти не удалось — пропусти этот контакт и найди другого человека.\n"
+            "   Никогда не повторяй send_outreach_email с тем же placeholder адресом.\n\n"
+
+            "�📊 ФИНАЛ: update_goal_progress — ОБЯЗАТЕЛЬНО последний инструмент в сессии.\n\n"
 
             "💬 КАК ТЫ ПИШЕШЬ — как живой коллега в чате:\n"
             f"  {_persona}\n"
@@ -6108,7 +6114,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "EMAIL-АДРЕСА:\n"
         "Копируй email ПОСИМВОЛЬНО из входных данных (IMAP, From, To, заголовки писем). "
         "Если видишь email в данных скрипта или в письме — используй ТОЧНО его, без изменений. "
-        "Генерировать email из имени человека = ОШИБКА.\n\n"
+        "Генерировать email из имени человека = ОШИБКА.\n"
+        "Если send_email/send_outreach_email вернул ошибку 'фейковый или generic email' — "
+        "найди реальный адрес через web_search. Placeholder (mark@example.com, test@, name@company.com) "
+        "заблокированы системой. Пропусти контакт, если реальный email найти не удалось.\n\n"
 
         + (f"ТВОИ ИНТЕГРАЦИИ (активированы и готовы к использованию):\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "")
         + (_intg_action_hint.strip() + "\n\n" if _intg_action_hint.strip() else "")
@@ -6872,6 +6881,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     f"Поиск выполнен (использовал: {_used_str}). "
                     "Если нашёл людей с email — save_email_contact + send_outreach_email. "
                     "Если данных нет — попробуй другой запрос или другую интеграцию."
+                )})
+            elif _last_tool_local in ('web_search', 'research_topic', 'quick_topic_search') and not _was_save and not _was_send:
+                # Поиск через web/research без сохранения контактов — направляем к реальному действию
+                _messages.append({"role": "user", "content": (
+                    f"Поиск выполнен (использовал: {_used_str}). "
+                    "Извлеки из результатов КОНКРЕТНЫЕ данные: имена, email-адреса, контакты. "
+                    "НЕ вызывай update_goal_progress и НЕ сохраняй в заметки — это NOT финал. "
+                    "Следующий шаг: save_email_contact для каждого найденного человека с email, "
+                    "затем send_outreach_email. Если email не найдены — попробуй другой поисковый запрос "
+                    "с именем человека + компания + 'email contact'."
                 )})
             else:
                 # Универсальная подсказка — ИИ сам выбирает следующий шаг
