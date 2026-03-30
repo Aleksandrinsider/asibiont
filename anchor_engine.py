@@ -9277,6 +9277,71 @@ class AnchorEngine:
             except Exception as _ih_err:
                 logger.debug("[COORD] integration hypotheses: %s", _ih_err)
 
+            # ── Последние результаты каждого агента (для передачи данных между агентами) ──
+            # Координатор видит ЧТО именно нашёл каждый агент → может поручить другому агенту
+            # использовать эти данные (хайрешать авторов, написать письма, создать пост и т.д.)
+            _agent_results_str = ''
+            try:
+                from models import AgentActivityLog as _AAL_res
+                _aal_res_cutoff = datetime.now(timezone.utc) - timedelta(hours=6)
+                _aal_res_rows = session.query(_AAL_res).filter(
+                    _AAL_res.user_id == user.id,
+                    _AAL_res.created_at >= _aal_res_cutoff,
+                    _AAL_res.result.isnot(None),
+                ).order_by(_AAL_res.created_at.desc()).limit(40).all()
+
+                if _aal_res_rows:
+                    # Группируем по агенту, берём последние результаты
+                    _res_by_agent: dict = {}
+                    for _aal_row in _aal_res_rows:
+                        # Определяем имя агента через real_agents
+                        _ag_name_res = None
+                        for _p_res in _profiles:
+                            _ag_res_obj = next((a for a in real_agents if a.name == _p_res['name']), None)
+                            if _ag_res_obj and _ag_res_obj.id == (_aal_row.ref_id if hasattr(_aal_row, 'ref_id') else None):
+                                _ag_name_res = _p_res['name']
+                                break
+                        if not _ag_name_res:
+                            # Fallback: ищем по имени агента в title/content
+                            _title_low = (_aal_row.title or '').lower()
+                            for _p_res in _profiles:
+                                if _p_res['name'].lower() in _title_low:
+                                    _ag_name_res = _p_res['name']
+                                    break
+                        if not _ag_name_res:
+                            _ag_name_res = 'агент'
+                        _result_text = str(_aal_row.result or '').strip()
+                        if _result_text and len(_result_text) > 20:
+                            _res_by_agent.setdefault(_ag_name_res, []).append({
+                                'title': (_aal_row.title or '')[:80],
+                                'result': _result_text[:400],
+                                'type': _aal_row.activity_type or '',
+                                'ts': _aal_row.created_at,
+                            })
+
+                    _res_lines = []
+                    for _ag_res_name, _entries in _res_by_agent.items():
+                        # Берём только самые свежие 2 записи на агента
+                        _entries_sorted = sorted(_entries, key=lambda x: x['ts'], reverse=True)[:2]
+                        for _e in _entries_sorted:
+                            _ago_min = int((datetime.now(timezone.utc) - (
+                                _e['ts'].replace(tzinfo=timezone.utc) if _e['ts'].tzinfo is None else _e['ts']
+                            )).total_seconds() / 60)
+                            _res_lines.append(
+                                f"  {_ag_res_name} [{_ago_min}мин назад] — {_e['title']}"
+                            )
+                            _res_lines.append(f"    Результат: {_e['result']}")
+
+                    if _res_lines:
+                        _agent_results_str = (
+                            '\n🔁 ДАННЫЕ АГЕНТОВ ИЗ ПРОШЛЫХ ЦИКЛОВ (можно передать другому агенту!):\n'
+                            + '\n'.join(_res_lines)
+                            + '\n  → Если агент A нашёл контакты/авторов — поручи агенту B написать им.\n'
+                            + '  → Если агент A собрал аналитику — поручи агенту B создать пост/письмо.\n\n'
+                        )
+            except Exception as _ar_err:
+                logger.debug("[COORD] agent results harvest: %s", _ar_err)
+
             # ── Недавние выполненные задачи (anti-repeat для координатора) ──
             _recent_done_str = ''
             try:
@@ -9318,6 +9383,7 @@ class AnchorEngine:
                 + _effectiveness_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
+                + _agent_results_str
                 + f"{_degraded_note}"
                 + _pending_replies_str
                 + _unsent_contacts_str
