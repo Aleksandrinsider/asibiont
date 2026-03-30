@@ -5006,8 +5006,10 @@ class AnchorEngine:
                             "не шаблон, а с упоминанием их проекта. Так конверсия выше.»\n"
                             "  «[Имя], если дневной лимит сегодня исчерпан — не жди, напиши пришедшим ответам "
                             "и найди 2 контакта на dev.to. Завтра продолжим рассылку.»\n"
-                            "❌ ЗАПРЕЩЕНО: заголовки (КОНКРЕТНОЕ ДЕЙСТВИЕ:, СТРАТЕГИЯ:, ОЖИДАНИЕ В ОТЧЁТЕ:, КАНАЛЫ:), "
-                            "нумерованные списки, маркеры (•, -, *), markdown-форматирование. Только живая речь."
+                            "❌ ЗАПРЕЩЕНО: заголовки любого вида (КОНКРЕТНОЕ ДЕЙСТВИЕ:, СТРАТЕГИЯ:, "
+                            "ОЖИДАНИЕ В ОТЧЁТЕ:, КАНАЛЫ:, Данные для работы:, Задача:, Шаги:, Описание:), "
+                            "нумерованные списки, маркеры (•, -, *), markdown-форматирование. "
+                            "Только живая речь без структурных разделов. Не более 3 предложений."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=400)
                         if _gen and len(_gen.strip()) > 15:
@@ -5026,6 +5028,30 @@ class AnchorEngine:
                                 _coord_text,
                                 flags=re.IGNORECASE,
                             )
+                            # Обрезаем структурные секции: LLM иногда генерирует заголовки
+                            # вида "Данные для работы:", "Задача:", "Шаги:". Берём только
+                            # живой текст ДО первого такого заголовка.
+                            _coord_clean_lines = []
+                            for _cln in _coord_text.split('\n'):
+                                _cln_s = _cln.strip()
+                                if not _cln_s:
+                                    continue
+                                # Строка-заголовок: заканчивается на ":", без знаков конца предложения, ≤ 60 сим
+                                if (
+                                    _cln_s.endswith(':')
+                                    and len(_cln_s) <= 60
+                                    and not re.search(r'[.!?]', _cln_s[:-1])
+                                ):
+                                    break
+                                # Markdown-заголовки и маркеры
+                                if re.match(r'^(?:#{1,4}\s|\*{1,2}[А-ЯA-Z]|-\s{2,})', _cln_s):
+                                    break
+                                _coord_clean_lines.append(_cln_s)
+                            _coord_text = ' '.join(_coord_clean_lines).strip()
+                            # Ограничиваем 3-мя предложениями
+                            _coord_sents = re.split(r'(?<=[.!?])\s+(?=[А-ЯA-ZЁа-яa-zё])', _coord_text)
+                            if len(_coord_sents) > 3:
+                                _coord_text = ' '.join(_coord_sents[:3])
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     try:
