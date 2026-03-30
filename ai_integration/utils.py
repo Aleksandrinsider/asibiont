@@ -647,6 +647,87 @@ def clean_technical_details(text):
 # Alias for backward compatibility
 clean_content = clean_technical_details
 
+
+def sanitize_live_team_chat_text(
+    text,
+    *,
+    anchor_type: str = '',
+    speaker_name: str = '',
+    max_chars: int | None = None,
+):
+    """Универсальная финальная нормализация «живого» текста для чата команды.
+
+    Применяется перед сохранением в Interaction, чтобы убирать структурные блоки
+    вроде «Данные для работы:», markdown-списки и избыточно длинные техничные
+    формулировки.
+    """
+    if text is None:
+        return ''
+    if not isinstance(text, str):
+        text = str(text)
+
+    import re
+
+    cleaned = clean_technical_details(text).strip()
+    if not cleaned:
+        return ''
+
+    cleaned = cleaned.replace('\r\n', '\n').replace('\r', '\n')
+    # Срезаем текст начиная со структурных секций ТЗ
+    cleaned = re.split(
+        r'(?i)\b(?:данные для работы|ключевые данные|детали|описание|задача|шаги|план|ожидание в отч[её]те|каналы)\s*:',
+        cleaned,
+        maxsplit=1,
+    )[0]
+
+    # Убираем markdown-оформление и списки
+    cleaned = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', cleaned)
+    cleaned = re.sub(r'^\s*#{1,4}\s*', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'^\s*[•\-\*]\s+', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'^\s*\d+[.)\]]\s+', '', cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r'\n{2,}', '\n', cleaned)
+
+    # Убираем строки-заголовки вида "Раздел:"
+    lines = []
+    for ln in cleaned.split('\n'):
+        s = ln.strip()
+        if not s:
+            continue
+        if s.endswith(':') and len(s) <= 70 and not re.search(r'[.!?]', s[:-1]):
+            break
+        lines.append(s)
+    cleaned = ' '.join(lines).strip()
+    cleaned = re.sub(r'\s{2,}', ' ', cleaned)
+
+    if speaker_name:
+        cleaned = re.sub(
+            rf'^\s*{re.escape(speaker_name)}\s*,?\s*',
+            '',
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+
+    _a = (anchor_type or '').lower().strip()
+    if max_chars is None:
+        if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+            max_chars = 240
+        elif _a == 'coordinator_result':
+            max_chars = 420
+        else:
+            max_chars = 500
+
+    # Ограничиваем количество предложений для диалогового ритма
+    if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+        sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
+        if len(sents) > 3:
+            cleaned = ' '.join(sents[:3])
+
+    if len(cleaned) > max_chars:
+        cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
+        cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
+
+    return cleaned.strip()
+
 def get_context_from_db(user_id, limit=10):
     """Get chat context from Interaction table"""
     session = Session()

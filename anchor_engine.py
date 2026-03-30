@@ -5084,8 +5084,12 @@ class AnchorEngine:
 
                             if not _skip_coord:
                                 # Coordinator assignment — сохраняем в хронологию чтобы пользователь видел поручения
-                                from ai_integration.utils import clean_technical_details as _ctd_coord_save
-                                _coord_text_clean_save = _ctd_coord_save(_coord_text) if _coord_text else _coord_text
+                                from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
+                                _coord_text_clean_save = _sltt_coord(
+                                    _coord_text,
+                                    anchor_type='goal_autopilot_assignment',
+                                    speaker_name='ASI',
+                                ) if _coord_text else _coord_text
                                 _coord_content = json.dumps({
                                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
                                     'text': _coord_text_clean_save,
@@ -5103,8 +5107,12 @@ class AnchorEngine:
                             _cs.close()
                         if not _skip_coord and self.bot:
                             try:
-                                from ai_integration.utils import clean_technical_details as _ctd_coord
-                                _coord_text_clean = _ctd_coord(_coord_text) if _coord_text else _coord_text
+                                from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
+                                _coord_text_clean = _sltt_coord(
+                                    _coord_text,
+                                    anchor_type='goal_autopilot_assignment',
+                                    speaker_name='ASI',
+                                ) if _coord_text else _coord_text
                                 await _safe_send(
                                     self.bot, user.telegram_id,
                                     _coord_text_clean or _coord_text,
@@ -9591,7 +9599,11 @@ class AnchorEngine:
                         message_type='agent_msg',
                         content=json.dumps({
                             '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': _asi_assign_text,
+                            'text': __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                                _asi_assign_text,
+                                anchor_type='coordinator_assignment',
+                                speaker_name='ASI',
+                            ),
                             '__to_agent': _ag_name,
                             '__anchor_type': 'coordinator_assignment',
                         }, ensure_ascii=False),
@@ -10493,13 +10505,18 @@ class AnchorEngine:
                     if _is_minor_update:
                         logger.info("[COORD] minor update compressed for %s", _ag_name)
                     elif not _skip_step_cap:
+                        _cleaned_chat = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            _strip_html(_cleaned),
+                            anchor_type='coordinator_result',
+                            speaker_name=_ag_name,
+                        )
                         _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,
                             message_type=_msg_type_c2,
                             content=json.dumps({
                                 '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
-                                'text': _strip_html(_cleaned),
+                                'text': _cleaned_chat,
                                 '__tools_used': _step_tools,
                                 '__anchor_type': 'coordinator_result',
                             }, ensure_ascii=False),
@@ -10535,7 +10552,12 @@ class AnchorEngine:
                 # Отправляем результат шага агента в Telegram — пользователь видит прогресс
                 if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not _is_minor_update and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
                     try:
-                        _tg_text = f"{_ag_name}:\n{_cleaned}"
+                        _cleaned_tg = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            _cleaned,
+                            anchor_type='coordinator_result',
+                            speaker_name=_ag_name,
+                        )
+                        _tg_text = f"{_ag_name}:\n{_cleaned_tg}"
                         await _safe_send(self.bot, user.telegram_id, _tg_text)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)

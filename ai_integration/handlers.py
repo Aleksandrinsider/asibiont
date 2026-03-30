@@ -11,7 +11,12 @@ from models import Session, Task, User, UserProfile, Subscription, Goal, Post, P
 from sqlalchemy import or_, and_, func
 
 from .memory import encrypt_data, decrypt_data, LongTermMemory
-from .utils import parse_time_to_datetime, generate_unified_recommendations, normalize_task_title
+from .utils import (
+    parse_time_to_datetime,
+    generate_unified_recommendations,
+    normalize_task_title,
+    sanitize_live_team_chat_text,
+)
 from .task_search import find_task_flexible
 from .dialog_context import get_user_context, resolve_task_reference
 from . import marketing_agent
@@ -1708,17 +1713,20 @@ async def delegate_task(
                 _base = _strip_structured_text(_task_text, _max_len=180)
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
                 if not _base:
-                    return f'{_agent_name}, пожалуйста возьми одну конкретную задачу по текущей цели.'
+                    _fallback = f'{_agent_name}, пожалуйста возьми одну конкретную задачу по текущей цели.'
+                    return sanitize_live_team_chat_text(_fallback, anchor_type='agent_delegation', speaker_name='ASI')
                 _base = _truncate_by_word(_base, 95)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
-                return f'{_agent_name}, пожалуйста {_base}.'
+                _msg = f'{_agent_name}, пожалуйста {_base}.'
+                return sanitize_live_team_chat_text(_msg, anchor_type='agent_delegation', speaker_name='ASI')
 
             def _live_result_text(_agent_name: str, _result_text: str) -> str:
                 _txt = (_result_text or '').strip()
                 if not _txt:
                     _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
-                    return 'Вот что я нашла: пока данных мало, продолжаю проверку.' if _is_fem else 'Вот что я нашел: пока данных мало, продолжаю проверку.'
+                    _fallback = 'Вот что я нашла: пока данных мало, продолжаю проверку.' if _is_fem else 'Вот что я нашел: пока данных мало, продолжаю проверку.'
+                    return sanitize_live_team_chat_text(_fallback, anchor_type='agent_delegation', speaker_name=_agent_name)
                 _txt = _ren.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _txt)
                 _txt = _ren.sub(r'\n\s*[•\-\*]\s*', '\n', _txt)
                 _txt = _ren.sub(r'\n\s*\d+[.)\]]\s*', '\n', _txt)
@@ -1732,7 +1740,7 @@ async def delegate_task(
                 _prefix = 'Вот что я нашла: ' if _is_fem else 'Вот что я нашел: '
                 if not _txt_l.startswith(('вот что', 'нашла', 'нашел', 'проверила', 'проверил', 'сделала', 'сделал', 'нашли')):
                     _txt = _prefix + (_txt[:1].lower() + _txt[1:] if _txt and _txt[:1].isupper() and not _txt[:3].isupper() else _txt)
-                return _txt.strip()
+                return sanitize_live_team_chat_text(_txt.strip(), anchor_type='agent_delegation', speaker_name=_agent_name)
 
             _subscribed_ids = [r[0] for r in session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id).all()]
             # Загружаем агентов: подписки ИЛИ собственные агенты пользователя
