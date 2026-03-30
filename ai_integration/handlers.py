@@ -1710,7 +1710,7 @@ async def delegate_task(
                 return (_cut or _txt[:_limit]).strip(' ,;:.-')
 
             def _live_assignment_text(_agent_name: str, _task_text: str) -> str:
-                _base = _strip_structured_text(_task_text, _max_len=520)
+                _base = _strip_structured_text(_task_text, _max_len=280)
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
                 if not _base:
                     _fallback = f'{_agent_name}, пожалуйста возьми одну конкретную задачу по текущей цели.'
@@ -1720,7 +1720,7 @@ async def delegate_task(
                         speaker_name='ASI',
                         target_name=_agent_name,
                     )
-                _base = _truncate_by_word(_base, 260)
+                _base = _truncate_by_word(_base, 160)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
                 _msg = f'{_agent_name}, пожалуйста {_base}.'
@@ -1741,10 +1741,10 @@ async def delegate_task(
                 _txt = _ren.sub(r'\n\s*[•\-\*]\s*', '\n', _txt)
                 _txt = _ren.sub(r'\n\s*\d+[.)\]]\s*', '\n', _txt)
                 _txt = _ren.sub(r'\n{2,}', '\n', _txt)
-                _txt = _strip_structured_text(_txt, _max_len=1100)
+                _txt = _strip_structured_text(_txt, _max_len=700)
                 _sent = [s.strip() for s in _ren.split(r'(?<=[.!?])\s+', _txt) if s.strip()]
-                _txt = ' '.join(_sent[:6]).strip() if _sent else _txt
-                _txt = _truncate_by_word(_txt, 900)
+                _txt = ' '.join(_sent[:4]).strip() if _sent else _txt
+                _txt = _truncate_by_word(_txt, 520)
                 _txt_l = _txt.lower()
                 _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
                 _prefix = 'Вот что я нашла: ' if _is_fem else 'Вот что я нашел: '

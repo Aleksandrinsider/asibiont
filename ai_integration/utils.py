@@ -711,11 +711,11 @@ def sanitize_live_team_chat_text(
     _a = (anchor_type or '').lower().strip()
     if max_chars is None:
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            max_chars = 1200
+            max_chars = 520
         elif _a == 'coordinator_result':
-            max_chars = 1800
+            max_chars = 900
         else:
-            max_chars = 1600
+            max_chars = 1100
 
     if len(cleaned) > max_chars:
         cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
