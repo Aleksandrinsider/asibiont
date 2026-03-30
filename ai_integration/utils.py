@@ -711,48 +711,28 @@ def sanitize_live_team_chat_text(
     _a = (anchor_type or '').lower().strip()
     if max_chars is None:
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            max_chars = 240
+            max_chars = 1200
         elif _a == 'coordinator_result':
-            max_chars = 420
+            max_chars = 1800
         else:
-            max_chars = 500
-
-    # Ограничиваем количество предложений для диалогового ритма
-    if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-        sents = [s.strip() for s in re.split(r'(?<=[.!?])\s+', cleaned) if s.strip()]
-        if len(sents) > 3:
-            cleaned = ' '.join(sents[:3])
+            max_chars = 1600
 
     if len(cleaned) > max_chars:
         cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
         cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
 
-    # Жёсткий runtime-guard: если текст всё ещё похож на ТЗ/бриф,
-    # заменяем на короткую живую реплику без структурных блоков.
-    _looks_brief = False
+    # Runtime-guard без потери содержания: если после очистки остались явные
+    # префиксы брифа, мягко убираем их, но НЕ заменяем весь текст шаблоном.
     _lower = cleaned.lower()
-    _brief_markers = (
-        'на основе анализа', 'рынок', 'исследован', 'ключевые',
-        'показател', 'метрик', 'нужно найти', 'нужно сделать',
-        'для outreach', 'для email-рассылки',
-    )
-    if any(m in _lower for m in _brief_markers):
-        _looks_brief = True
-    if cleaned.count(':') >= 2:
-        _looks_brief = True
-    if len(cleaned) >= 210 and _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-        _looks_brief = True
-
-    if _looks_brief and _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-        _to_name = (target_name or '').strip()
-        if not _to_name:
-            _m = re.match(r'^\s*([A-Za-zА-Яа-яЁё0-9_\-]{2,40})\s*,', cleaned)
-            if _m:
-                _to_name = (_m.group(1) or '').strip()
-        if _to_name:
-            cleaned = f'{_to_name}, пожалуйста возьми один конкретный следующий шаг по цели и дай короткий апдейт.'
-        else:
-            cleaned = 'Пожалуйста возьми один конкретный следующий шаг по цели и дай короткий апдейт.'
+    if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment') and any(
+        p in _lower for p in ('на основе анализа', 'ключевые данные', 'данные для работы', 'задача:')
+    ):
+        cleaned = re.sub(
+            r'(?i)^(?:на\s+основе\s+анализа[^.?!]*[.?!]\s*)+',
+            '',
+            cleaned,
+        ).strip()
+        cleaned = re.sub(r'\s{2,}', ' ', cleaned)
 
     return cleaned.strip()
 
