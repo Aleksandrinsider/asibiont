@@ -1710,7 +1710,18 @@ async def delegate_task(
                 return (_cut or _txt[:_limit]).strip(' ,;:.-')
 
             def _live_assignment_text(_agent_name: str, _task_text: str) -> str:
-                _base = _strip_structured_text(_task_text, _max_len=280)
+                _task_lines = [ln.strip() for ln in (_task_text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n') if ln.strip()]
+                _title_line = _task_lines[0] if _task_lines else ''
+                _base = _title_line or _strip_structured_text(_task_text, _max_len=280)
+                # Если модель/инструмент склеил заголовок и бриф в одну строку,
+                # берём только заголовочную часть до служебных вводок.
+                _base = _ren.split(
+                    r'(?i)\b(?:на\s+основе\s+анализа|на\s+основе\s+rss|используй|детали|описание|данные\s+для\s+работы|ключевые\s+данные|нужно\s+найти|нужно\s+сделать)\b',
+                    _base,
+                    maxsplit=1,
+                )[0].strip(' ,;:.-')
+                if len(_base) < 18 and len(_task_lines) > 1:
+                    _base = _strip_structured_text('\n'.join(_task_lines[:2]), _max_len=220)
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
                 if not _base:
                     _fallback = f'{_agent_name}, пожалуйста возьми одну конкретную задачу по текущей цели.'
