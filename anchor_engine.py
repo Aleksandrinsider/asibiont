@@ -13074,10 +13074,16 @@ class AnchorEngine:
                     _up_parts.append(f"Личные цели: {str(_up.goals)[:150]}")
                 if _up.content_strategy:
                     _up_parts.append(f"Контент-стратегия: {str(_up.content_strategy)[:150]}")
+                if getattr(user, 'phone', None):
+                    _up_parts.append(f"Телефон для связи: {str(user.phone)[:40]}")
+                if getattr(user, 'email', None):
+                    _up_parts.append(f"Email для связи: {str(user.email)[:120]}")
                 _user_profile_ctx = {
                     'company': _up.company or '',
                     'position': _up.position or '',
                     'bio': (_up.bio or '')[:200],
+                    'phone': (user.phone or '')[:40] if getattr(user, 'phone', None) else '',
+                    'email': (user.email or '')[:120] if getattr(user, 'email', None) else '',
                     'summary': '\n'.join(_up_parts),
                 }
         except Exception as _up_err:
