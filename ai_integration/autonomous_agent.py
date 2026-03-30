@@ -4429,18 +4429,21 @@ class HybridAutonomousAgent:
             messages.append({"role": "user", "content": instruction})
 
             # Определяем какие инструменты ИСКЛЮЧИТЬ по режиму
+            # update_profile ЗАПРЕЩЁН в любом не-chat режиме: AI не должен обновлять профиль
+            # на основе контекста якорей (может случайно скопировать данные другого пользователя)
+            _PROFILE_TOOLS = {'update_profile', 'save_user_rule'}
             exclude_tools = set()
             if mode == 'reminder':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'}
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _PROFILE_TOOLS
             elif mode == 'task_assist':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'}
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _PROFILE_TOOLS
             elif mode == 'result_check':
                 exclude_tools = {'add_task', 'create_goal', 'delegate_task',
-                                 'edit_task', 'reschedule_task'}
+                                 'edit_task', 'reschedule_task'} | _PROFILE_TOOLS
             elif mode == 'proactive':
-                exclude_tools = {'delegate_task'}
+                exclude_tools = {'delegate_task'} | _PROFILE_TOOLS
             elif mode == 'anchor':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'}
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _PROFILE_TOOLS
 
             # ===== Tool calling loop (облегчённый) =====
             all_execution_results = []
@@ -6879,8 +6882,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 # Поиск через интеграцию (GitHub, RSS, CRM и др.) без сохранения контактов
                 _messages.append({"role": "user", "content": (
                     f"Поиск выполнен (использовал: {_used_str}). "
-                    "Если нашёл людей с email — save_email_contact + send_outreach_email. "
-                    "Если данных нет — попробуй другой запрос или другую интеграцию."
+                    "Если нашёл людей/авторов с email — save_email_contact + send_outreach_email. "
+                    "Если email не найдены, но есть имена/ссылки/профили — "
+                    "передай данные коллеге через delegate_task: "
+                    "'DELEGATE[Имя-email-агента]: нашёл [авторов/контакты] — напишите им'. "
+                    "Не вызывай update_goal_progress с заметками — это не финал."
                 )})
             elif _last_tool_local in ('web_search', 'research_topic', 'quick_topic_search') and not _was_save and not _was_send:
                 # Поиск через web/research без сохранения контактов — направляем к реальному действию
