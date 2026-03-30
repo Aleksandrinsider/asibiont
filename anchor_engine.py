@@ -2142,6 +2142,23 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 "Рекомендуется: send_outreach_email или negotiate_by_email тем кто уже в базе.\n"
             )
 
+    # ── RSS-specific loop: агент читает RSS 3+ раз без публикации/делегирования ──
+    if _has_rss:
+        _rss_reads = _tool_cnt.get('run_agent_action', 0)
+        _has_rss_output = any(
+            t in ('create_post', 'publish_to_telegram', 'publish_to_discord', 'add_task')
+            for t in _used_tools
+        )
+        if _rss_reads >= 3 and not _has_rss_output:
+            _loop_context += (
+                f"\n📰 RSS-ПЕТЛЯ: ты вызвал run_agent_action {_rss_reads} раз, но ни разу не создал пост или задачу. "
+                "RSS — это сырой материал, не самоцель. Прямо сейчас выбери один из вариантов:\n"
+                "  A) create_post — напиши аналитику/инсайт по прочитанным статьям\n"
+                "  B) add_task — создай задачу коллеге-email-агенту: 'Напиши авторам вот этих статей'\n"
+                "  C) research_topic — углуби знания по самой интересной теме и создай полезный summary\n"
+                "Не читай RSS ещё раз пока не сделаешь что-то с уже прочитанным.\n"
+            )
+
     # Инструменты которые агент ЕЩЁ НЕ пробовал — адаптированы под тип агента
     if _has_rss and not _has_imap and not _has_github:
         # RSS-only агент: только реально доступные инструменты
@@ -5473,6 +5490,25 @@ class AnchorEngine:
                                     _loop_channel_hint_c = (
                                         f'⚠️ GitHub использовался {_gh_count_c} раз — попробуй другой канал: '
                                         f'{_alt_str_c}.'
+                                    )
+                                # RSS-петля: Марк/RSS-агент читает ленту без действий
+                                _rss_count_c = (
+                                    _all_recent_text_c.count('habr.com')
+                                    + _all_recent_text_c.count('habr')
+                                    + _all_recent_text_c.count('rss')
+                                )
+                                _has_rss_output_c = (
+                                    'create_post' in _all_recent_text_c
+                                    or 'publish_to_telegram' in _all_recent_text_c
+                                    or 'опубликовал' in _all_recent_text_c
+                                    or 'создал пост' in _all_recent_text_c
+                                )
+                                if _rss_count_c >= 4 and not _has_rss_output_c and not _loop_channel_hint_c:
+                                    _loop_channel_hint_c = (
+                                        f'⚠️ {_chosen_name} читал RSS/Хабр {_rss_count_c} раз подряд без публикации — это петля! '
+                                        f'Дай задачу с конкретным выходным артефактом: '
+                                        f'«создай пост-аналитику по прочитанным AI-трендам» или '
+                                        f'«выдели 3 лучшие статьи и делегируй контакты email-агенту».'
                                     )
                         except Exception as _cc_err:
                             logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
