@@ -551,10 +551,8 @@ MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
     'goal_autopilot_handoff',
-    # Рабочие результаты и межагентское взаимодействие должны быть видны пользователю.
-    # Иначе в чате доминирует ASI, хотя агенты реально работают и сохраняются в БД.
-    'goal_autopilot_result',
-    'coordinator_result',
+    # Межагентское взаимодействие (ack/handoff/delegation) не считается — это служебные сообщения.
+    # coordinator_result и goal_autopilot_result считаются — агент реально 'работал' и занял слот.
     'agent_delegation',
     'agent_chain_continue',
     'agent_chain_transfer',
@@ -8082,8 +8080,18 @@ class AnchorEngine:
             _unsent_contacts_data = data.get('unsent_contacts', [])
             _overworked_goals = data.get('overworked_goals', [])
             _neglected_goals = data.get('neglected_goals', [])
+            _known_identifiers_data = data.get('known_identifiers', [])
 
-            # Блок несотправленных контактов — критический приоритет
+            # Блок "не ищи этих" — имена/домены уже в базе, чтобы агенты не тратили циклы повторно
+            _known_dedup_str = ''
+            if _known_identifiers_data:
+                _ki_sample = _known_identifiers_data[:25]
+                _known_dedup_str = (
+                    f"\n🚫 УЖЕ В БАЗЕ ({_known_contacts} контактов) — НЕ ищи повторно: "
+                    + ', '.join(_ki_sample)
+                    + ('...' if len(_known_identifiers_data) > 25 else '')
+                    + "\n→ Если web_search возвращает кого-то из этого списка — пропускай, ищи НОВЫХ.\n"
+                )
             _unsent_contacts_str = ''
             _coord_sent_today = data.get('emails_sent_today', 0)
             _coord_daily_limit = data.get('email_daily_limit', 20)
@@ -8094,15 +8102,39 @@ class AnchorEngine:
                     "Назначай задачи на другие инструменты: research_topic, web_search, create_post, save_note.\n"
                 )
             elif _unsent_contacts_data:
-                _uc_names = [
-                    _c.split('<')[0].strip() if '<' in _c else _c[:40]
-                    for _c in _unsent_contacts_data[:5]
-                ]
+                import re as _re_uc
+                _PERSONAL_DOMAINS_PAT = _re_uc.compile(
+                    r'@(gmail|yahoo|outlook|hotmail|mail\.ru|yandex|icloud|proton|bk\.ru|list\.ru|inbox\.ru)',
+                    _re_uc.I,
+                )
+                _uc_personal = []
+                _uc_corp = []
+                for _c in _unsent_contacts_data[:10]:
+                    _em_uc = _c.split('<')[1].split('>')[0].strip() if '<' in _c and '>' in _c else ''
+                    _nm_uc = _c.split('<')[0].strip() if '<' in _c else _c[:40]
+                    if _PERSONAL_DOMAINS_PAT.search(_em_uc):
+                        _uc_personal.append((_nm_uc, _em_uc))
+                    else:
+                        _uc_corp.append((_nm_uc, _em_uc))
+                _uc_lines = []
+                if _uc_personal:
+                    _uc_lines.append(
+                        f"  👤 ЛИЧНЫЕ ({len(_uc_personal)}): "
+                        + ', '.join(f"{n} <{e}>" for n, e in _uc_personal[:5])
+                        + "\n     → send_outreach_email — персональный питч про ASI Biont"
+                    )
+                if _uc_corp:
+                    _uc_lines.append(
+                        f"  🏢 КОРПОРАТИВНЫЕ ({len(_uc_corp)}): "
+                        + ', '.join(f"{n} <{e}>" for n, e in _uc_corp[:5])
+                        + "\n     → send_outreach_email — B2B питч: ASI Biont как инструмент для БИЗНЕСА "
+                        "(автоматизация, AI-команда под ключ, снижение издержек). "
+                        "Обращайся к конкретному человеку по имени, говори на языке выгоды для компании."
+                    )
                 _unsent_contacts_str = (
-                    f"\n🟠 КОНТАКТЫ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.): "
-                    + ', '.join(_uc_names)
-                    + "\n→ Рекомендую email-агенту: send_outreach_email этим контактам — если данных достаточно. "
-                    "Если данные неполные или аудитория не подходит — сначала уточни/найди подходящие.\n"
+                    f"\n🟠 КОНТАКТЫ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.) — "
+                    "ПРИОРИТЕТ: напиши им ДО поиска новых!\n"
+                    + '\n'.join(_uc_lines) + "\n"
                 )
             elif _email_sent > 0 and _goals:
                 # Все контакты уже получили письма — нужны НОВЫЕ контакты
@@ -9247,6 +9279,7 @@ class AnchorEngine:
                 + f"{_degraded_note}"
                 + _pending_replies_str
                 + _unsent_contacts_str
+                + _known_dedup_str
                 + f"{_strategy_map_str}\n"
                 + f"{_situation_str}\n"
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
@@ -13074,6 +13107,19 @@ class AnchorEngine:
             for c in contacts
         ] if contacts else []
 
+        # Компактный список уже известных имён/компаний — чтобы агенты не искали их повторно
+        _known_identifiers: list[str] = []
+        for _kc in _contacts_raw[:80]:  # все недавние 50+
+            _kc_parts = []
+            if _kc.name:
+                _kc_parts.append(_kc.name.strip())
+            if _kc.company:
+                _kc_parts.append(_kc.company.strip())
+            if _kc.email:
+                _kc_parts.append(_kc.email.split('@')[1].replace('.ru', '').replace('.com', '').replace('.ai', ''))
+            if _kc_parts:
+                _known_identifiers.append(' / '.join(_kc_parts[:2]))
+
         # Per-agent action memory — чтобы каждый агент не зацикливался и не повторял своё
         _per_agent_history: dict = {}  # {agent_name: [action_str, ...]}
         try:
@@ -13818,6 +13864,7 @@ class AnchorEngine:
                 {e.lower() for e in _already_sent_emails} and
                 c.split('<')[1].split('>')[0].strip().lower() not in _negotiation_emails
             ],
+            'known_identifiers': _known_identifiers,
         }
 
         return [Anchor(

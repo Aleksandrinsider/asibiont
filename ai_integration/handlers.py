@@ -15472,6 +15472,7 @@ async def save_email_contact(
         ).first()
         if existing:
             # Update existing
+            _prev_status = existing.status or 'new'
             if name:
                 existing.name = name.strip()
             if company:
@@ -15483,7 +15484,29 @@ async def save_email_contact(
             if status:
                 existing.status = status
             session.commit()
-            return f" Контакт {email_clean} обновлён"
+            _cur_status = existing.status or _prev_status
+            # Информативный ответ: агент должен знать реальное состояние контакта
+            if _cur_status in ('contacted',):
+                return (
+                    f"ℹ️ {email_clean} уже в базе (статус: contacted — письмо уже отправлено). "
+                    f"НЕ повторяй этот контакт повторно. "
+                    f"Найди НОВОГО человека или используй send_outreach_email для тех, у кого статус 'new'."
+                )
+            if _cur_status in ('replied', 'interested'):
+                return (
+                    f"✅ {email_clean} (статус: {_cur_status}) — этот контакт ответил/заинтересован. "
+                    f"Используй negotiate_by_email для персонального диалога, не обычный outreach."
+                )
+            if _cur_status == 'unsubscribed':
+                return (
+                    f"⛔ {email_clean} отписался (статус: unsubscribed). "
+                    f"Никаких писем этому контакту — найди другого."
+                )
+            # Статус 'new' или другой: контакт в базе, ещё не написали
+            return (
+                f"ℹ️ {email_clean} уже в базе (статус: {_cur_status}). "
+                f"Можно отправить письмо через send_outreach_email — контакт ещё не получал outreach."
+            )
 
         # Авто-определение source по контексту (если агент не указал)
         _effective_source = source or 'manual'
