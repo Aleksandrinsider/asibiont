@@ -8333,12 +8333,33 @@ class AnchorEngine:
                     _ch_str = '+'.join(_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_cr))
                     _tool_hints = [_CAP_TOOL_HINTS[c] for c in sorted(_cats_cr) if c in _CAP_TOOL_HINTS and _CAP_TOOL_HINTS[c]]
                     _tool_hints.append('web_search, research_topic, add_task')
+                    # Строки "НЕ НАЗНАЧАЙ" — объясняем что НЕЛЬЗЯ давать агенту с такими интеграциями
+                    _do_not_lines = []
+                    if 'email' in _cats_cr:
+                        _do_not_lines.append(
+                            f"  ⛔ {_p_cr['name']} [email]: НЕ ДАВАЙ задачи только web_search/research без email-шага."
+                            f" Её ценность — в ОТПРАВКЕ писем. Каждая задача должна заканчиваться:"
+                            f" send_outreach_email / reply_to_outreach_email / check_emails / negotiate_by_email."
+                            f" web_search — только как шаг ДО письма, не самоцель."
+                        )
+                    if 'git' in _cats_cr:
+                        _do_not_lines.append(
+                            f"  ⛔ {_p_cr['name']} [GitHub]: НЕ ДАВАЙ задачи «найди авторов статей на Хабре» —"
+                            f" GitHub не индексирует Хабр. Используй: run_agent_action(search_users/search_repos)"
+                            f" → save_email_contact → send_outreach_email или DELEGATE[email-агент]."
+                        )
+                    if 'rss' in _cats_cr:
+                        _do_not_lines.append(
+                            f"  ⛔ {_p_cr['name']} [RSS]: НЕ ДАВАЙ задачи только «прочитай RSS» без действия."
+                            f" Каждый цикл RSS → обязательно: create_post / publish_to_telegram / send_message_to_user / DELEGATE outreach."
+                        )
                     _cap_rules_lines.append(
                         f"  {'📞' if 'calls' in _cats_cr else '🔀'} {_p_cr['name']} [{_ch_str}]: "
                         f"МОЖЕТ: {', '.join(_tool_hints[:5])}. "
                         f"Назначай задачи ТОЛЬКО с инструментами из этого списка. "
                         f"Чего нет — НЕ НАЗНАЧАЙ."
                     )
+                    _cap_rules_lines.extend(_do_not_lines)
             _cap_rules_str = (
                 "\nℹ️ ОГРАНИЧЕНИЯ ИНТЕГРАЦИЙ:\n"
                 + '\n'.join(_cap_rules_lines) + '\n'
@@ -9752,6 +9773,28 @@ class AnchorEngine:
                                 _ag_norm, _tool_norm or (_p_norm.get('tool') or ''), _tool_after, _note_after)
                     _p_norm['tool'] = _tool_after
                     _p_norm['task'] = _task_after
+
+                # ── Интеграционный постпроцессор: email-агент получил задачу без email-шага ──
+                _task_final = _p_norm.get('task', '')
+                _tool_final = (_p_norm.get('tool') or '').lower()
+                _cats_final = _agent_caps_categories.get(_ag_norm, set())
+                _email_tools = {'send_outreach_email', 'reply_to_outreach_email', 'check_emails',
+                                'negotiate_by_email', 'send_follow_up_email', 'find_and_message_relevant_users'}
+                _has_email_action = (
+                    _tool_final in _email_tools
+                    or any(kw in _task_final.lower() for kw in [
+                        'send_outreach', 'check_email', 'reply_to', 'follow_up', 'negotiate',
+                        'отправь письм', 'напишет письм', 'check_emails', 'outreach',
+                    ])
+                )
+                if 'email' in _cats_final and not _has_email_action and _tool_final not in ('delegate_task',):
+                    # Агент умеет слать письма, но задача не заканчивается письмом → дописать
+                    _p_norm['task'] = (
+                        _task_final.rstrip(' .,') +
+                        ' → найденные контакты сохрани через save_email_contact и отправь персональное'
+                        ' письмо через send_outreach_email каждому.'
+                    )
+                    logger.info("[COORD] email-guard: appended email step for %s", _ag_norm)
 
                 _plan_normalized.append(_p_norm)
 
