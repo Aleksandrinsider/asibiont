@@ -1059,6 +1059,343 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
     return '\n'.join(lines) + '\n'
 
 
+
+# ── Таблица стратегий по категориям (data-driven, покрывает все 60+ интеграций) ──
+# Ключ = категория из _CAP_CATEGORY_MAP. Значение = (chain_steps, why, alt)
+_STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
+    'email': (
+        ["check_emails → есть ответы? → ИНТЕРЕС: reply_to_outreach_email + negotiate_by_email",
+         "→ НЕТ новых: list_email_contacts(status='sent') → send_follow_up_email (>3д без ответа)",
+         "→ Новые контакты: web_search('[ЦА] email') → save_email_contact → send_outreach_email",
+         "→ update_goal_progress при получении интереса/регистрации"],
+        "IMAP позволяет читать ответы — начни с check_emails, дожми тёплых до отправки новых",
+        "find_and_message_relevant_users → быстрый первый отклик внутри платформы",
+    ),
+    'git': (
+        ["run_agent_action(action='search_users', query='language:[стек] repos:>3') — меняй query каждый цикл",
+         "→ save_email_contact → send_outreach_email (персонализируй: проект/стек получателя)",
+         "→ send_follow_up_email (тем кто не ответил >3 дней) → update_goal_progress"],
+        "GitHub: лучший sourcing для tech-аудитории — реальные активные разработчики с email",
+        "web_search('site:habr.com [тема] email contact') → save_email_contact → send_outreach_email",
+    ),
+    'rss': (
+        ["run_agent_action(action='[ТОЧНОЕ_ACTION_ИЗ_ПРОФИЛЯ]') — получи свежие данные из ленты",
+         "→ выдели 1-2 ключевых инсайта (не пересказ — твоя оценка значимости)",
+         "→ create_post(инсайт + вывод + CTA) → publish_to_telegram",
+         "→ DELEGATE[email-агент]: 'найди авторов по теме и напиши о коллаборации'"],
+        "RSS: реальные свежие данные. Превращай каждый инсайт в действие или контент",
+        "research_topic(тема из RSS) → аналитический вывод → create_post",
+    ),
+    'telegram': (
+        ["create_post(экспертный инсайт или полезный факт по теме цели)",
+         "→ publish_to_telegram(content=...) — пост в личный канал",
+         "→ find_and_message_relevant_users('[ЦА]') с ссылкой на пост",
+         "→ web_search('[ЦА] email contact') → save_email_contact → send_outreach_email"],
+        "Telegram-канал: точка входа для аудитории. Пост создаёт доверие перед outreach",
+        "generate_image + create_post → визуальный контент получает больше просмотров",
+    ),
+    'discord': (
+        ["create_post(тема) → publish_to_discord(webhook=...) — пост в Discord-сервер",
+         "→ research_topic('[ниша] Discord communities admins email') → save_email_contact",
+         "→ send_outreach_email (предложение коллаборации/упоминания) → update_goal_progress"],
+        "Discord: активные tech-сообщества. Публикуй полезный контент, не рекламу",
+        "publish_to_telegram → параллельный охват через два канала",
+    ),
+    'crm': (
+        ["run_agent_action(action='get_contacts') → найди без активности 7+ дней",
+         "→ ТЁПЛЫЕ: negotiate_by_email (конкретное предложение / следующий шаг)",
+         "→ ХОЛОДНЫЕ: send_follow_up_email (новый angle — другая боль/польза)",
+         "→ run_agent_action(action='update_lead', params={'status':'contacted'}) → update_goal_progress"],
+        "CRM: имеющиеся контакты теплее холодного outreach. Разогрей базу перед новой волной",
+        "Новые лиды: web_search('[ЦА] email) → save_email_contact → run_agent_action(action='create_deal')",
+    ),
+    'marketplace': (
+        ["run_agent_action(action='check_stock') → предупреди если остатки <10 шт.",
+         "→ run_agent_action(action='get_orders') → проанализируй топ-3 позиции за 7д",
+         "→ research_topic('[конкуренты ниши] цена стратегия 2026') → вывод конкурентного анализа",
+         "→ update_goal_progress (метрика = выручка/заказы — внеси актуал)"],
+        "Маркетплейс: операционные данные (остатки, заказы) — ключевые метрики. Мониторь и действуй быстро",
+        "create_post(топ-N товаров + почему покупают) → publish_to_telegram для органического трафика",
+    ),
+    'pm': (
+        ["run_agent_action(action='list_issues', params={'project':'[ключ]'}) → найди overdue",
+         "→ run_agent_action(action='update_status', params={'id':'...', 'status':'done'}) — закрой выполненные",
+         "→ add_task(следующий шаг с дедлайном) → delegate_task если нужен другой агент",
+         "→ update_goal_progress при закрытии milestone"],
+        "Трекер задач: синхронизируй внешний PM с платформой — единый контроль прогресса",
+        "web_search('[проект/спринт] best practices') → create_task с чеклистом",
+    ),
+    'notion': (
+        ["run_agent_action(action='query_db', params={'database_id':'...'}) → найди устаревшие записи",
+         "→ run_agent_action(action='update_page', params={'id':'...', 'data':{...}}) — обнови",
+         "→ research_topic('[тема цели] новые данные/тренды') → run_agent_action(action='create_page')",
+         "→ update_goal_progress при фиксации ключевого результата"],
+        "Notion: база знаний + трекер. Каждый цикл автопилота должен что-то записать или обновить",
+        "web_search('[тема] best resources 2026') → сохрани в Notion как справочник",
+    ),
+    'sheets': (
+        ["run_agent_action(action='read_range', params={'range':'A1:Z50'}) → получи актуальные данные",
+         "→ проанализируй: что изменилось, что аномально, какие тренды",
+         "→ run_agent_action(action='append_row', params={'row':[дата, метрика, ...]}) — обнови данные",
+         "→ create_post(ключевой инсайт из данных) → send_message_to_user если нужно решение"],
+        "Google Sheets/Airtable: живые данные под рукой. Анализируй и обновляй в каждом цикле",
+        "research_topic('[тема данных] бенчмарки') → run_agent_action(append_row) с эталонами",
+    ),
+    'crypto': (
+        ["run_agent_action(action='get_price', params={'symbol':'BTC'}) → актуальный курс/объём",
+         "→ research_topic('[монета/рынок] прогноз on-chain метрики') → контекст",
+         "→ create_post(данные + твой вывод + риски) → publish_to_telegram",
+         "→ update_goal_progress"],
+        "Крипто: волатильность = возможности. Реальные данные + аналитика = ценный контент",
+        "run_agent_action(action='get_news') → новостной контекст → аналитический дайджест",
+    ),
+    'finance': (
+        ["run_agent_action(action='get_price', symbol='[ТИКЕР]') → актуальные котировки",
+         "→ research_topic('[тикер/сырьё] прогноз тренды 2026') → макро-контекст",
+         "→ create_post(факты + вывод + что это значит для аудитории) → publish_to_telegram",
+         "→ update_goal_progress"],
+        "Alpha Vantage: реальные рыночные данные в реальном времени. Комбинируй с контентом",
+        "run_agent_action(action='get_news') → дополни котировки новостным контекстом",
+    ),
+    'news': (
+        ["run_agent_action(action='get_news', query='[тема цели]') → 5-7 свежих материалов",
+         "→ выдели главный инсайт + его значение для аудитории",
+         "→ create_post(дайджест + твой вывод) → publish_to_telegram",
+         "→ DELEGATE[email-агент]: 'найди экспертов по [теме] и напиши о коллаборации'"],
+        "NewsAPI: 100+ источников → преврати аналитику в контент и нетворкинг",
+        "web_search('[тема] ведущий эксперт email') → save_email_contact → send_outreach_email",
+    ),
+    'slack': (
+        ["research_topic('[тема цели] ключевой блокер или следующий шаг') → конкретный вывод",
+         "→ run_agent_action(action='post_message', params={'channel':'#general', 'text':'...'}) → команда в курсе",
+         "→ add_task(следующий конкретный шаг с дедлайном) → update_goal_progress"],
+        "Slack: прозрачность прогресса для команды. Синхронизируй статус и следующий шаг",
+        "run_agent_action(action='list_channels') → найди нужный канал для отчёта",
+    ),
+    'social': (
+        ["run_agent_action(action='get_stats', params={'period':'7d'}) → что сработало",
+         "→ research_topic('[ниша] вирусный контент формат 2026') → идея поста",
+         "→ create_post(идея) → run_agent_action(action='post', params={'text':'...', 'platform':'linkedin'})",
+         "→ web_search('[ЦА лидер мнений] email') → save_email_contact → send_outreach_email"],
+        "Соцсети (LinkedIn/YouTube/VK): органический охват + нетворкинг с лидерами мнений",
+        "generate_image + create_post → визуал повышает engagement в соцсетях",
+    ),
+    'payments': (
+        ["run_agent_action(action='get_charges', params={'limit':50}) → последние транзакции",
+         "→ проанализируй: средний чек, частота, сегменты",
+         "→ research_topic('увеличение LTV [твоя ниша] 2026') → находки",
+         "→ negotiate_by_email топ-клиентам (upsell/cross-sell) → update_goal_progress"],
+        "Stripe/Yookassa: данные о платежах = понимание клиентов. Работай с реальными транзакциями",
+        "create_post(кейс ROI) → publish_to_telegram → органический лид-маг",
+    ),
+    'calendar': (
+        ["run_agent_action(action='list_events', params={'from':'today', 'days':7}) → предстоящие встречи",
+         "→ add_task(подготовка к каждой встрече: цель + ключевые вопросы) до за 1 день",
+         "→ research_topic('[тема встречи] best practices') → готовься предметно",
+         "→ run_agent_action(action='create_event') если нужна новая встреча → update_goal_progress"],
+        "Календарь: встречи = самые важные точки контакта. Готовься заранее, фиксируй итоги",
+        "run_agent_action(action='find_free_slot') → предложи встречу ключевому контакту",
+    ),
+    'calls': (
+        ["run_agent_action(action='send_sms', params={'to':'+7...', 'message':'[короткий CTA]'})",
+         "→ ОТВЕТА НЕТ: send_outreach_email тому же контакту через 2-3 дня",
+         "→ ОТВЕТ ЕСТЬ: add_task(созвон + дедлайн) → negotiate_by_email с деталями",
+         "→ update_goal_progress"],
+        "SMS/Twilio: самый прямой канал. Используй для hot-лидов или срочных действий",
+        "web_search('[ЦА] email contact') → send_outreach_email как альтернатива SMS",
+    ),
+    'image_gen': (
+        ["research_topic('[тема цели] визуальный контент идеи трендовые форматы')",
+         "→ generate_image(prompt='[описание визуала по теме цели]')",
+         "→ create_post(изображение + экспертный текст) → publish_to_telegram",
+         "→ find_and_message_relevant_users('[ЦА] интересующихся [темой]') с ссылкой на пост"],
+        "Генерация изображений: визуал = больший охват. Комбинируй с контентом для максимума",
+        "generate_image + create_post → public post → send_outreach_email с ссылкой",
+    ),
+    'storage': (
+        ["run_agent_action(action='list_files', params={'prefix':'[папка]'}) → найди актуальные файлы",
+         "→ run_agent_action(action='download', params={'key':'...'}) → проанализируй содержимое",
+         "→ create_post(ключевые выводы) ИЛИ send_message_to_user(результат анализа)",
+         "→ run_agent_action(action='upload', params={'key':'[отчёт]', 'data':'...'}) → сохрани результат"],
+        "S3/Google Drive: работай с хранимыми данными как с базой знаний для анализа",
+        "research_topic('[тема файлов]') → создай структурированный отчёт → upload",
+    ),
+    'analytics': (
+        ["run_agent_action(action='get_metrics', params={'period':'7d'}) → KPI за неделю",
+         "→ сравни с предыдущей неделей — что выросло, что упало",
+         "→ research_topic('[метрика с проблемой] как улучшить') → конкретная рекомендация",
+         "→ send_message_to_user(краткий отчёт + рекомендация) → update_goal_progress"],
+        "Аналитика (GA4/Метрика): данные без действия бесполезны. Каждый отчёт → рекомендация",
+        "create_post(ключевой инсайт из метрик) → publish_to_telegram",
+    ),
+    'ms_teams': (
+        ["run_agent_action(action='list_channels') → найди нужный канал",
+         "→ research_topic('[тема цели] прогресс / блокер') → конкретный статус",
+         "→ run_agent_action(action='post_message', params={'channel':'...', 'text':'...'}) → команда в курсе",
+         "→ add_task(следующий шаг с дедлайном) → update_goal_progress"],
+        "MS Teams: корпоративная коммуникация. Держи команду в курсе прогресса и блокеров",
+        "add_task + delegate_task → платформенный трекинг параллельно с Teams",
+    ),
+    'automation': (
+        ["run_agent_action(action='trigger', params={'event':'[имя_события]', 'data':{...}})",
+         "→ schedule_background_task(task='[повторяющийся шаг]', interval='daily') → автоматизируй рутину",
+         "→ нет нужного action → web_search('[задача] n8n/zapier/make workflow example') → реализуй",
+         "→ update_goal_progress после первого успешного запуска автоматизации"],
+        "Webhook/Zapier/n8n: автоматизируй повторяющиеся шаги — освободи время для стратегии",
+        "run_agent_action(action='send_webhook') → интеграция с внешней системой",
+    ),
+    'database': (
+        ["run_agent_action(action='query', params={'query':'SELECT ... LIMIT 20'}) → актуальные данные",
+         "→ проанализируй: паттерны, аномалии, изменения за 7 дней",
+         "→ run_agent_action(action='insert', params={'table':'...', 'data':{...}}) — зафиксируй результат",
+         "→ create_post(инсайт) ИЛИ send_message_to_user(аналитика) → update_goal_progress"],
+        "БД (PostgreSQL/MongoDB/Firebase): сырые данные → анализ → действие. Не просто SELECT",
+        "research_topic('[тема данных] ML/аналитика методы') → новый запрос для поиска паттернов",
+    ),
+    'hr': (
+        ["run_agent_action(action='search_vacancies', params={'query':'[роль]', 'area':1}) → актуальные вакансии",
+         "→ run_agent_action(action='get_resumes', params={'query':'[требования]'}) → кандидаты",
+         "→ save_email_contact(имя, email кандидата) → send_outreach_email (персональное письмо)",
+         "→ update_goal_progress при подтверждённом интересе кандидата"],
+        "hh.ru/SuperJob: прямой доступ к активным кандидатам. Персонализируй — не спам",
+        "web_search('[роль] email portfolio github contact') → save_email_contact → send_outreach_email",
+    ),
+    'advertising': (
+        ["run_agent_action(action='get_stats', params={'login':'[логин]', 'period':'last_7_days'}) → эффективность",
+         "→ найди кампании с CTR <1% → run_agent_action(action='pause_campaign') если ROI отрицательный",
+         "→ research_topic('[ниша] директ ставки A/B тест 2026') → рекомендации",
+         "→ run_agent_action(action='update_bid') для топ-кампаний → update_goal_progress"],
+        "Яндекс.Директ: оптимизируй ставки на основе данных, не интуиции",
+        "create_post(кейс улучшения CTR) → publish_to_telegram → органический трафик",
+    ),
+    'scraping': (
+        ["run_agent_action(action='scrape', params={'url':'[целевая страница]', 'selector':'[CSS]'})",
+         "→ проанализируй данные: цены конкурентов / контакты / контент",
+         "→ save_email_contact ИЛИ create_post(конкурентный анализ) ИЛИ update_goal_progress",
+         "→ schedule_background_task(повторный мониторинг через 24ч)"],
+        "Web Scraping: автоматический мониторинг конкурентов, цен, контактов — не делай вручную",
+        "web_search('[сайт] robots.txt Terms of Service') — проверь what's allowed перед скрейпингом",
+    ),
+    'ai_api': (
+        ["run_agent_action(action='analyze', params={'text':'[данные из цели]', 'task':'classify'}) → классификация",
+         "→ run_agent_action(action='generate', params={'prompt':'[задача по цели]'}) → черновик контента",
+         "→ create_post(результат генерации, отредактированный) → publish_to_telegram",
+         "→ update_goal_progress"],
+        "AI/LLM API (OpenAI/Gemini): используй для обработки данных, генерации контента, классификации",
+        "run_agent_action(action='summarize') → сожми длинные данные перед send_message_to_user",
+    ),
+    'script': (
+        ["run_agent_action(action='[ТОЧНОЕ_ACTION_ИЗ_ПРОФИЛЯ]') → первый реальный результат",
+         "→ обработай ответ: что нашёл/получил → следующий логичный шаг",
+         "→ create_post / save_email_contact / update_goal_progress в зависимости от результата"],
+        "Python/HTTP script: кастомная логика под твои задачи. Используй точные action-имена",
+        "web_search('[задача] python script example') → DELEGATE[разработчик]: реализуй новый action",
+    ),
+}
+
+# Мощные комбинации (приоритет выше одиночных категорий)
+_POWER_COMBOS: list[tuple[frozenset, list, str, str]] = [
+    # GitHub + Email (IMAP) — полный цикл: нашёл → написал → получил ответ
+    (frozenset({'git', 'email'}),
+     ["run_agent_action(action='search_users', query='language:[стек] repos:>3') — меняй query!",
+      "→ save_email_contact → send_outreach_email (упомяни их конкретный проект/стек)",
+      "→ check_emails → ИНТЕРЕС: reply_to_outreach_email + negotiate_by_email",
+      "→ НЕТ ОТВЕТОВ >3д: send_follow_up_email → update_goal_progress"],
+     "GitHub + IMAP: идеальная пара — нашёл людей и читаешь их ответы в одном агенте",
+     "Habr: web_search('site:habr.com [тема] email') → save_email_contact → send_outreach_email"),
+
+    # CRM + Email — воронка + автоматический outreach
+    (frozenset({'crm', 'email'}),
+     ["run_agent_action(action='get_contacts') → сегментируй: тёплые vs холодные",
+      "→ ТЁПЛЫЕ >7д без касания: negotiate_by_email (конкретная следующая стадия)",
+      "→ ХОЛОДНЫЕ: check_emails → send_follow_up_email (новый angle/польза)",
+      "→ run_agent_action(action='update_lead', status='contacted') → update_goal_progress"],
+     "CRM + Email: полная воронка под контролем. Тёплые через CRM, холодные через email",
+     "web_search('[ЦА] email) → save_email_contact → run_agent_action(create_deal)"),
+
+    # Telegram/Discord + Email — контент греет, email конвертирует
+    (frozenset({'telegram', 'email'}),
+     ["create_post(экспертный инсайт по теме цели) → publish_to_telegram",
+      "→ list_email_contacts(status='replied'|'interested') → send_follow_up_email с P.S: ссылка на пост",
+      "→ check_emails → reply тем кто ответил → negotiate_by_email → update_goal_progress"],
+     "Telegram + IMAP: пост греет аудиторию, email конвертирует тёплых. Замкнутый цикл",
+     "find_and_message_relevant_users с ссылкой на опубликованный пост"),
+
+    # Marketplace + Analytics — операции + данные
+    (frozenset({'marketplace', 'analytics'}),
+     ["run_agent_action(action='get_orders') → топ-5 SKU за 7д",
+      "→ run_agent_action(action='get_metrics', period='7d') → трафик/конверсия по товарам",
+      "→ run_agent_action(action='check_stock') → предупреди если остатки критичны",
+      "→ research_topic('[ниша] ценообразование конкуренты') → create_post или send_message_to_user"],
+     "Маркетплейс + Аналитика: продажи + поведение покупателей = полная картина",
+     "create_post(топ-N товаров + почему покупают) → publish_to_telegram"),
+
+    # Finance/Alpha + RSS — данные + новости = полная аналитика
+    (frozenset({'finance', 'rss'}),
+     ["run_agent_action(action='get_price', symbol='[ТИКЕР]') → котировки",
+      "→ run_agent_action(action='[RSS_ACTION]') → новостной фон",
+      "→ research_topic('[тема] прогноз на основе данных') → комплексный анализ",
+      "→ create_post(котировки + news + вывод) → publish_to_telegram → update_goal_progress"],
+     "Finance + RSS: котировки + новостной фон = профессиональная аналитика",
+     "run_agent_action(action='get_news') как дополнение если NewsAPI тоже подключён"),
+
+    # GitHub + CRM — нашёл разработчиков, занёс в CRM
+    (frozenset({'git', 'crm'}),
+     ["run_agent_action(action='search_users', query='language:[стек] repos:>3') → контакты",
+      "→ save_email_contact → run_agent_action(action='create_deal', params={contact}) → в CRM",
+      "→ send_outreach_email → run_agent_action(action='update_lead', status='contacted')",
+      "→ check_emails через 3д → update_lead(status) → update_goal_progress"],
+     "GitHub + CRM: автоматическая воронка от поиска разработчика до лида в CRM",
+     "web_search('[роль] site:linkedin.com email contact') → save_email_contact → create_deal"),
+
+    # Social + Image Gen — вирусный контент в соцсетях
+    (frozenset({'social', 'image_gen'}),
+     ["research_topic('[тема] вирусный формат контента') → идея поста",
+      "→ generate_image(prompt='[визуальная концепция]') → изображение",
+      "→ create_post(изображение + текст) → run_agent_action(action='post', platform='linkedin')",
+      "→ web_search('[нишевый автор] email') → send_outreach_email с упоминанием поста"],
+     "Соцсети + Генерация изображений: визуал × эксперт = вирусный охват",
+     "publish_to_telegram → параллельный охват на двух платформах"),
+
+    # HR + Email — поиск кандидатов с outreach
+    (frozenset({'hr', 'email'}),
+     ["run_agent_action(action='get_resumes', params={'query':'[роль]'}) → кандидаты",
+      "→ save_email_contact → send_outreach_email (персонализированное приглашение)",
+      "→ check_emails → ИНТЕРЕС: reply_to_outreach_email → negotiate_by_email (детали оффера)",
+      "→ add_task(интервью + дедлайн) → update_goal_progress"],
+     "hh.ru + IMAP: полный рекрутинг-цикл — нашёл, написал, получил ответ, назначил встречу",
+     "send_follow_up_email кандидатам без ответа >4 дней — деликатно, с новым углом"),
+
+    # Sheets + Analytics — двойная аналитика
+    (frozenset({'sheets', 'analytics'}),
+     ["run_agent_action(action='get_metrics', period='7d') → KPI из Analytics",
+      "→ run_agent_action(action='read_range', range='A1:Z50') → данные из Sheets",
+      "→ совмести: что изменилось, какие метрики отклонились от ожиданий",
+      "→ run_agent_action(action='append_row', row=[дата, метрики, вывод]) → зафиксируй",
+      "→ send_message_to_user(краткий отчёт) → update_goal_progress"],
+     "Sheets + Analytics: объединяй оперативные данные с веб-аналитикой для полной картины",
+     "create_post(ключевой инсайт) → публикуй выводы для внешней аудитории"),
+
+    # Automation + Database — автоматизированный pipeline данных
+    (frozenset({'automation', 'database'}),
+     ["run_agent_action(action='query', params={'query':'SELECT ...'}) → актуальные записи",
+      "→ run_agent_action(action='trigger', params={'event':'[событие]', 'data':{...}}) → запусти workflow",
+      "→ schedule_background_task(task='[повтор каждые N часов]') → автоматизируй pipeline",
+      "→ send_message_to_user(результат) → update_goal_progress"],
+     "Automation + БД: автоматизированный data pipeline — обработка данных без ручного труда",
+     "run_agent_action(action='insert') → новые данные → trigger webhook для уведомлений"),
+
+    # AI API + RSS — автоматическое извлечение инсайтов из потока данных
+    (frozenset({'ai_api', 'rss'}),
+     ["run_agent_action(action='[RSS_ACTION]') → свежие статьи/данные",
+      "→ run_agent_action(action='summarize', params={'text':'[RSS-контент]'}) → краткое резюме",
+      "→ run_agent_action(action='analyze', params={'task':'classify wichtig/unwichtig'}) → фильтрация",
+      "→ create_post(ключевой инсайт) → publish_to_telegram → update_goal_progress"],
+     "AI API + RSS: автоматическая фильтрация и анализ потока данных — экономит часы ручной работы",
+     "DELEGATE[email-агент]: отправь дайджест контактам из list_email_contacts"),
+]
+
+
 def _build_personalized_strategy(
     goals_summary: list,
     caps_cats: set,
@@ -1076,8 +1413,9 @@ def _build_personalized_strategy(
     has_alpha: bool = False,
     py_actions: list | None = None,
 ) -> str:
-    """Синтезирует конкретную цепочку под КОНКРЕТНЫЕ цели + КОНКРЕТНЫЕ интеграции пользователя.
-    Не показывает все варианты — выводит 1 рекомендацию + 1 альтернативу.
+    """Синтезирует конкретную цепочку под КОНКРЕТНЫЕ цели + КОНКРЕТНЫЕ интеграции.
+    Data-driven: покрывает все 60+ интеграций через таблицу стратегий.
+    Приоритет: мощные комбо > goal_cap_rank > одиночная категория > fallback.
     """
     if not goals_summary:
         return ''
@@ -1092,12 +1430,10 @@ def _build_personalized_strategy(
             _best_goal = g
         else:
             _prev_prog = _best_goal.get('progress', 0) or 0
-            # Приоритет: есть метрика + прогресс 10-80% (есть ход, но не завершена)
             if g.get('metric_target') and not _best_goal.get('metric_target'):
                 _best_goal = g
             elif 10 <= prog <= 80 and not (10 <= _prev_prog <= 80):
                 _best_goal = g
-
     if not _best_goal and goals_summary:
         _best_goal = goals_summary[0]
     if not _best_goal:
@@ -1109,143 +1445,51 @@ def _build_personalized_strategy(
     _metric_tgt = _best_goal.get('metric_target', '')
     _metric_str = f"{_metric_cur}/{_metric_tgt}" if _metric_tgt else f"{_goal_prog}%"
 
-    # ── Определяем комбинацию интеграций → строим цепочку ──
     _chain: list[str] = []
     _alt   = ''
     _why   = ''
 
-    # Самая мощная комбинация: GitHub + IMAP → нетворкинг с полным циклом
-    if has_github and has_imap:
-        _chain = [
-            "run_agent_action(action='search_users', query='language:[стек ЦА] repos:>3 location:Russia')",
-            "→ save_email_contact (5-10 человек, меняй query каждый цикл!)",
-            "→ send_outreach_email (персонализируй: упомяни их конкретный проект/стек)",
-            "→ check_emails → ИНТЕРЕС: reply_to_outreach_email + ссылка → negotiate_by_email",
-            "→ НЕТ ОТВЕТОВ >3д: send_follow_up_email → update_goal_progress",
-        ]
-        _alt = "Habr: web_search('site:habr.com [тема] contact email') → save_email_contact → send_outreach_email"
-        _why = "GitHub + Email (IMAP): нашёл людей — сразу видишь и обрабатываешь ответы. Полный цикл в одном агенте."
+    # ── Шаг 1: mощные комбо (известные пары) ──
+    # Приоритизируем по goal_cap_rank: проверяем только комбо из top-N категорий
+    _top_cats = {item[3] for item in goal_cap_rank[:6]} | caps_cats
+    for combo_cats, combo_chain, combo_why, combo_alt in _POWER_COMBOS:
+        if combo_cats.issubset(_top_cats) and combo_cats.issubset(caps_cats):
+            _chain = combo_chain
+            _why   = combo_why
+            _alt   = combo_alt
+            break
 
-    # GitHub без IMAP — sourcing без чтения ответов
-    elif has_github and not has_imap:
-        _chain = [
-            "run_agent_action(action='search_users', query='language:[стек] repos:>5') — меняй query каждый цикл",
-            "→ save_email_contact → send_outreach_email",
-            "→ send_follow_up_email (тем кто не ответил >3 дней)",
-            "→ update_goal_progress",
-        ]
-        _alt = "Подключи IMAP-ключи → сможешь читать ответы → конверсия вырастет"
-        _why = "GitHub: лучший sourcing для tech-аудитории. Без IMAP только отправляешь — не видишь ответы."
+    # ── Шаг 2: если нет комбо — берём самую goal-релевантную одиночную категорию ──
+    if not _chain:
+        # goal_cap_rank даёт (score, display, route, key) — упорядочен по score desc
+        for _score, _display, _route, _key in goal_cap_rank:
+            if _key in _STRATEGY_TABLE and _key in caps_cats:
+                _chain, _why, _alt = _STRATEGY_TABLE[_key]
+                break
 
-    # IMAP без GitHub — фокус на переработке уже имеющихся контактов
-    elif has_imap and not has_github:
-        _chain = [
-            "check_emails → есть ответы? ИНТЕРЕС → reply_to_outreach_email + negotiate_by_email",
-            "→ НЕТ новых: list_email_contacts(status='sent') → send_follow_up_email (>3 дней без ответа)",
-            "→ Новые контакты: web_search('[ЦА] email contact site:habr.com ИЛИ site:dev.to') → save_email_contact → send_outreach_email",
-            "→ update_goal_progress при получении интереса/регистрации",
-        ]
-        _alt = "find_and_message_relevant_users → пользователи внутри платформы, быстрый первый отклик"
-        _why = "IMAP: начни с check_emails — возможно уже есть тёплые ответы. Дожимай их перед новой волной."
+    # ── Шаг 3: fallback по прямому наличию категории ──
+    if not _chain:
+        for _cat in ('email', 'git', 'rss', 'telegram', 'discord', 'crm', 'marketplace',
+                     'finance', 'news', 'social', 'hr', 'analytics', 'sheets', 'database',
+                     'pm', 'notion', 'crypto', 'calendar', 'calls', 'advertising',
+                     'scraping', 'ai_api', 'image_gen', 'storage', 'automation',
+                     'ms_teams', 'slack', 'payments', 'script'):
+            if _cat in caps_cats and _cat in _STRATEGY_TABLE:
+                _chain, _why, _alt = _STRATEGY_TABLE[_cat]
+                break
 
-    # Content + IMAP — связка пост → email
-    elif has_content and has_imap:
+    # ── Шаг 4: нет ни одной известной интеграции ──
+    if not _chain:
         _chain = [
-            "create_post(тема, полезная для твоей ЦА) → publish_to_telegram",
-            "→ list_email_contacts(status='replied'|'interested') → send_follow_up_email с P.S.: ссылка на пост",
-            "→ check_emails → reply тем кто ответил → update_goal_progress",
-        ]
-        _alt = "find_and_message_relevant_users с ссылкой на опубликованный пост"
-        _why = "Контент + Email: пост греет аудиторию, email конвертирует уже тёплых. Замкнутый цикл."
-
-    # Content без email
-    elif has_content and not has_imap:
-        _chain = [
-            "create_post(экспертная тема или инсайт по теме цели)",
-            "→ publish_to_telegram",
-            "→ find_and_message_relevant_users(описание ЦА) — напиши им с ссылкой на пост",
-            "→ web_search('[ЦА, интересующаяся темой поста] email contact') → save_email_contact → send_outreach_email",
-        ]
-        _alt = "Добавь Email-интеграцию → аутрич к внешней аудитории"
-        _why = "Контент — точка входа. Пост создаёт доверие, find_and_message и email конвертируют интерес."
-
-    # RSS — аналитика и контент-машина
-    elif has_rss:
-        _chain = [
-            "run_agent_action(action='[ТОЧНОЕ_ACTION_ИЗ_ПРОФИЛЯ]') — получи свежие данные",
-            "→ выдели 1-2 ключевых инсайта (НЕ пересказ — твоя оценка значимости)",
-            "→ create_post(инсайт + вывод + CTA) → publish_to_telegram",
-            "→ DELEGATE[email-агент]: 'найди авторов релевантных материалов и напиши им о коллаборации'",
-        ]
-        _alt = "research_topic(тема из RSS) → аналитический вывод → save_note или create_post"
-        _why = "RSS: твоя суперсила — реальные свежие данные. Превращай каждый инсайт в действие или контент."
-
-    # CRM — разогрев воронки
-    elif has_crm:
-        _chain = [
-            "run_agent_action(action='get_contacts') → найди контакты без активности 7+ дней",
-            "→ ТЁПЛЫЕ: negotiate_by_email (конкретное предложение / следующий шаг)",
-            "→ ХОЛОДНЫЕ: send_follow_up_email (новый angle — другая боль/польза)",
-            "→ run_agent_action(action='update_lead', params={'status':'contacted'}) → update_goal_progress",
-        ]
-        _alt = "Новые лиды: web_search([ЦА] email) → save_email_contact → run_agent_action(action='create_deal')"
-        _why = "CRM: уже имеющиеся контакты теплее холодного outreach. Начни с разогрева своей базы."
-
-    # Маркетплейс — мониторинг + прогресс
-    elif has_market:
-        _chain = [
-            "run_agent_action(action='check_stock') → предупреди если остатки <10 ед.",
-            "→ run_agent_action(action='get_orders') → проанализируй топ-3 позиции за 7 дней",
-            "→ research_topic('[конкуренты] [твоя ниша] WB/Ozon цена стратегия 2026') → вывод",
-            "→ update_goal_progress (если метрика = выручка/заказы — внеси актуальные данные)",
-        ]
-        _alt = "create_post(топ-N товаров по продажам + почему покупают) → publish_to_telegram"
-        _why = "Маркетплейс: операционные данные (остатки, заказы) — твои ключевые метрики. Мониторь и действуй быстро."
-
-    # Alpha Vantage / финансы — аналитика в реальном времени
-    elif has_alpha:
-        _chain = [
-            "run_agent_action(action='get_price', symbol='[ТИКЕР]') → актуальные котировки",
-            "→ research_topic('[тикер/сырьё] прогноз тренды 2026') → контекст",
-            "→ create_post(факты + вывод + что это значит для твоей аудитории) → publish_to_telegram",
-            "→ update_goal_progress",
-        ]
-        _alt = "run_agent_action(action='get_news') → новостной контекст → аналитический пост"
-        _why = "Alpha Vantage: реальные рыночные данные в реальном времени. Комбинируй с контентом."
-
-    # NewsAPI
-    elif has_news:
-        _chain = [
-            "run_agent_action(action='get_news', query='[тема цели]') → 5-7 свежих материалов",
-            "→ выдели главный инсайт + его значение для твоей аудитории",
-            "→ create_post(дайджест + твой вывод) → publish_to_telegram",
-            "→ DELEGATE[email-агент]: 'найди экспертов по [теме] и напиши им о коллаборации'",
-        ]
-        _alt = "web_search('[тема] эксперт email contact') → save_email_contact → send_outreach_email"
-        _why = "NewsAPI: 100+ источников → преврати аналитику в контент-стратегию и нетворкинг."
-
-    # Slack — командная координация
-    elif has_slack:
-        _chain = [
-            "research_topic('[тема цели] прогресс и следующий шаг') → выдели конкретный блокер",
-            "→ run_agent_action(action='post_message', params={'channel':'#general', 'text':'...'}) → команда в курсе",
-            "→ add_task(следующий конкретный шаг с дедлайном) → update_goal_progress",
-        ]
-        _alt = "run_agent_action(action='list_channels') → найди правильный канал для отчёта"
-        _why = "Slack: держи команду в курсе. Прозрачность прогресса = быстрее движение."
-
-    # Заглушка: нет специфических интеграций
-    else:
-        _chain = [
-            "research_topic('[тема цели] лучшие практики 2026 + конкретные ресурсы/люди')",
-            "→ найди 3-5 конкретных человека / ресурса / контакта",
+            "research_topic('[тема цели] лучшие практики 2026 + конкретные шаги')",
+            "→ найди 3-5 конкретных контакта / ресурса",
             "→ find_and_message_relevant_users('[описание ЦА]') ИЛИ web_search → save_email_contact",
             "→ add_task(следующий шаг с дедлайном) → update_goal_progress",
         ]
+        _why = "Нет специфических интеграций — используй платформенный охват и исследование"
         _alt = "Подключи интеграцию под цель → https://asibiont.com/dashboard"
-        _why = "Нет специфических интеграций → платформенный охват + исследование. Тем не менее двигай цель."
 
-    # ── Примечание если подход уже пробовался ──
+    # ── Предупреждение если первый шаг уже пробовался ──
     _first_tool = _chain[0].split('(')[0].strip().lower() if _chain else ''
     _is_tried = any(_first_tool in t.lower() for t in used_tools) if _first_tool else False
     _tried_note = ''
@@ -1256,7 +1500,7 @@ def _build_personalized_strategy(
         )
 
     lines = [
-        f"\n🧭 СТРАТЕГИЯ ДЛЯ ТЕБЯ (цель × интеграции × текущий прогресс):",
+        f"\n🧭 СТРАТЕГИЯ ДЛЯ ТЕБЯ (цель × интеграции × прогресс):",
         f"  Цель: «{_goal_title}» — {_metric_str} | тип: {goal_type}",
         f"  Почему эта цепочка: {_why}",
         f"  Цепочка:",
@@ -1267,10 +1511,11 @@ def _build_personalized_strategy(
         lines.append(_tried_note)
     lines.append(f"  Альтернатива: {_alt}")
     lines.append(
-        "  → Цепочка не работает? Задай себе: «Какой ЕЩЁ канал использует моя ЦА?»"
-        " и переключись на непробованный паттерн из 5 ПАТТЕРНОВ ниже."
+        "  → Не работает? Задай себе: «Какой ЕЩЁ канал использует моя ЦА?»"
+        " и переключись на непробованный паттерн ниже."
     )
     return '\n'.join(lines) + '\n'
+
 
 
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
