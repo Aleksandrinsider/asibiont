@@ -1664,10 +1664,75 @@ async def delegate_task(
             from models import UserAgent as _UA_chk, AgentSubscription as _AS_chk
             import json as _jj
             import re as _ren
+            import datetime as _dt_d
             from difflib import SequenceMatcher as _SM_del
             from .autonomous_agent import _exec_agent_for_director as _exec_dir
             from .autonomous_agent import _save_interaction_for_director as _save_ifd
             import json as _json_ag
+
+            def _strip_structured_text(_raw: str, _max_len: int = 220) -> str:
+                _t = (_raw or '').replace('\r\n', '\n').replace('\r', '\n').strip()
+                if not _t:
+                    return ''
+                _stop_prefixes = (
+                    'данные для работы', 'ключевые данные', 'детали:', 'описание:',
+                    'задача:', 'шаги:', 'план:', 'цель:', 'итог:',
+                )
+                _lines = []
+                for _ln in _t.split('\n'):
+                    _s = _ln.strip()
+                    if not _s:
+                        continue
+                    _s_l = _s.lower()
+                    if any(_s_l.startswith(_p) for _p in _stop_prefixes):
+                        break
+                    # Заголовок формата "Раздел:" без окончания предложения
+                    if _s.endswith(':') and len(_s) <= 70 and not _ren.search(r'[.!?]', _s[:-1]):
+                        break
+                    _lines.append(_s)
+                    if len(' '.join(_lines)) >= _max_len:
+                        break
+                _out = ' '.join(_lines).strip()
+                _out = _ren.sub(r'\s{2,}', ' ', _out)
+                _out = _ren.sub(r'^\[автопилот\]\s*', '', _out, flags=_ren.IGNORECASE)
+                return _out[:_max_len].strip(' ,;:.-')
+
+            def _truncate_by_word(_txt: str, _limit: int) -> str:
+                _txt = (_txt or '').strip()
+                if len(_txt) <= _limit:
+                    return _txt
+                _cut = _txt[:_limit].rsplit(' ', 1)[0].strip()
+                return (_cut or _txt[:_limit]).strip(' ,;:.-')
+
+            def _live_assignment_text(_agent_name: str, _task_text: str) -> str:
+                _base = _strip_structured_text(_task_text, _max_len=180)
+                _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
+                if not _base:
+                    return f'{_agent_name}, пожалуйста возьми одну конкретную задачу по текущей цели.'
+                _base = _truncate_by_word(_base, 95)
+                if _base and _base[:1].isupper() and not _base[:3].isupper():
+                    _base = _base[:1].lower() + _base[1:]
+                return f'{_agent_name}, пожалуйста {_base}.'
+
+            def _live_result_text(_agent_name: str, _result_text: str) -> str:
+                _txt = (_result_text or '').strip()
+                if not _txt:
+                    _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
+                    return 'Вот что я нашла: пока данных мало, продолжаю проверку.' if _is_fem else 'Вот что я нашел: пока данных мало, продолжаю проверку.'
+                _txt = _ren.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _txt)
+                _txt = _ren.sub(r'\n\s*[•\-\*]\s*', '\n', _txt)
+                _txt = _ren.sub(r'\n\s*\d+[.)\]]\s*', '\n', _txt)
+                _txt = _ren.sub(r'\n{2,}', '\n', _txt)
+                _txt = _strip_structured_text(_txt, _max_len=320)
+                _sent = [s.strip() for s in _ren.split(r'(?<=[.!?])\s+', _txt) if s.strip()]
+                _txt = ' '.join(_sent[:2]).strip() if _sent else _txt
+                _txt = _truncate_by_word(_txt, 240)
+                _txt_l = _txt.lower()
+                _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
+                _prefix = 'Вот что я нашла: ' if _is_fem else 'Вот что я нашел: '
+                if not _txt_l.startswith(('вот что', 'нашла', 'нашел', 'проверила', 'проверил', 'сделала', 'сделал', 'нашли')):
+                    _txt = _prefix + (_txt[:1].lower() + _txt[1:] if _txt and _txt[:1].isupper() and not _txt[:3].isupper() else _txt)
+                return _txt.strip()
 
             _subscribed_ids = [r[0] for r in session.query(_AS_chk.agent_id).filter(_AS_chk.user_id == delegator.id).all()]
             # Загружаем агентов: подписки ИЛИ собственные агенты пользователя
@@ -1731,6 +1796,28 @@ async def delegate_task(
 
                     _req_signals = _domain_signals(_request_l)
                     _req_tokens = {t for t in _ren.findall(r'[A-Za-zА-Яа-я0-9_]{3,}', _request_l)}
+                    _recent_agent_load = {}
+                    try:
+                        from models import Interaction as _Int_del
+                        _cutoff = _dt_d.datetime.now(_dt_d.timezone.utc) - _dt_d.timedelta(hours=8)
+                        _recent_msgs = session.query(_Int_del.content).filter(
+                            _Int_del.user_id == delegator.id,
+                            _Int_del.message_type.in_(['proactive', 'agent_msg']),
+                            _Int_del.created_at >= _cutoff,
+                        ).order_by(_Int_del.created_at.desc()).limit(250).all()
+                        _name_to_id = {(a.name or '').strip().lower(): a.id for a in _all_agents if a.name}
+                        for (_cnt_raw,) in _recent_msgs:
+                            try:
+                                _jd = _jj.loads(_cnt_raw or '{}')
+                                _ag_n = ((_jd.get('__agent') or {}).get('name') or '').strip().lower()
+                                if _ag_n in _name_to_id:
+                                    _aid = _name_to_id[_ag_n]
+                                    _recent_agent_load[_aid] = _recent_agent_load.get(_aid, 0) + 1
+                            except Exception:
+                                continue
+                    except Exception as _load_err:
+                        logger.debug('[DELEGATE] recent load calc skipped: %s', _load_err)
+
                     _best_score = -1.0
                     for _ag in _all_agents:
                         _ag_text = ' '.join([
@@ -1748,7 +1835,10 @@ async def delegate_task(
                         _ag_tokens = {t for t in _ren.findall(r'[A-Za-zА-Яа-я0-9_]{3,}', _ag_text)}
                         _tok_overlap = len(_req_tokens & _ag_tokens)
                         _name_sim = _SM_del(None, _request_l[:120], (_ag.name or '').lower()).ratio()
-                        _score = (_signal_overlap * 1.4) + min(2.0, _tok_overlap * 0.15) + (_name_sim * 0.6)
+                        _recent_load = _recent_agent_load.get(_ag.id, 0)
+                        _load_penalty = min(1.4, _recent_load * 0.25)
+                        _diversity_bonus = 0.4 if _recent_load == 0 else 0.0
+                        _score = (_signal_overlap * 1.4) + min(2.0, _tok_overlap * 0.15) + (_name_sim * 0.6) + _diversity_bonus - _load_penalty
                         if _score > _best_score:
                             _best_score = _score
                             _picked_agent = _ag
@@ -1908,13 +1998,15 @@ async def delegate_task(
                     _skip_dir_msg = any(kw in _agent_task_text.upper() for kw in ['ОТВЕТЬ НА ВОПРОС', 'ПРОСТО ОТВЕТЬ'])
                     if not _skip_dir_msg:
                         try:
+                            _live_assign = _live_assignment_text(_agent_name, _agent_task_text)
                             _dir_json = _json_ag.dumps({
                                 '__agent': {
                                     'name': 'ASI',
                                     'id': 0,
                                     'avatar_url': '/static/asibiont.svg',
                                 },
-                                'text': f'{_agent_name}, {_agent_task_text[:300]}',
+                                'text': _live_assign,
+                                '__to_agent': _agent_name,
                                 '__anchor_type': 'agent_delegation',
                             }, ensure_ascii=False)
                             _save_ifd(user_id, _dir_json)
@@ -2001,6 +2093,7 @@ async def delegate_task(
                     # Очищаем чрезмерное форматирование (bullet-списки, лишние пробелы)
                     _result = _ren.sub(r'\n{3,}', '\n\n', _result)  # не более 2 переносов подряд
                     _result = _ren.sub(r'^\s*[•\-\*]\s*', '', _result, flags=_ren.MULTILINE)  # убираем маркеры списков
+                    _result = _live_result_text(_agent_name, _result)
 
                     # Записываем ответ агента в чат (видно на дашборде с аватаркой)
                     try:
