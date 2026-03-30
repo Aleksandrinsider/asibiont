@@ -653,6 +653,7 @@ def sanitize_live_team_chat_text(
     *,
     anchor_type: str = '',
     speaker_name: str = '',
+    target_name: str = '',
     max_chars: int | None = None,
 ):
     """Универсальная финальная нормализация «живого» текста для чата команды.
@@ -725,6 +726,33 @@ def sanitize_live_team_chat_text(
     if len(cleaned) > max_chars:
         cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
         cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
+
+    # Жёсткий runtime-guard: если текст всё ещё похож на ТЗ/бриф,
+    # заменяем на короткую живую реплику без структурных блоков.
+    _looks_brief = False
+    _lower = cleaned.lower()
+    _brief_markers = (
+        'на основе анализа', 'рынок', 'исследован', 'ключевые',
+        'показател', 'метрик', 'нужно найти', 'нужно сделать',
+        'для outreach', 'для email-рассылки',
+    )
+    if any(m in _lower for m in _brief_markers):
+        _looks_brief = True
+    if cleaned.count(':') >= 2:
+        _looks_brief = True
+    if len(cleaned) >= 210 and _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+        _looks_brief = True
+
+    if _looks_brief and _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+        _to_name = (target_name or '').strip()
+        if not _to_name:
+            _m = re.match(r'^\s*([A-Za-zА-Яа-яЁё0-9_\-]{2,40})\s*,', cleaned)
+            if _m:
+                _to_name = (_m.group(1) or '').strip()
+        if _to_name:
+            cleaned = f'{_to_name}, пожалуйста возьми один конкретный следующий шаг по цели и дай короткий апдейт.'
+        else:
+            cleaned = 'Пожалуйста возьми один конкретный следующий шаг по цели и дай короткий апдейт.'
 
     return cleaned.strip()
 

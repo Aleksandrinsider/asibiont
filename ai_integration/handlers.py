@@ -1714,12 +1714,22 @@ async def delegate_task(
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
                 if not _base:
                     _fallback = f'{_agent_name}, пожалуйста возьми одну конкретную задачу по текущей цели.'
-                    return sanitize_live_team_chat_text(_fallback, anchor_type='agent_delegation', speaker_name='ASI')
+                    return sanitize_live_team_chat_text(
+                        _fallback,
+                        anchor_type='agent_delegation',
+                        speaker_name='ASI',
+                        target_name=_agent_name,
+                    )
                 _base = _truncate_by_word(_base, 95)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
                 _msg = f'{_agent_name}, пожалуйста {_base}.'
-                return sanitize_live_team_chat_text(_msg, anchor_type='agent_delegation', speaker_name='ASI')
+                return sanitize_live_team_chat_text(
+                    _msg,
+                    anchor_type='agent_delegation',
+                    speaker_name='ASI',
+                    target_name=_agent_name,
+                )
 
             def _live_result_text(_agent_name: str, _result_text: str) -> str:
                 _txt = (_result_text or '').strip()

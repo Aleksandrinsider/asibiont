@@ -5089,6 +5089,7 @@ class AnchorEngine:
                                     _coord_text,
                                     anchor_type='goal_autopilot_assignment',
                                     speaker_name='ASI',
+                                    target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
                                 _coord_content = json.dumps({
                                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
@@ -5112,6 +5113,7 @@ class AnchorEngine:
                                     _coord_text,
                                     anchor_type='goal_autopilot_assignment',
                                     speaker_name='ASI',
+                                    target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
                                 await _safe_send(
                                     self.bot, user.telegram_id,
@@ -9603,6 +9605,7 @@ class AnchorEngine:
                                 _asi_assign_text,
                                 anchor_type='coordinator_assignment',
                                 speaker_name='ASI',
+                                target_name=_ag_name,
                             ),
                             '__to_agent': _ag_name,
                             '__anchor_type': 'coordinator_assignment',
