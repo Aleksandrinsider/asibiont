@@ -7757,11 +7757,17 @@ class AnchorEngine:
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
             import re as _re_al
             _agent_banned_tools: dict = {}
-            # Пайплайн-инструменты НЕ банить — каждый вызов уникален (разные контакты/queries)
+            # Инструменты НЕ банить — каждый вызов уникален (разные темы, контакты, queries)
+            # Контентно-создающие инструменты: web_search("AI"), web_search("crypto") — это НЕ петля,
+            # это разные задачи. Банить нужно только реально идентичные повторы (напр. одинаковый tool_call без смысла).
             _COORD_MULTI_USE_OK = {
                 'run_agent_action', 'save_email_contact', 'send_outreach_email',
                 'check_emails', 'reply_to_outreach_email', 'find_relevant_contacts_for_task',
                 'update_goal_progress',
+                # Контентно-создающие: каждый раз разная тема/задача — не петля
+                'web_search', 'research_topic', 'get_news_trends',
+                'create_post', 'publish_to_telegram', 'publish_to_discord',
+                'generate_image', 'find_and_message_relevant_users',
             }
             for _p_al in _profiles:
                 _hist_al = _per_agent_history.get(_p_al['name'], [])
@@ -7787,6 +7793,9 @@ class AnchorEngine:
                     _ag_obj_bt = next((p for p in _profiles if p['name'] == _ag_bt), None)
                     if _ag_obj_bt:
                         _ag_all_tools = [t.lower().strip() for t in _ag_obj_bt.get('tools', [])]
+                        # Полная блокировка: только если список tools известен и все они заблокированы.
+                        # tools=[] → пустой whitelist → агент работает через run_agent_action по умолчанию,
+                        # не блокируем.
                         if _ag_all_tools and all(t in [x.lower() for x in _tl_bt] for t in _ag_all_tools):
                             _fully_blocked_agents.add(_ag_bt)
                             _banned_tools_str += f'  ℹ️ {_ag_bt}: все инструменты уже использованы → рассмотри другого агента или ASI.\n'
@@ -9030,24 +9039,40 @@ class AnchorEngine:
 
                     _mp_tools = [str(t).strip().lower() for t in (_mp.get('tools') or []) if str(t).strip()]
                     _mp_actions = [str(a).strip().lower() for a in (_mp.get('script_actions') or []) if str(a).strip()]
+                    _mp_caps = [str(cap).lower() for cap in (_mp.get('caps') or [])]
 
-                    if 'run_agent_action' in _mp_tools or _mp_actions:
+                    # Выбираем лучший инструмент для backfill на основе интеграций агента.
+                    # tools=[] означает что агент работает через run_agent_action (python_code/scripts).
+                    if _mp_actions:
                         _tool_fb = 'run_agent_action'
                     elif 'find_relevant_contacts_for_task' in _mp_tools:
                         _tool_fb = 'find_relevant_contacts_for_task'
-                    elif 'check_emails' in _mp_tools:
+                    elif 'check_emails' in _mp_tools or any('mail' in c or 'email' in c for c in _mp_caps):
                         _tool_fb = 'check_emails'
+                    elif 'run_agent_action' in _mp_tools:
+                        _tool_fb = 'run_agent_action'
+                    elif any('rss' in c or 'news' in c for c in _mp_caps):
+                        _tool_fb = 'get_news_trends'
                     else:
                         _tool_fb = 'research_topic'
+
+                    # Формируем осмысленную задачу (не «эксплорация», а конкретная цепочка).
+                    _mp_spec = (_mp.get('spec') or _mp.get('job') or '').strip()
+                    _fb_task = (
+                        f"Исходя из своей специализации ({_mp_spec}) и доступных интеграций, "
+                        f"сделай один конкретный шаг по цели «{_target_goal}»: "
+                        f"собери данные через свои инструменты и доведи до реального действия "
+                        f"(сохрани контакт, опубликуй пост, делегируй коллеге — что применимо)."
+                    ) if _mp_spec else (
+                        f"Сделай один конкретный шаг по цели «{_target_goal}» через свои инструменты. "
+                        f"Цель шага — реальное действие, а не только исследование."
+                    )
 
                     _plan.append({
                         'agent': _mp['name'],
                         'tool': _tool_fb,
                         'goal': _target_goal,
-                        'task': (
-                            f"Эксплорация по цели «{_target_goal}»: найди НОВЫЙ рабочий угол через свои интеграции, "
-                            f"без повтора уже обработанных контактов/каналов."
-                        ),
+                        'task': _fb_task,
                         'reason': 'fair_assignment diversification',
                     })
                     logger.info("[COORD] fairness backfill: added step for %s via %s", _mp['name'], _tool_fb)
@@ -9526,27 +9551,26 @@ class AnchorEngine:
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # Сохраняем живое поручение в чат
                 _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)
-                _skip_step_due_loop = bool(_assignment_health.get('stalled'))
+                _loop_risk_step = bool(_assignment_health.get('stalled'))
                 try:
-                    if _skip_step_due_loop:
+                    if _loop_risk_step:
                         logger.info(
-                            "[COORD] assignment guard: skip %s due to assignment/result gap (%s/%s)",
+                            "[COORD] assignment learning mode for %s: high assignment/result gap (%s/%s)",
                             _ag_name,
                             _assignment_health.get('assignments', 0),
                             _assignment_health.get('results', 0),
                         )
-                    else:
-                        session.add(Interaction(
-                            user_id=user.id,
-                            message_type='agent_msg',
-                            content=json.dumps({
-                                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                'text': _asi_assign_text,
-                                '__to_agent': _ag_name,
-                                '__anchor_type': 'coordinator_assignment',
-                            }, ensure_ascii=False),
-                        ))
-                        session.commit()
+                    session.add(Interaction(
+                        user_id=user.id,
+                        message_type='agent_msg',
+                        content=json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _asi_assign_text,
+                            '__to_agent': _ag_name,
+                            '__anchor_type': 'coordinator_assignment',
+                        }, ensure_ascii=False),
+                    ))
+                    session.commit()
                 except Exception as _aas_err:
                     logger.debug("[COORD] asi assign save error: %s", _aas_err)
                     try:
@@ -9558,10 +9582,11 @@ class AnchorEngine:
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
-                _kpi_block_step = False
+                _kpi_warn_step = False
                 _kpi_health = {'sample': 0, 'cancel_ratio': 0.0, 'completion_ratio': 0.0, 'block': False}
-                _tech_block_step = False
+                _tech_warn_step = False
                 _tech_health = {'sample': 0, 'tech_fail': 0, 'fail_ratio': 0.0, 'block': False}
+                _runtime_quality_hints = ''
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
@@ -9586,9 +9611,9 @@ class AnchorEngine:
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:20])
                     _kpi_health = self._recent_task_kpi_health(session, user.id, _task_title_short, lookback_hours=72)
-                    _kpi_block_step = bool(_kpi_health.get('block'))
+                    _kpi_warn_step = bool(_kpi_health.get('block'))
                     _tech_health = self._recent_tech_failure_health(session, user.id, _ag_name, _task_title_short, lookback_hours=24)
-                    _tech_block_step = bool(_tech_health.get('block'))
+                    _tech_warn_step = bool(_tech_health.get('block'))
                     # Guard: если задание расплывчатое → переформулируем в конкретное действие
                     _is_vague_task = False
                     if _ag_goal_title and _task_title_short.lower().strip() == _ag_goal_title.lower().strip()[:200]:
@@ -9652,58 +9677,6 @@ class AnchorEngine:
                         # Дубль задачи — не создаём Task, но агент ВЫПОЛНЯЕТСЯ
                         # (LLM каждый раз генерирует похожие формулировки → dedup не должен
                         #  блокировать выполнение, только предотвращать спам задач в UI)
-                    elif _kpi_block_step:
-                        _step_task = _Task_c2(
-                            user_id=user.id,
-                            title=_task_title_short[:200],
-                            description=(_ag_task[:2000] or None),
-                            status='cancelled',
-                            source='agent',
-                            created_by_agent_id=_target_ag.id if _target_ag else None,
-                            delegated_to_username=_ag_name,
-                            skipped_reason='kpi_low_conversion',
-                            recommendations=json.dumps([
-                                'Сменить тип канала/инструмента для этой цели',
-                                'Не повторять похожее поручение в следующем цикле',
-                                'Назначить альтернативного агента или стратегию',
-                            ], ensure_ascii=False),
-                        )
-                        session.add(_step_task)
-                        session.commit()
-                        _step_task_id = _step_task.id
-                        logger.info(
-                            "[COORD] KPI guard: block similar task for %s (sample=%d cancel=%.0f%% complete=%.0f%%)",
-                            _ag_name,
-                            int(_kpi_health.get('sample', 0)),
-                            float(_kpi_health.get('cancel_ratio', 0.0)) * 100,
-                            float(_kpi_health.get('completion_ratio', 0.0)) * 100,
-                        )
-                    elif _tech_block_step:
-                        _step_task = _Task_c2(
-                            user_id=user.id,
-                            title=_task_title_short[:200],
-                            description=(_ag_task[:2000] or None),
-                            status='cancelled',
-                            source='agent',
-                            created_by_agent_id=_target_ag.id if _target_ag else None,
-                            delegated_to_username=_ag_name,
-                            skipped_reason='tech_unstable_recent',
-                            recommendations=json.dumps([
-                                'Не повторять этот же канал/инструмент в следующем цикле',
-                                'Переключить задачу на альтернативный инструмент или ручной сценарий',
-                                'Декомпозировать задачу в 1 короткий шаг без тяжёлых API-вызовов',
-                            ], ensure_ascii=False),
-                        )
-                        session.add(_step_task)
-                        session.commit()
-                        _step_task_id = _step_task.id
-                        logger.info(
-                            "[COORD] TECH guard: block unstable step for %s (sample=%d tech_fail=%d ratio=%.0f%%)",
-                            _ag_name,
-                            int(_tech_health.get('sample', 0)),
-                            int(_tech_health.get('tech_fail', 0)),
-                            float(_tech_health.get('fail_ratio', 0.0)) * 100,
-                        )
                     else:
                         # Описание = полный текст только если отличается от заголовка
                         _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
@@ -9734,44 +9707,36 @@ class AnchorEngine:
                         session.add(_step_task)
                         session.commit()
                         _step_task_id = _step_task.id
+
+                    _hint_lines = []
+                    if _loop_risk_step:
+                        _gap = int(_assignment_health.get('gap', 0) or 0)
+                        _hint_lines.append(
+                            f"За последние часы был gap назначений/результатов={_gap}. "
+                            "Покажи новый результат в этом же цикле: действие + факт из tool-ответа."
+                        )
+                    if _kpi_warn_step:
+                        _hint_lines.append(
+                            f"Похожие шаги ранее давали слабую конверсию (выборка={int(_kpi_health.get('sample', 0))}). "
+                            "Выбери другой угол: сегмент, канал или формулировку."
+                        )
+                    if _tech_warn_step:
+                        _hint_lines.append(
+                            f"Похожий сценарий недавно падал по техпричине (выборка={int(_tech_health.get('sample', 0))}). "
+                            "Снизь риск: один лёгкий вызов, затем второй шаг после успеха."
+                        )
+                    if _hint_lines:
+                        _runtime_quality_hints = (
+                            "\n\n🧭 УРОКИ ИЗ ПРЕДЫДУЩИХ ЦИКЛОВ (это не блок, а обучение):\n"
+                            + '\n'.join(f"  • {ln}" for ln in _hint_lines)
+                            + "\n  • Перед финальным ответом сделай самопроверку: есть ли у тебя реально новое действие и подтверждение из tool-ответа.\n"
+                        )
                 except Exception as _tc_err:
                     logger.debug("[COORD] task create skipped: %s", _tc_err)
                     try:
                         session.rollback()
                     except Exception:
                         pass
-
-                if _skip_step_due_loop:
-                    _gap = int(_assignment_health.get('gap', 0) or 0)
-                    self._cancel_agent_task(
-                        session,
-                        _step_task_id,
-                        'no_result_loop',
-                        f'Пропущено: у агента {_ag_name} накопилось {_gap} назначений без подтверждённого результата.',
-                        [
-                            'Сменить исполнителя или инструмент',
-                            'Назначать новый шаг только после явного результата',
-                        ],
-                    )
-                    _prev_steps_context += (
-                        f"• {_ag_name}: шаг пропущен (no_result_loop) — слишком много назначений без результата. "
-                        "Нужна смена стратегии/исполнителя.\n"
-                    )
-                    continue
-
-                if _kpi_block_step:
-                    _prev_steps_context += (
-                        f"• {_ag_name}: шаг отменён (kpi_low_conversion, выборка={int(_kpi_health.get('sample', 0))}) — "
-                        "повторяющиеся похожие задачи дают низкую конверсию. Выбери новый подход.\n"
-                    )
-                    continue
-
-                if _tech_block_step:
-                    _prev_steps_context += (
-                        f"• {_ag_name}: шаг отменён (tech_unstable_recent, выборка={int(_tech_health.get('sample', 0))}) — "
-                        "этот сценарий недавно упирался в техсбои. Нужен альтернативный канал/инструмент.\n"
-                    )
-                    continue
 
                 # Собираем agent_data для _exec_agent_for_director
                 _coord_company = (_user_profile_coord or {}).get('company', '') or ''
@@ -10170,6 +10135,7 @@ class AnchorEngine:
                     + _intg_live_block
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
+                          + _runtime_quality_hints
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\n📋 Люди, которых ты уже нашла и добавила в систему (это твоя прошлая работа, не новые находки):\n{_agent_contacts_block}\n"
                        "   Подумай: если find_relevant_contacts_for_task вернул кого-то из этого списка — они уже обработаны. Ищи НОВЫХ людей с другими ключевыми словами, другой нишей или через другой канал." if _agent_contacts_block else '')
@@ -10311,6 +10277,43 @@ class AnchorEngine:
                         _prev_steps_context += f"• {_ag_name}: не выполнил задачу (пустой результат для «{_ag_task[:80]}»)\n"
                     # _done_fb: агент выполнил задачу без детального отчёта — тихо пропускаем
                     continue
+
+                # ── Обучающий retry: если агент ограничился исследованием, просим довести до действия ──
+                _PASSIVE_TOOLS_ACTION = {'web_search', 'research_topic', 'get_news_trends', 'update_goal_progress'}
+                _real_action_tools_now = [t for t in _step_tools if t not in _PASSIVE_TOOLS_ACTION]
+                _action_retry_key = f'{_ag_name}:{_executed}:action'
+                if not _real_action_tools_now and not _retry_done.get(_action_retry_key):
+                    _retry_done[_action_retry_key] = True
+                    _value_retry_prompt = (
+                        f"{_agent_prompt}\n\n"
+                        "⚠️ Сейчас ты описал исследование, но не завершил цепочку ценности. "
+                        "Сделай 1 конкретное действие через инструмент и верни факт результата.\n"
+                        "Формат самопроверки перед ответом:\n"
+                        "1) Какой инструмент я вызвал сейчас?\n"
+                        "2) Какой новый факт/результат он вернул?\n"
+                        "3) Как это продвигает цель пользователя?\n"
+                        "Если действие невозможно из-за интеграции/доступа — прямо напиши, чего не хватает, "
+                        "и предложи ближайший рабочий альтернативный шаг."
+                    )
+                    try:
+                        _raw_value_retry = await asyncio.wait_for(
+                            _exec_agent_for_director(_ag_data, _value_retry_prompt, user.telegram_id),
+                            timeout=300,
+                        )
+                        _value_result = _raw_value_retry[0] if isinstance(_raw_value_retry, (tuple, list)) else _raw_value_retry
+                        _value_tools = list(_raw_value_retry[1]) if isinstance(_raw_value_retry, (tuple, list)) and len(_raw_value_retry) > 1 else []
+                        _value_text = (_value_result or '').strip()
+                        _value_action_tools = [t for t in _value_tools if t not in _PASSIVE_TOOLS_ACTION]
+                        if _value_text and len(_value_text) >= 12 and _value_action_tools:
+                            _result = _value_result
+                            _result_stripped = _value_text
+                            _step_tools.extend(_value_tools)
+                            _all_tools.extend(_value_tools)
+                            if _ag_name:
+                                _current_run_agent_tools.setdefault(_ag_name, set()).update(_value_tools)
+                            logger.info("[COORD] agent %s: value-retry succeeded, action tools=%s", _ag_name, _value_action_tools)
+                    except Exception as _vr_err:
+                        logger.debug("[COORD] agent %s: value-retry failed: %s", _ag_name, _vr_err)
 
                 # Очистка и отправка результата пользователю
                 _ag_avatar = _ag_data.get('avatar_url', '')
