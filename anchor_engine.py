@@ -2002,7 +2002,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "  🔀 ЛУЧШИЕ КОМБО:\n"
             "    • Продвижение продукта: research_topic (ЦА+боли) → email-кампания + Telegram-пост одновременно\n"
             "    • Привлечение пользователей: find_and_message (быстро, внутри платформы) + email (охват)\n"
-            "    • Нет ответов на email: попробуй контент-пост → или смени ЦА / тему письма\n"
+            "    • Нет ответов на email: СНАЧАЛА send_follow_up_email (не открыли >3д) → ПОТОМ новые контакты/смена ЦА\n"
+            "    • Рост канала: publish_to_telegram (пост) → list_email_contacts (status=interested/replied) → send_follow_up_email с ссылкой на пост (P.S.-CTA подписаться)\n"
             "    • Партнёрство: negotiate_by_email (тёплый конкретный контакт) → лучше cold campaign"
         )
         _tool_matrix = (
@@ -2195,7 +2196,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         f"(конверсия {_rate}%). "
                     )
                     if _rate < 5:
-                        _outreach_stats += "Конверсия низкая → меняй подход: персонализируй письма, ищи другую аудиторию.\n"
+                        _outreach_stats += (
+                            "Конверсия низкая → ПОШАГОВЫЙ ПЛАН:\n"
+                            "  1. СНАЧАЛА send_follow_up_email (80% ответов приходят после 2-5 касаний!). "
+                            "Пиши тем кто не ответил >3 дней назад → конкретная польза/вопрос, не 'напоминаю'.\n"
+                            "  2. ПОТОМ проверь subject line: упомяни конкретный проект/задачу получателя, НЕ общее.\n"
+                            "  3. Смени аудиторию если 10+ контактов не ответили: другой сегмент или канал.\n"
+                        )
                     elif _rate > 20:
                         _outreach_stats += "Конверсия отличная → продолжай этот подход!\n"
                     else:
@@ -2376,9 +2383,20 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _publish_hint = ''
     if user:
         _ch = getattr(user, 'telegram_channel', None) or 'настроен в профиле'
+        _has_tg_ch = bool(getattr(user, 'telegram_channel', None))
+        _ch_growth_tip = ''
+        if _has_tg_ch:
+            _ch_growth_tip = (
+                f"\n📢 СТРАТЕГИЯ РОСТА КАНАЛА ({_ch}):\n"
+                "  1. Пост опубликован → сразу list_email_contacts (replied/interested) → send_follow_up_email с P.S. ссылкой на пост\n"
+                f"  2. В каждое outreach-письмо добавляй P.S.: 'Кстати, веду канал по теме: {_ch} — там свежий контент по [тема цели]'\n"
+                "  3. Ищи администраторов тематических каналов → пиши им через web_search + send_outreach_email (коллаборация/упоминание)\n"
+                "  ⚡ Без постоянного продвижения канала контент не приносит подписчиков!\n"
+            )
         _publish_hint = (
             f"\nℹ️ publish_to_telegram — только личный канал ({_ch}). "
             "Для внешних каналов: найди контакт админа через web_search и напиши ему.\n"
+            + _ch_growth_tip
         )
 
     _escalation_block = ''
@@ -5002,6 +5020,8 @@ class AnchorEngine:
                             "Если один агент нашёл контакты — назначь другому написать ЭТИМ людям.\n"
                             "Тон: старший коллега — уважительно, конкретно, без официоза.\n"
                             "Если есть «Последний результат» — отталкивайся от него: что уже сделано, какой следующий шаг.\n"
+                            "Если для выполнения шага не хватает данных пользователя — добавь в конце одно уточняющее предложение-вопрос.\n"
+                            "В конце дай одну идею улучшения процесса или интеграции (только из подключённых каналов).\n"
                             "✅ ОБРАЗЦЫ (подставь реальные имена агентов пользователя):\n"
                             "  «[Имя], загляни в почту — там должны быть ответы от вчерашней рассылки. "
                             "Если кто-то заинтересовался, сразу договаривайся о тестировании. "
@@ -10222,6 +10242,8 @@ class AnchorEngine:
                     f"\n  Пиши живо, от первого лица, показывай конкретные результаты."
                     f" Действуй инструментами и описывай что получилось."
                     f"\n  Опирайся на факты из tool-ответов."
+                    f"\n  Если данных для следующего шага не хватает — добавь 1 уточняющий вопрос пользователю в конце ответа."
+                    f"\n  Добавь 1 идею улучшения или интеграции (только из реально доступных тебе инструментов)."
                 )
 
                 # Кросс-агентное общение: если предыдущие агенты уже выполнили шаги,
@@ -10972,6 +10994,8 @@ class AnchorEngine:
                         f"- Не зацикливайся на слове 'таймаут': если это уже недавно упоминалось, пиши мягко 'автоканал нестабилен, переключились'.\n"
                         f"- Оценка прогресса: одним предложением — движемся вперёд или застряли?\n"
                         f"  Если застряли — предложи что изменить.\n"
+                        f"- Если для следующего шага не хватает данных — задай пользователю 1 уточняющий вопрос.\n"
+                        f"- Добавь 1 практичную идею улучшения или интеграции (только из реально подключённых инструментов).\n"
                         f"- Если агент не привёл конкретного результата — не упоминай его.\n"
                         + _note_hint
                         + f"- 3-5 предложений. Без markdown. Начни сразу с конкретики: кто что сделал.\n"
@@ -13058,11 +13082,53 @@ class AnchorEngine:
                         logger.debug("[AUTOPILOT] stagnation alert: %s", _stag_tg_err)
 
         # ── Профиль пользователя: агенты должны знать кому служат ──
+        # Контакты: email не передаём агентам (только для регистрации).
+        # Телефон передаём только при явном разрешении пользователя.
         _user_profile_ctx = {}
         try:
             from models import UserProfile as _UP_scan
             _up = session.query(_UP_scan).filter_by(user_id=user.id).first()
             if _up:
+                _phone_allowed = False
+                try:
+                    _rules_blob = ' '.join(str(r).lower() for r in (user_rules or []))
+                    _allow_phone_kw = (
+                        'можно использовать телефон', 'разрешаю использовать телефон',
+                        'можно звонить', 'можно писать в whatsapp', 'можно писать в телеграм по номеру',
+                        'allow phone', 'you can use my phone', 'phone allowed'
+                    )
+                    _deny_phone_kw = (
+                        'не используй телефон', 'нельзя использовать телефон', 'не звонить',
+                        'do not use phone', 'phone forbidden'
+                    )
+                    if any(_kw in _rules_blob for _kw in _allow_phone_kw) and not any(_kw in _rules_blob for _kw in _deny_phone_kw):
+                        _phone_allowed = True
+                except Exception:
+                    _phone_allowed = False
+
+                if not _phone_allowed:
+                    try:
+                        from models import Interaction as _Int_phone
+                        _phone_msgs = session.query(_Int_phone).filter(
+                            _Int_phone.user_id == user.id,
+                            _Int_phone.message_type == 'user',
+                            _Int_phone.created_at >= now_utc - timedelta(days=30),
+                        ).order_by(_Int_phone.created_at.desc()).limit(20).all()
+                        _phone_blob = ' '.join((m.content or '').lower() for m in _phone_msgs)
+                        _allow_phone_kw = (
+                            'можно использовать телефон', 'разрешаю использовать телефон',
+                            'можно звонить', 'можно писать на номер', 'используй мой телефон',
+                            'allow phone', 'you can use my phone', 'phone allowed'
+                        )
+                        _deny_phone_kw = (
+                            'не используй телефон', 'нельзя использовать телефон', 'не звонить',
+                            'do not use phone', 'phone forbidden'
+                        )
+                        if any(_kw in _phone_blob for _kw in _allow_phone_kw) and not any(_kw in _phone_blob for _kw in _deny_phone_kw):
+                            _phone_allowed = True
+                    except Exception:
+                        pass
+
                 _up_parts = []
                 if _up.company:
                     _up_parts.append(f"Компания/проект: {_up.company}")
@@ -13074,16 +13140,13 @@ class AnchorEngine:
                     _up_parts.append(f"Личные цели: {str(_up.goals)[:150]}")
                 if _up.content_strategy:
                     _up_parts.append(f"Контент-стратегия: {str(_up.content_strategy)[:150]}")
-                if getattr(user, 'phone', None):
+                if _phone_allowed and getattr(user, 'phone', None):
                     _up_parts.append(f"Телефон для связи: {str(user.phone)[:40]}")
-                if getattr(user, 'email', None):
-                    _up_parts.append(f"Email для связи: {str(user.email)[:120]}")
                 _user_profile_ctx = {
                     'company': _up.company or '',
                     'position': _up.position or '',
                     'bio': (_up.bio or '')[:200],
-                    'phone': (user.phone or '')[:40] if getattr(user, 'phone', None) else '',
-                    'email': (user.email or '')[:120] if getattr(user, 'email', None) else '',
+                    'phone': (user.phone or '')[:40] if (_phone_allowed and getattr(user, 'phone', None)) else '',
                     'summary': '\n'.join(_up_parts),
                 }
         except Exception as _up_err:

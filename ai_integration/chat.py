@@ -863,10 +863,26 @@ async def _build_proactive_context(user_id, lang='ru'):
                 val = getattr(profile, field, None)
                 if val:
                     profile_parts.append(f"{label}: {val}")
-            # Контактные данные из User (email, phone)
-            if user.email:
-                profile_parts.append(f"Email: {user.email}")
-            if user.phone:
+            # Email не передаём агенту: используется только для регистрации.
+            # Телефон передаём только при явном разрешении пользователя в памяти/правилах.
+            _allow_phone = False
+            try:
+                _mem_raw = decrypt_data(user.memory) if user.memory else ''
+                _mem_low = (_mem_raw or '').lower()
+                _allow_phone_kw = (
+                    'можно использовать телефон', 'разрешаю использовать телефон',
+                    'можно звонить', 'можно писать на номер', 'используй мой телефон',
+                    'allow phone', 'you can use my phone', 'phone allowed'
+                )
+                _deny_phone_kw = (
+                    'не используй телефон', 'нельзя использовать телефон', 'не звонить',
+                    'do not use phone', 'phone forbidden'
+                )
+                if any(_kw in _mem_low for _kw in _allow_phone_kw) and not any(_kw in _mem_low for _kw in _deny_phone_kw):
+                    _allow_phone = True
+            except Exception:
+                _allow_phone = False
+            if _allow_phone and user.phone:
                 profile_parts.append(f"{'Телефон' if lang == 'ru' else 'Phone'}: {user.phone}")
             if profile_parts:
                 user_memory += f"\n{_t('profile', lang)}: {', '.join(profile_parts)}"
