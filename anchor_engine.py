@@ -9006,7 +9006,15 @@ class AnchorEngine:
                     and p.get('name') not in _fully_blocked_agents
                 ]
 
-                for _mp in _missing_profiles[:2]:
+                # Приоритизируем «молчащих» агентов: у кого меньше результатов в недавнем окне,
+                # чтобы не было ощущения, что отвечает только один агент.
+                _missing_scored = []
+                for _mp in _missing_profiles:
+                    _h = self._recent_assignment_result_health(session, user.id, _mp.get('name', ''), hours=8)
+                    _missing_scored.append((_h.get('results', 0), -_h.get('gap', 0), _mp))
+                _missing_scored.sort(key=lambda x: (x[0], x[1]))
+
+                for _, _, _mp in _missing_scored[:3]:
                     _goal_counts = {}
                     for _ps in _plan:
                         _gg = (_ps.get('goal') or '').strip()
@@ -10175,6 +10183,8 @@ class AnchorEngine:
                     f" Ценность = новые данные, новые контакты, новые идеи. Повторение старого — не прогресс."
                     f"\n  Думай широко: мир огромный, людей и площадок бесконечно много."
                     f" Каждый цикл — возможность исследовать новую нишу, аудиторию, подход."
+                    f"\n  Сначала придумай 2 альтернативных маршрута и выбери лучший по вероятности результата."
+                    f" Если доступно несколько интеграций/каналов — не зацикливайся на одном и том же инструменте."
                     f"\n  Если нужна интеграция коллеги → DELEGATE[Имя]: конкретные данные для него."
                     f"\n  Пиши живо, от первого лица, показывай конкретные результаты."
                     f" Действуй инструментами и описывай что получилось."
@@ -10261,6 +10271,11 @@ class AnchorEngine:
                             logger.debug(f"[COORD] agent {_ag_name}: retry failed: {_retry_err}")
 
                 if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
+                    if _result_stripped in _DONE_FB_SET:
+                        # Вместо «немого» ответа даём короткий, понятный статус по шагу.
+                        _task_short_h = (_ag_task.split('\n')[0] or _ag_task)[:140].strip()
+                        _result = f"Сделал шаг по задаче: {_task_short_h}. Перехожу к следующему действию."
+                        _result_stripped = _result
                     if _result_stripped not in _DONE_FB_SET:
                         # Пустой результат после retry: отменяем задачу + объясняем пользователю
                         logger.info(f"[COORD] agent {_ag_name}: empty result after retry")
@@ -10286,6 +10301,22 @@ class AnchorEngine:
                         _cleaned = _result.strip()
                 except Exception:
                     _cleaned = _result.strip()
+
+                # Финальная human-readable нормализация текста агента (без ломки смысла).
+                try:
+                    import re as _re_h
+                    _cleaned = (_cleaned or '').strip()
+                    # Убираем случайные дубли имени в начале: "Кристина, ... Кристина, ..."
+                    _cleaned = _re_h.sub(r'^([А-ЯЁA-Z][а-яёa-z]+,\s+)(?:\1)+', r'\1', _cleaned)
+                    # Убираем артефактные склейки: "в —"
+                    _cleaned = _re_h.sub(r'\bв\s+—\s+', ' ', _cleaned)
+                    # Нормализуем пунктуацию хвоста
+                    _cleaned = _re_h.sub(r',\.$', '.', _cleaned)
+                    _cleaned = _re_h.sub(r'\s{2,}', ' ', _cleaned).strip()
+                    if _cleaned and _cleaned[-1] not in '.!?…':
+                        _cleaned += '.'
+                except Exception:
+                    pass
 
                 # ── Детектор живых реакций агента: запросы интеграций, инициатива, отклонение от сценария ──
                 # Если в ответе агент просит что-то / предлагает альтернативу → ASI озвучивает это пользователю
