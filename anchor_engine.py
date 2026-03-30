@@ -557,7 +557,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_FEED_PER_DAY = 3
+MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
 
@@ -9376,6 +9376,58 @@ class AnchorEngine:
             except Exception as _rd_err:
                 logger.debug("[COORD] recent done tasks: %s", _rd_err)
 
+            # ── Детектор петли: выявляем повторяющиеся подходы координатора ──
+            _loop_detection_str = ''
+            try:
+                from models import Interaction as _Inter_loop
+                _loop_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _loop_msgs = session.query(_Inter_loop).filter(
+                    _Inter_loop.user_id == user.id,
+                    _Inter_loop.message_type == 'agent_msg',
+                    _Inter_loop.created_at >= _loop_cutoff,
+                ).order_by(_Inter_loop.created_at.asc()).all()
+
+                # Ключевые паттерны подходов которые координатор мог повторять
+                _approach_keywords = {
+                    'LinkedIn': ['linkedin'],
+                    'Discord': ['discord'],
+                    'GitHub-поиск': ['github'],
+                    'RSS/Хабр': ['rss', 'хабр', 'vc.ru'],
+                    'web_search-контакты': ['поиск в интернете', 'web_search', 'найди контакт', 'найди email'],
+                    'email-лимит-упомин': ['лимит писем', 'лимит на email', 'исчерпан'],
+                    'таймаут-упомин': ['таймаут', 'timeout', 'прервал', 'прервать'],
+                    'смена-тактики': ['сменим тактику', 'смени тактику', 'сменим площадку'],
+                }
+                _approach_counts: dict = {}
+                for _lm in _loop_msgs:
+                    try:
+                        _lj = json.loads(_lm.content) if (_lm.content or '').strip().startswith('{') else {}
+                        _lt = (_lj.get('text') or _lm.content or '').lower()
+                    except Exception:
+                        _lt = (_lm.content or '').lower()
+                    for _ap_name, _ap_kws in _approach_keywords.items():
+                        if any(kw in _lt for kw in _ap_kws):
+                            _approach_counts[_ap_name] = _approach_counts.get(_ap_name, 0) + 1
+
+                # Подходы которые координатор предлагал 3+ раз → петля
+                _looped = {k: v for k, v in _approach_counts.items() if v >= 3}
+                if _looped:
+                    _loop_lines = ['\n🚨 ВНИМАНИЕ: ОБНАРУЖЕНА ПЕТЛЯ (координатор повторял одно и то же):']
+                    for _lap, _lcnt in sorted(_looped.items(), key=lambda x: -x[1]):
+                        _loop_lines.append(f'  ⛔ «{_lap}» — упоминалось {_lcnt} раз за 3ч БЕЗ результата')
+                    _loop_lines.append('')
+                    _loop_lines.append('  ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ВЫХОДА ИЗ ПЕТЛИ:')
+                    _loop_lines.append('  1. Ни один агент НЕ должен получить задачу с заблокированным подходом выше.')
+                    _loop_lines.append('  2. Если все привычные каналы заблокированы → сообщи пользователю через send_message_to_user')
+                    _loop_lines.append('     что данный инструмент/канал недоступен и предложи конкретную альтернативу.')
+                    _loop_lines.append('  3. Если контакты не находятся → смени ДОМЕН: от поиска людей к созданию контента,')
+                    _loop_lines.append('     публикации, аналитике, обновлению задач, мониторингу входящих.')
+                    _loop_lines.append('  4. Задача «ещё раз попробуй» тот же канал — ЗАПРЕЩЕНА.')
+                    _loop_detection_str = '\n'.join(_loop_lines) + '\n'
+                    logger.info("[COORD] Loop detected for user %s: %s", user.telegram_id, _looped)
+            except Exception as _ld_err:
+                logger.debug("[COORD] loop detection: %s", _ld_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -9394,6 +9446,7 @@ class AnchorEngine:
                 + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
                 + f"{_recent_done_str}"
+                + f"{_loop_detection_str}"
                 + f"{_cap_rules_str}"
                 + f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
@@ -9483,7 +9536,10 @@ class AnchorEngine:
                    if _used_github_queries else '')
                      + "• Агент БЕЗ интеграций: web_search, research_topic, create_post, save_email_contact, send_message_to_user, DELEGATE[].\n"
                 "• Хабр/VC.ru — только поиск через web_search.\n"
-                "• Если нужная интеграция отсутствует — предложи: 'Для этого полезно подключить [интеграция] в Настройках → API-ключи.'\n\n"
+                "• Если нужная интеграция отсутствует — предложи: 'Для этого полезно подключить [интеграция] в Настройках → API-ключи.'\n"
+                "• АНТИПЕТЛЯ: если одна и та же задача давалась 2+ раз за этот сеанс без прогресса —\n"
+                "  это петля. НЕ давай её снова. Смени домен: поиск→контент, контент→email, email→аналитика,\n"
+                "  аналитика→задачи пользователя. Или сообщи пользователю send_message_to_user что канал недоступен.\n\n"
 
                 "СТРАТЕГИЧЕСКАЯ СВОБОДА:\n"
                 "• Генерируй СВОИ уникальные стратегии — контент-магниты, партнёрства, community building, нестандартные подходы.\n"
@@ -14958,7 +15014,7 @@ class AnchorEngine:
             return anchors
 
         # Создаём один общий якорь — AI решит что с этим делать
-        source_key = f'post:{user_now.strftime("%Y-%m-%d")}:{posts_today}'
+        source_key = f'post:{user_now.strftime("%Y-%m-%d")}'
         anchors.append(Anchor(
             user_id=user.id,
             anchor_type='post_opportunity',
@@ -15394,7 +15450,7 @@ class AnchorEngine:
             'email_outreach_send', 'email_follow_up', 'email_reply_received',
             'content_campaign_publish',
             'delegation_campaign_send', 'delegation_campaign_follow_up',
-            'post_opportunity', 'channel_post', 'discord_post',
+            'channel_post', 'discord_post',
         }
 
         for anchor in anchors:
