@@ -551,6 +551,13 @@ MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
     'goal_autopilot_handoff',
+    # Рабочие результаты и межагентское взаимодействие должны быть видны пользователю.
+    # Иначе в чате доминирует ASI, хотя агенты реально работают и сохраняются в БД.
+    'goal_autopilot_result',
+    'coordinator_result',
+    'agent_delegation',
+    'agent_chain_continue',
+    'agent_chain_transfer',
 }
 MAX_FEED_PER_DAY = 3
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
