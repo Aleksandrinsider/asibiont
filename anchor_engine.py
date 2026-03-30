@@ -8333,25 +8333,25 @@ class AnchorEngine:
                     _ch_str = '+'.join(_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_cr))
                     _tool_hints = [_CAP_TOOL_HINTS[c] for c in sorted(_cats_cr) if c in _CAP_TOOL_HINTS and _CAP_TOOL_HINTS[c]]
                     _tool_hints.append('web_search, research_topic, add_task')
-                    # Строки "НЕ НАЗНАЧАЙ" — объясняем что НЕЛЬЗЯ давать агенту с такими интеграциями
+                    # Подсказки о цепочках — учим думать о конечной цели, а не запрещаем шаги
                     _do_not_lines = []
                     if 'email' in _cats_cr:
                         _do_not_lines.append(
-                            f"  ⛔ {_p_cr['name']} [email]: НЕ ДАВАЙ задачи только web_search/research без email-шага."
-                            f" Её ценность — в ОТПРАВКЕ писем. Каждая задача должна заканчиваться:"
-                            f" send_outreach_email / reply_to_outreach_email / check_emails / negotiate_by_email."
-                            f" web_search — только как шаг ДО письма, не самоцель."
+                            f"  💡 {_p_cr['name']} [email]: думай цепочкой — research/web_search → save_email_contact → send_outreach_email."
+                            f" Если цель задачи — связаться с кем-то, задача должна содержать ВСЮ цепочку, а не только её первый шаг."
+                            f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
                         )
                     if 'git' in _cats_cr:
                         _do_not_lines.append(
-                            f"  ⛔ {_p_cr['name']} [GitHub]: НЕ ДАВАЙ задачи «найди авторов статей на Хабре» —"
-                            f" GitHub не индексирует Хабр. Используй: run_agent_action(search_users/search_repos)"
-                            f" → save_email_contact → send_outreach_email или DELEGATE[email-агент]."
+                            f"  💡 {_p_cr['name']} [GitHub]: GitHub API ищет только по GitHub (репозитории, пользователи, issues)."
+                            f" Хабр/VC/Medium GitHub не индексирует — для этих сайтов используй web_search."
+                            f" Хорошая цепочка: search_users(GitHub) / web_search(Хабр) → save_email_contact → DELEGATE[email-агент]."
                         )
                     if 'rss' in _cats_cr:
                         _do_not_lines.append(
-                            f"  ⛔ {_p_cr['name']} [RSS]: НЕ ДАВАЙ задачи только «прочитай RSS» без действия."
-                            f" Каждый цикл RSS → обязательно: create_post / publish_to_telegram / send_message_to_user / DELEGATE outreach."
+                            f"  💡 {_p_cr['name']} [RSS]: RSS — источник материала, не конечная цель."
+                            f" Хорошая задача: прочитай RSS → создай пост / выдели инсайт / предложи идею команде."
+                            f" Если агент 2 цикла подряд только читает RSS без публикации — дай задачу с явным выходным артефактом."
                         )
                     _cap_rules_lines.append(
                         f"  {'📞' if 'calls' in _cats_cr else '🔀'} {_p_cr['name']} [{_ch_str}]: "
