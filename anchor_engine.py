@@ -9428,6 +9428,27 @@ class AnchorEngine:
                         r'(?:Результат (?:его|её) работы:?|Твоя задача:?|Твоё задание:?).*',
                         '', _task_clean, flags=_re_assign.DOTALL
                     ).strip()
+                    # Нормализация однообразных/ломаных формулировок из планировщика.
+                    _task_clean = _re_assign.sub(
+                        r'\bв интернете,?\s*чтобы\s*найти\b',
+                        'найди',
+                        _task_clean,
+                        flags=_re_assign.IGNORECASE,
+                    )
+                    _task_clean = _re_assign.sub(
+                        r'\bчерез поиск в интернете\b',
+                        'найди через релевантные площадки',
+                        _task_clean,
+                        flags=_re_assign.IGNORECASE,
+                    )
+                    _task_clean = _re_assign.sub(r'\s{2,}', ' ', _task_clean).strip(' ,.-')
+                    # Убираем дубли имени агента внутри текста задачи.
+                    _task_clean = _re_assign.sub(
+                        rf'\b{_re_assign.escape(_ag_name)}\b\s*,?\s*',
+                        '',
+                        _task_clean,
+                        flags=_re_assign.IGNORECASE,
+                    ).strip(' ,.-')
                     # Ограничиваем reason — обрезаем по последнему полному слову
                     _step_reason = (_step.get('reason') or '').strip()
                     if _step_reason and len(_step_reason) > 80:
