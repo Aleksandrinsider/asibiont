@@ -8350,6 +8350,7 @@ class AnchorEngine:
             _failed_tasks_str = ''
             try:
                 from models import Task as _Task_fail
+                from models import AgentActivityLog as _AAL_fail
                 _fail_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
                 _failed_tasks = session.query(_Task_fail).filter(
                     _Task_fail.user_id == user.id,
@@ -8357,16 +8358,77 @@ class AnchorEngine:
                     _Task_fail.status.in_(['cancelled']),
                     _Task_fail.created_at >= _fail_cutoff,
                 ).order_by(_Task_fail.created_at.desc()).limit(12).all()
-                if _failed_tasks:
-                    _ft_lines = ['\n📊 НЕУДАЧНЫЕ ЗАДАЧИ за 24ч (учитывай при планировании — попробуй другой подход):']
+                # Добавляем таймауты agent_task из AAL (повторять такие задачи ЗАПРЕЩЕНО)
+                _aal_timeouts = session.query(_AAL_fail).filter(
+                    _AAL_fail.user_id == user.id,
+                    _AAL_fail.activity_type == 'agent_task',
+                    _AAL_fail.result == 'timeout/process_restart',
+                    _AAL_fail.created_at >= _fail_cutoff,
+                ).order_by(_AAL_fail.created_at.desc()).limit(8).all()
+                if _failed_tasks or _aal_timeouts:
+                    _ft_lines = ['\n📊 НЕУДАЧНЫЕ/ПРЕРВАННЫЕ ЗАДАЧИ за 24ч (учитывай при планировании — попробуй другой подход):']
                     for _ft in _failed_tasks:
                         _reason = (getattr(_ft, 'completion_notes', '') or '').strip()
                         _reason_short = f' — {_reason[:60]}' if _reason else ''
                         _ft_lines.append(f'  • {_ft.delegated_to_username or "?"}: {(_ft.title or "")[:70]}{_reason_short}')
-                    _ft_lines.append('  → Рекомендация: дай другую задачу или другой инструмент — разнообразие даёт результат.')
+                    for _to in _aal_timeouts:
+                        _title_low = (_to.title or '').lower()
+                        _ag_to = next((p['name'] for p in _profiles if p['name'].lower() in _title_low), '?')
+                        _ft_lines.append(f'  ⛔ ТАЙМАУТ ({_ag_to}): {(_to.title or "")[:80]} — НЕ давать снова, агент не справляется с этим скриптом')
+                    _ft_lines.append('  → Рекомендация: замени agent_task на прямой инструмент (web_search/find_relevant_contacts_for_task) или смени подход.')
                     _failed_tasks_str = '\n'.join(_ft_lines) + '\n'
             except Exception as _ft_err:
                 logger.debug('[COORD] failed tasks query: %s', _ft_err)
+
+            # ── RSS usage tracking: если агент читал RSS N раз без создания контента → принуди к ACTION ──
+            _rss_action_str = ''
+            try:
+                from models import AgentActivityLog as _AAL_rss
+                _rss_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _rss_reads_by_agent: dict = {}
+                _rss_actions_by_agent: dict = {}
+                _rss_last_content: dict = {}
+                _rss_aal = session.query(_AAL_rss).filter(
+                    _AAL_rss.user_id == user.id,
+                    _AAL_rss.activity_type == 'run_agent_action',
+                    _AAL_rss.created_at >= _rss_cutoff,
+                ).order_by(_AAL_rss.created_at.asc()).all()
+                _rss_action_aal = session.query(_AAL_rss).filter(
+                    _AAL_rss.user_id == user.id,
+                    _AAL_rss.activity_type.in_(['post_newsfeed', 'post_telegram', 'email', 'post_discord']),
+                    _AAL_rss.created_at >= _rss_cutoff,
+                ).count()
+                for _re in _rss_aal:
+                    _rt = (str(_re.result or '')).lower()
+                    _is_rss = any(kw in _rt for kw in ['rss', 'habr', 'статья', 'http', 'article', '==='])
+                    if not _is_rss:
+                        continue
+                    _title_l = (_re.title or '').lower()
+                    _ag_rss = next((p['name'] for p in _profiles if p['name'].lower() in _title_l), None)
+                    if _ag_rss:
+                        _rss_reads_by_agent.setdefault(_ag_rss, 0)
+                        _rss_reads_by_agent[_ag_rss] += 1
+                        _rss_last_content[_ag_rss] = str(_re.result or '')[:400]
+                _rss_lines = []
+                for _ag_rss_n, _cnt_rss in _rss_reads_by_agent.items():
+                    if _cnt_rss >= 2 and _rss_action_aal == 0:
+                        _last = _rss_last_content.get(_ag_rss_n, '')[:200]
+                        _rss_lines.append(
+                            f'  ⛔ {_ag_rss_n} читал RSS {_cnt_rss} раз за 3ч БЕЗ публикации/письма/сообщения.'
+                        )
+                        _rss_lines.append(
+                            f'     → ОБЯЗАТЕЛЬНО: этот цикл дай ACTION-задачу: create_post/publish_to_telegram ИЛИ '
+                            f'send_message_to_user (поделись новостью с командой) ИЛИ DELEGATE[email-агент] outreach авторам.'
+                        )
+                        if _last:
+                            _rss_lines.append(f'     Последний контент: {_last}')
+                if _rss_lines:
+                    _rss_action_str = (
+                        '\n📰 RSS-ЦИКЛ — НУЖНО ДЕЙСТВИЕ (прочитано, но нет результата):\n'
+                        + '\n'.join(_rss_lines) + '\n'
+                    )
+            except Exception as _rss_err:
+                logger.debug('[COORD] RSS tracking: %s', _rss_err)
 
             # ── Anti-loop: вычисляем заблокированные по частоте инструменты ──
             import re as _re_al
@@ -9447,6 +9509,7 @@ class AnchorEngine:
                 + f"{_anti_repeat_str}"
                 + f"{_recent_done_str}"
                 + f"{_loop_detection_str}"
+                + f"{_rss_action_str}"
                 + f"{_cap_rules_str}"
                 + f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
                 f"уже_написали=[{_already_sent_str[:300]}]\n"
@@ -9501,10 +9564,21 @@ class AnchorEngine:
                 "Даже если у агента мало интеграций — он может делать МНОГО:\n"
                 "• Только web_search → найти контакты → save_email_contact → DELEGATE отправку коллеге\n"
                 "• Только email → проверить входящие → ответить → follow-up → negotiate → вся воронка продаж\n"
-                "• Только RSS → мониторинг трендов → create_post → publish_to_telegram → контент-маркетинг\n"
+                "• Только RSS → 4 РАЗНЫХ способа использовать ОДИН и ТОТ ЖЕ контент:\n"
+                "    1. Создать пост с инсайтом → create_post → publish_to_telegram/discord\n"
+                "    2. Поделиться новостью с командой → send_message_to_user (пересказ прочитанного)\n"
+                "    3. Найти авторов/упомянутые компании → DELEGATE[email-агент] написать им\n"
+                "    4. Создать задачу пользователю на основе тренда → add_task\n"
+                "   ⛔ Читать RSS В ПЯТЫЙ РАЗ ПОДРЯД без действия — запрещено. Выбери один из 4 вариантов выше.\n"
                 "• Только GitHub → search_users → save_email_contact → DELEGATE письма коллеге\n"
                 "• Любой агент → research_topic + create_post + publish_to_telegram = экспертный контент\n"
                 "Не ограничивай агента одним инструментом — давай КОМБИНИРОВАННЫЕ задачи.\n\n"
+                "УНИВЕРСАЛЬНЫЙ ПРИНЦИП ДЛЯ ЛЮБОГО АГЕНТА С ЛЮБЫМИ ИНТЕГРАЦИЯМИ:\n"
+                "Каждая интеграция имеет минимум 3 режима. Чередуй их каждый цикл:\n"
+                "  Режим A (сбор данных): читай/ищи/мониторь → получи сырой материал\n"
+                "  Режим B (создание ценности): превращай данные в пост, письмо, задачу, инсайт\n"
+                "  Режим C (взаимодействие): делись с командой, с пользователем, делегируй другому агенту\n"
+                "Если агент два цикла подряд в режиме A — обязательно переведи в режим B или C.\n\n"
 
                 "КОНТЕНТ И ПРОДВИЖЕНИЕ (думай, а не выполняй шаблон):\n"
                 "• Создал пост? Подумай: кому ещё он полезен? В каком канале его ещё нет?\n"
