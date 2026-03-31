@@ -5636,7 +5636,7 @@ class AnchorEngine:
                                         _bn_save_contact += _bnc.count('save_email_contact')
                                         _bn_create_post += _bnc.count('create_post') + _bnc.count('publish_to_telegram')
                                     _bn_actions = _bn_send + _bn_save_contact + _bn_create_post
-                                    if _bn_search >= 5 and _bn_actions <= 1:
+                                    if _bn_search >= 5 and _bn_actions <= 2:
                                         _bottleneck_hint_c = (
                                             f'🚨 КРИТИЧЕСКОЕ УЗКОЕ МЕСТО: за 24ч команда сделала {_bn_search} поисков, '
                                             f'но только {_bn_send} писем отправлено, {_bn_save_contact} контактов сохранено. '
@@ -5645,7 +5645,7 @@ class AnchorEngine:
                                             f'Назначь КОНКРЕТНОЕ ДЕЙСТВИЕ: send_outreach_email, create_post, delegate_task. '
                                             f'Если контактов нет в базе — назначь save_email_contact по уже найденным данным.'
                                         )
-                                    elif _bn_search >= 3 and _bn_send == 0:
+                                    elif _bn_search >= 3 and _bn_actions <= 1:
                                         _bottleneck_hint_c = (
                                             f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 24ч, но 0 отправленных писем. '
                                             f'Поиск без действий = потеря времени. '
