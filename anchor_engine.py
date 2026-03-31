@@ -3693,7 +3693,7 @@ class AnchorEngine:
                 _agent = _p.get('__agent') if isinstance(_p.get('__agent'), dict) else {}
                 _agent_l = str(_agent.get('name') or '').strip().lower()
 
-                if _anchor_type == 'coordinator_assignment' and _to_agent == _name_l:
+                if _anchor_type in ('coordinator_assignment', 'goal_autopilot_assignment') and _to_agent == _name_l:
                     _assignments += 1
                 if _anchor_type in ('coordinator_result', 'goal_autopilot_result') and _agent_l == _name_l:
                     _results += 1
@@ -5825,7 +5825,7 @@ class AnchorEngine:
                                 for _rc in _recent_coords:
                                     try:
                                         _rc_d = json.loads(_rc.content or '{}')
-                                        if _rc_d.get('__anchor_type') != 'goal_autopilot_assignment':
+                                        if _rc_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
                                             continue
                                         _rc_text = (_rc_d.get('text', '') or '').lower()
                                         _rc_kw = {w for w in _rc_text.split() if len(w) > 3}
