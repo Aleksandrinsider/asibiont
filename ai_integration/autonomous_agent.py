@@ -2673,32 +2673,13 @@ class HybridAutonomousAgent:
             if close_sess:
                 session.close()
 
-        """
-        Check if user profile is ready for networking actions.
-        Returns: {
-            "ready": bool, 
-            "reason": str, 
-            "missing": [list of missing items],
-            "suggested_integrations": [list of integration suggestions]
-        }
-        
-        Networking requires:
-        1. Non-empty profile (interests, skills, goals, or city)
-        2. At least one contact in network
-        
-        If not ready, suggests integrations to fix the problems:
-        - No profile → suggest GitHub/Twitter to auto-fill interests
-        - No contacts → suggest LinkedIn to import contacts
-        - No email tools → suggest Gmail/Resend for outreach
-        
-        This guard prevents recommending find_relevant_contacts_for_task when it will fail,
-        and helps users upgrade service incrementally.
-        """
+    def _get_networking_readiness(self, user_id, session=None) -> dict:
+        """Check if user profile is ready for networking actions."""
         close_sess = False
         if session is None:
             session = Session()
             close_sess = True
-        
+
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
             if not user:
@@ -2708,21 +2689,20 @@ class HybridAutonomousAgent:
                     "missing": ["profile"],
                     "suggested_integrations": []
                 }
-            
+
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             missing = []
             suggested_intgs = []
-            
+
             # Check profile completeness
             has_interests = profile and profile.interests and len(str(profile.interests)) > 5
             has_skills = profile and profile.skills and len(str(profile.skills)) > 5
             has_goals = profile and profile.goals and len(str(profile.goals)) > 5
             has_city = profile and profile.city and len(str(profile.city).strip()) > 2
-            
+
             profile_complete = has_interests or has_skills or has_goals or has_city
             if not profile_complete:
                 missing.append("profile_incomplete")
-                # Suggest integrations to auto-fill profile
                 suggested_intgs.extend([
                     {
                         "name": "GitHub",
@@ -2735,63 +2715,60 @@ class HybridAutonomousAgent:
                         "benefit": "поймёт твою область и интересы"
                     },
                 ])
-            
+
             # Check if user has contacts in network
             from .handlers import get_partners_list
             partners = get_partners_list(user.id, session)
             has_contacts = bool(partners and len(partners) > 0)
             if not has_contacts:
                 missing.append("no_contacts_in_network")
-                # Suggest integrations to build network
                 suggested_intgs.extend([
                     {
                         "name": "LinkedIn",
                         "reason": "импортировать профессиональные контакты",
                         "benefit": "получишь доступ к сотням контактов для сотрудничества"
                     },
-                    {
-                        "name": "Google Contacts",
-                        "reason": "импортировать контакты из почты",
-                        "benefit": "быстро заполнишь сеть известными тебе людьми"
-                    },
                 ])
-            
-            # Check if has email tools for outreach capability (only if profile is ready, but would help with outreach)
+
+            # Check email tools only when profile+contacts are ready
             if profile_complete and has_contacts:
-                has_email_tools = (
-                    (user.get_api_key('GMAIL_USER') or user.get_api_key('IMAP_HOST')) or
-                    user.get_api_key('RESEND_API_KEY') or
-                    user.get_api_key('SENDGRID_API_KEY')
+                _get_key = (lambda k: user.get_api_key(k)) if hasattr(user, 'get_api_key') else (
+                    lambda k: k in str(getattr(user, 'user_api_keys', '') or '').upper()
                 )
-                if not has_email_tools and "email" in str(profile.specialization or "").lower():
-                    # Only suggest email if they're sales/marketing focused
+                has_email_tools = _get_key('GMAIL_USER') or _get_key('IMAP_HOST') or \
+                                  _get_key('RESEND_API_KEY') or _get_key('SENDGRID_API_KEY')
+                if not has_email_tools and "email" in str(getattr(profile, 'specialization', '') or '').lower():
                     suggested_intgs.append({
                         "name": "Gmail / Resend",
                         "reason": "отправлять персональные письма контактам",
                         "benefit": "автоматически будешь отправлять outreach и follow-ups"
                     })
-            
-            # Deduplicate suggestions (keep only unique by name)
-            _seen_names = set()
-            dedup_intgs = []
-            for intg in suggested_intgs:
-                if intg['name'] not in _seen_names:
-                    dedup_intgs.append(intg)
-                    _seen_names.add(intg['name'])
-            suggested_intgs = dedup_intgs
-            
+
+            # Deduplicate
+            _seen_names: set = set()
+            suggested_intgs = [i for i in suggested_intgs
+                               if not _seen_names.add(i['name']) and i['name'] not in _seen_names - {i['name']}]  # type: ignore[func-returns-value]
+            # simpler dedup:
+            _dedup: list = []
+            _dedup_seen: set = set()
+            for _i in suggested_intgs:
+                if _i['name'] not in _dedup_seen:
+                    _dedup.append(_i)
+                    _dedup_seen.add(_i['name'])
+            suggested_intgs = _dedup
+
             if missing:
                 reason_parts = []
                 if "profile_incomplete" in missing:
-                    reason_parts.append("профиль не заполнен (добавьте интересы, навыки или город)")
+                    reason_parts.append("профиль не заполнен")
                 if "no_contacts_in_network" in missing:
                     reason_parts.append("в сети нет контактов")
-                
-                recommendation = "Заполни профиль (интересы, навыки, город) и добавь контакты в сеть"
+
+                recommendation = "Заполни профиль и добавь контакты в сеть"
                 if suggested_intgs:
-                    intg_suggestions = " или ".join([f"подключи {i['name']}" for i in suggested_intgs[:2]])
-                    recommendation = f"Быстрый способ: {intg_suggestions}"
-                
+                    recommendation = "Быстрый способ: " + " или ".join(
+                        f"подключи {i['name']}" for i in suggested_intgs[:2])
+
                 return {
                     "ready": False,
                     "reason": "Нетворкинг недоступен: " + " и ".join(reason_parts),
@@ -2799,16 +2776,16 @@ class HybridAutonomousAgent:
                     "recommendation": recommendation,
                     "suggested_integrations": suggested_intgs
                 }
-            
+
             return {
                 "ready": True,
                 "reason": "Нетворкинг доступен",
                 "missing": [],
                 "suggested_integrations": []
             }
-            
+
         except Exception as e:
-            logger.warning(f"[NETWORKING_CHECK] Error checking networking readiness: {e}")
+            logger.warning(f"[NETWORKING_CHECK] Error: {e}")
             return {
                 "ready": False,
                 "reason": f"Ошибка проверки: {e}",
@@ -2931,43 +2908,20 @@ class HybridAutonomousAgent:
                         dynamic_context += f"\n\n[USER_INTEGRATIONS]\nПодключены ({len(intg_detection['active'])} шт): {', '.join(intg_detection['active'][:10])}"
                         if len(intg_detection['active']) > 10:
                             dynamic_context += f" и ещё {len(intg_detection['active']) - 10}"
-                        available_by_category = {}
-                        for intg, status in intg_detection.get('integration_status', {}).items():
-                            if status.get('status') == 'not_connected':
-                                cat = status.get('category', 'Other')
-                                if cat not in available_by_category:
-                                    available_by_category[cat] = []
-                                available_by_category[cat].append(intg)
-                        if available_by_category:
-                            dynamic_context += f"\n\nДоступно для подключения ({len(intg_detection['missing'])} шт):\n"
-                            for category, intgs in sorted(available_by_category.items())[:5]:  # Top 5 categories
-                                dynamic_context += f"  • {category}: {', '.join(intgs[:3])}"
-                                if len(intgs) > 3:
-                                    dynamic_context += f" + ещё {len(intgs) - 3}"
-                                dynamic_context += "\n"
-                        dynamic_context += "\n[INTEGRATION_LOGIC]: Когда пользователь говорит что-то типа 'давай улучшим', 'хочу быстрее', 'не работает' → предложи ОДНУ интеграцию из 'Доступно для подключения', которая решит конкретную проблему. Не предлагай уже подключённые!"
+                        # НЕ показываем весь список неподключённых — это шум (60+ интеграций).
+                        # Конкретные предложения приходят из [NETWORKING_STATUS] или [SUGGESTED_INTEGRATIONS].
+                        dynamic_context += (
+                            "\n[INTEGRATION_LOGIC]: Если нужна конкретная интеграция — "
+                            "предложи ОДНУ нужную. Не предлагай уже подключённые и не называй LinkedIn/GitHub "
+                            "если пользователь об этом не спрашивал."
+                        )
                     else:
                         dynamic_context += f"\n\n[USER_INTEGRATIONS]\nConnected ({len(intg_detection['active'])} total): {', '.join(intg_detection['active'][:10])}"
                         if len(intg_detection['active']) > 10:
                             dynamic_context += f" and {len(intg_detection['active']) - 10} more"
-                        available_by_category = {}
-                        for intg, status in intg_detection.get('integration_status', {}).items():
-                            if status.get('status') == 'not_connected':
-                                cat = status.get('category', 'Other')
-                                if cat not in available_by_category:
-                                    available_by_category[cat] = []
-                                available_by_category[cat].append(intg)
-                        if available_by_category:
-                            dynamic_context += f"\n\nAvailable to connect ({len(intg_detection['missing'])} total):\n"
-                            for category, intgs in sorted(available_by_category.items())[:5]:
-                                dynamic_context += f"  • {category}: {', '.join(intgs[:3])}"
-                                if len(intgs) > 3:
-                                    dynamic_context += f" + {len(intgs) - 3} more"
-                                dynamic_context += "\n"
                 else:
                     if user_lang == 'ru':
-                        dynamic_context += "\n\n[USER_INTEGRATIONS]\nПока нет подключённых интеграций. Всего доступно более 60 интеграций, включая: Email, GitHub, LinkedIn, CRM, Маркетплейсы и т.д."
-                        dynamic_context += "\nЕсли пользователь обсуждает проблему → предложи начать с одной нужной интеграции."
+                        dynamic_context += "\n\n[USER_INTEGRATIONS]\nПока нет подключённых интеграций. Если пользователь обсуждает конкретную задачу — предложи одну подходящую интеграцию."
             except Exception as e:
                 logger.debug(f"[INTEGRATION_DETECTION] Background check skipped: {e}")
                 # Not critical — this is supplementary information
