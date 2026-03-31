@@ -4889,6 +4889,12 @@ _INTEGRATION_LABELS: dict = {
     'GA4_': 'Google Analytics 4',
     'LINEAR': 'Linear',
     'WEBHOOK_URL': 'Webhook (n8n/Zapier/Make)',
+    'CLICKUP': 'ClickUp',
+    'LINEAR': 'Linear',
+    'FIGMA': 'Figma API',
+    'TELEGRAM_BOT': 'Telegram Bot',
+    'OPENWEATHER': 'Погода (OpenWeatherMap)',
+    'WEATHER_API': 'Weather API',
 }
 
 
@@ -5082,6 +5088,13 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         'playwright': 'Браузерная автоматизация',
         'pandas': 'Анализ данных (pandas)',
         'sqlite': 'SQLite', 'psycopg': 'PostgreSQL',
+        'clickup': 'ClickUp', 'click_up': 'ClickUp',
+        'linear': 'Linear',
+        'openweathermap': 'Погода (OpenWeatherMap)',
+        'openweather': 'Погода (OpenWeatherMap)',
+        'outlook': 'Microsoft Outlook',
+        'microsoft.graph': 'Microsoft Graph (Outlook/Teams)',
+        'msal': 'Microsoft OAuth (Outlook/Teams)',
     }
     for hint, label in _code_hints.items():
         if hint in code_lc:

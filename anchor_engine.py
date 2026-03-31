@@ -83,8 +83,8 @@ def _enrich_caps_with_user_channels(caps: list, user=None) -> list:
 
 # Маппинг: подстроки в label (lowercase) → категория
 _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
-    # Email / почта
-    (('mail', 'почт', 'email', 'imap', 'smtp', 'gmail', 'yandex', 'mailru', 'resend', 'sendgrid', 'mailgun', 'sparkpost'), 'email'),
+    # Email / почта (включая Outlook/MailRu/Yandex)
+    (('mail', 'почт', 'email', 'imap', 'smtp', 'gmail', 'yandex', 'mailru', 'resend', 'sendgrid', 'mailgun', 'sparkpost', 'outlook', 'microsoft outlook', 'ms_outlook'), 'email'),
     # GitHub/GitLab
     (('github', 'gitlab'), 'git'),
     # RSS
@@ -131,8 +131,8 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('ms teams', 'microsoft teams', 'microsoft graph'), 'ms_teams'),
     # Webhook / Автоматизация
     (('webhook', 'n8n', 'zapier', 'make'), 'automation'),
-    # БД (включает Firebase/Firestore)
-    (('postgresql', 'mysql', 'mongodb', 'sqlite', 'redis', 'firebase', 'firestore'), 'database'),
+    # БД (включает Firebase/Firestore/Pinecone)
+    (('postgresql', 'mysql', 'mongodb', 'sqlite', 'redis', 'firebase', 'firestore', 'pinecone', 'векторн'), 'database'),
     # HR / Биржи труда
     (('hh.ru', 'headhunter', 'superjob', 'hh_query', 'hh_area'), 'hr'),
     # Реклама
@@ -149,6 +149,13 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('мойсклад', 'moysklad'), 'marketplace'),
     # Calendly (встречи/расписание)
     (('calendly',), 'calendar'),
+    # Figma (дизайн/прототипы — через HTTP API)
+    (('figma',), 'script'),
+    # OpenWeatherMap и другие погодные / IoT data APIs
+    (('openweather', 'погода (openweather', 'погода', 'weather api', 'openweathermap'), 'script'),
+    # ClickUp, Linear — PM-трекеры (могут распознаваться из python)
+    (('clickup', 'click up'), 'pm'),
+    (('linear app', ' linear '), 'pm'),
 ]
 
 # Русские названия для категорий (для вывода в промптах)
@@ -1849,6 +1856,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     'диджитал', 'digital', 'осведомлённост', 'осведомленност')
     _CONTENT_KW  = ('контент', 'smm', 'reels', 'видео', 'медиаплан')
     _DEV_KW      = ('разработ', 'программ', 'github', 'backend', 'frontend', 'developer', 'деплой')
+    _FINANCE_KW  = ('финанс', 'инвест', 'трейд', 'биржа', 'акции', 'облигац', 'крипт', 'доход', 'выручк',
+                    'бюджет', 'налог', 'бухгалт', 'profit', 'revenue', 'trading', 'портфель')
+    _ECOMM_KW    = ('магазин', 'товар', 'продукт', 'ozon', 'wildberries', 'shopify', 'авито',
+                    'маркетплейс', 'каталог', 'sku', 'остатки', 'заказ', 'клиент-виз', 'выкуп',
+                    'wb', 'ecommerce', 'e-commerce', 'интернет-магазин')
     _LEARNING_KW = ('изучить', 'научиться', 'курс', 'обучен', 'практик', 'навык', 'книг', 'читать',
                     'сертификат', 'диплом', 'урок', 'освоить', 'skill', 'учёб', 'прочитать',
                     'лекц', 'workshop', 'тренинг', 'язык программирован', 'английск', 'язык')
@@ -1860,13 +1872,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     'музыка', 'рисован', 'дневник', 'саморазвит', 'мечт', 'написать книг',
                     'личный проект', 'личная цель', 'жизнь', 'счастье', 'отдых', 'баланс')
     _gtype_scores = {
-        'research': sum(1 for w in _RESEARCH_KW if w in _goals_text_all),
-        'outreach': sum(1 for w in _OUTREACH_KW if w in _goals_text_all),
-        'content':  sum(1 for w in _CONTENT_KW  if w in _goals_text_all),
-        'dev':      sum(1 for w in _DEV_KW      if w in _goals_text_all),
-        'learning': sum(1 for w in _LEARNING_KW if w in _goals_text_all),
-        'health':   sum(1 for w in _HEALTH_KW   if w in _goals_text_all),
-        'personal': sum(1 for w in _PERSONAL_KW if w in _goals_text_all),
+        'research':  sum(1 for w in _RESEARCH_KW  if w in _goals_text_all),
+        'outreach':  sum(1 for w in _OUTREACH_KW  if w in _goals_text_all),
+        'content':   sum(1 for w in _CONTENT_KW   if w in _goals_text_all),
+        'dev':       sum(1 for w in _DEV_KW       if w in _goals_text_all),
+        'learning':  sum(1 for w in _LEARNING_KW  if w in _goals_text_all),
+        'health':    sum(1 for w in _HEALTH_KW    if w in _goals_text_all),
+        'personal':  sum(1 for w in _PERSONAL_KW  if w in _goals_text_all),
+        'finance':   sum(1 for w in _FINANCE_KW   if w in _goals_text_all),
+        'ecommerce': sum(1 for w in _ECOMM_KW     if w in _goals_text_all),
     }
     _best_gtype = max(_gtype_scores.items(), key=lambda x: x[1])
     _goal_type = _best_gtype[0] if _best_gtype[1] > 0 else 'general'
@@ -2440,6 +2454,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     if _goal_type in ('learning', 'health', 'personal'):
         _catalog_order = ['tasks', 'research', 'content', 'integrations', 'delegate']
+    elif _goal_type == 'finance':
+        _catalog_order = ['integrations', 'research', 'tasks', 'delegate', 'content', 'email']
+    elif _goal_type == 'ecommerce':
+        _catalog_order = ['integrations', 'email', 'research', 'tasks', 'delegate', 'content']
     elif any(key in _dynamic_top_keys for key in ('email', 'crm', 'calendar', 'calls', 'hr')):
         _catalog_order = ['email', 'integrations', 'research', 'delegate', 'tasks', 'content']
     elif any(key in _dynamic_top_keys for key in ('telegram', 'discord', 'social', 'image_gen', 'automation')):
@@ -2462,9 +2480,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         )
     else:
         _catalog_header = {
-            'research': 'ИНСТРУМЕНТЫ (порядок = capability-first для аналитической цели):\n',
-            'dev': 'ИНСТРУМЕНТЫ (порядок = capability-first для цели с разработкой/нетворкингом):\n',
-            'content': 'ИНСТРУМЕНТЫ (порядок = capability-first для контентной цели):\n',
+            'research':  'ИНСТРУМЕНТЫ (порядок = capability-first для аналитической цели):\n',
+            'dev':       'ИНСТРУМЕНТЫ (порядок = capability-first для цели с разработкой/нетворкингом):\n',
+            'content':   'ИНСТРУМЕНТЫ (порядок = capability-first для контентной цели):\n',
+            'finance':   'ИНСТРУМЕНТЫ (порядок = capability-first для финансовой/инвестиционной цели):\n',
+            'ecommerce': 'ИНСТРУМЕНТЫ (порядок = capability-first для e-commerce цели):\n',
         }.get(_goal_type, 'ИНСТРУМЕНТЫ (порядок = capability-first под текущую цель):\n')
         _catalog = (
             _catalog_header
@@ -8180,8 +8200,12 @@ class AnchorEngine:
                     return 'health'
                 if any(k in _t for k in ('автоматиз', 'процесс', 'оптимиз', 'workflow', 'систем')):
                     return 'automation'
-                return 'general'
-
+            if any(k in _t for k in ('финанс', 'инвест', 'трейд', 'биржа', 'акции', 'доход',
+                                     'выручк', 'бюджет', 'налог', 'крипт', 'trading')):
+                return 'finance'
+            if any(k in _t for k in ('товар', 'магазин', 'ozon', 'wildberries', 'shopify',
+                                     'маркетплейс', 'каталог', 'sku', 'заказ', 'авито')):
+                return 'ecommerce'
             _goals_str = '; '.join(
                 "[{}] {} ({}%, {}/{})".format(
                     _crd_goal_type(g),
