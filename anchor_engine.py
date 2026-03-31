@@ -5876,7 +5876,8 @@ class AnchorEngine:
                                 f"  «Щас разберусь, дай минуту.»\n"
                                 f"❌ Нельзя: технические термины, названия инструментов, своё имя в третьем лице, "
                                 f"дословно повторять поручение, «Приступаю к работе», «Отчёт будет готов», "
-                                f"«Отлично», «Супер», «Принято». Начинай СРАЗУ с сути."
+                                f"«Отлично», «Супер», «Принято», «Погружусь в поиск», «Сейчас изучу», "
+                                f"«Начинаю работать». Начинай СРАЗУ с конкретного действия."
                             )
                             _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=60)
                             if _ack_gen and len(_ack_gen.strip()) > 4:
@@ -10451,44 +10452,51 @@ class AnchorEngine:
                     # Формируем естественное обращение вместо тикета
                     _ag_is_fem_c = (_ag_name or '')[-1:] in 'аяАЯ'
                     _t = _task_body.lower() if _task_body and _task_body[0].isupper() and not _task_body[:3].isupper() else _task_body
+                    # Определяем: задача начинается с глагола или нет
+                    import re as _re_vcheck
+                    _is_verb_start = bool(_re_vcheck.match(
+                        r'^(?:найти|найди|проверить|проверь|отправить|отправь|создать|создай|написать|напиши|'
+                        r'собрать|собери|подготовить|подготовь|исследовать|исследуй|поискать|поищи|'
+                        r'сделать|сделай|проанализировать|проанализируй|запустить|запусти|'
+                        r'связаться|свяжись|обновить|обнови|опубликовать|опубликуй)\b',
+                        _t, _re_vcheck.IGNORECASE
+                    ))
                     if _task_short and len(_task_short) > 15:
                         import random as _rnd_assign
-                        if _ag_is_fem_c:
+                        if _is_verb_start:
+                            # Глагольная задача: "найти контакты", "проверить email"
                             _assign_templates = [
+                                f'{_ag_name}, {_t}.',
                                 f'{_ag_name}, пожалуйста {_t}.',
                                 f'{_ag_name}, можешь {_t}?',
-                                f'{_ag_name}, возьмись за {_t}.',
-                                f'{_ag_name}, было бы здорово если ты {_t}.',
                                 f'{_ag_name}, нужна твоя помощь — {_t}.',
-                                f'{_ag_name}, давай займёшься: {_t}.',
                             ]
                         else:
+                            # Описательная задача: "найденные авторы для outreach"
                             _assign_templates = [
-                                f'{_ag_name}, пожалуйста {_t}.',
-                                f'{_ag_name}, можешь {_t}?',
-                                f'{_ag_name}, возьми на себя {_t}.',
-                                f'{_ag_name}, давай {_t}.',
-                                f'{_ag_name}, нужна твоя помощь — {_t}.',
-                                f'{_ag_name}, займись {_t}.',
+                                f'{_ag_name}, займись: {_t}.',
+                                f'{_ag_name}, нужно поработать над: {_t}.',
+                                f'{_ag_name}, вот задача — {_t}.',
+                                f'{_ag_name}, возьми на себя: {_t}.',
                             ]
                         _asi_assign_text = _rnd_assign.choice(_assign_templates)
                         if _step_reason and len(_step_reason) > 10:
                             _asi_assign_text = _asi_assign_text.rstrip('.?') + f' — {_step_reason.lower()}.'
                     elif _step_reason:
                         _r = _step_reason[:90].rsplit(' ', 1)[0] if len(_step_reason) > 90 else _step_reason
-                        _asi_assign_text = f'{_ag_name}, пожалуйста {_r.lower() if _r[0].isupper() else _r}.'
+                        _asi_assign_text = f'{_ag_name}, вот задача — {_r.lower() if _r[0].isupper() else _r}.'
                     else:
                         _tfl_short = _task_first_line[:90].rsplit(' ', 1)[0] if len(_task_first_line) > 90 else _task_first_line
                         _tfl_l = _tfl_short.lower() if _tfl_short and _tfl_short[0].isupper() else _tfl_short
-                        _asi_assign_text = f'{_ag_name}, пожалуйста {_tfl_l}.'
+                        _asi_assign_text = f'{_ag_name}, займись: {_tfl_l}.'
                 except Exception as _aac_err:
                     import random as _rnd_aac
                     _aac_raw = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:80]
                     _aac_t = _aac_raw.lower() if _aac_raw[:1].isupper() else _aac_raw
                     _asi_assign_text = _rnd_aac.choice([
-                        f'{_ag_name}, пожалуйста {_aac_t}.',
-                        f'{_ag_name}, возьмись за {_aac_t}.',
-                        f'{_ag_name}, нам нужно {_aac_t}.',
+                        f'{_ag_name}, займись: {_aac_t}.',
+                        f'{_ag_name}, возьми на себя: {_aac_t}.',
+                        f'{_ag_name}, вот задача — {_aac_t}.',
                         f'{_ag_name}, можешь {_aac_t}?',
                     ])
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)

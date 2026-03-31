@@ -693,6 +693,13 @@ def sanitize_live_team_chat_text(
     cleaned = re.sub(r'^\s*\d+[.)\]]\s+', '', cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r'\n{2,}', '\n', cleaned)
 
+    # Удаляем предложения с упоминанием неподключённых сервисов
+    for _svc in ('linkedin', r'calendly', r'apollo\.io', 'sales navigator', 'hubspot'):
+        cleaned = re.sub(
+            rf'[^.!?\n]*\b{_svc}\b[^.!?\n]*[.!?]?\s*',
+            '', cleaned, flags=re.IGNORECASE
+        )
+
     # Убираем строки-заголовки вида "Раздел:"
     lines = []
     for ln in cleaned.split('\n'):

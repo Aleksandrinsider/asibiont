@@ -7657,6 +7657,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
 
+    # ── Пост-обработка: удаляем упоминания неподключённых сервисов из агентского текста ──
+    if _final_text:
+        import re as _re_svc
+        _BANNED_SVCS = ('linkedin', 'calendly', 'apollo\\.io', 'sales navigator', 'hubspot')
+        for _bs in _BANNED_SVCS:
+            # Удаляем предложения, содержащие запрещённый сервис
+            _final_text = _re_svc.sub(
+                rf'[^.!?\n]*\b{_bs}\b[^.!?\n]*[.!?]?\s*',
+                '', _final_text, flags=_re_svc.IGNORECASE
+            )
+        _final_text = _final_text.strip()
+
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
     return _final_text, _tools_used, _total_ap_tokens
 
