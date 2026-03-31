@@ -579,7 +579,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 40  # Интервал между autopilot dispatch'ами (было 15 → 40, ~1.5 цикла/час)
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
