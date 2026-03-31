@@ -1007,6 +1007,37 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             await message.bot.send_message(message.chat.id, cleared_msg)
             return
 
+        # ── Hardcoded стоп-фразы → автоматический DND (не зависим от LLM) ──────
+        _stop_phrases = (
+            'остановим диалог', 'останови диалог', 'прекрати писать', 'не пиши мне',
+            'не беспокой', 'стоп', 'stop', 'отстань', 'хватит', 'замолчи',
+            'не нужно ничего', 'ничего не нужно', 'больше не пиши', 'отпишись',
+            'перестань писать', 'не отвлекай', 'пауза', 'pause', 'не надо',
+            'прекрати', 'halt', 'shut up',
+        )
+        _text_lower = text.lower().strip().rstrip('.!?')
+        _is_stop = any(p in _text_lower for p in _stop_phrases)
+        if _is_stop:
+            try:
+                from ai_integration.handlers import set_do_not_disturb
+                _dnd_result = set_do_not_disturb(user_id, hours=24)
+                logger.info("[STOP-PHRASE] user %s triggered DND via hardcoded phrase: '%s'", user_id, _text_lower[:60])
+                _stop_resp = (
+                    "OK, I'll be silent for 24 hours. Write anytime to resume."
+                    if lang == 'en'
+                    else "Хорошо, не буду беспокоить 24 часа. Напиши когда захочешь продолжить."
+                )
+                await message.bot.send_message(message.chat.id, _stop_resp)
+            except Exception as _e:
+                logger.warning("[STOP-PHRASE] DND set failed: %s", _e)
+                _stop_resp = (
+                    "Got it, pausing notifications."
+                    if lang == 'en'
+                    else "Понял, ставлю уведомления на паузу."
+                )
+                await message.bot.send_message(message.chat.id, _stop_resp)
+            return
+
         # СОХРАНЯЕМ СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ СРАЗУ
         logger.info(f"[PTM] Step 2: saving user message")
         session = Session()

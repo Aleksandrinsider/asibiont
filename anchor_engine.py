@@ -554,6 +554,7 @@ def _strip_html(text: str) -> str:
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
 MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '5'))
+MAX_TOTAL_PROACTIVE_PER_DAY = int(os.getenv('MAX_TOTAL_PROACTIVE_PER_DAY', '30'))
 # Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
@@ -566,7 +567,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 50  # Общий лимит ВСЕХ autopilot сообщений (assignments+results) на пользователя в сутки
+MAX_AUTOPILOT_MSG_PER_DAY = 25  # Общий лимит ВСЕХ autopilot сообщений (assignments+results) на пользователя в сутки
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -3664,7 +3665,7 @@ class AnchorEngine:
     def _agent_persona_daily_cap_reached(self, session, user, agent_name: str, limit: int = MAX_AGENT_PERSONA_MSG_PER_DAY) -> bool:
         """Проверяет, достигнут ли дневной лимит сообщений от конкретного агента-персоны."""
         _name = (agent_name or '').strip()
-        if not _name or _name.upper() == 'ASI' or limit <= 0:
+        if not _name or limit <= 0:
             return False
 
         _today_start = self._user_day_start_utc(user)
@@ -4633,7 +4634,6 @@ class AnchorEngine:
                             Interaction.user_id == user.id,
                             Interaction.message_type.in_(['agent_msg', 'proactive']),
                             Interaction.created_at >= _today_start_ap,
-                            Interaction.content.like('%goal_autopilot_%'),
                         ).count()
                     except Exception:
                         _ap_today_count = 0
@@ -6295,7 +6295,7 @@ class AnchorEngine:
                 _has_real_actions = bool(_tools_used)
                 _filter_reason = ''
 
-                # ── Watchdog: если >3ч без успешной доставки autopilot → пропустить noise-фильтр ──
+                # ── Watchdog: если >6ч без успешной доставки autopilot → пропустить noise-фильтр ──
                 _force_delivery = False
                 try:
                     _last_ap_dlv = session.query(Anchor.delivered_at).filter(
@@ -6305,7 +6305,7 @@ class AnchorEngine:
                     ).order_by(Anchor.delivered_at.desc()).first()
                     if _last_ap_dlv:
                         _ap_age_h = (datetime.now(timezone.utc) - _last_ap_dlv[0].replace(tzinfo=timezone.utc)).total_seconds() / 3600
-                        if _ap_age_h > 3:
+                        if _ap_age_h > 6:
                             _force_delivery = True
                             logger.info("[ANCHOR-AUTOPILOT] watchdog: last autopilot delivered %.1fh ago → force delivery", _ap_age_h)
                     else:
@@ -6469,17 +6469,49 @@ class AnchorEngine:
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
 
-                # ── Watchdog: если >3ч без AP-сообщения — форсировать доставку ──
+                # ── Watchdog: если >6ч без AP-сообщения — форсировать доставку ──
                 # Работает ПОСЛЕ noise + dedup фильтров — обходит оба
+                # НО: не обходит если content >60% overlap с последним доставленным
                 if _is_noise_result and _force_delivery and len(_result_clean) > 50:
-                    # Watchdog НЕ обходит echo-фильтр — пересказы коллег бесполезны даже через 3ч
-                    if _filter_reason != 'noise' or not _is_echo:
+                    # Watchdog НЕ обходит echo-фильтр — пересказы коллег бесполезны даже через 6ч
+                    _watchdog_blocked = (_filter_reason == 'noise' and _is_echo)
+                    # Дополнительная проверка: не доставлять если >60% overlap с последним сообщением этого агента за 12ч
+                    if not _watchdog_blocked:
+                        try:
+                            _wd_recent = session.query(Interaction.content).filter(
+                                Interaction.user_id == user.id,
+                                Interaction.message_type.in_(['agent_msg', 'proactive']),
+                                Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=12),
+                            ).order_by(Interaction.created_at.desc()).limit(8).all()
+                            _wd_new_words = set(_result_clean.lower().split())
+                            for (_wd_c,) in _wd_recent:
+                                try:
+                                    _wd_j = json.loads(_wd_c or '{}')
+                                    _wd_ag = (_wd_j.get('__agent', {}) or {}).get('name', '')
+                                    if _wd_ag and _wd_ag != agent_name:
+                                        continue
+                                    _wd_txt = _wd_j.get('text', '') or ''
+                                except Exception:
+                                    _wd_txt = ''
+                                if not _wd_txt or len(_wd_txt) < 30:
+                                    continue
+                                _wd_old = set(_wd_txt.lower().split())
+                                _wd_common = len(_wd_new_words & _wd_old)
+                                _wd_total = max(len(_wd_new_words | _wd_old), 1)
+                                if _wd_common / _wd_total > 0.60:
+                                    _watchdog_blocked = True
+                                    logger.info("[ANCHOR-AUTOPILOT] watchdog BLOCKED: %.0f%% overlap with recent msg from %s",
+                                                _wd_common / _wd_total * 100, agent_name)
+                                    break
+                        except Exception as _wd_e:
+                            logger.debug("suppressed: %s", _wd_e)
+                    if not _watchdog_blocked:
                         _is_noise_result = False
                         logger.info("[ANCHOR-AUTOPILOT] watchdog override (%s): forcing delivery for %s (%d chars)",
                                     _filter_reason, agent_name, len(_result_clean))
                         _filter_reason = ''
                     else:
-                        logger.info("[ANCHOR-AUTOPILOT] watchdog BLOCKED echo delivery for %s", agent_name)
+                        logger.info("[ANCHOR-AUTOPILOT] watchdog BLOCKED delivery for %s (echo/overlap)", agent_name)
 
                 # ── ESCALATION: ASI обращается к пользователю если агенты застряли ──
                 _fw_esc = data.get('feasibility_warnings', [])
@@ -6768,6 +6800,11 @@ class AnchorEngine:
                             _chosen_id != 0
                             and self._agent_persona_daily_cap_reached(session, user, _chosen_name)
                         )
+                        # ASI (id=0) тоже имеет daily cap — более высокий, но не безлимитный
+                        if not _skip_persona_send and _chosen_id == 0:
+                            _skip_persona_send = self._agent_persona_daily_cap_reached(
+                                session, user, 'ASI', limit=15
+                            )
                         if _skip_persona_send:
                             logger.info(
                                 "[ANCHOR-AUTOPILOT] user %d: skip result from %s (daily cap=%d)",
@@ -13006,6 +13043,18 @@ class AnchorEngine:
         now_utc = datetime.now(timezone.utc)
 
         if not profile:
+            # ── Max nudge limit: не надоедать бесконечно если пользователь не заполняет профиль ──
+            _max_profile_nudges = 3
+            try:
+                _past_nudges = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'profile_gap',
+                    Anchor.source == 'profile:empty',
+                ).count()
+                if _past_nudges >= _max_profile_nudges:
+                    return anchors  # Уже спрашивали 3 раза — хватит
+            except Exception:
+                pass
             anchors.append(Anchor(
                 user_id=user.id,
                 anchor_type='profile_gap',
@@ -18856,6 +18905,14 @@ class AnchorEngine:
                 user = session.query(_User).filter_by(telegram_id=user_id).first()
                 if not user:
                     return
+                # ── DND check: не отправляем агентские наблюдения если пользователь попросил тишину ──
+                if user.do_not_disturb_until:
+                    try:
+                        if user.do_not_disturb_until.replace(tzinfo=timezone.utc) > datetime.now(timezone.utc):
+                            logger.info("[CHAT_HOOK] user %d has DND until %s, skipping", user.id, user.do_not_disturb_until)
+                            return
+                    except Exception:
+                        pass
                 sub_ids = {r.agent_id for r in session.query(_AS).filter_by(user_id=user.id).all()}
                 if not sub_ids:
                     return
