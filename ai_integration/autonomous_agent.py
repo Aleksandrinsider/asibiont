@@ -5852,9 +5852,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  ЗДОРОВЬЕ/СПОРТ/ХОББИ:\n"
             "  • web_search (методики/программы) → save_note (план) → add_task (конкретное действие/тренировка) → set_reminder\n"
             "  • research_topic (анализ подхода) → save_note (что работает) → update_goal_progress\n"
+            "  ФИНАНСЫ/КАРЬЕРА:\n"
+            "  • web_search (анализ рынка/вакансий/курсов) → save_note (выводы) → add_task (конкретные шаги)\n"
+            "  • research_topic (стратегия/инвестиции) → save_note (план) → set_reminder (контрольные точки)\n"
+            "  • run_agent_action (финансовые данные) → save_note (анализ) → update_goal_progress\n"
+            "  ТВОРЧЕСТВО/КОНТЕНТ:\n"
+            "  • research_topic (вдохновение/тренды) → create_post (статья/обзор) → publish_to_telegram\n"
+            "  • web_search (референсы) → generate_image (визуал) → create_post → update_goal_progress\n"
+            "  • research_topic → save_note (идеи/наброски) → add_task (план создания)\n"
             "  УНИВЕРСАЛЬНОЕ:\n"
             "  • research_topic → save_note (инсайты) → DELEGATE[коллега] с конкретными данными для действия\n"
             "  • web_search → create_post (статья/отчёт) → publish_to_telegram\n"
+            "  • любой инструмент → save_note (итог) → update_goal_progress\n"
             "⛔ Остановиться на первом шаге (только web_search) = ПРОВАЛ. Доведи до конечного действия.\n"
             "⛔ Написать «нашёл информацию» без tool-вызова для применения = ПРОВАЛ.\n\n"
 
@@ -6669,6 +6678,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
         'publish_to_discord', 'create_post', 'send_email', 'add_email_leads',
         'check_emails',
+        # Универсальные действия (обучение, здоровье, финансы, творчество)
+        'save_note', 'add_task', 'set_reminder', 'run_agent_action',
+        'update_goal_progress', 'generate_image', 'delegate_task',
     }
 
     # ── Универсальная история действий агента за 24ч (anti-repeat для ВСЕХ интеграций) ──
@@ -6702,7 +6714,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "\n\n📋 ТВОИ ДЕЙСТВИЯ за последние 24ч (НЕ ПОВТОРЯЙ — делай новое):\n"
                         + '\n'.join(_hist_lines)
                         + "\n⚡ Выбери ПРИНЦИПИАЛЬНО ДРУГОЙ подход из доступных интеграций. "
-                        "Чередуй каналы: поиск → контакты → письма → посты → задачи.\n"
+                        "Чередуй каналы: поиск → заметки → задачи → посты → контакты → письма.\n"
                     )
                     if _used_qp:
                         _qp_str = '\n  '.join(_used_qp[:10])
@@ -6723,25 +6735,31 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _sb_send += _sbc.count('send_outreach_email') + _sbc.count('send_email')
                         _sb_save += _sbc.count('save_email_contact')
                         _sb_post += _sbc.count('create_post') + _sbc.count('publish_to_telegram')
-                    _sb_actions = _sb_send + _sb_save + _sb_post
+                    # Универсальные действия: save_note, add_task, set_reminder, run_agent_action
+                    _sb_universal = 0
+                    for _sbl in _hist_logs:
+                        _sbc2 = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
+                        _sb_universal += _sbc2.count('save_note') + _sbc2.count('add_task') + _sbc2.count('set_reminder') + _sbc2.count('run_agent_action') + _sbc2.count('generate_image')
+                    _sb_actions = _sb_send + _sb_save + _sb_post + _sb_universal
                     if _sb_search >= 4 and _sb_actions <= 1:
                         system_prompt += (
                             f"\n\n🔄 ФАЗА КОНВЕРСИИ: ты уже выполнил {_sb_search} поисков за 24ч — "
                             "данных достаточно. Пора ИСПОЛЬЗОВАТЬ результаты. Варианты:\n"
-                            "  1. КОНТАКТЫ → save_email_contact + send_outreach_email (персональное письмо)\n"
-                            "  2. КОНТЕНТ → create_post (аналитика, обзор трендов, полезный пост)\n"
-                            "  3. АНАЛИЗ → save_note (выводы, рекомендации для пользователя)\n"
-                            "  4. ДЕЛЕГАЦИЯ → delegate_task коллеге с конкретными данными из поиска\n"
-                            "  5. ЗАДАЧИ → add_task (конкретные следующие шаги на основе находок)\n"
-                            "Если вызываешь web_search — он должен быть ТОЧЕЧНЫМ (имя+email конкретного человека), "
+                            "  1. ЗАМЕТКИ → save_note (выводы, конспект, подборка, рекомендации)\n"
+                            "  2. ЗАДАЧИ → add_task (конкретные шаги на основе находок)\n"
+                            "  3. КОНТЕНТ → create_post (аналитика, обзор, статья)\n"
+                            "  4. КОНТАКТЫ → save_email_contact + send_outreach_email (если цель связана с людьми)\n"
+                            "  5. ДЕЛЕГАЦИЯ → delegate_task коллеге с конкретными данными из поиска\n"
+                            "Выбери вариант, ПОДХОДЯЩИЙ ПОД ЦЕЛЬ. "
+                            "Если вызываешь web_search — он должен быть ТОЧЕЧНЫМ, "
                             "не общим обзорным. Общие поиски уже сделаны.\n"
                         )
                     elif _sb_search >= 3 and _sb_actions == 0:
                         system_prompt += (
                             f"\n\n⚠️ ВНИМАНИЕ: {_sb_search} поисков за 24ч без конвертации в результат. "
                             "Поиск полезен только когда результаты используются. Выбери: "
-                            "извлечь контакты (save_email_contact), написать пост (create_post), "
-                            "или передать данные коллеге (delegate_task).\n"
+                            "save_note (заметка/план), add_task (конкретный шаг), create_post (контент), "
+                            "или передай данные коллеге (delegate_task).\n"
                         )
             finally:
                 _db_hist.close()
@@ -6753,9 +6771,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         w in (agent.get('user_api_keys', '') or '').lower()
         for w in ('github', 'gitlab', 'resend', 'sendgrid', 'mailgun', 'gmail_pass', 'gmail_app')
     )
+    # Определяем тип цели для адаптивных подсказок
+    _OUTREACH_KW = ('outreach', 'email', 'рассылк', 'привлеч', 'клиент', 'продаж', 'лид', 'lead', 'предприниматель', 'партнёр', 'b2b', 'маркетинг')
+    _is_outreach_goal = any(w in (task or '').lower() for w in _OUTREACH_KW)
     for _iter in range(_max_iters):
-        # Адаптивные лимиты: агенты с outreach-интеграциями нуждаются в большей цепочке (search+save×N+send×N)
-        _max_tool_calls = 12 if (_is_autopilot_task and _has_outreach_intg) else (8 if _is_autopilot_task else 5)
+        # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
+        _max_tool_calls = 10 if _is_autopilot_task else 5
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -6792,21 +6813,32 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Если все обработаны — вызови update_goal_progress."
                 )})
             elif _was_save_contact:
-                # save без send = незавершённая цепочка
-                _messages.append({"role": "user", "content": (
-                    f"Контакт(ы) сохранены (использовал: {_used_str}). "
-                    "Следующий шаг — send_outreach_email: отправь письмо сохранённым контактам. "
-                    "save_email_contact без send_outreach_email = незавершённая цепочка."
-                )})
+                if _is_outreach_goal:
+                    # Outreach-цель: save → send (цепочка)
+                    _messages.append({"role": "user", "content": (
+                        f"Контакт(ы) сохранены (использовал: {_used_str}). "
+                        "Следующий шаг — send_outreach_email: отправь письмо сохранённым контактам."
+                    )})
+                else:
+                    # Не-outreach цель: сохранение контакта может быть самоценным
+                    _messages.append({"role": "user", "content": (
+                        f"Контакт(ы) сохранены (использовал: {_used_str}). "
+                        "Выбери следующий шаг по цели:\n"
+                        "• Нужно связаться → send_outreach_email (персональное письмо)\n"
+                        "• Контакт для заметок → save_note (зачем этот контакт полезен)\n"
+                        "• Есть ещё действия по цели → add_task или продолжай цепочку\n"
+                        "• Данные готовы → update_goal_progress"
+                    )})
             elif _last_tool_local == 'run_agent_action' and not _was_save:
                 # Поиск через интеграцию (GitHub, RSS, CRM и др.) — варианты конверсии
                 _messages.append({"role": "user", "content": (
                     f"Поиск через интеграцию выполнен (использовал: {_used_str}). "
-                    "Конвертируй результаты:\n"
-                    "• Нашёл людей/авторов с email → save_email_contact + send_outreach_email\n"
-                    "• Нашёл статьи/тренды → create_post (обзор, аналитика для аудитории)\n"
-                    "• Нашёл имена без email → delegate_task коллеге с данными для outreach\n"
-                    "• Данные полезны для цели → save_note с выводами\n"
+                    "Конвертируй результаты в действие по ЦЕЛИ:\n"
+                    "• Нашёл полезную информацию → save_note (выводы, подборка)\n"
+                    "• Нашёл что нужно сделать → add_task (конкретные шаги)\n"
+                    "• Нашёл статьи/тренды → create_post (обзор, аналитика)\n"
+                    "• Нашёл людей с email → save_email_contact + send_outreach_email\n"
+                    "• Данные нужны коллеге → delegate_task с конкретикой\n"
                     "Не вызывай update_goal_progress пока нет реального результата."
                 )})
             elif _last_tool_local in ('web_search', 'research_topic', 'quick_topic_search') and not _was_save and not _was_send:
@@ -6816,21 +6848,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     # Уже 2+ поиска в этой сессии — настаиваем на конверсии
                     _messages.append({"role": "user", "content": (
                         f"Уже {_search_count_local} поиска в этой сессии (использовал: {_used_str}). "
-                        "Данных достаточно — КОНВЕРТИРУЙ результаты в действие:\n"
-                        "• Нашёл людей с email → save_email_contact + send_outreach_email\n"
-                        "• Нашёл тренды/статьи/инсайты → create_post (аналитика/обзор)\n"
-                        "• Нашёл имена без email → delegate_task коллеге с данными\n"
-                        "• Нашёл идеи/возможности → add_task с конкретным планом\n"
+                        "Данных достаточно — КОНВЕРТИРУЙ результаты в действие по ЦЕЛИ:\n"
+                        "• Полезная информация → save_note (выводы, конспект, подборка)\n"
+                        "• Конкретные шаги → add_task (план действий)\n"
+                        "• Тренды/инсайты → create_post (аналитика/обзор)\n"
+                        "• Люди с email → save_email_contact + send_outreach_email\n"
+                        "• Данные для коллеги → delegate_task\n"
                         "Ещё один общий поиск = потеря времени. Действуй с тем что есть."
                     )})
                 else:
                     _messages.append({"role": "user", "content": (
                         f"Поиск выполнен (использовал: {_used_str}). "
                         "Извлеки из результатов КОНКРЕТНЫЕ данные и выбери следующий шаг:\n"
+                        "• Полезная информация → save_note (конспект, подборка, рекомендации)\n"
+                        "• Нужны действия → add_task (конкретные шаги)\n"
+                        "• Тренды/статьи → create_post (обзор, аналитика)\n"
                         "• Есть email → save_email_contact + send_outreach_email\n"
-                        "• Есть тренды/статьи → create_post (обзор, аналитика)\n"
-                        "• Есть имена/профили без email → точечный поиск 'имя + email' или delegate_task\n"
-                        "• Есть идеи → save_note или add_task\n"
+                        "• Есть идеи для коллеги → delegate_task\n"
                         "НЕ вызывай update_goal_progress пока не сделано реальное действие."
                     )})
             else:
@@ -6887,12 +6921,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
                 ).strip()
 
-            # ── Autopilot retry: save_email_contact без send_outreach_email на любой итерации ──
-            # Агент сохранил контакт и написал текст вместо письма — принудительный retry
-            # ВАЖНО: используем _was_save_contact (последний инструмент = save), не _was_save (общий флаг).
-            # Сценарий-баг: save(A)→send(A)→save(B)→текст: _was_save=True, _was_send=True → retry не срабатывал.
-            # Правильно: проверяем ПОСЛЕДНИЙ инструмент — если save без следующего send, форсируем send.
-            if (_is_autopilot_task and _iter > 0 and not _tool_calls
+            # ── Autopilot retry: save_email_contact без send_outreach_email ──
+            # Принудительный retry ТОЛЬКО для outreach-целей. Для других целей сохранение контакта самоценно.
+            if (_is_autopilot_task and _is_outreach_goal and _iter > 0 and not _tool_calls
                     and _was_save_contact and not (_last_tool_local == 'send_outreach_email')):
                 logger.info(
                     "[DIRECTOR-EXEC] autopilot save-without-send retry for %s",
@@ -7199,12 +7230,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             if _iter < _max_iters - 1:
                 # Не последняя итерация — продолжаем действовать
                 if _last_t_post == 'save_email_contact':
-                    # Только что сохранили контакт — ОБЯЗАТЕЛЬНО отправить письмо
-                    _messages.append({"role": "user", "content": (
-                        "Контакт сохранён. 🚨 НЕМЕДЛЕННО вызови send_outreach_email:\n"
-                        "Напиши персональное письмо сохранённому контакту. "
-                        "НЕ пиши отчёт — вызови send_outreach_email прямо сейчас!"
-                    )})
+                    if _is_outreach_goal:
+                        # Outreach-цель → обязательный email
+                        _messages.append({"role": "user", "content": (
+                            "Контакт сохранён. Вызови send_outreach_email:\n"
+                            "Напиши персональное письмо сохранённому контакту. "
+                            "НЕ пиши отчёт — вызови send_outreach_email прямо сейчас!"
+                        )})
+                    else:
+                        # Не-outreach цель → контакт может быть самоценным
+                        _messages.append({"role": "user", "content": (
+                            "Контакт сохранён. Выбери следующий шаг по ЦЕЛИ:\n"
+                            "— Нужно связаться → send_outreach_email (персональное письмо)\n"
+                            "— Контакт для заметок → save_note (зачем он полезен)\n"
+                            "— Есть ещё действия → продолжай цепочку по цели\n"
+                            "НЕ пиши отчёт — вызови инструмент!"
+                        )})
                 elif _is_search_tool and _last_t_post == 'run_agent_action':
                     # Поиск через интеграцию (GitHub, RSS, CRM и т.д.): проверяем cooldown
                     _intg_result_texts = [
@@ -7212,8 +7253,6 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         if m.get('role') == 'tool'
                     ]
                     # ── Детектор повторного таймаута скрипта ──
-                    # Если run_agent_action упал по тайм-ауту 2+ раз подряд — блокируем его,
-                    # форсируем переключение на web_search / research_topic
                     _script_timeout_count = sum(
                         1 for t in _intg_result_texts
                         if any(w in t.lower() for w in (
@@ -7225,8 +7264,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             f"⚠️ run_agent_action вернул тайм-аут уже {_script_timeout_count} раза подряд — "
                             "скрипт перегружен или источник недоступен прямо сейчас. "
                             "⛔ НЕ ВЫЗЫВАЙ run_agent_action снова в этой сессии! "
-                            "Немедленно переключись: web_search('[твоя ЦА] email contact site:linkedin.com OR site:habr.com') "
-                            "→ save_email_contact → send_outreach_email"
+                            "Переключись на web_search или research_topic, затем конвертируй в действие по цели."
                         )})
                     else:
                         _sent_blocked_count = sum(
@@ -7241,26 +7279,30 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             )})
                         else:
                             _messages.append({"role": "user", "content": (
-                                "Данные поиска получены. Конвертируй результаты в действия:\n"
-                                "— Нашёл email → save_email_contact + send_outreach_email\n"
-                                "— 0 результатов → другой query или другая интеграция\n"
+                                "Данные получены. Конвертируй результаты в действие по ЦЕЛИ:\n"
+                                "— Полезная информация → save_note (выводы, подборка)\n"
+                                "— Нужны шаги → add_task (конкретный план)\n"
+                                "— Есть email → save_email_contact + send_outreach_email\n"
+                                "— 0 результатов → другой query или интеграция\n"
                                 "НЕ пиши отчёт — вызови инструмент!"
                             )})
                 elif _is_search_tool:
                     # Обычный поиск: мягкое требование
                     _messages.append({"role": "user", "content": (
-                        "Данные получены. ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ — используй результаты:\n"
-                        "— Нашёл email/контакт → save_email_contact + send_outreach_email\n"
-                        "— Нашёл площадку/сообщество → создай задачу (add_task) с деталями\n"
-                        "— Нашёл информацию для коллеги → DELEGATE[Имя]: задача с данными\n"
+                        "Данные получены. ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ — используй результаты по ЦЕЛИ:\n"
+                        "— Полезная информация → save_note (конспект, подборка, рекомендации)\n"
+                        "— Нужны действия → add_task (конкретные шаги)\n"
+                        "— Тренды/инсайты → create_post (аналитика, обзор)\n"
+                        "— Есть email/контакт → save_email_contact + send_outreach_email\n"
+                        "— Данные для коллеги → DELEGATE[Имя]: задача с данными\n"
                         "НЕ останавливайся на 'нашёл и рассказал'. СДЕЛАЙ что-то с результатами!"
                     )})
                 else:
                     # Не поиск (send, update и др.) — завершай цепочку
                     _messages.append({"role": "user", "content": (
-                        "Действие выполнено. "
-                        "Если есть ещё контакты для отправки — продолжай send_outreach_email. "
-                        "Иначе вызови update_goal_progress."
+                        "Действие выполнено. Выбери следующий шаг:\n"
+                        "— Есть ещё действия по цели → продолжай цепочку\n"
+                        "— Цепочка завершена → update_goal_progress с итогом."
                     )})
             else:
                 # Последняя итерация: завершаем

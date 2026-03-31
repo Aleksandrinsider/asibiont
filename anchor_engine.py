@@ -5629,29 +5629,32 @@ class AnchorEngine:
                                     _bn_send = 0
                                     _bn_save_contact = 0
                                     _bn_create_post = 0
+                                    _bn_universal = 0
                                     for _bnl in _bn_logs:
                                         _bnc = (_bnl.content or '').lower() + ' ' + (_bnl.title or '').lower()
                                         _bn_search += _bnc.count('web_search') + _bnc.count('research_topic') + _bnc.count('quick_topic_search')
                                         _bn_send += _bnc.count('send_outreach_email') + _bnc.count('send_email')
                                         _bn_save_contact += _bnc.count('save_email_contact')
                                         _bn_create_post += _bnc.count('create_post') + _bnc.count('publish_to_telegram')
-                                    _bn_actions = _bn_send + _bn_save_contact + _bn_create_post
+                                        _bn_universal += _bnc.count('save_note') + _bnc.count('add_task') + _bnc.count('set_reminder') + _bnc.count('run_agent_action') + _bnc.count('generate_image')
+                                    _bn_actions = _bn_send + _bn_save_contact + _bn_create_post + _bn_universal
                                     if _bn_search >= 5 and _bn_actions <= 2:
                                         _bottleneck_hint_c = (
                                             f'� ФАЗА КОНВЕРСИИ: за 24ч команда сделала {_bn_search} поисков, '
-                                            f'но только {_bn_send} писем, {_bn_save_contact} контактов, {_bn_create_post} постов. '
+                                            f'но только {_bn_actions} конкретных действий. '
                                             f'Данных ДОСТАТОЧНО — пора их использовать. '
                                             f'Назначь задачу с КОНВЕРСИЕЙ результатов поиска:\n'
-                                            f'  — контакты → save_email_contact + send_outreach_email\n'
+                                            f'  — заметки/план → save_note (выводы, конспект, подборка)\n'
+                                            f'  — конкретные шаги → add_task (план действий)\n'
                                             f'  — аналитика/тренды → create_post (обзор, статья, инсайты)\n'
-                                            f'  — конкретные люди → delegate_task с именами и данными коллеге\n'
-                                            f'  — идеи/выводы → save_note или add_task с конкретными шагами\n'
+                                            f'  — контакты → save_email_contact + send_outreach_email (если цель связана с людьми)\n'
+                                            f'  — идеи/данные для коллеги → delegate_task с конкретикой\n'
                                             f'Если назначаешь поиск — он должен быть ТОЧЕЧНЫМ (имя+email), не обзорным.'
                                         )
                                     elif _bn_search >= 3 and _bn_actions <= 1:
                                         _bottleneck_hint_c = (
                                             f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 24ч, но мало конверсий ({_bn_actions}). '
-                                            f'Назначь задачу с КОНКРЕТНЫМ результатом: письмо, пост, контакт, анализ. '
+                                            f'Назначь задачу с КОНКРЕТНЫМ результатом: заметка, задача, пост, письмо, анализ. '
                                             f'Поиск полезен когда результаты превращаются в действия.'
                                         )
                                 except Exception as _bn_err:
@@ -5695,13 +5698,15 @@ class AnchorEngine:
                             "Если есть «Последний результат» — отталкивайся от него: что уже сделано, какой следующий шаг.\n"
                             "Если для выполнения шага не хватает данных пользователя — добавь в конце одно уточняющее предложение-вопрос.\n"
                             "В конце можешь дать одну идею улучшения процесса (только из подключённых каналов).\n"
-                            "✅ ОБРАЗЦЫ:\n"
+                            "✅ ОБРАЗЦЫ (разные типы целей):\n"
                             "  «Кристина, загляни в почту — там должны быть ответы от вчерашней рассылки. "
                             "Если кто-то заинтересовался, сразу договаривайся о тестировании.»\n"
-                            "  «Марк, прошлые два раза искали на Хабре — результатов маловато. "
-                            "Попробуй сегодня dev.to или GitHub — там реальные специалисты с публичными контактами.»\n"
-                            "  «Кристина, Марк нашёл 3 контакта. Напиши каждому персональное письмо — "
-                            "не шаблон, а с упоминанием их проекта.»\n"
+                            "  «Марк, исследуй через research_topic лучшие подходы к изучению Python — "
+                            "сохрани подборку через save_note и создай 3 задачи (add_task) с конкретными шагами.»\n"
+                            "  «Кристина, проанализируй через web_search тренды в нашей нише — "
+                            "напиши обзорный пост через create_post с ключевыми инсайтами.»\n"
+                            "  «Марк, найди через web_search 3-5 лучших программ тренировок для начинающих — "
+                            "сохрани план через save_note и поставь напоминание через set_reminder.»\n"
                             "❌ ЗАПРЕЩЕНО: заголовки (ДЕЙСТВИЕ:, СТРАТЕГИЯ:, Задача:, Шаги:), "
                             "нумерованные списки, маркеры (•, -, *), markdown. "
                             "Только живая речь. Кратко и по делу."
@@ -5719,6 +5724,7 @@ class AnchorEngine:
                             _COORD_TOOL_NAMES = (
                                 'web_search', 'check_emails', 'research_topic', 'create_post',
                                 'save_note', 'delegate_task', 'find_relevant', 'run_agent_action',
+                                'add_task', 'set_reminder', 'generate_image', 'save_email_contact',
                             )
                             _COORD_PLATFORM_HINTS = (
                                 'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
