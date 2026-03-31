@@ -2495,7 +2495,31 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     # ── Матрица умного выбора инструментов ──
     _tool_matrix = ''
-    if _goal_type not in ('learning', 'health', 'personal'):
+    if _goal_type in ('learning', 'health', 'personal'):
+        _tm_rows_p = [
+            "  🔍 research_topic/web_search → исследуй тему цели: лучшие методики, ресурсы, чеклисты.",
+            "  📝 save_note → фиксируй конспекты, планы, выводы, чеклисты прогресса.",
+            "  ✅ add_task → конкретные шаги для пользователя: 'Прочитать главу 3', 'Тренировка 30 мин'.",
+            "  ⏰ set_reminder → регулярные напоминания для привычек и расписания.",
+            "  📊 update_goal_progress → трекай прогресс: сколько сделано, что дальше.",
+        ]
+        if _has_content:
+            _tm_rows_p.append(
+                "  📢 create_post + publish → делись прогрессом/обзорами в канале пользователя."
+            )
+        _tm_rows_p.append(
+            "  🔀 ЛУЧШИЕ КОМБО:\n"
+            "    • Обучение: research_topic(тема) → save_note(конспект) → add_task(практика)\n"
+            "    • Здоровье: web_search(программа) → save_note(план) → add_task(действие) → set_reminder\n"
+            "    • Хобби: research_topic(техника) → save_note(заметки) → create_post(поделиться)\n"
+            "    • Чтение: web_search(рекомендации) → save_note(список) → add_task(следующая книга)"
+        )
+        _tool_matrix = (
+            "\n💡 КАК ВЫБРАТЬ ИНСТРУМЕНТ (для личной/обучающей цели):\n"
+            + '\n'.join(_tm_rows_p)
+            + "\n→ Главное: конкретный шаг вперёд к цели. Нет явного фаворита? Начни с research_topic.\n"
+        )
+    else:
         _tm_rows = [
             "  📧 Email-кампания → охватить 10+ человек, нужны прямые ответы/заявки/регистрации: "
             "find_relevant_contacts_for_task → save_email_contact → send_outreach_email.",
@@ -3021,16 +3045,25 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     from datetime import datetime as _dt_ap
     _today_str = _dt_ap.now().strftime('%d.%m.%Y')
 
-    # ── GUARD: личные/обучающие цели — жёсткий запрет на mass outreach ──
+    # ── GUARD: личные/обучающие цели — запрет на mass outreach + направление ──
     _personal_guard = ''
     if _goal_type in ('learning', 'health', 'personal'):
         _personal_guard = (
-            "\n\n🚫 ВАЖНО — ЛИЧНАЯ/ОБУЧАЮЩАЯ ЦЕЛЬ:\n"
-            "  • НЕ запускай массовые email-рассылки (send_outreach_email множественные)\n"
-            "  • НЕ ищи 'тестировщиков', 'клиентов', 'подписчиков' через GitHub/web_search\n"
-            "  • Твоя задача: ПОМОЧЬ пользователю ЛИЧНО достичь этой цели\n"
-            "  • Правильные действия: research_topic → конкретный план → add_task → save_note\n"
-            "  • Единственное исключение: negotiate_by_email(email=конкретный_эксперт) если нужен ментор\n"
+            "\n\n🎯 ЛИЧНАЯ/ОБУЧАЮЩАЯ ЦЕЛЬ — СТРАТЕГИЯ РАБОТЫ:\n"
+            "  Цель пользователя НЕ про бизнес — ты помогаешь ему лично развиваться/достигать.\n"
+            "  ❌ НЕ запускай массовые email-рассылки (send_outreach_email множественные)\n"
+            "  ❌ НЕ ищи 'тестировщиков', 'клиентов', 'подписчиков'\n"
+            "  ✅ ПРАВИЛЬНЫЙ ПОДХОД:\n"
+            "  1. research_topic / web_search → найди лучшие материалы, методики, ресурсы ПО ТЕМЕ ЦЕЛИ\n"
+            "  2. save_note → зафиксируй конспект, план, чеклист, подборку ресурсов\n"
+            "  3. add_task → создай конкретные шаги: 'Прочитать X', 'Выполнить упражнение Y', 'Пройти тест Z'\n"
+            "  4. set_reminder → настрой регулярные напоминания для привычек/расписания\n"
+            "  5. update_goal_progress → отмечай прогресс с конкретными метриками\n"
+            "  ПРИМЕРЫ ЦЕПОЧЕК:\n"
+            "  • Обучение Python: research_topic('лучшие курсы Python 2025') → save_note(топ-5 с ссылками) → add_task('Пройти урок 1 на Stepik')\n"
+            "  • Похудеть: web_search('программа тренировок для похудения дома') → save_note(план на неделю) → add_task('Тренировка 30 мин') → set_reminder\n"
+            "  • Прочитать 30 книг: research_topic('must-read книги по теме X') → save_note(список) → add_task('Прочитать главу 1-3')\n"
+            "  Единственное исключение для email: negotiate_by_email(email=конкретный_эксперт) если нужен ментор/тренер\n"
         )
 
     # ── Intelligence Block: Email Success Patterns ──────────────────
