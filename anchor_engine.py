@@ -566,6 +566,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
+MAX_AUTOPILOT_MSG_PER_DAY = 50  # Общий лимит ВСЕХ autopilot сообщений (assignments+results) на пользователя в сутки
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -578,7 +579,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 40  # Интервал между autopilot dispatch'ами (было 15 → 40, ~1.5 цикла/час)
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -4572,10 +4573,25 @@ class AnchorEngine:
                     logger.debug("suppressed: %s", _e)
 
                 if _ap_gap_ok:
-                    logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night})...")
-                    for _ap in autopilot_anchors[:1]:
-                        async with self._ai_semaphore:
-                            await self._dispatch_agent_for_anchor(user, _ap, session)
+                    # ── GUARD: общий дневной лимит autopilot-сообщений ──
+                    _today_start_ap = self._user_day_start_utc(user)
+                    try:
+                        _ap_today_count = session.query(Interaction).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type.in_(['agent_msg', 'proactive']),
+                            Interaction.created_at >= _today_start_ap,
+                            Interaction.content.like('%goal_autopilot_%'),
+                        ).count()
+                    except Exception:
+                        _ap_today_count = 0
+
+                    if _ap_today_count >= MAX_AUTOPILOT_MSG_PER_DAY:
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot daily cap reached ({_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})")
+                    else:
+                        logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
+                        for _ap in autopilot_anchors[:1]:
+                            async with self._ai_semaphore:
+                                await self._dispatch_agent_for_anchor(user, _ap, session)
 
         # ── 3b2. CUSTOM AGENT ANCHORS — агент пишет первым с инструментами ──
         # custom_anchor создаёт якорь для конкретного агента (из UserAgent.custom_anchors).
@@ -10688,14 +10704,16 @@ class AnchorEngine:
                 # Сохраняем живое поручение в чат
                 _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)
                 _loop_risk_step = bool(_assignment_health.get('stalled'))
+                if _loop_risk_step:
+                    logger.info(
+                        "[COORD] ⛔ skipping assignment to stalled agent %s (sent=%s results=%s gap=%s)",
+                        _ag_name,
+                        _assignment_health.get('assignments', 0),
+                        _assignment_health.get('results', 0),
+                        _assignment_health.get('gap', 0),
+                    )
+                    continue
                 try:
-                    if _loop_risk_step:
-                        logger.info(
-                            "[COORD] assignment learning mode for %s: high assignment/result gap (%s/%s)",
-                            _ag_name,
-                            _assignment_health.get('assignments', 0),
-                            _assignment_health.get('results', 0),
-                        )
                     session.add(Interaction(
                         user_id=user.id,
                         message_type='agent_msg',

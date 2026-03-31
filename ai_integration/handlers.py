@@ -5349,6 +5349,52 @@ async def set_reminder(reminder_text=None, reminder_time=None, user_id=None, ses
     )
 
 
+def set_do_not_disturb(hours=None, user_id=None, session=None):
+    """Включить режим «Не беспокоить» — бот не будет отправлять проактивные сообщения указанное количество часов.
+
+    Args:
+        hours: На сколько часов включить (1-720). Если 0 — выключить.
+        user_id: Telegram ID
+        session: SQLAlchemy session
+    """
+    if session is None:
+        from models import Session as _S
+        session = _S()
+        _close = True
+    else:
+        _close = False
+    try:
+        from models import User
+        from datetime import datetime, timedelta, timezone as _tz
+        _user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not _user:
+            return "Пользователь не найден."
+        _h = 0
+        try:
+            _h = int(float(hours or 0))
+        except (TypeError, ValueError):
+            return "Укажи количество часов (число от 0 до 720)."
+        if _h < 0 or _h > 720:
+            return "Допустимый диапазон: 0-720 часов (0 — выключить)."
+        if _h == 0:
+            _user.do_not_disturb_until = None
+            session.commit()
+            return "Режим «Не беспокоить» выключен. Бот снова будет отправлять сообщения."
+        _until = datetime.now(_tz.utc) + timedelta(hours=_h)
+        _user.do_not_disturb_until = _until
+        session.commit()
+        return f"Режим «Не беспокоить» включён на {_h}ч (до {_until.strftime('%d.%m %H:%M')} UTC). Бот не будет отправлять проактивные сообщения."
+    except Exception as _e:
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        return f"Ошибка: {_e}"
+    finally:
+        if _close:
+            session.close()
+
+
 
     """Визуальная полоска прогресса"""
     filled = int(pct / 10)
