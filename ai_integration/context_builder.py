@@ -882,7 +882,7 @@ class ContextBuilder:
                     # < 500 ≈ ~1 день использования (средний расход ~450/день)
                     hints.append(f"ТОКЕНЫ: осталось {_tokens} — это менее суток использования, предупреди пользователя и предложи /buy.")
                 elif _tokens < 1500:
-                    hints.append(f"ТОКЕНЫ: осталось {_tokens} (~{round(_tokens/450,1)} дней). При удобном случае упомяни что стоит пополнить.")
+                    hints.append(f"ТОКЕНЫ: осталось {_tokens} (~{round(_tokens/300,1)} дней). При удобном случае упомяни что стоит пополнить.")
                 _channel = getattr(user, 'telegram_channel', None)
                 if not _channel:
                     hints.append("TELEGRAM-КАНАЛ: не настроен в профиле — publish_to_telegram работать не будет до добавления канала.")

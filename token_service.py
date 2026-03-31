@@ -383,7 +383,7 @@ def get_balance_info(user_id: int, session=None) -> str:
         balance = user.token_balance or 0
         spent = user.tokens_spent or 0
         
-        days_left = round(balance / 450, 1) if balance > 0 else 0
+        days_left = round(balance / 300, 1) if balance > 0 else 0
         
         if lang == 'en':
             text = f"💰 Balance: {balance} tokens (~{days_left} days)\n"
@@ -391,11 +391,11 @@ def get_balance_info(user_id: int, session=None) -> str:
             if balance < 100:
                 text += "⚠️ Running low on tokens! Top up: /buy\n\n"
             text += "📋 Action costs:\n"
-            text += "• Message: 10\n"
-            text += "• Create task: 7\n"
-            text += "• Delegation: 20\n"
-            text += "• Marketing content: 30\n"
-            text += "• Proactive message: 7\n"
+            text += f"• Message: {ACTION_COSTS['message']}\n"
+            text += f"• Create task: {ACTION_COSTS['add_task']}\n"
+            text += f"• Delegation: {ACTION_COSTS['delegate_task']}\n"
+            text += f"• Marketing content: {ACTION_COSTS['generate_marketing_content']}\n"
+            text += f"• Proactive message: {ACTION_COSTS['proactive_message']}\n"
             text += f"\nTop up: /buy"
         else:
             text = f"💰 Баланс: {balance} токенов (~{days_left} дней)\n"
@@ -403,11 +403,11 @@ def get_balance_info(user_id: int, session=None) -> str:
             if balance < 100:
                 text += "⚠️ Токены заканчиваются! Пополни: /buy\n\n"
             text += "📋 Стоимость действий:\n"
-            text += "• Сообщение: 10\n"
-            text += "• Создание задачи: 7\n"
-            text += "• Делегирование: 20\n"
-            text += "• Маркетинг-контент: 30\n"
-            text += "• Проактивное сообщение: 7\n"
+            text += f"• Сообщение: {ACTION_COSTS['message']}\n"
+            text += f"• Создание задачи: {ACTION_COSTS['add_task']}\n"
+            text += f"• Делегирование: {ACTION_COSTS['delegate_task']}\n"
+            text += f"• Маркетинг-контент: {ACTION_COSTS['generate_marketing_content']}\n"
+            text += f"• Проактивное сообщение: {ACTION_COSTS['proactive_message']}\n"
             text += f"\nПополнить: /buy"
         
         return text
