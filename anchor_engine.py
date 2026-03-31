@@ -2463,118 +2463,70 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _dynamic_cap_rank = _rank_goal_capabilities(_goals_text_all, agent_caps or [], python_code=python_code)
     _dynamic_top_keys = [item[3] for item in _dynamic_cap_rank[:3]]
 
-    _section_blocks = {
-        'integrations': _sec_integrations,
-        'research': _sec_research,
-        'content': _sec_content,
-        'email': _sec_email,
-        'tasks': _sec_tasks,
-        'delegate': _sec_delegate,
-    }
+    # ── Каталог инструментов: reasoning-first, без жёстких per-type веток ──
+    # ИИ видит все секции + один принцип выбора → сам решает с чего начать.
+    # Правило: «что нужно ПРОИЗВЕСТИ из этой цели?»
+    #   → данные/анализ       : начни с Интеграции + Поиск
+    #   → охватить людей      : начни с Email/Outreach
+    #   → видимость/аудитория : начни с Публикация
+    #   → структура/план/трек : начни с Задачи
+    # Единственный hard guardrail — личные/здоровье цели: без массовых рассылок.
+    _catalog_guardrail = (
+        "⛔ [ЛИЧНАЯ/ЗДОРОВЬЕ/ОБУЧЕНИЕ цель] — НЕ запускай массовые email-рассылки. "
+        "Email только negotiate_by_email с конкретным ментором/специалистом по теме цели.\n"
+        if _goal_type in ('learning', 'health', 'personal') else
+        ("📧 Email не настроен — для распространения выводов используй публикацию или сохранение в базе знаний.\n"
+         if _goal_type == 'research' and not _has_imap else "")
+    )
+    _catalog = (
+        "ИНСТРУМЕНТЫ — выбирай по принципу «что нужно ПРОИЗВЕСТИ из этой цели?»:\n"
+        "  → данные / анализ / мониторинг   : Интеграции + Поиск первыми\n"
+        "  → охватить людей / контакты       : Email/Outreach первым\n"
+        "  → видимость / аудитория / охват   : Публикация первой\n"
+        "  → структура / план / трекинг      : Задачи первыми\n"
+        "  → внешние API / реальные данные   : run_agent_action первым\n"
+        "Все секции доступны — применяй нужные, игнорируй лишние.\n"
+        + _catalog_guardrail
+        + _sec_integrations
+        + _sec_research
+        + _sec_email
+        + _sec_content
+        + _sec_tasks
+        + _sec_delegate
+    )
 
-    if _goal_type in ('learning', 'health', 'personal'):
-        _catalog_order = ['tasks', 'research', 'content', 'integrations', 'delegate']
-    elif _goal_type == 'finance':
-        _catalog_order = ['integrations', 'research', 'tasks', 'delegate', 'content', 'email']
-    elif _goal_type == 'ecommerce':
-        _catalog_order = ['integrations', 'email', 'research', 'tasks', 'delegate', 'content']
-    elif _goal_type == 'legal':
-        _catalog_order = ['research', 'tasks', 'integrations', 'content', 'delegate', 'email']
-    elif _goal_type == 'travel':
-        _catalog_order = ['integrations', 'tasks', 'research', 'content', 'delegate', 'email']
-    elif _goal_type == 'startup':
-        _catalog_order = ['research', 'email', 'integrations', 'content', 'delegate', 'tasks']
-    elif _goal_type == 'logistics':
-        _catalog_order = ['integrations', 'tasks', 'email', 'research', 'delegate', 'content']
-    elif _goal_type == 'hr':
-        _catalog_order = ['email', 'integrations', 'research', 'tasks', 'delegate', 'content']
-    elif any(key in _dynamic_top_keys for key in ('email', 'crm', 'calendar', 'calls', 'hr')):
-        _catalog_order = ['email', 'integrations', 'research', 'delegate', 'tasks', 'content']
-    elif any(key in _dynamic_top_keys for key in ('telegram', 'discord', 'social', 'image_gen', 'automation')):
-        _catalog_order = ['content', 'integrations', 'research', 'delegate', 'tasks', 'email']
-    elif any(key in _dynamic_top_keys for key in ('finance', 'rss', 'news', 'git', 'sheets', 'database', 'analytics', 'custom_actions', 'script')):
-        _catalog_order = ['integrations', 'research', 'content', 'tasks', 'delegate', 'email']
-    elif _goal_type == 'dev':
-        _catalog_order = ['integrations', 'research', 'email', 'tasks', 'delegate', 'content']
-    else:
-        _catalog_order = ['email', 'research', 'integrations', 'content', 'delegate', 'tasks']
-
-    # ── Порядок секций: capability-first, goal_type только корректирует guardrails ──
-    if _goal_type in ('learning', 'health', 'personal'):
-        _catalog = (
-            "ИНСТРУМЕНТЫ (порядок = приоритет для ЛИЧНОЙ/ОБУЧАЮЩЕЙ цели):\n"
-            "⛔ НЕ запускай массовые email-рассылки — "
-            "это ЛИЧНАЯ цель, а не продажи. Единственное исключение: negotiate_by_email конкретному ментору/эксперту.\n"
-            + ''.join(_section_blocks[name] for name in _catalog_order if name in _section_blocks)
-            + "\n📧 Email: только для negotiate_by_email с конкретным ментором/наставником по теме цели.\n"
-        )
-    else:
-        _catalog_header = {
-            'research':  'ИНСТРУМЕНТЫ (порядок = capability-first для аналитической цели):\n',
-            'dev':       'ИНСТРУМЕНТЫ (порядок = capability-first для цели с разработкой/нетворкингом):\n',
-            'content':   'ИНСТРУМЕНТЫ (порядок = capability-first для контентной цели):\n',
-            'finance':   'ИНСТРУМЕНТЫ (порядок = capability-first для финансовой/инвестиционной цели):\n',
-            'ecommerce': 'ИНСТРУМЕНТЫ (порядок = capability-first для e-commerce цели):\n',
-            'legal':     'ИНСТРУМЕНТЫ (порядок = research-first для юридической/compliance цели):\n',
-            'travel':    'ИНСТРУМЕНТЫ (порядок = integrations-first для цели с путешествиями):\n',
-            'startup':   'ИНСТРУМЕНТЫ (порядок = research+outreach-first для стартап-цели):\n',
-            'logistics': 'ИНСТРУМЕНТЫ (порядок = integrations-first для логистической цели):\n',
-            'hr':        'ИНСТРУМЕНТЫ (порядок = email+integrations-first для HR/рекрутинг-цели):\n',
-        }.get(_goal_type, 'ИНСТРУМЕНТЫ (порядок = capability-first под текущую цель):\n')
-        _catalog = (
-            _catalog_header
-            + ''.join(_section_blocks[name] for name in _catalog_order if name in _section_blocks)
-        )
-        if _goal_type == 'research' and not _has_imap:
-            _catalog += "\n📧 Email не настроен — для распространения выводов используй публикацию, делегирование или сохранение в базе знаний.\n"
-
-    # ── Матрица умного выбора инструментов (только для outreach/content/general/dev) ──
+    # ── Матрица умного выбора инструментов ──
     _tool_matrix = ''
     if _goal_type not in ('learning', 'health', 'personal'):
-        _tm_rows = []
-        _tm_rows.append(
-            "  📧 Email-кампания → когда: нужно охватить 10+ человек, цель = прямые ответы/заявки/регистрации. "
-            "Для ПРОДВИЖЕНИЯ — один из лучших инструментов. "
-            "find_relevant_contacts_for_task → save_email_contact → send_outreach_email."
-        )
-        if _has_content:
-            _tm_rows.append(
-                "  📢 Контент-пост (publish_to_telegram / publish_to_discord) → "
-                "когда: цель = узнаваемость, охват. "
-                "⚠️ Это постинг в ЛИЧНЫЙ КАНАЛ ПОЛЬЗОВАТЕЛЯ — НЕ в чужие группы/чаты!\n"
-                "  Комбо: пост → email тем кто заинтересовался."
-            )
-        else:
-            _tm_rows.append(
-                "  📢 Контент (Telegram/Discord) — нет настроенного канала. "
-                "Альтернатива: create_post заготовит текст, затем send_message_to_user чтобы пользователь опубликовал сам."
-            )
-        _tm_rows.append(
-            "  👥 Пользователи платформы (find_and_message_relevant_users) → когда: нужны быстрые первые "
-            "пользователи/бета-тестеры среди уже зарегистрированных. Быстрее холодного email."
-        )
-        _tm_rows.append(
-            "  🔍 research_topic/web_search → лучший ПЕРВЫЙ ШАГ перед кампанией: "
-            "найди ЦА, их боли, конкурентов → потом пиши персонально."
-        )
+        _tm_rows = [
+            "  📧 Email-кампания → охватить 10+ человек, нужны прямые ответы/заявки/регистрации: "
+            "find_relevant_contacts_for_task → save_email_contact → send_outreach_email.",
+
+            (  "  📢 Контент-пост (publish_to_telegram / publish_to_discord) → узнаваемость, охват. "
+               "⚠️ Только в ЛИЧНЫЙ КАНАЛ ПОЛЬЗОВАТЕЛЯ.\n  Комбо: пост → email заинтересовавшимся."
+            ) if _has_content else (
+               "  📢 Канал не настроен — create_post заготовит текст, send_message_to_user отправит пользователю."
+            ),
+
+            "  👥 find_and_message_relevant_users → быстрые первые пользователи/бета внутри платформы.",
+
+            "  🔍 research_topic/web_search → лучший ПЕРВЫЙ ШАГ: найди ЦА, боли, конкурентов → пиши персонально.",
+        ]
         if _has_github:
             _tm_rows.append(
-                "  🐙 GitHub → узкоспециализированная ЦА (разработчики по языку/стеку). "
-                "search_users → save_email_contact → send_outreach_email."
+                "  🐙 GitHub → разработчики по языку/стеку: search_users → save_email_contact → send_outreach_email."
             )
         _tm_rows.append(
             "  🔀 ЛУЧШИЕ КОМБО:\n"
-            "    • Продвижение продукта: research_topic (ЦА+боли) → email-кампания + Telegram-пост одновременно\n"
-            "    • Привлечение пользователей: find_and_message (быстро, внутри платформы) + email (охват)\n"
-            "    • Нет ответов на email: СНАЧАЛА send_follow_up_email (не открыли >3д) → ПОТОМ новые контакты/смена ЦА\n"
-            "    • Рост канала: publish_to_telegram (пост) → list_email_contacts (status=interested/replied) → send_follow_up_email с ссылкой на пост (P.S.-CTA подписаться)\n"
-            "    • Партнёрство: negotiate_by_email (тёплый конкретный контакт) → лучше cold campaign"
+            "    • Продвижение: research_topic(ЦА+боли) → email + Telegram-пост параллельно\n"
+            "    • Нет ответов: send_follow_up_email(не открыли >3д) → потом новые контакты\n"
+            "    • Рост канала: publish + email подписчикам со ссылкой\n"
+            "    • Партнёрство: negotiate_by_email(тёплый контакт) лучше cold campaign"
         )
         _tool_matrix = (
-            "\n💡 КАК ВЫБРАТЬ ИНСТРУМЕНТ — рассуждай сам по цели:\n"
+            "\n💡 КАК ВЫБРАТЬ ИНСТРУМЕНТ:\n"
             + '\n'.join(_tm_rows)
-            + "\n→ Мультиканал лучше монотонного: email + контент + платформа работают вместе.\n"
-            "→ Нет явного фаворита? Начни с email-кампании — для продвижения это базовый канал.\n"
+            + "\n→ Мультиканал лучше монотонного. Нет явного фаворита? Начни с email-кампании.\n"
         )
 
     # ── Матрица делегирования команды ──
