@@ -8326,18 +8326,22 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             except Exception as _ae:
                 logger.warning("[DIRECTOR] activity log error: %s", _ae)
 
+            # Якорь delegation создаём ТОЛЬКО для прямых (не-автопилотных) поручений.
+            # Автопилот доставляет результат через goal_autopilot_result — якорь дублировал бы.
             _task_lc = (task or '').lower()
-            _cooldown = 2.0 if any(
-                w in _task_lc for w in ('анализ', 'исследов', 'отчёт', 'отчет', 'research', 'report', 'strategy', 'стратег')
-            ) else 0.5
-            _save_agent_delegation_anchor(
-                user_db_id=user_db_id,
-                agent_id=ag['id'],
-                agent_name=ag['name'],
-                task=task,
-                result_summary=str(resp)[:600],
-                cooldown_hours=_cooldown,
-            )
+            _is_ap_task = any(m in _task_lc for m in ('[автопилот]', 'автопилот', 'autopilot'))
+            if not _is_ap_task:
+                _cooldown = 2.0 if any(
+                    w in _task_lc for w in ('анализ', 'исследов', 'отчёт', 'отчет', 'research', 'report', 'strategy', 'стратег')
+                ) else 0.5
+                _save_agent_delegation_anchor(
+                    user_db_id=user_db_id,
+                    agent_id=ag['id'],
+                    agent_name=ag['name'],
+                    task=task,
+                    result_summary=str(resp)[:600],
+                    cooldown_hours=_cooldown,
+                )
         return str(resp)[:2000]
 
     # ── Прямое обращение к агенту по имени (без LLM-решения) ────────────────────
