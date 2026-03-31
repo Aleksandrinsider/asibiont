@@ -546,13 +546,15 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
-MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '2'))
+MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '5'))
 # Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
     'goal_autopilot_handoff',
     # Межагентское взаимодействие (ack/handoff/delegation) не считается — это служебные сообщения.
-    # coordinator_result и goal_autopilot_result считаются — агент реально 'работал' и занял слот.
+    # Реальные отчёты агентов (result) НЕ считаются — пользователь должен видеть каждый результат.
+    'goal_autopilot_result',
+    'coordinator_result',
     'agent_delegation',
     'agent_chain_continue',
     'agent_chain_transfer',
@@ -9703,8 +9705,13 @@ class AnchorEngine:
                 "• ПРИЗНАК ПЛОХОЙ ЗАДАЧИ: если агент может выполнить её вызовом update_goal_progress(notes='...') — перепиши.\n\n"
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
-                '[{"agent": "имя", "task": "конкретная задача или стратегическое поручение (2-3 предл.)", "tool": "инструмент", "goal": "точное_название", '
-                '"reason": "стратегическое обоснование (1 предл.)"}]'
+                "ФОРМАТ ПОЛЕЙ: agent=имя агента, tool=инструмент (snake_case), goal=точное_название, "
+                'reason=1 предложение почему. '
+                'Поле task: ЧЕЛОВЕКОЧИТАЕМЫЙ текст 1-2 предложения — БЕЗ стрелок (→), '
+                'БЕЗ tool-названий, БЕЗ технических деталей типа run_agent_action. '
+                'Пример ХОРОШО: "Проанализируй RSS-ленты Хабр и VC, выдели авторов по теме AI." '
+                'Пример ПЛОХО: "Займись RSS → run_agent_action(get_rss_feed) → save_email_contact."\n'
+                '[{"agent": "имя", "task": "...", "tool": "инструмент", "goal": "точное_название", "reason": "..."}]'
             )
 
             try:
@@ -10355,7 +10362,10 @@ class AnchorEngine:
                     # Убираем технические маркеры (→, tool:, outreach_id= и т.д.)
                     import re as _re_assign
                     _task_clean = _re_assign.sub(r'\(outreach_id=\d+\)', '', _task_first_line)
-                    _task_clean = _re_assign.sub(r'→.*$', '', _task_clean).strip()
+                    # Удаляем → только если за ним идёт имя инструмента (snake_case), а не обычный текст
+                    _task_clean = _re_assign.sub(r'\s*→\s+[a-z][a-z_]+_[a-z_]+.*$', '', _task_clean).strip()
+                    # Также удаляем одиночную → в конце строки (без полезного текста после)
+                    _task_clean = _re_assign.sub(r'\s*→\s*$', '', _task_clean).strip()
                     _task_clean = _task_clean.rstrip('.').rstrip(':')
                     # Убираем внутренние инструкции типа "Результат его работы:", "Твоя задача:"
                     _task_clean = _re_assign.sub(
@@ -10410,13 +10420,21 @@ class AnchorEngine:
                                 _step_reason = 'переключаемся на рабочий сценарий, чтобы сохранить темп'
                     except Exception:
                         pass
-                    # Короткая версия задачи для живого обращения (до 90 символов, по слову)
+                    # Короткая версия задачи для живого обращения (до 140 символов, по слову)
                     _task_short = _task_clean
-                    if len(_task_short) > 90:
-                        _task_short = _task_short[:90].rsplit(' ', 1)[0].rstrip('.,;:')
+                    if len(_task_short) > 140:
+                        _task_short = _task_short[:140].rsplit(' ', 1)[0].rstrip('.,;:')
+                    # Убираем ведущий глагол «займись/начни/сделай» чтобы шаблон не дублировал его
+                    import re as _re_verb
+                    _task_body = _re_verb.sub(
+                        r'^(?:займись|начни|сделай|проверь|возьмись за|найди|создай|проанализируй)\s+',
+                        '', _task_short, flags=_re_verb.IGNORECASE
+                    ).strip()
+                    if not _task_body:
+                        _task_body = _task_short
                     # Формируем естественное обращение вместо тикета
                     _ag_is_fem_c = (_ag_name or '')[-1:] in 'аяАЯ'
-                    _t = _task_short[:80].lower() if _task_short and _task_short[0].isupper() and not _task_short[:3].isupper() else (_task_short[:80] if _task_short else '')
+                    _t = _task_body.lower() if _task_body and _task_body[0].isupper() and not _task_body[:3].isupper() else _task_body
                     if _task_short and len(_task_short) > 15:
                         import random as _rnd_assign
                         if _ag_is_fem_c:
@@ -10426,16 +10444,16 @@ class AnchorEngine:
                                 f'{_ag_name}, возьмись за {_t}.',
                                 f'{_ag_name}, было бы здорово если ты {_t}.',
                                 f'{_ag_name}, нужна твоя помощь — {_t}.',
-                                f'{_ag_name}, давай ты займёшься: {_t}.',
+                                f'{_ag_name}, давай займёшься: {_t}.',
                             ]
                         else:
                             _assign_templates = [
                                 f'{_ag_name}, пожалуйста {_t}.',
                                 f'{_ag_name}, можешь {_t}?',
                                 f'{_ag_name}, возьми на себя {_t}.',
-                                f'{_ag_name}, давай ты {_t}.',
+                                f'{_ag_name}, давай {_t}.',
                                 f'{_ag_name}, нужна твоя помощь — {_t}.',
-                                f'{_ag_name}, займись {_t if not _t.startswith("займ") else _task_short[:80]}.',
+                                f'{_ag_name}, займись {_t}.',
                             ]
                         _asi_assign_text = _rnd_assign.choice(_assign_templates)
                         if _step_reason and len(_step_reason) > 10:
