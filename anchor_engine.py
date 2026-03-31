@@ -1068,6 +1068,56 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
 
 
 
+def _build_recent_suggestion_guard(agent_history: list | None = None,
+                                   team_history: dict | None = None) -> str:
+    """Мягкая самопроверка на повторение одной и той же идеи.
+
+    Не блокирует действие жёстко, а напоминает модели: если паттерн уже звучал
+    сегодня, возвращаться к нему можно только при наличии нового факта.
+    """
+    _entries: list[str] = []
+    for _item in (agent_history or [])[:10]:
+        if _item:
+            _entries.append(str(_item))
+    for _agent_name, _hist in (team_history or {}).items():
+        for _item in (_hist or [])[:6]:
+            if _item:
+                _entries.append(f"{_agent_name}: {_item}")
+
+    if not _entries:
+        return ''
+
+    _patterns = {
+        'Telegram-чаты/каналы': ('telegram', 'чат', 'чаты', 'канал', 'каналы', 'сообществ'),
+        'GitHub / GitHub API': ('github', 'gitlab', 'repo', 'репозитор'),
+        'Контакты внутри платформы': ('через платформу', 'активных пользователей', 'из сети', 'внутри платформы'),
+        'Письма / outreach': ('email', 'письм', 'outreach', 'reply', 'follow-up', 'check_emails'),
+        'Смена тактики': ('сменим тактику', 'смени тактику', 'другой подход', 'сменить подход'),
+        'Поиск новых контактов': ('новых контактов', 'новых предпринимател', 'новых людей', 'новый сегмент'),
+    }
+
+    _counts: dict[str, int] = {}
+    for _entry in _entries:
+        _txt = str(_entry).lower()
+        for _label, _keywords in _patterns.items():
+            if any(_kw in _txt for _kw in _keywords):
+                _counts[_label] = _counts.get(_label, 0) + 1
+
+    _lines = [
+        "\n🧠 АНТИ-ПОВТОР ИДЕЙ:",
+        "  Если ту же идею уже предлагали сегодня — не повторяй её автоматически.",
+        "  Максимум: 1 раз в 24ч на один и тот же паттерн.",
+        "  Повтор допустим только если есть новый факт: другой сегмент, другой query, другая площадка, новый контакт или новый результат.",
+    ]
+    if _counts:
+        _lines.append("  Недавние паттерны команды:")
+        for _label, _count in sorted(_counts.items(), key=lambda x: (-x[1], x[0]))[:5]:
+            _lines.append(f"    • {_label}: {_count}")
+    _lines.append("  Перед новой рекомендацией ответь себе: что здесь реально нового по сравнению с прошлым разом?")
+    return '\n'.join(_lines) + '\n'
+
+
+
 # ── Таблица стратегий по категориям (data-driven, покрывает все 60+ интеграций) ──
 # Ключ = категория из _CAP_CATEGORY_MAP. Значение = (chain_steps, why, alt)
 _STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
@@ -2627,6 +2677,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "\nТВОЯ ИСТОРИЯ (последние действия — используй как основу, развивай дальше):\n"
             + '\n'.join(_mem_lines) + '\n'
         )
+        _memory_block += _build_recent_suggestion_guard(agent_history=agent_history, team_history=team_history)
         if _force_analyse:
             # Предлагаем конкретные альтернативы с учётом типа агента и типа цели
             _ALTS_RSS_ONLY = [
@@ -2696,6 +2747,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
         _memory_block += _untried_block
         _memory_block += _check_emails_overuse
+    elif team_history:
+        _memory_block = _build_recent_suggestion_guard(agent_history=agent_history, team_history=team_history)
 
     # ── Имена целей для привязки задач ──
     _first_goal_title = goals_summary[0].get('title', '') if goals_summary else ''
@@ -9830,6 +9883,10 @@ class AnchorEngine:
             except Exception as _ld_err:
                 logger.debug("[COORD] loop detection: %s", _ld_err)
 
+            _recent_suggestion_guard = _build_recent_suggestion_guard(
+                team_history=_per_agent_history,
+            )
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -9849,6 +9906,7 @@ class AnchorEngine:
                 + f"{_anti_repeat_str}"
                 + f"{_recent_done_str}"
                 + f"{_loop_detection_str}"
+                + f"{_recent_suggestion_guard}"
                 + f"{_rss_action_str}"
                 + f"{_cap_rules_str}"
                 + f"Контекст: контактов={_known_contacts}, писем_отправлено={_email_sent}, "
@@ -9944,6 +10002,7 @@ class AnchorEngine:
                 "• Каждый агент работает своими интеграциями. Назначай задачи ПОД его возможности.\n"
                 "• Каждая задача продвигает активную цель.\n"
                 "• РАСПРЕДЕЛЕНИЕ: если активных агентов 2+ — в плане должны быть минимум 2 разных агента.\n"
+                "• Если эту идею уже предлагали сегодня — не повторяй её снова; максимум один раз в 24ч, если не появился новый факт.\n"
                 "• АНТИ-ПОВТОР КОНТАКТОВ: одних и тех же людей/контакты не крути каждый цикл; после первого упоминания ищи новый сегмент/канал.\n"
                 "• GitHub search query: меняй параметры каждый цикл.\n"
                 + (f"• GitHub запросы уже использованные (контекст): {'; '.join(_used_github_queries[:4])}\n"
