@@ -7509,19 +7509,34 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                                 # Никогда не сохраняем base64 data URI в interactions
                                                 _sd_ag_avatar = f'/api/arena/agent_avatar/{_ta2.id}' if getattr(_ta2, 'id', 0) else ''
                                                 break
-                                        # Сохраняем interaction
-                                        _msg_s.add(_MsgInt(
-                                            user_id=_msg_u.id,
-                                            message_type='proactive',
-                                            content=json.dumps({
-                                                '__agent': {'name': _sd_target_name, 'id': _sd_ag_id, 'avatar_url': _sd_ag_avatar},
-                                                'text': _sd_result_text[:600],
-                                                '__tools_used': [],
-                                                '__anchor_type': 'agent_delegation',
-                                            }, ensure_ascii=False),
-                                        ))
-                                        _msg_s.commit()
-                                        logger.info("[SUBDELEGATE] saved %s result as separate interaction", _sd_target_name)
+                                        # ── Noise-фильтр для subdelegation: не сохраняем hollow acks ──
+                                        _sd_lower = (_sd_result_text or '').strip().lower()
+                                        _SD_NOISE = {
+                                            'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                                            'понял задачу', 'приняла в работу', 'принял в работу',
+                                            'задачу принял', 'задачу приняла',
+                                        }
+                                        _sd_is_noise = (
+                                            not _sd_result_text.strip()
+                                            or len(_sd_result_text.strip()) < 15
+                                            or _sd_lower.rstrip('.!') in _SD_NOISE
+                                        )
+                                        if not _sd_is_noise:
+                                            # Сохраняем interaction
+                                            _msg_s.add(_MsgInt(
+                                                user_id=_msg_u.id,
+                                                message_type='proactive',
+                                                content=json.dumps({
+                                                    '__agent': {'name': _sd_target_name, 'id': _sd_ag_id, 'avatar_url': _sd_ag_avatar},
+                                                    'text': _sd_result_text[:600],
+                                                    '__tools_used': [],
+                                                    '__anchor_type': 'agent_delegation',
+                                                }, ensure_ascii=False),
+                                            ))
+                                            _msg_s.commit()
+                                            logger.info("[SUBDELEGATE] saved %s result as separate interaction", _sd_target_name)
+                                        else:
+                                            logger.info("[SUBDELEGATE] filtered noise from %s: %r", _sd_target_name, _sd_result_text[:80])
                                 finally:
                                     _msg_s.close()
                             except Exception as _msg_err:

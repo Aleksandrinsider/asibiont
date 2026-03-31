@@ -559,12 +559,12 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
     'goal_autopilot_handoff',
     # Межагентское взаимодействие (ack/handoff/delegation) не считается — это служебные сообщения.
-    # Реальные отчёты агентов (result) НЕ считаются — пользователь должен видеть каждый результат.
-    'goal_autopilot_result',
     'coordinator_result',
     'agent_delegation',
     'agent_chain_continue',
     'agent_chain_transfer',
+    # goal_autopilot_result СЧИТАЕТСЯ в лимите — это основной поток сообщений пользователю.
+    # Без учёта лимит не работает и агенты спамят 100+ сообщений/день.
 }
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
@@ -5818,21 +5818,11 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
                         finally:
                             _cs.close()
-                        if not _skip_coord and self.bot:
-                            try:
-                                from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
-                                _coord_text_clean = _sltt_coord(
-                                    _coord_text,
-                                    anchor_type='goal_autopilot_assignment',
-                                    speaker_name='ASI',
-                                    target_name=_chosen_name,
-                                ) if _coord_text else _coord_text
-                                await _safe_send(
-                                    self.bot, user.telegram_id,
-                                    _coord_text_clean or _coord_text,
-                                )
-                            except Exception as _e:
-                                logger.debug("suppressed: %s", _e)
+                        # Координаторские делегации (ASI → агент) сохраняются в DB для аудита,
+                        # но НЕ отправляются в Telegram — пользователь видит только результаты работы агентов.
+                        # Это устраняет ~55% шума в чате (внутренняя координация не нужна пользователю).
+                        if not _skip_coord:
+                            logger.info("[ANCHOR-AUTOPILOT] coord-assign stored (not sent to TG) user %d → %s", user.id, _chosen_name)
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
@@ -6135,6 +6125,23 @@ class AnchorEngine:
                     'задачу выполнил', 'задачу выполнила',
                 )
                 _is_echo = False  # промпт теперь учит думать правильно
+                # Утечки делегаций: ответ обращается к другому агенту (запятая, пробел, пожалуйста)
+                _is_delegation_leak = any(
+                    _result_lower.startswith(n.lower() + sep)
+                    for n in _all_agent_names
+                    for sep in (',', ', ', ' ', ' пожалуйста')
+                )
+                # Планы без действий: "Поняла, переключаемся...", "Запускаю поиск..."
+                _PLANNING_WITHOUT_FACTS = (
+                    'поняла, ', 'понял, ', 'переключаемся', 'переключаюсь',
+                    'запускаю ', 'приступаю ', 'начинаю ', 'погружусь ',
+                    'сейчас ', 'попробую ', 'буду ', 'давай ',
+                )
+                _is_planning_noise = (
+                    not _has_real_actions
+                    and len(_result_clean) < 200
+                    and any(_result_lower.startswith(p) for p in _PLANNING_WITHOUT_FACTS)
+                )
                 _is_noise_result = (
                     # Абсолютный фильтр: hollow acks ВСЕГДА noise, даже если tools вызваны
                     _result_lower.rstrip('.!') in _EMPTY_RESPONSES
@@ -6146,8 +6153,10 @@ class AnchorEngine:
                     # Шум: инструменты вызваны, но текст ОЧЕНЬ короткий и шаблонный (нет фактов)
                     or (_has_real_actions and len(_result_clean) < 60
                         and any(p in _result_lower for p in _GENERIC_TOOL_PATTERNS))
-                    # Утечки делегаций: ответ начинается с обращения к другому агенту
-                    or any(_result_lower.startswith(n.lower() + ',') for n in _all_agent_names)
+                    # Утечки делегаций: агент обращается к другому агенту
+                    or _is_delegation_leak
+                    # Планы без действий: агент описывает намерения без фактов
+                    or _is_planning_noise
                 )
                 if _is_noise_result:
                     _filter_reason = 'noise'

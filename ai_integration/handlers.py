@@ -8769,8 +8769,8 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
         _db_sess = session
         _close_sess = False
         if _db_sess is None:
-            from models import SessionLocal
-            _db_sess = SessionLocal()
+            from models import Session as _SessionLocal
+            _db_sess = _SessionLocal()
             _close_sess = True
         try:
             # user_id — это telegram_id, нужно найти DB user.id
