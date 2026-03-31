@@ -8898,20 +8898,47 @@ class AnchorEngine:
                 ('maps', 'Google Maps / 2GIS API', 'геоданные, отзывы, актуальность карточки', 'локальный бизнес, навигация, репутация'),
                 ('forms', 'Google Forms / Typeform / Tally', 'сбор заявок и опросов', 'лидогенерация, NPS, анкетирование'),
             ]
-            _not_connected = [(name, desc, use) for _type, name, desc, use in _FULL_CATALOG if _type not in _all_connected_types]
+            _CATALOG_KEYWORDS = {
+                'email':       ('почт', 'outreach', 'письм', 'email', 'imap', 'gmail', 'рассылк', 'контакт'),
+                'github':      ('github', 'гитхаб', 'разработ', 'developer', 'программист', 'код', 'репозитор'),
+                'rss':         ('новост', 'rss', 'лент', 'мониторинг', 'тренды', 'медиа', 'контент'),
+                'alphavantage':('нефт', 'газ', 'акции', 'биржа', 'котировк', 'финанс', 'трейдинг', 'инвест', 'oil', 'stock', 'крипто'),
+                'newsapi':     ('новост', 'тренды', 'медиа', 'сми', 'пресс', 'мониторинг'),
+                'notion':      ('база знаний', 'wiki', 'документ', 'notion'),
+                'slack':       ('команд', 'slack', 'уведомлен', 'координац'),
+                'pm':          ('jira', 'trello', 'asana', 'todoist', 'задач', 'проект', 'спринт', 'agile'),
+                'crm':         ('crm', 'лид', 'сделк', 'воронк', 'клиент', 'продаж', 'amocrm', 'bitrix', 'hubspot'),
+                'ecommerce':   ('wildberries', 'ozon', 'shopify', 'маркетплейс', 'магазин', 'товар', 'склад', 'еком'),
+                'crypto':      ('крипто', 'binance', 'bybit', 'биткоин', 'btc', 'ETH', 'трейдинг', 'портфель', 'defi'),
+                'sheets':      ('таблиц', 'аналитик', 'kpi', 'дашборд', 'отчёт', 'sheets', 'airtable', 'метрик'),
+                'payments':    ('оплата', 'платёж', 'stripe', 'юкасса', 'подписк', 'монетизац', 'выручк'),
+                'tg_channel':  ('telegram', 'телеграм', 'канал', 'пост', 'аудитор'),
+                'discord':     ('discord', 'сообществ', 'webhook'),
+                'whatsapp':    ('whatsapp', 'вотсап', 'клиентск', 'рассылк'),
+                'calendar':    ('встреч', 'показ', 'запись', 'консультац', 'расписан', 'calendar', 'calendly'),
+                'sms':         ('sms', 'смс', 'уведомлен', 'акция', 'напоминан'),
+                'vk':          ('вконтакт', 'vk', 'smm', 'таргет'),
+                'avito':       ('авито', 'циан', 'объявлен', 'недвижим', 'товар'),
+                'youtube':     ('youtube', 'ютуб', 'видео', 'обзор'),
+                'linkedin':    ('linkedin', 'линкедин', 'b2b', 'рекрутинг', 'нанять', 'hr', 'нетворкинг'),
+                'maps':        ('карт', 'геоданн', 'отзыв', 'локальн', '2гис', 'gmaps'),
+                'forms':       ('форм', 'заявк', 'опрос', 'анкет', 'лидогенерац', 'typeform'),
+            }
+            _not_connected = [
+                (name, desc, use)
+                for _type, name, desc, use in _FULL_CATALOG
+                if _type not in _all_connected_types
+                and any(kw in _goals_lower_c for kw in _CATALOG_KEYWORDS.get(_type, ()))
+            ]
             _intg_advisor_str = ''
-            if _not_connected and len(_not_connected) > 2:
-                _advisor_lines = [f'  • {name} — {desc} (для: {use})' for name, desc, use in _not_connected[:10]]
+            if _not_connected:
+                _advisor_lines = [f'  • {name} — {desc} (для: {use})' for name, desc, use in _not_connected[:6]]
                 _intg_advisor_str = (
-                    '\n\n💡 ДОСТУПНЫЕ ИНТЕГРАЦИИ (ещё не подключены):\n'
+                    '\n\n💡 ИНТЕГРАЦИИ ПОДХОДЯЩИЕ ПОД ТЕКУЩИЕ ЦЕЛИ (ещё не подключены):\n'
                     + '\n'.join(_advisor_lines)
-                    + '\n→ Если текущие подходы не дают результата — ПРЕДЛОЖИ пользователю подключить '
-                    'новую интеграцию через Телеграм: "Подключите [интеграцию] для [цели] — '
-                    'инструкция в дашборде: https://asibiont.com/dashboard".\n'
-                    '→ Включи это как один из шагов плана с tool="send_message_to_user" если считаешь подключение полезным.\n'
-                    '→ ВАЖНО: список выше — только то что уже ВСТРОЕНО в систему. Если для целей пользователя '
-                    'нужен инструмент которого нет в списке — ВСЁ РАВНО предложи его через send_message_to_user. '
-                    'Думай как эксперт-консультант: какой сервис или API был бы КРИТИЧЕСКИ полезен для этих конкретных целей?\n'
+                    + '\n→ Если текущих инструментов недостаточно — отправь пользователю send_message_to_user '
+                    'с предложением подключить конкретную интеграцию: '
+                    '"Подключите [название] — инструкция: https://asibiont.com/dashboard"\n'
                 )
 
             # ── Строим per-goal блок: для каждой цели — её тематика и подходящие инструменты ──
