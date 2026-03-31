@@ -708,7 +708,7 @@
             </button>
         </div>
         <div style="display: flex; align-items: center; gap: 6px; position: relative;">
-            <button onclick="switchToMarketplace()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="Маркет" data-i18n-title="marketplace">
+            <button onclick="switchToMarketplace()" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 6px; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;" title="AI команда" data-i18n-title="marketplace">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5Zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5Zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5Zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5Z"/></svg>
             </button>
             <button id="mobile-token-balance" onclick="window.location.href='/subscription-tiers'" style="background: none; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; padding: 4px 8px; height: 32px; display: flex; align-items: center; font-size: 13px; color: #59636E; font-family: inherit; white-space: nowrap;">
@@ -748,7 +748,6 @@
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-8.997.002A4.5 4.5 0 0 0 11.5 7Z"/>
                     </svg>
-                    <span data-i18n="search-contacts">Поиск</span>
                 </button>
 
                 <!-- Сообщения -->
@@ -756,15 +755,14 @@
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M1.75 1h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25v-8.5C0 1.784.784 1 1.75 1ZM1.5 2.75v8.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25Z"/>
                     </svg>
-                    <span data-i18n="header-messages">Сообщения</span>
                 </button>
 
                 <!-- Маркет -->
-                <button onclick="switchToMarketplace()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="Маркет" data-i18n-title="marketplace">
+                <button onclick="switchToMarketplace()" style="padding: 8px 16px; height: 32px; background: #FFFFFF; border: 1px solid #D1D9E0; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: #59636E; font-weight: 400; display: flex; align-items: center; gap: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;" onmouseover="this.style.background='#F6F8FA'; this.style.borderColor='#1F2328';" onmouseout="this.style.background='#FFFFFF'; this.style.borderColor='#D1D9E0';" title="AI команда" data-i18n-title="marketplace">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#374151">
                         <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5Zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5Zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5Zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5Z"/>
                     </svg>
-                    <span data-i18n="marketplace">Маркет</span>
+                    <span data-i18n="marketplace">AI команда</span>
                 </button>
 
                 <!-- Модальное окно поиска вынесено за пределы хедера -->
@@ -1125,11 +1123,6 @@
                         {% if logged_in %}
                         <!-- Бар активных агентов -->
                         <div id="active-agents-bar" style="display:none;padding:6px 12px 4px;border-top:1px solid #F0F2F5;background:#FAFBFC;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
-                        <div id="chat-history-controls" style="display:none;padding:6px 12px;border-top:1px solid #F0F2F5;background:#FAFBFC;">
-                            <button id="chat-load-older-btn" onclick="loadOlderChatMessages()" style="width:100%;height:32px;border:1px solid #D1D9E0;border-radius:6px;background:#FFFFFF;color:#374151;cursor:pointer;font-size:12px;font-family:inherit;">
-                                Показать старые сообщения
-                            </button>
-                        </div>
                         <div class="chat-input">
                             <input type="text" id="message-input" placeholder="Сообщение..." data-i18n-ph="msg-placeholder">
                             <input type="file" id="file-input" style="display: none;" accept="image/*,text/*,.pdf,.doc,.docx">
@@ -7635,11 +7628,11 @@ else:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'run_agent_action', 'background_research', 'background_research_ready', 'agent_event_dispatch', 'agent_chain_continue']);
+            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'run_agent_action', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated']);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
-                // Hide only in_progress/noise/dedup autopilot dispatches — failed и completed показываем
-                if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered'].includes(a.status)) return false;
+                // Hide non-terminal autopilot dispatches — completed/failed показываем
+                if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered', 'empty_result', 'no_action'].includes(a.status)) return false;
                 return true;
             }).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
@@ -11602,66 +11595,9 @@ else:
         let lastSeenPostId = null; // Для отслеживания последнего просмотренного поста
 
         function updateChatHistoryControls() {
-            const controls = document.getElementById('chat-history-controls');
-            const btn = document.getElementById('chat-load-older-btn');
-            if (!controls || !btn) return;
-            const canLoad = !!chatHistoryHasMore && !!chatHistoryNextBeforeId;
-            controls.style.display = canLoad ? 'block' : 'none';
-            btn.disabled = chatHistoryLoading || !canLoad;
-            btn.style.opacity = (chatHistoryLoading || !canLoad) ? '0.6' : '1';
-            btn.style.cursor = (chatHistoryLoading || !canLoad) ? 'default' : 'pointer';
-            btn.textContent = chatHistoryLoading ? 'Загрузка...' : 'Показать старые сообщения';
+            // removed — chat history pagination disabled
         }
 
-        async function loadOlderChatMessages() {
-            if (chatHistoryLoading || !chatHistoryHasMore || !chatHistoryNextBeforeId) return;
-            const messages = document.getElementById('chat-messages');
-            if (!messages) return;
-
-            chatHistoryLoading = true;
-            updateChatHistoryControls();
-
-            const prevHeight = messages.scrollHeight;
-            const prevTop = messages.scrollTop;
-
-            try {
-                const response = await fetch(`/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}&before_id=${chatHistoryNextBeforeId}`, {
-                    credentials: 'include',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    },
-                    cache: 'no-store'
-                });
-                if (!await checkAuth(response)) return;
-                if (!response.ok) return;
-
-                const data = await response.json();
-                const older = Array.isArray(data.interactions) ? data.interactions.sort((a, b) => a.id - b.id) : [];
-
-                // Prepend with preserved order: insert from newest to oldest at top.
-                for (let i = older.length - 1; i >= 0; i--) {
-                    const interaction = older[i];
-                    const msgId = interaction.id;
-                    if (!displayedMessageIds.has(msgId)) {
-                        addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id, null, { prepend: true, skipAutoScroll: true });
-                        displayedMessageIds.add(msgId);
-                    }
-                }
-
-                chatHistoryHasMore = !!data.has_more;
-                chatHistoryNextBeforeId = data.next_before_id || null;
-
-                const newHeight = messages.scrollHeight;
-                messages.scrollTop = prevTop + (newHeight - prevHeight);
-            } catch (error) {
-                console.error('Error loading older chat messages:', error);
-            } finally {
-                chatHistoryLoading = false;
-                updateChatHistoryControls();
-            }
-        }
-        
         // Устанавливаем аватар пользователя для использования в чате
         {% if user_avatar_url %}
         window.userAvatarUrl = '{{ user_avatar_url | safe }}';
@@ -16493,7 +16429,7 @@ else:
   var D = {
     ru: {
       'profile':'Профиль','contacts':'Контакты','tasks':'Задачи',
-      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'Маркет','arena':'Арена AI','arena-placeholder':'Напишите в арену...','mp-my-agents':'Мои агенты','mp-create-agent':'Создать агента','mp-search-ph':'Поиск агентов...','mp-loading-agents':'Загрузка агентов...','mp-loading':'Загрузка...',
+      'chat-ai':'Чат с AI','news-feed':'Блог','marketplace':'AI команда','arena':'Арена AI','arena-placeholder':'Напишите в арену...','mp-my-agents':'Мои агенты','mp-create-agent':'Создать агента','mp-search-ph':'Поиск агентов...','mp-loading-agents':'Загрузка агентов...','mp-loading':'Загрузка...',
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
@@ -16789,7 +16725,7 @@ else:
     },
     en: {
       'profile':'Profile','contacts':'Contacts','tasks':'Tasks',
-      'chat-ai':'Chat with AI','news-feed':'Blog','marketplace':'Marketplace','arena':'Arena AI','arena-placeholder':'Post to Arena...','mp-my-agents':'My Agents','mp-create-agent':'Create Agent','mp-search-ph':'Search agents...','mp-loading-agents':'Loading agents...','mp-loading':'Loading...',
+      'chat-ai':'Chat with AI','news-feed':'Blog','marketplace':'AI team','arena':'Arena AI','arena-placeholder':'Post to Arena...','mp-my-agents':'My Agents','mp-create-agent':'Create Agent','mp-search-ph':'Search agents...','mp-loading-agents':'Loading agents...','mp-loading':'Loading...',
       'msg-placeholder':'Message...',
       'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',

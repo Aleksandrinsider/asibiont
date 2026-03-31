@@ -425,7 +425,7 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
         lines.append(f'  ✅ {name}: {hint}' if hint else f'  ✅ {name}')
 
     # Всегда доступные
-    lines.append('  ✅ web_search, research_topic, add_task, create_goal — всегда доступны')
+    lines.append('  ✅ web_search, research_topic, create_goal — всегда доступны')
 
     result = '\nИНТЕГРАЦИИ АГЕНТА (используй ТОЛЬКО из этого списка):\n'
     result += '\n'.join(lines) + '\n'
@@ -642,7 +642,7 @@ _INTEGRATION_PLANS = [
       "ОТКАЗ: не отвечай, система отпишет. → update_goal_progress. "
       "📅 СОЗВОН/ВСТРЕЧА: если контакт предлагает звонок/встречу — сначала уточни у пользователя через "
       "send_message_to_user('Контакт [имя] хочет созвон [дата/время]. Подтвердить? Пришли ссылку на Zoom.'). "
-      "После подтверждения → reply_to_outreach_email + add_task с датой встречи. "
+      "После подтверждения → reply_to_outreach_email + set_reminder. "
       "💡 Вместо плейсхолдеров вроде [вставьте ссылку] — пиши 'ссылку пришлю отдельно'.",
       "B) find_relevant_contacts_for_task → save_email_contact → send_outreach_email → update_goal_progress",
       "C) list_email_contacts → send_outreach_email (если кампания уже есть) → update_goal_progress",
@@ -678,7 +678,7 @@ _INTEGRATION_PLANS = [
      "Твоя RSS-лента — источник мониторинга, контента и аналитики. Решай сам: инсайт стоит поста? Публикуй. Стоит outreach? Делегируй email-агенту. Стоит мониторинга? Запланируй. Важно: не повторяй один и тот же паттерн — чередуй подходы.",
          ["A) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → оцени: если материал контентно ценный → create_post → publish_to_telegram/discord",
             "B) run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди релевантный инсайт → DELEGATE[email-агент]: персонализация для outreach",
-      "C) research_topic(query=тема из RSS) → экспертный разбор → create_post или add_task — что полезнее для цели",
+      "C) research_topic(query=тема из RSS) → экспертный разбор → create_post → update_goal_progress",
             "D) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → найди автора с email → save_email_contact",
       "E) web_search (развитие темы из RSS) → create_post для аудитории → publish_to_telegram/discord",
             "F) run_agent_action(action='[ТОЧНОЕ_RSS_ACTION_ИЗ_ПРОФИЛЯ]') → generate_image (визуализация тренда) → create_post",
@@ -692,7 +692,7 @@ _INTEGRATION_PLANS = [
       "C) research_topic → подготовь сообщение → run_agent_action(action='post_message')",
       "D) find_relevant_contacts_for_task → run_agent_action(action='invite_to_channel')",
       "E) web_search → актуальная новость → run_agent_action(action='post_message') как daily digest",
-      "F) add_task (зафиксируй результаты обсуждения) → update_goal_progress"]),
+      "F) update_goal_progress (зафиксируй результаты обсуждения)"]),
     # Notion
     (lambda c: 'notion' in c,
      'notion',
@@ -710,7 +710,7 @@ _INTEGRATION_PLANS = [
      ["A) run_agent_action(action='create_card') → зафиксируй следующий шаг",
       "B) run_agent_action(action='update_card') → обнови статус активных задач",
       "C) research_topic → создай карточку с конкретными данными",
-      "D) run_agent_action(action='get_overdue') → найди просроченные → add_task для эскалации",
+      "D) run_agent_action(action='get_overdue') → найди просроченные → delegate_task для эскалации",
       "E) list_tasks → run_agent_action(action='sync') → синхронизируй платформы",
       "F) web_search (best practices по теме задачи) → run_agent_action(action='create_card') с чеклистом"]),
     # CRM (AmoCRM, Bitrix24)
@@ -719,7 +719,7 @@ _INTEGRATION_PLANS = [
      "Твоя CRM — управление контактами и сделками.",
      ["A) run_agent_action(action='find_lead') → обнови статус → update_goal_progress",
       "B) find_relevant_contacts_for_task → run_agent_action(action='add_contact')",
-      "C) research_topic → add_task с конкретными лидами",
+      "C) research_topic → save_email_contact с конкретными лидами",
       "D) run_agent_action(action='get_deals', stage='stalled') → negotiate_by_email / send_follow_up_email",
       "E) run_agent_action(action='get_activities') → выяви паттерны → web_search конкурентов-лидов",
       "F) set_contact_alert → run_agent_action(action='update_deal') при активности контакта"]),
@@ -728,20 +728,20 @@ _INTEGRATION_PLANS = [
      'ecommerce',
      "Твой маркетплейс — мониторинг продаж, позиций, конкурентов.",
      ["A) run_agent_action(action='get_stats') → анализ → update_goal_progress",
-      "B) run_agent_action(action='get_positions') → оптимизация → add_task",
-      "C) research_topic → анализ конкурентов → add_task",
+      "B) run_agent_action(action='get_positions') → оптимизация → update_goal_progress",
+      "C) research_topic → анализ конкурентов → update_goal_progress",
       "D) run_agent_action(action='get_reviews') → анализ отзывов → create_post (ответ/улучшение)",
-      "E) web_search (конкуренты, тренды категории) → run_agent_action(action='update_price') + add_task",
+      "E) web_search (конкуренты, тренды категории) → run_agent_action(action='update_price') → update_goal_progress",
       "F) web_search (SEO ключевые слова) → run_agent_action(action='update_description')"]),
     # Crypto / Binance / Bybit
     (lambda c: any(w in c for w in ('binance', 'bybit', 'coinbase', 'крипт', 'биржев')),
      'crypto',
      "Твои данные — крипто-рынок и биржа.",
      ["A) run_agent_action(action='get_price') → оцени тренд → update_goal_progress",
-      "B) research_topic → анализ рынка → add_task с сигналами",
-      "C) run_agent_action(action='get_portfolio') → сравнение → add_task",
+      "B) research_topic → анализ рынка → update_goal_progress",
+      "C) run_agent_action(action='get_portfolio') → сравнение → update_goal_progress",
       "D) web_search (крипто-новости) → run_agent_action(action='set_alert') при пороге",
-      "E) web_search 'дефи тренды {монета}' → research_topic → add_task (стратегия)",
+      "E) web_search 'дефи тренды {монета}' → research_topic → update_goal_progress (стратегия)",
       "F) run_agent_action(action='get_history', period='7d') → выяви паттерн → create_post"]),
     # Google Sheets / Airtable / Данные
     (lambda c: any(w in c for w in ('sheets', 'google sheets', 'pandas', 'airtable', 'данных')),
@@ -750,7 +750,7 @@ _INTEGRATION_PLANS = [
      ["A) run_agent_action(action='read_sheet') → анализ → update_goal_progress",
       "B) research_topic → run_agent_action(action='append_row') → зафиксируй",
       "C) run_agent_action(action='update_cell') → обнови метрики",
-      "D) run_agent_action(action='read_sheet') → выяви аномалии → add_task (расследование)",
+      "D) run_agent_action(action='read_sheet') → выяви аномалии → update_goal_progress",
       "E) web_search (benchmarks по отрасли) → run_agent_action(action='append_row') для сравнения",
       "F) run_agent_action(action='get_chart') → create_post (визуальный отчёт) → publish_to_telegram"]),
     # Telegram-канал / Discord / Контент
@@ -769,8 +769,8 @@ _INTEGRATION_PLANS = [
      'hr',
      "Твоя интеграция — поиск людей и вакансий.",
      ["A) run_agent_action(action='search_candidates') → оцени → save_email_contact",
-      "B) research_topic → описание вакансии → add_task",
-      "C) run_agent_action(action='get_responses') → оцени отклики → add_task",
+      "B) research_topic → описание вакансии → update_goal_progress",
+      "C) run_agent_action(action='get_responses') → оцени отклики → update_goal_progress",
       "D) web_search 'эксперт {область} телеграм OR github' → save_email_contact",
       "E) find_and_message_relevant_users → send_outreach_email (партнёрское приглашение)",
       "F) negotiate_by_email (персональный оффер кандидату) → set_contact_alert"]),
@@ -780,7 +780,7 @@ _INTEGRATION_PLANS = [
      "Твоя интеграция Авито — объявления, продажи, аренда.",
      ["A) run_agent_action(action='get_listings') → анализ → update_goal_progress",
       "B) run_agent_action(action='create_listing') → новое объявление",
-      "C) research_topic → цены/конкуренты → add_task",
+      "C) research_topic → цены/конкуренты → update_goal_progress",
       "D) web_search (конкуренты на Авито) → run_agent_action(action='update_price')",
       "E) run_agent_action(action='get_messages') → ответь на входящие → update_goal_progress",
       "F) web_search (тренды спроса) → run_agent_action(action='create_listing') с новым описанием"]),
@@ -789,11 +789,11 @@ _INTEGRATION_PLANS = [
      'payments',
      "Твои данные — платежи и выручка.",
      ["A) run_agent_action(action='get_revenue') → анализ → update_goal_progress",
-      "B) research_topic → стратегия роста выручки → add_task",
-      "C) run_agent_action(action='list_transactions') → выяви паттерны → add_task",
+      "B) research_topic → стратегия роста выручки → update_goal_progress",
+      "C) run_agent_action(action='list_transactions') → выяви паттерны → update_goal_progress",
       "D) run_agent_action(action='get_failed_payments') → выясни причины → negotiate_by_email",
       "E) web_search (retention-стратегии) → create_post (оффер для потерявших клиентов)",
-      "F) run_agent_action(action='get_refunds') → анализ → add_task (снижение возвратов)"]),
+      "F) run_agent_action(action='get_refunds') → анализ → update_goal_progress"]),
 ]
 
 # Тип интеграции → описание для матрицы делегирования
@@ -930,7 +930,7 @@ _TACTIC_FAMILIES: dict = {
                            'save_email_contact',
                            'find_and_message_relevant_users', 'create_post', 'publish_to_telegram',
                            'publish_to_discord', 'web_search'},
-    'infrastructure':     {'research_topic', 'add_task',
+    'infrastructure':     {'research_topic',
                            'delegate_task', 'start_delegation_campaign', 'schedule_background_task'},
     'relationship':       {'reply_to_outreach_email', 'negotiate_by_email', 'send_follow_up_email',
                            'check_emails', 'list_email_contacts'},
@@ -946,7 +946,7 @@ _UNIVERSAL_PATTERNS: dict = {
     ),
     'infrastructure': (
         '🏗️ СОЗДАТЬ СИСТЕМУ',
-        'research_topic → add_task/delegate. Расписание, план, автоматизация, материалы.',
+        'research_topic → delegate_task. Расписание, план, автоматизация, материалы.',
     ),
     'relationship': (
         '🔁 СВЯЗИ И ПОДДЕРЖКА',
@@ -1127,7 +1127,7 @@ _STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
     'pm': (
         ["run_agent_action(action='list_issues', params={'project':'[ключ]'}) → найди overdue",
          "→ run_agent_action(action='update_status', params={'id':'...', 'status':'done'}) — закрой выполненные",
-         "→ add_task(следующий шаг с дедлайном) → delegate_task если нужен другой агент",
+         "→ delegate_task если нужен другой агент",
          "→ update_goal_progress при закрытии milestone"],
         "Трекер задач: синхронизируй внешний PM с платформой — единый контроль прогресса",
         "web_search('[проект/спринт] best practices') → create_task с чеклистом",
@@ -1175,7 +1175,7 @@ _STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
     'slack': (
         ["research_topic('[тема цели] ключевой блокер или следующий шаг') → конкретный вывод",
          "→ run_agent_action(action='post_message', params={'channel':'#general', 'text':'...'}) → команда в курсе",
-         "→ add_task(следующий конкретный шаг с дедлайном) → update_goal_progress"],
+         "→ update_goal_progress"],
         "Slack: прозрачность прогресса для команды. Синхронизируй статус и следующий шаг",
         "run_agent_action(action='list_channels') → найди нужный канал для отчёта",
     ),
@@ -1197,7 +1197,7 @@ _STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
     ),
     'calendar': (
         ["run_agent_action(action='list_events', params={'from':'today', 'days':7}) → предстоящие встречи",
-         "→ add_task(подготовка к каждой встрече: цель + ключевые вопросы) до за 1 день",
+         "→ schedule_background_task('подготовка к встрече: цель + ключевые вопросы') до за 1 день",
          "→ research_topic('[тема встречи] best practices') → готовься предметно",
          "→ run_agent_action(action='create_event') если нужна новая встреча → update_goal_progress"],
         "Календарь: встречи = самые важные точки контакта. Готовься заранее, фиксируй итоги",
@@ -1206,7 +1206,7 @@ _STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
     'calls': (
         ["run_agent_action(action='send_sms', params={'to':'+7...', 'message':'[короткий CTA]'})",
          "→ ОТВЕТА НЕТ: send_outreach_email тому же контакту через 2-3 дня",
-         "→ ОТВЕТ ЕСТЬ: add_task(созвон + дедлайн) → negotiate_by_email с деталями",
+         "→ ОТВЕТ ЕСТЬ: set_reminder('созвон + дедлайн') → negotiate_by_email с деталями",
          "→ update_goal_progress"],
         "SMS/Twilio: самый прямой канал. Используй для hot-лидов или срочных действий",
         "web_search('[ЦА] email contact') → send_outreach_email как альтернатива SMS",
@@ -1239,9 +1239,9 @@ _STRATEGY_TABLE: dict[str, tuple[list, str, str]] = {
         ["run_agent_action(action='list_channels') → найди нужный канал",
          "→ research_topic('[тема цели] прогресс / блокер') → конкретный статус",
          "→ run_agent_action(action='post_message', params={'channel':'...', 'text':'...'}) → команда в курсе",
-         "→ add_task(следующий шаг с дедлайном) → update_goal_progress"],
+         "→ update_goal_progress"],
         "MS Teams: корпоративная коммуникация. Держи команду в курсе прогресса и блокеров",
-        "add_task + delegate_task → платформенный трекинг параллельно с Teams",
+        "delegate_task → платформенный трекинг параллельно с Teams",
     ),
     'automation': (
         ["run_agent_action(action='trigger', params={'event':'[имя_события]', 'data':{...}})",
@@ -1369,7 +1369,7 @@ _POWER_COMBOS: list[tuple[frozenset, list, str, str]] = [
      ["run_agent_action(action='get_resumes', params={'query':'[роль]'}) → кандидаты",
       "→ save_email_contact → send_outreach_email (персонализированное приглашение)",
       "→ check_emails → ИНТЕРЕС: reply_to_outreach_email → negotiate_by_email (детали оффера)",
-      "→ add_task(интервью + дедлайн) → update_goal_progress"],
+      "→ set_reminder('интервью + дедлайн') → update_goal_progress"],
      "hh.ru + IMAP: полный рекрутинг-цикл — нашёл, написал, получил ответ, назначил встречу",
      "send_follow_up_email кандидатам без ответа >4 дней — деликатно, с новым углом"),
 
@@ -1491,7 +1491,7 @@ def _build_personalized_strategy(
             "research_topic('[тема цели] лучшие практики 2026 + конкретные шаги')",
             "→ найди 3-5 конкретных контакта / ресурса",
             "→ find_and_message_relevant_users('[описание ЦА]') ИЛИ web_search → save_email_contact",
-            "→ add_task(следующий шаг с дедлайном) → update_goal_progress",
+            "→ update_goal_progress",
         ]
         _why = "Нет специфических интеграций — используй платформенный охват и исследование"
         _alt = "Подключи интеграцию под цель → https://asibiont.com/dashboard"
@@ -1633,7 +1633,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
     _sys_personal = [
         "  📚 research_topic('[что изучить / как достичь / best practices по теме]') ← методика, ресурсы, план",
         "  🔍 web_search('[тема] how to achieve / step by step / best program') ← конкретные шаги",
-        "  📋 add_task(title='[конкретное действие]', due_date='[дата]') ← зафиксируй следующий шаг",
+        "  📋 schedule_background_task('[конкретное действие]') ← запланируй следующий шаг",
         "  📝 save_note('[прогресс/инсайт/результат занятия]') ← фиксируй промежуточный результат",
         "  📢 publish_to_telegram(content='...') ← поделись прогрессом — создаёт публичное обязательство",
         "  🤝 find_relevant_contacts_for_task('[ментор/эксперт по теме]') ← найди поддержку/сообщество",
@@ -1805,7 +1805,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _aic_cannot.append("📢 Telegram публикация (нет бота агента / канала пользователя)")
     if _agent_has_discord or _user_discord_wh:
         _aic_can.append("📢 publish_to_discord: отправка webhook в Discord-сервер пользователя")
-    _aic_can.append("🔍 web_search, research_topic, add_task — всегда доступны")
+    _aic_can.append("🔍 web_search, research_topic — всегда доступны")
     # Платформенные ограничения: одинаковы для ВСЕХ агентов, не зависят от интеграций
     _aic_cannot.append("Любая интеграция, которой нет в блоке ДОСТУПНО, для этого агента недоступна прямо сейчас")
     _aic_cannot.append(
@@ -1948,14 +1948,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 '✅ Трекер задач (Jira/Trello) — run_agent_action(action="list_issues", params={"project":"..."})\n'
                 '  run_agent_action(action="create_task", params={"title":"...", "assignee":"..."})\n'
                 '  run_agent_action(action="update_status", params={"id":"...", "status":"done"})\n'
-                '  🔗 Цепочки: list_issues → add_task (платформа) | create_task → delegate_task\n'
+                '  🔗 Цепочки: list_issues → delegate_task | create_task → update_goal_progress\n'
                 '  ⚠️ action-имена точно из python_code агента.'
             )
         elif _cat == 'hr':
             _intg_connected.append(
                 '✅ HR / Работа (hh.ru/SuperJob) — run_agent_action(action="search_vacancies", params={"query":"Python developer", "area":1})\n'
                 '  run_agent_action(action="get_resumes", params={"query":"...", "experience":"between3And6"})\n'
-                '  🔗 Цепочки: search_vacancies → add_task | get_resumes → save_email_contact → send_outreach_email\n'
+                '  🔗 Цепочки: search_vacancies → save_email_contact | get_resumes → save_email_contact → send_outreach_email\n'
                 '  ℹ️ area: 1=Москва, 2=Санкт-Петербург, 113=Россия. Меняй query каждый цикл.'
             )
         elif _cat == 'database':
@@ -2055,7 +2055,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _intg_block = '\nИНТЕГРАЦИИ АГЕНТА (используй ТОЛЬКО из этого списка):\n'
         if _intg_connected:
             _intg_block += '\n'.join(f'  {x}' for x in _intg_connected) + '\n'
-        _intg_block += '  ✅ web_search, research_topic, add_task — всегда доступны\n'
+        _intg_block += '  ✅ web_search, research_topic — всегда доступны\n'
         _intg_block += '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Если для цели нужна интеграция, которой нет — скажи пользователю что подключить.\n'
         if _intg_missing:
             _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
@@ -2125,7 +2125,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _MULTI_USE_OK = {
         'send_outreach_email', 'check_emails', 'reply_to_outreach_email',
         'send_follow_up_email', 'save_email_contact',
-        'find_relevant_contacts_for_task', 'update_goal_progress', 'add_task',
+        'find_relevant_contacts_for_task', 'update_goal_progress',
     }
     # GitHub/RSS-агенты: run_agent_action не банить — каждый вызов уникален
     # (GitHub: разные query/pages; RSS: данные меняются каждый час)
@@ -2161,9 +2161,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         'web_search', 'research_topic', 'get_news_trends',
     }
     # Для RSS-агентов run_agent_action — основной рабочий инструмент, не признак петли
-    _RSS_WORK_TOOLS = {'run_agent_action', 'research_topic', 'create_post', 'add_task',
+    _RSS_WORK_TOOLS = {'run_agent_action', 'research_topic', 'create_post',
                        'schedule_background_task', 'web_search'} if _has_rss else set()
-    _SAVE_ONLY   = {'save_email_contact', 'add_task'}
+    _SAVE_ONLY   = {'save_email_contact'}
     _PROGRESS_ONLY = {'update_goal_progress'}
     _last4 = _last_tools[-4:]
     _last5 = _last_tools[-5:]
@@ -2216,7 +2216,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _has_rss:
         _rss_reads = _tool_cnt.get('run_agent_action', 0)
         _has_rss_output = any(
-            t in ('create_post', 'publish_to_telegram', 'publish_to_discord', 'add_task')
+            t in ('create_post', 'publish_to_telegram', 'publish_to_discord')
             for t in _used_tools
         )
         if _rss_reads >= 3 and not _has_rss_output:
@@ -2224,8 +2224,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 f"\n📰 RSS-ПЕТЛЯ: ты вызвал run_agent_action {_rss_reads} раз, но ни разу не создал пост или задачу. "
                 "RSS — это сырой материал, не самоцель. Прямо сейчас выбери один из вариантов:\n"
                 "  A) create_post — напиши аналитику/инсайт по прочитанным статьям\n"
-                "  B) add_task — создай задачу коллеге-email-агенту: 'Напиши авторам вот этих статей'\n"
-                "  C) research_topic — углуби знания по самой интересной теме и создай полезный summary\n"
+                "  B) research_topic — углуби знания по самой интересной теме и создай полезный summary\n"
                 "Не читай RSS ещё раз пока не сделаешь что-то с уже прочитанным.\n"
             )
 
@@ -2234,7 +2233,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         # RSS-only агент: только реально доступные инструменты
         _ALL_ACTION_TOOLS = [
             'run_agent_action', 'research_topic', 'web_search', 'create_post',
-            'publish_to_telegram', 'add_task', 'schedule_background_task',
+            'publish_to_telegram', 'schedule_background_task',
             'get_news_trends', 'update_goal_progress',
         ]
     else:
@@ -2245,7 +2244,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             'send_follow_up_email', 'schedule_background_task', 'set_contact_alert',
             'research_topic', 'get_news_trends', 'web_search',
             'generate_image', 'publish_to_discord', 'list_email_contacts',
-            'add_task', 'save_email_contact', 'update_goal_progress',
+            'save_email_contact', 'update_goal_progress',
         ]
     _untried = [t for t in _ALL_ACTION_TOOLS if t not in _used_tools and t not in _banned]
     _untried_block = ''
@@ -2448,7 +2447,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     )
     _sec_tasks = (
         "\n🎯 Задачи и цели:\n"
-        + _td('add_task') + '\n'
         + _td('update_goal_progress') + '\n'
         + _td('schedule_background_task') + '\n'
         + _td('set_reminder') + '\n'
@@ -2610,7 +2608,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 # Для RSS-only агента: меняй action, формат вывода, делегируй
                 "run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_СПИСКА_ВЫШЕ]')",
                 'create_post', 'web_search', 'research_topic',
-                'add_task', 'schedule_background_task',
+                'schedule_background_task',
                 'get_news_trends', 'DELEGATE[email-агент]: передай идеи/инсайты email-агенту',
             ]
             _ALTS_RESEARCH = [
@@ -3281,11 +3279,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "  → ИЛИ: create_post + send_message_to_user('Контент готов, опубликуй в своём канале')\n"
         )
         + "  → ИЛИ: DELEGATE[другой агент с email]: отправь эти контакты — список: ...\n"
-        + "  → ИЛИ: add_task('завтра отправить письма [список]') — зафиксируй на завтра.\n"
+        + "  → ИЛИ: schedule_background_task('завтра отправить письма [список]') — запланируй на завтра.\n"
 
         # create_post / publish требует канал
         "📢 create_post или publish-инструмент вернул ошибку (нет канала / нет получателя):\n"
-        "  → Сохрани контент через add_task('Контент готов: [текст]', source='agent')\n"
+        "  → Сохрани контент через save_note('Контент готов: [текст]')\n"
         "  → Сообщи пользователю через send_message_to_user: 'Контент готов — скажи куда публиковать'\n"
         "  → ИЛИ: DELEGATE[коллега с Telegram-ботом]: опубликуй этот контент: [текст]\n"
 
@@ -3379,7 +3377,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "   🔴 ОТКАЗ → не отвечай, система отпишет\n"
         "   ⚪ НЕЯСНО → если есть вопрос — ответь; если нет — жди\n"
         "   Пиши на языке контакта. check_emails покажет классификацию.\n"
-        "9. add_task — для внутренних шагов (source=agent), не для задач пользователю.\n"
+        "9. НЕ создавай задачи (add_task) — координатор уже дал тебе задачу. Выполняй САМ.\n"
         "10. Отчёт = факты и цифры, сплошной текст 2-3 абзаца. Формат мессенджера, без списков и заголовков.\n"
         "    Блокер → начни с 'БЛОКЕР:' — ASI спросит пользователя.\n"
         "11. Стратегическая инициатива: если прогресс стоит — предложи пользователю смену подхода с аргументами.\n"
@@ -4746,7 +4744,7 @@ class AnchorEngine:
                 )
             _asi_tools_list = [
                 'web_search', 'research_topic', 'find_relevant_contacts_for_task',
-                'save_email_contact', 'add_task', 'complete_task', 'edit_task',
+                'save_email_contact', 'complete_task', 'edit_task',
                 'delegate_task', 'send_outreach_email', 'send_email',
                 'update_goal_progress', 'create_goal',
                 'get_news_trends',
@@ -4760,7 +4758,7 @@ class AnchorEngine:
                     'Ты — координатор команды ASI Biont. '
                     'Ты используешь web_search, research_topic, find_relevant_contacts_for_task, '
                     'save_email_contact, send_outreach_email, send_email, '
-                    'add_task, delegate_task, update_goal_progress. '
+                    'delegate_task, update_goal_progress. '
                     'Для email-охвата: find_relevant_contacts_for_task → save_email_contact → send_outreach_email. '
                     'Ты СНАЧАЛА делаешь сам (ищешь, находишь контакты, отправляешь письма), '
                     'И делегируешь коллегам задачи по их специализации. '
@@ -4990,14 +4988,14 @@ class AnchorEngine:
                 )
                 _STRATEGY_RECOVERY = {
                     'search': (
-                        'сфокусируйся на конкретном личном действии: add_task → save_note → research_topic для следующего шага'
+                        'сфокусируйся на конкретном личном действии: research_topic → save_note → update_goal_progress'
                         if _exh_is_personal else
                         'перейди к прямому контакту: find_relevant_contacts_for_task → send_outreach_email'
                     ),
                     'email': 'смени источник контактов: web_search(\'site:habr.com [тема] email\') или другой GitHub query (другой язык/страна/followers). publish_to_telegram только в свой канал, не в чужие!',
                     # ⛔ find_and_message_relevant_users — это внутренняя платформа, не внешние соцсети
                     'content': (
-                        'создай конкретный план действий: add_task → research_topic → save_note'
+                        'создай конкретный план действий: research_topic → save_note → update_goal_progress'
                         if _exh_is_personal else
                         'контент создан → теперь привлекай людей: send_outreach_email / find_relevant_contacts_for_task'
                     ),
@@ -7147,10 +7145,10 @@ class AnchorEngine:
                     'task': (
                         f"{prev_agent.name} проверил почту и нашёл {_inbox_count} новых письма. "
                         f"Реши что делать: ответить (reply_to_outreach_email), "
-                        f"сохранить контакт (save_email_contact), создать задачу (add_task) или другое.\n"
+                        f"сохранить контакт (save_email_contact) или делегировать (delegate_task).\n"
                         f"📅 ЕСЛИ контакт предлагает СОЗВОН/ВСТРЕЧУ — уточни у пользователя через "
                         f"send_message_to_user('Контакт [имя] хочет созвон [когда]. Подтвердить? Zoom-ссылка?'). "
-                        f"После подтверждения → reply + add_task.\n"
+                        f"После подтверждения → reply + set_reminder.\n"
                         f"💡 Вместо плейсхолдеров вроде [вставьте ссылку] — пиши 'ссылку пришлю отдельно'.\n\n"
                         f"Входящие письма:\n{result[:2000]}"
                     ),
@@ -7743,7 +7741,7 @@ class AnchorEngine:
                             'task': (
                                 f'Для цели «{title}»: используй GitHub API. '
                                 f'Действия: search_users/search_repos/create_issue/list_issues — выбери подходящее. '
-                                f'Результаты → save_note/add_task/save_email_contact → update_goal_progress.'
+                                f'Результаты → save_note/save_email_contact → update_goal_progress.'
                             ),
                             'reason': 'GitHub интеграция доступна',
                         })
@@ -7751,7 +7749,7 @@ class AnchorEngine:
                         directives.append({
                             'goal': title, 'agent_domain': 'any',
                             'tool': 'web_search',
-                            'task': f'GitHub интеграция не подключена. web_search("site:github.com {title_l[:40]}") → add_task.',
+                            'task': f'GitHub интеграция не подключена. web_search("site:github.com {title_l[:40]}") → save_note.',
                             'reason': 'нет GitHub-агента, fallback web_search',
                         })
                     continue
@@ -7799,11 +7797,10 @@ class AnchorEngine:
                     else:
                         directives.append({
                             'goal': title, 'agent_domain': 'any',
-                            'tool': 'add_task',
+                            'tool': 'save_note',
                             'task': (
-                                f'CRM не подключена. Используй внутренние задачи: '
-                                f'add_task для отслеживания сделок по «{title}» вручную. '
-                                f'save_note для фиксации статусов.'
+                                f'CRM не подключена. '
+                                f'save_note для фиксации статусов сделок по «{title}».'
                             ),
                             'reason': 'нет CRM, fallback на задачи',
                         })
@@ -7846,8 +7843,8 @@ class AnchorEngine:
                     else:
                         directives.append({
                             'goal': title, 'agent_domain': 'any',
-                            'tool': 'add_task',
-                            'task': f'Jira не подключена. Используй add_task для трекинга задач по «{title}».',
+                            'tool': 'save_note',
+                            'task': f'Jira не подключена. Используй save_note для трекинга задач по «{title}».',
                             'reason': 'нет Jira, fallback',
                         })
                     continue
@@ -7989,7 +7986,7 @@ class AnchorEngine:
                     elif not _tried['find']:
                         tool, task = 'find_relevant_contacts_for_task', f'Найди контакты для «{title}».'
                     elif not _tried['community']:
-                        tool, task = 'research_topic', f'Найди сообщества для «{title}» → add_task.'
+                        tool, task = 'research_topic', f'Найди сообщества для «{title}» → save_note.'
                     elif not _tried['content']:
                         tool, task = 'create_post', f'Контент-магнит для «{title}» → publish_to_telegram.'
                     else:
@@ -8043,27 +8040,27 @@ class AnchorEngine:
             _fb_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
             # Определяем класс цели для осмысленного fallback
             _goal_class = 'общий'
-            _goal_hint = f'{_fb_tool}("{title[:40]} — пошаговый план") → add_task → update_goal_progress.'
+            _goal_hint = f'{_fb_tool}("{title[:40]} — пошаговый план") → save_note → update_goal_progress.'
             _GOAL_CLASS_MAP = [
                 (('недвижим', 'квартир', 'застройщик', 'новостройк', 'риелтор', 'ипотек', 'аренд'),
                  'недвижимость',
-                 f'{_fb_tool}("маркетинг недвижимости — лидогенерация") → web_search("площадки для объявлений недвижимости") → add_task. '
+                 f'{_fb_tool}("маркетинг недвижимости — лидогенерация") → web_search("площадки для объявлений недвижимости") → save_note. '
                  'Подумай: ЦИАН/Авито, показы, CRM/воронка, WhatsApp для клиентов.'),
                 (('ресторан', 'кафе', 'доставк', 'общепит', 'кухн', 'повар', 'рецепт', 'меню'),
                  'общепит/HoReCa',
-                 f'{_fb_tool}("продвижение ресторана — каналы привлечения") → add_task. '
+                 f'{_fb_tool}("продвижение ресторана — каналы привлечения") → save_note. '
                  'Подумай: Google Maps, Instagram, доставка (Яндекс.Еда/Delivery Club), отзывы.'),
                 (('фитнес', 'тренер', 'зал', 'психолог', 'коуч', 'репетитор', 'юрист', 'стоматолог', 'врач', 'клиник', 'салон'),
                  'услуги',
-                 f'{_fb_tool}("привлечение клиентов в {title[:30]}") → add_task. '
+                 f'{_fb_tool}("привлечение клиентов в {title[:30]}") → save_note. '
                  'Подумай: запись на приём (YClients/Calendly), отзывы (Google Maps/2GIS), WhatsApp/Telegram.'),
                 (('курс', 'школа', 'образован', 'обучен', 'вебинар', 'инфопродукт'),
                  'EdTech',
-                 f'{_fb_tool}("продвижение онлайн-курса") → create_post → add_task. '
+                 f'{_fb_tool}("продвижение онлайн-курса") → create_post → save_note. '
                  'Подумай: Telegram-канал, воронка (лид-магнит → email), YouTube.'),
                 (('стартап', 'приложен', 'mvp', 'saas', 'сервис', 'платформ'),
                  'стартап/tech',
-                 f'{_fb_tool}("growth hacking для стартапа") → web_search("Product Hunt launch checklist") → add_task. '
+                 f'{_fb_tool}("growth hacking для стартапа") → web_search("Product Hunt launch checklist") → save_note. '
                  'Подумай: landing page, AppSumo, Product Hunt, beta-тестеры.'),
             ]
             for _gc_kw, _gc_name, _gc_hint in _GOAL_CLASS_MAP:
@@ -8485,13 +8482,13 @@ class AnchorEngine:
                 if not _cats_cr:
                     # Нет интеграций — базовые инструменты платформы
                     _cap_rules_lines.append(
-                        f"  🔧 {_p_cr['name']} [базовые]: web_search, research_topic, add_task, create_goal, send_message_to_user."
+                        f"  🔧 {_p_cr['name']} [базовые]: web_search, research_topic, create_goal, send_message_to_user."
                     )
                 else:
                     # Строим карточку из категорий
                     _ch_str = '+'.join(_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_cr))
                     _tool_hints = [_CAP_TOOL_HINTS[c] for c in sorted(_cats_cr) if c in _CAP_TOOL_HINTS and _CAP_TOOL_HINTS[c]]
-                    _tool_hints.append('web_search, research_topic, add_task')
+                    _tool_hints.append('web_search, research_topic')
                     # Подсказки о цепочках — учим думать о конечной цели, а не запрещаем шаги
                     _do_not_lines = []
                     if 'email' in _cats_cr:
@@ -8856,33 +8853,33 @@ class AnchorEngine:
                 'content':  'Используй: create_post, publish_to_telegram/discord, generate_image. research_topic для идей контента.',
                 'sales':    'Используй: find_relevant_contacts_for_task → save_email_contact → send_outreach_email. web_search для поиска лидов.',
                 'realestate': (
-                    'Недвижимость: research_topic("где искать покупателей квартир/домов") → web_search("площадки объявлений недвижимости") → add_task. '
+                    'Недвижимость: research_topic("где искать покупателей квартир/домов") → web_search("площадки объявлений недвижимости") → save_note. '
                     'Ключевые каналы: ЦИАН/Авито (публикация), CRM (воронка), WhatsApp (переписка с клиентами), показы (календарь). '
                     'Контент: create_post с планировками/ценами → publish_to_telegram. НЕ GitHub/RSS.'
                 ),
                 'services': (
-                    'Услуги/сервис: research_topic("продвижение [тип услуги] — каналы лидогенерации") → web_search → add_task. '
+                    'Услуги/сервис: research_topic("продвижение [тип услуги] — каналы лидогенерации") → web_search → save_note. '
                     'Ключевые каналы: Google Maps/2GIS (карточка + отзывы), запись онлайн (YClients/Calendly), WhatsApp. '
                     'Контент: create_post (до/после, отзывы) → Telegram/Instagram. НЕ GitHub.'
                 ),
                 'ecommerce': (
                     'E-commerce: run_agent_action (если есть WB/Ozon API) → аналитика продаж/остатков. '
-                    'Без API: web_search("оптимизация карточки товара [тип]") → save_note → add_task. '
+                    'Без API: web_search("оптимизация карточки товара [тип]") → save_note → update_goal_progress. '
                     'Контент: create_post с товарами → publish_to_telegram.'
                 ),
                 'edtech': (
-                    'EdTech: research_topic("воронка продаж онлайн-курса") → web_search → add_task. '
+                    'EdTech: research_topic("воронка продаж онлайн-курса") → web_search → save_note. '
                     'Стратегия: лид-магнит (бесплатный урок) → email-воронка (send_outreach_email) → Telegram-канал. '
                     'Контент: create_post → publish_to_telegram.'
                 ),
-                'learning': 'Используй: research_topic("[тема] best course / как освоить") → web_search → add_task("урок X до [дата]") → save_note(результат). НЕ email-рассылки.',
-                'health':   'Используй: research_topic("программа тренировок / план питания / как похудеть") → add_task("тренировка [время]") → save_note("результат") → update_goal_progress. Если есть Strava → run_agent_action("получить активность"). НЕ email-рассылки.',
-                'personal': 'Используй: research_topic("[цель] — с чего начать?") → web_search → add_task → save_note(прогресс) → update_goal_progress. НЕ email-рассылки если не нужен контакт.',
-                'travel':   'Путешествия: если есть Aviasales/Tutu → run_agent_action("поиск билетов") → save_note. web_search("отель [город] цены") → add_task("забронировать отель") → google_calendar("даты поездки"). Погода: run_agent_action(openweather). НЕ GitHub/CRM.',
-                'legal':    'Юридические: research_topic("закон [тема] 2025-2026") → web_search → save_note("КЛЮЧЕВОЕ") → add_task("дедлайн по документу"). Если есть RSS – мониторинг изменений в законодательстве. Google Calendar — напоминания по отчётности.',
+                'learning': 'Используй: research_topic("[тема] best course / как освоить") → web_search → set_reminder("урок X до [дата]") → save_note(результат). НЕ email-рассылки.',
+                'health':   'Используй: research_topic("программа тренировок / план питания / как похудеть") → set_reminder("тренировка [время]") → save_note("результат") → update_goal_progress. Если есть Strava → run_agent_action("получить активность"). НЕ email-рассылки.',
+                'personal': 'Используй: research_topic("[цель] — с чего начать?") → web_search → save_note(прогресс) → update_goal_progress. НЕ email-рассылки если не нужен контакт.',
+                'travel':   'Путешествия: если есть Aviasales/Tutu → run_agent_action("поиск билетов") → save_note. web_search("отель [город] цены") → set_reminder("забронировать отель") → google_calendar("даты поездки"). Погода: run_agent_action(openweather). НЕ GitHub/CRM.',
+                'legal':    'Юридические: research_topic("закон [тема] 2025-2026") → web_search → save_note("КЛЮЧЕВОЕ") → set_reminder("дедлайн по документу"). Если есть RSS – мониторинг изменений в законодательстве. Google Calendar — напоминания по отчётности.',
                 'startup':  'Стартап: research_topic("рынок [ниша]") → web_search("конкуренты [продукт]") → save_note. Поиск инвесторов: find_relevant_contacts_for_task("инвестор [ниша]") → send_outreach_email. Лид-магнит: create_post → publish_to_telegram.',
                 'logistics': 'Логистика: если есть СДЭК/МойСклад/1С → run_agent_action("трекинг / остатки") → save_note. web_search("оптимизация [процесс]") → add_task. Если есть база данных → SQL-анализ остатков.',
-                'universal': 'Определи сам подход под цель: research_topic("[цель] — лучший способ") → web_search → add_task → save_note → update_goal_progress. Адаптируй инструменты под конкретную задачу.',
+                'universal': 'Определи сам подход под цель: research_topic("[цель] — лучший способ") → web_search → save_note → update_goal_progress. Адаптируй инструменты под конкретную задачу.',
             }
             for _g_plan in _goals[:5]:
                 _gt = (_g_plan.get('title') or '').lower()
@@ -9028,14 +9025,14 @@ class AnchorEngine:
 
             _TOOL_ALTERNATIVES = {
                 'run_agent_action': ['research_topic', 'web_search', 'get_news_trends', 'find_relevant_contacts_for_task', 'create_post', 'save_note'],
-                'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action', 'create_post', 'add_task'],
+                'research_topic':   ['web_search', 'get_news_trends', 'run_agent_action', 'create_post', 'save_note'],
                 'web_search':       ['research_topic', 'get_news_trends', 'find_relevant_contacts_for_task', 'run_agent_action', 'create_post'],
                 'get_news_trends':  ['research_topic', 'web_search', 'run_agent_action', 'create_post'],
                 'find_relevant_contacts_for_task': ['web_search', 'research_topic', 'run_agent_action', 'find_and_message_relevant_users'],
                 'check_emails':     ['send_follow_up_email', 'reply_to_outreach_email', 'send_outreach_email', 'find_relevant_contacts_for_task', 'create_post'],
                 'send_outreach_email': ['check_emails', 'reply_to_outreach_email', 'send_follow_up_email', 'find_relevant_contacts_for_task', 'create_post'],
-                'reply_to_outreach_email': ['send_follow_up_email', 'negotiate_by_email', 'check_emails', 'add_task'],
-                'create_post': ['publish_to_telegram', 'publish_to_discord', 'send_outreach_email', 'save_note', 'add_task'],
+                'reply_to_outreach_email': ['send_follow_up_email', 'negotiate_by_email', 'check_emails', 'save_note'],
+                'create_post': ['publish_to_telegram', 'publish_to_discord', 'send_outreach_email', 'save_note'],
                 'publish_to_telegram': ['create_post', 'web_search', 'get_news_trends', 'find_and_message_relevant_users'],
             }
             _agent_tools_map = {
