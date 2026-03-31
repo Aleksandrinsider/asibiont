@@ -6279,7 +6279,7 @@ class AnchorEngine:
                                 # --- Диагностика узких мест (конкретные причины стагнации) ---
                                 _bottlenecks = []
                                 _sent_today = data.get('emails_sent_today', 0)
-                                _daily_lim = data.get('email_daily_limit', 20)
+                                _daily_lim = data.get('email_daily_limit', 50)
                                 _total_sent = data.get('total_emails_sent', 0)
                                 _pending = data.get('pending_replies', [])
                                 _unsent = data.get('unsent_contacts', [])
@@ -7595,7 +7595,7 @@ class AnchorEngine:
         )
         # Daily email limit awareness
         _sent_today = data.get('emails_sent_today', 0)
-        _daily_limit = data.get('email_daily_limit', 20)
+        _daily_limit = data.get('email_daily_limit', 50)
         _email_limit_exhausted = _sent_today >= _daily_limit
 
         # ── Broader need keywords ──
@@ -8292,7 +8292,7 @@ class AnchorEngine:
                 _known_dedup_str = '\n'.join(_kd_lines)
             _unsent_contacts_str = ''
             _coord_sent_today = data.get('emails_sent_today', 0)
-            _coord_daily_limit = data.get('email_daily_limit', 20)
+            _coord_daily_limit = data.get('email_daily_limit', 50)
             _coord_email_limit_hit = _coord_sent_today >= _coord_daily_limit
             if _coord_email_limit_hit:
                 _unsent_contacts_str = (
@@ -10194,14 +10194,10 @@ class AnchorEngine:
                         )
                         # Если email-лимит выбит — подсказываем переключиться
                         _email_limit_hit = (
-                            data.get('emails_sent_today', 0) >= data.get('email_daily_limit', 20)
-                            or any(
-                                w in (_prev_steps_context or '').lower()
-                                for w in ('лимит', 'исчерпан', 'limit exceeded', 'daily limit')
-                            )
+                            data.get('emails_sent_today', 0) >= data.get('email_daily_limit', 50)
                         )
                         _email_limit_note = (
-                            f"⛔ Дневной лимит email исчерпан ({data.get('emails_sent_today', 0)}/{data.get('email_daily_limit', 20)}). "
+                            f"⛔ Дневной лимит email исчерпан ({data.get('emails_sent_today', 0)}/{data.get('email_daily_limit', 50)}). "
                             "НЕ назначай send_outreach_email / send_email. "
                             "Используй research_topic, web_search, find_relevant_contacts_for_task, create_post.\n"
                             if _email_limit_hit else ''
@@ -13730,7 +13726,7 @@ class AnchorEngine:
             EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
             EmailOutreach.sent_at >= _today_start,
         ).count()
-        _email_daily_limit = 20  # default
+        _email_daily_limit = 50  # default
         if email_campaigns:
             _max_dl = max((c.daily_limit or 20) for c in email_campaigns)
             if _max_dl > 0:

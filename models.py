@@ -622,7 +622,7 @@ class EmailCampaign(Base):
 
     # Лимиты
     max_emails = Column(Integer, default=50)    # Макс. писем в кампании
-    daily_limit = Column(Integer, default=10)   # Макс. писем в день
+    daily_limit = Column(Integer, default=50)   # Макс. писем в день
     max_follow_ups = Column(Integer, default=2) # Макс. фоллоу-апов на одно письмо
 
     # Статус
