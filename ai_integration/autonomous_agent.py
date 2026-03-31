@@ -6292,14 +6292,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info('[DIRECTOR] Autopilot task → adaptive toolset for %s', agent.get('name'))
             # Core: минимальный набор для любого автопилота (включая поиск — нужен всегда)
             _autopilot_tools = {
-                'complete_task', 'edit_task',
-                'update_goal_progress', 'update_goal', 'complete_goal',
+                'complete_task', 'edit_task', 'list_tasks',
+                'update_goal_progress', 'update_goal', 'complete_goal', 'list_goals',
                 'delegate_task', 'run_agent_action',
                 # Поиск/исследование — базово доступны всем, даже если есть спец.интеграция.
                 # Агент с RSS/Github/Telegram всё равно дополняет данные через web/research.
                 'research_topic', 'web_search', 'quick_topic_search',
                 # Планирование — полезно для любого автопилота
                 'schedule_background_task', 'set_reminder',
+                # Заметки и контакты — базовые возможности, нужны всем
+                'save_note', 'find_relevant_contacts_for_task', 'save_email_contact',
             }
             # Smart extend: добавляем инструменты по специализации и интеграциям агента.
             # Используем _intg_hint (лейблы из _parse_agent_integrations) — универсально
@@ -6317,7 +6319,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'negotiate_by_email', 'send_follow_up_email', 'set_contact_alert',
                 })
             # Контент/маркетинг — по специализации или мессенджер-интеграции
-            if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr ', 'пиар', 'копирайт', 'редактор')) or
+            if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr,', 'pr ', 'пиар', 'копирайт', 'редактор')) or
                     any(w in _lbl_ap for w in ('telegram', 'discord', 'slack', 'вконтакт'))):
                 _autopilot_tools.update({
                     'create_post', 'publish_to_telegram', 'publish_to_discord',
