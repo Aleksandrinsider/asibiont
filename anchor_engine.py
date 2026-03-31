@@ -5307,6 +5307,55 @@ class AnchorEngine:
                 }
                 agent_name = chosen.name
 
+                # Efficiency guard: если агент застрял (поручения >> результаты),
+                # переключаемся на более «здорового» агента до dispatch.
+                if anchor.anchor_type == 'goal_autopilot_review' and getattr(chosen, 'id', 0) != 0:
+                    _h_cur = self._recent_assignment_result_health(session, user.id, chosen.name, hours=8)
+                    if _h_cur.get('stalled'):
+                        _alt_pool = []
+                        for _cand in agents:
+                            if getattr(_cand, 'id', 0) in (0, getattr(chosen, 'id', 0)):
+                                continue
+                            _h = self._recent_assignment_result_health(session, user.id, _cand.name, hours=8)
+                            if not _h.get('stalled'):
+                                _alt_pool.append((_h.get('gap', 0), _h.get('assignments', 0), _cand))
+                        if _alt_pool:
+                            _alt_pool.sort(key=lambda x: (x[0], x[1]))
+                            _new = _alt_pool[0][2]
+                            logger.info(
+                                "[ANCHOR-AUTOPILOT] reroute stalled agent %s (a=%s r=%s gap=%s) -> %s",
+                                chosen.name,
+                                _h_cur.get('assignments', 0),
+                                _h_cur.get('results', 0),
+                                _h_cur.get('gap', 0),
+                                _new.name,
+                            )
+                            chosen = _new
+                            agent_data = {
+                                'id': chosen.id, 'name': chosen.name,
+                                'job_title': chosen.job_title or '',
+                                'specialization': chosen.specialization or '',
+                                'description': chosen.description or '',
+                                'personality': chosen.personality or '',
+                                'python_code': chosen.python_code or '',
+                                'user_api_keys': chosen.user_api_keys or '',
+                                'tools_allowed': (chosen.tools_allowed or ''),
+                                'tools': json.loads((chosen.tools_allowed or '') or '[]'),
+                                'avatar_url': _safe_avatar(getattr(chosen, 'avatar_url', ''), chosen.id),
+                                'search_scope': getattr(chosen, 'search_scope', '') or '',
+                                'knowledge_base': getattr(chosen, 'knowledge_base', '') or '',
+                            }
+                            agent_name = chosen.name
+                        else:
+                            anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+                            session.commit()
+                            logger.info(
+                                "[ANCHOR-AUTOPILOT] no healthy agent for user %d; snooze 30m (stalled=%s)",
+                                user.id,
+                                chosen.name,
+                            )
+                            return
+
                 # ── Адаптация задачи под роль агента: универсальный подход ──
                 # Используем _parse_agent_integrations — она определяет реальные интеграции
                 # из user_api_keys (имена ключей) + python_code (импорты) + tools_allowed.
