@@ -554,7 +554,6 @@ def _strip_html(text: str) -> str:
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
 MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '5'))
-MAX_TOTAL_PROACTIVE_PER_DAY = int(os.getenv('MAX_TOTAL_PROACTIVE_PER_DAY', '30'))
 # Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
@@ -567,7 +566,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 25  # Общий лимит ВСЕХ autopilot сообщений (assignments+results) на пользователя в сутки
+MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -6800,11 +6799,6 @@ class AnchorEngine:
                             _chosen_id != 0
                             and self._agent_persona_daily_cap_reached(session, user, _chosen_name)
                         )
-                        # ASI (id=0) тоже имеет daily cap — более высокий, но не безлимитный
-                        if not _skip_persona_send and _chosen_id == 0:
-                            _skip_persona_send = self._agent_persona_daily_cap_reached(
-                                session, user, 'ASI', limit=15
-                            )
                         if _skip_persona_send:
                             logger.info(
                                 "[ANCHOR-AUTOPILOT] user %d: skip result from %s (daily cap=%d)",
