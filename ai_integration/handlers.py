@@ -16574,12 +16574,28 @@ async def switch_agent(agent_slug: str = None, reset: bool = False,
             return " Возвращаюсь в стандартный режим ASI Biont."
 
         if not agent_slug:
-            return " Укажи slug агента (например @crypto-alex)"
+            return " Укажи slug или имя агента (например @crypto-alex или «Марк»)"
 
         slug = agent_slug.lstrip('@').strip()
+
+        # Поиск по slug (приоритет), затем по name (case-insensitive) — для поддержки @Имя
         agent = session.query(UserAgent).filter_by(slug=slug, status='active').first()
         if not agent:
-            return f" Агент @{slug} не найден или ещё не опубликован."
+            agent = session.query(UserAgent).filter(
+                UserAgent.name.ilike(slug),
+                UserAgent.status == 'active',
+            ).first()
+        # Дополнительный поиск среди собственных агентов пользователя (status active/paused)
+        if not agent:
+            user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+            if user_obj:
+                agent = session.query(UserAgent).filter(
+                    UserAgent.author_id == user_obj.id,
+                    UserAgent.name.ilike(slug),
+                    UserAgent.status.in_(['active', 'paused']),
+                ).first()
+        if not agent:
+            return f" Агент «{slug}» не найден. Проверь имя или slug в разделе Маркетплейс."
 
         # Проверяем/создаём подписку
         user_obj = session.query(User).filter_by(telegram_id=user_id).first()
@@ -16606,7 +16622,6 @@ async def switch_agent(agent_slug: str = None, reset: bool = False,
     finally:
         if close_session:
             session.close()
-
 
 async def run_user_script(script_id: int = None, script_slug: str = None,
                           params: dict = None,

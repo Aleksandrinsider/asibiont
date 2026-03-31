@@ -813,6 +813,8 @@ class HybridAutonomousAgent:
         'send_email', 'check_emails',
         # Delegation & agents
         'delegate_task', 'run_agent_action',
+        # Agent switching — always available so ASI can proactively route to user's custom agents
+        'switch_agent', 'list_marketplace',
         # Campaigns — conversation can span multiple turns
         'start_delegation_campaign',
         # Scheduling & background
@@ -3045,6 +3047,56 @@ class HybridAutonomousAgent:
                     dynamic_context += f"\n\n[{_lbl}: {', '.join(topics)}]"
             else:
                 history = full_history
+
+            # ═══ USER AGENTS — инжектируем в контекст список агентов пользователя ═══
+            try:
+                from .user_agents import get_user_active_agents as _gua_hint, load_agent_personality as _lap_hint
+                _hint_ids = _gua_hint(user_id)
+                if not _hint_ids:
+                    # Fallback: собственные офисные агенты (own, status active/paused)
+                    try:
+                        from models import UserAgent as _UA_h, User as _U_h, Session as _S_h
+                        _s_h = _S_h()
+                        try:
+                            _u_h = _s_h.query(_U_h).filter_by(telegram_id=user_id).first()
+                            if _u_h:
+                                _hint_ids = [
+                                    a.id for a in _s_h.query(_UA_h).filter(
+                                        _UA_h.author_id == _u_h.id,
+                                        _UA_h.status.in_(['active', 'paused']),
+                                    ).all()
+                                ]
+                        finally:
+                            _s_h.close()
+                    except Exception:
+                        pass
+                if _hint_ids:
+                    _agent_hints = []
+                    for _hid in _hint_ids[:6]:
+                        _hdata = _lap_hint(_hid)
+                        if _hdata:
+                            _hname = _hdata.get('name', '')
+                            _hdesc = (_hdata.get('description') or _hdata.get('role') or '')[:100]
+                            _hline = f"• @{_hname}" + (f" — {_hdesc}" if _hdesc else "")
+                            _agent_hints.append(_hline)
+                    if _agent_hints:
+                        if user_lang == 'en':
+                            dynamic_context += (
+                                "\n\n[YOUR AGENTS — active and ready]\n"
+                                + "\n".join(_agent_hints)
+                                + "\nTo engage: write @Name or say 'switch to Name'. "
+                                "If the user's request matches an agent's specialty — proactively suggest engaging them."
+                            )
+                        else:
+                            dynamic_context += (
+                                "\n\n[ТВОИ АГЕНТЫ — активны и готовы к работе]\n"
+                                + "\n".join(_agent_hints)
+                                + "\nЧтобы задействовать агента: напиши @Имя или «Переключись на Имя». "
+                                "Если запрос пользователя соответствует специализации агента — предложи его, "
+                                "или вызови switch_agent(agent_slug=«Имя»)."
+                            )
+            except Exception as _ua_hint_e:
+                logger.debug("suppressed user_agents hint: %s", _ua_hint_e)
 
             # ═══ TOKEN BUDGET — обрезаем если превышен лимит ═══
             base_prompt, history = self._trim_prompt_to_budget(base_prompt, history)
