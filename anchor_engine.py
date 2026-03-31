@@ -5645,6 +5645,7 @@ class AnchorEngine:
                             "Пример хорошего: «Марк, запусти web_search по AI-стартапам на dev.to, найди 3 автора с публичным email и сохрани через save_note.»\n\n"
                             "Объясни почему именно этот подход и что ждёшь в итоге — всё в одном потоке, без заголовков и нумерации.\n"
                             "Используй только подключённые каналы из списка выше. О сервисах вне списка — не упоминай.\n"
+                            "🚫 LinkedIn, Sales Navigator, Apollo.io — ЗАПРЕЩЕНЫ. Не упоминай их ни в каком контексте.\n"
                             "Если один агент нашёл контакты — назначь другому написать ЭТИМ людям.\n"
                             "Тон: старший коллега — уважительно, конкретно, без официоза.\n"
                             "Если есть «Последний результат» — отталкивайся от него: что уже сделано, какой следующий шаг.\n"
@@ -5671,13 +5672,22 @@ class AnchorEngine:
                             _gen_s = _gen.strip()
                             _gen_lower = _gen_s.lower()
                             # Guard: AI иногда генерирует пустышки вопреки промпту
+                            _COORD_TOOL_NAMES = (
+                                'web_search', 'check_emails', 'research_topic', 'create_post',
+                                'save_note', 'delegate_task', 'find_relevant', 'run_agent_action',
+                            )
+                            _COORD_PLATFORM_HINTS = (
+                                'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
+                                'dev.to', 'github',
+                            )
+                            _has_tool_name = any(t in _gen_lower for t in _COORD_TOOL_NAMES)
+                            _has_platform_hint = any(t in _gen_lower for t in _COORD_PLATFORM_HINTS)
                             _is_vague_gen = (
                                 any(v in _gen_lower for v in _VAGUE_COORD_PATTERNS)
-                                or (len(_gen_s) < 80 and not any(t in _gen_lower for t in (
-                                    'web_search', 'check_emails', 'research_topic', 'create_post',
-                                    'save_note', 'delegate_task', 'find_relevant', 'run_agent_action',
-                                    'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
-                                )))
+                                # Слишком короткое без инструмента и площадки
+                                or (len(_gen_s) < 80 and not _has_tool_name and not _has_platform_hint)
+                                # Короткое: площадка есть, но инструмент не указан → пустышка
+                                or (len(_gen_s) < 100 and not _has_tool_name)
                             )
                             if _is_vague_gen:
                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
@@ -5686,6 +5696,13 @@ class AnchorEngine:
                                 _coord_text = _gen_s
                             _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
+                            # LinkedIn/неподключённые сервисы — убираем из самого поручения (а не только из отображения)
+                            for _banned_svc in ('linkedin', r'sales\s*navigator', r'apollo\.io', r'calendly', r'hubspot'):
+                                _coord_text = re.sub(
+                                    rf'[^.!?\n]*\b{_banned_svc}\b[^.!?\n]*[.!?]?\s*',
+                                    '', _coord_text, flags=re.IGNORECASE
+                                )
+                            _coord_text = _coord_text.strip()
                             _coord_text = re.sub(
                                 r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
                                 '',
@@ -5738,32 +5755,40 @@ class AnchorEngine:
                                 _new_words_list = [w for w in (_coord_text or '').lower().split() if len(w) > 3]
                                 _new_bigrams = {(_new_words_list[i], _new_words_list[i+1]) for i in range(len(_new_words_list)-1)} if len(_new_words_list) > 1 else set()
                                 _similar_count = 0
+                                _cross_agent_similar = 0  # дедуп МЕЖДУ агентами (ловит "найди 5-7" отправленное всем)
                                 for _rc in _recent_coords:
                                     try:
                                         _rc_d = json.loads(_rc.content or '{}')
                                         if _rc_d.get('__anchor_type') != 'goal_autopilot_assignment':
-                                            continue
-                                        if _rc_d.get('__to_agent') != _chosen_name:
                                             continue
                                         _rc_text = (_rc_d.get('text', '') or '').lower()
                                         _rc_kw = {w for w in _rc_text.split() if len(w) > 3}
                                         if not _rc_kw or not _new_kw:
                                             continue
                                         _overlap = len(_rc_kw & _new_kw) / max(min(len(_rc_kw), len(_new_kw)), 1)
-                                        # Bigram overlap — ловит одинаковые фразы даже если слова перемешаны
                                         _rc_wl = [w for w in _rc_text.split() if len(w) > 3]
                                         _rc_bigrams = {(_rc_wl[i], _rc_wl[i+1]) for i in range(len(_rc_wl)-1)} if len(_rc_wl) > 1 else set()
                                         _bi_overlap = (len(_new_bigrams & _rc_bigrams) / max(min(len(_new_bigrams), len(_rc_bigrams)), 1)) if _new_bigrams and _rc_bigrams else 0
-                                        if _overlap > 0.35 or _bi_overlap > 0.30:
-                                            _similar_count += 1
-                                            if _similar_count >= 2:
+                                        _is_same_agent = (_rc_d.get('__to_agent') == _chosen_name)
+                                        # ── Per-agent dedup (прежняя логика) ──
+                                        if _is_same_agent:
+                                            if _overlap > 0.35 or _bi_overlap > 0.30:
+                                                _similar_count += 1
+                                                if _similar_count >= 2:
+                                                    _skip_coord = True
+                                                    logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h (word=%.0f%% bi=%.0f%%), skip", _similar_count, _chosen_name, _overlap*100, _bi_overlap*100)
+                                                    break
+                                            if _overlap > 0.50 or _bi_overlap > 0.45:
                                                 _skip_coord = True
-                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h (word=%.0f%% bi=%.0f%%), skip", _similar_count, _chosen_name, _overlap*100, _bi_overlap*100)
+                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: word=%.0f%% bi=%.0f%% overlap with recent assign to %s, skip", _overlap * 100, _bi_overlap * 100, _chosen_name)
                                                 break
-                                        if _overlap > 0.50 or _bi_overlap > 0.45:
-                                            _skip_coord = True
-                                            logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: word=%.0f%% bi=%.0f%% overlap with recent assign to %s, skip", _overlap * 100, _bi_overlap * 100, _chosen_name)
-                                            break
+                                        # ── Cross-agent dedup: одинаковая фраза разным агентам = петля ──
+                                        if _overlap > 0.45 or _bi_overlap > 0.40:
+                                            _cross_agent_similar += 1
+                                            if _cross_agent_similar >= 3:
+                                                _skip_coord = True
+                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS cross-agent loop: phrase repeated %d× across agents (word=%.0f%% bi=%.0f%%), skip", _cross_agent_similar, _overlap*100, _bi_overlap*100)
+                                                break
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
                             except Exception as _dc_err:
@@ -5880,7 +5905,9 @@ class AnchorEngine:
                         ).first()
                         if _ap_recent:
                             _skip_ap_task = True
-                            logger.debug("[ANCHOR-AUTOPILOT] dedup: skip task for agent %s, recent task id=%s", agent_name, _ap_recent.id)
+                            # Сохраняем ID существующей задачи чтобы обновить её результатом после выполнения
+                            _ap_task_id = _ap_recent.id
+                            logger.debug("[ANCHOR-AUTOPILOT] dedup: reuse task id=%s for agent %s", _ap_recent.id, agent_name)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
                     if not _skip_ap_task:
@@ -17589,7 +17616,8 @@ class AnchorEngine:
                     result_json = await response.json()
                     text = result_json['choices'][0]['message']['content'].strip()
 
-            if not text or text.upper() == 'SKIP' or text.upper().startswith('SKIP'):
+            _text_upper = text.upper().strip()
+            if not text or _text_upper == 'SKIP' or _text_upper.startswith('SKIP') or _text_upper.endswith('SKIP') or '\nSKIP' in _text_upper:
                 return None
 
             # Очистка: убираем кавычки если AI обернул
@@ -18203,7 +18231,8 @@ class AnchorEngine:
                 return None
 
             # Убираем "SKIP" если AI начал писать но потом решил не стоит
-            if result.strip().upper().startswith('SKIP'):
+            _result_upper = result.strip().upper()
+            if _result_upper.startswith('SKIP') or _result_upper.endswith('SKIP') or '\nSKIP' in _result_upper:
                 return None
 
             # Нормализация формата: убираем двойные переносы, списки, markdown

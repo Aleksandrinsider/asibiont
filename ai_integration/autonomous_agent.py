@@ -8177,6 +8177,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 resp = _cleaned_ag
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
+        # Capitalize first letter if starts with lowercase (cosmetic quality)
+        if resp and resp[0].islower():
+            resp = resp[0].upper() + resp[1:]
         _ag_id = ag.get('id')
         _av_url = f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''
         _ac = _json.dumps({
