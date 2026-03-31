@@ -1429,10 +1429,42 @@ class OfficeEngine:
             _agents_caps.append(_line)
         agents_caps_text = "\n".join(_agents_caps)
 
+        # Определяем подключённые интеграции пользователя
+        _user_obj = entry.get('user')
+        _connected = []
+        _missing = []
+        if _user_obj:
+            if getattr(_user_obj, 'telegram_channel', None):
+                _connected.append('Telegram-канал')
+            else:
+                _missing.append('Telegram-канал')
+            if getattr(_user_obj, 'discord_webhook', None):
+                _connected.append('Discord')
+            else:
+                _missing.append('Discord')
+            if getattr(_user_obj, 'google_oauth_token', None):
+                _connected.append('Google/Gmail OAuth')
+            else:
+                _missing.append('Google/Gmail OAuth')
+        _always_missing = ['LinkedIn', 'Calendly', 'Apollo.io', 'Sales Navigator', 'Slack', 'Notion']
+        _missing.extend(_always_missing)
+        _integrations_block = ''
+        if _missing:
+            _integrations_block = (
+                "⛔ НЕДОСТУПНЫЕ СЕРВИСЫ (НЕ назначай задачи с ними): "
+                + ", ".join(_missing) + "\n"
+            )
+        if _connected:
+            _integrations_block += (
+                "✅ Подключено: " + ", ".join(_connected) + "\n"
+            )
+        _integrations_block += "\n"
+
         prompt = (
             "Ты — ASI-координатор. Назначаешь агентам КОНКРЕТНЫЕ микро-задачи, которые двигают цели вперёд.\n\n"
             f"ЦЕЛИ:\n{goals_text}\n\n"
             f"АГЕНТЫ (и их реальные возможности):\n{agents_caps_text}\n\n"
+            f"{_integrations_block}"
             f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
             f"{_failed_tasks_l2}"
             "ПРАВИЛА НАЗНАЧЕНИЯ:\n"

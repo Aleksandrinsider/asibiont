@@ -349,13 +349,17 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
     # Напоминание о формате — в конец dynamic_context (не кешируется → всегда видно AI)
     if lang == 'en':
         _dyn_parts.append(
-            "FORMAT REMINDER: Plain text only. No lists, bullets (-, *, •), bold, headers, code blocks. "
-            "Paragraphs separated by single newline. Max 2 emojis."
+            "FORMAT REMINDER: Plain text only. No lists, bullets (-, *, •, 1. 2. 3.), bold, headers, code blocks, double spaces. "
+            "Enumerate inline using commas, not markers. "
+            "Paragraphs separated by single newline. Max 2 emojis. "
+            "Do NOT mention services (LinkedIn, Calendly etc.) that are NOT connected for this user."
         )
     else:
         _dyn_parts.append(
-            "НАПОМИНАНИЕ О ФОРМАТЕ: только сплошной текст. ЗАПРЕЩЕНЫ списки, буллеты (-, *, •), "
-            "жирный (** / __), заголовки (## / #), блоки кода. Абзацы через одиночный \\n. Максимум 2 эмодзи."
+            "НАПОМИНАНИЕ О ФОРМАТЕ: только сплошной текст. ЗАПРЕЩЕНЫ списки, буллеты (-, *, •, 1. 2. 3.), "
+            "жирный (** / __), заголовки (## / #), блоки кода, двойные пробелы. "
+            "Перечисляй через запятую в предложениях, НЕ маркерами. Абзацы через одиночный \\n. Максимум 2 эмодзи. "
+            "НЕ упоминай сервисы (LinkedIn, Calendly и др.) если они НЕ подключены у пользователя."
         )
 
     dynamic_context = '\n'.join(_dyn_parts)

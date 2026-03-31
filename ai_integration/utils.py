@@ -576,6 +576,11 @@ def clean_technical_details(text):
     text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'\1', text)  # *italic* → italic
     text = re.sub(r'^#{1,3}\s+', '', text, flags=re.MULTILINE)  # ### Header → Header
     
+    # Удаляем маркеры списков (-, *, •, 1.) в начале строк — мессенджер-стиль
+    text = re.sub(r'^\s*[-\*•–—]\s+', '', text, flags=re.MULTILINE)  # - item → item
+    text = re.sub(r'^\s*\d+[.)]\s+', '', text, flags=re.MULTILINE)  # 1. item → item
+    text = re.sub(r'^\s*[a-zа-яё][.)]\s+', '', text, flags=re.MULTILINE)  # a) item → item
+    
     # Удаляем фразы-филлеры в начале ответа: «Отлично!», «О, отлично!», «Супер!» и т.д.
     # НЕ удаляем если это часть осмысленного слова: «Отличная работа»
     # Ловит: "Отлично! Нашла...", "О, отлично! Вижу...", "Супер, начинаю..."
