@@ -5602,16 +5602,19 @@ class AnchorEngine:
                                     Interaction.user_id == user.id,
                                     Interaction.message_type == 'agent_msg',
                                     Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=3),
-                                ).order_by(Interaction.created_at.desc()).limit(5).all()
+                                ).order_by(Interaction.created_at.desc()).limit(10).all()
                                 for _rc in _recent_coords:
                                     try:
                                         _rc_d = json.loads(_rc.content or '{}')
                                         if _rc_d.get('__anchor_type') == 'goal_autopilot_assignment':
+                                            # Сравниваем только назначения ТОМУ ЖЕ агенту
+                                            if _rc_d.get('__to_agent') != _chosen_name:
+                                                continue
                                             _rc_words = set((_rc_d.get('text', '') or '').lower().split())
                                             _new_words = set((_coord_text or '').lower().split())
                                             if _rc_words and _new_words:
                                                 _overlap = len(_rc_words & _new_words) / max(len(_rc_words | _new_words), 1)
-                                                if _overlap > 0.65:
+                                                if _overlap > 0.50:
                                                     _skip_coord = True
                                                     logger.info("[ANCHOR-AUTOPILOT] coord-assign DEDUP: %.0f%% overlap with recent, skip sending", _overlap * 100)
                                                     break
@@ -5998,18 +6001,22 @@ class AnchorEngine:
 
                 # ── Dedup для tool-based результатов: RSS/новости не должны повторяться ──
                 # Даже если агент использовал инструменты, один и тот же материал отсылается многократно.
-                # Проверяем по порогу 65% за последние 4 часа.
+                # Проверяем по порогу 70% за последние 4 часа (только сообщения ТОГО ЖЕ агента).
                 if not _is_noise_result and _result_clean and _has_real_actions:
                     try:
                         _recent_tool_msgs = session.query(Interaction.content).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'agent_msg',
                             Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
-                        ).order_by(Interaction.created_at.desc()).limit(8).all()
+                        ).order_by(Interaction.created_at.desc()).limit(12).all()
                         _new_words_t = set(_result_clean.lower().split())
                         for (_rt_content,) in _recent_tool_msgs:
                             try:
                                 _rt_j = json.loads(_rt_content or '{}')
+                                # Сравниваем только с сообщениями того же агента
+                                _rt_agent = (_rt_j.get('__agent', {}) or {}).get('name', '')
+                                if _rt_agent and _rt_agent != agent_name:
+                                    continue
                                 _rt_text = _rt_j.get('text', '') or ''
                             except Exception:
                                 _rt_text = ''
@@ -6018,7 +6025,7 @@ class AnchorEngine:
                             _old_words_t = set(_rt_text.lower().split())
                             _common_t = len(_new_words_t & _old_words_t)
                             _total_t = max(len(_new_words_t | _old_words_t), 1)
-                            if _common_t / _total_t > 0.65:
+                            if _common_t / _total_t > 0.70:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup_tools'
                                 logger.info("[ANCHOR-AUTOPILOT] tools dedup: %.0f%% overlap with recent tool msg from %s",
@@ -6029,10 +6036,12 @@ class AnchorEngine:
 
                 # ── Contact-repeat guard: не присылать снова те же email в одном дне ──
                 # Исключение: обработка входящих/переговоров (там повтор адреса нормален).
+                # Исключение: send_outreach_email — агент реально отправил письмо, показываем всегда.
                 if not _is_noise_result and _result_clean:
                     try:
                         _skip_contact_guard = any(
-                            t in ('check_emails', 'reply_to_outreach_email', 'negotiate_by_email')
+                            t in ('check_emails', 'reply_to_outreach_email', 'negotiate_by_email',
+                                  'send_outreach_email', 'save_email_contact')
                             for t in (_tools_used or [])
                         )
                         if not _skip_contact_guard:
