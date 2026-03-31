@@ -424,6 +424,24 @@ def test_chat_ai_review_registered_in_anchor_engine():
     assert "_scan_chat_ai_review" in src
 
 
+def test_sanitize_assignment_drops_dangling_tail():
+    """Поручение не должно заканчиваться обрывком вроде 'Как думаешь, какой'."""
+    from ai_integration.utils import sanitize_live_team_chat_text
+
+    raw = (
+        "Марк, найди 5-7 Telegram-чатов по биотеху, оцени активность и сохрани в заметку. "
+        "После этого подготовь черновик поста для входа в сообщество. Как думаешь, какой"
+    )
+    out = sanitize_live_team_chat_text(
+        raw,
+        anchor_type='goal_autopilot_assignment',
+        speaker_name='ASI',
+        target_name='Марк',
+    )
+    assert "Как думаешь" not in out
+    assert out.endswith(('.', '!', '?'))
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. Goal CRUD integrity
 # ══════════════════════════════════════════════════════════════════════════════

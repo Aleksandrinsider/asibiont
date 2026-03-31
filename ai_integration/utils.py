@@ -723,7 +723,7 @@ def sanitize_live_team_chat_text(
     _a = (anchor_type or '').lower().strip()
     if max_chars is None:
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            max_chars = 520
+            max_chars = 380
         elif _a == 'coordinator_result':
             max_chars = 900
         else:
@@ -732,6 +732,20 @@ def sanitize_live_team_chat_text(
     if len(cleaned) > max_chars:
         cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
         cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
+
+    # Для живых поручений: не оставляем оборванный хвост типа
+    # "Как думаешь, какой..." после обрезки.
+    if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+        cleaned = re.sub(r'(?i)\s+как\s+думаешь,?\s+какой\s*$', '', cleaned).strip()
+        cleaned = re.sub(r'(?i)\s+как\s+думаешь\s*$', '', cleaned).strip()
+        cleaned = re.sub(r'(?i)\s+что\s+думаешь\s*$', '', cleaned).strip()
+        # Если текст обрезан без финальной пунктуации — закрываем мысль.
+        if cleaned and cleaned[-1] not in '.!?':
+            _last_punc = max(cleaned.rfind('.'), cleaned.rfind('!'), cleaned.rfind('?'))
+            if _last_punc >= 90:
+                cleaned = cleaned[:_last_punc + 1].strip()
+            else:
+                cleaned = cleaned.rstrip(' ,;:-') + '.'
 
     # Runtime-guard без потери содержания: если после очистки остались явные
     # префиксы брифа, мягко убираем их, но НЕ заменяем весь текст шаблоном.
