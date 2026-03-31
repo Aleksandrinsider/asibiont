@@ -1566,6 +1566,46 @@ class OfficeEngine:
             if not _aname or not _atask:
                 continue
 
+            # ── Санитизация: вырезаем предложения с LinkedIn и др. из задачи ──
+            for _bs in ('linkedin', r'calendly', r'apollo\.io', 'sales navigator'):
+                _atask = _re.sub(
+                    rf'[^.!?\n]*\b{_bs}\b[^.!?\n]*[.!?]?\s*',
+                    '', _atask, flags=_re.IGNORECASE
+                )
+            _atask = _atask.strip()
+            if not _atask:
+                continue
+
+            # ── Код-уровневый антилуп: проверяем keyword overlap с последними 6ч ──
+            try:
+                _task_words = set(w.lower() for w in _atask.split() if len(w) > 4)
+                _s_dup = Db2()
+                try:
+                    _dup_cutoff = _now - timedelta(hours=6)
+                    _recent_aal = _s_dup.query(AgentActivityLog).filter(
+                        AgentActivityLog.user_id == user_db_id,
+                        AgentActivityLog.activity_type == 'agent_task',
+                        AgentActivityLog.target == f'agent:{_aname}',
+                        AgentActivityLog.created_at >= _dup_cutoff,
+                    ).order_by(AgentActivityLog.created_at.desc()).limit(6).all()
+
+                    _high_overlap_count = 0
+                    for _aal_row in _recent_aal:
+                        _old_text = ((_aal_row.title or '') + ' ' + (_aal_row.content or '')).lower()
+                        _old_words = set(w for w in _old_text.split() if len(w) > 4)
+                        if _old_words and _task_words:
+                            _overlap = len(_task_words & _old_words) / min(len(_task_words), len(_old_words))
+                            if _overlap > 0.45:
+                                _high_overlap_count += 1
+                    if _high_overlap_count >= 2:
+                        logger.info("[OFFICE-L2] ANTILOOP: user=%d skipping task for %s (overlap with %d recent tasks): %s",
+                                    user_db_id, _aname, _high_overlap_count, _atask[:60])
+                        continue
+                finally:
+                    _s_dup.close()
+            except Exception as _dup_err:
+                logger.debug("[OFFICE-L2] antiloop check failed: %s", _dup_err)
+
             # Находим агента
             _agent_match = next(
                 (a for a in agents if a[1] and a[1].lower() == _aname.lower()),

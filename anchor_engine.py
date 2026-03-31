@@ -5688,29 +5688,37 @@ class AnchorEngine:
                     try:
                         _cs = Session()
                         try:
-                            # ── DEDUP: не отправляем если очень похоже на последние coord-сообщения ──
+                            # ── DEDUP + ANTILOOP: не отправляем если похоже на недавние назначения ──
                             _skip_coord = False
                             try:
                                 _recent_coords = _cs.query(Interaction).filter(
                                     Interaction.user_id == user.id,
                                     Interaction.message_type == 'agent_msg',
-                                    Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=3),
-                                ).order_by(Interaction.created_at.desc()).limit(10).all()
+                                    Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
+                                ).order_by(Interaction.created_at.desc()).limit(20).all()
+                                _new_kw = {w for w in (_coord_text or '').lower().split() if len(w) > 3}
+                                _similar_count = 0
                                 for _rc in _recent_coords:
                                     try:
                                         _rc_d = json.loads(_rc.content or '{}')
-                                        if _rc_d.get('__anchor_type') == 'goal_autopilot_assignment':
-                                            # Сравниваем только назначения ТОМУ ЖЕ агенту
-                                            if _rc_d.get('__to_agent') != _chosen_name:
-                                                continue
-                                            _rc_words = set((_rc_d.get('text', '') or '').lower().split())
-                                            _new_words = set((_coord_text or '').lower().split())
-                                            if _rc_words and _new_words:
-                                                _overlap = len(_rc_words & _new_words) / max(len(_rc_words | _new_words), 1)
-                                                if _overlap > 0.50:
-                                                    _skip_coord = True
-                                                    logger.info("[ANCHOR-AUTOPILOT] coord-assign DEDUP: %.0f%% overlap with recent, skip sending", _overlap * 100)
-                                                    break
+                                        if _rc_d.get('__anchor_type') != 'goal_autopilot_assignment':
+                                            continue
+                                        if _rc_d.get('__to_agent') != _chosen_name:
+                                            continue
+                                        _rc_kw = {w for w in (_rc_d.get('text', '') or '').lower().split() if len(w) > 3}
+                                        if not _rc_kw or not _new_kw:
+                                            continue
+                                        _overlap = len(_rc_kw & _new_kw) / max(min(len(_rc_kw), len(_new_kw)), 1)
+                                        if _overlap > 0.40:
+                                            _similar_count += 1
+                                            if _similar_count >= 2:
+                                                _skip_coord = True
+                                                logger.info("[ANCHOR-AUTOPILOT] ANTILOOP: %d similar assigns to %s in 6h, skip", _similar_count, _chosen_name)
+                                                break
+                                        if _overlap > 0.55:
+                                            _skip_coord = True
+                                            logger.info("[ANCHOR-AUTOPILOT] DEDUP: %.0f%% overlap with recent assign to %s, skip", _overlap * 100, _chosen_name)
+                                            break
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
                             except Exception as _dc_err:
@@ -5882,33 +5890,42 @@ class AnchorEngine:
                             _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=60)
                             if _ack_gen and len(_ack_gen.strip()) > 4:
                                 _ack_text = _ack_gen.strip()
-                                try:
-                                    _ack_sv = Session()
+                                # Фильтруем hollow ack — отбрасываем шаблонные пустые ответы
+                                _ack_lower = _ack_text.lower()
+                                _HOLLOW_ACK = ('погружусь в поиск', 'сейчас изучу', 'начинаю работать',
+                                               'приступаю к', 'сейчас займусь', 'планирую изучить',
+                                               'буду искать', 'вернусь с результатами',
+                                               'наткнулась на пару', 'наткнулся на пару')
+                                _is_hollow_ack = any(h in _ack_lower for h in _HOLLOW_ACK)
+                                if _is_hollow_ack:
+                                    logger.info("[ANCHOR-AUTOPILOT] hollow ack filtered: %s", _ack_text[:60])
+                                else:
                                     try:
-                                        _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
-                                        if not _skip_ack_cap:
-                                            _ack_sv.add(Interaction(
-                                                user_id=user.id,
-                                                message_type='agent_msg',
-                                                content=json.dumps({
-                                                    '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
-                                                    'text': _ack_text,
-                                                    '__anchor_type': 'goal_autopilot_ack',
-                                                }, ensure_ascii=False),
-                                            ))
-                                            _ack_sv.commit()
-                                        else:
-                                            logger.info(
-                                                "[ANCHOR-AUTOPILOT] user %d: skip ack from %s (daily cap=%d)",
-                                                user.id,
-                                                _chosen_name,
-                                                MAX_AGENT_PERSONA_MSG_PER_DAY,
-                                            )
-                                    finally:
-                                        _ack_sv.close()
-                                    # Ack сохраняем только если не превышен лимит — в Telegram НЕ шлём
-                                except Exception as _ack_sv_err:
-                                    logger.debug("[ANCHOR-AUTOPILOT] ack save/send: %s", _ack_sv_err)
+                                        _ack_sv = Session()
+                                        try:
+                                            _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
+                                            if not _skip_ack_cap:
+                                                _ack_sv.add(Interaction(
+                                                    user_id=user.id,
+                                                    message_type='agent_msg',
+                                                    content=json.dumps({
+                                                        '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
+                                                        'text': _ack_text,
+                                                        '__anchor_type': 'goal_autopilot_ack',
+                                                    }, ensure_ascii=False),
+                                                ))
+                                                _ack_sv.commit()
+                                            else:
+                                                logger.info(
+                                                    "[ANCHOR-AUTOPILOT] user %d: skip ack from %s (daily cap=%d)",
+                                                    user.id,
+                                                    _chosen_name,
+                                                    MAX_AGENT_PERSONA_MSG_PER_DAY,
+                                                )
+                                        finally:
+                                            _ack_sv.close()
+                                    except Exception as _ack_sv_err:
+                                        logger.debug("[ANCHOR-AUTOPILOT] ack save/send: %s", _ack_sv_err)
                     except Exception as _ack_err:
                         logger.debug("[ANCHOR-AUTOPILOT] agent ack gen failed: %s", _ack_err)
 
@@ -6044,6 +6061,7 @@ class AnchorEngine:
                     'запустил поиск', 'запустила поиск',
                     'проверил данные', 'проверила данные',
                     'выполнено', 'поиск завершён',
+                    'задачу выполнил', 'задачу выполнила',
                 )
                 _is_echo = False  # промпт теперь учит думать правильно
                 _is_noise_result = (
