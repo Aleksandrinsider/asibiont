@@ -175,10 +175,11 @@ def test_d4_timeline_visible_types():
     # Ищем _TIMELINE_VISIBLE_TYPES из source
     src = inspect.getsource(main_mod)
     required_types = [
-        'goal_created', 'goal_completed', 'goal_updated',
-        'goal_autopilot_dispatch', 'agent_task',
+        'goal_created', 'goal_completed',
+        'goal_autopilot_dispatch',
         'task_completed', 'coordinator_summary',
     ]
+    # goal_updated and agent_task intentionally removed from visible types (timeline noise)
     for t in required_types:
         assert f"'{t}'" in src or f'"{t}"' in src, \
             f"'{t}' отсутствует в исходнике main.py"

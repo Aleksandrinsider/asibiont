@@ -850,7 +850,7 @@ def test_g37_agent_persona_cap_counts_real_result_message():
             content=json.dumps({
                 '__agent': {'name': 'Кристина', 'id': 14, 'avatar_url': ''},
                 'text': 'Нашла 6 контактов и отправила 6 писем',
-                '__anchor_type': 'coordinator_result',
+                '__anchor_type': 'proactive_summary',  # coordinator_result excluded from cap by design
             }, ensure_ascii=False),
         ))
         s.commit()

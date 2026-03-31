@@ -2212,6 +2212,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
 
     # ── RSS-specific loop: агент читает RSS 3+ раз без публикации/делегирования ──
+    _used_tools = set(_tool_cnt.keys())
     if _has_rss:
         _rss_reads = _tool_cnt.get('run_agent_action', 0)
         _has_rss_output = any(
@@ -2246,7 +2247,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             'generate_image', 'publish_to_discord', 'list_email_contacts',
             'add_task', 'save_email_contact', 'update_goal_progress',
         ]
-    _used_tools = set(_tool_cnt.keys())
     _untried = [t for t in _ALL_ACTION_TOOLS if t not in _used_tools and t not in _banned]
     _untried_block = ''
     if _untried and agent_history:  # показываем только если есть история (есть что менять)
