@@ -5662,8 +5662,28 @@ class AnchorEngine:
                             "Только живая речь. Кратко и по делу."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=400)
+                        _VAGUE_COORD_PATTERNS = (
+                            'посмотри что можно', 'поработай над', 'займись',
+                            'сделай что-нибудь', 'подумай что можно', 'проверь что можно',
+                            'поработай с целями', 'продолжай работу',
+                        )
                         if _gen and len(_gen.strip()) > 15:
-                            _coord_text = _gen.strip()
+                            _gen_s = _gen.strip()
+                            _gen_lower = _gen_s.lower()
+                            # Guard: AI иногда генерирует пустышки вопреки промпту
+                            _is_vague_gen = (
+                                any(v in _gen_lower for v in _VAGUE_COORD_PATTERNS)
+                                or (len(_gen_s) < 80 and not any(t in _gen_lower for t in (
+                                    'web_search', 'check_emails', 'research_topic', 'create_post',
+                                    'save_note', 'delegate_task', 'find_relevant', 'run_agent_action',
+                                    'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
+                                )))
+                            )
+                            if _is_vague_gen:
+                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
+                                # Оставляем _coord_text (конкретный fallback), не перезаписываем
+                            else:
+                                _coord_text = _gen_s
                             _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(
@@ -5714,6 +5734,9 @@ class AnchorEngine:
                                     Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
                                 ).order_by(Interaction.created_at.desc()).limit(20).all()
                                 _new_kw = {w for w in (_coord_text or '').lower().split() if len(w) > 3}
+                                # Bigram overlap: ловит перефразировки лучше чем слова
+                                _new_words_list = [w for w in (_coord_text or '').lower().split() if len(w) > 3]
+                                _new_bigrams = {(_new_words_list[i], _new_words_list[i+1]) for i in range(len(_new_words_list)-1)} if len(_new_words_list) > 1 else set()
                                 _similar_count = 0
                                 for _rc in _recent_coords:
                                     try:
@@ -5722,19 +5745,24 @@ class AnchorEngine:
                                             continue
                                         if _rc_d.get('__to_agent') != _chosen_name:
                                             continue
-                                        _rc_kw = {w for w in (_rc_d.get('text', '') or '').lower().split() if len(w) > 3}
+                                        _rc_text = (_rc_d.get('text', '') or '').lower()
+                                        _rc_kw = {w for w in _rc_text.split() if len(w) > 3}
                                         if not _rc_kw or not _new_kw:
                                             continue
                                         _overlap = len(_rc_kw & _new_kw) / max(min(len(_rc_kw), len(_new_kw)), 1)
-                                        if _overlap > 0.40:
+                                        # Bigram overlap — ловит одинаковые фразы даже если слова перемешаны
+                                        _rc_wl = [w for w in _rc_text.split() if len(w) > 3]
+                                        _rc_bigrams = {(_rc_wl[i], _rc_wl[i+1]) for i in range(len(_rc_wl)-1)} if len(_rc_wl) > 1 else set()
+                                        _bi_overlap = (len(_new_bigrams & _rc_bigrams) / max(min(len(_new_bigrams), len(_rc_bigrams)), 1)) if _new_bigrams and _rc_bigrams else 0
+                                        if _overlap > 0.35 or _bi_overlap > 0.30:
                                             _similar_count += 1
                                             if _similar_count >= 2:
                                                 _skip_coord = True
-                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h, skip", _similar_count, _chosen_name)
+                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h (word=%.0f%% bi=%.0f%%), skip", _similar_count, _chosen_name, _overlap*100, _bi_overlap*100)
                                                 break
-                                        if _overlap > 0.55:
+                                        if _overlap > 0.50 or _bi_overlap > 0.45:
                                             _skip_coord = True
-                                            logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: %.0f%% overlap with recent assign to %s, skip", _overlap * 100, _chosen_name)
+                                            logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: word=%.0f%% bi=%.0f%% overlap with recent assign to %s, skip", _overlap * 100, _bi_overlap * 100, _chosen_name)
                                             break
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
@@ -6081,11 +6109,10 @@ class AnchorEngine:
                 )
                 _is_echo = False  # промпт теперь учит думать правильно
                 _is_noise_result = (
+                    # Абсолютный фильтр: hollow acks ВСЕГДА noise, даже если tools вызваны
+                    _result_lower.rstrip('.!') in _EMPTY_RESPONSES
                     # Шум: нет инструментов + пустой/шаблонный ответ
-                    not _has_real_actions and (
-                        len(_result_clean) < 15
-                        or _result_lower.rstrip('.!') in _EMPTY_RESPONSES
-                    )
+                    or (not _has_real_actions and len(_result_clean) < 15)
                     # Шум: ответ содержит ТОЛЬКО техническую ошибку без полезной информации
                     or (not _has_real_actions and len(_result_clean) < 80
                         and any(w in _result_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно', 'ошибка подключения')))
@@ -18381,6 +18408,20 @@ class AnchorEngine:
 
             # Создаём запись в interactions
             # Если нет конкретного агента — атрибутируем как ASI (проактивные сообщения системы)
+            # ── Universal hollow filter: блокируем пустышки на уровне доставки ──
+            _DELIVER_HOLLOW = {
+                'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                'данных нет', 'понял задачу', 'принял в работу',
+                'задачу принял', 'задачу приняла', 'готово', 'сделано',
+            }
+            _msg_for_hollow_check = message.strip().lower().rstrip('.!?')
+            if _msg_for_hollow_check in _DELIVER_HOLLOW:
+                logger.info("[ANCHOR] TEACH-MISS hollow delivery blocked: '%s' for user %d", message[:60], user.id)
+                try:
+                    session.commit()  # commit anchor.delivered_at
+                except Exception:
+                    pass
+                return
             if not interaction_content.strip().startswith('{'):
                 interaction_content = json.dumps({
                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
