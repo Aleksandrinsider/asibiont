@@ -2008,6 +2008,11 @@ class HybridAutonomousAgent:
             params.pop('sender_name', None)
             params.pop('from_name', None)
             params.pop('from_email', None)   # не часть send_outreach_email
+            # Автозапись кто отправил: берём имя активного агента
+            if not params.get('sent_by_agent'):
+                _ag_sba = self._active_agent_data.get(params.get('user_id'))
+                if _ag_sba and _ag_sba.get('name'):
+                    params['sent_by_agent'] = _ag_sba['name']
             # Приводим email к нижнему регистру и убираем лишние слэши
             if 'recipient_email' in params and isinstance(params['recipient_email'], str):
                 params['recipient_email'] = params['recipient_email'].strip().lower().lstrip('/')
@@ -6637,10 +6642,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Создаём изолированный инстанс — не делим состояние с глобальным ASI
     # (execution_history, счётчики, лимиты у каждого агента свои)
     _agent_inst = HybridAutonomousAgent()
-    # Регистрируем текущего агента в _active_agent_data, чтобы _run_external_action
-    # нашёл python_code этого агента при вызове run_agent_action из tool-loop.
-    if agent.get('python_code', '').strip():
-        _agent_inst._active_agent_data[user_id] = agent
+    # Регистрируем текущего агента в _active_agent_data:
+    # 1) чтобы _run_external_action нашёл python_code при вызове run_agent_action
+    # 2) чтобы send_outreach_email/send_email знали имя агента-отправителя
+    _agent_inst._active_agent_data[user_id] = agent
     _messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},

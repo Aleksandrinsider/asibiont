@@ -386,6 +386,7 @@ def _migrate_email_campaigns(session, inspector):
             'has_call_to_action': 'ALTER TABLE email_outreach ADD COLUMN has_call_to_action BOOLEAN',
             'tone_type': 'ALTER TABLE email_outreach ADD COLUMN tone_type VARCHAR(30)',
             'sent_at_hour_utc': 'ALTER TABLE email_outreach ADD COLUMN sent_at_hour_utc INTEGER',
+            'sent_by_agent': 'ALTER TABLE email_outreach ADD COLUMN sent_by_agent VARCHAR(100)',
         })
         # Unique index на (campaign_id, recipient_email) — защита от дублей при race condition
         try:

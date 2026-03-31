@@ -11743,6 +11743,7 @@ async def send_outreach_email(
     recipient_context: str = None,
     subject: str = None,
     body: str = None,
+    sent_by_agent: str = None,
     user_id: int = None,
     session=None,
     close_session: bool = True,
@@ -12156,6 +12157,7 @@ async def send_outreach_email(
                 status='sent',
                 resend_id=resend_id,
                 sent_at=dt.now(tz.utc),
+                sent_by_agent=sent_by_agent or None,
             )
             session.add(outreach)
         campaign.emails_sent = (campaign.emails_sent or 0) + 1
@@ -13960,10 +13962,31 @@ async def check_emails(
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
 
+        # Словарь outreach: кто из наших агентов писал каждому контакту
+        _outreach_map: dict = {}
+        try:
+            from models import EmailOutreach as _EO_ce3
+            _eo_rows = session.query(_EO_ce3).filter(
+                _EO_ce3.user_id == user.id,
+                _EO_ce3.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).order_by(_EO_ce3.sent_at.desc()).limit(500).all()
+            for _eo_r in _eo_rows:
+                if _eo_r.recipient_email:
+                    _eo_key = _eo_r.recipient_email.lower()
+                    if _eo_key not in _outreach_map:  # берём последний по sent_at
+                        _outreach_map[_eo_key] = {
+                            'sent_by_agent': _eo_r.sent_by_agent,
+                            'outreach_id': _eo_r.id,
+                            'sent_at': _eo_r.sent_at,
+                            'subject': _eo_r.subject or '',
+                        }
+        except Exception as _e_om:
+            logger.debug("outreach_map build: %s", _e_om)
+
         if chosen['type'] == 'gmail_oauth':
-            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_email)
+            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_email, _outreach_map)
         elif chosen['type'] in ('smtp', 'gmail_server'):
-            result = await _check_emails_imap(chosen, limit, _known_emails, _my_email)
+            result = await _check_emails_imap(chosen, limit, _known_emails, _my_email, _outreach_map)
         elif chosen['type'] == 'resend':
             return "Resend — сервис только для отправки, входящие не поддерживаются."
         else:
@@ -14664,7 +14687,7 @@ async def check_emails(
             session.close()
 
 
-async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_email: str = '') -> str:
+async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_email: str = '', outreach_map: dict = None) -> str:
     """Читает входящие через Gmail API v1."""
     import base64 as _b64_r
     import json as _jsn_r
@@ -14798,11 +14821,20 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                 if _is_known:
                     skipped_known_g.append(from_hdr)
                 _known_badge = "[email-контакт, не зарегистрирован в сервисе] " if _is_known else ""
+                _gm_outreach_ctx = ""
+                if outreach_map and _gm_em_low and _gm_em_low in outreach_map:
+                    _goc = outreach_map[_gm_em_low]
+                    _goc_agent = _goc.get("sent_by_agent") or "наш агент"
+                    _goc_date = _goc["sent_at"].strftime("%d.%m") if _goc.get("sent_at") else "?"
+                    _goc_subj = (_goc.get("subject") or "")[:50]
+                    _gm_outreach_ctx = (f"\n⚡ ИСХОДЯЩИЙ OUTREACH (outreach_id={_goc['outreach_id']}): "
+                                        f"{_goc_agent} писал(а) этому контакту {_goc_date}, тема: «{_goc_subj}». "
+                                        f"Используй reply_to_outreach_email(outreach_id={_goc['outreach_id']})")
                 results.append(
                     f"От: {_known_badge}{from_hdr}\n"
                     f"Тема: {headers.get('Subject', '(без темы)')}\n"
                     f"Дата: {headers.get('Date', '?')}\n"
-                    f"Превью: {snippet}\n"
+                    f"Превью: {snippet}{_gm_outreach_ctx}\n"
                 )
             if not results:
                 return "Входящих писем нет."
@@ -14822,7 +14854,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
     return result
 
 
-async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_email: str = '') -> str:
+async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_email: str = '', outreach_map: dict = None) -> str:
     """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""    
     import asyncio
     import imaplib
@@ -14946,11 +14978,20 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                             snippet = ''
                 # Храним полный текст (до 3000 символов) для reply_text в БД
                 _known_badge_imap = "[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else ""
+                _im_outreach_ctx = ""
+                if outreach_map and _from_low and _from_low in outreach_map:
+                    _ioc = outreach_map[_from_low]
+                    _ioc_agent = _ioc.get("sent_by_agent") or "наш агент"
+                    _ioc_date = _ioc["sent_at"].strftime("%d.%m") if _ioc.get("sent_at") else "?"
+                    _ioc_subj = (_ioc.get("subject") or "")[:50]
+                    _im_outreach_ctx = (f"\n⚡ ИСХОДЯЩИЙ OUTREACH (outreach_id={_ioc['outreach_id']}): "
+                                        f"{_ioc_agent} писал(а) этому контакту {_ioc_date}, тема: «{_ioc_subj}». "
+                                        f"Используй reply_to_outreach_email(outreach_id={_ioc['outreach_id']})")
                 results.append(
                     f"От: {_known_badge_imap}{from_addr}\n"
                     f"Тема: {subject}\n"
                     f"Дата: {date}\n"
-                    f"Превью: {snippet}\n"
+                    f"Превью: {snippet}{_im_outreach_ctx}\n"
                 )
             mail.logout()
             if not results:

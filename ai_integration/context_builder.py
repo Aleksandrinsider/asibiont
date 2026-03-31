@@ -585,19 +585,20 @@ class ContextBuilder:
                             r.reply_at and r.ai_reply_sent_at
                             and r.reply_at > r.ai_reply_sent_at
                         )
+                        _sender_info = f", писал(а): {r.sent_by_agent}" if getattr(r, 'sent_by_agent', None) else ""
                         if _new_reply_after_ai:
                             new_reply_lines.append(
-                                f"  🔄 {name} ({r.recipient_email}): [ПРОДОЛЖЕНИЕ]"
+                                f"  🔄 {name} ({r.recipient_email}){_sender_info}: [ПРОДОЛЖЕНИЕ]"
                                 f" последний наш ответ {r.ai_reply_sent_at.strftime('%d.%m %H:%M')},"
                                 f" они написали снова: {reply_preview}"
                             )
                         elif r.ai_reply_sent_at:
                             answered_reply_lines.append(
-                                f"  {name} ({r.recipient_email}):"
+                                f"  {name} ({r.recipient_email}){_sender_info}:"
                                 f" [ОТВЕТ ОТПРАВЛЕН {r.ai_reply_sent_at.strftime('%d.%m %H:%M')}, ожидаем реакцию]"
                             )
                         else:
-                            new_reply_lines.append(f"  🆕 {name} ({r.recipient_email}): {reply_preview}")
+                            new_reply_lines.append(f"  🆕 {name} ({r.recipient_email}){_sender_info}: {reply_preview}")
                     parts = []
                     if new_reply_lines:
                         parts.append(

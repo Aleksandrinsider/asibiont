@@ -674,6 +674,9 @@ class EmailOutreach(Base):
     last_follow_up_at = Column(DateTime)
     next_follow_up_at = Column(DateTime)
 
+    # Кто отправил письмо (агент)
+    sent_by_agent = Column(String(100))             # имя агента-отправителя (Кристина, Марк, ASI и т.д.)
+
     # Аналитика ответов (Outcome Feedback Loop)
     reply_count = Column(Integer, default=0)        # сколько ответов получено на это письмо
     engagement_rating = Column(Float)               # 0.0-1.0: общая оценка вовлечённости
