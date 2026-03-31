@@ -3626,6 +3626,33 @@ class AnchorEngine:
                 cycle_start = _time.monotonic()
                 self._cycle_counter += 1
                 logger.info(f"[ANCHOR] 🔄 Starting scan cycle #{self._cycle_counter}")
+
+                # Периодический recovery зависших dispatch-задач (не только на старте).
+                # Защищает от «есть поручение, но нет отчёта» после рестартов/флапов.
+                try:
+                    from models import Session as _RecDb2, AgentActivityLog as _RecAAL2
+                    _s_rec2 = _RecDb2()
+                    try:
+                        _stuck2 = (
+                            _s_rec2.query(_RecAAL2)
+                            .filter(
+                                _RecAAL2.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch', 'agent_chain_continue']),
+                                _RecAAL2.status == 'in_progress',
+                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=12),
+                            )
+                            .all()
+                        )
+                        if _stuck2:
+                            for _st2 in _stuck2:
+                                _st2.status = 'failed'
+                                _st2.result = (_st2.result or '') + ' [recovered: periodic stuck cleanup]'
+                            _s_rec2.commit()
+                            logger.info("[ANCHOR] Periodic recovery: marked %d stuck in_progress entries as failed", len(_stuck2))
+                    finally:
+                        _s_rec2.close()
+                except Exception as _rec2_err:
+                    logger.debug("[ANCHOR] Periodic recovery error: %s", _rec2_err)
+
                 await self._scan_all_users()
                 cycle_duration = _time.monotonic() - cycle_start
 
