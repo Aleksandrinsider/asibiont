@@ -1704,6 +1704,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         (('кг', 'килограмм', 'похуд', 'вес'), 'kg_lost', 5, 'кг'),
         (('репозитор', 'commit', 'github', 'deploy'), 'commits', 50, 'коммитов'),
         (('доход', 'выручк', 'заработ', 'revenue', 'продаж'), 'revenue', 100000, '₽'),
+        # Новые доменные метрики
+        (('вакансия', 'кандидат', 'найм', 'нанять', 'рекрутинг', 'резюме'), 'contacts', 10, 'кандидатов'),
+        (('стартап', 'startup', 'mvp', 'питч', 'акселератор', 'запустить продукт'), 'tasks', 30, 'этапов'),
+        (('логистик', 'доставк', 'отправк', 'трекинг', 'склад заказ'), 'tasks', 50, 'отправок'),
+        (('закон', 'договор', 'документ', 'юридическ', 'лицензия', 'патент'), 'tasks', 10, 'документов'),
+        (('путешеств', 'поездк', 'маршрут', 'отпуск', 'перелёт'), 'tasks', 5, 'маршрутов'),
     ]
     for _g in goals_summary:
         if not _g.get('metric_target'):
@@ -1871,16 +1877,30 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _PERSONAL_KW = ('путешеств', 'поездк', 'привычк', 'ежедневн', 'streak', 'хобби', 'творч',
                     'музыка', 'рисован', 'дневник', 'саморазвит', 'мечт', 'написать книг',
                     'личный проект', 'личная цель', 'жизнь', 'счастье', 'отдых', 'баланс')
+    _LEGAL_KW    = ('юридическ', 'юрист', 'закон', 'договор', 'лицензия', 'патент',
+                    'комплайенс', 'декларация', 'налоговая', 'судебн', 'иск', 'право')
+    _TRAVEL_KW   = ('путешеств', 'поездк', 'отпуск', 'авиабилет', 'виза', 'маршрут путешеств',
+                    'перелёт', 'турпоездк', 'aviasales', 'бронирован отел', 'эмиграция', 'релокация')
+    _STARTUP_KW  = ('стартап', 'startup', 'mvp', 'питч', 'акселератор',
+                    'product market fit', 'фандрейзинг', 'валидация гипотез', 'раунд инвест')
+    _LOGISTICS_KW = ('логистик', 'грузоперевозк', 'склад хранен', 'сдэк', 'моясклад')
+    _HR_KW       = ('найти сотрудник', 'нанять', 'рекрутинг', 'резюме кандидат',
+                    'подбор персонал', 'hh.ru', 'headhunter', 'hr менедж', 'вакансия открыт')
     _gtype_scores = {
-        'research':  sum(1 for w in _RESEARCH_KW  if w in _goals_text_all),
-        'outreach':  sum(1 for w in _OUTREACH_KW  if w in _goals_text_all),
-        'content':   sum(1 for w in _CONTENT_KW   if w in _goals_text_all),
-        'dev':       sum(1 for w in _DEV_KW       if w in _goals_text_all),
-        'learning':  sum(1 for w in _LEARNING_KW  if w in _goals_text_all),
-        'health':    sum(1 for w in _HEALTH_KW    if w in _goals_text_all),
-        'personal':  sum(1 for w in _PERSONAL_KW  if w in _goals_text_all),
-        'finance':   sum(1 for w in _FINANCE_KW   if w in _goals_text_all),
-        'ecommerce': sum(1 for w in _ECOMM_KW     if w in _goals_text_all),
+        'research':  sum(1 for w in _RESEARCH_KW   if w in _goals_text_all),
+        'outreach':  sum(1 for w in _OUTREACH_KW   if w in _goals_text_all),
+        'content':   sum(1 for w in _CONTENT_KW    if w in _goals_text_all),
+        'dev':       sum(1 for w in _DEV_KW        if w in _goals_text_all),
+        'learning':  sum(1 for w in _LEARNING_KW   if w in _goals_text_all),
+        'health':    sum(1 for w in _HEALTH_KW     if w in _goals_text_all),
+        'personal':  sum(1 for w in _PERSONAL_KW   if w in _goals_text_all),
+        'finance':   sum(1 for w in _FINANCE_KW    if w in _goals_text_all),
+        'ecommerce': sum(1 for w in _ECOMM_KW      if w in _goals_text_all),
+        'legal':     sum(1 for w in _LEGAL_KW      if w in _goals_text_all),
+        'travel':    sum(1 for w in _TRAVEL_KW     if w in _goals_text_all),
+        'startup':   sum(1 for w in _STARTUP_KW    if w in _goals_text_all),
+        'logistics': sum(1 for w in _LOGISTICS_KW  if w in _goals_text_all),
+        'hr':        sum(1 for w in _HR_KW         if w in _goals_text_all),
     }
     _best_gtype = max(_gtype_scores.items(), key=lambda x: x[1])
     _goal_type = _best_gtype[0] if _best_gtype[1] > 0 else 'general'
@@ -2458,6 +2478,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _catalog_order = ['integrations', 'research', 'tasks', 'delegate', 'content', 'email']
     elif _goal_type == 'ecommerce':
         _catalog_order = ['integrations', 'email', 'research', 'tasks', 'delegate', 'content']
+    elif _goal_type == 'legal':
+        _catalog_order = ['research', 'tasks', 'integrations', 'content', 'delegate', 'email']
+    elif _goal_type == 'travel':
+        _catalog_order = ['integrations', 'tasks', 'research', 'content', 'delegate', 'email']
+    elif _goal_type == 'startup':
+        _catalog_order = ['research', 'email', 'integrations', 'content', 'delegate', 'tasks']
+    elif _goal_type == 'logistics':
+        _catalog_order = ['integrations', 'tasks', 'email', 'research', 'delegate', 'content']
+    elif _goal_type == 'hr':
+        _catalog_order = ['email', 'integrations', 'research', 'tasks', 'delegate', 'content']
     elif any(key in _dynamic_top_keys for key in ('email', 'crm', 'calendar', 'calls', 'hr')):
         _catalog_order = ['email', 'integrations', 'research', 'delegate', 'tasks', 'content']
     elif any(key in _dynamic_top_keys for key in ('telegram', 'discord', 'social', 'image_gen', 'automation')):
@@ -2485,6 +2515,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             'content':   'ИНСТРУМЕНТЫ (порядок = capability-first для контентной цели):\n',
             'finance':   'ИНСТРУМЕНТЫ (порядок = capability-first для финансовой/инвестиционной цели):\n',
             'ecommerce': 'ИНСТРУМЕНТЫ (порядок = capability-first для e-commerce цели):\n',
+            'legal':     'ИНСТРУМЕНТЫ (порядок = research-first для юридической/compliance цели):\n',
+            'travel':    'ИНСТРУМЕНТЫ (порядок = integrations-first для цели с путешествиями):\n',
+            'startup':   'ИНСТРУМЕНТЫ (порядок = research+outreach-first для стартап-цели):\n',
+            'logistics': 'ИНСТРУМЕНТЫ (порядок = integrations-first для логистической цели):\n',
+            'hr':        'ИНСТРУМЕНТЫ (порядок = email+integrations-first для HR/рекрутинг-цели):\n',
         }.get(_goal_type, 'ИНСТРУМЕНТЫ (порядок = capability-first под текущую цель):\n')
         _catalog = (
             _catalog_header
@@ -8200,12 +8235,28 @@ class AnchorEngine:
                     return 'health'
                 if any(k in _t for k in ('автоматиз', 'процесс', 'оптимиз', 'workflow', 'систем')):
                     return 'automation'
-            if any(k in _t for k in ('финанс', 'инвест', 'трейд', 'биржа', 'акции', 'доход',
-                                     'выручк', 'бюджет', 'налог', 'крипт', 'trading')):
-                return 'finance'
-            if any(k in _t for k in ('товар', 'магазин', 'ozon', 'wildberries', 'shopify',
-                                     'маркетплейс', 'каталог', 'sku', 'заказ', 'авито')):
-                return 'ecommerce'
+                if any(k in _t for k in ('финанс', 'инвест', 'трейд', 'биржа', 'акции', 'доход',
+                                         'выручк', 'бюджет', 'налог', 'крипт', 'trading')):
+                    return 'finance'
+                if any(k in _t for k in ('товар', 'магазин', 'ozon', 'wildberries', 'shopify',
+                                         'маркетплейс', 'каталог', 'sku', 'заказ', 'авито')):
+                    return 'ecommerce'
+                if any(k in _t for k in ('юридическ', 'юрист', 'закон', 'договор', 'лицензия',
+                                         'патент', 'комплайенс', 'декларация', 'ип ', 'ооо ')):
+                    return 'legal'
+                if any(k in _t for k in ('путешеств', 'поездк', 'отпуск', 'авиабилет', 'виза',
+                                         'маршрут', 'перелёт', 'тур', 'релокация')):
+                    return 'travel'
+                if any(k in _t for k in ('стартап', 'startup', 'mvp', 'питч', 'акселератор',
+                                         'инвестор', 'раунд', 'фандрейзинг', 'валидация')):
+                    return 'startup'
+                if any(k in _t for k in ('логистик', 'склад', 'доставк', 'сдэк', 'моясклад',
+                                         'трекинг', 'грузоперевозк')):
+                    return 'logistics'
+                if any(k in _t for k in ('вакансия', 'кандидат', 'найм', 'нанять',
+                                         'рекрутинг', 'резюме', 'подбор персонал')):
+                    return 'hr'
+                return None
             _goals_str = '; '.join(
                 "[{}] {} ({}%, {}/{})".format(
                     _crd_goal_type(g),
