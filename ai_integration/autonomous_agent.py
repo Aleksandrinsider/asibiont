@@ -6711,37 +6711,38 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             f"  {_qp_str}\n"
                             "Для следующего цикла используй ДРУГУЮ комбинацию или page+1.\n"
                         )
-                    # ── Search budget: подсчёт поисков vs действий за 24ч ──
+                    # ── Search conversion: подсчёт поисков vs действий за 24ч ──
+                    # Вместо бана поиска — перенаправляем: «данных достаточно, теперь ИСПОЛЬЗУЙ их»
                     _sb_search = 0
                     _sb_send = 0
                     _sb_save = 0
+                    _sb_post = 0
                     for _sbl in _hist_logs:
                         _sbc = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
                         _sb_search += _sbc.count('web_search') + _sbc.count('research_topic')
                         _sb_send += _sbc.count('send_outreach_email') + _sbc.count('send_email')
                         _sb_save += _sbc.count('save_email_contact')
-                    if _sb_search >= 4 and _sb_send == 0:
+                        _sb_post += _sbc.count('create_post') + _sbc.count('publish_to_telegram')
+                    _sb_actions = _sb_send + _sb_save + _sb_post
+                    if _sb_search >= 4 and _sb_actions <= 1:
                         system_prompt += (
-                            "\n\n🚨 БЮДЖЕТ ПОИСКА ИСЧЕРПАН: ты уже выполнил "
-                            f"{_sb_search} поисков за 24ч, но НЕ ОТПРАВИЛ НИ ОДНОГО ПИСЬМА. "
-                            "ЗАПРЕЩЕНО вызывать web_search/research_topic/quick_topic_search. "
-                            "Используй ТОЛЬКО действия: save_email_contact → send_outreach_email → update_goal_progress. "
-                            "Если у тебя нет контактов — используй find_relevant_contacts_for_task или delegate_task коллеге.\n"
+                            f"\n\n🔄 ФАЗА КОНВЕРСИИ: ты уже выполнил {_sb_search} поисков за 24ч — "
+                            "данных достаточно. Пора ИСПОЛЬЗОВАТЬ результаты. Варианты:\n"
+                            "  1. КОНТАКТЫ → save_email_contact + send_outreach_email (персональное письмо)\n"
+                            "  2. КОНТЕНТ → create_post (аналитика, обзор трендов, полезный пост)\n"
+                            "  3. АНАЛИЗ → save_note (выводы, рекомендации для пользователя)\n"
+                            "  4. ДЕЛЕГАЦИЯ → delegate_task коллеге с конкретными данными из поиска\n"
+                            "  5. ЗАДАЧИ → add_task (конкретные следующие шаги на основе находок)\n"
+                            "Если вызываешь web_search — он должен быть ТОЧЕЧНЫМ (имя+email конкретного человека), "
+                            "не общим обзорным. Общие поиски уже сделаны.\n"
                         )
-                    elif _sb_search >= 3 and _sb_send == 0 and _sb_save == 0:
+                    elif _sb_search >= 3 and _sb_actions == 0:
                         system_prompt += (
-                            f"\n\n⚠️ ВНИМАНИЕ: {_sb_search} поисков за 24ч без сохранённых контактов и отправленных писем. "
-                            "Это неэффективно. Сфокусируйся на РЕЗУЛЬТАТЕ: извлеки конкретные email адреса, "
-                            "сохрани через save_email_contact, отправь через send_outreach_email.\n"
+                            f"\n\n⚠️ ВНИМАНИЕ: {_sb_search} поисков за 24ч без конвертации в результат. "
+                            "Поиск полезен только когда результаты используются. Выбери: "
+                            "извлечь контакты (save_email_contact), написать пост (create_post), "
+                            "или передать данные коллеге (delegate_task).\n"
                         )
-                    # Hard exclude: если бюджет исчерпан, убираем web_search из доступных
-                    if _sb_search >= 4 and _sb_send == 0:
-                        _search_ban = {'web_search', 'research_topic', 'quick_topic_search'}
-                        if _exclude_for_agent is not None:
-                            _exclude_for_agent = _exclude_for_agent | _search_ban
-                        else:
-                            _exclude_for_agent = _search_ban
-                        logger.info('[DIRECTOR] search budget exceeded for %s: %d searches, 0 sends → banning search tools', agent.get('name'), _sb_search)
             finally:
                 _db_hist.close()
         except Exception as _hist_err:
@@ -6798,25 +6799,40 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "save_email_contact без send_outreach_email = незавершённая цепочка."
                 )})
             elif _last_tool_local == 'run_agent_action' and not _was_save:
-                # Поиск через интеграцию (GitHub, RSS, CRM и др.) без сохранения контактов
+                # Поиск через интеграцию (GitHub, RSS, CRM и др.) — варианты конверсии
                 _messages.append({"role": "user", "content": (
-                    f"Поиск выполнен (использовал: {_used_str}). "
-                    "Если нашёл людей/авторов с email — save_email_contact + send_outreach_email. "
-                    "Если email не найдены, но есть имена/ссылки/профили — "
-                    "передай данные коллеге через delegate_task: "
-                    "'DELEGATE[Имя-email-агента]: нашёл [авторов/контакты] — напишите им'. "
-                    "Не вызывай update_goal_progress с заметками — это не финал."
+                    f"Поиск через интеграцию выполнен (использовал: {_used_str}). "
+                    "Конвертируй результаты:\n"
+                    "• Нашёл людей/авторов с email → save_email_contact + send_outreach_email\n"
+                    "• Нашёл статьи/тренды → create_post (обзор, аналитика для аудитории)\n"
+                    "• Нашёл имена без email → delegate_task коллеге с данными для outreach\n"
+                    "• Данные полезны для цели → save_note с выводами\n"
+                    "Не вызывай update_goal_progress пока нет реального результата."
                 )})
             elif _last_tool_local in ('web_search', 'research_topic', 'quick_topic_search') and not _was_save and not _was_send:
-                # Поиск через web/research без сохранения контактов — направляем к реальному действию
-                _messages.append({"role": "user", "content": (
-                    f"Поиск выполнен (использовал: {_used_str}). "
-                    "Извлеки из результатов КОНКРЕТНЫЕ данные: имена, email-адреса, контакты. "
-                    "НЕ вызывай update_goal_progress и НЕ сохраняй в заметки — это NOT финал. "
-                    "Следующий шаг: save_email_contact для каждого найденного человека с email, "
-                    "затем send_outreach_email. Если email не найдены — попробуй другой поисковый запрос "
-                    "с именем человека + компания + 'email contact'."
-                )})
+                # Поиск выполнен — предлагаем варианты конверсии результатов
+                _search_count_local = sum(1 for t in _tools_used if t in ('web_search', 'research_topic', 'quick_topic_search'))
+                if _search_count_local >= 2:
+                    # Уже 2+ поиска в этой сессии — настаиваем на конверсии
+                    _messages.append({"role": "user", "content": (
+                        f"Уже {_search_count_local} поиска в этой сессии (использовал: {_used_str}). "
+                        "Данных достаточно — КОНВЕРТИРУЙ результаты в действие:\n"
+                        "• Нашёл людей с email → save_email_contact + send_outreach_email\n"
+                        "• Нашёл тренды/статьи/инсайты → create_post (аналитика/обзор)\n"
+                        "• Нашёл имена без email → delegate_task коллеге с данными\n"
+                        "• Нашёл идеи/возможности → add_task с конкретным планом\n"
+                        "Ещё один общий поиск = потеря времени. Действуй с тем что есть."
+                    )})
+                else:
+                    _messages.append({"role": "user", "content": (
+                        f"Поиск выполнен (использовал: {_used_str}). "
+                        "Извлеки из результатов КОНКРЕТНЫЕ данные и выбери следующий шаг:\n"
+                        "• Есть email → save_email_contact + send_outreach_email\n"
+                        "• Есть тренды/статьи → create_post (обзор, аналитика)\n"
+                        "• Есть имена/профили без email → точечный поиск 'имя + email' или delegate_task\n"
+                        "• Есть идеи → save_note или add_task\n"
+                        "НЕ вызывай update_goal_progress пока не сделано реальное действие."
+                    )})
             else:
                 # Универсальная подсказка — ИИ сам выбирает следующий шаг
                 _messages.append({"role": "user", "content": (

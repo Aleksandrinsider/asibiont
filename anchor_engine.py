@@ -5638,18 +5638,21 @@ class AnchorEngine:
                                     _bn_actions = _bn_send + _bn_save_contact + _bn_create_post
                                     if _bn_search >= 5 and _bn_actions <= 2:
                                         _bottleneck_hint_c = (
-                                            f'🚨 КРИТИЧЕСКОЕ УЗКОЕ МЕСТО: за 24ч команда сделала {_bn_search} поисков, '
-                                            f'но только {_bn_send} писем отправлено, {_bn_save_contact} контактов сохранено. '
-                                            f'ПРОБЛЕМА НЕ В ПОИСКЕ — контакты уже есть. '
-                                            f'ЗАПРЕЩЕНО назначать ещё один поиск (web_search/research_topic). '
-                                            f'Назначь КОНКРЕТНОЕ ДЕЙСТВИЕ: send_outreach_email, create_post, delegate_task. '
-                                            f'Если контактов нет в базе — назначь save_email_contact по уже найденным данным.'
+                                            f'� ФАЗА КОНВЕРСИИ: за 24ч команда сделала {_bn_search} поисков, '
+                                            f'но только {_bn_send} писем, {_bn_save_contact} контактов, {_bn_create_post} постов. '
+                                            f'Данных ДОСТАТОЧНО — пора их использовать. '
+                                            f'Назначь задачу с КОНВЕРСИЕЙ результатов поиска:\n'
+                                            f'  — контакты → save_email_contact + send_outreach_email\n'
+                                            f'  — аналитика/тренды → create_post (обзор, статья, инсайты)\n'
+                                            f'  — конкретные люди → delegate_task с именами и данными коллеге\n'
+                                            f'  — идеи/выводы → save_note или add_task с конкретными шагами\n'
+                                            f'Если назначаешь поиск — он должен быть ТОЧЕЧНЫМ (имя+email), не обзорным.'
                                         )
                                     elif _bn_search >= 3 and _bn_actions <= 1:
                                         _bottleneck_hint_c = (
-                                            f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 24ч, но 0 отправленных писем. '
-                                            f'Поиск без действий = потеря времени. '
-                                            f'Назначь задачу с КОНЕЧНЫМ результатом: отправить письмо, создать пост, сохранить контакт.'
+                                            f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 24ч, но мало конверсий ({_bn_actions}). '
+                                            f'Назначь задачу с КОНКРЕТНЫМ результатом: письмо, пост, контакт, анализ. '
+                                            f'Поиск полезен когда результаты превращаются в действия.'
                                         )
                                 except Exception as _bn_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] bottleneck detection: %s', _bn_err)
@@ -5835,7 +5838,7 @@ class AnchorEngine:
                             except Exception as _dc_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
 
-                            # ── Intent-level dedup: блокируем очередной "поиск" если уже bottleneck ──
+                            # ── Intent-level conversion: если bottleneck + чистый поиск → дописываем конверсию ──
                             if not _skip_coord and _bottleneck_hint_c:
                                 _coord_lower_dd = (_coord_text or '').lower()
                                 _is_search_assignment = any(kw in _coord_lower_dd for kw in (
@@ -5843,16 +5846,24 @@ class AnchorEngine:
                                     'поиск в интернете', 'найди 5-7', 'найди 3-5',
                                     'найди 2-3', 'запусти поиск',
                                 ))
-                                _has_action_tool = any(kw in _coord_lower_dd for kw in (
+                                _has_conversion_plan = any(kw in _coord_lower_dd for kw in (
                                     'send_outreach_email', 'send_email', 'create_post',
                                     'save_email_contact', 'отправь письмо', 'напиши письмо',
-                                    'publish_to_telegram',
+                                    'publish_to_telegram', 'save_note', 'delegate_task',
+                                    'add_task', 'создай пост', 'напиши пост',
+                                    'проанализируй', 'обзор', 'аналитик',
                                 ))
-                                if _is_search_assignment and not _has_action_tool:
-                                    _skip_coord = True
+                                if _is_search_assignment and not _has_conversion_plan:
+                                    # Не блокируем — дополняем конверсионной инструкцией
+                                    _coord_text += (
+                                        ' После поиска обязательно ИСПОЛЬЗУЙ результаты: '
+                                        'извлеки контакты (save_email_contact), создай пост-аналитику (create_post), '
+                                        'или передай данные коллеге (delegate_task). '
+                                        'Просто поиск без действия — не засчитывается.'
+                                    )
                                     logger.info(
-                                        "[ANCHOR-AUTOPILOT] TEACH-MISS bottleneck-search-block: "
-                                        "coordinator assigned ANOTHER search despite bottleneck, skip"
+                                        "[ANCHOR-AUTOPILOT] search-conversion-append: "
+                                        "added conversion directive to search-only assignment"
                                     )
 
                             if not _skip_coord:
