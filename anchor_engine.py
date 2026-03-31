@@ -4339,7 +4339,7 @@ class AnchorEngine:
         _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=60)
         _stuck_cleared = 0
         for _sa in deliverable:
-            if _sa.anchor_type == 'goal_autopilot_review':
+            if _sa.anchor_type in REVIEW_SILENT_TYPES:
                 _tr = _sa.triggered_at
                 if _tr and (_tr.tzinfo is None and _tr < _stuck_threshold.replace(tzinfo=None)
                             or _tr.tzinfo is not None and _tr < _stuck_threshold):
@@ -7098,8 +7098,11 @@ class AnchorEngine:
                 return obj.get(key, default)
             return getattr(obj, key, default)
 
-        trigger_anchors = [a for a in new_anchors if _get(a, 'anchor_type') in _AGENT_DISPATCH_TRIGGERS
-                          and _get(a, 'anchor_type') != 'goal_autopilot_review']
+        trigger_anchors = [
+            a for a in new_anchors
+            if _get(a, 'anchor_type') in _AGENT_DISPATCH_TRIGGERS
+            and _get(a, 'anchor_type') not in REVIEW_SILENT_TYPES
+        ]
         if not trigger_anchors:
             return
 
