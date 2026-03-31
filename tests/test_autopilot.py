@@ -414,6 +414,16 @@ def test_autopilot_anchor_type_in_scan_dispatcher():
     assert "AUTOPILOT_SILENT_TYPES" in src
 
 
+def test_chat_ai_review_registered_in_anchor_engine():
+    """chat_ai_review зарегистрирован как silent review с 15-минутным циклом."""
+    import inspect
+    import anchor_engine
+    src = inspect.getsource(anchor_engine)
+    assert "chat_ai_review" in src
+    assert "REVIEW_SILENT_TYPES" in src
+    assert "_scan_chat_ai_review" in src
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. Goal CRUD integrity
 # ══════════════════════════════════════════════════════════════════════════════

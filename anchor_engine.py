@@ -580,6 +580,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
 MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
+REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
@@ -629,6 +630,7 @@ _AGENT_DISPATCH_TRIGGERS: dict[str, str] = {
     'campaign_stagnation': "Кампания '{task}' не показывает активности 3+ дня. Проанализируй эффективность и предложи корректировку.",
     # goal_autopilot_review: fallback — используется если _build_autopilot_prompt вернёт пустое
     'goal_autopilot_review': "Продвинь цель пользователя на один конкретный шаг вперёд. Анализ → выбор → ДЕЙСТВИЕ.",
+    'chat_ai_review': "Продолжи анализ недавнего диалога с пользователем. Если есть полезный следующий шаг — сделай его инструментами или напиши короткое живое сообщение по делу без повторов.",
 }
 
 
@@ -3556,6 +3558,7 @@ BATCH_GROUPS = {
     'agent_task_blocked': 'office',        # Агент застрял, нужно решение пользователя
     # Goal autopilot
     'goal_autopilot_review': 'goals',      # Периодический AI-анализ целей — автономные действия
+    'chat_ai_review': 'engagement',        # Периодический AI-анализ недавнего чата
 }
 
 
@@ -4502,7 +4505,7 @@ class AnchorEngine:
         EMAIL_SILENT_TYPES = {'email_outreach_send', 'email_follow_up', 'email_need_leads', 'email_reply_received'}
         CONTENT_SILENT_TYPES = {'content_campaign_publish'}
         DELEGATION_SILENT_TYPES = {'delegation_campaign_send', 'delegation_campaign_follow_up'}
-        AUTOPILOT_SILENT_TYPES = {'goal_autopilot_review'}
+        AUTOPILOT_SILENT_TYPES = REVIEW_SILENT_TYPES
         CUSTOM_AGENT_TYPES = {'custom_anchor'}  # агент пишет первым — dispatch с tools
         critical_anchors = [a for a in ready if (a.anchor_type in ALWAYS_DELIVER_TYPES
                             or a.priority in (AnchorPriority.CRITICAL, AnchorPriority.HIGH))
@@ -4515,7 +4518,7 @@ class AnchorEngine:
         custom_agent_anchors = [a for a in ready if a.anchor_type in CUSTOM_AGENT_TYPES]
         regular_anchors = [a for a in ready if a not in critical_anchors and a not in post_anchors and a not in email_silent_anchors and a not in content_silent_anchors and a not in delegation_silent_anchors and a not in autopilot_anchors and a not in custom_agent_anchors]
 
-        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}, custom_agent={len(custom_agent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
+        logger.info(f"[ANCHOR] User {user_id}: ready={len(ready)} (critical={len(critical_anchors)}, regular={len(regular_anchors)}, posts={len(post_anchors)}, email_silent={len(email_silent_anchors)}, content_silent={len(content_silent_anchors)}, deleg_silent={len(delegation_silent_anchors)}, review_silent={len(autopilot_anchors)}, custom_agent={len(custom_agent_anchors)}) dialog_count={dialog_count} gap_ok={proactive_gap_ok}")
 
         # ── 3. ДОСТАВКА — системные якоря (ASI) и агентские ОТДЕЛЬНО ──
         # Разделение: task_reminder/task_overdue доставляются от ASI,
@@ -4594,56 +4597,61 @@ class AnchorEngine:
         # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
         # Gap check по DELIVERED autopilot-якорям — надёжнее чем Interaction content.
         # Cooldown на source уже блокирует, но этот guard — двойная защита.
-        if autopilot_anchors:
-            # ── GUARD: проверяем флаг прямо перед dispatch (мог быть выключен после создания якоря) ──
-            # expire_all() сбрасывает кэш сессии — иначе query вернёт stale объект из identity map
-            session.expire_all()
-            _profile_recheck = session.query(UserProfile).filter_by(user_id=user.id).first()
-            _autopilot_still_on = _profile_recheck and getattr(_profile_recheck, 'goal_autopilot_enabled', False)
-            if not _autopilot_still_on:
-                logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot anchors skipped — goal_autopilot_enabled=False (disabled after anchor was created)")
-                # Помечаем как delivered чтобы не накапливались в БД
-                for _ap in autopilot_anchors:
-                    _ap.delivered_at = datetime.now(timezone.utc)
-                session.commit()
-            else:
-                _ap_gap_ok = True
+        if autopilot_anchors and has_proactive_tokens:
+            _goal_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'goal_autopilot_review']
+            _chat_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'chat_ai_review']
+            _ap_gap_ok = True
+            try:
+                _last_ap_delivered = session.query(Anchor.delivered_at).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type.in_(list(REVIEW_SILENT_TYPES)),
+                    Anchor.delivered_at.isnot(None),
+                ).order_by(Anchor.delivered_at.desc()).first()
+                if _last_ap_delivered:
+                    _ap_time = _last_ap_delivered[0]
+                    if _ap_time.tzinfo is None:
+                        _ap_time = _ap_time.replace(tzinfo=timezone.utc)
+                    _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
+                    if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
+                        _ap_gap_ok = False
+                        logger.info(f"[ANCHOR] User {user_id}: ⛔ review deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+
+            if _ap_gap_ok:
+                _today_start_ap = self._user_day_start_utc(user)
                 try:
-                    _last_ap_delivered = session.query(Anchor.delivered_at).filter(
-                        Anchor.user_id == user.id,
-                        Anchor.anchor_type == 'goal_autopilot_review',
-                        Anchor.delivered_at.isnot(None),
-                    ).order_by(Anchor.delivered_at.desc()).first()
-                    if _last_ap_delivered:
-                        _ap_time = _last_ap_delivered[0]
-                        if _ap_time.tzinfo is None:
-                            _ap_time = _ap_time.replace(tzinfo=timezone.utc)
-                        _ap_gap = (datetime.now(timezone.utc) - _ap_time).total_seconds() / 60
-                        if _ap_gap < MIN_AUTOPILOT_GAP_MINUTES:
-                            _ap_gap_ok = False
-                            logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot deferred (last delivered {_ap_gap:.0f}m ago, min={MIN_AUTOPILOT_GAP_MINUTES}m)")
-                except Exception as _e:
-                    logger.debug("suppressed: %s", _e)
+                    _ap_today_count = session.query(Interaction).filter(
+                        Interaction.user_id == user.id,
+                        Interaction.message_type.in_(['agent_msg', 'proactive']),
+                        Interaction.created_at >= _today_start_ap,
+                    ).count()
+                except Exception:
+                    _ap_today_count = 0
 
-                if _ap_gap_ok:
-                    # ── GUARD: общий дневной лимит autopilot-сообщений ──
-                    _today_start_ap = self._user_day_start_utc(user)
-                    try:
-                        _ap_today_count = session.query(Interaction).filter(
-                            Interaction.user_id == user.id,
-                            Interaction.message_type.in_(['agent_msg', 'proactive']),
-                            Interaction.created_at >= _today_start_ap,
-                        ).count()
-                    except Exception:
-                        _ap_today_count = 0
-
-                    if _ap_today_count >= MAX_AUTOPILOT_MSG_PER_DAY:
-                        logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot daily cap reached ({_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})")
-                    else:
-                        logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
-                        for _ap in autopilot_anchors[:1]:
+                if _ap_today_count >= MAX_AUTOPILOT_MSG_PER_DAY:
+                    logger.info(f"[ANCHOR] User {user_id}: ⛔ autopilot daily cap reached ({_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})")
+                else:
+                    _processed_goal = False
+                    if _goal_review_anchors:
+                        session.expire_all()
+                        _profile_recheck = session.query(UserProfile).filter_by(user_id=user.id).first()
+                        _autopilot_still_on = _profile_recheck and getattr(_profile_recheck, 'goal_autopilot_enabled', False)
+                        if not _autopilot_still_on:
+                            logger.info(f"[ANCHOR] User {user_id}: ⛔ goal autopilot anchors skipped — goal_autopilot_enabled=False")
+                            for _ap in _goal_review_anchors:
+                                _ap.delivered_at = datetime.now(timezone.utc)
+                            session.commit()
+                        else:
+                            logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
                             async with self._ai_semaphore:
-                                await self._dispatch_agent_for_anchor(user, _ap, session)
+                                await self._dispatch_agent_for_anchor(user, _goal_review_anchors[0], session)
+                            _processed_goal = True
+
+                    if _chat_review_anchors and not _processed_goal:
+                        logger.info(f"[ANCHOR] User {user_id}: 💬 Processing chat AI review (today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
+                        async with self._ai_semaphore:
+                            await self._dispatch_agent_for_anchor(user, _chat_review_anchors[0], session)
 
         # ── 3b2. CUSTOM AGENT ANCHORS — агент пишет первым с инструментами ──
         # custom_anchor создаёт якорь для конкретного агента (из UserAgent.custom_anchors).
@@ -4885,6 +4893,22 @@ class AnchorEngine:
                 # Промпт будет перестроен ПОСЛЕ выбора агента с учётом его интеграций
                 _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
                 task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"  # placeholder — дополнится ниже
+            elif anchor.anchor_type == 'chat_ai_review':
+                _recent_chat = data.get('recent_chat', []) if isinstance(data, dict) else []
+                _chat_lines = []
+                for _item in _recent_chat[:8]:
+                    _role = (_item.get('role') or 'Сообщение').strip()
+                    _text = (_item.get('text') or '').strip()[:240]
+                    if _text:
+                        _chat_lines.append(f"{_role}: {_text}")
+                task_text = (
+                    "[АВТОПИЛОТ ЧАТА]\n"
+                    f"Последняя чат-активность: {data.get('minutes_since', '?')} минут назад.\n"
+                    + ("Недавний диалог:\n" + "\n".join(_chat_lines) + "\n\n" if _chat_lines else "")
+                    + "Задача: продолжи анализ ситуации пользователя и текущего диалога. "
+                      "Если есть следующий полезный шаг — сделай его инструментом или напиши одно живое сообщение по делу. "
+                      "Не повторяй предыдущие ответы и не создавай шум ради активности."
+                )
             elif anchor.anchor_type == 'custom_anchor':
                 # custom_anchor: агент пишет первым — используем topic как задачу
                 _ca_agent_name = data.get('agent_name', '')
@@ -5339,7 +5363,7 @@ class AnchorEngine:
                 # агент должен использовать полный арсенал (research, email, campaigns и т.д.)
                 # Если агент определил кастомный список — он актуален для диалога, но не для
                 # автономной работы по целям пользователя.
-                _is_autopilot_dispatch = (anchor.anchor_type == 'goal_autopilot_review')
+                _is_autopilot_dispatch = (anchor.anchor_type in REVIEW_SILENT_TYPES)
                 # Адаптивный toolset: сохраняем tools_allowed агента,
                 # но помечаем автопилот через _autopilot_mode для расширения core tools
                 _tools_for_dispatch = chosen.tools_allowed or ''
@@ -12424,6 +12448,7 @@ class AnchorEngine:
 
         # --- ДИАЛОГ (follow-up из LTM) ---
         anchors.extend(self._scan_dialog_followup(user, session, now_utc))
+        anchors.extend(self._scan_chat_ai_review(user, session, now_utc))
 
         # --- РЫНОК/КОНТЕНТ (открыто всем) ---
         anchors.extend(self._scan_premium_insights(user, profile, session, now_utc))
@@ -13297,6 +13322,81 @@ class AnchorEngine:
                     cooldown_hours=24,
                     batch_group='engagement',
                 ))
+
+        return anchors
+
+    def _scan_chat_ai_review(self, user, session, now_utc) -> list:
+        """Тихий review недавнего диалога каждые 15 минут."""
+        anchors = []
+
+        last_chat_msg = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type.in_(['user', 'ai']),
+        ).order_by(Interaction.created_at.desc()).first()
+
+        if not last_chat_msg:
+            return anchors
+
+        lc_time = last_chat_msg.created_at
+        if lc_time.tzinfo is None:
+            lc_time = lc_time.replace(tzinfo=timezone.utc)
+
+        minutes_since = (now_utc - lc_time).total_seconds() / 60
+        if minutes_since < MIN_AUTOPILOT_GAP_MINUTES or minutes_since > 12 * 60:
+            return anchors
+
+        try:
+            _last_review = session.query(Anchor.delivered_at).filter(
+                Anchor.user_id == user.id,
+                Anchor.anchor_type.in_(list(REVIEW_SILENT_TYPES)),
+                Anchor.delivered_at.isnot(None),
+            ).order_by(Anchor.delivered_at.desc()).first()
+            if _last_review:
+                _rv_time = _last_review[0]
+                if _rv_time.tzinfo is None:
+                    _rv_time = _rv_time.replace(tzinfo=timezone.utc)
+                if (now_utc - _rv_time).total_seconds() / 60 < MIN_AUTOPILOT_GAP_MINUTES:
+                    return anchors
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+
+        _slot = int(minutes_since // MIN_AUTOPILOT_GAP_MINUTES)
+        if _slot <= 0:
+            return anchors
+
+        _recent_chat = session.query(Interaction).filter(
+            Interaction.user_id == user.id,
+            Interaction.message_type.in_(['user', 'ai']),
+        ).order_by(Interaction.id.desc()).limit(8).all()
+
+        _chat_lines = []
+        for _msg in reversed(_recent_chat):
+            _role = 'Пользователь' if _msg.message_type == 'user' else 'ASI'
+            _txt = (_msg.content or '').strip()[:240]
+            if _txt:
+                _chat_lines.append({'role': _role, 'text': _txt})
+
+        anchors.append(Anchor(
+            user_id=user.id,
+            anchor_type='chat_ai_review',
+            source=f'chat_review:{last_chat_msg.id}:{_slot}',
+            topic=_t(
+                user,
+                f'Продолжить анализ чата: прошло {int(minutes_since)} мин после последней реплики',
+                f'Continue chat analysis: {int(minutes_since)} min since the last message',
+            ),
+            priority=AnchorPriority.LOW,
+            data=json.dumps({
+                'minutes_since': round(minutes_since, 1),
+                'last_message_type': last_chat_msg.message_type,
+                'last_message': (last_chat_msg.content or '')[:300],
+                'recent_chat': _chat_lines,
+            }, ensure_ascii=False),
+            triggered_at=now_utc,
+            expires_at=now_utc + timedelta(hours=2),
+            cooldown_hours=MIN_AUTOPILOT_GAP_MINUTES / 60,
+            batch_group='engagement',
+        ))
 
         return anchors
 
