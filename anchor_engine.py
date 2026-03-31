@@ -1661,7 +1661,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
 
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None) -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None, vector_memory: str = '') -> str:
     """Строит адаптивный промпт автопилота.
     Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
     и предоставляет AI свободу выбора лучшей цепочки под цель и интеграции агента.
@@ -1681,10 +1681,43 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _channels:
             channels_hint = f"Каналы пользователя: {', '.join(_channels)}.\n"
 
+    # ── Авто-инференс метрик для целей без metric_target ──
+    # Цель без метрики = слепое вождение. Подбираем разумный default по тексту цели.
+    _METRIC_DEFAULTS = [
+        # (ключевые_слова, metric_type, target, единица)
+        (('клиент', 'пользовател', 'подписчик', 'лид', 'lead', 'beta', 'бета', 'регистрац'), 'contacts', 50, 'контактов'),
+        (('партнёр', 'партнер', 'инвест', 'b2b', 'сделк'), 'contacts', 20, 'партнёров'),
+        (('письм', 'email', 'outreach', 'рассыл'), 'emails_sent', 100, 'писем'),
+        (('пост', 'контент', 'публикац', 'статья', 'статей'), 'posts', 30, 'публикаций'),
+        (('просмотр', 'охват', 'view', 'impression', 'читател'), 'views', 1000, 'просмотров'),
+        (('подписчик', 'follower'), 'subscribers', 200, 'подписчиков'),
+        (('курс', 'урок', 'модул', 'занятие', 'тренировк'), 'lessons', 20, 'занятий'),
+        (('книг', 'глав', 'страниц'), 'pages', 100, 'страниц'),
+        (('км', 'километр', 'пробежать', 'марафон', 'спорт'), 'km', 42, 'км'),
+        (('кг', 'килограмм', 'похуд', 'вес'), 'kg_lost', 5, 'кг'),
+        (('репозитор', 'commit', 'github', 'deploy'), 'commits', 50, 'коммитов'),
+        (('доход', 'выручк', 'заработ', 'revenue', 'продаж'), 'revenue', 100000, '₽'),
+    ]
+    for _g in goals_summary:
+        if not _g.get('metric_target'):
+            _g_text = (_g.get('title', '') + ' ' + (_g.get('description', '') or '')).lower()
+            for _kws, _mtype, _mtarget, _munit in _METRIC_DEFAULTS:
+                if any(kw in _g_text for kw in _kws):
+                    _g['_inferred_metric'] = f"{_mtype}:{_mtarget} {_munit}"
+                    break
+
     # ── Краткое описание целей ──
+    def _goal_metric_str(g):
+        if g.get('metric_target'):
+            return f", {g.get('metric_current', 0)}/{g.get('metric_target', '?')}"
+        inf = g.get('_inferred_metric')
+        if inf:
+            return f", ориентир: {inf.split(':')[1] if ':' in inf else inf}"
+        return ''
+
     _goals_desc = '; '.join(
         f"{g.get('title', '?')} ({g.get('progress', 0)}%"
-        + (f", {g.get('metric_current', 0)}/{g.get('metric_target', '?')}" if g.get('metric_target') else '')
+        + _goal_metric_str(g)
         + ")"
         for g in goals_summary[:5]
     )
@@ -3319,7 +3352,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_team_block}"
         f"{_team_context_block}"
         f"{_memory_block}\n"
-        "АВТОПИЛОТ — ПРИНЦИПЫ:\n"
+        + (
+            "\n🧠 ДОЛГОСРОЧНАЯ ПАМЯТЬ (релевантные факты из истории пользователя):\n"
+            + vector_memory + "\n"
+            "→ Учитывай эти инсайты при принятии решений — пользователь однажды уже решил или узнал это.\n"
+            if vector_memory else ""
+        )
+        + "АВТОПИЛОТ — ПРИНЦИПЫ:\n"
         "1. Действуй сразу: первый ответ = вызов инструмента. Нашёл данные — сразу следующее действие.\n"
         "2. Работай по роли, но если застрял → выходи за рамки, результат важнее.\n"
         "3. Реальный прогресс = подтверждённый результат (ответ, регистрация, публикация). Просто отправка ≠ прогресс.\n"
@@ -5234,6 +5273,19 @@ class AnchorEngine:
                     # Перестраиваем task_text — вставляем промпт после placeholder
                     _per_agent_hist = data.get('per_agent_history', {}).get(chosen.name, [])
                     _full_team_hist = data.get('per_agent_history', {})
+                    # ── Долгосрочная семантическая память (Pinecone) ──
+                    _vector_mem_str = ''
+                    try:
+                        from ai_integration.vector_memory import build_memory_context as _bmc
+                        _goals_query = ' '.join(
+                            g.get('title', '') for g in _goals_for_prompt[:3]
+                        )[:300]
+                        _vector_mem_str = await asyncio.wait_for(
+                            _bmc(user.id, _goals_query, max_chars=600),
+                            timeout=4,
+                        ) or ''
+                    except Exception as _vme:
+                        logger.debug("[DISPATCH] vector memory skip: %s", _vme)
                     _autopilot_prompt = _build_autopilot_prompt(
                         _goals_for_prompt, user=user,
                         agent_caps=_detected, agent_name=chosen.name,
@@ -5241,6 +5293,7 @@ class AnchorEngine:
                         agent_history=_per_agent_hist,
                         team_history=_full_team_hist,
                         python_code=getattr(chosen, 'python_code', '') or '',
+                        vector_memory=_vector_mem_str,
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:
@@ -8106,8 +8159,37 @@ class AnchorEngine:
                         logger.info("[COORD] loaded %d goals from DB (data was empty)", len(_goals))
                 except Exception as _gl_err:
                     logger.warning("[COORD] failed to load goals from DB: %s", _gl_err)
+            # ── Авто-детектор типа цели для координатора ──
+            def _crd_goal_type(g_):
+                _t = (g_.get('title', '') + ' ' + (g_.get('description', '') or '')).lower()
+                if any(k in _t for k in ('outreach', 'привлеч', 'клиент', 'партнёр', 'партнер',
+                                         'написать', 'рассылк', 'email', 'лид', 'b2b', 'продаж',
+                                         'маркетинг', 'продвиж', 'раскрутк', 'аудитор')):
+                    return 'outreach'
+                if any(k in _t for k in ('контент', 'пост', 'статья', 'публикац', 'smm', 'блог',
+                                         'reels', 'видео', 'медиаплан')):
+                    return 'content'
+                if any(k in _t for k in ('изучить', 'обучен', 'курс', 'навык', 'книг', 'skill',
+                                         'язык', 'сертификат', 'урок', 'читать')):
+                    return 'learning'
+                if any(k in _t for k in ('разработ', 'github', 'deploy', 'backend', 'frontend',
+                                         'код', 'программ', 'developer', 'деплой')):
+                    return 'dev'
+                if any(k in _t for k in ('спорт', 'тренировк', 'похудеть', 'бег', 'марафон',
+                                         'здоровь', 'диета', 'фитнес', 'workout')):
+                    return 'health'
+                if any(k in _t for k in ('автоматиз', 'процесс', 'оптимиз', 'workflow', 'систем')):
+                    return 'automation'
+                return 'general'
+
             _goals_str = '; '.join(
-                f"{g['title']} ({g.get('progress', 0)}%, {g.get('metric_current', 0)}/{g.get('metric_target', '?')})"
+                "[{}] {} ({}%, {}/{})".format(
+                    _crd_goal_type(g),
+                    g['title'],
+                    g.get('progress', 0),
+                    g.get('metric_current', 0),
+                    g.get('metric_target', '?')
+                )
                 for g in _goals[:5]
             )
             _recent = data.get('recent_actions', [])
@@ -9152,9 +9234,55 @@ class AnchorEngine:
                     _emp_lines.append(f"  {_p_emp.get('name')}: эффективно → {_best_s}; слабо → {_worst_s}")
 
                 if _emp_lines:
+                    # ── Дополняем: для каждой цели — топ-инструмент всей команды ──
+                    _goal_tool_hints = []
+                    if _agent_tool_scores and _goals:
+                        # Собираем глобальный рейтинг инструментов по всем агентам
+                        _global_tool_scores: dict = {}
+                        for _ag_scores in _agent_tool_scores.values():
+                            for _tl, _td in _ag_scores.items():
+                                _gs = _global_tool_scores.setdefault(_tl, {'sum': 0.0, 'n': 0})
+                                _gs['sum'] += _td['sum']
+                                _gs['n'] += _td['n']
+                        _global_ranked = sorted(
+                            ((t, d['sum'] / d['n']) for t, d in _global_tool_scores.items() if d['n'] > 0),
+                            key=lambda x: -x[1],
+                        )
+                        for _gi, _g_emp in enumerate(_goals[:3]):
+                            _g_txt = (_g_emp.get('title', '') + ' ' + (_g_emp.get('description', '') or '')).lower()
+                            # Определяем категорию цели
+                            _g_cat = 'general'
+                            if any(k in _g_txt for k in ('email', 'клиент', 'outreach', 'рассылк', 'партнёр', 'лид')):
+                                _g_cat = 'email'
+                            elif any(k in _g_txt for k in ('контент', 'пост', 'telegram', 'discord', 'публикац')):
+                                _g_cat = 'content'
+                            elif any(k in _g_txt for k in ('исследов', 'анализ', 'мониторинг', 'рынок', 'тренды')):
+                                _g_cat = 'research'
+                            # Топ-инструмент для этой категории из эмпирики
+                            _cat_pref = {
+                                'email': ('send_outreach_email', 'check_emails', 'find_relevant_contacts_for_task'),
+                                'content': ('create_post', 'publish_to_telegram', 'publish_to_discord'),
+                                'research': ('research_topic', 'web_search', 'get_news_trends'),
+                            }.get(_g_cat, ())
+                            # Находим лучший по эмпирике из предпочтений категории, fallback — глобальный топ
+                            _best_for_g = ''
+                            _best_for_g_score = -1.0
+                            for _t_cand, _t_score in _global_ranked[:8]:
+                                if _cat_pref and _t_cand in _cat_pref:
+                                    if _t_score > _best_for_g_score:
+                                        _best_for_g = _t_cand
+                                        _best_for_g_score = _t_score
+                            if not _best_for_g and _global_ranked:
+                                _best_for_g, _best_for_g_score = _global_ranked[0]
+                            if _best_for_g:
+                                _goal_tool_hints.append(
+                                    f"  Цель «{_g_emp.get('title', '')[:50]}»: "
+                                    f"исторически лучший инструмент → {_best_for_g} (avg={_best_for_g_score:.2f})"
+                                )
                     _empirical_guidance_str = (
                         "\n📈 ЭМПИРИКА ПО РЕЗУЛЬТАТАМ (последние 21 день):\n"
                         + '\n'.join(_emp_lines)
+                        + ("\n\n  ПО ЦЕЛЯМ:\n" + '\n'.join(_goal_tool_hints) if _goal_tool_hints else '')
                         + "\n  → Это не жёсткие запреты. Это ориентир: чаще выбирай то, что уже приносило результат.\n"
                     )
             except Exception as _emp_err:
@@ -13534,7 +13662,7 @@ class AnchorEngine:
                 if not _ag_nm_aal:
                     continue
                 _aal_title = (_api.title or '')[:100]
-                _aal_content = (_api.content or '')[:120]
+                _aal_content = (_api.content or '')[:200]
                 _aal_ts = _api.created_at.strftime('%d.%m %H:%M')
                 # Угадываем инструмент по содержимому — для совместимости с anti-loop парсером
                 _tl_lower = (_aal_title + ' ' + _aal_content).lower()

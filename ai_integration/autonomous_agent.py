@@ -4246,7 +4246,7 @@ class HybridAutonomousAgent:
 
     async def generate_system_message(self, user_id, mode, instruction,
                                        extra_context=None, max_tokens=500,
-                                       max_iterations=2):
+                                       max_iterations=4):
         """Генерация системного сообщения (напоминание, проактивное, поздравление)
         через тот же мозг с tool calling, но без сохранения в историю диалога.
 
@@ -4256,7 +4256,7 @@ class HybridAutonomousAgent:
             instruction: текст задания для AI (что сгенерировать)
             extra_context: дополнительный контекст (ситуация, красные флаги и т.д.)
             max_tokens: лимит токенов (короткие сообщения = меньше)
-            max_iterations: макс. итераций tool calling (2 для скорости)
+            max_iterations: макс. итераций tool calling (4 для баланса скорость/глубина)
 
         Returns:
             str — готовый текст сообщения
