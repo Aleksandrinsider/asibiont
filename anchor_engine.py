@@ -559,12 +559,12 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
     'goal_autopilot_handoff',
     # Межагентское взаимодействие (ack/handoff/delegation) не считается — это служебные сообщения.
+    # Реальные отчёты агентов (result) НЕ считаются — пользователь должен видеть каждый результат.
+    'goal_autopilot_result',
     'coordinator_result',
     'agent_delegation',
     'agent_chain_continue',
     'agent_chain_transfer',
-    # goal_autopilot_result СЧИТАЕТСЯ в лимите — это основной поток сообщений пользователю.
-    # Без учёта лимит не работает и агенты спамят 100+ сообщений/день.
 }
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
@@ -5533,6 +5533,7 @@ class AnchorEngine:
                         # ── Контекст предыдущего цикла: что сделали агенты недавно ──
                         _last_cycle_ctx_c = ''
                         _loop_channel_hint_c = ''
+                        _bottleneck_hint_c = ''
                         try:
                             from models import AgentActivityLog as _AAL_coord_ctx
                             import datetime as _dt_cc
@@ -5613,6 +5614,45 @@ class AnchorEngine:
                                         f'«создай пост-аналитику по прочитанным AI-трендам» или '
                                         f'«выдели 3 лучшие статьи и делегируй контакты email-агенту».'
                                     )
+                                # ── Bottleneck detector: search >> action ──
+                                # Считаем инструменты ВСЕХ агентов за 24ч (не только 6ч)
+                                _bottleneck_hint_c = ''
+                                try:
+                                    import re as _re_bn
+                                    _bn_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=24)
+                                    _bn_logs = session.query(_AAL_coord_ctx).filter(
+                                        _AAL_coord_ctx.user_id == user.id,
+                                        _AAL_coord_ctx.activity_type == 'agent_task',
+                                        _AAL_coord_ctx.created_at >= _bn_cutoff,
+                                    ).all()
+                                    _bn_search = 0
+                                    _bn_send = 0
+                                    _bn_save_contact = 0
+                                    _bn_create_post = 0
+                                    for _bnl in _bn_logs:
+                                        _bnc = (_bnl.content or '').lower() + ' ' + (_bnl.title or '').lower()
+                                        _bn_search += _bnc.count('web_search') + _bnc.count('research_topic') + _bnc.count('quick_topic_search')
+                                        _bn_send += _bnc.count('send_outreach_email') + _bnc.count('send_email')
+                                        _bn_save_contact += _bnc.count('save_email_contact')
+                                        _bn_create_post += _bnc.count('create_post') + _bnc.count('publish_to_telegram')
+                                    _bn_actions = _bn_send + _bn_save_contact + _bn_create_post
+                                    if _bn_search >= 5 and _bn_actions <= 1:
+                                        _bottleneck_hint_c = (
+                                            f'🚨 КРИТИЧЕСКОЕ УЗКОЕ МЕСТО: за 24ч команда сделала {_bn_search} поисков, '
+                                            f'но только {_bn_send} писем отправлено, {_bn_save_contact} контактов сохранено. '
+                                            f'ПРОБЛЕМА НЕ В ПОИСКЕ — контакты уже есть. '
+                                            f'ЗАПРЕЩЕНО назначать ещё один поиск (web_search/research_topic). '
+                                            f'Назначь КОНКРЕТНОЕ ДЕЙСТВИЕ: send_outreach_email, create_post, delegate_task. '
+                                            f'Если контактов нет в базе — назначь save_email_contact по уже найденным данным.'
+                                        )
+                                    elif _bn_search >= 3 and _bn_send == 0:
+                                        _bottleneck_hint_c = (
+                                            f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 24ч, но 0 отправленных писем. '
+                                            f'Поиск без действий = потеря времени. '
+                                            f'Назначь задачу с КОНЕЧНЫМ результатом: отправить письмо, создать пост, сохранить контакт.'
+                                        )
+                                except Exception as _bn_err:
+                                    logger.debug('[ANCHOR-AUTOPILOT] bottleneck detection: %s', _bn_err)
                         except Exception as _cc_err:
                             logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
 
@@ -5625,6 +5665,7 @@ class AnchorEngine:
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
+                            + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
 
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
                             f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
@@ -5794,6 +5835,26 @@ class AnchorEngine:
                             except Exception as _dc_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
 
+                            # ── Intent-level dedup: блокируем очередной "поиск" если уже bottleneck ──
+                            if not _skip_coord and _bottleneck_hint_c:
+                                _coord_lower_dd = (_coord_text or '').lower()
+                                _is_search_assignment = any(kw in _coord_lower_dd for kw in (
+                                    'web_search', 'research_topic', 'quick_topic_search',
+                                    'поиск в интернете', 'найди 5-7', 'найди 3-5',
+                                    'найди 2-3', 'запусти поиск',
+                                ))
+                                _has_action_tool = any(kw in _coord_lower_dd for kw in (
+                                    'send_outreach_email', 'send_email', 'create_post',
+                                    'save_email_contact', 'отправь письмо', 'напиши письмо',
+                                    'publish_to_telegram',
+                                ))
+                                if _is_search_assignment and not _has_action_tool:
+                                    _skip_coord = True
+                                    logger.info(
+                                        "[ANCHOR-AUTOPILOT] TEACH-MISS bottleneck-search-block: "
+                                        "coordinator assigned ANOTHER search despite bottleneck, skip"
+                                    )
+
                             if not _skip_coord:
                                 # Coordinator assignment — сохраняем в хронологию чтобы пользователь видел поручения
                                 from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
@@ -5818,11 +5879,21 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
                         finally:
                             _cs.close()
-                        # Координаторские делегации (ASI → агент) сохраняются в DB для аудита,
-                        # но НЕ отправляются в Telegram — пользователь видит только результаты работы агентов.
-                        # Это устраняет ~55% шума в чате (внутренняя координация не нужна пользователю).
-                        if not _skip_coord:
-                            logger.info("[ANCHOR-AUTOPILOT] coord-assign stored (not sent to TG) user %d → %s", user.id, _chosen_name)
+                        if not _skip_coord and self.bot:
+                            try:
+                                from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
+                                _coord_text_clean = _sltt_coord(
+                                    _coord_text,
+                                    anchor_type='goal_autopilot_assignment',
+                                    speaker_name='ASI',
+                                    target_name=_chosen_name,
+                                ) if _coord_text else _coord_text
+                                await _safe_send(
+                                    self.bot, user.telegram_id,
+                                    _coord_text_clean or _coord_text,
+                                )
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 

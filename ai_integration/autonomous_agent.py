@@ -6711,6 +6711,37 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             f"  {_qp_str}\n"
                             "Для следующего цикла используй ДРУГУЮ комбинацию или page+1.\n"
                         )
+                    # ── Search budget: подсчёт поисков vs действий за 24ч ──
+                    _sb_search = 0
+                    _sb_send = 0
+                    _sb_save = 0
+                    for _sbl in _hist_logs:
+                        _sbc = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
+                        _sb_search += _sbc.count('web_search') + _sbc.count('research_topic')
+                        _sb_send += _sbc.count('send_outreach_email') + _sbc.count('send_email')
+                        _sb_save += _sbc.count('save_email_contact')
+                    if _sb_search >= 4 and _sb_send == 0:
+                        system_prompt += (
+                            "\n\n🚨 БЮДЖЕТ ПОИСКА ИСЧЕРПАН: ты уже выполнил "
+                            f"{_sb_search} поисков за 24ч, но НЕ ОТПРАВИЛ НИ ОДНОГО ПИСЬМА. "
+                            "ЗАПРЕЩЕНО вызывать web_search/research_topic/quick_topic_search. "
+                            "Используй ТОЛЬКО действия: save_email_contact → send_outreach_email → update_goal_progress. "
+                            "Если у тебя нет контактов — используй find_relevant_contacts_for_task или delegate_task коллеге.\n"
+                        )
+                    elif _sb_search >= 3 and _sb_send == 0 and _sb_save == 0:
+                        system_prompt += (
+                            f"\n\n⚠️ ВНИМАНИЕ: {_sb_search} поисков за 24ч без сохранённых контактов и отправленных писем. "
+                            "Это неэффективно. Сфокусируйся на РЕЗУЛЬТАТЕ: извлеки конкретные email адреса, "
+                            "сохрани через save_email_contact, отправь через send_outreach_email.\n"
+                        )
+                    # Hard exclude: если бюджет исчерпан, убираем web_search из доступных
+                    if _sb_search >= 4 and _sb_send == 0:
+                        _search_ban = {'web_search', 'research_topic', 'quick_topic_search'}
+                        if _exclude_for_agent is not None:
+                            _exclude_for_agent = _exclude_for_agent | _search_ban
+                        else:
+                            _exclude_for_agent = _search_ban
+                        logger.info('[DIRECTOR] search budget exceeded for %s: %d searches, 0 sends → banning search tools', agent.get('name'), _sb_search)
             finally:
                 _db_hist.close()
         except Exception as _hist_err:
