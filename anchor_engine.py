@@ -1721,7 +1721,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
 
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None, vector_memory: str = '') -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None, vector_memory: str = '', integration_snapshots: list = None) -> str:
     """Строит адаптивный промпт автопилота.
     Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
     и предоставляет AI свободу выбора лучшей цепочки под цель и интеграции агента.
@@ -3421,6 +3421,17 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "  → update_goal_progress когда ФАКТ: человек ответил/зарегистрировался/подтвердил интерес.\n"
     )
 
+    # ── Свежие данные интеграций (Метрика, GitHub, RSS и т.д.) ──────────────
+    _integ_data_block = ''
+    if integration_snapshots:
+        _integ_lines = '\n'.join(integration_snapshots[:8])
+        _integ_data_block = (
+            "\n📊 СВЕЖИЕ ДАННЫЕ ИНТЕГРАЦИЙ (за 24ч — используй для принятия решений и оценки прогресса):\n"
+            f"{_integ_lines}\n"
+            "→ Сверяй реальные метрики с целями. Если Метрика показывает рост — отрази в update_goal_progress.\n"
+            "→ Если данные показывают проблему (отказы, падение) — предложи стратегию улучшения.\n"
+        )
+
     return (
         f"📅 СЕГОДНЯ: {_today_str}. События/конференции с датой ДО сегодня — уже ПРОШЛИ, не называй их будущими.\n"
         f"ЦЕЛИ: {_goals_desc}\n"
@@ -3428,6 +3439,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{'Интеграции: ' + _caps_str + chr(10) if _caps_str else ''}"
         f"{channels_hint}"
         f"{_intg_block}"
+        f"{_integ_data_block}"
         f"{_personalized_strategy_block}"
         f"{_personal_guard}"
         f"{_campaign_directive}"
@@ -5500,6 +5512,7 @@ class AnchorEngine:
                         team_history=_full_team_hist,
                         python_code=getattr(chosen, 'python_code', '') or '',
                         vector_memory=_vector_mem_str,
+                        integration_snapshots=data.get('integration_snapshots', []),
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:
@@ -14856,6 +14869,27 @@ class AnchorEngine:
             elif 'post_discord' in _posted_channels and 'post_telegram' not in _posted_channels:
                 _crosspost_hints.append('Посты были в Discord, но НЕ в TG → кросс-постнуть в Telegram')
 
+        # ── Свежие данные интеграций (Метрика, GitHub, RSS и т.д.) ──────────────
+        _integration_data: list = []
+        try:
+            _integ_anchors = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.anchor_type == 'integration_alert',
+                Anchor.triggered_at >= now_utc - timedelta(hours=24),
+            ).order_by(Anchor.triggered_at.desc()).limit(10).all()
+            for _ia in _integ_anchors:
+                try:
+                    _iad = json.loads(_ia.data) if _ia.data else {}
+                    _svc = _iad.get('service_label', '')
+                    _snip = _iad.get('snippet', '')
+                    _ag = _iad.get('agent_name', '')
+                    if _snip:
+                        _integration_data.append(f"[{_ag} / {_svc}] {_snip[:600]}")
+                except Exception:
+                    pass
+        except Exception as _ie:
+            logger.debug("[AUTOPILOT] integration data: %s", _ie)
+
         # Формируем полный контекст
         context_data = {
             'goals': goals_summary,
@@ -14899,6 +14933,7 @@ class AnchorEngine:
             'no_reply_info': _no_reply_info,
             'hot_contacts_info': _hot_contacts_info,
             'corp_new_info': _corp_new_info,
+            'integration_snapshots': _integration_data,
         }
 
         return [Anchor(

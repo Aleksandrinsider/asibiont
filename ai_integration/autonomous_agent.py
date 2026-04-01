@@ -8583,8 +8583,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                                   'понял, алексей', 'понял,',
                                   'начну с', 'сейчас разработаю', 'сейчас проанализирую')
         _is_fallback = _resp_lower in _fallback_phrases
+        # Промежуточный ответ = маркер-обещание без данных (нет цифр → нет фактов).
+        # Если ответ содержит цифры (6 визитов, 3 контакта...) — он не промежуточный.
         _is_intermediate = (len(str(resp).strip()) < 200 and
-                            any(m in _resp_lower for m in _intermediate_markers))
+                            any(m in _resp_lower for m in _intermediate_markers) and
+                            not re.search(r'\d', _resp_lower))
         _is_too_short = _resp_len < 120 and _resp_len > 5
         # В автопилоте: если агент не вызвал ни одного инструмента — ответ бесполезен
         _is_autopilot_no_tools = (
@@ -8616,12 +8619,26 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         # Для ВОПРОСОВ: если агент ответил пустышкой или промежуточной фразой
         # ("Проверю...", "Сейчас посмотрю...") — делаем мягкий rework в конкретный ответ.
         if _skip_rework and (_is_fallback or _is_intermediate or _is_too_short):
+            # Убираем технический префикс из задачи — LLM видит чистый вопрос
+            _task_q = task
+            for _pfx_q in (
+                'ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): ',
+                'ОТВЕТЬ НА ВОПРОС: ',
+            ):
+                if _task_q.startswith(_pfx_q):
+                    _task_q = _task_q[len(_pfx_q):]
+                    break
+            # Если агент дал краткий ответ с данными — используем его как подсказку для расширения
+            _prev_q_hint = ''
+            if _is_too_short and not _is_fallback and str(resp).strip():
+                _prev_q_hint = f"Краткий ответ агента: {str(resp).strip()[:150]}. Расширь его естественно.\n"
             _q_rework = await _quick_ai_call_raw([{
                 "role": "user",
                 "content": (
                     f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
-                    f"Пользователь спросил: {task}\n"
+                    f"Пользователь спросил: {_task_q}\n"
                     f"Контекст: {(extra_context or '')[:500]}\n"
+                    f"{_prev_q_hint}"
                     f"Ответь на вопрос от первого лица как {ag.get('name', 'агент')}. "
                     f"Если не знаешь ответ или у тебя нет доступа — честно скажи что и почему. "
                     f"Не давай промежуточные формулировки типа 'проверю/посмотрю/сейчас'. "
