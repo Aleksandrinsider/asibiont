@@ -13958,6 +13958,34 @@ async def check_emails(
 
         # Загружаем уже-известные контакты для фильтрации дублей
         _my_email = chosen.get('email_user', '').lower()
+        # Собираем ВСЕ собственные email-адреса (Gmail + Resend sender + все интеграции)
+        # чтобы не показывать копии собственных исходящих как "входящие"
+        _my_emails: set = {_my_email} if _my_email else set()
+        for _intg in _integrations:
+            _ie = _intg.get('email_user', '').lower()
+            if _ie:
+                _my_emails.add(_ie)
+        # Resend sender — платформенный outreach@...
+        try:
+            import os as _os_me
+            _resend_from = _os_me.getenv('RESEND_FROM_EMAIL', 'outreach@asibiont.com').lower()
+            _my_emails.add(_resend_from)
+        except Exception:
+            _my_emails.add('outreach@asibiont.com')
+        # Личный Resend-адрес пользователя (из user_api_keys агентов)
+        try:
+            from models import UserAgent as _UA_me
+            _ua_rows = session.query(_UA_me).filter_by(user_id=user.id).all()
+            for _ua_r in _ua_rows:
+                _keys_str = getattr(_ua_r, 'user_api_keys', '') or ''
+                if 'RESEND_FROM=' in _keys_str:
+                    import re as _re_me
+                    _m_from = _re_me.search(r'RESEND_FROM=([^\s,;]+)', _keys_str)
+                    if _m_from:
+                        _my_emails.add(_m_from.group(1).strip().lower())
+        except Exception as _e_me:
+            logger.debug("suppressed own-emails: %s", _e_me)
+        _my_emails.discard('')
         _known_emails: set = set()
         try:
             from models import EmailContact as _EC_ce
@@ -13987,9 +14015,9 @@ async def check_emails(
             logger.debug("outreach_map build: %s", _e_om)
 
         if chosen['type'] == 'gmail_oauth':
-            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_email, _outreach_map)
+            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_emails, _outreach_map)
         elif chosen['type'] in ('smtp', 'gmail_server'):
-            result = await _check_emails_imap(chosen, limit, _known_emails, _my_email, _outreach_map)
+            result = await _check_emails_imap(chosen, limit, _known_emails, _my_emails, _outreach_map)
         elif chosen['type'] == 'resend':
             return "Resend — сервис только для отправки, входящие не поддерживаются."
         else:
@@ -14117,7 +14145,7 @@ async def check_emails(
                 return any(p in el for p in _NOREPLY_PATS)
 
             _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result, _re_ce.IGNORECASE))
-            _found_em.discard(_my_email)
+            _found_em -= _my_emails
             _found_em = {em for em in _found_em if not _is_noreply(em)}
             _new_auto = _found_em - _known_emails
             # 1) Новые контакты → создаём с status=replied
@@ -14690,7 +14718,7 @@ async def check_emails(
             session.close()
 
 
-async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_email: str = '', outreach_map: dict = None) -> str:
+async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_emails: set = None, outreach_map: dict = None) -> str:
     """Читает входящие через Gmail API v1."""
     import base64 as _b64_r
     import json as _jsn_r
@@ -14814,10 +14842,10 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                 body_text = _gmail_extract_body(msg_data.get('payload', {}))
                 snippet = body_text[:3000] if body_text else msg_data.get('snippet', '')[:500]
                 from_hdr = headers.get('From', '?')
-                # Фильтруем письма от собственного аккаунта (копии исходящих)
+                # Фильтруем письма от собственных аккаунтов (копии исходящих)
                 _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
                 _gm_em_low = _gm_ems[0].lower() if _gm_ems else ''
-                if my_email and _gm_em_low == my_email.lower():
+                if my_emails and _gm_em_low and _gm_em_low in my_emails:
                     continue
                 # Помечаем известные контакты — но НЕ скрываем их письма
                 _is_known = known_emails and _gm_em_low and _gm_em_low in known_emails
@@ -14857,7 +14885,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
     return result
 
 
-async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_email: str = '', outreach_map: dict = None) -> str:
+async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_emails: set = None, outreach_map: dict = None) -> str:
     """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""    
     import asyncio
     import imaplib
@@ -14923,8 +14951,8 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                 _from_ems = _re_imap.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_addr, _re_imap.IGNORECASE)
                 _from_low = _from_ems[0].lower() if _from_ems else ''
 
-                # Пропускаем письма от собственного аккаунта (копии исходящих, тесты)
-                if my_email and _from_low == my_email.lower():
+                # Пропускаем письма от собственных аккаунтов (копии исходящих, тесты)
+                if my_emails and _from_low and _from_low in my_emails:
                     continue
 
                 # Помечаем известные контакты — но НЕ скрываем их письма
@@ -16081,6 +16109,35 @@ async def get_system_status(
             if close_session and session:
                 session.close()
 
+    # ── Формируем человекочитаемый текст (AI не должен показывать raw JSON) ──
+    lines = []
+    overall = report.get('overall', '?')
+    lines.append(f"Общий статус: {'✅ Всё работает' if overall == 'ok' else '⚠️ Есть проблемы'}")
+
+    svcs = report.get('services', {})
+    if svcs:
+        for _svc_key, _svc in svcs.items():
+            _label = _svc.get('label', _svc_key)
+            _st = _svc.get('status', '?')
+            _icon = '✅' if _st == 'ok' else '❌'
+            _line = f"  {_icon} {_label}"
+            if _st != 'ok' and _svc.get('message'):
+                _line += f" — {_svc['message']}"
+            lines.append(_line)
+
+    eq = report.get('email_quota')
+    if eq:
+        lines.append(f"Email: отправлено {eq.get('sent_today', '?')}/{eq.get('daily_limit', 50)}, осталось {eq.get('remaining', '?')}")
+
+    tb = report.get('token_balance')
+    if tb and tb.get('balance') is not None:
+        lines.append(f"Токены: {tb['balance']}" + (" ⚠️ мало" if tb.get('low') else ""))
+
+    ac = report.get('active_email_campaigns')
+    if ac is not None:
+        lines.append(f"Активных email-кампаний: {ac}")
+
+    report['_human_summary'] = '\n'.join(lines)
     return report
 
 

@@ -3515,7 +3515,12 @@ class HybridAutonomousAgent:
                             user_message=user_message, web_context=web_context)
                         _r = _results[0] if _results else {"success": False, "error": "no result"}
                         if _r.get('success'):
-                            _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)
+                            _raw_res = _r['result']
+                            # Если handler вернул dict с _human_summary — используем его вместо raw JSON
+                            if isinstance(_raw_res, dict) and '_human_summary' in _raw_res:
+                                _rc = _raw_res['_human_summary']
+                            else:
+                                _rc = json.dumps(_raw_res, ensure_ascii=False, default=str)
                             _rc = CognitiveEngine.compress_tool_result(_rc)
                             try: get_learner().record_tool_result(user_id, _name, True)
                             except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
@@ -3738,7 +3743,11 @@ class HybridAutonomousAgent:
                             _res = _res_arr[0] if _res_arr else {"success": False, "error": "no result", "tool": _tname}
                             _retry_exec_results.append(_res)
                             if _res.get('success'):
-                                _tc_content = json.dumps(_res.get('result', ''), ensure_ascii=False, default=str)
+                                _raw_res_r = _res.get('result', '')
+                                if isinstance(_raw_res_r, dict) and '_human_summary' in _raw_res_r:
+                                    _tc_content = _raw_res_r['_human_summary']
+                                else:
+                                    _tc_content = json.dumps(_raw_res_r, ensure_ascii=False, default=str)
                             else:
                                 _tc_content = json.dumps({"error": str(_res.get('error', ''))}, ensure_ascii=False)
                             _retry_msgs.append({
@@ -4363,7 +4372,11 @@ class HybridAutonomousAgent:
                             user_id, session=None, user_message=instruction)
                         _r = _results[0] if _results else {"success": False, "error": "no result"}
                         if _r.get('success'):
-                            _rc = json.dumps(_r['result'], ensure_ascii=False, default=str)[:1500]
+                            _raw_res_s = _r['result']
+                            if isinstance(_raw_res_s, dict) and '_human_summary' in _raw_res_s:
+                                _rc = _raw_res_s['_human_summary'][:1500]
+                            else:
+                                _rc = json.dumps(_raw_res_s, ensure_ascii=False, default=str)[:1500]
                         else:
                             _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
                     except Exception as _err:
@@ -7104,7 +7117,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                         )
                                         _r0 = _tres[0] if _tres else {"success": False}
                                         if _r0.get('success'):
-                                            _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)[:1500]
+                                            _raw_r0 = _r0['result']
+                                            if isinstance(_raw_r0, dict) and '_human_summary' in _raw_r0:
+                                                _tc_result = _raw_r0['_human_summary'][:1500]
+                                            else:
+                                                _tc_result = json.dumps(_raw_r0, ensure_ascii=False, default=str)[:1500]
                                         else:
                                             _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
                                     except asyncio.TimeoutError:
@@ -7223,8 +7240,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     )
                     _r0 = _tres[0] if _tres else {"success": False}
                     if _r0.get('success'):
-                        _tc_result = json.dumps(_r0['result'], ensure_ascii=False, default=str)
-                        _tc_result = _tc_result[:1500]
+                        _raw_r0b = _r0['result']
+                        if isinstance(_raw_r0b, dict) and '_human_summary' in _raw_r0b:
+                            _tc_result = _raw_r0b['_human_summary'][:1500]
+                        else:
+                            _tc_result = json.dumps(_raw_r0b, ensure_ascii=False, default=str)[:1500]
                         if _tname in _ACTION_EVIDENCE_TOOLS:
                             import re as _re_ev
                             _email_ev = ''
@@ -7847,6 +7867,33 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             r'(?:^|\n)[^\S\n]*(?:Запускаю|Сейчас (?:вызову|вызываю|запущу)|Использую действие агента|Делаю|Выполняю вызов)[^.!?\n]*[.!?\u2026]?[^\S\n]*(?:\n|$)',
             '\n', _final_text, flags=_re_tools.IGNORECASE
         )
+        # Мягкая замена tool-имён на русские аналоги (не удаление, а перевод)
+        _TOOL_RU = (
+            (r'\bweb_search\b', 'поиск в интернете'),
+            (r'\bresearch_topic\b', 'исследование'),
+            (r'\bquick_topic_search\b', 'быстрый поиск'),
+            (r'\bsave_email_contact\b', 'сохранение контакта'),
+            (r'\bsend_outreach_email\b', 'отправка письма'),
+            (r'\breply_to_outreach_email\b', 'ответ на письмо'),
+            (r'\bsend_follow_up_email\b', 'фоллоу-ап'),
+            (r'\bsave_note\b', 'заметка'),
+            (r'\badd_task\b', 'задача'),
+            (r'\bupdate_goal_progress\b', 'обновление прогресса'),
+            (r'\brun_agent_action\b', 'действие агента'),
+            (r'\bcreate_post\b', 'публикация'),
+            (r'\bpublish_to_telegram\b', 'публикация в Telegram'),
+            (r'\bpublish_to_discord\b', 'публикация в Discord'),
+            (r'\bcheck_emails\b', 'проверка почты'),
+            (r'\bfind_relevant_contacts(?:_for_task)?\b', 'поиск контактов'),
+            (r'\bdelegate_task\b', 'делегирование'),
+            (r'\bset_reminder\b', 'напоминание'),
+            (r'\bgenerate_image\b', 'генерация изображения'),
+            (r'\bcheck_news_and_markets\b', 'анализ новостей'),
+            (r'\bread_rss\b', 'чтение RSS'),
+            (r'\bsearch_users\b', 'поиск пользователей'),
+        )
+        for _pat, _repl in _TOOL_RU:
+            _final_text = _re_tools.sub(_pat, _repl, _final_text, flags=_re_tools.IGNORECASE)
         _final_text = _re_tools.sub(r'\n{3,}', '\n\n', _final_text).strip()
 
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
