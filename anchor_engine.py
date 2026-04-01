@@ -12745,7 +12745,7 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 3.0,
+            'goal_autopilot_review': 0.25,  # 15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
             'email_need_leads': 3.0,
             'chat_ai_review': 1.5,
         }
@@ -14947,7 +14947,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=2.0,  # раз в 2ч — снижает спам (было 0.2h=60/день)
+            cooldown_hours=0.25,  # раз в 15 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
             batch_group='goals',
         )]
 
