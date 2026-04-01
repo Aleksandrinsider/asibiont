@@ -5868,6 +5868,64 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 "\n\n🔧 run_agent_action — скрипт агента выполняется без параметра action (читает данные автоматически)."
             )
 
+    # Последние факты от интеграций (AnchorEngine) — чтобы автопилот видел
+    # не только список подключений, но и свежие сигналы/цифры за последние 24ч.
+    _integration_facts_block = ""
+    if _is_autopilot_task:
+        try:
+            from models import Session as _Sess_ia_ctx, User as _Uia_ctx, Anchor as _Anch_ctx
+            import json as _json_ia_ctx
+            from datetime import datetime as _dt_ia_ctx, timezone as _tz_ia_ctx, timedelta as _td_ia_ctx
+
+            _s_ia_ctx = _Sess_ia_ctx()
+            try:
+                _u_ia_ctx = _s_ia_ctx.query(_Uia_ctx).filter_by(telegram_id=user_id).first()
+                if _u_ia_ctx:
+                    _since_ia = _dt_ia_ctx.now(_tz_ia_ctx.utc) - _td_ia_ctx(hours=24)
+                    _rows_ia = (
+                        _s_ia_ctx.query(_Anch_ctx)
+                        .filter(
+                            _Anch_ctx.user_id == _u_ia_ctx.id,
+                            _Anch_ctx.anchor_type == 'integration_alert',
+                            _Anch_ctx.triggered_at >= _since_ia,
+                        )
+                        .order_by(_Anch_ctx.triggered_at.desc())
+                        .limit(8)
+                        .all()
+                    )
+                    if _rows_ia:
+                        _facts_lines = []
+                        for _a in reversed(_rows_ia):
+                            _svc = ''
+                            _signal = ''
+                            _snippet = ''
+                            try:
+                                _ad = _json_ia_ctx.loads(_a.data or '{}') if (_a.data or '').strip() else {}
+                                if isinstance(_ad, dict):
+                                    _svc = str(_ad.get('service_label') or '').strip()
+                                    _signal = str(_ad.get('signal') or '').strip()
+                                    _snippet = str(_ad.get('snippet') or '').strip().replace('\n', ' ')
+                            except Exception:
+                                pass
+                            _svc = _svc or 'Интеграция'
+                            _signal = _signal or (_a.topic or 'сигнал без деталей')
+                            _ts = _a.triggered_at.strftime('%d.%m %H:%M') if _a.triggered_at else ''
+                            _sn = (_snippet[:140] + '…') if len(_snippet) > 140 else _snippet
+                            _line = f"  • [{_ts}] {_svc}: {_signal}"
+                            if _sn:
+                                _line += f" | {_sn}"
+                            _facts_lines.append(_line)
+                        if _facts_lines:
+                            _integration_facts_block = (
+                                "\n📥 ПОСЛЕДНИЕ СИГНАЛЫ ИНТЕГРАЦИЙ (24ч, для сверки):\n"
+                                + "\n".join(_facts_lines)
+                                + "\n"
+                            )
+            finally:
+                _s_ia_ctx.close()
+        except Exception as _ia_ctx_e:
+            logger.debug('[DIRECTOR-EXEC] integration facts load: %s', _ia_ctx_e)
+
     if _is_autopilot_task:
         # ── Компактный autopilot system prompt ──
         # Принцип: минимум правил, максимум конкретики.
@@ -5922,6 +5980,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"Работаешь в {_team_ctx}. Сейчас: {_now_str}.\n"
             f"{_intg_line}\n"
             f"{_kb_block}\n"
+            f"{_integration_facts_block}\n"
 
             "🧠 КАК ТЫ ДУМАЕШЬ (каждый цикл — заново!):\n"
             "Ты — настоящий сотрудник с зарплатой. Тебя оценивают по РЕЗУЛЬТАТАМ, не по отчётам.\n"
@@ -6021,6 +6080,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             "📡 ТВОИ ИНТЕГРАЦИИ:\n"
             "   Используй ВСЕ подключённые интеграции (см. 'Подключено у тебя' выше).\n"
+            "   ⚠️ В автопилоте интеграции не подгружаются сами: перед выводами вызови нужный инструмент "
+            "(run_agent_action/check_emails и т.д.) и получи СВЕЖИЕ данные.\n"
+            "   ⚠️ СВЕРКА ОБЯЗАТЕЛЬНА: перед update_goal_progress/complete_goal сверь минимум 2 факта "
+            "(два источника ИЛИ две независимые метрики одного источника).\n"
+            "   Если данные конфликтуют — прямо укажи конфликт и не повышай прогресс цели до уточнения.\n"
             "   ⛔ Не повторяй одно и то же действие в соседних циклах — чередуй подходы.\n"
             "   ⚠️ НЕ ДЕЛАЙ ВИД что можешь использовать канал, который НЕ подключён у тебя.\n"
             "   Если для цели нужен канал, которого нет — работай с доступными инструментами.\n\n"
