@@ -872,7 +872,10 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             )
         except Exception as _e:
             logger.debug(f"[SAVE_NOTE] Vector memory skipped: {_e}")
-        return f"Заметка сохранена: «{note.title}»"
+        _preview = content.strip()[:300]
+        if len(content.strip()) > 300:
+            _preview += '...'
+        return f"Заметка сохранена: «{note.title}»\n\n{_preview}"
     except Exception as e:
         logger.warning(f"[SAVE_NOTE] Error: {e}")
         try:

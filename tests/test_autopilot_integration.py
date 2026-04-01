@@ -1563,3 +1563,88 @@ def test_d52_save_note_visible_to_other_agents():
             # Cleanup
             s.delete(note)
             s.commit()
+
+
+# ── D53: save_note returns content preview (not just title) ──
+
+def test_d53_save_note_returns_content_preview():
+    """save_note должен возвращать превью контента, а не только заголовок."""
+    with TestSession() as s:
+        user = s.query(models.User).filter_by(telegram_id=UID).first()
+        import models as m
+        old_m_session = m.Session
+        m.Session = TestSession
+        try:
+            loop = asyncio.new_event_loop()
+            result = loop.run_until_complete(
+                h_mod.save_note(
+                    content="Найдены 5 баз данных контактов AI-стартапов с email основателей и CEO",
+                    title="Базы контактов AI",
+                    user_id=UID,
+                    session=s,
+                )
+            )
+            loop.close()
+            # Result must contain title AND content preview
+            assert "Базы контактов AI" in result, "save_note must include note title"
+            assert "Найдены 5 баз" in result, "save_note must include content preview"
+            assert "Заметка сохранена" in result, "save_note must confirm saving"
+        finally:
+            m.Session = old_m_session
+            # Cleanup notes
+            for n in s.query(models.Note).filter_by(user_id=user.id).all():
+                s.delete(n)
+            s.commit()
+
+
+# ── D54: system_prompt differentiates questions vs actions ──
+
+def test_d54_system_prompt_question_answer_instruction():
+    """system_prompt должен различать ответ на ВОПРОС (полный ответ) и ACTION (краткий)."""
+    import ai_integration.system_prompt as sp_mod
+    prompt_text = sp_mod.get_system_prompt(lang='en')
+    lower = prompt_text.lower()
+    assert "question" in lower or "вопрос" in lower, \
+        "System prompt must mention handling of user questions"
+    # Must NOT have blanket "1-2 sentences" for all responses
+    assert "full useful answer" in lower or "полный" in lower or "3-6 sentences" in lower, \
+        "System prompt must allow full answers for questions"
+
+
+# ── D55: final summarization prompt allows longer answers for questions ──
+
+def test_d55_final_summary_allows_full_answer():
+    """Финальный промпт подытоживания должен позволять полный ответ на вопрос."""
+    # The final summarization text in autonomous_agent.py
+    import ai_integration.autonomous_agent as ag
+    src = open(ag.__file__, 'r', encoding='utf-8').read()
+    # Check that the summarization prompt mentions full answer for questions
+    assert "ВОПРОС" in src or "QUESTION" in src, \
+        "Summarization prompt must handle user questions differently"
+    assert "1500" in src or "4-8" in src, \
+        "Summarization prompt should allow longer responses (up to 1500 chars or 4-8 sentences)"
+
+
+# ── D56: goal-title-copy guard rejects plan steps copying goal title ──
+
+def test_d56_goal_title_copy_guard():
+    """goal-title-copy guard должен отклонять задачи дублирующие название цели."""
+    import anchor_engine as ae
+    src = open(ae.__file__, 'r', encoding='utf-8').read()
+    assert "goal-copy-guard" in src, \
+        "anchor_engine must have goal-copy-guard logic"
+    assert "ЗАПРЕЩЕНО копировать название цели" in src, \
+        "Coordinator prompt must explicitly ban copying goal title as task"
+
+
+# ── D57: coordinator 12h anti-repeat lookback ──
+
+def test_d57_coordinator_12h_lookback():
+    """Координатор должен смотреть 12ч назад для anti-repeat."""
+    import anchor_engine as ae
+    src = open(ae.__file__, 'r', encoding='utf-8').read()
+    # Check the specific line with _rd_cutoff
+    assert "timedelta(hours=12)" in src, \
+        "Coordinator must use 12h lookback for recent tasks"
+    assert "НЕ повторять" in src, \
+        "Coordinator must have strong anti-repeat instructions"
