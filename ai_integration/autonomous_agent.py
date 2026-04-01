@@ -4630,7 +4630,8 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
             # Проверяем только если это директива (не отчёт агента с __agent)
             _is_directive = '"__agent"' not in content
             if _is_directive:
-                _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=5)
+                # Exact prefix dedup: 60 минут (расширено с 5 чтобы не повторять одинаковые поручения)
+                _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=60)
                 _existing = (
                     _s.query(_Intr)
                     .filter(
@@ -4648,6 +4649,37 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
                         telegram_id, _dedup_prefix[:40]
                     )
                     return False
+
+                # Semantic dedup: если за последние 2ч уже была директива с теми же ключевыми фразами
+                # (напр. "застрял на 44%, сменим тактику" → "застрял на 44%, давай сменим")
+                _sem_since = _dt_dir.now(_tz_dir.utc) - _td_dir(hours=2)
+                _content_lower = content.lower()
+                _SEM_MARKERS = ('застрял', 'сменим тактику', 'смени тактику', 'давай сменим',
+                                'прогресс.*не растёт', 'не двигает нас вперёд')
+                import re as _re_sem_dd
+                _has_sem_marker = any(_re_sem_dd.search(m, _content_lower) for m in _SEM_MARKERS)
+                if _has_sem_marker:
+                    _recent_directives = (
+                        _s.query(_Intr)
+                        .filter(
+                            _Intr.user_id == _u.id,
+                            _Intr.message_type == 'agent_msg',
+                            _Intr.created_at >= _sem_since,
+                        )
+                        .order_by(_Intr.created_at.desc())
+                        .limit(10)
+                        .all()
+                    )
+                    for _rd in _recent_directives:
+                        _rd_txt = (_rd.content or '').lower()
+                        if '"__agent"' in _rd_txt:
+                            continue  # skip agent reports
+                        if any(_re_sem_dd.search(m, _rd_txt) for m in _SEM_MARKERS):
+                            logger.warning(
+                                "[DIRECTOR] SEMANTIC-DEDUP: similar directive already sent %s ago, skipping",
+                                str(_dt_dir.now(_tz_dir.utc) - _rd.created_at.replace(tzinfo=_tz_dir.utc))[:7]
+                            )
+                            return False
             # ────────────────────────────────────────────────────────────────────────
             _s.add(_Intr(user_id=_u.id, message_type=message_type, content=content))
             _s.commit()
@@ -7857,7 +7889,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                 'новых ответов пока нет', 'новых писем нет',
                                 'новых ответов нет', 'пока нет ответов',
                                 'входящие проверены', 'проверила входящие',
-                                'проверил входящие', 'ничего нового')
+                                'проверил входящие', 'ничего нового',
+                                'понял, переключаюсь', 'поняла, сменим',
+                                'понял, запускаю', 'поняла, запускаю',
+                                'есть пара идей', 'покажу результат')
         if len(_final_text.strip()) < 200 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
@@ -7878,10 +7913,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _final_text:
         import re as _re_tools
         # Убираем ЦЕЛЫЕ предложения-анонсы: «Запускаю web_search...», «Сейчас вызову research_topic...»
-        # НЕ трогаем содержательный текст — только чистые анонсы действий
+        # Анонс может быть как в начале строки, так и после ". " (середина строки)
+        _NARRATION_KEYWORDS = (
+            r'Запускаю',
+            r'Сейчас (?:вызову|вызываю|запущу|прочешу|проверю)',
+            r'Использую действие агента',
+            r'Делаю',
+            r'Выполняю вызов',
+            r'[Пп]ереключаюсь на',
+            r'[Сс]разу запускаю',
+        )
+        _narr_kw = '|'.join(_NARRATION_KEYWORDS)
+        # Вариант 1: начало строки / после newline
         _final_text = _re_tools.sub(
-            r'(?:^|\n)[^\S\n]*(?:Запускаю|Сейчас (?:вызову|вызываю|запущу)|Использую действие агента|Делаю|Выполняю вызов)[^.!?\n]*[.!?\u2026]?[^\S\n]*(?:\n|$)',
+            rf'(?:^|\n)[^\S\n]*(?:{_narr_kw})[^.!?\n]*[.!?\u2026]?[^\S\n]*(?:\n|$)',
             '\n', _final_text, flags=_re_tools.IGNORECASE
+        )
+        # Вариант 2: после ". " / "! " / "? " в середине строки
+        _final_text = _re_tools.sub(
+            rf'(?<=[.!?])\s+(?:{_narr_kw})[^.!?\n]*[.!?\u2026]?',
+            '', _final_text, flags=_re_tools.IGNORECASE
         )
         # Мягкая замена tool-имён на русские аналоги (не удаление, а перевод)
         _TOOL_RU = (

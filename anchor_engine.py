@@ -12732,9 +12732,9 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 2.0,
+            'goal_autopilot_review': 3.0,
             'email_need_leads': 3.0,
-            'chat_ai_review': 1.0,
+            'chat_ai_review': 1.5,
         }
         _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
         try:
@@ -12770,6 +12770,7 @@ class AnchorEngine:
             'service_degraded', 'token_low_balance', 'weather_extreme',
             'profile_gap', 'morning_plan', 'evening_review',
             'inactivity_reengagement',
+            'goal_autopilot_review', 'email_need_leads',
         }
         # Exclude expired anchors from singleton check — expired-but-undelivered anchors
         # should NOT block creation of fresh ones
