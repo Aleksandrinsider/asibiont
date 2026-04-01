@@ -8501,11 +8501,13 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 resp = _fallback_resp
 
         # ── Final hollow guard: если после rework текст всё ещё пустышка — не отправляем ──
+        # Для вопросов (skip_rework=True) — НЕ подавляем: пользователь ждёт ответ,
+        # пусть даже "Данных нет." — это лучше чем молчание.
         _HOLLOW_FINAL = {'задачу выполнил', 'задачу выполнила', 'задача выполнена',
                          'данных нет', 'готово', 'сделано', 'принял в работу',
                          'задачу принял', 'задачу приняла', 'понял задачу'}
         _resp_final_check = str(resp).strip().lower().rstrip('.!?')
-        if _resp_final_check in _HOLLOW_FINAL:
+        if _resp_final_check in _HOLLOW_FINAL and not _skip_rework:
             logger.info("[AGENT] TEACH-MISS hollow final guard: '%s' from %s — suppressing", resp.strip()[:60], ag.get('name', '?'))
             return str(resp)[:2000]
 
@@ -8886,10 +8888,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         try:
             _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
         except Exception as _run_err:
-            logger.warning("[DIRECTOR] agent run error round %d: %s", _round, _run_err)
+            _run_err_msg = str(_run_err) or type(_run_err).__name__
+            logger.warning("[DIRECTOR] agent run error round %d: %s", _round, _run_err_msg)
             if _delegation_task_id:
                 try:
-                    _update_agent_delegation_task(_delegation_task_id, f'Ошибка: {str(_run_err)[:200]}')
+                    _update_agent_delegation_task(_delegation_task_id, f'Ошибка: {_run_err_msg[:200]}')
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
             break
@@ -9023,6 +9026,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     # Сохраняем контекст всех раундов делегирования
     _all_results = ' | '.join(r['result'][:200] for r in _round_history)
     _save_delegation_to_history(user_id, _agent_name_d, user_message, _all_results[:600])
+
+    # Для прямых обращений/вопросов: если агент ничего не отправил (ошибка call_ai),
+    # возвращаем None → chat_with_ai откатится на process_request
+    if (_is_direct or _is_q) and not _round_history:
+        logger.warning("[DIRECTOR] direct/question agent call produced no rounds — fallback to process_request")
+        return None
 
     return "__agent_handled__"
 
