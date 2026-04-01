@@ -8500,15 +8500,35 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             if _fallback_resp and len(_fallback_resp) > 50:
                 resp = _fallback_resp
 
+        # Для ВОПРОСОВ: если агент ответил пустышкой ("Задачу выполнила.") — rework с вопросным промптом
+        if _skip_rework and _is_fallback:
+            _q_rework = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
+                    f"Пользователь спросил: {task}\n"
+                    f"Контекст: {(extra_context or '')[:500]}\n"
+                    f"Ответь на вопрос от первого лица как {ag.get('name', 'агент')}. "
+                    f"Если не знаешь ответ или у тебя нет доступа — честно скажи что и почему. "
+                    f"НЕ пиши 'Задачу выполнила' — это не ответ на вопрос. "
+                    f"Пиши живо, как человек в чате. 2-4 предложения."
+                ),
+            }], max_tokens=300)
+            if _q_rework and len(_q_rework) > 30:
+                resp = _q_rework
+                logger.info("[AGENT] question rework for %s: %d chars", ag.get('name', '?'), len(resp))
+
         # ── Final hollow guard: если после rework текст всё ещё пустышка — не отправляем ──
-        # Для вопросов (skip_rework=True) — НЕ подавляем: пользователь ждёт ответ,
-        # пусть даже "Данных нет." — это лучше чем молчание.
         _HOLLOW_FINAL = {'задачу выполнил', 'задачу выполнила', 'задача выполнена',
                          'данных нет', 'готово', 'сделано', 'принял в работу',
                          'задачу принял', 'задачу приняла', 'понял задачу'}
         _resp_final_check = str(resp).strip().lower().rstrip('.!?')
-        if _resp_final_check in _HOLLOW_FINAL and not _skip_rework:
+        if _resp_final_check in _HOLLOW_FINAL:
             logger.info("[AGENT] TEACH-MISS hollow final guard: '%s' from %s — suppressing", resp.strip()[:60], ag.get('name', '?'))
+            # Для вопросов: вместо молчания — возвращаем None чтобы chat_with_ai
+            # обработал запрос через process_request (ASI ответит сам)
+            if _skip_rework:
+                return None
             return str(resp)[:2000]
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
@@ -8900,6 +8920,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _agent_tools_used_round: list[str] = []
         if isinstance(_resp, tuple):
             _resp, _agent_tools_used_round = _resp
+
+        # _run_agent_task вернул None → агент не смог ответить, fallback на process_request
+        if _resp is None:
+            logger.warning("[DIRECTOR] agent %s returned None for round %d — fallback", _agent_name_d, _round)
+            if _delegation_task_id:
+                try:
+                    _update_agent_delegation_task(_delegation_task_id, 'Агент не смог ответить')
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+            break
+
         _agent_result = str(_resp or '')[:600]
 
         # Обновляем Task → completed
