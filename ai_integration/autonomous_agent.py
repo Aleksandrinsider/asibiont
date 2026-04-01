@@ -5846,7 +5846,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   ✅ БУДУЩЕЕ: если событие ещё не наступило — это возможность. Указывай «через N дней/недель».\n"
             "   ✅ ПРОВЕРКА: перед отчётом спроси себя: «эта дата уже прошла?» Если да — не предлагай участвовать.\n\n"
 
-            "🔗 ЦЕПОЧКИ ЦЕННОСТИ (делай не ОДИН шаг, а ВЕСЬ конвейер):\n"
+            "� ПУБЛИЧНЫЕ КАНАЛЫ (Discord, Telegram) — ТЫ ПИШЕШЬ ДЛЯ АУДИТОРИИ:\n"
+            "publish_to_discord, publish_to_telegram, create_post → контент идёт в ПУБЛИЧНЫЙ канал.\n"
+            "   ⛔ НЕ пиши как в личку владельцу: 'для тебя', 'твои задачи', 'я нашёл тебе', 'рекомендую тебе'.\n"
+            "   ⛔ НЕ публикуй внутренние отчёты/статусы задач/личную аналитику пользователя.\n"
+            "   ✅ Пиши как эксперт для подписчиков: инсайты, кейсы, аналитика, полезный контент по теме канала.\n"
+            "   ✅ Стиль: профессиональный пост-статья, а НЕ сообщение ассистента.\n\n"
+
+            "�🔗 ЦЕПОЧКИ ЦЕННОСТИ (делай не ОДИН шаг, а ВЕСЬ конвейер):\n"
             "Каждая задача — это НЕ один инструмент, а цепочка из 2-4 шагов до конечного результата.\n"
             "Выбери цепочку ПОДХОДЯЩУЮ ПОД ЦЕЛЬ пользователя:\n"
             "  БИЗНЕС/OUTREACH:\n"
@@ -7828,23 +7835,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
         _final_text = _final_text.strip()
 
-    # ── Пост-обработка: удаляем упоминания инструментов из текста ──
+    # ── Пост-обработка: удаляем нарративные анонсы (целыми предложениями) ──
     if _final_text:
         import re as _re_tools
-        _TOOL_NAMES_PAT = (
-            r'\b(?:web_search|research_topic|quick_topic_search|save_email_contact'
-            r'|send_outreach_email|save_note|add_task|update_goal_progress'
-            r'|run_agent_action|create_post|publish_to_telegram|check_emails'
-            r'|find_relevant_contacts_for_task|delegate_task|set_reminder'
-            r'|reply_to_outreach_email|send_follow_up_email|generate_image)\b'
-        )
-        _final_text = _re_tools.sub(_TOOL_NAMES_PAT, '', _final_text, flags=_re_tools.IGNORECASE)
-        # Чистим «Запускаю ...», «Сейчас вызову ...» — нарративные анонсы
+        # Убираем ЦЕЛЫЕ предложения-анонсы: «Запускаю web_search...», «Сейчас вызову research_topic...»
+        # НЕ трогаем содержательный текст — только чистые анонсы действий
         _final_text = _re_tools.sub(
-            r'[^.!?\n]*(?:запускаю|вызову|вызываю|использую действие агента)[^.!?\n]*[.!?]?\s*',
-            '', _final_text, flags=_re_tools.IGNORECASE
+            r'(?:^|\n)[^\S\n]*(?:Запускаю|Сейчас (?:вызову|вызываю|запущу)|Использую действие агента|Делаю|Выполняю вызов)[^.!?\n]*[.!?\u2026]?[^\S\n]*(?:\n|$)',
+            '\n', _final_text, flags=_re_tools.IGNORECASE
         )
-        _final_text = _re_tools.sub(r'\s{2,}', ' ', _final_text).strip()
+        _final_text = _re_tools.sub(r'\n{3,}', '\n\n', _final_text).strip()
 
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
     return _final_text, _tools_used, _total_ap_tokens
