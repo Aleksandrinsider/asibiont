@@ -3688,6 +3688,18 @@ class HybridAutonomousAgent:
         from i18n import get_user_lang
 
         final = clean_technical_details(content or '').strip()
+
+        # ── Пост-обработка: удаляем упоминания неподключённых сервисов ──
+        if final:
+            import re as _re_svc_fin
+            _BANNED_SVCS_FIN = ('linkedin', 'calendly', 'apollo\\.io', 'sales.navigator', 'hubspot', 'crm', 'zoho', 'pipedrive')
+            for _bs_f in _BANNED_SVCS_FIN:
+                final = _re_svc_fin.sub(
+                    rf'[^.!?\n]*\b{_bs_f}\b[^.!?\n]*[.!?]?\s*',
+                    '', final, flags=_re_svc_fin.IGNORECASE
+                )
+            final = final.strip()
+
         if not final:
             _lang = get_user_lang(user_id)
             
@@ -7841,15 +7853,19 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _GENERIC_PATTERNS_AA = ('выполнил поиск', 'выполнила поиск', 'обновил прогресс',
                                 'обновила прогресс', 'провёл поиск', 'провела поиск',
                                 'задачу выполнил', 'задачу выполнила', 'задача выполнена',
-                                'данных нет', 'готово', 'сделано')
-        if len(_final_text.strip()) < 100 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
+                                'данных нет', 'готово', 'сделано',
+                                'новых ответов пока нет', 'новых писем нет',
+                                'новых ответов нет', 'пока нет ответов',
+                                'входящие проверены', 'проверила входящие',
+                                'проверил входящие', 'ничего нового')
+        if len(_final_text.strip()) < 200 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
 
     # ── Пост-обработка: удаляем упоминания неподключённых сервисов из агентского текста ──
     if _final_text:
         import re as _re_svc
-        _BANNED_SVCS = ('linkedin', 'calendly', 'apollo\\.io', 'sales navigator', 'hubspot')
+        _BANNED_SVCS = ('linkedin', 'calendly', 'apollo\\.io', 'sales navigator', 'hubspot', 'crm', 'zoho', 'pipedrive')
         for _bs in _BANNED_SVCS:
             # Удаляем предложения, содержащие запрещённый сервис
             _final_text = _re_svc.sub(

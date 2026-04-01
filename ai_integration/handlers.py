@@ -12007,6 +12007,40 @@ async def send_outreach_email(
         if not subject or not body:
             return " Нужны subject и body письма."
 
+        # ── GUARD: запрещённые слова в теме письма ──
+        # DeepSeek регулярно игнорирует инструкции и ставит "тестирование", "AI employee" и т.п.
+        # Проверяем программно и отклоняем.
+        if subject:
+            import re as _re_subj
+            _subj_lower = subject.lower()
+            _BANNED_SUBJECT_PATTERNS = [
+                r'\bтест\w*',            # тест, тестирование, тестовый
+                r'\btest\w*',             # test, testing
+                r'\bai.?employee\b',      # AI employee, AI-employee
+                r'\bai.?сотрудни\w*',     # AI-сотрудник, AI сотрудников
+                r'\basi\s*biont\b',       # ASI Biont
+                r'\bплатформ\w*',         # платформа, платформы
+                r'\bпредложение о сотрудничестве\b',
+                r'\bcooperation\s+offer\b',
+                r'\bbusiness\s+opportunity\b',
+                r'\bpartnership\s+opportunity\b',
+                r'\bсотрудничество\b',    # слишком generic
+            ]
+            _banned_match = None
+            for _bp in _BANNED_SUBJECT_PATTERNS:
+                _m = _re_subj.search(_bp, _subj_lower)
+                if _m:
+                    _banned_match = _m.group()
+                    break
+            if _banned_match:
+                return (
+                    f"⛔ Тема письма содержит запрещённое слово/фразу: «{_banned_match}». "
+                    f"Текущая тема: «{subject}». "
+                    "ПЕРЕПИШИ тему: она должна быть конкретной, персонализированной под получателя, "
+                    "без слов 'тест', 'платформа', 'AI employee', 'ASI Biont', 'сотрудничество'. "
+                    "Хороший пример: «Вопрос по автоматизации {компания}» или «{имя}, идея для {проект}»."
+                )
+
         # ── GUARD: язык subject+body должен соответствовать языку контакта ──
         if subject and body:
             import unicodedata as _ud_lang
