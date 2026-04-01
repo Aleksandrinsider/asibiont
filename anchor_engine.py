@@ -3650,7 +3650,7 @@ class AnchorEngine:
                             .filter(
                                 _RecAAL2.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch', 'agent_chain_continue']),
                                 _RecAAL2.status == 'in_progress',
-                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=12),
+                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=25),
                             )
                             .all()
                         )
@@ -4288,9 +4288,10 @@ class AnchorEngine:
             logger.debug(f"[ANCHOR] Dedup error (non-critical): {_e_dedup}")
             session.rollback()
 
-        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>8 мин) как failed
+        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>22 мин) как failed
+        # Порог 22 мин: координатор может запускать 2 агентов × до 300с = 10мин + запас
         try:
-            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=8)  # naive UTC — PostgreSQL возвращает naive datetime
+            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=22)  # naive UTC — PostgreSQL возвращает naive datetime
             from models import AgentActivityLog as _AAL_stuck
             _stuck_logs = session.query(_AAL_stuck).filter(
                 _AAL_stuck.user_id == user.id,
@@ -12575,6 +12576,25 @@ class AnchorEngine:
                 session.rollback()
             except Exception:
                 pass
+            # Явно помечаем AAL как failed — не ждём stuck cleanup
+            if _aal_id_c:
+                try:
+                    from models import Session as _Fail_Sess_cls
+                    from sqlalchemy import text as _fail_t
+                    _fail_sess = _Fail_Sess_cls()
+                    try:
+                        _fail_sess.execute(_fail_t(
+                            "UPDATE agent_activity_log SET status='failed', result=:r WHERE id=:aid"
+                        ), {'r': f'exception: {str(_coord_main_err)[:200]}', 'aid': _aal_id_c})
+                        _fail_sess.commit()
+                    except Exception:
+                        try: _fail_sess.rollback()
+                        except Exception: pass
+                    finally:
+                        try: _fail_sess.close()
+                        except Exception: pass
+                except Exception:
+                    pass
             return False
 
     # ═══════════════════════════════════════════════════════
