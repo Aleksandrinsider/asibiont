@@ -5837,6 +5837,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "7. МИНИМАЛЬНЫЙ СТАНДАРТ ОТЧЁТА: назови хотя бы одну конкретную вещь, которую ты сделал/нашёл.\n"
             "   Имя, ссылку, цифру, факт. Отчёт без единого конкретного факта = ты ничего не сделал.\n\n"
 
+            f"📅 ДАТА И ВРЕМЯ — ТЫ ЖИВЁШЬ В НАСТОЯЩЕМ ({_now_str}):\n"
+            "Когда находишь событие, мероприятие, конференцию — СВЕРЯЙ ДАТУ с текущей.\n"
+            "   ⛔ ПРОШЕДШЕЕ: если дата события УЖЕ ПРОШЛА — НЕ рекомендуй его как возможность.\n"
+            "      Скажи: «Форум X прошёл [дата] — ищу следующий» или используй его как источник контактов спикеров.\n"
+            "   ⛔ СТАРЫЕ ДАННЫЕ: статьи, треды, посты старше 6 месяцев — помечай год: «(2024)», «(2025)».\n"
+            "      НЕ представляй материалы 2024-2025 года как «свежие» или «актуальные».\n"
+            "   ✅ БУДУЩЕЕ: если событие ещё не наступило — это возможность. Указывай «через N дней/недель».\n"
+            "   ✅ ПРОВЕРКА: перед отчётом спроси себя: «эта дата уже прошла?» Если да — не предлагай участвовать.\n\n"
+
             "🔗 ЦЕПОЧКИ ЦЕННОСТИ (делай не ОДИН шаг, а ВЕСЬ конвейер):\n"
             "Каждая задача — это НЕ один инструмент, а цепочка из 2-4 шагов до конечного результата.\n"
             "Выбери цепочку ПОДХОДЯЩУЮ ПОД ЦЕЛЬ пользователя:\n"
@@ -5996,6 +6005,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Рычаги: ищи точку минимум-усилий/максимум-результата. Соединяй то, что человек сам не видит.\n"
         "Инверсия: перед советом спроси себя «что гарантированно провалит эту цель?» Скажи прямо.\n"
         "Адаптация: если пользователь исправил тебя — извлеки принцип и применяй всегда.\n\n"
+
+        f"📅 ВРЕМЯ: сейчас {_now_str}. Если упоминаешь событие/мероприятие/статью — сверяй дату.\n"
+        "Прошедшее событие ≠ возможность. Материалы старше 6 мес — помечай год.\n\n"
 
         "ФОРМАТ ОТВЕТА: сплошной текст как в мессенджере, абзацами. 200-500 символов.\n"
         "Ответ короче 200 символов = ОШИБКА (кроме да/нет на закрытый вопрос). Длиннее 500 = ОШИБКА.\n"
@@ -7815,6 +7827,24 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 '', _final_text, flags=_re_svc.IGNORECASE
             )
         _final_text = _final_text.strip()
+
+    # ── Пост-обработка: удаляем упоминания инструментов из текста ──
+    if _final_text:
+        import re as _re_tools
+        _TOOL_NAMES_PAT = (
+            r'\b(?:web_search|research_topic|quick_topic_search|save_email_contact'
+            r'|send_outreach_email|save_note|add_task|update_goal_progress'
+            r'|run_agent_action|create_post|publish_to_telegram|check_emails'
+            r'|find_relevant_contacts_for_task|delegate_task|set_reminder'
+            r'|reply_to_outreach_email|send_follow_up_email|generate_image)\b'
+        )
+        _final_text = _re_tools.sub(_TOOL_NAMES_PAT, '', _final_text, flags=_re_tools.IGNORECASE)
+        # Чистим «Запускаю ...», «Сейчас вызову ...» — нарративные анонсы
+        _final_text = _re_tools.sub(
+            r'[^.!?\n]*(?:запускаю|вызову|вызываю|использую действие агента)[^.!?\n]*[.!?]?\s*',
+            '', _final_text, flags=_re_tools.IGNORECASE
+        )
+        _final_text = _re_tools.sub(r'\s{2,}', ' ', _final_text).strip()
 
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
     return _final_text, _tools_used, _total_ap_tokens
