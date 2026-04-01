@@ -8504,7 +8504,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _resp_final_check = str(resp).strip().lower().rstrip('.!?')
         if _resp_final_check in _HOLLOW_FINAL:
             logger.info("[AGENT] TEACH-MISS hollow final guard: '%s' from %s — suppressing", resp.strip()[:60], ag.get('name', '?'))
-            return resp, _agent_tools_used, _total_tokens_used
+            return str(resp)[:2000]
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
         resp = _strip_agent_html(str(resp))
