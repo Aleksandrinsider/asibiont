@@ -1520,3 +1520,46 @@ def test_d51_escalation_cross_system_check():
     # System A должна проверять оба типа сообщений
     assert "message_type.in_(['proactive', 'stagnation_alert'])" in src, \
         "Escalation system A should check both proactive AND stagnation_alert"
+
+
+def test_d52_save_note_visible_to_other_agents():
+    """Заметка, сохранённая одним агентом, видна другим через _build_autopilot_prompt."""
+    with TestSession() as s:
+        user = s.query(models.User).filter_by(telegram_id=UID).first()
+
+        # Сохраняем заметку от имени агента (как если бы Кристина вызвала save_note)
+        note = models.Note(
+            user_id=user.id,
+            title="Важный контакт: Иван Петров",
+            content="Иван Петров — CTO стартапа, интерес к AI-автоматизации",
+            source="chat",
+        )
+        s.add(note)
+        s.commit()
+
+        # Подменяем Session в models чтобы _build_autopilot_prompt использовал тестовую БД
+        old_session = models.Session
+        models.Session = TestSession
+        try:
+            import anchor_engine as ae_mod
+            # Вызываем _build_autopilot_prompt от имени ДРУГОГО агента (Марк)
+            prompt = ae_mod._build_autopilot_prompt(
+                goals_summary=[{"title": "Тестовая цель", "status": "active", "progress": 10}],
+                user=user,
+                agent_name="Марк",
+                agent_history=[],
+                team_history=[],
+            )
+
+            # Заметка должна быть в промпте (блок "ЗАМЕТКИ КОМАНДЫ")
+            assert "Важный контакт" in prompt, \
+                "Note saved by one agent must appear in another agent's prompt via shared notes block"
+
+            # Убедимся что блок реально помечен как командный
+            assert "ЗАМЕТКИ КОМАНДЫ" in prompt or "заметк" in prompt.lower(), \
+                "Shared notes block header should be present"
+        finally:
+            models.Session = old_session
+            # Cleanup
+            s.delete(note)
+            s.commit()

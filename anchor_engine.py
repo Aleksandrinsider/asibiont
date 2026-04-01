@@ -9876,15 +9876,15 @@ class AnchorEngine:
                         if _result_text and len(_result_text) > 20:
                             _res_by_agent.setdefault(_ag_name_res, []).append({
                                 'title': (_aal_row.title or '')[:80],
-                                'result': _result_text[:400],
+                                'result': _result_text[:700],
                                 'type': _aal_row.activity_type or '',
                                 'ts': _aal_row.created_at,
                             })
 
                     _res_lines = []
                     for _ag_res_name, _entries in _res_by_agent.items():
-                        # Берём только самые свежие 2 записи на агента
-                        _entries_sorted = sorted(_entries, key=lambda x: x['ts'], reverse=True)[:2]
+                        # Берём самые свежие 3 записи на агента (больше данных для межагентных передач)
+                        _entries_sorted = sorted(_entries, key=lambda x: x['ts'], reverse=True)[:3]
                         for _e in _entries_sorted:
                             _ago_min = int((datetime.now(timezone.utc) - (
                                 _e['ts'].replace(tzinfo=timezone.utc) if _e['ts'].tzinfo is None else _e['ts']
@@ -9896,10 +9896,15 @@ class AnchorEngine:
 
                     if _res_lines:
                         _agent_results_str = (
-                            '\n🔁 ДАННЫЕ АГЕНТОВ ИЗ ПРОШЛЫХ ЦИКЛОВ (можно передать другому агенту!):\n'
+                            '\n🔁 ДАННЫЕ АГЕНТОВ ИЗ ПРОШЛЫХ ЦИКЛОВ (ОБЯЗАТЕЛЬНО используй при планировании!):\n'
                             + '\n'.join(_res_lines)
-                            + '\n  → Если агент A нашёл контакты/авторов — поручи агенту B написать им.\n'
-                            + '  → Если агент A собрал аналитику — поручи агенту B создать пост/письмо.\n\n'
+                            + '\n  ⚡ ПРАВИЛО ПЕРЕДАЧИ ДАННЫХ: когда даёшь задачу на основе чужих результатов —\n'
+                            + '     КОПИРУЙ конкретные данные (имена, email, ссылки, цифры) В ТЕКСТ ЗАДАЧИ.\n'
+                            + '     ПЛОХО: "Напиши письма найденным контактам" — агент не знает КОМУ.\n'
+                            + '     ХОРОШО: "Напиши персональное письмо Иванову ivan@co.ru (CTO стартапа X, интерес: AI)"\n'
+                            + '  → Если агент A нашёл контакты — передай имена+email агенту B в тексте задачи.\n'
+                            + '  → Если агент A собрал аналитику — передай ключевые факты агенту B для поста/письма.\n'
+                            + '  → Если данных из прошлого цикла достаточно — НЕ повторяй поиск, сразу действуй.\n\n'
                         )
             except Exception as _ar_err:
                 logger.debug("[COORD] agent results harvest: %s", _ar_err)
@@ -9974,17 +9979,30 @@ class AnchorEngine:
                 # Подходы которые координатор предлагал 3+ раз → петля
                 _looped = {k: v for k, v in _approach_counts.items() if v >= 3}
                 if _looped:
+                    # Конкретные альтернативы для каждого заблокированного подхода
+                    _alternatives_map = {
+                        'LinkedIn': 'Хабр, dev.to, GitHub, ProductHunt, тематические Telegram-каналы',
+                        'Discord': 'Telegram-группы, форумы, комментарии на Хабре/dev.to',
+                        'GitHub-поиск': 'Хабр авторы, dev.to, RSS-ленты техблогов, ProductHunt makers',
+                        'RSS/Хабр': 'web_search по нишевым блогам, GitHub trending, ProductHunt',
+                        'web_search-контакты': 'check_emails (входящие), create_post (inbound-стратегия), research_topic (аналитика для контента)',
+                        'email-лимит-упомин': 'create_post + publish_to_telegram (контент-маркетинг), research_topic + save_note (аналитика), update_goal_progress',
+                        'таймаут-упомин': 'более простые задачи: save_note, update_goal_progress, create_post из уже собранных данных',
+                        'смена-тактики': 'КОНКРЕТНО смени: другой поисковый запрос, другая платформа, другой тип контента',
+                    }
                     _loop_lines = ['\n🚨 ВНИМАНИЕ: ОБНАРУЖЕНА ПЕТЛЯ (координатор повторял одно и то же):']
                     for _lap, _lcnt in sorted(_looped.items(), key=lambda x: -x[1]):
-                        _loop_lines.append(f'  ⛔ «{_lap}» — упоминалось {_lcnt} раз за 3ч БЕЗ результата')
+                        _alt = _alternatives_map.get(_lap, 'другой подход')
+                        _loop_lines.append(f'  ⛔ «{_lap}» — упоминалось {_lcnt} раз за 3ч БЕЗ результата → ЗАМЕНА: {_alt}')
                     _loop_lines.append('')
                     _loop_lines.append('  ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ВЫХОДА ИЗ ПЕТЛИ:')
                     _loop_lines.append('  1. Ни один агент НЕ должен получить задачу с заблокированным подходом выше.')
-                    _loop_lines.append('  2. Если все привычные каналы заблокированы → сообщи пользователю через send_message_to_user')
-                    _loop_lines.append('     что данный инструмент/канал недоступен и предложи конкретную альтернативу.')
-                    _loop_lines.append('  3. Если контакты не находятся → смени ДОМЕН: от поиска людей к созданию контента,')
-                    _loop_lines.append('     публикации, аналитике, обновлению задач, мониторингу входящих.')
+                    _loop_lines.append('  2. Используй КОНКРЕТНУЮ альтернативу из «ЗАМЕНА» рядом с каждым заблокированным подходом.')
+                    _loop_lines.append('  3. Если все каналы поиска заблокированы → переключись на СОЗДАНИЕ КОНТЕНТА')
+                    _loop_lines.append('     (create_post, publish_to_telegram) или ОБРАБОТКУ ВХОДЯЩИХ (check_emails, reply).')
                     _loop_lines.append('  4. Задача «ещё раз попробуй» тот же канал — ЗАПРЕЩЕНА.')
+                    _loop_lines.append('  5. Если есть данные из прошлых циклов (см. 🔁 ДАННЫЕ АГЕНТОВ) — используй ИХ,')
+                    _loop_lines.append('     не ищи заново. Нашли контакты? Пиши письма. Нашли тренды? Делай пост.')
                     _loop_detection_str = '\n'.join(_loop_lines) + '\n'
                     logger.info("[COORD] Loop detected for user %s: %s", user.telegram_id, _looped)
             except Exception as _ld_err:
@@ -10140,6 +10158,15 @@ class AnchorEngine:
                 "  Пример: task='Проверь RSS на авторов статей по AI-агентам → для каждого автора с email\n"
                 "  DELEGATE[Кристина]: имя, email/ссылка, тема статьи — она напишет персональное письмо.'\n"
                 "• ПРИЗНАК ПЛОХОЙ ЗАДАЧИ: если агент может выполнить её вызовом update_goal_progress(notes='...') — перепиши.\n\n"
+
+                "⚡ ПОВТОРНОЕ ИСПОЛЬЗОВАНИЕ ДАННЫХ (КРИТИЧЕСКИ ВАЖНО!):\n"
+                "Если в разделе 🔁 ДАННЫЕ АГЕНТОВ есть конкретные результаты — НЕ ИЩИ ЗАНОВО.\n"
+                "Агент нашёл контакты/email? → ВКЛЮЧИ их прямо в текст задачи для следующего агента.\n"
+                "Агент собрал аналитику? → ВКЛЮЧИ ключевые факты в задачу на создание поста/письма.\n"
+                "ПЛОХО: task='Найди контакты в сфере AI' (когда контакты УЖЕ найдены в прошлом цикле)\n"
+                "ХОРОШО: task='Напиши персональное письмо Алексею (alexey@startup.io, CTO в AI-стартапе, интересуется агентами)'\n"
+                "Повторный поиск того что уже найдено = пустая трата цикла. Используй собранные данные.\n\n"
+
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
                 "ФОРМАТ ПОЛЕЙ: agent=имя агента, tool=инструмент (snake_case), goal=точное_название, "
@@ -10190,6 +10217,24 @@ class AnchorEngine:
                 elif _ak_agent:
                     logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
+
+            # ── Контент-дедупликация: пропускаем задачи, дублирующие недавно выполненные ──
+            if _plan and _recent_done_str:
+                _recent_done_lower = _recent_done_str.lower()
+                _plan_content_deduped = []
+                for _pcd in _plan:
+                    _pcd_task = (_pcd.get('task') or '').lower()
+                    # Извлекаем ключевые слова (>4 символов) для нечёткого сравнения
+                    _pcd_words = {w for w in _pcd_task.split() if len(w) > 4}
+                    _overlap = sum(1 for w in _pcd_words if w in _recent_done_lower) if _pcd_words else 0
+                    _overlap_ratio = _overlap / max(len(_pcd_words), 1)
+                    if _overlap_ratio > 0.6 and len(_pcd_words) >= 3:
+                        logger.info("[COORD] content-dedup: skip task with %.0f%% overlap: %s",
+                                    _overlap_ratio * 100, _pcd_task[:80])
+                    else:
+                        _plan_content_deduped.append(_pcd)
+                if _plan_content_deduped:
+                    _plan = _plan_content_deduped
 
             # ── Adaptive plan normalization: мягкая коррекция на основе опыта и валидности ──
             # 1) Предупреждаем о рисках по агенту, но не выкидываем шаги без крайней причины
@@ -12341,9 +12386,22 @@ class AnchorEngine:
                             import datetime as _dt_sumchk
                             _sum_sess = _Sum_Sess_cls()
                             try:
-                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 40 мин назад
-                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(minutes=40)
+                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 3ч назад
+                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(hours=3)
                                 from sqlalchemy import text as _sql_sumchk
+                                # Daily cap: макс 3 coordinator_summary в сутки
+                                _sum_day_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(hours=24)
+                                _sum_day_count = _sum_sess.execute(_sql_sumchk(
+                                    "SELECT count(*) FROM interactions WHERE user_id=:uid "
+                                    "AND message_type='proactive' "
+                                    "AND content LIKE '%coordinator_summary%' "
+                                    "AND created_at >= :cutoff"
+                                ), {'uid': user.id, 'cutoff': _sum_day_cutoff}).scalar() or 0
+                                if _sum_day_count >= 3:
+                                    logger.info("[COORD] coordinator_summary daily cap reached (%d/3) for user %d", _sum_day_count, user.id)
+                                    try: _sum_sess.close()
+                                    except Exception: pass
+                                    return True
                                 _recent_summary = _sum_sess.execute(_sql_sumchk(
                                     "SELECT id FROM interactions WHERE user_id=:uid "
                                     "AND message_type='proactive' "
@@ -12375,14 +12433,7 @@ class AnchorEngine:
                                     finally:
                                         try: _sum_sess.close()
                                         except Exception: pass
-                                    if self.bot:
-                                        try:
-                                            await self.bot.send_message(
-                                                chat_id=user.telegram_id,
-                                                text=f"ASI (итог):\n\n{_report_text}",
-                                            )
-                                        except Exception as _e:
-                                            logger.debug("suppressed: %s", _e)
+                                    # Deduped — НЕ отправляем в Telegram, только AAL для хронологии
                                     return True
                                 _sum_sess.add(Interaction(
                                     user_id=user.id,
@@ -14060,10 +14111,10 @@ class AnchorEngine:
                     _ag_nm = _j.get('__agent', {}).get('name', '')
                     if not _ag_nm:
                         continue
-                    _txt = (_j.get('text', '') or '')[:250]
+                    _txt = (_j.get('text', '') or '')[:350]
                     _tl = _j.get('__tools_used', [])
                     _tl_s = f"[{', '.join(_tl)}] " if _tl else ''
-                    _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:200]}"
+                    _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:300]}"
                     _per_agent_history.setdefault(_ag_nm, [])
                     if len(_per_agent_history[_ag_nm]) < 12:
                         _per_agent_history[_ag_nm].append(_entry)
