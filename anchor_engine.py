@@ -12732,13 +12732,9 @@ class AnchorEngine:
                 ~Anchor.anchor_type.in_(list(_DEDUP_WITH_DELIVERED)),  # email_reply_received handled above
             ).all()
             for _cd_a in _cooldown_delivered:
-                # goal_autopilot_review: always use MIN_AUTOPILOT_GAP_MINUTES regardless of
-                # stored cooldown_hours (old records may have 2.0h which blocks the 15min cycle)
-                if _cd_a.anchor_type == 'goal_autopilot_review':
-                    _cd_h = MIN_AUTOPILOT_GAP_MINUTES / 60
-                else:
-                    _cd_h = (_cd_a.cooldown_hours if _cd_a.cooldown_hours and _cd_a.cooldown_hours > 0
-                             else PRIORITY_COOLDOWN.get(_cd_a.priority, 4))
+                # Используем stored cooldown_hours для всех типов
+                _cd_h = (_cd_a.cooldown_hours if _cd_a.cooldown_hours and _cd_a.cooldown_hours > 0
+                         else PRIORITY_COOLDOWN.get(_cd_a.priority, 4))
                 _da = _cd_a.delivered_at
                 if _da.tzinfo is None:
                     _da = _da.replace(tzinfo=timezone.utc)
@@ -13490,7 +13486,7 @@ class AnchorEngine:
         anchors.append(Anchor(
             user_id=user.id,
             anchor_type='chat_ai_review',
-            source=f'chat_review:{last_chat_msg.id}:{_slot}',
+            source=f'chat_review:{user.id}',
             topic=_t(
                 user,
                 f'Продолжить анализ чата: прошло {int(minutes_since)} мин после последней реплики',
@@ -13505,7 +13501,7 @@ class AnchorEngine:
             }, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=2),
-            cooldown_hours=MIN_AUTOPILOT_GAP_MINUTES / 60,
+            cooldown_hours=1.0,  # раз в 1ч (было 0.25h с уникальным source — кулдаун не работал)
             batch_group='engagement',
         ))
 
@@ -14889,7 +14885,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.2,  # ~12min — реальный rate limit задаётся MIN_AUTOPILOT_GAP_MINUTES=15
+            cooldown_hours=2.0,  # раз в 2ч — снижает спам (было 0.2h=60/день)
             batch_group='goals',
         )]
 
@@ -15596,7 +15592,7 @@ class AnchorEngine:
                 if remaining_total > drafts_in_pipeline:
                     # Дедупликация: один необработанный email_need_leads на кампанию
                     # (защита от дублей при параллельном запуске нескольких воркеров)
-                    _nl_source = f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}-{now_utc.hour // 2}'
+                    _nl_source = f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}'
                     _nl_exists = session.query(Anchor).filter(
                         Anchor.user_id == user.id,
                         Anchor.anchor_type == 'email_need_leads',
@@ -15625,7 +15621,7 @@ class AnchorEngine:
                             }),
                             triggered_at=now_utc,
                             expires_at=now_utc + timedelta(hours=6),
-                            cooldown_hours=0.5,
+                            cooldown_hours=3.0,  # раз в 3ч (было 0.5h=47/день)
                             batch_group='email',
                         ))
 

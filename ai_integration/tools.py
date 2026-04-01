@@ -47,7 +47,7 @@ EXCLUDED_TOOLS = {
     'analyze_group_opportunities',       # внутренняя
     'set_auto_post_time',                # покрывается set_content_strategy
     # 'publish_to_telegram' — разблокирован, AI может публиковать в TG-канал напрямую
-    'get_weather_info',                  # дубль встроенного контекста погоды
+    # 'get_weather_info' — разблокирован, AI должен вызывать для запросов о погоде
     # Внутренние утилиты (не инструменты для AI)
     'encrypt_data',                      # служебная криптография
     'decrypt_data',                      # служебная криптография
