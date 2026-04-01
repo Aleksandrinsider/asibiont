@@ -7035,19 +7035,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Text-only final summary iterations need full response space (1600).
         _iter_max_tokens = 1200 if _use_tools_now else 1600
         try:
-            _resp = await asyncio.wait_for(
-                _agent_inst.call_ai(
-                    _messages,
-                    use_tools=_use_tools_now,
-                    tool_choice=_tc_mode,
-                    exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                    max_tokens=_iter_max_tokens,
-                    api_timeout=API_TIMEOUT_LONG,
-                ),
-                timeout=API_TIMEOUT_LONG + 5,
+            _resp = await _agent_inst.call_ai(
+                _messages,
+                use_tools=_use_tools_now,
+                tool_choice=_tc_mode,
+                exclude_tools=_exclude_for_agent if _use_tools_now else None,
+                max_tokens=_iter_max_tokens,
+                api_timeout=API_TIMEOUT_LONG,
             )
-        except (asyncio.TimeoutError, Exception) as _ai_err:
-            logger.warning("[DIRECTOR-EXEC] agent %s call_ai error: %s", agent.get('name'), _ai_err)
+        except Exception as _ai_err:
+            _err_msg = str(_ai_err) or type(_ai_err).__name__
+            logger.warning("[DIRECTOR-EXEC] agent %s call_ai error: %s", agent.get('name'), _err_msg)
             break
         if _resp:
             _u_ap = _resp.get('usage') or {}

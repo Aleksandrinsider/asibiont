@@ -1532,7 +1532,7 @@ class OfficeEngine:
                     data = await resp.json()
                     answer = data["choices"][0]["message"]["content"].strip()
         except Exception as e:
-            logger.warning("[OFFICE-L2] AI call error: %s", e)
+            logger.warning("[OFFICE-L2] AI call error: %s", str(e) or type(e).__name__)
             return
 
         import json as _json
