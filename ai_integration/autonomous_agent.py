@@ -8006,6 +8006,39 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _final_text = _re_tools.sub(_pat, _repl, _final_text, flags=_re_tools.IGNORECASE)
         _final_text = _re_tools.sub(r'\n{3,}', '\n\n', _final_text).strip()
 
+    # ── Rework: если ответ — шаблонная пустышка, но есть данные скрипта → перегенерировать ──
+    _HOLLOW_CHECK = {'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                     'данных нет', 'готово', 'сделано', 'принял в работу'}
+    _ft_check = (_final_text or '').strip().lower().rstrip('.!? ')
+    if _ft_check in _HOLLOW_CHECK or (not _final_text and not _is_autopilot_task):
+        # Собираем доступный контекст: script_context + tool data
+        _rework_ctx = ''
+        if script_context:
+            _rework_ctx += script_context[:1500]
+        _tool_data_rw = [
+            (m.get('content') or '')[:300]
+            for m in _messages if m.get('role') == 'tool' and m.get('content', '') != '{"status":"skipped"}'
+        ]
+        if _tool_data_rw:
+            _rework_ctx += '\n' + '\n'.join(_tool_data_rw[-3:])
+        if _rework_ctx.strip():
+            try:
+                _rw_resp = await _quick_ai_call_raw([{
+                    "role": "user",
+                    "content": (
+                        f"Ты — {agent.get('name', 'агент')} ({agent.get('specialization', '')}).\n"
+                        f"Пользователь попросил: {task[:300]}\n\n"
+                        f"Вот данные которые ты получил из своих интеграций:\n{_rework_ctx}\n\n"
+                        f"Ответь на запрос пользователя используя ЭТИ данные. "
+                        f"Пиши от первого лица, живо, как человек. 2-5 предложений."
+                    ),
+                }], max_tokens=400, _caller='exec_hollow_rework')
+                if _rw_resp and len(_rw_resp.strip()) > 40:
+                    _final_text = _rw_resp.strip()
+                    logger.info("[DIRECTOR-EXEC] hollow rework for %s: %d chars", agent.get('name', '?'), len(_final_text))
+            except Exception as _rw_err:
+                logger.debug("[DIRECTOR-EXEC] hollow rework failed: %s", _rw_err)
+
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
     return _final_text, _tools_used, _total_ap_tokens
 
