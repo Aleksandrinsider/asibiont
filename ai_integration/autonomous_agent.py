@@ -5964,7 +5964,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             "  ⛔ АНТИ-НАРРАТИВНОСТЬ:\n"
             "  НЕ описывай процесс до результата. Сначала ВЫЗОВИ tool, потом расскажи итог.\n"
-            "  НЕ упоминай названия инструментов (web_search, save_email_contact и т.д.) — пользователь не знает про них.\n"
+            "  НЕ упоминай названия инструментов (web_search, save_email_contact и т.д.) — НИ пользователю, НИ коллегам.\n"
+            "  При делегировании коллеге: описывай ЗАДАЧУ, а не инструмент. НЕ 'используя send_outreach_email', А 'отправь письмо'.\n"
             "  ЗАПРЕЩЕНО: «Запускаю web_search», «Сейчас вызову research_topic», «Делаю save_note».\n"
             "  ПРАВИЛЬНО: «Поискала на Хабре — нашла 3 автора с email», «Сохранила контакт Алексея».\n"
             "  НЕ анонсируй что собираешься делать: «Понял, застряли. Запускаю поиск...» — НЕТ.\n"
@@ -7818,7 +7819,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     if _is_autopilot_task and _final_text:
         _ft_lower = _final_text.strip().lower()
         _GENERIC_PATTERNS_AA = ('выполнил поиск', 'выполнила поиск', 'обновил прогресс',
-                                'обновила прогресс', 'провёл поиск', 'провела поиск')
+                                'обновила прогресс', 'провёл поиск', 'провела поиск',
+                                'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                                'данных нет', 'готово', 'сделано')
         if len(_final_text.strip()) < 100 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''

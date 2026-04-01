@@ -11678,11 +11678,16 @@ class AnchorEngine:
                     _current_run_agent_tools.setdefault(_ag_name, set()).update(_step_tools)
 
                 _DONE_FB_SET = {"Задачу выполнил.", "Задачу выполнила."}
+                _DONE_FB_LOWER = {'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                                  'данных нет', 'готово', 'сделано', 'принял в работу',
+                                  'задачу принял', 'задачу приняла'}
                 _result_stripped = (_result or '').strip()
-                if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
+                _is_done_fb = (_result_stripped in _DONE_FB_SET
+                               or _result_stripped.lower().rstrip('.!?') in _DONE_FB_LOWER)
+                if not _result_stripped or len(_result_stripped) < 5 or _is_done_fb:
                     # ── RETRY: если пустой результат и не было retry — пробуем ещё раз с уточнённым промптом ──
                     _retry_key = f'{_ag_name}:{_executed}'
-                    if _result_stripped not in _DONE_FB_SET and not _retry_done.get(_retry_key):
+                    if not _is_done_fb and not _retry_done.get(_retry_key):
                         _retry_done[_retry_key] = True
                         _retry_prompt = (
                             f"{_agent_prompt}\n\n"
@@ -11698,23 +11703,25 @@ class AnchorEngine:
                             _result_retry = _raw_retry[0] if isinstance(_raw_retry, (tuple, list)) else _raw_retry
                             _retry_tools = list(_raw_retry[1]) if isinstance(_raw_retry, (tuple, list)) and len(_raw_retry) > 1 else []
                             _retry_stripped = (_result_retry or '').strip()
-                            if _retry_stripped and len(_retry_stripped) >= 5 and _retry_stripped not in _DONE_FB_SET:
+                            _retry_is_done_fb = _retry_stripped.lower().rstrip('.!?') in _DONE_FB_LOWER
+                            if _retry_stripped and len(_retry_stripped) >= 5 and not _retry_is_done_fb:
                                 # Retry успешен — используем новый результат
                                 _result = _result_retry
                                 _result_stripped = _retry_stripped
+                                _is_done_fb = False
                                 _step_tools.extend(_retry_tools)
                                 _all_tools.extend(_retry_tools)
                                 logger.info(f"[COORD] agent {_ag_name}: retry succeeded ({len(_retry_stripped)} chars)")
                         except Exception as _retry_err:
                             logger.debug(f"[COORD] agent {_ag_name}: retry failed: {_retry_err}")
 
-                if not _result_stripped or len(_result_stripped) < 5 or _result_stripped in _DONE_FB_SET:
-                    if _result_stripped in _DONE_FB_SET:
+                if not _result_stripped or len(_result_stripped) < 5 or _is_done_fb:
+                    if _is_done_fb:
                         # Вместо «немого» ответа даём короткий, понятный статус по шагу.
                         _task_short_h = (_ag_task.split('\n')[0] or _ag_task)[:140].strip()
                         _result = f"Сделал шаг по задаче: {_task_short_h}. Перехожу к следующему действию."
                         _result_stripped = _result
-                    if _result_stripped not in _DONE_FB_SET:
+                    if not _is_done_fb:
                         # Пустой результат после retry: отменяем задачу + объясняем пользователю
                         logger.info(f"[COORD] agent {_ag_name}: empty result after retry")
                         self._cancel_agent_task(
@@ -12722,6 +12729,14 @@ class AnchorEngine:
         # This prevents the "deliver → re-create instantly" loop (e.g. email_outreach_send
         # cooldown=0.3h created 60+ times/day, goal_autopilot_review 38+ times/day).
         # Safety window: look back max 48h to cover the longest cooldown (72h types clamp at 48).
+        # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
+        # from before a code update, so we enforce a floor per anchor_type.
+        _MIN_COOLDOWN_OVERRIDE = {
+            'goal_autopilot_review': 2.0,
+            'email_need_leads': 3.0,
+            'chat_ai_review': 1.0,
+        }
+        _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
         try:
             _MAX_LOOKBACK_H = 48
             _cooldown_delivered = session.query(Anchor).filter(
@@ -12732,14 +12747,21 @@ class AnchorEngine:
                 ~Anchor.anchor_type.in_(list(_DEDUP_WITH_DELIVERED)),  # email_reply_received handled above
             ).all()
             for _cd_a in _cooldown_delivered:
-                # Используем stored cooldown_hours для всех типов
                 _cd_h = (_cd_a.cooldown_hours if _cd_a.cooldown_hours and _cd_a.cooldown_hours > 0
                          else PRIORITY_COOLDOWN.get(_cd_a.priority, 4))
+                # Enforce minimum cooldown — stale DB values must not bypass intended limits
+                _cd_min = _MIN_COOLDOWN_OVERRIDE.get(_cd_a.anchor_type, 0)
+                if _cd_min > _cd_h:
+                    _cd_h = _cd_min
                 _da = _cd_a.delivered_at
                 if _da.tzinfo is None:
                     _da = _da.replace(tzinfo=timezone.utc)
                 if _da >= now_utc - timedelta(hours=_cd_h):
                     existing_keys.add((_cd_a.anchor_type, _cd_a.source))
+                    # For types with unstable source keys, also block by type-only
+                    # so that source rotation (e.g. per-hour) can't bypass cooldown
+                    if _cd_a.anchor_type in _MIN_COOLDOWN_OVERRIDE:
+                        _cooldown_blocked_types.add(_cd_a.anchor_type)
         except Exception as _ecd:
             logger.debug("[ANCHOR] cooldown-dedup error (non-critical): %s", _ecd)
 
@@ -12760,6 +12782,10 @@ class AnchorEngine:
                     continue
                 existing_types.add(a.anchor_type)
                 unique_anchors.append(a)
+            elif a.anchor_type in _cooldown_blocked_types:
+                # Type-level cooldown block (source-independent) — prevents
+                # source rotation from bypassing cooldown
+                continue
             else:
                 key = (a.anchor_type, a.source)
                 if key not in existing_keys:
