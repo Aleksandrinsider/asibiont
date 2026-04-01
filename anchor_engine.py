@@ -5751,6 +5751,38 @@ class AnchorEngine:
                                         f"\n\nПоследние действия {_chosen_name} (видишь паттерн?):\n"
                                         + '\n'.join(f'  — {p}' for p in _chosen_hist_parts[:3])
                                     )
+                                # ── История собственных поручений координатора: что уже назначалось этому агенту ──
+                                # Без этого ASI не знает что сам говорил и повторяет те же задания
+                                _my_recent_assigns_ctx = ''
+                                try:
+                                    _coord_hist_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=8)
+                                    _recent_my_coords = session.query(Interaction).filter(
+                                        Interaction.user_id == user.id,
+                                        Interaction.message_type == 'agent_msg',
+                                        Interaction.created_at >= _coord_hist_cutoff,
+                                    ).order_by(Interaction.created_at.desc()).limit(40).all()
+                                    _my_assign_texts = []
+                                    for _rmc in _recent_my_coords:
+                                        try:
+                                            _rmc_d = json.loads(_rmc.content or '{}')
+                                            if (
+                                                _rmc_d.get('__anchor_type') == 'goal_autopilot_assignment'
+                                                and _rmc_d.get('__to_agent') == _chosen_name
+                                            ):
+                                                _atxt = (_rmc_d.get('text', '') or '').strip()[:180]
+                                                if _atxt and _atxt not in _my_assign_texts:
+                                                    _my_assign_texts.append(_atxt)
+                                                    if len(_my_assign_texts) >= 3:
+                                                        break
+                                        except Exception:
+                                            pass
+                                    if _my_assign_texts:
+                                        _my_recent_assigns_ctx = '\n'.join(
+                                            f'  [{i+1}] {t}' for i, t in enumerate(_my_assign_texts)
+                                        )
+                                except Exception as _mh_err:
+                                    logger.debug('[ANCHOR-AUTOPILOT] my assign history: %s', _mh_err)
+
                                 # Детектор зацикливания: считаем упоминания каналов в последних циклах
                                 _all_recent_text_c = ' '.join((a.result or '') for a in _last_aals_c).lower()
                                 _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
@@ -5839,6 +5871,21 @@ class AnchorEngine:
                                             f'Назначь задачу с КОНКРЕТНЫМ результатом: заметка, задача, пост, письмо, анализ. '
                                             f'Поиск полезен когда результаты превращаются в действия.'
                                         )
+                                    # ── Bottleneck → fallback _coord_text меняем на конверсионный ──
+                                    # Если AI сгенерирует пустышку — резервный текст тоже должен быть про конверсию
+                                    if _bn_search >= 5 and _bn_actions <= 2 and _goal_titles_fb:
+                                        if _has_email_fb:
+                                            _coord_text = (
+                                                f'{_chosen_name}, загляни в почту — '
+                                                f'после стольких поисков по «{_goal_titles_fb[0]}» должны быть ответы. '
+                                                f'Если кто-то откликнулся — сразу отвечай и назначай встречу.'
+                                            )
+                                        else:
+                                            _coord_text = (
+                                                f'{_chosen_name}, мы уже много искали по «{_goal_titles_fb[0]}». '
+                                                f'Возьми лучшие находки из своих заметок и создай аналитический пост через create_post — '
+                                                f'что нашли, кто перспективен, какой следующий шаг.'
+                                            )
                                 except Exception as _bn_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] bottleneck detection: %s', _bn_err)
                         except Exception as _cc_err:
@@ -5851,7 +5898,15 @@ class AnchorEngine:
                             f"{_channels_info_c}\n"
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
-                            + (f"Последний результат команды: {_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
+                            + (f"Результаты команды за последний цикл:\n{_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
+                            + (
+                                f"\n📋 ЧТО ТЫ УЖЕ ПОРУЧАЛ {_chosen_name.upper()} (последние {len(_my_assign_texts)} задания, от нового к старому):\n"
+                                f"{_my_recent_assigns_ctx}\n"
+                                f"→ Твоё НОВОЕ поручение ДОЛЖНО отличаться от перечисленных выше:\n"
+                                f"  другой канал ИЛИ другой инструмент ИЛИ другой тип результата.\n"
+                                f"  Если ты снова напишешь то же самое — это зацикливание, и оно бесполезно.\n"
+                                if _my_recent_assigns_ctx else ''
+                            )
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
                             + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
 
@@ -5859,7 +5914,7 @@ class AnchorEngine:
                             f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
                             f"  2) Если результат был слабым или повторяется «поиск / исследование» без конкретных итогов — "
                             f"прежний подход НЕ РАБОТАЕТ. Не повторяй его с новыми словами — предложи ДРУГУЮ СТРАТЕГИЮ.\n"
-                            f"  3) Чем твоё новое поручение ОТЛИЧАЕТСЯ от предыдущих? Если отличие только в формулировке — ты зацикливаешься.\n"
+                            f"  3) Чем твоё новое поручение ОТЛИЧАЕТСЯ от предыдущих (см. список выше)? Если отличие только в формулировке — ты зацикливаешься.\n"
                             f"  4) Прогресс цели вырос? Если нет — задай себе вопрос: что мешает? Может нужна другая площадка, "
                             f"другая аудитория, другой формат, или вообще пауза.\n"
 
@@ -5926,6 +5981,69 @@ class AnchorEngine:
                                 # Оставляем _coord_text (конкретный fallback), не перезаписываем
                             else:
                                 _coord_text = _gen_s
+                                # ── INF→IMP: нормализуем "пожалуйста использовать" → "пожалуйста, используй" ──
+                                _COORD_INF_MAP = {
+                                    'использовать': 'используй', 'найти': 'найди', 'проверить': 'проверь',
+                                    'отправить': 'отправь', 'создать': 'создай', 'написать': 'напиши',
+                                    'собрать': 'собери', 'подготовить': 'подготовь', 'исследовать': 'исследуй',
+                                    'поискать': 'поищи', 'сделать': 'сделай', 'проанализировать': 'проанализируй',
+                                    'запустить': 'запусти', 'связаться': 'свяжись', 'обновить': 'обнови',
+                                    'опубликовать': 'опубликуй',
+                                }
+                                for _cinf, _cimp in _COORD_INF_MAP.items():
+                                    _coord_text = re.sub(
+                                        rf'\bпожалуйста\s+{_cinf}\b',
+                                        f'пожалуйста, {_cimp}',
+                                        _coord_text, flags=re.IGNORECASE,
+                                    )
+                                # ── Обучающий retry: если петля подтверждена — предлагаем другой подход ──
+                                # Не блокируем, а показываем AI что именно повторяется и просим переосмыслить
+                                _loop_retry_needed = False
+                                _blocked_ch_name = ''
+                                if _loop_channel_hint_c:
+                                    _ct_lower = _coord_text.lower()
+                                    _tg_still = ('telegram' in _ct_lower or 'тг-' in _ct_lower or 'tg-' in _ct_lower)
+                                    _disc_still = 'discord' in _ct_lower
+                                    _gh_still = 'github' in _ct_lower
+                                    if _tg_still and _tg_count_c >= 4:
+                                        _loop_retry_needed = True
+                                        _blocked_ch_name = 'Telegram'
+                                    elif _disc_still and _disc_count_c >= 3:
+                                        _loop_retry_needed = True
+                                        _blocked_ch_name = 'Discord'
+                                    elif _gh_still and _gh_count_c >= 3:
+                                        _loop_retry_needed = True
+                                        _blocked_ch_name = 'GitHub'
+                                if _loop_retry_needed:
+                                    try:
+                                        _retry_teach = (
+                                            f"Ты написал поручение, которое снова использует {_blocked_ch_name}. "
+                                            f"Этот канал уже использовался {_tg_count_c if _blocked_ch_name == 'Telegram' else _disc_count_c if _blocked_ch_name == 'Discord' else _gh_count_c} раз подряд и не даёт роста. "
+                                            f"Подумай: что ты УЖЕ знаешь из прошлых циклов, и как это использовать БЕЗ {_blocked_ch_name}? "
+                                            f"Перепиши поручение с другим каналом из подключённых: {_alt_str_c}. "
+                                            f"Тот же формат: 2-3 предложения, конкретный инструмент и результат."
+                                        )
+                                        _retry_gen = await _qar_coord([
+                                            {'role': 'user', 'content': _coord_prompt},
+                                            {'role': 'assistant', 'content': _coord_text},
+                                            {'role': 'user', 'content': _retry_teach},
+                                        ], max_tokens=300)
+                                        if _retry_gen and len(_retry_gen.strip()) > 15:
+                                            _rg_lower = _retry_gen.strip().lower()
+                                            _rg_no_loop = not (
+                                                ('telegram' in _rg_lower and _blocked_ch_name == 'Telegram')
+                                                or ('discord' in _rg_lower and _blocked_ch_name == 'Discord')
+                                                or ('github' in _rg_lower and _blocked_ch_name == 'GitHub')
+                                            )
+                                            _rg_not_vague = not any(v in _rg_lower for v in _VAGUE_COORD_PATTERNS)
+                                            if _rg_no_loop and _rg_not_vague:
+                                                _coord_text = _retry_gen.strip()
+                                                logger.info(
+                                                    "[ANCHOR-AUTOPILOT] loop-retry: replaced %s-loop assign for %s",
+                                                    _blocked_ch_name, _chosen_name,
+                                                )
+                                    except Exception as _retry_err:
+                                        logger.debug('[ANCHOR-AUTOPILOT] loop retry: %s', _retry_err)
                             _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
                             # LinkedIn/неподключённые сервисы — убираем из самого поручения (а не только из отображения)
