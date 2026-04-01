@@ -4611,7 +4611,7 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата.
     
     Возвращает True если сохранено, False если обнаружен дубль (поручение уже
-    давалось за последние 30 минут — идентичный текст начала директивы).
+    давалось в коротком окне — идентичный/семантически похожий текст директивы).
     """
     if not content or not content.strip():
         return False
@@ -4624,36 +4624,76 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
             if not _u:
                 logger.warning("[DIRECTOR] user not found for tg=%s", telegram_id)
                 return False
-            # ── Дедупликация директив (только для agent_msg без __agent) ────────────
-            # Сравниваем первые 80 символов — достаточно чтобы убедиться что поручение то же самое
-            _dedup_prefix = content.strip()[:80]
-            # Проверяем только если это директива (не отчёт агента с __agent)
-            _is_directive = '"__agent"' not in content
+            # ── Дедупликация директив ───────────────────────────────────────────────
+            # Важно: директивы ASI теперь часто приходят как JSON с __agent,
+            # поэтому выделяем текст и тип сообщения безопасно.
+            _raw_text = content.strip()
+            _agent_name = ''
+            _is_json_wrapped = False
+            try:
+                _p = json.loads(content)
+                if isinstance(_p, dict) and isinstance(_p.get('__agent'), dict):
+                    _is_json_wrapped = True
+                    _agent_name = str(_p.get('__agent', {}).get('name') or '').strip()
+                    _txt = str(_p.get('text') or '').strip()
+                    if _txt:
+                        _raw_text = _txt
+            except Exception:
+                pass
+
+            # Директивами считаем:
+            # 1) plain-text agent_msg от директора;
+            # 2) JSON agent_msg от ASI (director persona).
+            _is_directive = False
+            if message_type == 'agent_msg':
+                if _is_json_wrapped:
+                    _is_directive = (_agent_name.upper() == 'ASI')
+                else:
+                    _is_directive = True
+
+            # Сравниваем первые 80 символов нормализованного текста
+            _dedup_prefix = _raw_text[:80]
             if _is_directive:
                 # Exact prefix dedup: 60 минут (расширено с 5 чтобы не повторять одинаковые поручения)
                 _since = _dt_dir.now(_tz_dir.utc) - _td_dir(minutes=60)
-                _existing = (
+                _recent_for_exact = (
                     _s.query(_Intr)
                     .filter(
                         _Intr.user_id == _u.id,
                         _Intr.message_type == 'agent_msg',
                         _Intr.created_at >= _since,
-                        _Intr.content.like(_dedup_prefix + '%'),
                     )
-                    .first()
+                    .order_by(_Intr.created_at.desc())
+                    .limit(30)
+                    .all()
                 )
-                if _existing:
-                    logger.warning(
-                        "[DIRECTOR] DEDUP: identical directive already sent %s ago for tg=%s, skipping: %s...",
-                        str(_dt_dir.now(_tz_dir.utc) - _existing.created_at.replace(tzinfo=_tz_dir.utc))[:7],
-                        telegram_id, _dedup_prefix[:40]
-                    )
-                    return False
+                for _rd in _recent_for_exact:
+                    _rd_txt = str(_rd.content or '').strip()
+                    _rd_agent = ''
+                    try:
+                        _p_rd = json.loads(_rd_txt)
+                        if isinstance(_p_rd, dict) and isinstance(_p_rd.get('__agent'), dict):
+                            _rd_agent = str(_p_rd.get('__agent', {}).get('name') or '').strip()
+                            _rd_txt = str(_p_rd.get('text') or '').strip()
+                    except Exception:
+                        pass
+
+                    # Не считаем отчёты Кристины/Марка директивами
+                    if _rd_agent and _rd_agent.upper() != 'ASI':
+                        continue
+
+                    if _rd_txt and _rd_txt[:80].lower() == _dedup_prefix.lower():
+                        logger.warning(
+                            "[DIRECTOR] DEDUP: identical directive already sent %s ago for tg=%s, skipping: %s...",
+                            str(_dt_dir.now(_tz_dir.utc) - _rd.created_at.replace(tzinfo=_tz_dir.utc))[:7],
+                            telegram_id, _dedup_prefix[:40]
+                        )
+                        return False
 
                 # Semantic dedup: если за последние 2ч уже была директива с теми же ключевыми фразами
                 # (напр. "застрял на 44%, сменим тактику" → "застрял на 44%, давай сменим")
                 _sem_since = _dt_dir.now(_tz_dir.utc) - _td_dir(hours=2)
-                _content_lower = content.lower()
+                _content_lower = _raw_text.lower()
                 _SEM_MARKERS = ('застрял', 'сменим тактику', 'смени тактику', 'давай сменим',
                                 'прогресс.*не растёт', 'не двигает нас вперёд')
                 import re as _re_sem_dd
@@ -4671,9 +4711,18 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
                         .all()
                     )
                     for _rd in _recent_directives:
-                        _rd_txt = (_rd.content or '').lower()
-                        if '"__agent"' in _rd_txt:
-                            continue  # skip agent reports
+                        _rd_txt = str(_rd.content or '')
+                        _rd_agent = ''
+                        try:
+                            _p_rd = json.loads(_rd_txt)
+                            if isinstance(_p_rd, dict) and isinstance(_p_rd.get('__agent'), dict):
+                                _rd_agent = str(_p_rd.get('__agent', {}).get('name') or '').strip()
+                                _rd_txt = str(_p_rd.get('text') or '')
+                        except Exception:
+                            pass
+                        if _rd_agent and _rd_agent.upper() != 'ASI':
+                            continue  # skip non-director agent reports
+                        _rd_txt = _rd_txt.lower()
                         if any(_re_sem_dd.search(m, _rd_txt) for m in _SEM_MARKERS):
                             logger.warning(
                                 "[DIRECTOR] SEMANTIC-DEDUP: similar directive already sent %s ago, skipping",
@@ -8368,11 +8417,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 lambda m: m.group(1) + m.group(2).lower(),
                 _dm_display,
             )
-            # Сохраняем директиву в чат (дедупликация только сообщения, НЕ выполнения задачи).
-            # Даже если сообщение — дубль (< 5 мин), агент всё равно запускается — это новое поручение.
+            # Сохраняем директиву в чат.
+            # Если директива продублирована и выглядит как цикл "запусти поиск/сменим тактику",
+            # пропускаем повторный запуск агента, чтобы не зацикливать автопилот.
             _msg_dedup = _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
             if not _msg_dedup:
-                logger.info("[DIRECTOR] directive is a duplicate message (not blocking execution) for %s: %s...", ag.get('name'), director_message[:60])
+                logger.info("[DIRECTOR] duplicate directive detected for %s: %s...", ag.get('name'), director_message[:60])
+                _loop_markers = (
+                    'сменим тактику', 'смени тактику', 'запусти поиск',
+                    'поиск в интернете', 'застрял', 'застряли',
+                )
+                _dm_l = (_dm_display or '').lower()
+                if any(_m in _dm_l for _m in _loop_markers):
+                    logger.warning("[DIRECTOR] anti-loop: skip duplicated search directive for %s", ag.get('name'))
+                    return "Пропускаю повторную директиву (anti-loop): задача уже недавно давалась."
 
         # Списываем токены за запуск агента директором
         try:
