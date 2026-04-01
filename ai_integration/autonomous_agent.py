@@ -439,6 +439,7 @@ def _wrap_agent_code(code: str) -> str:
     lines = [_SECTION_RUNNER]
     for title, block in blocks:
         lines.append(
+            f'print({repr(title)})\n'
             f'try:\n'
             f'    _run_section({repr(block)})\n'
             f'except SystemExit:\n'
@@ -6360,7 +6361,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         [_sys2.executable, '-c', _wrapped],
                         **_kwargs_sc,
                     )
-                    return r.stdout[:2000].strip(), r.stderr[:400].strip()
+                    return r.stdout[:10000].strip(), r.stderr[:400].strip()
                 except _sp2.TimeoutExpired:
                     return '', 'timeout'
                 except Exception as _e2:
@@ -6379,9 +6380,22 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _sc_clean = _re_sc.sub(r'["\']?\s*/?\s*>(?=\S)', '', _sc_clean)
                 _sc_clean = _re_sc.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _sc_clean)
                 _sc_clean = _re_sc.sub(r'\n{3,}', '\n\n', _sc_clean)
+                # ── Fair budget по секциям: каждая интеграция видна ИИ ──
+                _MAX_SC = 6000
+                _sections = _parse_integration_sections(_sc_clean, agent.get('name', 'Агент'))
+                if len(_sections) > 1:
+                    _per = max(400, _MAX_SC // len(_sections))
+                    _parts = []
+                    for _sn, _sv in _sections:
+                        if len(_sv) > _per:
+                            _sv = _sv[:_per - 20] + '\n[…сокращено…]'
+                        _parts.append(f'=== {_sn} ===\n{_sv}')
+                    _sc_final = '\n\n'.join(_parts)
+                else:
+                    _sc_final = _sc_clean[:_MAX_SC]
                 script_context = (
                     f"\n\n[Данные от скрипта/интеграции — перескажи СВОИМИ СЛОВАМИ в ответе, "
-                    f"не копируй raw-текст дословно, сформулируй как живой человек]:\n{_sc_clean[:2000]}"
+                    f"не копируй raw-текст дословно, сформулируй как живой человек]:\n{_sc_final}"
                 )
                 system_prompt += script_context
             elif _stderr2 and 'timeout' not in _stderr2:

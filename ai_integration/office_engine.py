@@ -349,7 +349,7 @@ def _exec_agent_script_sync(code: str, env: dict | None = None) -> tuple:
         if env is not None:
             kwargs['env'] = env
         result = subprocess.run([sys.executable, '-c', code], **kwargs)
-        return result.stdout[:2000].strip(), result.stderr[:400].strip()
+        return result.stdout[:10000].strip(), result.stderr[:400].strip()
     except subprocess.TimeoutExpired:
         return '', 'timeout'
     except Exception as e:
@@ -882,7 +882,7 @@ class OfficeEngine:
                         user.id,
                         agent.name or 'Агент',
                         service_label,
-                        stdout[:1000],
+                        stdout[:3000],
                     )
                     logger.debug("[OFFICE-L1] [%s] anchored (%d chars)", agent.name, len(stdout))
                 except Exception as e:
@@ -1200,9 +1200,23 @@ class OfficeEngine:
                 logger.debug("suppressed: %s", _e)
         _ctx_block = f"\n\nКонтекст о пользователе:\n{_user_ctx[:400]}" if _user_ctx else ''
 
+        # Fair-share: каждая секция интеграции получает равный бюджет
+        from ai_integration.autonomous_agent import _parse_integration_sections
+        _sections = _parse_integration_sections(clean, agent_name)
+        if len(_sections) > 1:
+            _per = max(300, 4000 // len(_sections))
+            _parts = []
+            for _sn, _sv in _sections:
+                if len(_sv) > _per:
+                    _sv = _sv[:_per - 20] + '\n[…сокращено…]'
+                _parts.append(f'=== {_sn} ===\n{_sv}')
+            _clean_budget = '\n\n'.join(_parts)
+        else:
+            _clean_budget = clean[:4000]
+
         prompt = (
             f"Ты — {agent_name}, {agent_spec}. Ты только что выполнил мониторинг и получил следующие данные:\n\n"
-            f"{clean[:600]}\n\n"
+            f"{_clean_budget}\n\n"
             "Напиши одно короткое сообщение (2-3 предложения) в чат пользователю — как живой человек в мессенджере.\n"
             "Что нашёл, что важного, если нужно — одно действие. Без технических деталей, без логов, без списков.\n"
             f"Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом.{_ctx_block}"
