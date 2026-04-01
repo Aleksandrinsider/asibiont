@@ -1721,6 +1721,18 @@ class HybridAutonomousAgent:
                             result=(out[:800] if out else (err or '')),
                         ))
                         _al_sa.commit()
+                        # Создаём integration_alert якоря для autopilot-контекста
+                        # (python_code не запускается в автопилоте, поэтому якоря здесь)
+                        if out and len(out) > 20:
+                            try:
+                                import asyncio as _asyncio_ia
+                                _uid_ia, _an_ia, _sv_ia, _o_ia = _al_ua.id, _aname_a, _svc_a, out
+                                _asyncio_ia.get_running_loop().run_in_executor(
+                                    None,
+                                    lambda: spawn_integration_anchors(_uid_ia, _an_ia, _sv_ia, _o_ia)
+                                )
+                            except Exception as _sia_e:
+                                logger.debug('[ACTION] spawn anchor: %s', _sia_e)
                 finally:
                     _al_sa.close()
             except Exception as _al_ae:
@@ -8583,11 +8595,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                                   'понял, алексей', 'понял,',
                                   'начну с', 'сейчас разработаю', 'сейчас проанализирую')
         _is_fallback = _resp_lower in _fallback_phrases
-        # Промежуточный ответ = маркер-обещание без данных (нет цифр → нет фактов).
-        # Если ответ содержит цифры (6 визитов, 3 контакта...) — он не промежуточный.
+        # Промежуточный ответ = маркер-обещание без данных.
+        # Если ответ НАЧИНАЕТСЯ с маркера — промежуточный даже при наличии цифр
+        # ("Понял, найду 5-7 чатов" — это обещание, не результат).
+        # Если маркер внутри текста — промежуточный только без цифр (цифры = факты).
+        _starts_with_marker = any(_resp_lower.startswith(m) for m in _intermediate_markers)
+        _contains_marker = any(m in _resp_lower for m in _intermediate_markers)
         _is_intermediate = (len(str(resp).strip()) < 200 and
-                            any(m in _resp_lower for m in _intermediate_markers) and
-                            not re.search(r'\d', _resp_lower))
+                            (_starts_with_marker or
+                             (_contains_marker and not re.search(r'\d', _resp_lower))))
         _is_too_short = _resp_len < 120 and _resp_len > 5
         # В автопилоте: если агент не вызвал ни одного инструмента — ответ бесполезен
         _is_autopilot_no_tools = (
@@ -8658,11 +8674,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _resp_final_check = str(resp).strip().lower().rstrip('.!?')
         if _resp_final_check in _HOLLOW_FINAL:
             logger.info("[AGENT] TEACH-MISS hollow final guard: '%s' from %s — suppressing", resp.strip()[:60], ag.get('name', '?'))
-            # Для вопросов: вместо молчания — возвращаем None чтобы chat_with_ai
-            # обработал запрос через process_request (ASI ответит сам)
-            if _skip_rework:
-                return None
-            return str(resp)[:2000]
+            # Hollow ответ бесполезен и для вопросов и для задач — не отправляем в Telegram.
+            # Для вопросов: возвращаем None → chat_with_ai ответит через ASI.
+            # Для задач: тоже None → тихий пропуск (лучше молчание чем "Задачу выполнила" без фактов).
+            return None
 
         # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
         resp = _strip_agent_html(str(resp))
