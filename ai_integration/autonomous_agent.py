@@ -8578,7 +8578,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _intermediate_markers = ('использую', 'ищу данные', 'уточняю поиск', 'исследую',
                                   'начинаю', 'приступаю', 'анализирую', 'подготовлю',
                                   'первый запрос дал', 'сейчас найду', 'сейчас подготовлю',
-                                  'сейчас проведу', 'понял, алексей', 'понял,',
+                                  'сейчас проведу', 'сейчас проверю', 'проверю', 'посмотрю',
+                                  'уточню', 'проверю детальную статистику',
+                                  'понял, алексей', 'понял,',
                                   'начну с', 'сейчас разработаю', 'сейчас проанализирую')
         _is_fallback = _resp_lower in _fallback_phrases
         _is_intermediate = (len(str(resp).strip()) < 200 and
@@ -8611,8 +8613,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             if _fallback_resp and len(_fallback_resp) > 50:
                 resp = _fallback_resp
 
-        # Для ВОПРОСОВ: если агент ответил пустышкой ("Задачу выполнила.") — rework с вопросным промптом
-        if _skip_rework and _is_fallback:
+        # Для ВОПРОСОВ: если агент ответил пустышкой или промежуточной фразой
+        # ("Проверю...", "Сейчас посмотрю...") — делаем мягкий rework в конкретный ответ.
+        if _skip_rework and (_is_fallback or _is_intermediate or _is_too_short):
             _q_rework = await _quick_ai_call_raw([{
                 "role": "user",
                 "content": (
@@ -8621,6 +8624,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     f"Контекст: {(extra_context or '')[:500]}\n"
                     f"Ответь на вопрос от первого лица как {ag.get('name', 'агент')}. "
                     f"Если не знаешь ответ или у тебя нет доступа — честно скажи что и почему. "
+                    f"Не давай промежуточные формулировки типа 'проверю/посмотрю/сейчас'. "
+                    f"Сразу дай фактический ответ на вопрос (если есть данные — с цифрами). "
                     f"НЕ пиши 'Задачу выполнила' — это не ответ на вопрос. "
                     f"Пиши живо, как человек в чате. 2-4 предложения."
                 ),
