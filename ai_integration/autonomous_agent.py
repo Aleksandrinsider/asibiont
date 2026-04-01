@@ -3390,36 +3390,31 @@ class HybridAutonomousAgent:
                     if _auto_saved_notes:
                         _titles_str = '», «'.join(n[:40] for n in _auto_saved_notes[:3])
                         _note_hint_ru = (
-                            f" Полные данные исследования сохранены в заметки («{_titles_str}»)."
-                            f" ВАЖНО: если пользователь задал ВОПРОС — дай ПОЛНЫЙ полезный ответ (4-8 предложений)."
-                            f" Не ограничивайся фразой 'нашёл информацию' — расскажи ЧТО КОНКРЕТНО нашёл и дай практический совет."
-                            f" В конце одной фразой упомяни что подробности в заметках."
-                            f" Говори от себя, без шаблонов. НЕ копируй текст заметки целиком."
+                            f" Данные сохранены в заметки («{_titles_str}»)."
+                            f" Скажи что нашёл (2-4 предложения), между делом упомяни заметки."
+                            f" Если пользователь задал ВОПРОС — дай конкретный ответ, не отделывайся общими фразами."
                         )
                         _note_hint_en = (
-                            f" Full research saved to notes («{_titles_str}»)."
-                            f" IMPORTANT: if user asked a QUESTION — give a FULL useful answer (4-8 sentences)."
-                            f" Don't just say 'found info' — explain WHAT you found and give practical advice."
-                            f" At the end, briefly mention details are in notes."
-                            f" No templates. Do NOT copy the full note text."
+                            f" Research saved to notes («{_titles_str}»)."
+                            f" Say what you found (2-4 sentences), casually mention notes."
+                            f" If user asked a QUESTION — give a concrete answer, don't be vague."
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
-                            "Summarize results briefly (3-5 sentences, up to 1000 chars). "
+                            "Summarize results (3-5 sentences, up to 800 chars). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses."
                             + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
-                            "Подытожь результаты (4-8 предложений, до 1500 символов). "
-                            "Если пользователь задал ВОПРОС — дай ПОЛНЫЙ практический ответ, не отделывайся общими фразами. "
+                            "Подытожь результаты (3-5 предложений, до 800 символов). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task."
                             + _note_hint_ru
                         )})
 
                 # Text-only call (no tools) uses shorter timeout + fewer tokens
                 _timeout = API_TIMEOUT_NORMAL if not _allow_tools else None
-                _max_tok = 1200 if _is_last_iter and all_execution_results else 600
+                _max_tok = 600 if _is_last_iter and all_execution_results else 500
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,

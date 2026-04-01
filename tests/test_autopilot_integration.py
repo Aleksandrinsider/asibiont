@@ -1606,8 +1606,7 @@ def test_d54_system_prompt_question_answer_instruction():
     lower = prompt_text.lower()
     assert "question" in lower or "вопрос" in lower, \
         "System prompt must mention handling of user questions"
-    # Must NOT have blanket "1-2 sentences" for all responses
-    assert "full useful answer" in lower or "полный" in lower or "3-6 sentences" in lower, \
+    assert "full useful answer" in lower or "полный" in lower or "3-5 sentences" in lower, \
         "System prompt must allow full answers for questions"
 
 
@@ -1621,8 +1620,8 @@ def test_d55_final_summary_allows_full_answer():
     # Check that the summarization prompt mentions full answer for questions
     assert "ВОПРОС" in src or "QUESTION" in src, \
         "Summarization prompt must handle user questions differently"
-    assert "1500" in src or "4-8" in src, \
-        "Summarization prompt should allow longer responses (up to 1500 chars or 4-8 sentences)"
+    assert "800" in src or "3-5" in src, \
+        "Summarization prompt should allow adequate response length (800 chars or 3-5 sentences)"
 
 
 # ── D56: goal-title-copy guard rejects plan steps copying goal title ──
