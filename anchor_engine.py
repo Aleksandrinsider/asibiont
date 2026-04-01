@@ -9913,12 +9913,12 @@ class AnchorEngine:
             _recent_done_str = ''
             try:
                 from models import Task as _Task_rd
-                _rd_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _rd_cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
                 _rd_tasks = session.query(_Task_rd).filter(
                     _Task_rd.user_id == user.id,
                     _Task_rd.source == 'agent',
                     _Task_rd.created_at >= _rd_cutoff,
-                ).order_by(_Task_rd.created_at.desc()).limit(20).all()
+                ).order_by(_Task_rd.created_at.desc()).limit(30).all()
                 if _rd_tasks:
                     _rd_by_agent: dict = {}
                     for _rdt in _rd_tasks:
@@ -9933,12 +9933,14 @@ class AnchorEngine:
                         _rd_by_agent.setdefault(_ag_name_rd, []).append(
                             (_rdt.title or '')[:80]
                         )
-                    _rd_lines = ['\n📋 НЕДАВНО ВЫПОЛНЕННЫЕ ЗАДАЧИ (за 3ч — НЕ повторять буквально!):']
+                    _rd_lines = ['\n📋 НЕДАВНО ВЫПОЛНЕННЫЕ ЗАДАЧИ (за 12ч — НЕ повторять!!):']
                     for _ag_rd_n, _titles_rd in _rd_by_agent.items():
                         _rd_lines.append(f'  {_ag_rd_n}:')
-                        for _t_rd in _titles_rd[:4]:
+                        for _t_rd in _titles_rd[:6]:
                             _rd_lines.append(f'    • {_t_rd}')
-                    _rd_lines.append('  → Если задача уже выполнена — дай ДРУГУЮ задачу или пропусти агента.')
+                    _rd_lines.append('  → ЖЁСТКОЕ ПРАВИЛО: если задача или её вариация уже есть выше — ЗАПРЕЩЕНО давать её снова.')
+                    _rd_lines.append('  → Дай КОНКРЕТНУЮ НОВУЮ подзадачу. Пример: вместо «привлечь предпринимателей» →')
+                    _rd_lines.append('    «напиши персональное письмо Иванову ivan@co.ru» или «найди email автора статьи X на dev.to»')
                     _recent_done_str = '\n'.join(_rd_lines) + '\n'
             except Exception as _rd_err:
                 logger.debug("[COORD] recent done tasks: %s", _rd_err)
@@ -10169,6 +10171,11 @@ class AnchorEngine:
 
                 f"ТОЧНЫЕ названия целей: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 шаг на каждую активную цель).\n"
+                "⛔ ЗАПРЕЩЕНО копировать название цели в поле task! Цель — это НАПРАВЛЕНИЕ, task — КОНКРЕТНЫЙ ШАГ.\n"
+                "ПЛОХО: goal='Привлечь 50 предпринимателей', task='Привлечь 50 заинтересованных предпринимателей'\n"
+                "ХОРОШО: goal='Привлечь 50 предпринимателей', task='Найди через GitHub 5 разработчиков AI-агентов в Москве, сохрани их email'\n"
+                "ХОРОШО: goal='Привлечь 50 предпринимателей', task='Напиши персональное письмо Ivanov ivan@co.ru о нашем продукте ASI Biont'\n"
+                "Каждый цикл task ДОЛЖЕН быть уникальным и конкретным — другой подход, другая площадка, другой контакт.\n"
                 "ФОРМАТ ПОЛЕЙ: agent=имя агента, tool=инструмент (snake_case), goal=точное_название, "
                 'reason=1 предложение почему. '
                 'Поле task: ЧЕЛОВЕКОЧИТАЕМЫЙ текст 1-2 предложения — БЕЗ стрелок (→), '
@@ -10218,6 +10225,29 @@ class AnchorEngine:
                     logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
 
+            # ── Goal-title-copy guard: координатор не должен копировать название цели как задачу ──
+            _goal_titles_lower = {g['title'].lower().strip() for g in _goals if g.get('title')}
+            _plan_goal_filtered = []
+            for _pgf in _plan:
+                _pgf_task = (_pgf.get('task') or '').lower().strip()
+                _pgf_task_clean = _pgf_task.rstrip('.!?')
+                _is_goal_copy = False
+                for _gt in _goal_titles_lower:
+                    # Точное или почти точное совпадение task с названием цели
+                    _gt_words = set(_gt.split())
+                    _pgf_words = set(_pgf_task_clean.split())
+                    if _gt_words and _pgf_words:
+                        _gt_overlap = len(_gt_words & _pgf_words) / max(len(_gt_words), 1)
+                        if _gt_overlap > 0.7:
+                            _is_goal_copy = True
+                            break
+                if _is_goal_copy:
+                    logger.info("[COORD] goal-copy-guard: rejected task '%s' (too similar to goal title)", _pgf_task[:80])
+                else:
+                    _plan_goal_filtered.append(_pgf)
+            if _plan_goal_filtered:
+                _plan = _plan_goal_filtered
+
             # ── Контент-дедупликация: пропускаем задачи, дублирующие недавно выполненные ──
             if _plan and _recent_done_str:
                 _recent_done_lower = _recent_done_str.lower()
@@ -10228,7 +10258,7 @@ class AnchorEngine:
                     _pcd_words = {w for w in _pcd_task.split() if len(w) > 4}
                     _overlap = sum(1 for w in _pcd_words if w in _recent_done_lower) if _pcd_words else 0
                     _overlap_ratio = _overlap / max(len(_pcd_words), 1)
-                    if _overlap_ratio > 0.6 and len(_pcd_words) >= 3:
+                    if _overlap_ratio > 0.4 and len(_pcd_words) >= 3:
                         logger.info("[COORD] content-dedup: skip task with %.0f%% overlap: %s",
                                     _overlap_ratio * 100, _pcd_task[:80])
                     else:
