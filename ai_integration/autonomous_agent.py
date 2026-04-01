@@ -1794,14 +1794,15 @@ class HybridAutonomousAgent:
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
 
-                    # Если _fix_tool_params заблокировал вызов (нет обязательного контента) — пропускаем
+                    # Если _fix_tool_params заблокировал вызов (нет обязательного контента / фейковый email) — пропускаем
                     if params.pop('__skip__', False):
+                        _block_err = params.pop('__block_error__', None)
                         results.append({
                             "tool": tool_name, "success": False,
-                            "error": f"{tool_name}: нет контента для публикации — сначала сгенерируй текст поста",
+                            "error": _block_err or f"{tool_name}: нет контента для публикации — сначала сгенерируй текст поста",
                             "reason": reason
                         })
-                        logger.warning("[EXEC] %s SKIPPED: no content to publish", tool_name)
+                        logger.warning("[EXEC] %s SKIPPED: %s", tool_name, (_block_err or 'no content')[:100])
                         continue
 
                     # === Дедупликация add_task: не создаём задачи с очень похожим названием ===
@@ -2026,9 +2027,10 @@ class HybridAutonomousAgent:
                 '@sample.com', '@demo.com',
             )
             if _rcpt and any(_rcpt.endswith(d) or d in _rcpt for d in _FAKE_DOMAINS):
-                return [{"tool": tool_name, "success": False,
-                         "error": f"⛔ Email {_rcpt} — placeholder/фейковый адрес. "
-                                  "Найди реальный email через web_search или используй другой метод контакта."}]
+                params['__skip__'] = True
+                params['__block_error__'] = (f"⛔ Email {_rcpt} — placeholder/фейковый адрес. "
+                                             "Найди реальный email через web_search или используй другой метод контакта.")
+                return params
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:
@@ -7254,8 +7256,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if 'task' in _targs and 'title' not in _targs:
                     _targs['title'] = _targs.pop('task')
             # ── Обычные инструменты ───────────────────────────────────────────────────────────
-            # Проверяем доступность инструмента
-            elif _allowed_tools and _tname not in _allowed_tools:
+            # Проверяем доступность инструмента (not elif — delegate_to_agent уже переименован выше)
+            if _allowed_tools and _tname not in _allowed_tools:
                 _tc_result = json.dumps({"error": f"tool {_tname} not in tools_allowed"}, ensure_ascii=False)
             else:
                 # ── GUARD: block update_goal_progress if only research tools were used ──
@@ -7931,25 +7933,19 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Шаблонные ответы с инструментами: "Выполнил поиск." — тоже noise
     if _is_autopilot_task and _final_text:
         _ft_lower = _final_text.strip().lower()
-        _GENERIC_PATTERNS_AA = ('выполнил поиск', 'выполнила поиск', 'обновил прогресс',
-                                'обновила прогресс', 'провёл поиск', 'провела поиск',
-                                'задачу выполнил', 'задачу выполнила', 'задача выполнена',
-                                'данных нет', 'готово', 'сделано',
-                                'новых ответов пока нет', 'новых писем нет',
-                                'новых ответов нет', 'пока нет ответов',
-                                'входящие проверены', 'проверила входящие',
-                                'проверил входящие', 'ничего нового',
+        _GENERIC_PATTERNS_AA = ('задачу выполнил.', 'задачу выполнила.', 'задача выполнена.',
+                                'данных нет.', 'готово.', 'сделано.',
                                 'понял, переключаюсь', 'поняла, сменим',
-                                'понял, запускаю', 'поняла, запускаю',
-                                'есть пара идей', 'покажу результат')
-        if len(_final_text.strip()) < 200 and any(p in _ft_lower for p in _GENERIC_PATTERNS_AA):
+                                'понял, запускаю', 'поняла, запускаю')
+        # Фильтруем ТОЛЬКО если весь текст — одна шаблонная фраза (< 80 chars)
+        if len(_final_text.strip()) < 80 and any(_ft_lower.rstrip('.!? ') == p.rstrip('.!? ') for p in _GENERIC_PATTERNS_AA):
             logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
             _final_text = ''
 
     # ── Пост-обработка: удаляем упоминания неподключённых сервисов из агентского текста ──
     if _final_text:
         import re as _re_svc
-        _BANNED_SVCS = ('linkedin', 'calendly', 'apollo\\.io', 'sales navigator', 'hubspot', 'crm', 'zoho', 'pipedrive')
+        _BANNED_SVCS = ('linkedin', 'calendly', 'apollo\\.io', 'sales navigator', 'hubspot', 'zoho', 'pipedrive')
         for _bs in _BANNED_SVCS:
             # Удаляем предложения, содержащие запрещённый сервис
             _final_text = _re_svc.sub(
@@ -8342,7 +8338,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     )
                     for _r in reversed(_recent):
                         _role = 'Пользователь' if _r.message_type == 'user' else 'ASI'
-                        _txt = (_r.content or '').strip()[:200]
+                        _raw_h = (_r.content or '').strip()
+                        # Парсим JSON-обёртку агентских сообщений
+                        try:
+                            _jh = json.loads(_raw_h)
+                            _ag_h = _jh.get('__agent', {}).get('name', '')
+                            _txt = (_jh.get('text', '') or '')[:200]
+                            if _ag_h:
+                                _role = _ag_h
+                        except (json.JSONDecodeError, ValueError, AttributeError):
+                            _txt = _raw_h[:200]
                         if _txt:
                             _history_lines.append(f"{_role}: {_txt}")
                 finally:
