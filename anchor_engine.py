@@ -11973,9 +11973,27 @@ class AnchorEngine:
 
                 try:
                     _skip_step_cap = (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name))
-                    if _is_minor_update:
-                        logger.info("[COORD] minor update compressed for %s", _ag_name)
-                    elif not _skip_step_cap:
+                    if _is_minor_update and not _skip_step_cap:
+                        # Minor update: сохраняем в чат (Interaction) но НЕ шлём в Telegram
+                        _cleaned_chat_m = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            _strip_html(_cleaned),
+                            anchor_type='coordinator_result',
+                            speaker_name=_ag_name,
+                        )
+                        _msg_type_m = 'agent_msg' if _ag_id != 0 else 'proactive'
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type=_msg_type_m,
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
+                                'text': _cleaned_chat_m,
+                                '__tools_used': _step_tools,
+                                '__anchor_type': 'coordinator_result',
+                                '__minor': True,
+                            }, ensure_ascii=False),
+                        ))
+                        logger.info("[COORD] minor update saved to chat for %s", _ag_name)
+                    elif not _is_minor_update and not _skip_step_cap:
                         _cleaned_chat = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
                             _strip_html(_cleaned),
                             anchor_type='coordinator_result',
@@ -12034,7 +12052,7 @@ class AnchorEngine:
                         logger.debug("suppressed: %s", _e)
 
                 if _is_minor_update:
-                    _results_summary.append(f"{_ag_name}: промежуточный апдейт (сжат в итог цикла)")
+                    _results_summary.append(f"{_ag_name}: {_cleaned[:150]}")
                 else:
                     _results_summary.append(
                         f"{_ag_name}: {_cleaned[:150]}"
@@ -12451,10 +12469,10 @@ class AnchorEngine:
                             import datetime as _dt_sumchk
                             _sum_sess = _Sum_Sess_cls()
                             try:
-                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 3ч назад
-                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(hours=3)
+                                # Dedup: не сохраняем coordinator_summary если предыдущий был < 40мин назад
+                                _sum_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(minutes=40)
                                 from sqlalchemy import text as _sql_sumchk
-                                # Daily cap: макс 3 coordinator_summary в сутки
+                                # Daily cap: макс 16 coordinator_summary в сутки
                                 _sum_day_cutoff = _dt_sumchk.datetime.now(_dt_sumchk.timezone.utc) - _dt_sumchk.timedelta(hours=24)
                                 _sum_day_count = _sum_sess.execute(_sql_sumchk(
                                     "SELECT count(*) FROM interactions WHERE user_id=:uid "
@@ -12462,8 +12480,8 @@ class AnchorEngine:
                                     "AND content LIKE '%coordinator_summary%' "
                                     "AND created_at >= :cutoff"
                                 ), {'uid': user.id, 'cutoff': _sum_day_cutoff}).scalar() or 0
-                                if _sum_day_count >= 3:
-                                    logger.info("[COORD] coordinator_summary daily cap reached (%d/3) for user %d", _sum_day_count, user.id)
+                                if _sum_day_count >= 16:
+                                    logger.info("[COORD] coordinator_summary daily cap reached (%d/16) for user %d", _sum_day_count, user.id)
                                     try: _sum_sess.close()
                                     except Exception: pass
                                     return True
