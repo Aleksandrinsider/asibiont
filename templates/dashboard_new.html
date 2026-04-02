@@ -5977,9 +5977,9 @@ except Exception as e:
             vcru: {
                 name: 'VC.ru',
                 fields: [
-                    {k:'VCRU_TOKEN', label:'Токен VC.ru (osnova-remember)', ph:'5944452dd655723f158cf21366f45002', t:'text'}
+                    {k:'VCRU_TOKEN', label:'Токен VC.ru', ph:'a1b2c3d4e5f6...', t:'text'}
                 ],
-                hint: 'Как получить: vc.ru → F12 (DevTools) → вкладка <b>Application</b> → слева <b>Cookies</b> → <b>vc.ru</b> → найдите строку <b>osnova-remember</b> → скопируйте значение из колонки Value.',
+                hint: '<b>Как получить токен (1 минута):</b><br>1. Откройте <a href="https://vc.ru" target="_blank">vc.ru</a> и убедитесь что вы залогинены<br>2. Нажмите <b>F12</b> на клавиатуре (откроется панель разработчика)<br>3. Вверху панели нажмите вкладку <b>Application</b> (если не видно — нажмите <b>»</b> справа)<br>4. Слева в дереве раскройте <b>Cookies</b> → кликните <b>https://vc.ru</b><br>5. В таблице найдите строку <b>osnova-remember</b><br>6. Дважды кликните на значение в колонке <b>Value</b> → скопируйте (Ctrl+C)<br>7. Вставьте сюда',
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('VCRU_TOKEN', '')
 try:
