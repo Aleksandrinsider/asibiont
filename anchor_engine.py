@@ -5664,6 +5664,40 @@ class AnchorEngine:
                 # ── Координатор назначает задачу ПЕРЕД биллингом (всегда видно в чате) ──
                 # ИИ генерирует живое поручение — адаптируется под любого агента и его интеграции.
                 _coord_text = None  # инициализируем до блока условия — защита от UnboundLocalError
+
+                # ── Читаем незакрытое поручение координатора из БД (goal_autopilot_dispatch без review) ──
+                # Если координатор упал после сохранения поручения, агент всё равно его выполнит.
+                if _coord_text is None and anchor.anchor_type != 'goal_autopilot_review' and _chosen_id != 0:
+                    try:
+                        from models import Interaction as _Intc_pd
+                        _pd_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
+                        _pd_rows = session.query(_Intc_pd).filter(
+                            _Intc_pd.user_id == user.id,
+                            _Intc_pd.message_type == 'proactive',
+                            _Intc_pd.created_at >= _pd_cutoff,
+                        ).order_by(_Intc_pd.id.desc()).limit(10).all()
+                        _agent_name_l = _chosen_name.lower()
+                        for _pd_row in _pd_rows:
+                            try:
+                                _pd = json.loads(_pd_row.content or '{}') if isinstance(_pd_row.content, str) else {}
+                                if _pd.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
+                                    continue
+                                _to = str(_pd.get('__to_agent') or '').lower()
+                                if _to and _to not in _agent_name_l and _agent_name_l not in _to:
+                                    continue
+                                _pending_txt = (_pd.get('text') or '').strip()
+                                if _pending_txt and len(_pending_txt) > 15:
+                                    _coord_text = _pending_txt
+                                    logger.info(
+                                        "[ANCHOR-AUTOPILOT] loaded pending coordinator assignment for %s: %s",
+                                        _chosen_name, _pending_txt[:80],
+                                    )
+                                    break
+                            except Exception:
+                                continue
+                    except Exception as _pd_err:
+                        logger.debug("[ANCHOR-AUTOPILOT] pending assignment load failed: %s", _pd_err)
+
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
                     _gl_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:3]]
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
@@ -10771,6 +10805,7 @@ class AnchorEngine:
 
             # ── Рекомендация по интеграции — раз в 6 часов, если цели требуют внешних данных ──
             # Отправляем ДО начала выполнения, чтобы пользователь мог подключить нужную интеграцию
+            _missing_intg_coord: list = []  # заглушка; список строк-рекомендаций по интеграции
             if _missing_intg_coord:
                 try:
                     _intg_rec = _missing_intg_coord[0]
