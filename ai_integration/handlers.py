@@ -10288,7 +10288,7 @@ def get_message_status(
 
 # Generic email prefixes — фильтруем при автопоиске
 _GENERIC_PREFIXES = {
-    'info', 'contact', 'contacts', 'hello', 'hi', 'support', 'sales',
+    'info', 'contact', 'contacts', 'hello', 'hi', 'support', 'sales', 'sale',
     'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
     'hr', 'billing', 'press', 'media', 'marketing', 'general',
     'enquiries', 'feedback', 'service', 'webmaster', 'subscribe',
@@ -10300,12 +10300,13 @@ _GENERIC_PREFIXES = {
     'cooperation', 'collab', 'collaborate', 'pr', 'invest',
     'investor', 'investors', 'ceo', 'cto', 'cfo', 'coo',
     'editor', 'editorial', 'news', 'newsroom', 'events', 'event',
-    'community', 'social', 'director', 'manager', 'commercial',
+    'community', 'social', 'director', 'manager', 'commercial', 'komm',
     'advertising', 'ads', 'advert', 'adv', 'ad', 'reklama',
     'booking', 'reservations',
     'customerservice', 'cs', 'tech', 'technical', 'ops', 'operations',
     'compliance', 'procurement', 'reception', 'frontdesk', 'helpdesk',
     'itsupport', 'it', 'devops', 'sysadmin', 'accounts', 'accounting',
+    'buhgalter', 'bukhgalter', 'buh',
     'finance', 'payroll', 'hq', 'headquarters', 'main', 'central',
     'web', 'website', 'webteam', 'digital', 'online',
     'noc', 'network', 'infra', 'infrastructure', 'platform',

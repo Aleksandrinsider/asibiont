@@ -2071,12 +2071,14 @@ class HybridAutonomousAgent:
                 return params
             # GUARD: блокируем role-based / generic email (не персональные)
             _ROLE_PREFIXES = (
-                'info@', 'support@', 'marketing@', 'sales@', 'admin@', 'noreply@',
+                'info@', 'support@', 'marketing@', 'sales@', 'sale@', 'admin@', 'noreply@',
                 'no-reply@', 'contact@', 'hello@', 'help@', 'office@', 'hr@',
                 'buhgalter@', 'bukhgalter@', 'accounting@', 'team@', 'press@',
                 'general@', 'mail@', 'webmaster@', 'postmaster@', 'abuse@',
-                'feedback@', 'service@', 'billing@', 'jobs@', 'career@',
+                'feedback@', 'service@', 'billing@', 'jobs@', 'career@', 'careers@',
                 'opensource@', 'security@', 'privacy@', 'legal@', 'compliance@',
+                'komm@', 'commercial@', 'pr@', 'media@', 'partners@', 'partner@',
+                'reception@', 'director@', 'ceo@', 'cto@', 'cfo@',
             )
             if _rcpt and any(_rcpt.startswith(p) for p in _ROLE_PREFIXES):
                 params['__skip__'] = True
@@ -6147,7 +6149,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "⛔ Написать «нашёл информацию» без tool-вызова для применения = ПРОВАЛ.\n"
             "⛔ ОБЯЗАТЕЛЬНО: если web_search/research_topic вернул имя+email → НЕМЕДЛЕННО вызови save_email_contact.\n"
             "   Не сохранил контакт = потерял его. Коллеги НЕ видят результаты твоего поиска без save_email_contact.\n"
-            "   После save_email_contact → send_outreach_email с ПЕРСОНАЛЬНЫМ письмом (не шаблон!).\n\n"
+            "   После save_email_contact → send_outreach_email с ПЕРСОНАЛЬНЫМ письмом (не шаблон!).\n"
+            "⛔ ИМЕНА И EMAIL: перед save_email_contact УБЕДИСЬ что имя соответствует email.\n"
+            "   Если нашёл 3 контакта — НЕ ПЕРЕПУТАЙ кто есть кто. Каждый вызов = один конкретный человек.\n"
+            "   Пример ОШИБКИ: нашёл Олега (oleg@x.com) и Анну (anna@y.com), но save_email_contact(email='anna@y.com', name='Олег') — ПУТАНИЦА.\n\n"
 
             "🤝 РАБОТА В КОМАНДЕ (ты НЕ один — у тебя есть коллеги):\n"
             "⚠️ ГЛАВНОЕ ПРАВИЛО: ТЫ ДЕЛАЕШЬ СВОЮ РАБОТУ САМ. Не перекладывай задачу на коллегу.\n"
@@ -6201,9 +6206,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   Если real email найти не удалось — пропусти этот контакт и найди другого человека.\n"
             "   Никогда не повторяй send_outreach_email с тем же placeholder адресом.\n\n"
 
-            "�📊 ФИНАЛ: update_goal_progress — ОБЯЗАТЕЛЬНО последний инструмент в сессии.\n\n"
+            "📊 ФИНАЛ — update_goal_progress:\n"
+            "   ОБЯЗАТЕЛЬНО вызови update_goal_progress КАК ПОСЛЕДНИЙ tool call в КАЖДОЙ сессии.\n"
+            "   Даже если прогресс не изменился — вызови с notes=\"что сделано\".\n"
+            "   Без вызова update_goal_progress твоя работа НЕ ЗАСЧИТАНА, руководитель не увидит результат.\n"
+            "   Пример: update_goal_progress(goal_title=\"...\", notes=\"отправил 3 письма, нашёл 2 контакта\")\n\n"
 
-            "� ДАННЫЕ ДЛЯ КОМАНДЫ (твой результат читают коллеги!):\n"
+            "📋 ДАННЫЕ ДЛЯ КОМАНДЫ (твой результат читают коллеги!):\n"
             "Когда ты находишь контакты, email, ссылки, цифры — ВКЛЮЧАЙ ИХ В ТЕКСТ ОТЧЁТА.\n"
             "Коллеги получают твой отчёт и должны видеть конкретные данные для следующего шага.\n"
             "ХОРОШО: «Нашла 3 AI-стартапа: Алексей Хахунов alex@deeptech.io (CTO), Мария К. m.k@startup.ru (CEO)»\n"

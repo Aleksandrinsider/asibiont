@@ -2428,7 +2428,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                             f"\n📊 РЕАЛЬНЫЙ РЕЗУЛЬТАТ: {_gs_replied} человек ответили на outreach!\n"
                             f"→ Ответ на письмо ≠ подтверждённый интерес. Уточни с каждым готовность участвовать.\n"
                             f"→ Если подтверждение получено → update_goal_progress("
-                            f"goal_title=\"{_g0t[:40]}\", metric_current={int(_g0_mc) + _gs_replied}, "
+                            f"goal_title=\"{_g0t[:80]}\", metric_current={int(_g0_mc) + _gs_replied}, "
                             f"notes=\"{_gs_replied} откликнулись на outreach\" )\n"
                             f"→ С заинтересованными — продолжай диалог, отправляй ссылку https://asibiont.com.\n"
                         )
@@ -8857,7 +8857,7 @@ class AnchorEngine:
             _fb_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
             # Определяем класс цели для осмысленного fallback
             _goal_class = 'общий'
-            _goal_hint = f'{_fb_tool}("{title[:40]} — пошаговый план") → save_note → update_goal_progress.'
+            _goal_hint = f'{_fb_tool}("{title[:80]} — пошаговый план") → save_note → update_goal_progress.'
             _GOAL_CLASS_MAP = [
                 (('недвижим', 'квартир', 'застройщик', 'новостройк', 'риелтор', 'ипотек', 'аренд'),
                  'недвижимость',
@@ -10679,7 +10679,7 @@ class AnchorEngine:
             for _p in _plan:
                 _ak_agent = _p.get('agent', '').strip().lower()
                 _ak_tool = (_p.get('tool') or '').strip().lower()
-                _ak_goal = (_p.get('goal') or '').strip().lower()[:40]
+                _ak_goal = (_p.get('goal') or '').strip().lower()[:80]
                 _ak = (_ak_agent, _ak_tool, _ak_goal)
                 if _ak_agent and _ak not in _seen_agent_tool_goal:
                     _seen_agent_tool_goal.add(_ak)
