@@ -5977,9 +5977,9 @@ except Exception as e:
             vcru: {
                 name: 'VC.ru',
                 fields: [
-                    {k:'VCRU_TOKEN', label:'Device-токен VC.ru', ph:'xxxxxxxxxxxxxxxx', t:'text'}
+                    {k:'VCRU_TOKEN', label:'Токен VC.ru (X-Device-Token)', ph:'xxxxxxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'Как получить токен: войдите на vc.ru → F12 (DevTools) → Application → Cookies → скопируйте значение <b>osnova-device-token</b>. Этот токен используется для публикации статей.',
+                hint: 'Как получить: vc.ru → F12 (DevTools) → Network → любой запрос к api.vc.ru → в Request Headers найдите <b>X-Device-Token</b> и скопируйте его значение.',
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('VCRU_TOKEN', '')
 try:
