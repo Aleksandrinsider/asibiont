@@ -9106,6 +9106,9 @@ class AnchorEngine:
                             f"  💡 {_p_cr['name']} [email]: думай цепочкой — research/web_search → save_email_contact → send_outreach_email."
                             f" Если цель задачи — связаться с кем-то, задача должна содержать ВСЮ цепочку, а не только её первый шаг."
                             f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
+                            f" ⚠️ ЧЕРЕДОВАНИЕ ИНБОКСА: {_p_cr['name']} оснащён IMAP-почтой."
+                            f" В КАЖДОМ цикле или через цикл назначай ему check_emails (чтобы не пропустить ответы контактов)."
+                            f" Хорошая цепочка: check_emails → reply_to_outreach_email (ответить всем кто отписал) → send_follow_up_email (тем кто молчит 3+ дня)."
                         )
                     if 'git' in _cats_cr:
                         _do_not_lines.append(
@@ -10217,11 +10220,10 @@ class AnchorEngine:
                 + _intg_advisor_str
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + (
-                    "⚡ Есть отправленные письма — стоит проверить входящие, "
-                    "если это ещё не делалось в этом цикле.\n"
-                    if _already_sent and _email_sent > 0 and
-                    any(any(kw in (getattr(a, 'user_api_keys', '') or '').lower()
-                            for kw in ('gmail_user=', 'imap_')) for a in real_agents)
+                    f"⚡ ОБЯЗАТЕЛЬНО: Есть {_email_sent} отправленных писем — назначь IMAP-агенту check_emails "
+                    f"(проверить ответы: reply_to_outreach_email для ответивших, follow-up для молчащих >2дн).\n"
+                    if _email_sent > 0 and
+                    any('email' in _agent_caps_categories.get(a.name, set()) for a in real_agents)
                     else ''
                 )
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
@@ -20161,6 +20163,13 @@ class AnchorEngine:
                 EmailCampaign.status == 'active',
             ).all()
             for c in campaigns:
+                # Пропускаем кампании моложе 3 дней — они ещё не могут быть "стагнирующими"
+                _c_created = c.created_at
+                if _c_created:
+                    if _c_created.tzinfo is None:
+                        _c_created = _c_created.replace(tzinfo=timezone.utc)
+                    if (now_utc - _c_created).total_seconds() < 3 * 86400:
+                        continue  # кампания создана менее 3 дней назад — не стагнация
                 recent_sends = session.query(EmailOutreach).filter(
                     EmailOutreach.campaign_id == c.id,
                     EmailOutreach.status.in_(['sent', 'replied']),
