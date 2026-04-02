@@ -14771,9 +14771,9 @@ class AnchorEngine:
         ).count()
         _email_daily_limit = 50  # default
         if email_campaigns:
-            _max_dl = max((c.daily_limit or 20) for c in email_campaigns)
+            _max_dl = max((c.daily_limit or 50) for c in email_campaigns)
             if _max_dl > 0:
-                _email_daily_limit = _max_dl
+                _email_daily_limit = max(_max_dl, 50)  # не ниже 50
 
         # ── Определяем исчерпанные стратегии (все инструменты категории провалились) ──
         _STRATEGY_TOOLS = {
