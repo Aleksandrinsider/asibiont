@@ -3540,12 +3540,12 @@ class HybridAutonomousAgent:
                             try: get_learner().record_tool_result(user_id, _name, True)
                             except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
 
-                            # ── Авто-заметка: длинный результат research → save_note ─────────
-                            # Пользователю не нужно говорить "запиши" — длинное исследование
-                            # автоматически сохраняется в заметки чтобы не терялось в чате.
-                            _RESEARCH_AUTO_SAVE = {'research_topic', 'web_search', 'quick_topic_search'}
+                            # ── Авто-заметка: только research_topic с глубоким уникальным контентом ──
+                            # Порог повышен до 1500 + дедуп по теме за 24ч — не спамить заметками.
+                            # web_search не сохраняем авто — избыточно, всё логируется в результатах.
+                            _RESEARCH_AUTO_SAVE = {'research_topic'}
                             _raw_result_str = _r['result'] if isinstance(_r['result'], str) else _rc
-                            if _name in _RESEARCH_AUTO_SAVE and len(_raw_result_str) > 800:
+                            if _name in _RESEARCH_AUTO_SAVE and len(_raw_result_str) > 1500:
                                 try:
                                     from .handlers import save_note as _auto_save_note
                                     _note_q = (
@@ -3553,17 +3553,43 @@ class HybridAutonomousAgent:
                                         _args.get('prompt') or _name
                                     )
                                     _note_title = str(_note_q)[:80]
-                                    _note_content = _raw_result_str
-                                    asyncio.ensure_future(
-                                        _auto_save_note(
-                                            content=_note_content,
-                                            title=_note_title,
-                                            user_id=user_id,
+                                    # Дедуп: не создаём заметку если похожая тема уже есть за 24ч
+                                    _auto_note_skip = False
+                                    try:
+                                        from config import Session as _SN_sess
+                                        from models import Note as _N_m, User as _UN_m
+                                        import datetime as _dt_an
+                                        _sn_s = _SN_sess()
+                                        try:
+                                            _sn_u = _sn_s.query(_UN_m).filter_by(telegram_id=user_id).first()
+                                            if _sn_u:
+                                                _cutoff_an = _dt_an.datetime.now(_dt_an.timezone.utc) - _dt_an.timedelta(hours=24)
+                                                _kw_an = set(_note_title.lower().split()[:5])
+                                                _recent_ns = _sn_s.query(_N_m).filter(
+                                                    _N_m.user_id == _sn_u.id,
+                                                    _N_m.created_at >= _cutoff_an,
+                                                ).all()
+                                                for _rn in _recent_ns:
+                                                    _rn_kw = set((_rn.title or '').lower().split()[:5])
+                                                    if len(_kw_an & _rn_kw) >= 2:
+                                                        _auto_note_skip = True
+                                                        logger.info('[AUTO_NOTE] dedup: similar note for %s', _note_title[:40])
+                                                        break
+                                        finally:
+                                            _sn_s.close()
+                                    except Exception as _dn_e:
+                                        logger.debug('[AUTO_NOTE] dedup check: %s', _dn_e)
+                                    if not _auto_note_skip:
+                                        _note_content = _raw_result_str
+                                        asyncio.ensure_future(
+                                            _auto_save_note(
+                                                content=_note_content,
+                                                title=_note_title,
+                                                user_id=user_id,
+                                            )
                                         )
-                                    )
-                                    _auto_saved_notes.append(_note_title)
-                                    logger.info(f"[AUTO_NOTE] Saved research note: '{_note_title[:50]}'")
-                                    # Уведомление — НЕ через отдельный _cb, AI сам вплетёт в ответ
+                                        _auto_saved_notes.append(_note_title)
+                                        logger.info(f"[AUTO_NOTE] Saved research note: '{_note_title[:50]}'")
                                 except Exception as _auto_ne:
                                     logger.warning(f"[AUTO_NOTE] Failed to save: {_auto_ne}")
                             # ─────────────────────────────────────────────────────────────────
@@ -6045,24 +6071,25 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  • research_topic (тренд) → create_post → publish_to_telegram → update_goal_progress\n"
             "  • run_agent_action (GitHub/RSS) → save_email_contact + send_outreach_email ИЛИ create_post\n"
             "  ОБУЧЕНИЕ/РАЗВИТИЕ:\n"
-            "  • research_topic (тема из цели) → save_note (конспект/план обучения) → add_task (конкретный шаг на практику)\n"
-            "  • web_search (лучшие ресурсы/курсы/книги) → save_note (подборка) → update_goal_progress\n"
-            "  • research_topic → create_post (поделиться изученным) → update_goal_progress\n"
+            "  • research_topic (тема из цели) → add_task (конкретный шаг на практику) → update_goal_progress\n"
+            "  • web_search (ресурсы/курсы) → create_post (поделиться изученным) → update_goal_progress\n"
+            "  • research_topic → save_note (конспект) ТОЛЬКО если материал НОВЫЙ и нужен для справки потом\n"
             "  ЗДОРОВЬЕ/СПОРТ/ХОББИ:\n"
-            "  • web_search (методики/программы) → save_note (план) → add_task (конкретное действие/тренировка) → set_reminder\n"
-            "  • research_topic (анализ подхода) → save_note (что работает) → update_goal_progress\n"
+            "  • web_search (методики) → add_task (конкретная тренировка) → set_reminder (регулярность)\n"
+            "  • research_topic (анализ) → create_post (мотивационный/аналитический) → update_goal_progress\n"
             "  ФИНАНСЫ/КАРЬЕРА:\n"
-            "  • web_search (анализ рынка/вакансий/курсов) → save_note (выводы) → add_task (конкретные шаги)\n"
-            "  • research_topic (стратегия/инвестиции) → save_note (план) → set_reminder (контрольные точки)\n"
-            "  • run_agent_action (финансовые данные) → save_note (анализ) → update_goal_progress\n"
+            "  • web_search (рынок/вакансии) → add_task (конкретные шаги) → update_goal_progress\n"
+            "  • research_topic (стратегия) → create_post (анализ для читателей) → publish_to_telegram\n"
+            "  • run_agent_action (данные) → create_post (обзор) ИЛИ add_task (следующий шаг)\n"
             "  ТВОРЧЕСТВО/КОНТЕНТ:\n"
-            "  • research_topic (вдохновение/тренды) → create_post (статья/обзор) → publish_to_telegram\n"
+            "  • research_topic (тренды) → create_post (статья/обзор) → publish_to_telegram\n"
             "  • web_search (референсы) → generate_image (визуал) → create_post → update_goal_progress\n"
-            "  • research_topic → save_note (идеи/наброски) → add_task (план создания)\n"
             "  УНИВЕРСАЛЬНОЕ:\n"
-            "  • research_topic → save_note (инсайты) → DELEGATE[коллега] с конкретными данными для действия\n"
+            "  • research_topic → DELEGATE[коллега] с КОНКРЕТНЫМИ данными (email, ссылки, текст)\n"
             "  • web_search → create_post (статья/отчёт) → publish_to_telegram\n"
-            "  • любой инструмент → save_note (итог) → update_goal_progress\n"
+            "  • save_note — ТОЛЬКО для уникального нового материала, который нужен позже как справка.\n"
+            "    НЕ сохраняй каждый поиск — пользователь видит ВСЕ заметки и не хочет мусор.\n"
+            "    Правило: если данные уже отражены (пост/задача/письмо) — не дублируй в заметку.\n"
             "⛔ Остановиться на первом шаге (только web_search) = ПРОВАЛ. Доведи до конечного действия.\n"
             "⛔ Написать «нашёл информацию» без tool-вызова для применения = ПРОВАЛ.\n"
             "⛔ ОБЯЗАТЕЛЬНО: если web_search/research_topic вернул имя+email → НЕМЕДЛЕННО вызови save_email_contact.\n"
@@ -6082,12 +6109,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  Если ТЫ можешь сделать шаг — ТЫ его делаешь, не просишь коллегу\n\n"
 
             "💡 МАКСИМУМ ИЗ МИНИМУМА (даже с ограниченными инструментами):\n"
-            "Нет email? → research_topic + save_note (глубокий анализ) + create_post + publish (делись результатами)\n"
-            "Нет интеграций? → web_search + research_topic + save_note + add_task (исследуй → планируй → действуй)\n"
+            "Нет email? → research_topic + create_post (поделись результатами) + publish_to_telegram\n"
+            "Нет интеграций? → web_search + research_topic + add_task (конкретные шаги) + update_goal_progress\n"
             "Есть ТОЛЬКО email? → check_emails → reply → send_follow_up_email → negotiate_by_email (вся воронка)\n"
-            "Есть ТОЛЬКО web_search? → web_search → save_note/save_email_contact → DELEGATE[] дальнейшие шаги\n"
-            "Цель — обучение? → research_topic (материалы) → save_note (конспект) → add_task (практика) → update_goal_progress\n"
-            "Цель — здоровье? → web_search (методики) → save_note (план) → add_task (действие) → set_reminder (регулярность)\n"
+            "Есть ТОЛЬКО web_search? → web_search → save_email_contact → DELEGATE[агент с email] отправить письмо\n"
+            "Цель — обучение? → research_topic → add_task (практика) → update_goal_progress\n"
+            "Цель — здоровье? → web_search (методики) → add_task (действие) → set_reminder (регулярность)\n"
             "Главный принцип: КАЖДЫЙ ИНСТРУМЕНТ КОМБИНИРУЕТСЯ С ДРУГИМИ. Один web_search без продолжения = 0.\n\n"
 
             "📡 ТВОИ ИНТЕГРАЦИИ:\n"
