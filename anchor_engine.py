@@ -5759,10 +5759,41 @@ class AnchorEngine:
                     # Строим список "Подключено" из категорий
                     _connected_names = [_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_c)]
                     _connected_names.append('web_search (всегда)')
+
+                    # Конкретные инструменты по каждой подключённой категории
+                    _can_tools_by_cat = []
+                    for _cat_c in sorted(_cats_c):
+                        _cname = _CAP_CATEGORY_NAMES.get(_cat_c, _cat_c)
+                        _hint_c = _CAP_TOOL_HINTS.get(_cat_c, '')
+                        _first_tool = _hint_c.split(',')[0].strip() if _hint_c else ''
+                        if _first_tool:
+                            _can_tools_by_cat.append(f'{_cname} → {_first_tool}')
+                    _can_tools_by_cat.append('Всегда → web_search, research_topic, save_note, add_task, create_post')
+
+                    # Что НЕ подключено (для контекста рассуждений координатора)
+                    _CAP_CANNOT_EXAMPLES: dict[str, str] = {
+                        'telegram': 'Telegram (нет токена бота/канала)',
+                        'discord': 'Discord (нет webhook)',
+                        'social': 'Соцсети (нет API)',
+                        'git': 'GitHub API (нет токена)',
+                        'rss': 'RSS-ленты (нет настроенных источников)',
+                        'calls': 'Звонки/SMS (нет SIP/Twilio)',
+                        'crm': 'CRM (нет интеграции)',
+                        'calendar': 'Календарь/Zoom (нет API)',
+                    }
+                    _missing_cats = [c for c in _CAP_CANNOT_EXAMPLES if c not in _cats_c]
+                    _cannot_ctx = [_CAP_CANNOT_EXAMPLES[c] for c in _missing_cats[:4]]
+
                     _channels_info_c = (
-                        f"✅ Подключено у {_chosen_name}: {', '.join(_connected_names)}.\n"
-                        f"💡 Назначай ТОЛЬКО действия с этими инструментами. "
-                        f"Если для цели нужна другая интеграция — скажи пользователю что подключить."
+                        f"Реальные возможности {_chosen_name} прямо сейчас:\n"
+                        f"  Подключено: {', '.join(_connected_names)}\n"
+                        + (f"  Конкретные инструменты:\n    " + '\n    '.join(_can_tools_by_cat) + '\n' if _can_tools_by_cat else '')
+                        + (
+                            f"  Не подключено: {', '.join(_cannot_ctx)}\n"
+                            f"  → Задача через неподключённый канал не выполнится — агент сделает что сможет,\n"
+                            f"    но результата не будет. Подбирай задачу под реальные инструменты выше.\n"
+                            if _cannot_ctx else ''
+                        )
                     )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
@@ -5994,6 +6025,8 @@ class AnchorEngine:
                             + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
 
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
+                            f"  0) Посмотри на список инструментов выше. Задай себе: «Каким конкретным инструментом\n"
+                            f"     из этого списка {_chosen_name} выполнит задачу?» Если ответа нет — задача не для этого агента.\n"
                             f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
                             f"  2) Если результат был слабым или повторяется «поиск / исследование» без конкретных итогов — "
                             f"прежний подход НЕ РАБОТАЕТ. Не повторяй его с новыми словами — предложи ДРУГУЮ СТРАТЕГИЮ.\n"
@@ -6013,8 +6046,7 @@ class AnchorEngine:
                             "Пример пустышки: «Марк, посмотри что можно сделать по нашим целям» — ЭТО БЕСПОЛЕЗНО.\n"
                             "Пример хорошего: «Марк, запусти web_search по AI-стартапам на dev.to, найди 3 автора с публичным email и сохрани через save_note.»\n\n"
                             "Объясни почему именно этот подход и что ждёшь в итоге — всё в одном потоке, без заголовков и нумерации.\n"
-                            "Используй только подключённые каналы из списка выше. О сервисах вне списка — не упоминай.\n"
-                            "🚫 LinkedIn, Sales Navigator, Apollo.io — ЗАПРЕЩЕНЫ. Не упоминай их ни в каком контексте.\n"
+                            "Работай только с теми инструментами, которые перечислены в карточке выше — остальных у агента нет.\n"
                             "Если один агент нашёл контакты — назначь другому написать ЭТИМ людям.\n"
                             "Тон: старший коллега — уважительно, конкретно, без официоза.\n"
                             "Если есть «Последний результат» — отталкивайся от него: что уже сделано, какой следующий шаг.\n"
@@ -9237,7 +9269,7 @@ class AnchorEngine:
                             f"  💡 {_p_cr['name']} [email]: думай цепочкой — research/web_search → save_email_contact → send_outreach_email."
                             f" Если цель задачи — связаться с кем-то, задача должна содержать ВСЮ цепочку, а не только её первый шаг."
                             f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
-                            + (f" ❌ НЕ НАЗНАЧАЙ {_p_cr['name']}: {_cant_str} — интеграций нет, задача зависнет." if _cant_str else '')
+                            + (f" У {_p_cr['name']} нет интеграции для: {_cant_str} — задача через эти каналы не выполнится. Предложи email-альтернативу или попроси пользователя подключить." if _cant_str else '')
                             + (
                                 f" ⛔ КУЛДАУН ИНБОКСА: {_p_cr['name']} уже проверял входящие недавно — НЕ назначать check_emails."
                                 f" Дай другую задачу: send_outreach_email, create_post, web_search, find_relevant_contacts_for_task."
@@ -9261,14 +9293,13 @@ class AnchorEngine:
                             f" Если агент 2 цикла подряд только читает RSS без публикации — дай задачу с явным выходным артефактом."
                         )
                     _cap_rules_lines.append(
-                        f"  {'📞' if 'calls' in _cats_cr else '🔀'} {_p_cr['name']} [{_ch_str}]: "
-                        f"МОЖЕТ: {', '.join(_tool_hints[:5])}. "
-                        f"Назначай задачи ТОЛЬКО с инструментами из этого списка. "
-                        f"Чего нет — НЕ НАЗНАЧАЙ."
+                        f"  {'📞' if 'calls' in _cats_cr else '�'} {_p_cr['name']} [{_ch_str}]: "
+                        f"Инструменты: {', '.join(_tool_hints[:5])}. "
+                        f"Подбирай задачу под этот набор — тогда агент дойдёт до результата."
                     )
                     _cap_rules_lines.extend(_do_not_lines)
             _cap_rules_str = (
-                "\nℹ️ ОГРАНИЧЕНИЯ ИНТЕГРАЦИЙ:\n"
+                "\nℹ️ ВОЗМОЖНОСТИ АГЕНТОВ:\n"
                 + '\n'.join(_cap_rules_lines) + '\n'
                 "  → Используй то что есть у агента. Нет интеграции → предложи подключить в дашборде: https://asibiont.com/dashboard.\n"
                 if _cap_rules_lines else ''
