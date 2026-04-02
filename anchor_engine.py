@@ -5777,6 +5777,7 @@ class AnchorEngine:
                         'social': 'Соцсети (нет API)',
                         'git': 'GitHub API (нет токена)',
                         'rss': 'RSS-ленты (нет настроенных источников)',
+                        'analytics': 'Аналитика (Я..Метрика/GA не странице агента)',
                         'calls': 'Звонки/SMS (нет SIP/Twilio)',
                         'crm': 'CRM (нет интеграции)',
                         'calendar': 'Календарь/Zoom (нет API)',
@@ -5788,6 +5789,7 @@ class AnchorEngine:
                         f"Реальные возможности {_chosen_name} прямо сейчас:\n"
                         f"  Подключено: {', '.join(_connected_names)}\n"
                         + (f"  Конкретные инструменты:\n    " + '\n    '.join(_can_tools_by_cat) + '\n' if _can_tools_by_cat else '')
+                        + (f"  ❗ ВАЖНО: используй ВСЕ подключённые интеграции по очереди, не только email.\n    Если в предыдущем цикле далал email-задачу — сейчас дай задачу через другую интеграцию: {', '.join(_CAP_CATEGORY_NAMES.get(c,c) for c in sorted(_cats_c - {'email'})) or 'web_search'}.\n" if len(_cats_c) > 1 else '')
                         + (
                             f"  Не подключено: {', '.join(_cannot_ctx)}\n"
                             f"  → Задача через неподключённый канал не выполнится — агент сделает что сможет,\n"
@@ -5803,9 +5805,21 @@ class AnchorEngine:
                         for g in data.get('goals', [])[:2]
                     ) if data.get('goals') else ''
                     # Fallback: конкретное поручение на основе целей и интеграций агента
+                    # Ротируем по непочтовым интеграциям прежде чем давать email
                     _goal_titles_fb = [g.get('title', '')[:40] for g in data.get('goals', [])[:2] if g.get('title')]
-                    _has_email_fb = 'email' in ' '.join(_connected_names).lower()
-                    if _goal_titles_fb and _has_email_fb:
+                    _non_email_cats = sorted(_cats_c - {'email'})
+                    if _goal_titles_fb and _non_email_cats:
+                        # У агента есть другие (не email) интеграции — используем их для разнообразия
+                        _fb_cat = _non_email_cats[0]
+                        _fb_hint = _CAP_TOOL_HINTS.get(_fb_cat, '')
+                        _fb_tool = (_fb_hint.split(',')[0].split('(')[0].strip() or 'run_agent_action') if _fb_hint else 'web_search'
+                        _fb_cat_name = _CAP_CATEGORY_NAMES.get(_fb_cat, _fb_cat)
+                        _coord_text = (
+                            f'{_chosen_name}, используй {_fb_cat_name} — запусти {_fb_tool} '
+                            f'по теме «{_goal_titles_fb[0]}». '
+                            f'Зафиксируй результат через save_note.'
+                        )
+                    elif _goal_titles_fb and 'email' in _cats_c:
                         _coord_text = (
                             f'{_chosen_name}, проверь входящие через check_emails — '
                             f'возможно пришли ответы по цели «{_goal_titles_fb[0]}». '
@@ -6027,7 +6041,10 @@ class AnchorEngine:
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
                             f"  0) Посмотри на список инструментов выше. Задай себе: «Каким конкретным инструментом\n"
                             f"     из этого списка {_chosen_name} выполнит задачу?» Если ответа нет — задача не для этого агента.\n"
-                            f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
+                            + (f"  0b) У {_chosen_name} подключено несколько интеграций: {_caps_c['categories_str']}.\n"
+                               f"     Не привязывайся только к email — используй ВСЕ интеграции осознанно.\n"
+                               if len(_cats_c) > 1 else '')
+                            + f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
                             f"  2) Если результат был слабым или повторяется «поиск / исследование» без конкретных итогов — "
                             f"прежний подход НЕ РАБОТАЕТ. Не повторяй его с новыми словами — предложи ДРУГУЮ СТРАТЕГИЮ.\n"
                             f"  3) Чем твоё новое поручение ОТЛИЧАЕТСЯ от предыдущих (см. список выше)? Если отличие только в формулировке — ты зацикливаешься.\n"
@@ -9295,9 +9312,15 @@ class AnchorEngine:
                         )
                     if 'git' in _cats_cr:
                         _do_not_lines.append(
-                            f"  💡 {_p_cr['name']} [GitHub]: GitHub API ищет только по GitHub (репозитории, пользователи, issues)."
+                            f"  💡 {_p_cr['name']} [GitHub]: GitHub API ищет по GitHub (репозитории, пользователи, issues)."
+                            f" Хорошая же цепочка: run_agent_action(поиск девелоперов) → save_note(найденные профили) → дальше АСИ передаёт контакты email-агенту."
                             f" Хабр/VC/Medium GitHub не индексирует — для этих сайтов используй web_search."
-                            f" Хорошая цепочка: search_users(GitHub) / web_search(Хабр) → save_email_contact → DELEGATE[email-агент]."
+                        )
+                    if 'analytics' in _cats_cr:
+                        _do_not_lines.append(
+                            f"  💡 {_p_cr['name']} [Аналитика]: есть доступ к метрикам сайта."
+                            f" Хорошая задача: run_agent_action(action='get_metrics'|'get_report', params={{'period':'7d'}}) → сделай вывод / создай отчёт save_note."
+                            f" Назначай аналитику когда нужно понять трафик / источники / поведение пользователей."
                         )
                     if 'rss' in _cats_cr:
                         _do_not_lines.append(
