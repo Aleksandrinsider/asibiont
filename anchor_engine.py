@@ -14620,6 +14620,17 @@ class AnchorEngine:
             for c in contacts
         ] if contacts else []
 
+        # Ранний prefetch отправленных emails — нужен для фильтрации hot_contacts_info
+        _already_sent_emails_pre: set = set()
+        try:
+            _sent_pre = session.query(EmailOutreach.recipient_email).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).all()
+            _already_sent_emails_pre = {r[0].lower() for r in _sent_pre if r[0]}
+        except Exception as _e_pre:
+            logger.debug("[AUTOPILOT] already_sent_emails_pre: %s", _e_pre)
+
         # Статистика базы по статусам + структура для умного блока
         import re as _re_ec
         _PERSONAL_EC = _re_ec.compile(
@@ -14651,7 +14662,9 @@ class AnchorEngine:
                 if _age_days >= 3:
                     _no_reply_info.append(f'{_nm_kc} <{_em_kc}> ({_age_days}д)')
             elif _st in ('replied', 'interested'):
-                _hot_contacts_info.append(f'{_nm_kc} <{_em_kc}> [{_st}]')
+                # Только если реально отправляли письмо — иначе статус проставлен агентом вручную
+                if _em_kc in {_ae.lower() for _ae in (_already_sent_emails_pre or [])}:
+                    _hot_contacts_info.append(f'{_nm_kc} <{_em_kc}> [{_st}]')
         _known_identifiers = list(_status_counts.keys())  # placeholder — computed above instead
 
         # Per-agent action memory — чтобы каждый агент не зацикливался и не повторял своё

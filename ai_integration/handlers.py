@@ -15741,7 +15741,12 @@ async def save_email_contact(
             if notes:
                 existing.notes = notes.strip()
             if status:
-                existing.status = status
+                # Запрет понижать или вручную ставить replied/interested — только система
+                _RESERVED_STATUSES = ('replied', 'interested')
+                if status in _RESERVED_STATUSES and _prev_status not in _RESERVED_STATUSES:
+                    pass  # игнорируем: агент не может вручную повысить до replied/interested
+                else:
+                    existing.status = status
             session.commit()
             _cur_status = existing.status or _prev_status
             # Информативный ответ: агент видит реальное состояние и знает следующий шаг
@@ -15794,6 +15799,14 @@ async def save_email_contact(
             elif 'web_search' in _all_fields or 'найден через поиск' in _all_fields:
                 _effective_source = 'web_search'
 
+        # Статусы 'interested'/'replied' нельзя ставить вручную при создании контакта.
+        # Они устанавливаются только системой при получении реального email-ответа.
+        _MANUAL_FORBIDDEN_STATUSES = ('interested', 'replied')
+        _effective_status = status or 'new'
+        if _effective_status in _MANUAL_FORBIDDEN_STATUSES:
+            _effective_status = 'new'
+            logger.info('[SAVE_CONTACT] Blocked manual status=%s → reset to new for %s', status, email_clean)
+
         contact = EmailContact(
             user_id=user.id,
             email=email_clean,
@@ -15803,7 +15816,7 @@ async def save_email_contact(
             notes=(notes or '').strip() or None,
             source=_effective_source,
             # Дефолт 'new' — агент сохраняет найденный контакт, это НЕ означает что он ответил
-            status=status or 'new',
+            status=_effective_status,
         )
         session.add(contact)
         session.commit()
