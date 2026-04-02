@@ -978,6 +978,9 @@ class ContextBuilder:
                         'OPENAI': 'OpenAI', 'ANTHROPIC': 'Claude',
                         'YANDEX_USER': 'Яндекс Почта', 'MAILRU_USER': 'Mail.ru',
                         'GMAIL_USER': 'Gmail', 'RESEND_API_KEY': 'Resend',
+                        'TWITTER_': 'Twitter/X', 'X_API': 'Twitter/X',
+                        'LINKEDIN_': 'LinkedIn', 'VCRU_': 'VC.ru',
+                        'YOUTUBE_': 'YouTube', 'TWILIO_': 'Twilio',
                     }
                     _agent_lines = []
                     for _ta in _team:
@@ -1044,6 +1047,10 @@ class ContextBuilder:
                         'start_content_campaign': 'контент-кампания',
                         'start_delegation_campaign': 'аутрич',
                         'publish_to_telegram': 'TG посты', 'publish_to_discord': 'Discord посты',
+                        'publish_to_vk': 'VK посты', 'publish_to_twitter': 'Twitter посты',
+                        'publish_to_linkedin': 'LinkedIn посты', 'publish_to_vcru': 'VC.ru статьи',
+                        'publish_to_notion': 'Notion', 'publish_to_youtube': 'YouTube',
+                        'initiate_phone_call': 'звонки',
                     }
                     _matches = []
                     for _g in _active_goals[:5]:
@@ -1836,6 +1843,10 @@ class ContextBuilder:
         _has_shopify = 'SHOPIFY' in _kup
         _has_whatsapp = 'WHATSAPP' in _kup or 'TWILIO' in _kup
         _has_twitter = 'TWITTER' in _kup or 'X_API' in _kup or 'TWEEPY' in _kup
+        _has_linkedin = 'LINKEDIN' in _kup
+        _has_vcru = 'VCRU' in _kup
+        _has_youtube = 'YOUTUBE' in _kup
+        _has_twilio = 'TWILIO' in _kup
         _has_openai = 'OPENAI' in _kup
         _has_calendar = 'GOOGLE_CALENDAR' in _kup or 'CALDAV' in _kup
         _has_crm = 'BITRIX' in _kup or 'AMOCRM' in _kup or 'HUBSPOT' in _kup or 'SALESFORCE' in _kup
@@ -1925,8 +1936,24 @@ class ContextBuilder:
              "агент + TWILIO_SID + TWILIO_TOKEN"),
             (not _has_twitter,
              "Twitter / X",
-             "автопостинг, мониторинг упоминаний",
-             "агент + X_API_KEY + X_API_SECRET"),
+             "автопостинг твитов, мониторинг упоминаний",
+             "агент + TWITTER_API_KEY + TWITTER_API_SECRET + TWITTER_ACCESS_TOKEN + TWITTER_ACCESS_SECRET"),
+            (not _has_linkedin,
+             "LinkedIn",
+             "публикация профессиональных постов, нетворкинг",
+             "агент + LINKEDIN_ACCESS_TOKEN"),
+            (not _has_vcru,
+             "VC.ru",
+             "публикация экспертных статей, продвижение бренда",
+             "агент + VCRU_TOKEN"),
+            (not _has_youtube,
+             "YouTube",
+             "аналитика канала, комментарии, управление контентом",
+             "агент + YOUTUBE_API_KEY + YOUTUBE_CHANNEL_ID"),
+            (not _has_twilio,
+             "Телефонные звонки (Twilio)",
+             "голосовые звонки, SMS-уведомления",
+             "агент + TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_FROM"),
             (not _has_calendar,
              "Google Calendar",
              "синхронизация задач с календарём, авторасписание",

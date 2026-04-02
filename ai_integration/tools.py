@@ -755,6 +755,159 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "publish_to_vk",
+            "description": "📢 Опубликовать пост на стене ВКонтакте (личная страница или группа). Требует VK_TOKEN и VK_OWNER_ID в настройках агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Текст поста для ВКонтакте. Пиши для широкой аудитории: экспертный контент, кейсы, инсайты."
+                    },
+                    "image_url": {
+                        "type": "string",
+                        "description": "URL картинки для прикрепления к посту (опционально)."
+                    }
+                },
+                "required": ["content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_twitter",
+            "description": "📢 Опубликовать твит в Twitter/X. Требует TWITTER_BEARER_TOKEN и TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET / TWITTER_API_KEY / TWITTER_API_SECRET в настройках агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Текст твита (до 280 символов). Кратко, ёмко, с хештегами."
+                    }
+                },
+                "required": ["content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_linkedin",
+            "description": "📢 Опубликовать пост в LinkedIn. Требует LINKEDIN_ACCESS_TOKEN в настройках агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "Текст поста для LinkedIn. Профессиональный тон, экспертный контент, кейсы."
+                    }
+                },
+                "required": ["content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_vcru",
+            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN в настройках агента. Поддерживает заголовок и текст статьи.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Заголовок статьи на VC.ru (до 120 символов)."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Текст статьи. Поддерживает Markdown. Пиши экспертный, развёрнутый контент."
+                    },
+                    "subsite_id": {
+                        "type": "integer",
+                        "description": "ID подсайта (опционально). 199124=Маркетинг, 199122=Дизайн, 199120=Разработка, 199132=Бизнес."
+                    }
+                },
+                "required": ["title", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_notion",
+            "description": "📝 Создать страницу в Notion. Требует NOTION_TOKEN и NOTION_DB_ID в настройках агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Заголовок страницы в Notion."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Текст содержимого страницы."
+                    }
+                },
+                "required": ["title", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "publish_to_youtube",
+            "description": "📹 Обновить описание/заголовок видео на YouTube или получить аналитику канала. Требует YOUTUBE_API_KEY и YOUTUBE_CHANNEL_ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "description": "Действие: 'analytics' — получить статистику канала, 'comment' — оставить комментарий.",
+                        "enum": ["analytics", "comment"]
+                    },
+                    "video_id": {
+                        "type": "string",
+                        "description": "ID видео (для action=comment). 11-символьный код из URL."
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Текст комментария (для action=comment)."
+                    }
+                },
+                "required": ["action"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "initiate_phone_call",
+            "description": "📞 Инициировать телефонный звонок через Twilio. Агент может позвонить на номер и произнести сообщение (TTS). Требует TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM в настройках.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to_phone": {
+                        "type": "string",
+                        "description": "Номер телефона получателя в формате E.164: +79991234567"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "Текст сообщения, который будет произнесён голосом (TTS)."
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Язык TTS. По умолчанию 'ru-RU'.",
+                        "enum": ["ru-RU", "en-US", "de-DE", "fr-FR", "es-ES"]
+                    }
+                },
+                "required": ["to_phone", "message"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "set_content_strategy",
             "description": "🎯 НАСТРОИТЬ СТРАТЕГИЮ КОНТЕНТА: Сохраняет стратегию контента для автономного ведения канала. AI будет автоматически генерировать и публиковать контент по этой стратегии. Примеры: 'хочу постить про свой бизнес', 'буду публиковать кейсы по дизайну'. ВАЖНО: Спроси детали — что постить, для кого, цель.",
             "parameters": {

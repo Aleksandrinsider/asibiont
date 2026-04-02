@@ -5931,6 +5931,64 @@ else:
                 print('Ответ: ' + resp)
     except Exception as e:
         print('Ошибка вебхука: ' + str(e))`
+            },
+            twitter: {
+                name: 'Twitter / X',
+                fields: [
+                    {k:'TWITTER_API_KEY', label:'API Key (Consumer Key)', ph:'xxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TWITTER_API_SECRET', label:'API Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'},
+                    {k:'TWITTER_ACCESS_TOKEN', label:'Access Token', ph:'xxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TWITTER_ACCESS_SECRET', label:'Access Token Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'}
+                ],
+                hint: 'developer.twitter.com → Projects & Apps → Keys and Tokens. Нужен Elevated access для публикации.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN', '')
+try:
+    req = urllib.request.Request('https://api.twitter.com/2/users/me', headers={'Authorization': 'Bearer ' + TOKEN})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    user = d.get('data', {})
+    print('Twitter: @' + user.get('username', '?'))
+    print('Имя: ' + user.get('name', '?'))
+except Exception as e:
+    print('Ошибка Twitter: ' + str(e))`
+            },
+            linkedin: {
+                name: 'LinkedIn',
+                fields: [
+                    {k:'LINKEDIN_ACCESS_TOKEN', label:'Access Token (OAuth 2.0)', ph:'AQVxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'linkedin.com/developers → Create App → Auth → OAuth 2.0 → Generate token. Нужны scopes: w_member_social, r_liteprofile.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('LINKEDIN_ACCESS_TOKEN', '')
+try:
+    req = urllib.request.Request('https://api.linkedin.com/v2/userinfo', headers={'Authorization': 'Bearer ' + TOKEN})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    print('LinkedIn: ' + d.get('name', '?'))
+    print('Email: ' + d.get('email', '?'))
+    print('Sub: ' + d.get('sub', '?'))
+except Exception as e:
+    print('Ошибка LinkedIn: ' + str(e))`
+            },
+            vcru: {
+                name: 'VC.ru',
+                fields: [
+                    {k:'VCRU_TOKEN', label:'API токен VC.ru', ph:'xxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'vc.ru → Настройки профиля → API-токен. Токен используется для публикации статей через Editor API.',
+                code: `import urllib.request, json, os
+TOKEN = os.environ.get('VCRU_TOKEN', '')
+try:
+    req = urllib.request.Request('https://api.vc.ru/v2.8/me', headers={'X-Device-Token': TOKEN})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        d = json.loads(r.read().decode())
+    user = d.get('result', {})
+    print('VC.ru: ' + (user.get('name') or '?'))
+    print('ID: ' + str(user.get('id', '?')))
+    print('Karma: ' + str(user.get('karma', '?')))
+except Exception as e:
+    print('Ошибка VC.ru: ' + str(e))`
             }
         };
 
@@ -6450,6 +6508,7 @@ else:
                             <option value="rss">RSS-лента новостей</option>
                             <option value="telegram_bot">Telegram Bot</option>
                             <option value="vk">ВКонтакте</option>
+                            <option value="vcru">VC.ru (статьи)</option>
                             <option value="wildberries">Wildberries</option>
                             <option value="ozon">Ozon</option>
                             <option value="avito">Авито</option>
@@ -6463,6 +6522,7 @@ else:
                             <option value="hh">hh.ru</option>
                             <option value="superjob">SuperJob</option>
                             <option value="linkedin">LinkedIn</option>
+                            <option value="twitter">Twitter / X</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Международные</option>
                             <option value="notion">Notion</option>
                             <option value="airtable">Airtable</option>
@@ -6516,7 +6576,7 @@ else:
                             <option value="strava">Strava (бег, велосипед, плавание)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">SMS / Другое</option>
                             <option value="sms_ru">SMS-рассылки (SMS.ru / SMSC)</option>
-                            <option value="twilio">Twilio (SMS)</option>
+                            <option value="twilio">Twilio (SMS / Звонки)</option>
                             <option value="playwright">Playwright (скрапинг)</option>
                         </select>
                         <div id="mpa-svc-fields" style="margin-top:8px;display:none;"></div>

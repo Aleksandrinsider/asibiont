@@ -16065,6 +16065,731 @@ async def publish_to_discord(
             session.close()
 
 
+# ── publish_to_vk ──────────────────────────────────────────────────────
+async def publish_to_vk(
+    content: str,
+    image_url: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация поста на стене ВКонтакте через VK API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        vk_token, vk_owner_id = None, None
+        try:
+            from models import UserAgent as _UA_vk
+            for _ag in session.query(_UA_vk).filter(
+                _UA_vk.author_id == user.id, _UA_vk.status != 'disabled',
+                _UA_vk.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('VK_TOKEN'):
+                    vk_token = _env['VK_TOKEN']
+                    vk_owner_id = _env.get('VK_OWNER_ID', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[VK] agent lookup: {_e}")
+
+        if not vk_token:
+            return (
+                "VK_TOKEN не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "VK_TOKEN=ваш_токен\n"
+                "VK_OWNER_ID=id_страницы_или_группы\n"
+                "Получить: vk.com/dev → Мои приложения → Standalone → Получить токен"
+            )
+
+        import urllib.parse
+        import aiohttp as _aiohttp
+        url = (
+            f"https://api.vk.com/method/wall.post?"
+            f"owner_id={vk_owner_id}&message={urllib.parse.quote(content)}"
+            f"&access_token={vk_token}&v=5.131"
+        )
+        if image_url:
+            url += f"&attachments={urllib.parse.quote(image_url)}"
+
+        async with _aiohttp.ClientSession() as http:
+            async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
+                data = await resp.json()
+
+        if 'error' in data:
+            return f"Ошибка VK: {data['error'].get('error_msg', str(data['error']))}"
+
+        post_id = data.get('response', {}).get('post_id', '?')
+        try:
+            from models import AgentActivityLog
+            log = AgentActivityLog(
+                user_id=user.id, activity_type='post_vk',
+                title=content[:80], content=content,
+                target=f'VK {vk_owner_id}', status='published',
+            )
+            session.add(log)
+            session.commit()
+        except Exception as _le:
+            logger.warning(f"[VK] log: {_le}")
+
+        return f"Пост #{post_id} опубликован в ВКонтакте"
+    except Exception as e:
+        logger.error(f"[PUBLISH_VK] Error: {e}", exc_info=True)
+        return f"Ошибка публикации в VK: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_twitter ─────────────────────────────────────────────────
+async def publish_to_twitter(
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация твита в Twitter/X через OAuth 1.0a."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        tw_keys = {}
+        try:
+            from models import UserAgent as _UA_tw
+            for _ag in session.query(_UA_tw).filter(
+                _UA_tw.author_id == user.id, _UA_tw.status != 'disabled',
+                _UA_tw.user_api_keys.isnot(None),
+            ).all():
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _ku = _k.strip().upper()
+                        if _ku.startswith('TWITTER_') or _ku.startswith('X_'):
+                            tw_keys[_ku] = _v.strip()
+                if tw_keys:
+                    break
+        except Exception as _e:
+            logger.debug(f"[TWITTER] agent lookup: {_e}")
+
+        api_key = tw_keys.get('TWITTER_API_KEY') or tw_keys.get('X_API_KEY', '')
+        api_secret = tw_keys.get('TWITTER_API_SECRET') or tw_keys.get('X_API_SECRET', '')
+        access_token = tw_keys.get('TWITTER_ACCESS_TOKEN') or tw_keys.get('X_ACCESS_TOKEN', '')
+        access_secret = tw_keys.get('TWITTER_ACCESS_SECRET') or tw_keys.get('X_ACCESS_SECRET', '')
+
+        if not all([api_key, api_secret, access_token, access_secret]):
+            return (
+                "Twitter API не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "TWITTER_API_KEY=...\nTWITTER_API_SECRET=...\n"
+                "TWITTER_ACCESS_TOKEN=...\nTWITTER_ACCESS_SECRET=...\n"
+                "Получить: developer.twitter.com → Projects & Apps"
+            )
+
+        if len(content) > 280:
+            content = content[:277] + '...'
+
+        import hashlib, hmac, time, urllib.parse, uuid, json as _json
+        import aiohttp as _aiohttp
+
+        # OAuth 1.0a signature
+        method = 'POST'
+        url = 'https://api.twitter.com/2/tweets'
+        nonce = uuid.uuid4().hex
+        timestamp = str(int(time.time()))
+
+        oauth_params = {
+            'oauth_consumer_key': api_key,
+            'oauth_nonce': nonce,
+            'oauth_signature_method': 'HMAC-SHA1',
+            'oauth_timestamp': timestamp,
+            'oauth_token': access_token,
+            'oauth_version': '1.0',
+        }
+        sig_base = '&'.join([
+            method,
+            urllib.parse.quote(url, safe=''),
+            urllib.parse.quote('&'.join(f'{k}={urllib.parse.quote(v, safe="")}' for k, v in sorted(oauth_params.items())), safe=''),
+        ])
+        sig_key = f"{urllib.parse.quote(api_secret, safe='')}&{urllib.parse.quote(access_secret, safe='')}"
+        import base64
+        signature = base64.b64encode(hmac.new(sig_key.encode(), sig_base.encode(), hashlib.sha1).digest()).decode()
+
+        auth_header = 'OAuth ' + ', '.join(
+            f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in
+            {**oauth_params, 'oauth_signature': signature}.items()
+        )
+
+        async with _aiohttp.ClientSession() as http:
+            async with http.post(
+                url,
+                json={"text": content},
+                headers={
+                    'Authorization': auth_header,
+                    'Content-Type': 'application/json',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201):
+            tweet_id = data.get('data', {}).get('id', '?')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='post_twitter',
+                    title=content[:80], content=content,
+                    target='Twitter/X', status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[TWITTER] log: {_le}")
+            return f"Твит опубликован (ID: {tweet_id})"
+        else:
+            err = data.get('detail') or data.get('title') or str(data)
+            return f"Ошибка Twitter: {err[:200]}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_TWITTER] Error: {e}", exc_info=True)
+        return f"Ошибка публикации в Twitter: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_linkedin ────────────────────────────────────────────────
+async def publish_to_linkedin(
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация поста в LinkedIn через Marketing API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        li_token = None
+        try:
+            from models import UserAgent as _UA_li
+            for _ag in session.query(_UA_li).filter(
+                _UA_li.author_id == user.id, _UA_li.status != 'disabled',
+                _UA_li.user_api_keys.isnot(None),
+            ).all():
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        if _k.strip().upper() == 'LINKEDIN_ACCESS_TOKEN':
+                            li_token = _v.strip()
+                            break
+                if li_token:
+                    break
+        except Exception as _e:
+            logger.debug(f"[LINKEDIN] agent lookup: {_e}")
+
+        if not li_token:
+            return (
+                "LINKEDIN_ACCESS_TOKEN не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "LINKEDIN_ACCESS_TOKEN=ваш_токен\n"
+                "Получить: linkedin.com/developers → Create App → OAuth 2.0"
+            )
+
+        import aiohttp as _aiohttp
+        import json as _json
+
+        # Get user profile URN
+        async with _aiohttp.ClientSession() as http:
+            async with http.get(
+                'https://api.linkedin.com/v2/userinfo',
+                headers={'Authorization': f'Bearer {li_token}'},
+                timeout=_aiohttp.ClientTimeout(total=10),
+            ) as prof_resp:
+                if prof_resp.status != 200:
+                    return f"Ошибка LinkedIn авторизации: {prof_resp.status}"
+                prof_data = await prof_resp.json()
+
+        person_id = prof_data.get('sub', '')
+        if not person_id:
+            return "Не удалось получить LinkedIn profile ID"
+
+        post_body = {
+            "author": f"urn:li:person:{person_id}",
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {
+                "com.linkedin.ugc.ShareContent": {
+                    "shareCommentary": {"text": content},
+                    "shareMediaCategory": "NONE",
+                }
+            },
+            "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
+        }
+
+        async with _aiohttp.ClientSession() as http:
+            async with http.post(
+                'https://api.linkedin.com/v2/ugcPosts',
+                json=post_body,
+                headers={
+                    'Authorization': f'Bearer {li_token}',
+                    'Content-Type': 'application/json',
+                    'X-Restli-Protocol-Version': '2.0.0',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status == 201:
+                    try:
+                        from models import AgentActivityLog
+                        log = AgentActivityLog(
+                            user_id=user.id, activity_type='post_linkedin',
+                            title=content[:80], content=content,
+                            target='LinkedIn', status='published',
+                        )
+                        session.add(log)
+                        session.commit()
+                    except Exception as _le:
+                        logger.warning(f"[LINKEDIN] log: {_le}")
+                    return "Пост опубликован в LinkedIn"
+                else:
+                    err = await resp.text()
+                    return f"Ошибка LinkedIn: {resp.status} — {err[:200]}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_LINKEDIN] Error: {e}", exc_info=True)
+        return f"Ошибка публикации в LinkedIn: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_vcru ────────────────────────────────────────────────────
+async def publish_to_vcru(
+    title: str,
+    content: str,
+    subsite_id: int = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация статьи на VC.ru через API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        vc_token = None
+        try:
+            from models import UserAgent as _UA_vc
+            for _ag in session.query(_UA_vc).filter(
+                _UA_vc.author_id == user.id, _UA_vc.status != 'disabled',
+                _UA_vc.user_api_keys.isnot(None),
+            ).all():
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        if _k.strip().upper() == 'VCRU_TOKEN':
+                            vc_token = _v.strip()
+                            break
+                if vc_token:
+                    break
+        except Exception as _e:
+            logger.debug(f"[VCRU] agent lookup: {_e}")
+
+        if not vc_token:
+            return (
+                "VCRU_TOKEN не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "VCRU_TOKEN=ваш_токен\n"
+                "Получить: vc.ru → Настройки → API токен"
+            )
+
+        import aiohttp as _aiohttp
+        import json as _json
+
+        # Build entry blocks (VC.ru Editor API format)
+        blocks = [{"type": "text", "data": {"text": p.strip()}} for p in content.split('\n\n') if p.strip()]
+        if not blocks:
+            blocks = [{"type": "text", "data": {"text": content}}]
+
+        entry_data = {
+            "title": title[:120],
+            "entry": {"blocks": blocks},
+        }
+        if subsite_id:
+            entry_data["subsite_id"] = subsite_id
+
+        async with _aiohttp.ClientSession() as http:
+            async with http.post(
+                'https://api.vc.ru/v2.8/entry/create',
+                json=entry_data,
+                headers={
+                    'X-Device-Token': vc_token,
+                    'Content-Type': 'application/json',
+                },
+                timeout=_aiohttp.ClientTimeout(total=20),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201) and data.get('result'):
+            entry_id = data['result'].get('id', '?')
+            entry_url = data['result'].get('url', f'https://vc.ru/{entry_id}')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='post_vcru',
+                    title=title[:80], content=content[:500],
+                    target='VC.ru', status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[VCRU] log: {_le}")
+            return f"Статья опубликована на VC.ru: {entry_url}"
+        else:
+            err = data.get('error', {}).get('message') or data.get('message') or str(data)[:200]
+            return f"Ошибка VC.ru: {err}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_VCRU] Error: {e}", exc_info=True)
+        return f"Ошибка публикации на VC.ru: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_notion ──────────────────────────────────────────────────
+async def publish_to_notion(
+    title: str,
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создание страницы в Notion через API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        notion_token, notion_db_id = None, None
+        try:
+            from models import UserAgent as _UA_nt
+            for _ag in session.query(_UA_nt).filter(
+                _UA_nt.author_id == user.id, _UA_nt.status != 'disabled',
+                _UA_nt.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('NOTION_TOKEN'):
+                    notion_token = _env['NOTION_TOKEN']
+                    notion_db_id = _env.get('NOTION_DB_ID', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[NOTION] agent lookup: {_e}")
+
+        if not notion_token or not notion_db_id:
+            return (
+                "NOTION_TOKEN / NOTION_DB_ID не настроены.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "NOTION_TOKEN=secret_xxx\n"
+                "NOTION_DB_ID=id_базы_данных\n"
+                "Notion → Settings → Integrations → New Integration"
+            )
+
+        import aiohttp as _aiohttp
+
+        children = []
+        for p in content.split('\n\n'):
+            p = p.strip()
+            if p:
+                children.append({
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": p[:2000]}}]}
+                })
+        if not children:
+            children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": content[:2000]}}]}}]
+
+        page_data = {
+            "parent": {"database_id": notion_db_id},
+            "properties": {
+                "Name": {"title": [{"text": {"content": title}}]},
+            },
+            "children": children[:100],
+        }
+
+        async with _aiohttp.ClientSession() as http:
+            async with http.post(
+                'https://api.notion.com/v1/pages',
+                json=page_data,
+                headers={
+                    'Authorization': f'Bearer {notion_token}',
+                    'Notion-Version': '2022-06-28',
+                    'Content-Type': 'application/json',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201):
+            page_url = data.get('url', '')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='post_notion',
+                    title=title[:80], content=content[:300],
+                    target='Notion', status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[NOTION] log: {_le}")
+            return f"Страница «{title}» создана в Notion: {page_url}"
+        else:
+            err = data.get('message') or str(data)[:200]
+            return f"Ошибка Notion: {err}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_NOTION] Error: {e}", exc_info=True)
+        return f"Ошибка создания страницы в Notion: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_youtube ─────────────────────────────────────────────────
+async def publish_to_youtube(
+    action: str = 'analytics',
+    video_id: str = None,
+    content: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Аналитика YouTube-канала или публикация комментария."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        yt_key, yt_channel = None, None
+        try:
+            from models import UserAgent as _UA_yt
+            for _ag in session.query(_UA_yt).filter(
+                _UA_yt.author_id == user.id, _UA_yt.status != 'disabled',
+                _UA_yt.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('YOUTUBE_API_KEY'):
+                    yt_key = _env['YOUTUBE_API_KEY']
+                    yt_channel = _env.get('YOUTUBE_CHANNEL_ID', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[YOUTUBE] agent lookup: {_e}")
+
+        if not yt_key:
+            return (
+                "YOUTUBE_API_KEY не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "YOUTUBE_API_KEY=AIza...\n"
+                "YOUTUBE_CHANNEL_ID=UCxxx...\n"
+                "Получить: console.cloud.google.com → YouTube Data API v3"
+            )
+
+        import aiohttp as _aiohttp
+
+        if action == 'analytics':
+            if not yt_channel:
+                return "YOUTUBE_CHANNEL_ID не указан. Добавьте в API-ключи агента."
+            async with _aiohttp.ClientSession() as http:
+                async with http.get(
+                    f'https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id={yt_channel}&key={yt_key}',
+                    timeout=_aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    data = await resp.json()
+            items = data.get('items', [])
+            if not items:
+                return "Канал не найден. Проверьте YOUTUBE_CHANNEL_ID."
+            ch = items[0]
+            stats = ch.get('statistics', {})
+            name = ch.get('snippet', {}).get('title', '?')
+            return (
+                f"YouTube: {name}\n"
+                f"Подписчиков: {stats.get('subscriberCount', '?')}\n"
+                f"Видео: {stats.get('videoCount', '?')}\n"
+                f"Просмотров: {stats.get('viewCount', '?')}"
+            )
+        elif action == 'comment':
+            if not video_id or not content:
+                return "Для комментария нужны video_id и content."
+            async with _aiohttp.ClientSession() as http:
+                async with http.post(
+                    f'https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&key={yt_key}',
+                    json={
+                        "snippet": {
+                            "videoId": video_id,
+                            "topLevelComment": {
+                                "snippet": {"textOriginal": content}
+                            }
+                        }
+                    },
+                    headers={'Content-Type': 'application/json'},
+                    timeout=_aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    if resp.status in (200, 201):
+                        return f"Комментарий опубликован к видео {video_id}"
+                    else:
+                        err = await resp.text()
+                        return f"Ошибка YouTube: {resp.status} — {err[:200]}"
+        else:
+            return f"Неизвестное действие: {action}. Используйте 'analytics' или 'comment'."
+    except Exception as e:
+        logger.error(f"[YOUTUBE] Error: {e}", exc_info=True)
+        return f"Ошибка YouTube: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── initiate_phone_call ────────────────────────────────────────────────
+async def initiate_phone_call(
+    to_phone: str,
+    message: str,
+    language: str = 'ru-RU',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Инициировать телефонный звонок через Twilio с TTS-сообщением."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        twilio_sid, twilio_token, twilio_from = None, None, None
+        try:
+            from models import UserAgent as _UA_tw
+            for _ag in session.query(_UA_tw).filter(
+                _UA_tw.author_id == user.id, _UA_tw.status != 'disabled',
+                _UA_tw.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('TWILIO_ACCOUNT_SID'):
+                    twilio_sid = _env['TWILIO_ACCOUNT_SID']
+                    twilio_token = _env.get('TWILIO_AUTH_TOKEN', '')
+                    twilio_from = _env.get('TWILIO_FROM', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[CALL] agent lookup: {_e}")
+
+        if not all([twilio_sid, twilio_token, twilio_from]):
+            return (
+                "Twilio не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "TWILIO_ACCOUNT_SID=ACxxx\n"
+                "TWILIO_AUTH_TOKEN=xxx\n"
+                "TWILIO_FROM=+1234567890\n"
+                "Получить: console.twilio.com → Account Info"
+            )
+
+        import re
+        if not re.match(r'^\+\d{10,15}$', to_phone):
+            return f"Некорректный номер: {to_phone}. Формат: +79991234567"
+
+        # Escape XML special chars in message for TwiML
+        import html as _html_mod
+        safe_message = _html_mod.escape(message)
+
+        twiml = f'<Response><Say language="{language}" voice="alice">{safe_message}</Say></Response>'
+
+        import aiohttp as _aiohttp
+        import base64, urllib.parse
+        auth = base64.b64encode(f"{twilio_sid}:{twilio_token}".encode()).decode()
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Calls.json"
+
+        async with _aiohttp.ClientSession() as http:
+            async with http.post(
+                url,
+                data=urllib.parse.urlencode({
+                    'From': twilio_from,
+                    'To': to_phone,
+                    'Twiml': twiml,
+                }),
+                headers={
+                    'Authorization': f'Basic {auth}',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201):
+            call_sid = data.get('sid', '?')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='phone_call',
+                    title=f'Звонок на {to_phone}',
+                    content=message[:300],
+                    target=to_phone, status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[CALL] log: {_le}")
+            return f"Звонок инициирован на {to_phone} (SID: {call_sid})"
+        else:
+            err = data.get('message') or str(data)[:200]
+            return f"Ошибка Twilio: {err}"
+    except Exception as e:
+        logger.error(f"[PHONE_CALL] Error: {e}", exc_info=True)
+        return f"Ошибка звонка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
 async def generate_image(
     prompt: str,
     style: str = None,
