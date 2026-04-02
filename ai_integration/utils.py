@@ -763,6 +763,26 @@ def sanitize_live_team_chat_text(
                 cleaned = cleaned[:_last_punc + 1].strip()
             # else: текст короткий/без знаков — оставляем как есть (честный обрыв лучше «...на.»)
 
+        # Detect trailing fragment-sentences: last sentence ends with a preposition
+        # (≤3 letters like «с», «и», «в») or starts with a subordinate conjunction
+        # («которые», «если», «что» etc.) — these are dangling clauses.
+        if cleaned:
+            _lp = max(cleaned.rfind('.'), cleaned.rfind('!'), cleaned.rfind('?'))
+            if _lp > 0:
+                _prev_p = max(cleaned.rfind('.', 0, _lp), cleaned.rfind('!', 0, _lp), cleaned.rfind('?', 0, _lp))
+                _last_sent_text = cleaned[_prev_p + 1:_lp].strip() if _prev_p >= 0 else cleaned[:_lp].strip()
+                _lw = _last_sent_text.split()
+                _last_word = _lw[-1].lower().rstrip('.')  if _lw else ''
+                _first_word = _lw[0].lower() if _lw else ''
+                _is_frag = (
+                    len(_last_word) <= 3  # trailing preposition: «с», «и», «в», «на»
+                    or _first_word in ('которые', 'который', 'которой', 'которых', 'которого',
+                                       'если', 'хотя', 'пока', 'когда')
+                    or len(_last_sent_text) < 8  # very short last sentence
+                )
+                if _is_frag and _prev_p >= 30:
+                    cleaned = cleaned[:_prev_p + 1].strip()
+
     # Runtime-guard без потери содержания: если после очистки остались явные
     # префиксы брифа, мягко убираем их, но НЕ заменяем весь текст шаблоном.
     _lower = cleaned.lower()

@@ -6082,6 +6082,7 @@ class AnchorEngine:
                             "нумерованные списки, маркеры (•, -, *), markdown. "
                             "Запрещены канцеляризмы: «возьми на себя:», «нужно поработать над:», «займись:», «поработай над:». "
                             "Запрещены инфинитивы в поручении: не «найти контакты», а «найди контакты»; не «отправить письмо», а «отправь письмо». "
+                            "Имена людей (Артём, Алексей), компаний и продуктов (ASI Biont, GitHub) — всегда с заглавной буквы. "
                             "Только живая речь. Кратко и по делу."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=800)
@@ -6188,6 +6189,8 @@ class AnchorEngine:
                                         logger.debug('[ANCHOR-AUTOPILOT] loop retry: %s', _retry_err)
                             _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
+                            # Убираем болтающий «как —» без существительного: «Biont как — используем» → «Biont — используем»
+                            _coord_text = re.sub(r'\s+как\s+—', ' —', _coord_text, flags=re.IGNORECASE)
                             # Канцеляризмы — заменяем на живые конструкции
                             _coord_text = re.sub(r'\bвозьми на себя:\s*', '', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'\bнужно поработать над:\s*', 'разберись с ', _coord_text, flags=re.IGNORECASE)
@@ -6232,6 +6235,24 @@ class AnchorEngine:
                                     break
                                 _coord_clean_lines.append(_cln_s)
                             _coord_text = ' '.join(_coord_clean_lines).strip()
+                            # ── Оборванные хвосты: последнее «предложение» — предлог или подчинительный союз ──
+                            # Пример: «поддерживать диалог с.» → режем до предыдущей точки
+                            if _coord_text:
+                                _ct_lp = max(_coord_text.rfind('.'), _coord_text.rfind('!'), _coord_text.rfind('?'))
+                                if _ct_lp > 0:
+                                    _ct_pp = max(_coord_text.rfind('.', 0, _ct_lp), _coord_text.rfind('!', 0, _ct_lp), _coord_text.rfind('?', 0, _ct_lp))
+                                    _ct_last = _coord_text[_ct_pp + 1: _ct_lp].strip() if _ct_pp >= 0 else _coord_text[:_ct_lp].strip()
+                                    _ct_lw_list = _ct_last.split()
+                                    _ct_last_word = _ct_lw_list[-1].lower() if _ct_lw_list else ''
+                                    _ct_first_word = _ct_lw_list[0].lower() if _ct_lw_list else ''
+                                    _ct_is_frag = (
+                                        len(_ct_last_word) <= 3  # предлог: «с», «и», «в», «на»
+                                        or _ct_first_word in ('которые', 'который', 'которой', 'которых', 'которого',
+                                                              'если', 'хотя', 'пока', 'когда')
+                                        or len(_ct_last) < 8
+                                    )
+                                    if _ct_is_frag and _ct_pp >= 30:
+                                        _coord_text = _coord_text[:_ct_pp + 1].strip()
                             # Не ограничиваем до 2-3 предложений: сохраняем глубину,
                             # оставляя только защиту от структурных блоков.
 
