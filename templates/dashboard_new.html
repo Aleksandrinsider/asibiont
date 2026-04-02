@@ -5973,26 +5973,6 @@ try:
     print('Sub: ' + d.get('sub', '?'))
 except Exception as e:
     print('Ошибка LinkedIn: ' + str(e))`
-            },
-            vcru: {
-                name: 'VC.ru',
-                fields: [
-                    {k:'VCRU_TOKEN', label:'X-Device-Token от VC.ru', ph:'abc123def456...', t:'text'}
-                ],
-                hint: '<b>Как получить:</b> Откройте <a href="https://vc.ru" target="_blank">vc.ru</a>, войдите → F12 → вкладка Network → обновите страницу → кликните любой запрос к <b>api.vc.ru</b> → в Request Headers скопируйте значение <b>X-Device-Token</b>.',
-                code: `import urllib.request, json, os
-TOKEN = os.environ.get('VCRU_TOKEN', '')
-try:
-    req = urllib.request.Request('https://api.vc.ru/v2.1/subsite/me')
-    req.add_header('X-Device-Token', TOKEN)
-    with urllib.request.urlopen(req, timeout=8) as r:
-        d = json.loads(r.read().decode())
-    user = d.get('result', {})
-    print('VC.ru: ' + (user.get('name') or '?'))
-    print('ID: ' + str(user.get('id', '?')))
-    print('Karma: ' + str(user.get('karma', '?')))
-except Exception as e:
-    print('Ошибка VC.ru: ' + str(e))`
             }
         };
 
@@ -6512,7 +6492,6 @@ except Exception as e:
                             <option value="rss">RSS-лента новостей</option>
                             <option value="telegram_bot">Telegram Bot</option>
                             <option value="vk">ВКонтакте</option>
-                            <option value="vcru">VC.ru (статьи)</option>
                             <option value="wildberries">Wildberries</option>
                             <option value="ozon">Ozon</option>
                             <option value="avito">Авито</option>

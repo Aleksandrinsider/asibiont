@@ -979,7 +979,7 @@ class ContextBuilder:
                         'YANDEX_USER': 'Яндекс Почта', 'MAILRU_USER': 'Mail.ru',
                         'GMAIL_USER': 'Gmail', 'RESEND_API_KEY': 'Resend',
                         'TWITTER_': 'Twitter/X', 'X_API': 'Twitter/X',
-                        'LINKEDIN_': 'LinkedIn', 'VCRU_': 'VC.ru',
+                        'LINKEDIN_': 'LinkedIn',
                         'YOUTUBE_': 'YouTube', 'TWILIO_': 'Twilio',
                     }
                     _agent_lines = []
@@ -1048,7 +1048,7 @@ class ContextBuilder:
                         'start_delegation_campaign': 'аутрич',
                         'publish_to_telegram': 'TG посты', 'publish_to_discord': 'Discord посты',
                         'publish_to_vk': 'VK посты', 'publish_to_twitter': 'Twitter посты',
-                        'publish_to_linkedin': 'LinkedIn посты', 'publish_to_vcru': 'VC.ru статьи',
+                        'publish_to_linkedin': 'LinkedIn посты',
                         'publish_to_notion': 'Notion', 'publish_to_youtube': 'YouTube',
                         'initiate_phone_call': 'звонки',
                     }
@@ -1844,7 +1844,6 @@ class ContextBuilder:
         _has_whatsapp = 'WHATSAPP' in _kup or 'TWILIO' in _kup
         _has_twitter = 'TWITTER' in _kup or 'X_API' in _kup or 'TWEEPY' in _kup
         _has_linkedin = 'LINKEDIN' in _kup
-        _has_vcru = 'VCRU' in _kup
         _has_youtube = 'YOUTUBE' in _kup
         _has_twilio = 'TWILIO' in _kup
         _has_openai = 'OPENAI' in _kup
@@ -1942,10 +1941,6 @@ class ContextBuilder:
              "LinkedIn",
              "публикация профессиональных постов, нетворкинг",
              "агент + LINKEDIN_ACCESS_TOKEN"),
-            (not _has_vcru,
-             "VC.ru",
-             "публикация экспертных статей, продвижение бренда",
-             "агент + VCRU_TOKEN"),
             (not _has_youtube,
              "YouTube",
              "аналитика канала, комментарии, управление контентом",

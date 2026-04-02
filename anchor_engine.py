@@ -2414,7 +2414,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _escalation_block = (
                 f"\nЕСЛИ НЕТ ОТВЕТОВ (холодный outreach не работает) — варианты которые ты ещё не пробовал:\n"
                 + _esc_suggestions
-                + "\n• ℹ️ Хабр и VC.ru — публичного API для постинга нет. Используй для поиска: web_search('site:habr.com ...').\n"
+                + "\n• ℹ️ Хабр и VC.ru — публичного API для постинга нет. Используй для поиска: web_search('site:habr.com ...') или web_search('site:vc.ru ...').\n"
                 "• Reddit/Medium — публикация возможна если агент настроен с python_code-скриптом и API-ключом. Без этого — поиск контактов.\n"
                 "→ Выбери что лучше подходит для ЭТОЙ цели и ЦА.\n"
             )

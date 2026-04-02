@@ -810,31 +810,6 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "publish_to_vcru",
-            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN (X-Device-Token) в настройках агента. Автоматически публикует; при ошибке — возвращает готовый текст.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {
-                        "type": "string",
-                        "description": "Заголовок статьи на VC.ru (до 120 символов)."
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Текст статьи. Поддерживает Markdown. Пиши экспертный, развёрнутый контент."
-                    },
-                    "subsite_id": {
-                        "type": "integer",
-                        "description": "ID подсайта (опционально). 199124=Маркетинг, 199122=Дизайн, 199120=Разработка, 199132=Бизнес."
-                    }
-                },
-                "required": ["title", "content"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "publish_to_notion",
             "description": "📝 Создать страницу в Notion. Требует NOTION_TOKEN и NOTION_DB_ID в настройках агента.",
             "parameters": {
