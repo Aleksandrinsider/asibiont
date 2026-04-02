@@ -11811,6 +11811,39 @@ async def send_outreach_email(
         if _rcpt and _is_generic_email(_rcpt):
             return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
 
+        # ── GUARD: C-suite крупнейших мировых корпораций ──
+        # Холодный outreach на CEO/CTO Fortune 500 вредит репутации домена и бесполезен
+        _FORTUNE500_DOMAINS = {
+            'oracle.com', 'microsoft.com', 'google.com', 'apple.com', 'amazon.com',
+            'meta.com', 'facebook.com', 'berkshirehathaway.com', 'exxonmobil.com',
+            'unh.com', 'cvs.com', 'mckesson.com', 'walmart.com', 'jpmorgan.com',
+            'jpmorganchase.com', 'bofa.com', 'bankofamerica.com', 'wellsfargo.com',
+            'citi.com', 'citigroup.com', 'goldmansachs.com', 'gs.com',
+            'sap.com', 'ibm.com', 'cisco.com', 'intel.com', 'samsung.com',
+            'nvidia.com', 'tesla.com', 'spacex.com', 'samsung.com',
+        }
+        _CSUITE_PREFIXES = (
+            'ceo', 'cto', 'cfo', 'coo', 'cmo', 'chairman', 'president',
+            'larry', 'elon', 'sundar', 'satya', 'tim.cook', 'jensen',
+            'mark.zuckerberg', 'jeff', 'bezos', 'warren', 'buffett',
+        )
+        if _rcpt and '@' in _rcpt:
+            _rcpt_local, _rcpt_domain = _rcpt.rsplit('@', 1)
+            if _rcpt_domain in _FORTUNE500_DOMAINS:
+                return (
+                    f"⛔ {_rcpt} — корпоративный адрес крупнейшей мировой компании ({_rcpt_domain}). "
+                    f"Холодный outreach на адреса Fortune 500 не результативен и вредит репутации домена отправителя. "
+                    f"Целевая аудитория: стартапы, малый/средний бизнес, инди-разработчики, AI-энтузиасты."
+                )
+            if any(_rcpt_local.startswith(pref) for pref in _CSUITE_PREFIXES):
+                # Дополнительно проверим: домен крупной компании или C-suite prefix явный?
+                _csuite_explicit = any(_rcpt_local == pref for pref in ('ceo', 'cto', 'cfo', 'coo', 'cmo', 'chairman'))
+                if _csuite_explicit:
+                    return (
+                        f"⛔ {_rcpt} — похоже на email C-suite руководителя (префикс '{_rcpt_local}'). "
+                        f"Такие адреса обычно заблокированы или не читаются лично. Найди более подходящий контакт."
+                    )
+
         # ── GUARD: плейсхолдеры в теле письма ──
         _body_to_check_oe = (body or '') + ' ' + (subject or '')
         if _body_to_check_oe:
