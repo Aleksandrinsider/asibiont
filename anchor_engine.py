@@ -11553,6 +11553,25 @@ class AnchorEngine:
                         f'{_ag_name}, можешь {_aac_t}?',
                     ])
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
+                # ── POST-PROCESS: INF→IMP в итоговом тексте поручения ──
+                # Ловит случаи когда инфинитив проскочил через fallback-шаблоны
+                _POST_INF_IMP = {
+                    'найти': 'найди', 'проверить': 'проверь', 'отправить': 'отправь',
+                    'создать': 'создай', 'написать': 'напиши', 'собрать': 'собери',
+                    'подготовить': 'подготовь', 'исследовать': 'исследуй',
+                    'поискать': 'поищи', 'сделать': 'сделай',
+                    'проанализировать': 'проанализируй', 'запустить': 'запусти',
+                    'использовать': 'используй', 'опубликовать': 'опубликуй',
+                    'обновить': 'обнови', 'связаться': 'свяжись',
+                }
+                import re as _re_post_inf
+                for _pinf, _pimp in _POST_INF_IMP.items():
+                    _asi_assign_text = _re_post_inf.sub(
+                        rf'(?<=[\s,—:])({_pinf})\b',
+                        _pimp,
+                        _asi_assign_text,
+                        flags=_re_post_inf.IGNORECASE,
+                    )
                 # Сохраняем живое поручение в чат
                 _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)
                 _loop_risk_step = bool(_assignment_health.get('stalled'))
@@ -12507,7 +12526,10 @@ class AnchorEngine:
 
                 try:
                     _skip_step_cap = (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name))
-                    if _is_minor_update and not _skip_step_cap:
+                    # GUARD: не сохраняем пустой текст в чат
+                    if not (_cleaned or '').strip():
+                        logger.info("[COORD] skip empty coordinator_result from %s", _ag_name)
+                    elif _is_minor_update and not _skip_step_cap:
                         # Minor update: сохраняем в чат (Interaction) но НЕ шлём в Telegram
                         _cleaned_chat_m = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
                             _strip_html(_cleaned),

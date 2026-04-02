@@ -1925,9 +1925,9 @@
             if (typeof text === 'string' && text.trim().startsWith('{')) {
                 try {
                     const _parsed = JSON.parse(text);
-                    if (_parsed.__agent && _parsed.text) {
+                    if (_parsed.__agent && ('text' in _parsed)) {
                         if (!agentInfo) agentInfo = _parsed.__agent;
-                        text = _parsed.text;
+                        text = _parsed.text || '(нет текста)';
                         _isAgentMsgWithAgent = true;
                         _toAgentName = _parsed.__to_agent || null;
                         _anchorType = _parsed.__anchor_type || null;
