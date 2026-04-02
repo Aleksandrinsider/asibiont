@@ -9112,6 +9112,49 @@ class AnchorEngine:
             _n_agents = len(_profiles)
             _profiles_str = '\n'.join(_profiles_lines)
 
+            # ── check_emails cooldown: предотвращаем петлю делегирования «проверь почту» ──
+            # Запрашиваем ПЕРЕД cap_rules — чтобы использовать при генерации инструкций агентам.
+            _CE_COOLDOWN_MIN = 90  # минут между последовательными check_emails одному агенту
+            _check_emails_on_cooldown: set = set()  # имена агентов, которым НЕ нужен check_emails
+            _check_emails_cooldown_note = ''
+            try:
+                from models import AgentActivityLog as _AAL_ce_cd
+                _ce_cd_cutoff = datetime.now(timezone.utc) - timedelta(minutes=_CE_COOLDOWN_MIN)
+                for _p_ce_cd in _profiles:
+                    _ag_ce_cd_obj = next((a for a in real_agents if a.name == _p_ce_cd['name']), None)
+                    if not _ag_ce_cd_obj:
+                        continue
+                    _recent_ce_cd = session.query(_AAL_ce_cd).filter(
+                        _AAL_ce_cd.user_id == user.id,
+                        _AAL_ce_cd.ref_id == _ag_ce_cd_obj.id,
+                        _AAL_ce_cd.created_at >= _ce_cd_cutoff,
+                    ).filter(
+                        _AAL_ce_cd.title.ilike('%check%email%') |
+                        _AAL_ce_cd.title.ilike('%входящ%') |
+                        _AAL_ce_cd.content.ilike('%check_emails%') |
+                        _AAL_ce_cd.result.ilike('%imap%') |
+                        _AAL_ce_cd.title.ilike('%проверь почт%'),
+                    ).order_by(_AAL_ce_cd.created_at.desc()).first()
+                    if _recent_ce_cd:
+                        _ago_ce_cd = int((datetime.now(timezone.utc) - (
+                            _recent_ce_cd.created_at.replace(tzinfo=timezone.utc)
+                            if _recent_ce_cd.created_at.tzinfo is None
+                            else _recent_ce_cd.created_at
+                        )).total_seconds() / 60)
+                        _check_emails_on_cooldown.add(_p_ce_cd['name'])
+                        _check_emails_cooldown_note += (
+                            f"⛔ КУЛДАУН check_emails: {_p_ce_cd['name']} проверял входящие "
+                            f"{_ago_ce_cd} мин назад — НЕ назначать снова до истечения {_CE_COOLDOWN_MIN} мин. "
+                            f"Вместо check_emails дай: send_outreach_email новым контактам, "
+                            f"create_post, web_search, find_relevant_contacts_for_task.\n"
+                        )
+                        logger.info(
+                            "[COORD] check_emails cooldown active for %s: %d min ago",
+                            _p_ce_cd['name'], _ago_ce_cd,
+                        )
+            except Exception as _ce_cd_err:
+                logger.debug("[COORD] check_emails cooldown query: %s", _ce_cd_err)
+
             # ── Строгие правила матчинга возможностей агентов (чтобы LLM не назначал бесполезные задачи) ──
             # Используем _classify_agent_caps + _parse_agent_integrations — универсально для любых интеграций.
             _cap_rules_lines = []
@@ -9167,12 +9210,15 @@ class AnchorEngine:
                             f" Если цель задачи — связаться с кем-то, задача должна содержать ВСЮ цепочку, а не только её первый шаг."
                             f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
                             + (f" ❌ НЕ НАЗНАЧАЙ {_p_cr['name']}: {_cant_str} — интеграций нет, задача зависнет." if _cant_str else '')
-                            + f" ⚠️ ЧЕРЕДОВАНИЕ ИНБОКСА: {_p_cr['name']} оснащён IMAP-почтой."
-                            f" В КАЖДОМ цикле или через цикл назначай ему check_emails (чтобы не пропустить ответы контактов)."
-                            f" Алгоритм после check_emails:"
-                            f" 1) Есть ответы (status=replied в email_outreach)? → reply_to_outreach_email(outreach_id=ID)."
-                            f" 2) Нет ответов? → send_follow_up_email тем кто молчит 3+ дня."
-                            f" Если reply_to_outreach_email вернул 'не найдено письмо' — это нормально: никто ещё не ответил, переключайся на follow-up."
+                            + (
+                                f" ⛔ КУЛДАУН ИНБОКСА: {_p_cr['name']} уже проверял входящие недавно — НЕ назначать check_emails."
+                                f" Дай другую задачу: send_outreach_email, create_post, web_search, find_relevant_contacts_for_task."
+                                if _p_cr['name'] in _check_emails_on_cooldown
+                                else
+                                f" 📬 ИНБОКС: {_p_cr['name']} оснащён IMAP. Назначай check_emails не чаще 1 раза в 90 мин."
+                                f" Если письма ждут → check_emails → reply или follow-up."
+                                f" Если check_emails был недавно → сразу дай продуктивную задачу (outreach, поиск контактов, пост)."
+                            )
                         )
                     if 'git' in _cats_cr:
                         _do_not_lines.append(
@@ -10283,13 +10329,15 @@ class AnchorEngine:
                 + _missing_intg_str_c
                 + _intg_advisor_str
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
+                + (_check_emails_cooldown_note if _check_emails_cooldown_note else '')
                 + (
                     f"⚡ ОБЯЗАТЕЛЬНО: Есть {_email_sent} отправленных писем — назначь IMAP-агенту check_emails "
                     f"(проверить ответы: если кто-то ответил → reply_to_outreach_email(outreach_id=...) по ID записи; "
                     f"если нет ответов → send_follow_up_email тем кто молчит >2дн; "
                     f"если reply_to_outreach_email возвращает ошибку 'не найдено' → значит никто ещё не ответил, переходи к follow-up).\n"
                     if _email_sent > 0 and
-                    any('email' in _agent_caps_categories.get(a.name, set()) for a in real_agents)
+                    any('email' in _agent_caps_categories.get(a.name, set()) for a in real_agents) and
+                    not _check_emails_on_cooldown
                     else ''
                 )
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
@@ -10598,6 +10646,33 @@ class AnchorEngine:
 
             if _plan_normalized:
                 _plan = _plan_normalized
+
+            # ── check_emails cooldown post-filter: заменяем check_emails на альтернативу ──
+            # Для агентов, которые уже проверяли почту < _CE_COOLDOWN_MIN мин назад.
+            if _check_emails_on_cooldown:
+                _plan_ce_filtered = []
+                for _pce in _plan:
+                    _ag_pce = (_pce.get('agent') or '').strip()
+                    _tool_pce = (_pce.get('tool') or '').strip().lower()
+                    _task_pce = (_pce.get('task') or '').strip().lower()
+                    _is_check_emails = (
+                        _tool_pce == 'check_emails'
+                        or ('check_email' in _task_pce and 'входящ' in _task_pce)
+                    )
+                    if _ag_pce in _check_emails_on_cooldown and _is_check_emails:
+                        # Заменяем на продуктивную задачу: поиск новых контактов
+                        logger.info(
+                            "[COORD] cooldown post-filter: replaced check_emails for agent %s", _ag_pce,
+                        )
+                        _pce['tool'] = 'find_relevant_contacts_for_task'
+                        _pce['task'] = (
+                            'Найди новых потенциальных пользователей ASI Biont через web_search или GitHub. '
+                            'Сохрани найденные email-адреса через save_email_contact. '
+                            '(Входящая почта была проверена недавно — сейчас важнее расширить базу контактов.)'
+                        )
+                        _pce['reason'] = 'check_emails на кулдауне — заменено на поиск новых контактов'
+                    _plan_ce_filtered.append(_pce)
+                _plan = _plan_ce_filtered
 
             # ── Force-reply: если есть входящие без AI-ответа — добавляем reply в план ──
             # Мягкий пост-фильтр: reply добавляется как первый шаг, но НЕ стирает план координатора
