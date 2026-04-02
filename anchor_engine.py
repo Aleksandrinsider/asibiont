@@ -19629,6 +19629,36 @@ class AnchorEngine:
                     'text': interaction_content,
                     '__anchor_type': _deliver_anchor_type,
                 }, ensure_ascii=False)
+
+            # ── Dedup: если agent_msg от того же агента уже в чате за последние 10мин — skip ──
+            # Это ловит случай: пользователь спросил агента напрямую → agent_msg + якорь agent_delegation
+            if _agent_name and _deliver_anchor_type == 'agent_delegation':
+                try:
+                    _dedup_cutoff = now_utc - timedelta(minutes=10)
+                    _recent_agent_msgs = session.query(Interaction).filter(
+                        Interaction.user_id == user.id,
+                        Interaction.message_type == 'agent_msg',
+                        Interaction.created_at >= _dedup_cutoff,
+                    ).order_by(Interaction.created_at.desc()).limit(5).all()
+                    for _ram in _recent_agent_msgs:
+                        try:
+                            _ram_j = json.loads(_ram.content or '{}')
+                            _ram_agent = (_ram_j.get('__agent', {}).get('name') or '')
+                            if _ram_agent == _agent_name:
+                                logger.info(
+                                    "[ANCHOR] Dedup: skipping agent_delegation proactive for %s — agent_msg already in chat (id=%d)",
+                                    _agent_name, _ram.id,
+                                )
+                                try:
+                                    session.commit()
+                                except Exception:
+                                    pass
+                                return
+                        except Exception:
+                            continue
+                except Exception as _dedup_err:
+                    logger.debug("[ANCHOR] dedup check error: %s", _dedup_err)
+
             interaction = Interaction(
                 user_id=user.id,
                 message_type='proactive',

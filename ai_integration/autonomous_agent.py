@@ -8808,11 +8808,20 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             except Exception as _ae:
                 logger.warning("[DIRECTOR] activity log error: %s", _ae)
 
-            # Якорь delegation создаём ТОЛЬКО для прямых (не-автопилотных) поручений.
+            # Якорь delegation создаём ТОЛЬКО для ASI-инициированных поручений.
             # Автопилот доставляет результат через goal_autopilot_result — якорь дублировал бы.
+            # Прямое обращение пользователя (_is_direct) и вопросы (_is_q) уже отправлены
+            # в чат как agent_msg — якорь создаст дубль-сообщение (proactive).
             _task_lc = (task or '').lower()
             _is_ap_task = any(m in _task_lc for m in ('[автопилот]', 'автопилот', 'autopilot'))
-            if not _is_ap_task:
+            _skip_anchor = _is_ap_task
+            # _is_direct и _is_q доступны через замыкание (определены в _delegate_or_answer до вызова)
+            try:
+                if _is_direct or _is_q:
+                    _skip_anchor = True
+            except NameError:
+                pass  # вызов до определения _is_direct (не должно случиться)
+            if not _skip_anchor:
                 _cooldown = 2.0 if any(
                     w in _task_lc for w in ('анализ', 'исследов', 'отчёт', 'отчет', 'research', 'report', 'strategy', 'стратег')
                 ) else 0.5
