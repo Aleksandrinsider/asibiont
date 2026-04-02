@@ -832,22 +832,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_youtube",
-            "description": "📹 Получить аналитику канала YouTube или оставить комментарий под видео. Требует YOUTUBE_API_KEY и YOUTUBE_CHANNEL_ID.",
+            "description": "📹 Получить аналитику YouTube-канала: подписчики, видео, просмотры. Требует YOUTUBE_API_KEY и YOUTUBE_CHANNEL_ID.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "action": {
                         "type": "string",
-                        "description": "Действие: 'analytics' — получить статистику канала, 'comment' — оставить комментарий.",
-                        "enum": ["analytics", "comment"]
-                    },
-                    "video_id": {
-                        "type": "string",
-                        "description": "ID видео (для action=comment). 11-символьный код из URL."
-                    },
-                    "content": {
-                        "type": "string",
-                        "description": "Текст комментария (для action=comment)."
+                        "description": "Действие: 'analytics' — получить статистику канала.",
+                        "enum": ["analytics"]
                     }
                 },
                 "required": ["action"]

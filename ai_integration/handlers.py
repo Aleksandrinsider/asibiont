@@ -16116,7 +16116,7 @@ async def publish_to_vk(
         url = (
             f"https://api.vk.com/method/wall.post?"
             f"owner_id={vk_owner_id}&message={urllib.parse.quote(content)}"
-            f"&access_token={vk_token}&v=5.131"
+            f"&access_token={vk_token}&v=5.199"
         )
         if image_url:
             url += f"&attachments={urllib.parse.quote(image_url)}"
@@ -16554,30 +16554,8 @@ async def publish_to_youtube(
                 f"Видео: {stats.get('videoCount', '?')}\n"
                 f"Просмотров: {stats.get('viewCount', '?')}"
             )
-        elif action == 'comment':
-            if not video_id or not content:
-                return "Для комментария нужны video_id и content."
-            async with _aiohttp.ClientSession() as http:
-                async with http.post(
-                    f'https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&key={yt_key}',
-                    json={
-                        "snippet": {
-                            "videoId": video_id,
-                            "topLevelComment": {
-                                "snippet": {"textOriginal": content}
-                            }
-                        }
-                    },
-                    headers={'Content-Type': 'application/json'},
-                    timeout=_aiohttp.ClientTimeout(total=15),
-                ) as resp:
-                    if resp.status in (200, 201):
-                        return f"Комментарий опубликован к видео {video_id}"
-                    else:
-                        err = await resp.text()
-                        return f"Ошибка YouTube: {resp.status} — {err[:200]}"
         else:
-            return f"Неизвестное действие: {action}. Используйте 'analytics' или 'comment'."
+            return f"Неизвестное действие: {action}. Используйте 'analytics'."
     except Exception as e:
         logger.error(f"[YOUTUBE] Error: {e}", exc_info=True)
         return f"Ошибка YouTube: {str(e)}"
