@@ -5979,18 +5979,29 @@ except Exception as e:
                 fields: [
                     {k:'VCRU_TOKEN', label:'Токен VC.ru (cookie osnova-remember)', ph:'a1b2c3d4e5f6...', t:'text'}
                 ],
-                hint: 'vc.ru → F12 → Application → Cookies → vc.ru → скопируйте значение <b>osnova-remember</b>.',
-                code: `import urllib.request, json, os
+                hint: 'vc.ru → F12 → Application → Cookies → vc.ru → скопируйте значение <b>osnova-remember</b>. Бот автоматически опубликует статью; если не удастся — вернёт готовый текст.',
+                code: `import urllib.request, json, os, http.cookiejar
 TOKEN = os.environ.get('VCRU_TOKEN', '')
 try:
-    req = urllib.request.Request('https://api.vc.ru/v2.1/subsite/me')
-    req.add_header('Cookie', 'osnova-remember=' + TOKEN)
-    with urllib.request.urlopen(req, timeout=8) as r:
-        d = json.loads(r.read().decode())
+    cj = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+    # set cookie
+    import http.cookies
+    c = http.cookiejar.Cookie(0,'osnova-remember',TOKEN,None,False,'api.vc.ru',False,True,'/',True,False,None,False,None,None,{})
+    cj.set_cookie(c)
+    hdrs = {'User-Agent':'Mozilla/5.0','Origin':'https://vc.ru','Referer':'https://vc.ru/'}
+    # step 1: create session
+    rq = urllib.request.Request('https://api.vc.ru/v2.6/sessions', data=b'', headers=hdrs, method='POST')
+    sr = opener.open(rq, timeout=10)
+    sd = json.loads(sr.read().decode())
+    print('Session:', sd)
+    # step 2: check profile
+    rq2 = urllib.request.Request('https://api.vc.ru/v2.1/subsite/me', headers=hdrs)
+    r2 = opener.open(rq2, timeout=10)
+    d = json.loads(r2.read().decode())
     user = d.get('result', {})
     print('VC.ru: ' + (user.get('name') or '?'))
     print('ID: ' + str(user.get('id', '?')))
-    print('Karma: ' + str(user.get('karma', '?')))
 except Exception as e:
     print('Ошибка VC.ru: ' + str(e))`
             }

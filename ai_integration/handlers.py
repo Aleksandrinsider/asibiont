@@ -16387,7 +16387,7 @@ async def publish_to_vcru(
     session=None,
     close_session: bool = True,
 ):
-    """Публикация статьи на VC.ru через API."""
+    """Публикация статьи на VC.ru (автоматически через session API)."""
     if not session:
         session = Session()
         close_session = True
@@ -16424,50 +16424,85 @@ async def publish_to_vcru(
             )
 
         import aiohttp as _aiohttp
-        import json as _json
 
-        # Build entry blocks (VC.ru Editor API format)
-        blocks = [{"type": "text", "data": {"text": p.strip()}} for p in content.split('\n\n') if p.strip()]
-        if not blocks:
-            blocks = [{"type": "text", "data": {"text": content}}]
-
-        entry_data = {
-            "title": title[:120],
-            "entry": {"blocks": blocks},
+        _browser_hdrs = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+            'Origin': 'https://vc.ru',
+            'Referer': 'https://vc.ru/',
+            'Accept': 'application/json, text/plain, */*',
         }
-        if subsite_id:
-            entry_data["subsite_id"] = subsite_id
 
-        async with _aiohttp.ClientSession() as http:
+        # Step 1: Create session (like browser does on page load)
+        jar = _aiohttp.CookieJar(unsafe=True)
+        async with _aiohttp.ClientSession(cookie_jar=jar) as http:
+            # Set initial cookie
+            jar.update_cookies({'osnova-remember': vc_token}, _aiohttp.URL('https://api.vc.ru/'))
+
+            # Create session first
+            async with http.post(
+                'https://api.vc.ru/v2.6/sessions',
+                headers=_browser_hdrs,
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as sess_resp:
+                _sess_data = await sess_resp.json()
+                logger.info(f"[VCRU] sessions: {sess_resp.status} cookies={list(jar)}")
+
+            # Step 2: Build entry blocks
+            blocks = []
+            for p in content.split('\n\n'):
+                p = p.strip()
+                if p:
+                    blocks.append({"type": "text", "data": {"text": p}})
+            if not blocks:
+                blocks = [{"type": "text", "data": {"text": content}}]
+
+            entry_data = {
+                "title": title[:120],
+                "entry": {"blocks": blocks},
+            }
+            if subsite_id:
+                entry_data["subsite_id"] = subsite_id
+
+            # Step 3: Publish
             async with http.post(
                 'https://api.vc.ru/v2.10/entry/create',
                 json=entry_data,
-                headers={
-                    'Content-Type': 'application/json',
-                    'Cookie': f'osnova-remember={vc_token}',
-                },
+                headers={**_browser_hdrs, 'Content-Type': 'application/json'},
                 timeout=_aiohttp.ClientTimeout(total=20),
             ) as resp:
                 data = await resp.json()
+                logger.info(f"[VCRU] entry/create: {resp.status} data_keys={list(data.keys()) if isinstance(data, dict) else '?'}")
 
-        if resp.status in (200, 201) and data.get('result'):
-            entry_id = data['result'].get('id', '?')
-            entry_url = data['result'].get('url', f'https://vc.ru/{entry_id}')
-            try:
-                from models import AgentActivityLog
-                log = AgentActivityLog(
-                    user_id=user.id, activity_type='post_vcru',
-                    title=title[:80], content=content[:500],
-                    target='VC.ru', status='published',
+            if resp.status in (200, 201) and isinstance(data, dict) and data.get('result'):
+                entry_id = data['result'].get('id', '?')
+                entry_url = data['result'].get('url', f'https://vc.ru/{entry_id}')
+                try:
+                    from models import AgentActivityLog
+                    log = AgentActivityLog(
+                        user_id=user.id, activity_type='post_vcru',
+                        title=title[:80], content=content[:500],
+                        target='VC.ru', status='published',
+                    )
+                    session.add(log)
+                    session.commit()
+                except Exception as _le:
+                    logger.warning(f"[VCRU] log: {_le}")
+                return f"Статья опубликована на VC.ru: {entry_url}"
+            else:
+                err = ''
+                if isinstance(data, dict):
+                    err = data.get('error', {}).get('message') or data.get('message') or ''
+                if not err:
+                    err = str(data)[:300]
+                # Fallback: return prepared text
+                editor_url = f"https://vc.ru/editor/{subsite_id}" if subsite_id else "https://vc.ru/editor"
+                return (
+                    f"Не удалось опубликовать автоматически (VC.ru: {err}).\n\n"
+                    f"Статья готова — опубликуйте вручную:\n"
+                    f"Заголовок: {title}\n\n"
+                    f"{content}\n\n"
+                    f"Редактор: {editor_url}"
                 )
-                session.add(log)
-                session.commit()
-            except Exception as _le:
-                logger.warning(f"[VCRU] log: {_le}")
-            return f"Статья опубликована на VC.ru: {entry_url}"
-        else:
-            err = data.get('error', {}).get('message') or data.get('message') or str(data)[:200]
-            return f"Ошибка VC.ru: {err}"
     except Exception as e:
         logger.error(f"[PUBLISH_VCRU] Error: {e}", exc_info=True)
         return f"Ошибка публикации на VC.ru: {str(e)}"
