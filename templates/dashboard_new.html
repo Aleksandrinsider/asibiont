@@ -5977,13 +5977,14 @@ except Exception as e:
             vcru: {
                 name: 'VC.ru',
                 fields: [
-                    {k:'VCRU_TOKEN', label:'Токен VC.ru (X-Device-Token)', ph:'xxxxxxxxxxxxxxxx', t:'text'}
+                    {k:'VCRU_TOKEN', label:'Токен VC.ru (osnova-remember)', ph:'5944452dd655723f158cf21366f45002', t:'text'}
                 ],
-                hint: 'Как получить: vc.ru → F12 (DevTools) → Network → любой запрос к api.vc.ru → в Request Headers найдите <b>X-Device-Token</b> и скопируйте его значение.',
+                hint: 'Как получить: vc.ru → F12 (DevTools) → вкладка <b>Application</b> → слева <b>Cookies</b> → <b>vc.ru</b> → найдите строку <b>osnova-remember</b> → скопируйте значение из колонки Value.',
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('VCRU_TOKEN', '')
 try:
-    req = urllib.request.Request('https://api.vc.ru/v2.8/me', headers={'X-Device-Token': TOKEN})
+    req = urllib.request.Request('https://api.vc.ru/v2.1/subsite/me')
+    req.add_header('Cookie', 'osnova-remember=' + TOKEN)
     with urllib.request.urlopen(req, timeout=8) as r:
         d = json.loads(r.read().decode())
     user = d.get('result', {})

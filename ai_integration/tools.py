@@ -811,7 +811,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_vcru",
-            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN (X-Device-Token из DevTools → Network) в настройках агента.",
+            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN (cookie osnova-remember) в настройках агента.",
             "parameters": {
                 "type": "object",
                 "properties": {

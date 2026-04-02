@@ -16420,7 +16420,7 @@ async def publish_to_vcru(
                 "VCRU_TOKEN не настроен.\n"
                 "Добавьте в настройках агента (API-ключи):\n"
                 "VCRU_TOKEN=ваш_токен\n"
-                "Получить: vc.ru → F12 → Network → любой запрос к api.vc.ru → заголовок X-Device-Token"
+                "Получить: vc.ru → F12 → Application → Cookies → скопируйте значение osnova-remember"
             )
 
         import aiohttp as _aiohttp
@@ -16438,12 +16438,11 @@ async def publish_to_vcru(
         if subsite_id:
             entry_data["subsite_id"] = subsite_id
 
-        async with _aiohttp.ClientSession() as http:
+        async with _aiohttp.ClientSession(cookies={'osnova-remember': vc_token}) as http:
             async with http.post(
-                'https://api.vc.ru/v2.8/entry/create',
+                'https://api.vc.ru/v2.10/entry/create',
                 json=entry_data,
                 headers={
-                    'X-Device-Token': vc_token,
                     'Content-Type': 'application/json',
                 },
                 timeout=_aiohttp.ClientTimeout(total=20),
