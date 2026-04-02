@@ -12402,6 +12402,7 @@ async def reply_to_outreach_email(
     recipient_email: str = None,
     reply_body: str = None,
     user_id: int = None,
+    sent_by_agent: str = None,
     session=None,
     close_session: bool = True,
 ):
@@ -12448,6 +12449,32 @@ async def reply_to_outreach_email(
 
         if not outreach:
             return " Не найдено письмо для ответа."
+
+        # ── GUARD: проверяем владение email-перепиской (кто отправлял = тот и отвечает) ──
+        _original_agent = (outreach.sent_by_agent or '').strip()
+        _current_agent = (sent_by_agent or '').strip()
+        if _original_agent and _current_agent and _original_agent.lower() != _current_agent.lower():
+            # Проверяем пользовательское правило о продолжении переписки тем же агентом
+            _has_ownership_rule = False
+            try:
+                import json as _j_own
+                _u_mem = (user.memory or '').strip()
+                if _u_mem.startswith('{'):
+                    _mem_j = _j_own.loads(_u_mem)
+                    _rules = _mem_j.get('rules', [])
+                    for _r in _rules:
+                        _rl = str(_r).lower()
+                        if ('от имени' in _rl and 'агент' in _rl) or ('перв' in _rl and 'писал' in _rl):
+                            _has_ownership_rule = True
+                            break
+            except Exception:
+                pass
+            if _has_ownership_rule:
+                return (f"⛔ Это письмо отправлял(а) {_original_agent}. "
+                        f"По правилам пользователя переписку ведёт тот агент, кто первый писал. "
+                        f"Передай задачу {_original_agent} через DELEGATE[{_original_agent}].")
+            else:
+                logger.info(f"[EMAIL_REPLY] agent mismatch: original={_original_agent}, current={_current_agent}")
 
         # ── GUARD: не отвечать отписавшимся контактам ──
         _reply_rcpt = (recipient_email or outreach.recipient_email or '').strip().lower()
@@ -14965,6 +14992,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                     _goc_subj = (_goc.get("subject") or "")[:50]
                     _gm_outreach_ctx = (f"\n⚡ ИСХОДЯЩИЙ OUTREACH (outreach_id={_goc['outreach_id']}): "
                                         f"{_goc_agent} писал(а) этому контакту {_goc_date}, тема: «{_goc_subj}». "
+                                        f"⚠️ Отвечать ДОЛЖЕН(А) {_goc_agent} — переписку ведёт тот агент, кто начал диалог. "
                                         f"Используй reply_to_outreach_email(outreach_id={_goc['outreach_id']})")
                 results.append(
                     f"От: {_known_badge}{from_hdr}\n"
@@ -15122,6 +15150,7 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                     _ioc_subj = (_ioc.get("subject") or "")[:50]
                     _im_outreach_ctx = (f"\n⚡ ИСХОДЯЩИЙ OUTREACH (outreach_id={_ioc['outreach_id']}): "
                                         f"{_ioc_agent} писал(а) этому контакту {_ioc_date}, тема: «{_ioc_subj}». "
+                                        f"⚠️ Отвечать ДОЛЖЕН(А) {_ioc_agent} — переписку ведёт тот агент, кто начал диалог. "
                                         f"Используй reply_to_outreach_email(outreach_id={_ioc['outreach_id']})")
                 results.append(
                     f"От: {_known_badge_imap}{from_addr}\n"

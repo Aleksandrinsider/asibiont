@@ -9196,7 +9196,8 @@ class AnchorEngine:
                 _pending_replies_str = (
                     "\n🔴 ПРИОРИТЕТ — ОТВЕТИТЬ НА ВХОДЯЩИЕ ПИСЬМА:\n"
                     "⚠️ ПРАВИЛА ОТВЕТА: (1) Отвечай на КОНКРЕТНЫЙ вопрос контакта. "
-                    "(2) Используй ЯЗЫК контакта. (3) НЕ отправляй стандартное outreach-письмо — только reply_to_outreach_email.\n"
+                    "(2) Используй ЯЗЫК контакта. (3) НЕ отправляй стандартное outreach-письмо — только reply_to_outreach_email. "
+                    "(4) Переписку ведёт ТОТ агент, кто первый писал — не передавай чужую переписку другому агенту.\n"
                     + '\n'.join(_pr_lines)
                     + "\n→ Email-агент: рекомендуется ответить через reply_to_outreach_email — это живые люди, ответ = реальный прогресс!\n"
                     + ("→ Если reply_text='[текст не получен]' → сначала вызови check_emails чтобы получить текст!\n"
@@ -18498,12 +18499,15 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: ai_result={(ai_result or '')[:80]!r}, _reply_body_len={len(_reply_body)}")
 
                 _send_result = ''
+                # Определяем кто отправлял исходное письмо (для guard проверки владения)
+                _eo_sent_by = getattr(_eo_check, 'sent_by_agent', None) or '' if _eo_check else ''
                 if _reply_body:
                     try:
                         _send_result = await reply_to_outreach_email(
                             outreach_id=outreach_id,
                             reply_body=_reply_body,
                             user_id=user.telegram_id,
+                            sent_by_agent=_eo_sent_by or None,
                             session=session,
                             close_session=False,
                         )
@@ -18526,6 +18530,7 @@ class AnchorEngine:
                                     outreach_id=outreach_id,
                                     reply_body=_reply_body,
                                     user_id=user.telegram_id,
+                                    sent_by_agent=_eo_sent_by or None,
                                     session=session,
                                     close_session=False,
                                 )

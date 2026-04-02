@@ -2041,7 +2041,7 @@ class HybridAutonomousAgent:
                     params['sender_name'] = _agent['name']
                     logger.info(f"[FIX_PARAMS] send_email: set sender_name='{_agent['name']}' from active agent")
 
-        elif tool_name in ('send_outreach_email', 'negotiate_by_email', 'send_follow_up_email'):
+        elif tool_name in ('send_outreach_email', 'negotiate_by_email', 'send_follow_up_email', 'reply_to_outreach_email'):
             # AI путает send_email (с sender_name) с send_outreach_email (без него)
             # Просто убираем неправильный параметр; у universal stripping нет этого в белом списке
             params.pop('sender_name', None)
@@ -6118,6 +6118,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "ЗАПРЕЩЕНО в теме: 'Testing', 'тест', 'тестирование', 'AI employee', 'платформа', 'opportunity', "
             "названия кампаний. Хорошо: конкретный проект/достижение получателя + точка пересечения.\n"
             "  • check_emails → reply_to_outreach_email → update_goal_progress\n"
+            "    ⚠️ ВЛАДЕНИЕ ПЕРЕПИСКОЙ: отвечать на email ДОЛЖЕН тот агент, который отправлял исходное письмо.\n"
+            "    Если check_emails показал «sent_by_agent=Кристина» — reply делает Кристина, не Марк.\n"
+            "    Если ты НЕ тот агент — DELEGATE[нужный агент]: ответь на письмо outreach_id=... reply_body=...\n"
             "  • research_topic (тренд) → create_post → publish_to_telegram → update_goal_progress\n"
             "  • run_agent_action (GitHub/RSS) → save_email_contact + send_outreach_email ИЛИ create_post\n"
             "  ОБУЧЕНИЕ/РАЗВИТИЕ:\n"
@@ -6324,7 +6327,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Генерировать email из имени человека = ОШИБКА.\n"
         "Если send_email/send_outreach_email вернул ошибку 'фейковый или generic email' — "
         "найди реальный адрес через web_search. Placeholder (mark@example.com, test@, name@company.com) "
-        "заблокированы системой. Пропусти контакт, если реальный email найти не удалось.\n\n"
+        "заблокированы системой. Пропусти контакт, если реальный email найти не удалось.\n"
+        "⚠️ ВЛАДЕНИЕ EMAIL-ПЕРЕПИСКОЙ: reply_to_outreach_email делает ТОТ агент, кто отправлял исходное письмо.\n"
+        "Если check_emails показал sent_by_agent=Кристина → отвечает Кристина. Не бери чужую переписку.\n\n"
 
         + (f"ТВОИ ИНТЕГРАЦИИ (активированы и готовы к использованию):\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "")
         + (_intg_action_hint.strip() + "\n\n" if _intg_action_hint.strip() else "")
