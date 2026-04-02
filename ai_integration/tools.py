@@ -811,7 +811,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_vcru",
-            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN (cookie osnova-remember) в настройках агента. Если автопубликация не сработает — вернёт готовый текст со ссылкой на редактор.",
+            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN (X-Device-Token) в настройках агента. Автоматически публикует; при ошибке — возвращает готовый текст.",
             "parameters": {
                 "type": "object",
                 "properties": {

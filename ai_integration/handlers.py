@@ -16387,7 +16387,7 @@ async def publish_to_vcru(
     session=None,
     close_session: bool = True,
 ):
-    """Публикация статьи на VC.ru (автоматически через session API)."""
+    """Публикация статьи на VC.ru через X-Device-Token (Osnova API)."""
     if not session:
         session = Session()
         close_session = True
@@ -16419,35 +16419,38 @@ async def publish_to_vcru(
             return (
                 "VCRU_TOKEN не настроен.\n"
                 "Добавьте в настройках агента (API-ключи):\n"
-                "VCRU_TOKEN=ваш_токен\n"
-                "Получить: vc.ru → F12 → Application → Cookies → скопируйте значение osnova-remember"
+                "VCRU_TOKEN=ваш_токен\n\n"
+                "Как получить:\n"
+                "1. Откройте vc.ru, войдите в аккаунт\n"
+                "2. F12 → Network → обновите страницу\n"
+                "3. Найдите любой запрос к api.vc.ru\n"
+                "4. В Request Headers скопируйте значение X-Device-Token"
             )
 
         import aiohttp as _aiohttp
 
-        _browser_hdrs = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-            'Origin': 'https://vc.ru',
-            'Referer': 'https://vc.ru/',
-            'Accept': 'application/json, text/plain, */*',
+        _api_hdrs = {
+            'X-Device-Token': vc_token,
+            'Accept': 'application/json',
         }
 
-        # Step 1: Create session (like browser does on page load)
-        jar = _aiohttp.CookieJar(unsafe=True)
-        async with _aiohttp.ClientSession(cookie_jar=jar) as http:
-            # Set initial cookie
-            jar.update_cookies({'osnova-remember': vc_token}, _aiohttp.URL('https://api.vc.ru/'))
+        async with _aiohttp.ClientSession() as http:
+            # Verify token
+            async with http.get(
+                'https://api.vc.ru/v2.1/subsite/me',
+                headers=_api_hdrs,
+                timeout=_aiohttp.ClientTimeout(total=10),
+            ) as check:
+                if check.status != 200:
+                    return (
+                        "Токен VC.ru невалиден или истёк.\n"
+                        "Обновите VCRU_TOKEN:\n"
+                        "vc.ru → F12 → Network → любой запрос к api.vc.ru → заголовок X-Device-Token"
+                    )
+                me = await check.json()
+                logger.info(f"[VCRU] auth ok: {me.get('result', {}).get('name', '?')}")
 
-            # Create session first
-            async with http.post(
-                'https://api.vc.ru/v2.6/sessions',
-                headers=_browser_hdrs,
-                timeout=_aiohttp.ClientTimeout(total=15),
-            ) as sess_resp:
-                _sess_data = await sess_resp.json()
-                logger.info(f"[VCRU] sessions: {sess_resp.status} cookies={list(jar)}")
-
-            # Step 2: Build entry blocks
+            # Build entry blocks (Editor.js format)
             blocks = []
             for p in content.split('\n\n'):
                 p = p.strip()
@@ -16463,15 +16466,15 @@ async def publish_to_vcru(
             if subsite_id:
                 entry_data["subsite_id"] = subsite_id
 
-            # Step 3: Publish
+            # Publish
             async with http.post(
                 'https://api.vc.ru/v2.10/entry/create',
                 json=entry_data,
-                headers={**_browser_hdrs, 'Content-Type': 'application/json'},
+                headers={**_api_hdrs, 'Content-Type': 'application/json'},
                 timeout=_aiohttp.ClientTimeout(total=20),
             ) as resp:
                 data = await resp.json()
-                logger.info(f"[VCRU] entry/create: {resp.status} data_keys={list(data.keys()) if isinstance(data, dict) else '?'}")
+                logger.info(f"[VCRU] entry/create: {resp.status}")
 
             if resp.status in (200, 201) and isinstance(data, dict) and data.get('result'):
                 entry_id = data['result'].get('id', '?')
@@ -16494,10 +16497,9 @@ async def publish_to_vcru(
                     err = data.get('error', {}).get('message') or data.get('message') or ''
                 if not err:
                     err = str(data)[:300]
-                # Fallback: return prepared text
                 editor_url = f"https://vc.ru/editor/{subsite_id}" if subsite_id else "https://vc.ru/editor"
                 return (
-                    f"Не удалось опубликовать автоматически (VC.ru: {err}).\n\n"
+                    f"Не удалось опубликовать (VC.ru: {err}).\n\n"
                     f"Статья готова — опубликуйте вручную:\n"
                     f"Заголовок: {title}\n\n"
                     f"{content}\n\n"
