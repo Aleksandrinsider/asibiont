@@ -14690,6 +14690,8 @@ class AnchorEngine:
                     if _needs_upward_correction or _needs_cap_correction:
                         _new_mc = max(float(_replied_count), _cur_mc) if not _needs_cap_correction else float(_replied_count)
                         _safe_pct = min(95, int(_new_mc * 100 / _mt_au)) if _mt_au else 0
+                        if _new_mc > 0 and _safe_pct == 0:
+                            _safe_pct = 1
                         _g_au.metric_current = _new_mc
                         _g_au.progress_percentage = _safe_pct
                         try:

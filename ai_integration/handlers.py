@@ -4738,6 +4738,8 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                         logger.debug("suppressed: %s", _e)
                 matched.metric_current = mc
                 pct = int(mc / matched.metric_target * 100)
+                if mc > 0 and pct == 0:
+                    pct = 1  # показываем хотя бы 1% при наличии прогресса
                 pct = max(0, min(100, pct))
                 matched.progress_percentage = pct
                 changes.append(f"метрика: {int(mc)}/{int(matched.metric_target)} {matched.metric_unit or ''} ({pct}%)")

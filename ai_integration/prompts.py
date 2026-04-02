@@ -346,6 +346,29 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
     if task_section:
         _dyn_parts.append(task_section.strip())
 
+    # ── Список активных агентов для delegate_task ──
+    if user_id_param:
+        try:
+            from .user_agents import get_user_active_agents, load_agent_personality
+            _agent_ids = get_user_active_agents(user_id_param)
+            if _agent_ids:
+                _lines = []
+                for _aid in _agent_ids[:5]:
+                    _ad = load_agent_personality(_aid)
+                    if _ad:
+                        _desc = _ad.get('job_title') or ''
+                        _svc = _ad.get('service_label') or ''
+                        _extra = f" ({_svc})" if _svc else ''
+                        _lines.append(f"• {_ad['name']}: {_desc}{_extra}" if _desc else f"• {_ad['name']}{_extra}")
+                if _lines:
+                    if lang == 'en':
+                        _header = "ACTIVE AGENTS (use delegate_task to assign):"
+                    else:
+                        _header = "АКТИВНЫЕ АГЕНТЫ (delegate_task чтобы поручить):"
+                    _dyn_parts.append(_header + '\n' + '\n'.join(_lines))
+        except Exception:
+            pass
+
     # Напоминание о формате — в конец dynamic_context (не кешируется → всегда видно AI)
     if lang == 'en':
         _dyn_parts.append(

@@ -127,6 +127,7 @@ MESSAGE_CACHE_MAX_SIZE = 5000  # Максимум записей
 # Per-user processing lock — prevents duplicate responses
 # when Telegram retries webhook or sends duplicate updates
 _user_processing_locks: dict[int, asyncio.Lock] = {}
+_user_pending_messages: dict[int, tuple] = {}  # user_id → (text, message, state) — очередь из 1
 _USER_LOCKS_MAX_SIZE = 2000  # Максимум локов
 
 def _get_user_lock(user_id: int) -> asyncio.Lock:
@@ -919,13 +920,22 @@ async def process_text_message(user_id, text, message, state, source='message'):
     message_cache[message_cache_key] = current_time
     logger.info(f"[DEDUP] Message registered: msg_id={message_id}, user={user_id}, cache_size={len(message_cache)}")
 
-    # Per-user lock — если уже обрабатываем сообщение от этого юзера, пропускаем
+    # Per-user lock — если уже обрабатываем сообщение от этого юзера,
+    # сохраняем последнее как pending (обработается после текущего)
     user_lock = _get_user_lock(user_id)
     if user_lock.locked():
-        logger.info(f"[DEDUP] User {user_id} already processing, skipping duplicate")
+        _user_pending_messages[user_id] = (text, message, state)
+        logger.info(f"[DEDUP] User {user_id} already processing, queued pending message")
         return
 
     await _process_text_message_inner(user_id, text, message, state, user_lock)
+
+    # Обработать pending-сообщение если есть
+    pending = _user_pending_messages.pop(user_id, None)
+    if pending and not user_lock.locked():
+        p_text, p_message, p_state = pending
+        logger.info(f"[DEDUP] Processing pending message for user {user_id}")
+        await _process_text_message_inner(user_id, p_text, p_message, p_state, user_lock)
 
 
 async def _process_text_message_inner(user_id, text, message, state, user_lock):
