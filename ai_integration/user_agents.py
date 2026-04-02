@@ -44,7 +44,14 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
         # Detect which external service is connected by env key names
         service_label = ''
         if agent.user_api_keys:
-            k = agent.user_api_keys.upper()
+            _raw_keys = agent.user_api_keys
+            if _raw_keys.startswith(('enc:', 'obf:')):
+                try:
+                    from config import decrypt_token as _dt
+                    _raw_keys = _dt(_raw_keys)
+                except Exception:
+                    pass
+            k = _raw_keys.upper()
             if 'GMAIL_USER' in k:          service_label = 'Gmail'
             elif 'RESEND_API_KEY' in k:    service_label = 'Resend'
             elif 'SLACK_TOKEN' in k:       service_label = 'Slack'
@@ -66,6 +73,7 @@ def load_agent_personality(agent_id: int, session=None) -> Optional[dict]:
             elif 'RSS_URL' in k:           service_label = 'RSS'
             elif 'WEATHER_API_KEY' in k:   service_label = 'OpenWeatherMap'
             elif 'COINGECKO' in k:         service_label = 'CoinGecko'
+            elif 'YANDEX_METRIKA' in k:    service_label = 'Яндекс.Метрика'
             elif 'YANDEX_USER' in k:       service_label = 'Яндекс Почта'
             elif 'MAIL_USER' in k:         service_label = 'Mail.ru'
             elif 'API_URL' in k:           service_label = 'HTTP API'

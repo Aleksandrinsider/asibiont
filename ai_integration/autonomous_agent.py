@@ -5030,6 +5030,14 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
     """
     found: set = set()
 
+    # Расшифровываем user_api_keys если зашифрован (Fernet/obf)
+    if (user_api_keys or '').startswith(('enc:', 'obf:')):
+        try:
+            from config import decrypt_token as _dt
+            user_api_keys = _dt(user_api_keys)
+        except Exception:
+            pass
+
     # 1. Из user_api_keys — смотрим имена ключей
     for line in (user_api_keys or '').splitlines():
         line = line.strip()
@@ -5060,7 +5068,7 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
     code_lc = (python_code or '').lower()
     _code_hints = {
         'imaplib': 'IMAP почта', 'smtplib': 'SMTP почта',
-        'gmail': 'Gmail (почта)', 'yandex': 'Яндекс Почта',
+        'gmail': 'Gmail (почта)', 'imap.yandex': 'Яндекс Почта', 'smtp.yandex': 'Яндекс Почта',
         'mail.ru': 'Mail.ru почта',
         'ozon': 'Ozon (маркетплейс)', 'wildberries': 'Wildberries',
         'amocrm': 'AmoCRM', 'bitrix': 'Битрикс24',
@@ -5068,7 +5076,8 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
         'binance': 'Binance (крипта)', 'bybit': 'Bybit (крипта)',
         'avito': 'Авито', 'avito.ru': 'Авито',
         'yandex.direct': 'Яндекс.Директ', 'moysklad': 'МойСклад',
-        'yandex.market': 'Яндекс.Маркет', 'linkedin': 'LinkedIn',
+        'yandex.market': 'Яндекс.Маркет', 'yandex_metrika': 'Яндекс.Метрика',
+        'api-metrika.yandex': 'Яндекс.Метрика', 'linkedin': 'LinkedIn',
         'airtable': 'Airtable', 'gspread': 'Google Sheets',
         'google.oauth': 'Google API', 'googleapiclient': 'Google Sheets',
         'feedparser': 'RSS-лента', 'rss': 'RSS-лента новостей',
