@@ -777,7 +777,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_twitter",
-            "description": "📢 Опубликовать твит в Twitter/X. Требует TWITTER_BEARER_TOKEN и TWITTER_ACCESS_TOKEN / TWITTER_ACCESS_SECRET / TWITTER_API_KEY / TWITTER_API_SECRET в настройках агента.",
+            "description": "📢 Опубликовать твит в Twitter/X. Требует TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET (OAuth 1.0a) в настройках агента.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -811,7 +811,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_vcru",
-            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN в настройках агента. Поддерживает заголовок и текст статьи.",
+            "description": "📢 Опубликовать статью на VC.ru. Требует VCRU_TOKEN (osnova-device-token из cookie браузера) в настройках агента.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -857,7 +857,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "publish_to_youtube",
-            "description": "📹 Обновить описание/заголовок видео на YouTube или получить аналитику канала. Требует YOUTUBE_API_KEY и YOUTUBE_CHANNEL_ID.",
+            "description": "📹 Получить аналитику канала YouTube или оставить комментарий под видео. Требует YOUTUBE_API_KEY и YOUTUBE_CHANNEL_ID.",
             "parameters": {
                 "type": "object",
                 "properties": {

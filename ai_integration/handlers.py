@@ -16420,7 +16420,7 @@ async def publish_to_vcru(
                 "VCRU_TOKEN не настроен.\n"
                 "Добавьте в настройках агента (API-ключи):\n"
                 "VCRU_TOKEN=ваш_токен\n"
-                "Получить: vc.ru → Настройки → API токен"
+                "Получить: vc.ru → F12 (DevTools) → Application → Cookies → osnova-device-token"
             )
 
         import aiohttp as _aiohttp

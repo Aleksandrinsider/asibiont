@@ -5940,25 +5940,28 @@ else:
                     {k:'TWITTER_ACCESS_TOKEN', label:'Access Token', ph:'xxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
                     {k:'TWITTER_ACCESS_SECRET', label:'Access Token Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'}
                 ],
-                hint: 'developer.twitter.com → Projects & Apps → Keys and Tokens. Нужен Elevated access для публикации.',
-                code: `import urllib.request, json, os
-TOKEN = os.environ.get('TWITTER_ACCESS_TOKEN', '')
-try:
-    req = urllib.request.Request('https://api.twitter.com/2/users/me', headers={'Authorization': 'Bearer ' + TOKEN})
-    with urllib.request.urlopen(req, timeout=8) as r:
-        d = json.loads(r.read().decode())
-    user = d.get('data', {})
-    print('Twitter: @' + user.get('username', '?'))
-    print('Имя: ' + user.get('name', '?'))
-except Exception as e:
-    print('Ошибка Twitter: ' + str(e))`
+                hint: 'developer.twitter.com → Dashboard → Project → App → Keys and tokens → Generate. Нужны все 4 ключа (OAuth 1.0a): API Key, API Secret, Access Token, Access Token Secret. Для публикации требуется уровень доступа Free с правами Read and Write.',
+                code: `import os
+keys = ['TWITTER_API_KEY', 'TWITTER_API_SECRET', 'TWITTER_ACCESS_TOKEN', 'TWITTER_ACCESS_SECRET']
+ok = True
+for k in keys:
+    v = os.environ.get(k, '')
+    if v:
+        print(k + ' = ' + v[:6] + '...' + v[-4:])
+    else:
+        print(k + ' = НЕ ЗАДАН')
+        ok = False
+if ok:
+    print('\\nВсе 4 ключа OAuth 1.0a заданы — публикация твитов готова.')
+else:
+    print('\\nЗаполните все 4 ключа: developer.twitter.com → Dashboard → Keys and tokens')`
             },
             linkedin: {
                 name: 'LinkedIn',
                 fields: [
                     {k:'LINKEDIN_ACCESS_TOKEN', label:'Access Token (OAuth 2.0)', ph:'AQVxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'linkedin.com/developers → Create App → Auth → OAuth 2.0 → Generate token. Нужны scopes: w_member_social, r_liteprofile.',
+                hint: 'linkedin.com/developers → Create App → Auth → OAuth 2.0 settings → Generate token. Scopes: openid, profile, w_member_social. Токен действует 60 дней.',
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('LINKEDIN_ACCESS_TOKEN', '')
 try:
@@ -5974,9 +5977,9 @@ except Exception as e:
             vcru: {
                 name: 'VC.ru',
                 fields: [
-                    {k:'VCRU_TOKEN', label:'API токен VC.ru', ph:'xxxxxxxxxxxxxxxx', t:'text'}
+                    {k:'VCRU_TOKEN', label:'Device-токен VC.ru', ph:'xxxxxxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'vc.ru → Настройки профиля → API-токен. Токен используется для публикации статей через Editor API.',
+                hint: 'Как получить токен: войдите на vc.ru → F12 (DevTools) → Application → Cookies → скопируйте значение <b>osnova-device-token</b>. Этот токен используется для публикации статей.',
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('VCRU_TOKEN', '')
 try:
