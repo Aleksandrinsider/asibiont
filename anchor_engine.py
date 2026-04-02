@@ -1096,6 +1096,22 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
     return '\n'.join(lines) + '\n'
 
 
+def _smart_trunc(text: str, limit: int = 200) -> str:
+    """Sentence-aware truncation: обрезает на границе предложения, не посреди слова."""
+    if not text or len(text) <= limit:
+        return text or ''
+    # Ищем последнюю точку/!/? в пределах лимита
+    _chunk = text[:limit]
+    for _sep in ('.', '!', '?', '»', ')'):
+        _pos = _chunk.rfind(_sep)
+        if _pos > limit // 3:  # минимум треть текста сохраняем
+            return _chunk[:_pos + 1]
+    # Нет конца предложения — обрезаем по последнему пробелу
+    _sp = _chunk.rfind(' ')
+    if _sp > limit // 3:
+        return _chunk[:_sp] + '…'
+    return _chunk + '…'
+
 
 def _build_recent_suggestion_guard(agent_history: list | None = None,
                                    team_history: dict | None = None) -> str:
@@ -5840,6 +5856,31 @@ class AnchorEngine:
                         # Суть задания — передаём реальный текст из координатора, 
                         # не hardcoded шаблоны (те не учитывали интеграции агента)
                         _task_hint_human = _brief_task[:80] if _brief_task else 'займись активными целями'
+                        # ── Последний ответ конкретного агента — координатор ВИДИТ результат ──
+                        _last_agent_reply_c = ''
+                        try:
+                            _lar_rows = session.query(Interaction).filter(
+                                Interaction.user_id == user.id,
+                                Interaction.message_type.in_(['proactive', 'agent_msg']),
+                                Interaction.created_at >= _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=12),
+                            ).order_by(Interaction.created_at.desc()).limit(30).all()
+                            for _lar in _lar_rows:
+                                try:
+                                    _lar_d = json.loads(_lar.content or '{}')
+                                    if _lar_d.get('__agent', {}).get('name', '') == _chosen_name:
+                                        _lar_txt = (_lar_d.get('text', '') or '').strip()[:500]
+                                        if _lar_txt and len(_lar_txt) > 20:
+                                            _lar_tools = _lar_d.get('__tools_used', [])
+                                            _lar_ts = _lar.created_at.strftime('%H:%M') if _lar.created_at else ''
+                                            _last_agent_reply_c = (
+                                                f"[{_lar_ts}] {_chosen_name}: {_lar_txt}"
+                                                + (f" [инструменты: {', '.join(_lar_tools[:4])}]" if _lar_tools else '')
+                                            )
+                                            break
+                                except Exception:
+                                    pass
+                        except Exception as _lar_err:
+                            logger.debug('[ANCHOR-AUTOPILOT] last agent reply: %s', _lar_err)
                         # ── Контекст предыдущего цикла: что сделали агенты недавно ──
                         _last_cycle_ctx_c = ''
                         _loop_channel_hint_c = ''
@@ -6027,6 +6068,10 @@ class AnchorEngine:
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Результаты команды за последний цикл:\n{_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
+                            + (f"\n💬 ПОСЛЕДНИЙ ОТВЕТ {_chosen_name.upper()} (прочитай внимательно — это реальный результат):\n{_last_agent_reply_c}\n"
+                               f"→ Отталкивайся от этого: если агент сообщил о проблеме или результате — твоё новое поручение должно учитывать ЭТО.\n"
+                               f"   Если домен не работает — не присылай тот же адрес. Если поиск дал 0 результатов — смени стратегию.\n"
+                               if _last_agent_reply_c else '')
                             + (
                                 f"\n📋 ЧТО ТЫ УЖЕ ПОРУЧАЛ {_chosen_name.upper()} (последние {len(_my_assign_texts)} задания, от нового к старому):\n"
                                 f"{_my_recent_assigns_ctx}\n"
@@ -6414,7 +6459,7 @@ class AnchorEngine:
                     _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
                     # Приоритет: координаторское поручение (_coord_text) > task_hint > цель
                     if _coord_text and len(_coord_text) > 15 and _coord_text != f"{agent_name}, займись текущими задачами.":
-                        _ap_task_text = _coord_text[:200]
+                        _ap_task_text = _smart_trunc(_coord_text, 200)
                     elif _task_hint_human and _task_hint_human != 'займись активными целями':
                         _goal_prefix = _gl_titles_s[0][:40] if _gl_titles_s else ''
                         _ap_task_text = f"{_goal_prefix}: {_task_hint_human}" if _goal_prefix else _task_hint_human
@@ -6477,7 +6522,7 @@ class AnchorEngine:
                             _ack_role = (agent_data.get('job_title') or agent_data.get('specialization') or 'специалист')[:60]
                             _ack_prompt = (
                                 f"Ты — {_chosen_name}, {_ack_role}. "
-                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_coord_text[:200]}».\n"
+                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_smart_trunc(_coord_text, 200)}».\n"
                                 f"Напиши 1-2 предложения — ОТВЕТ в чате, как живой коллега.\n"
                                 f"Стиль: неформальный рабочий чат между коллегами. Ты — реальный человек, не бот.\n"
                                 f"От первого лица, {'по-женски' if _is_ack_fem else 'по-мужски'}. С характером, живо.\n"
@@ -9344,7 +9389,29 @@ class AnchorEngine:
                     _AAL_fail.result == 'timeout/process_restart',
                     _AAL_fail.created_at >= _fail_cutoff,
                 ).order_by(_AAL_fail.created_at.desc()).limit(8).all()
-                if _failed_tasks or _aal_timeouts:
+                # Completed tasks with error indicators in result — agent reported a problem
+                _ERROR_INDICATORS = (
+                    'mx', 'bounce', 'не принимает', 'не доставлено', 'ошибка', 'не удалось',
+                    'отказ', 'заблокирован', 'недоступен', 'failed', 'error', 'timeout',
+                    'не найден', '0 результат', 'нет результат', 'пусто',
+                )
+                _aal_errors = []
+                try:
+                    _aal_completed = session.query(_AAL_fail).filter(
+                        _AAL_fail.user_id == user.id,
+                        _AAL_fail.activity_type == 'agent_task',
+                        _AAL_fail.status == 'completed',
+                        _AAL_fail.created_at >= _fail_cutoff,
+                    ).order_by(_AAL_fail.created_at.desc()).limit(20).all()
+                    for _ac in _aal_completed:
+                        _ac_res = ((_ac.result or '') + ' ' + (_ac.content or '')).lower()
+                        if any(ei in _ac_res for ei in _ERROR_INDICATORS):
+                            _aal_errors.append(_ac)
+                            if len(_aal_errors) >= 6:
+                                break
+                except Exception:
+                    pass
+                if _failed_tasks or _aal_timeouts or _aal_errors:
                     _ft_lines = ['\n📊 НЕУДАЧНЫЕ/ПРЕРВАННЫЕ ЗАДАЧИ за 24ч (учитывай при планировании — попробуй другой подход):']
                     for _ft in _failed_tasks:
                         _reason = (getattr(_ft, 'completion_notes', '') or '').strip()
@@ -9354,8 +9421,12 @@ class AnchorEngine:
                         _title_low = (_to.title or '').lower()
                         _ag_to = next((p['name'] for p in _profiles if p['name'].lower() in _title_low), '?')
                         _ft_lines.append(f'  ⛔ ТАЙМАУТ ({_ag_to}): {(_to.title or "")[:80]} — НЕ давать снова, агент не справляется с этим скриптом')
-                    _ft_lines.append('  → ЖЁСТКОЕ ПРАВИЛО: не создавай задачи с теми же ключевыми словами/площадками что в списке выше.')
-                    _ft_lines.append('  → Рекомендация: замени agent_task на прямой инструмент (web_search/find_relevant_contacts_for_task) или смени подход.')
+                    for _ae in _aal_errors:
+                        _ae_title_low = (_ae.title or '').lower()
+                        _ae_agent = next((p['name'] for p in _profiles if p['name'].lower() in _ae_title_low), '?')
+                        _ae_result_short = (_ae.result or '')[:120].strip()
+                        _ft_lines.append(f'  ⚠️ ПРОБЛЕМА ({_ae_agent}): {(_ae.title or "")[:60]} → {_ae_result_short}')
+                    _ft_lines.append('  → Учти эти результаты: не повторяй провалившиеся подходы, смени стратегию или адресата.')
                     _failed_tasks_str = '\n'.join(_ft_lines) + '\n'
             except Exception as _ft_err:
                 logger.debug('[COORD] failed tasks query: %s', _ft_err)
