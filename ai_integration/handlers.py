@@ -16438,12 +16438,13 @@ async def publish_to_vcru(
         if subsite_id:
             entry_data["subsite_id"] = subsite_id
 
-        async with _aiohttp.ClientSession(cookies={'osnova-remember': vc_token}) as http:
+        async with _aiohttp.ClientSession() as http:
             async with http.post(
                 'https://api.vc.ru/v2.10/entry/create',
                 json=entry_data,
                 headers={
                     'Content-Type': 'application/json',
+                    'Cookie': f'osnova-remember={vc_token}',
                 },
                 timeout=_aiohttp.ClientTimeout(total=20),
             ) as resp:

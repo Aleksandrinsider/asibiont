@@ -1940,9 +1940,9 @@
             // coordinator_summary, asi_director_review, autopilot_escalation — ПОКАЗЫВАЕМ
             // Это создаёт ощущение живого общения агентов в чате
             if (_anchorType === 'asi_self_analysis') return;
-            // Директивы директора (agent_msg без __agent): показываем с именем "Директор"
+            // Директивы ASI Biont (agent_msg без __agent): показываем с именем "ASI Biont"
             if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
-                agentInfo = { name: 'Директор', avatar_url: '' };
+                agentInfo = { name: 'ASI Biont', avatar_url: '' };
             }
             
             // Normalize sender: 'agent', 'ai', 'agent_msg', 'proactive', 'reminder' -> 'ai' for consistent styling
