@@ -3660,6 +3660,22 @@ class AnchorEngine:
                                 _st2.result = (_st2.result or '') + ' [recovered: periodic stuck cleanup]'
                             _s_rec2.commit()
                             logger.info("[ANCHOR] Periodic recovery: marked %d stuck in_progress entries as failed", len(_stuck2))
+                        # Дополнительно: зависшие agent_task (задачи делегирования) старше 30 минут
+                        _stuck_agent_tasks = (
+                            _s_rec2.query(_RecAAL2)
+                            .filter(
+                                _RecAAL2.activity_type == 'agent_task',
+                                _RecAAL2.status == 'in_progress',
+                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=30),
+                            )
+                            .all()
+                        )
+                        if _stuck_agent_tasks:
+                            for _st3 in _stuck_agent_tasks:
+                                _st3.status = 'failed'
+                                _st3.result = (_st3.result or '') + ' [recovered: agent_task stuck cleanup]'
+                            _s_rec2.commit()
+                            logger.info("[ANCHOR] Periodic recovery: marked %d stuck agent_task entries as failed", len(_stuck_agent_tasks))
                     finally:
                         _s_rec2.close()
                 except Exception as _rec2_err:
@@ -9102,11 +9118,23 @@ class AnchorEngine:
                     # Подсказки о цепочках — учим думать о конечной цели, а не запрещаем шаги
                     _do_not_lines = []
                     if 'email' in _cats_cr:
+                        _no_discord = 'discord' not in _cats_cr
+                        _no_tg = 'telegram' not in _cats_cr
+                        _no_social = 'social' not in _cats_cr
+                        _cant_list = []
+                        if _no_discord:
+                            _cant_list.append('Discord/сообщества (вступление/публикация)')
+                        if _no_tg:
+                            _cant_list.append('Telegram-канал')
+                        if _no_social:
+                            _cant_list.append('соцсети')
+                        _cant_str = ', '.join(_cant_list)
                         _do_not_lines.append(
                             f"  💡 {_p_cr['name']} [email]: думай цепочкой — research/web_search → save_email_contact → send_outreach_email."
                             f" Если цель задачи — связаться с кем-то, задача должна содержать ВСЮ цепочку, а не только её первый шаг."
                             f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
-                            f" ⚠️ ЧЕРЕДОВАНИЕ ИНБОКСА: {_p_cr['name']} оснащён IMAP-почтой."
+                            + (f" ❌ НЕ НАЗНАЧАЙ {_p_cr['name']}: {_cant_str} — интеграций нет, задача зависнет." if _cant_str else '')
+                            + f" ⚠️ ЧЕРЕДОВАНИЕ ИНБОКСА: {_p_cr['name']} оснащён IMAP-почтой."
                             f" В КАЖДОМ цикле или через цикл назначай ему check_emails (чтобы не пропустить ответы контактов)."
                             f" Алгоритм после check_emails:"
                             f" 1) Есть ответы (status=replied в email_outreach)? → reply_to_outreach_email(outreach_id=ID)."
@@ -11160,8 +11188,17 @@ class AnchorEngine:
                                 f'{_ag_name}, возьми на себя: {_t}.',
                             ]
                         _asi_assign_text = _rnd_assign.choice(_assign_templates)
-                        if _step_reason and len(_step_reason) > 10:
-                            _asi_assign_text = _asi_assign_text.rstrip('.?') + f' — {_step_reason.lower()}.'
+                        # Фильтруем технические reason-коды — не добавляем в текст пользователю
+                        _INTERNAL_REASON_CODES = frozenset({
+                            'fair_assignment diversification', 'fairness backfill',
+                            'backfill', 'diversification', 'fallback',
+                        })
+                        _step_reason_show = (
+                            '' if _step_reason.lower().strip() in _INTERNAL_REASON_CODES
+                            else _step_reason
+                        )
+                        if _step_reason_show and len(_step_reason_show) > 10:
+                            _asi_assign_text = _asi_assign_text.rstrip('.?') + f' — {_step_reason_show.lower()}.'
                     elif _step_reason:
                         _r = _step_reason[:90].rsplit(' ', 1)[0] if len(_step_reason) > 90 else _step_reason
                         _asi_assign_text = f'{_ag_name}, вот задача — {_r.lower() if _r[0].isupper() else _r}.'
