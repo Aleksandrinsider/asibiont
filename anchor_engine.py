@@ -15417,7 +15417,9 @@ class AnchorEngine:
                 if '<' in c and '>' in c and
                 c.split('<')[1].split('>')[0].strip().lower() not in
                 {e.lower() for e in _already_sent_emails} and
-                c.split('<')[1].split('>')[0].strip().lower() not in _negotiation_emails
+                c.split('<')[1].split('>')[0].strip().lower() not in _negotiation_emails and
+                'статус: bounced' not in c and
+                'статус: unsubscribed' not in c
             ],
             'status_counts': _status_counts,
             'new_contacts_info': _new_contacts_info,

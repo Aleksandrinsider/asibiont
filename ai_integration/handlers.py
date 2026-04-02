@@ -12148,6 +12148,16 @@ async def send_outreach_email(
         # MX-проверка домена получателя
         mx_valid, mx_err = _validate_email_domain(recipient_email)
         if not mx_valid:
+            # Помечаем контакт как bounced — чтобы он не попадал в unsent_contacts повторно
+            try:
+                _ec_mx = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=_rcpt,
+                ).first()
+                if _ec_mx and _ec_mx.status not in ('unsubscribed',):
+                    _ec_mx.status = 'bounced'
+                    session.commit()
+            except Exception as _e_mx:
+                logger.debug("suppressed MX bounce mark: %s", _e_mx)
             return f" {mx_err}"
 
         # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
