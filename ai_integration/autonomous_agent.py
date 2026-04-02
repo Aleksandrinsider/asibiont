@@ -2069,6 +2069,20 @@ class HybridAutonomousAgent:
                 params['__block_error__'] = (f"⛔ Email {_rcpt} — placeholder/фейковый адрес. "
                                              "Найди реальный email через web_search или используй другой метод контакта.")
                 return params
+            # GUARD: блокируем role-based / generic email (не персональные)
+            _ROLE_PREFIXES = (
+                'info@', 'support@', 'marketing@', 'sales@', 'admin@', 'noreply@',
+                'no-reply@', 'contact@', 'hello@', 'help@', 'office@', 'hr@',
+                'buhgalter@', 'bukhgalter@', 'accounting@', 'team@', 'press@',
+                'general@', 'mail@', 'webmaster@', 'postmaster@', 'abuse@',
+                'feedback@', 'service@', 'billing@', 'jobs@', 'career@',
+                'opensource@', 'security@', 'privacy@', 'legal@', 'compliance@',
+            )
+            if _rcpt and any(_rcpt.startswith(p) for p in _ROLE_PREFIXES):
+                params['__skip__'] = True
+                params['__block_error__'] = (f"⛔ {_rcpt} — фейковый или generic email. "
+                                             "Найди реальный email получателя через поиск или контакты.")
+                return params
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:
