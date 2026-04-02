@@ -11235,6 +11235,23 @@ class AnchorEngine:
                 if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
                     _ag_task = f'{_ag_task}\nКонтекст — уже сделано командой:\n{_prev_steps_context[:400]}'
 
+                # ── Email-контакты: если задача на отправку, а в тексте нет '@' — вставляем адреса напрямую ──
+                # Это решает случай когда координатор написал "напиши Артёму" без email-адреса,
+                # а агент не может найти его через find_relevant_contacts_for_task (уже в _already_sent).
+                _EMAIL_SEND_TOOLS = {'send_outreach_email', 'send_follow_up_email', 'negotiate_by_email', 'reply_to_outreach_email'}
+                if _tool_hint in _EMAIL_SEND_TOOLS and '@' not in _ag_task:
+                    if _unsent_contacts_data:
+                        _uc_inject = ', '.join(uc.strip() for uc in _unsent_contacts_data[:5])
+                        _ag_task = f"{_ag_task}\n📋 Конкретные адреса для отправки: {_uc_inject}"
+                    elif _pending_replies:
+                        # У них есть ответы — вставляем email прямо
+                        _pr_inject = ', '.join(
+                            f"{pr.get('name') or pr.get('email')} <{pr.get('email')}>"
+                            for pr in _pending_replies[:3] if pr.get('email')
+                        )
+                        if _pr_inject:
+                            _ag_task = f"{_ag_task}\n📋 Кто ответил (используй reply_to_outreach_email): {_pr_inject}"
+
                 # Ищем агента в команде
                 _target_ag = next(
                     (a for a in real_agents if a.name.lower() == _ag_name.lower()), None
