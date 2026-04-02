@@ -10246,6 +10246,9 @@ class AnchorEngine:
                     'email-лимит-упомин': ['лимит писем', 'лимит на email', 'исчерпан'],
                     'таймаут-упомин': ['таймаут', 'timeout', 'прервал', 'прервать'],
                     'смена-тактики': ['сменим тактику', 'смени тактику', 'сменим площадку'],
+                    'Hi,AI-Telegram': ['hi,ai', 'hi ai', 'hiai'],
+                    'SyntheticBiology': ['syntheticbiology', 'synthetic biology', 'r/syntheticbiology'],
+                    'Reddit-нерелев': ['reddit.com', 'subreddit', '/r/'],
                 }
                 _approach_counts: dict = {}
                 for _lm in _loop_msgs:
@@ -10271,6 +10274,9 @@ class AnchorEngine:
                         'email-лимит-упомин': 'create_post + publish_to_telegram (контент-маркетинг), research_topic + save_note (аналитика), update_goal_progress',
                         'таймаут-упомин': 'более простые задачи: save_note, update_goal_progress, create_post из уже собранных данных',
                         'смена-тактики': 'КОНКРЕТНО смени: другой поисковый запрос, другая платформа, другой тип контента',
+                        'Hi,AI-Telegram': 'email-рассылка авторам AI-блогов, ProductHunt launch, Хабр-статья — НЕ Telegram-контакт (интеграции нет)',
+                        'SyntheticBiology': 'AI/tech аудитория: dev.to, ProductHunt, GitHub trending, Hacker News, Хабр',
+                        'Reddit-нерелев': 'Хабр, dev.to, ProductHunt (Reddit-аудитория нерелевантна — проверь нишу перед назначением)',
                     }
                     _loop_lines = ['\n🚨 ВНИМАНИЕ: ОБНАРУЖЕНА ПЕТЛЯ (координатор повторял одно и то же):']
                     for _lap, _lcnt in sorted(_looped.items(), key=lambda x: -x[1]):
@@ -10647,6 +10653,36 @@ class AnchorEngine:
 
             if _plan_normalized:
                 _plan = _plan_normalized
+
+            # ── Telegram-task post-filter: убираем Telegram-задачи для email-only агентов ──
+            # Если агенту нет Telegram-интеграции, задачи на контакт через Telegram/Hi,AI — зависнут.
+            _tg_task_kws = ('hi,ai', 'hiai', 'hi ai', 't.me/', 'telegram.me/', 'telegram-канал', 'телеграм-канал')
+            _tg_action_kws = ('администратор', 'admin', 'написать', 'связаться', 'dm', 'outreach', 'контакт')
+            _plan_tg_filtered = []
+            for _ptg in _plan:
+                _ag_ptg = (_ptg.get('agent') or '').strip()
+                _task_ptg = (_ptg.get('task') or '').lower()
+                _caps_ptg = _agent_caps_categories.get(_ag_ptg, set())
+                _has_tg_cap = 'telegram' in _caps_ptg
+                _is_tg_specific = (
+                    any(kw in _task_ptg for kw in _tg_task_kws)
+                    and any(kw in _task_ptg for kw in _tg_action_kws)
+                )
+                if not _has_tg_cap and _is_tg_specific:
+                    logger.info(
+                        "[COORD] tg-task post-filter: replaced Telegram task for email-only agent %s: %.80s",
+                        _ag_ptg, _task_ptg,
+                    )
+                    _ptg['tool'] = 'find_relevant_contacts_for_task'
+                    _ptg['task'] = (
+                        'Найди потенциальных пользователей ASI Biont через web_search: '
+                        'tech-блоги, Product Hunt, Hacker News, Хабр. '
+                        'Сохрани email-адреса через save_email_contact. '
+                        '(Telegram-интеграции нет — переключаемся на email-охват.)'
+                    )
+                    _ptg['reason'] = 'Telegram-задача заменена: у агента нет Telegram-интеграции'
+                _plan_tg_filtered.append(_ptg)
+            _plan = _plan_tg_filtered
 
             # ── check_emails cooldown post-filter: заменяем check_emails на альтернативу ──
             # Для агентов, которые уже проверяли почту < _CE_COOLDOWN_MIN мин назад.
