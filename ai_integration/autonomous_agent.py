@@ -2420,7 +2420,6 @@ class HybridAutonomousAgent:
             profile = session.query(UserProfile).filter_by(user_id=user.id).first()
             
             # Полный каталог всех поддерживаемых интеграций
-            # (извлечено из anchor_engine._INTEGRATION_PLANS и других источников)
             all_integrations = {
                 "Gmail": {
                     "env_vars": ["GMAIL_USER", "GMAIL_PASS", "IMAP_HOST"],
@@ -4934,120 +4933,27 @@ def _agent_tools_from_intg(agent: dict, intg_labels: list) -> str:
         _explicit = []
 
     if _explicit:
-        # Есть явный список — показываем его с аннотацией
         return ', '.join(_explicit[:10])
 
-    # tools_allowed пустой → выводим рекомендации из интеграций + роли
-    recommended: list = []
-    _lbl_text = ' '.join(l.lower() for l in intg_labels)
-
-    # Интеграции → конкретные инструменты
-    _INTG_TOOL_MAP = [
-        # Email / почта
-        (('почт', 'mail', 'imap', 'smtp', 'gmail', 'яндекс почт', 'resend', 'sendgrid', 'mailgun'),
-         ['send_outreach_email', 'check_emails', 'reply_to_outreach_email', 'send_follow_up_email',
-          'save_email_contact', 'list_email_contacts', 'find_relevant_contacts_for_task']),
-        # GitHub / GitLab
-        (('github', 'gitlab', 'bitbucket'),
-         ['run_agent_action', 'find_relevant_contacts_for_task', 'save_email_contact', 'web_search']),
-        # RSS / новости / NewsAPI
-        (('rss', 'лент', 'feed', 'newsapi', 'новост', 'тасс', 'habr'),
-         ['run_agent_action', 'get_news_trends', 'research_topic', 'web_search', 'add_task']),
-        # Биржа / крипта / Alpha Vantage
-        (('биржевые', 'alpha vantage', 'binance', 'bybit', 'coinbase', 'крипт'),
-         ['run_agent_action', 'web_search', 'research_topic', 'add_task', 'update_goal_progress']),
-        # Мессенджеры / Slack / Discord / Telegram
-        (('slack', 'discord'),
-         ['run_agent_action', 'find_and_message_relevant_users', 'send_message_to_user']),
-        (('telegram',),
-         ['publish_to_telegram', 'create_post', 'run_agent_action']),
-        # CRM
-        (('crm', 'amocrm', 'битрикс', 'hubspot', 'pipedrive', 'salesforce', 'zoho'),
-         ['run_agent_action', 'save_email_contact', 'find_relevant_contacts_for_task', 'delegate_task']),
-        # Маркетплейсы
-        (('ozon', 'wildberries', 'авито', 'shopify', 'wb'),
-         ['run_agent_action', 'research_topic', 'web_search', 'add_task']),
-        # Таблицы / Notion / Airtable
-        (('sheets', 'airtable', 'notion', 'таблиц', 'gspread'),
-         ['run_agent_action', 'add_task', 'update_goal_progress', 'research_topic']),
-        # Платежи
-        (('stripe', 'юкасса', 'платёж', 'payment'),
-         ['run_agent_action', 'web_search', 'add_task']),
-        # OpenWeather / погода
-        (('погода', 'openweather', 'weather'),
-         ['run_agent_action', 'get_weather_info', 'add_task']),
-        # Генерация изображений
-        (('генерац', 'replicate', 'изображен', 'image'),
-         ['generate_image', 'create_post', 'publish_to_telegram']),
-        # VK / соцсети
-        (('вконтакт', 'vk', 'instagram', 'twitter'),
-         ['run_agent_action', 'create_post', 'generate_marketing_content', 'web_search']),
-        # Google Calendar
-        (('calendar', 'календар'),
-         ['run_agent_action', 'set_reminder', 'add_task', 'check_time_conflicts']),
-        # LinkedIn / найм / HR
-        (('linkedin', 'superjob', 'hh.ru', 'headhunter'),
-         ['run_agent_action', 'find_relevant_contacts_for_task', 'save_email_contact', 'web_search']),
-        # Яндекс.Директ / реклама
-        (('директ', 'яндекс.директ', 'adwords', 'mytarget'),
-         ['run_agent_action', 'web_search', 'research_topic', 'generate_marketing_content']),
-    ]
-    seen: set = set()
-    for _kws, _tools in _INTG_TOOL_MAP:
-        if any(w in _lbl_text for w in _kws):
-            for _t in _tools:
-                if _t not in seen:
-                    seen.add(_t)
-                    recommended.append(_t)
-
-    # Роль → добавляем характерные инструменты если ещё не добавлены
-    _role_text = (
-        (agent.get('job_title') or '') + ' ' +
-        (agent.get('specialization') or '') + ' ' +
-        (agent.get('description') or '')
-    ).lower()
-
-    _ROLE_TOOL_MAP = [
-        (('аналитик', 'analyst', 'исследован', 'research', 'data', 'данн'),
-         ['web_search', 'research_topic', 'quick_topic_search', 'analyze_situation_and_suggest_tasks',
-          'add_task', 'update_goal_progress']),
-        (('маркетолог', 'marketing', 'smm', 'контент', 'content', 'продвиж', 'promo', 'реклам'),
-         ['web_search', 'generate_marketing_content', 'create_post', 'research_topic',
-          'start_content_campaign', 'publish_to_telegram']),
-        (('менеджер', 'manager', 'project', 'проект', 'pm', 'руковод', 'координат'),
-         ['add_task', 'delegate_task', 'update_goal_progress', 'analyze_situation_and_suggest_tasks',
-          'list_tasks', 'set_reminder']),
-        (('разработчик', 'developer', 'engineer', 'программист', 'backend', 'frontend', 'fullstack'),
-         ['run_agent_action', 'web_search', 'research_topic', 'add_task']),
-        (('продаж', 'sales', 'outreach', 'лидоген', 'lead'),
-         ['send_outreach_email', 'find_relevant_contacts_for_task', 'save_email_contact',
-          'start_delegation_campaign', 'web_search']),
-        (('hr', 'рекрутер', 'recruiter', 'найм', 'подбор'),
-         ['find_relevant_contacts_for_task', 'save_email_contact', 'send_outreach_email',
-          'run_agent_action', 'web_search']),
-        (('финанс', 'finance', 'бухгалт', 'accountant', 'инвест', 'invest'),
-         ['run_agent_action', 'web_search', 'research_topic', 'add_task', 'update_goal_progress']),
-        (('копирайт', 'copywriter', 'журналист', 'писател', 'редактор'),
-         ['generate_marketing_content', 'web_search', 'research_topic', 'create_post']),
-        (('ассистент', 'assistant', 'помощник', 'secretary', 'секретар'),
-         ['add_task', 'set_reminder', 'check_time_conflicts', 'send_email', 'list_tasks',
-          'delegate_task', 'update_goal_progress']),
-    ]
-    for _kws, _tools in _ROLE_TOOL_MAP:
-        if any(w in _role_text for w in _kws):
-            for _t in _tools:
-                if _t not in seen:
-                    seen.add(_t)
-                    recommended.append(_t)
-
-    # Всегда базовые инструменты если ещё ничего нет
-    _base = ['web_search', 'research_topic', 'add_task', 'update_goal_progress']
-    for _t in _base:
-        if _t not in seen:
-            seen.add(_t)
-            recommended.append(_t)
-
-    return ', '.join(recommended[:10])
+    # Динамически через anchor_engine capability system
+    try:
+        from anchor_engine import _classify_agent_caps, _CAP_TOOL_HINTS
+        _caps = _classify_agent_caps(intg_labels)
+        _cats = _caps.get('categories', set())
+        seen: set = set()
+        recommended: list = []
+        for cat in _cats:
+            hint = _CAP_TOOL_HINTS.get(cat, '')
+            for tool in hint.split(','):
+                t = tool.strip().split('(')[0].strip()
+                if t and t not in seen:
+                    seen.add(t)
+                    recommended.append(t)
+        if not recommended:
+            recommended = ['web_search', 'research_topic', 'add_task', 'update_goal_progress']
+        return ', '.join(recommended[:10])
+    except Exception:
+        return 'web_search, research_topic, add_task, update_goal_progress'
 
 
 def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
