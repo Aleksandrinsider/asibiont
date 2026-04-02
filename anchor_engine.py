@@ -9123,9 +9123,9 @@ class AnchorEngine:
                         _no_social = 'social' not in _cats_cr
                         _cant_list = []
                         if _no_discord:
-                            _cant_list.append('Discord/сообщества (вступление/публикация)')
+                            _cant_list.append('Discord/сообщества (публикация, DM, вступление)')
                         if _no_tg:
-                            _cant_list.append('Telegram-канал')
+                            _cant_list.append('любые Telegram-задачи (канал, группа, outreach, DM, @channel)')
                         if _no_social:
                             _cant_list.append('соцсети')
                         _cant_str = ', '.join(_cant_list)
