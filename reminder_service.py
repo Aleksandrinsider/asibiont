@@ -1102,6 +1102,10 @@ class ReminderService:
                 # Отправить проактивное сообщение с номером для разнообразия
                 proactive_text = await self.generate_proactive_message(user_id, "general", task_count, overdue_count, all_tasks)
                 
+                # Strip markdown formatting
+                import re as _re_md
+                proactive_text = _re_md.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', proactive_text or '')
+                
                 # Сохранить проактивное сообщение в таблицу Interaction
                 interaction = Interaction(
                     user_id=user.id,

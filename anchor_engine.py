@@ -507,11 +507,23 @@ def _detect_catalog_types(detected_labels: list[str]) -> set[str]:
     return types
 
 
+def _strip_md(text: str) -> str:
+    """Strip markdown formatting: **bold**, ##headers, bullet lists."""
+    if not text:
+        return text or ''
+    import re as _re_md
+    t = _re_md.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)
+    t = _re_md.sub(r'^\s*#{1,4}\s*', '', t, flags=_re_md.MULTILINE)
+    t = _re_md.sub(r'^\s*[•\-\*]\s+', '', t, flags=_re_md.MULTILINE)
+    t = _re_md.sub(r'^\s*\d+[.)\]]\s+', '', t, flags=_re_md.MULTILINE)
+    return t
+
+
 async def _safe_send(bot, chat_id: int, text: str):
     """Send a message, splitting into chunks if it exceeds Telegram's 4096 char limit."""
     if not text or not text.strip():
         return
-    text = text.strip()
+    text = _strip_md(text).strip()
     if len(text) <= _TG_MAX_LEN:
         await bot.send_message(chat_id=chat_id, text=text)
         return
@@ -557,7 +569,7 @@ def _strip_html(text: str) -> str:
     _t = re.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', _t)
     _t = re.sub(r'["\']\s*/?>\s*(?=\S)', '', _t)
     _t = re.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _t)
-    return _t
+    return _strip_md(_t)
 
 
 # ═══════════════════════════════════════════════════════
@@ -6658,7 +6670,7 @@ class AnchorEngine:
                                 message_type='proactive',
                                 content=json.dumps({
                                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                    'text': _dir_txt,
+                                    'text': _strip_md(_dir_txt),
                                     '__anchor_type': 'asi_director_review',
                                 }, ensure_ascii=False),
                             ))
@@ -7465,7 +7477,7 @@ class AnchorEngine:
                         'id': getattr(prev_agent, 'id', 0),
                         'avatar_url': _safe_avatar(getattr(prev_agent, 'avatar_url', ''), getattr(prev_agent, 'id', 0)),
                     },
-                    'text': _transfer_text,
+                    'text': _strip_md(_transfer_text),
                     '__anchor_type': 'agent_chain_transfer',
                 }, ensure_ascii=False)
                 session.add(Interaction(
@@ -12389,7 +12401,7 @@ class AnchorEngine:
                                     message_type='proactive',
                                     content=json.dumps({
                                         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                        'text': _report_text,
+                                        'text': _strip_md(_report_text),
                                         '__anchor_type': 'coordinator_summary',
                                     }, ensure_ascii=False),
                                 ))
@@ -18939,7 +18951,7 @@ class AnchorEngine:
                                 'id': _ua.id,
                                 'avatar_url': _safe_avatar(_ua.avatar_url, _ua.id),
                             },
-                            'text': message,
+                            'text': _strip_md(message),
                             '__anchor_type': _deliver_anchor_type,
                         }, ensure_ascii=False)
                 except Exception as _e:
@@ -18964,7 +18976,7 @@ class AnchorEngine:
             if not interaction_content.strip().startswith('{'):
                 interaction_content = json.dumps({
                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                    'text': interaction_content,
+                    'text': _strip_md(interaction_content),
                     '__anchor_type': _deliver_anchor_type,
                 }, ensure_ascii=False)
 

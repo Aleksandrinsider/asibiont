@@ -7864,7 +7864,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                                 message_type='proactive',
                                                 content=json.dumps({
                                                     '__agent': {'name': _sd_target_name, 'id': _sd_ag_id, 'avatar_url': _sd_ag_avatar},
-                                                    'text': _sd_result_text[:600],
+                                                    'text': re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _sd_result_text[:600]),
                                                     '__tools_used': _sub_tools,
                                                     '__anchor_type': 'agent_delegation',
                                                 }, ensure_ascii=False),
