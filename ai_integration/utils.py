@@ -734,8 +734,19 @@ def sanitize_live_team_chat_text(
             max_chars = 1100
 
     if len(cleaned) > max_chars:
-        cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
-        cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
+        if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
+            # Для поручений: режем по последнему полному предложению, а не по символу.
+            # Это гарантирует что сообщение не обрывается на «…на.»
+            _tail = cleaned[:max_chars]
+            _last_sent = max(_tail.rfind('.'), _tail.rfind('!'), _tail.rfind('?'))
+            if _last_sent >= max_chars // 3:
+                cleaned = cleaned[:_last_sent + 1].strip()
+            else:
+                cut = _tail.rsplit(' ', 1)[0].strip()
+                cleaned = (cut or _tail).rstrip(' ,;:.-')
+        else:
+            cut = cleaned[:max_chars].rsplit(' ', 1)[0].strip()
+            cleaned = (cut or cleaned[:max_chars]).rstrip(' ,;:.-')
 
     # Для живых поручений: не оставляем оборванный хвост типа
     # "Как думаешь, какой..." после обрезки.
@@ -743,13 +754,14 @@ def sanitize_live_team_chat_text(
         cleaned = re.sub(r'(?i)\s+как\s+думаешь,?\s+какой\s*$', '', cleaned).strip()
         cleaned = re.sub(r'(?i)\s+как\s+думаешь\s*$', '', cleaned).strip()
         cleaned = re.sub(r'(?i)\s+что\s+думаешь\s*$', '', cleaned).strip()
-        # Если текст обрезан без финальной пунктуации — закрываем мысль.
+        # Если текст обрезан без финальной пунктуации — режем до последней завершённой мысли.
+        # НЕ добавляем фиктивную точку — это создаёт артефакты вида «...на.»
         if cleaned and cleaned[-1] not in '.!?':
             _last_punc = max(cleaned.rfind('.'), cleaned.rfind('!'), cleaned.rfind('?'))
-            if _last_punc >= 90:
+            if _last_punc >= 40:
+                # есть хотя бы одно завершённое предложение — обрезаем до него
                 cleaned = cleaned[:_last_punc + 1].strip()
-            else:
-                cleaned = cleaned.rstrip(' ,;:-') + '.'
+            # else: текст короткий/без знаков — оставляем как есть (честный обрыв лучше «...на.»)
 
     # Runtime-guard без потери содержания: если после очистки остались явные
     # префиксы брифа, мягко убираем их, но НЕ заменяем весь текст шаблоном.
