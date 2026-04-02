@@ -6197,74 +6197,27 @@ class AnchorEngine:
                                                 )
                                     except Exception as _retry_err:
                                         logger.debug('[ANCHOR-AUTOPILOT] loop retry: %s', _retry_err)
-                            _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
-                            _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
-                            # Убираем болтающий «как —» без существительного: «Biont как — используем» → «Biont — используем»
-                            _coord_text = re.sub(r'\s+как\s+—', ' —', _coord_text, flags=re.IGNORECASE)
-                            # Канцеляризмы — заменяем на живые конструкции
+                            # Канцеляризмы — страховочная сетка (промпт учит, но не гарантирует)
                             _coord_text = re.sub(r'\bвозьми на себя:\s*', '', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'\bнужно поработать над:\s*', 'разберись с ', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'\bзаймись:\s*', '', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'\bпоработай над:\s*', 'разберись с ', _coord_text, flags=re.IGNORECASE)
-                            # LinkedIn/неподключённые сервисы — убираем из самого поручения (а не только из отображения)
+                            # LinkedIn/неподключённые сервисы — до dedup-проверки
                             for _banned_svc in ('linkedin', r'sales\s*navigator', r'apollo\.io', r'calendly', r'hubspot'):
                                 _coord_text = re.sub(
                                     rf'[^.!?\n]*\b{_banned_svc}\b[^.!?\n]*[.!?]?\s*',
                                     '', _coord_text, flags=re.IGNORECASE
                                 )
                             _coord_text = _coord_text.strip()
-                            _coord_text = re.sub(
-                                r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
-                                '',
-                                _coord_text,
-                                flags=re.IGNORECASE,
-                            )
+                            # Email тестовых доменов — маскируем (security)
                             _coord_text = re.sub(
                                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
                                 '[email скрыт]',
                                 _coord_text,
                                 flags=re.IGNORECASE,
                             )
-                            # Обрезаем структурные секции: LLM иногда генерирует заголовки
-                            # вида "Данные для работы:", "Задача:", "Шаги:". Берём только
-                            # живой текст ДО первого такого заголовка.
-                            _coord_clean_lines = []
-                            for _cln in _coord_text.split('\n'):
-                                _cln_s = _cln.strip()
-                                if not _cln_s:
-                                    continue
-                                # Строка-заголовок: заканчивается на ":", без знаков конца предложения, ≤ 60 сим
-                                if (
-                                    _cln_s.endswith(':')
-                                    and len(_cln_s) <= 60
-                                    and not re.search(r'[.!?]', _cln_s[:-1])
-                                ):
-                                    break
-                                # Markdown-заголовки и маркеры
-                                if re.match(r'^(?:#{1,4}\s|\*{1,2}[А-ЯA-Z]|-\s{2,})', _cln_s):
-                                    break
-                                _coord_clean_lines.append(_cln_s)
-                            _coord_text = ' '.join(_coord_clean_lines).strip()
-                            # ── Оборванные хвосты: последнее «предложение» — предлог или подчинительный союз ──
-                            # Пример: «поддерживать диалог с.» → режем до предыдущей точки
-                            if _coord_text:
-                                _ct_lp = max(_coord_text.rfind('.'), _coord_text.rfind('!'), _coord_text.rfind('?'))
-                                if _ct_lp > 0:
-                                    _ct_pp = max(_coord_text.rfind('.', 0, _ct_lp), _coord_text.rfind('!', 0, _ct_lp), _coord_text.rfind('?', 0, _ct_lp))
-                                    _ct_last = _coord_text[_ct_pp + 1: _ct_lp].strip() if _ct_pp >= 0 else _coord_text[:_ct_lp].strip()
-                                    _ct_lw_list = _ct_last.split()
-                                    _ct_last_word = _ct_lw_list[-1].lower() if _ct_lw_list else ''
-                                    _ct_first_word = _ct_lw_list[0].lower() if _ct_lw_list else ''
-                                    _ct_is_frag = (
-                                        len(_ct_last_word) <= 3  # предлог: «с», «и», «в», «на»
-                                        or _ct_first_word in ('которые', 'который', 'которой', 'которых', 'которого',
-                                                              'если', 'хотя', 'пока', 'когда')
-                                        or len(_ct_last) < 8
-                                    )
-                                    if _ct_is_frag and _ct_pp >= 30:
-                                        _coord_text = _coord_text[:_ct_pp + 1].strip()
-                            # Не ограничиваем до 2-3 предложений: сохраняем глубину,
-                            # оставляя только защиту от структурных блоков.
+                            # Структурная очистка (заголовки, markdown) и trailing fragments —
+                            # делегированы в sanitize_live_team_chat_text, которая вызывается ниже.
 
                             # ── Telegram-guard для coord_text: если email-only агент получает
                             # Telegram-поручение — заменяем прямо здесь, до сохранения в чат ──
