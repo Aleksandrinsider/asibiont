@@ -9114,6 +9114,7 @@ class AnchorEngine:
 
             # ── check_emails cooldown: предотвращаем петлю делегирования «проверь почту» ──
             # Запрашиваем ПЕРЕД cap_rules — чтобы использовать при генерации инструкций агентам.
+            # ВАЖНО: agent_task записи в AAL имеют ref_id=NULL → ищем по имени агента в title.
             _CE_COOLDOWN_MIN = 90  # минут между последовательными check_emails одному агенту
             _check_emails_on_cooldown: set = set()  # имена агентов, которым НЕ нужен check_emails
             _check_emails_cooldown_note = ''
@@ -9121,19 +9122,18 @@ class AnchorEngine:
                 from models import AgentActivityLog as _AAL_ce_cd
                 _ce_cd_cutoff = datetime.now(timezone.utc) - timedelta(minutes=_CE_COOLDOWN_MIN)
                 for _p_ce_cd in _profiles:
-                    _ag_ce_cd_obj = next((a for a in real_agents if a.name == _p_ce_cd['name']), None)
-                    if not _ag_ce_cd_obj:
-                        continue
+                    _ag_name_lower = _p_ce_cd['name'].lower()
+                    # agent_task записи имеют ref_id=NULL — ищем по имени агента в title
                     _recent_ce_cd = session.query(_AAL_ce_cd).filter(
                         _AAL_ce_cd.user_id == user.id,
-                        _AAL_ce_cd.ref_id == _ag_ce_cd_obj.id,
                         _AAL_ce_cd.created_at >= _ce_cd_cutoff,
+                        _AAL_ce_cd.activity_type == 'agent_task',
                     ).filter(
-                        _AAL_ce_cd.title.ilike('%check%email%') |
-                        _AAL_ce_cd.title.ilike('%входящ%') |
-                        _AAL_ce_cd.content.ilike('%check_emails%') |
-                        _AAL_ce_cd.result.ilike('%imap%') |
-                        _AAL_ce_cd.title.ilike('%проверь почт%'),
+                        (_AAL_ce_cd.title.ilike(f'%{_ag_name_lower}%проверь%почт%')) |
+                        (_AAL_ce_cd.title.ilike(f'%{_ag_name_lower}%check%email%')) |
+                        (_AAL_ce_cd.title.ilike(f'%{_ag_name_lower}%входящ%')) |
+                        (_AAL_ce_cd.title.ilike(f'%проверь%почт%') &
+                         _AAL_ce_cd.title.ilike(f'%{_ag_name_lower}%')),
                     ).order_by(_AAL_ce_cd.created_at.desc()).first()
                     if _recent_ce_cd:
                         _ago_ce_cd = int((datetime.now(timezone.utc) - (
@@ -9269,12 +9269,13 @@ class AnchorEngine:
                     _ft_lines = ['\n📊 НЕУДАЧНЫЕ/ПРЕРВАННЫЕ ЗАДАЧИ за 24ч (учитывай при планировании — попробуй другой подход):']
                     for _ft in _failed_tasks:
                         _reason = (getattr(_ft, 'completion_notes', '') or '').strip()
-                        _reason_short = f' — {_reason[:60]}' if _reason else ''
-                        _ft_lines.append(f'  • {_ft.delegated_to_username or "?"}: {(_ft.title or "")[:70]}{_reason_short}')
+                        _reason_short = f' — {_reason[:80]}' if _reason else ''
+                        _ft_lines.append(f'  ⛔ {_ft.delegated_to_username or "?"}: {(_ft.title or "")[:70]}{_reason_short}')
                     for _to in _aal_timeouts:
                         _title_low = (_to.title or '').lower()
                         _ag_to = next((p['name'] for p in _profiles if p['name'].lower() in _title_low), '?')
                         _ft_lines.append(f'  ⛔ ТАЙМАУТ ({_ag_to}): {(_to.title or "")[:80]} — НЕ давать снова, агент не справляется с этим скриптом')
+                    _ft_lines.append('  → ЖЁСТКОЕ ПРАВИЛО: не создавай задачи с теми же ключевыми словами/площадками что в списке выше.')
                     _ft_lines.append('  → Рекомендация: замени agent_task на прямой инструмент (web_search/find_relevant_contacts_for_task) или смени подход.')
                     _failed_tasks_str = '\n'.join(_ft_lines) + '\n'
             except Exception as _ft_err:
