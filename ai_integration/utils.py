@@ -611,8 +611,8 @@ def clean_technical_details(text):
     text = re.sub(r'^ВРЕМЯ НЕ УКАЗАНО\..*$', '', text, flags=re.MULTILINE)
     # Удаляем ведущие ": " или ": " артефакты (после clean срезается слово перед двоеточием)
     text = re.sub(r'^:\s+', '', text)
-    # Убираем висячие предлоги/артефакты после удаления tool names: "через ." → "."
-    text = re.sub(r'\b(через|используя|использую|инструмент|функцию?)\s+([.!?,;:\n])', r'\2', text, flags=re.IGNORECASE)
+    # Убираем висячие предлоги/артефакты после удаления tool names: "через ." → "." или "используя —" → "—"
+    text = re.sub(r'\b(через|используя|использую|инструмент|функцию?)\s*,?\s*([.!?,;:\n—–])', r'\2', text, flags=re.IGNORECASE)
     # Убираем двойные пробелы после замен
     text = re.sub(r'  +', ' ', text)
     # Нормализуем отступы: \n\n\n+ → \n\n, а \n\n → \n (мессенджер-стиль, без лишних пустых строк)
@@ -723,7 +723,7 @@ def sanitize_live_team_chat_text(
     _a = (anchor_type or '').lower().strip()
     if max_chars is None:
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            max_chars = 380
+            max_chars = 700
         elif _a == 'coordinator_result':
             max_chars = 900
         else:
