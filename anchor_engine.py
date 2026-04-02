@@ -6063,9 +6063,11 @@ class AnchorEngine:
                             "сохрани план через save_note и поставь напоминание через set_reminder.»\n"
                             "❌ ЗАПРЕЩЕНО: заголовки (ДЕЙСТВИЕ:, СТРАТЕГИЯ:, Задача:, Шаги:), "
                             "нумерованные списки, маркеры (•, -, *), markdown. "
+                            "Запрещены канцеляризмы: «возьми на себя:», «нужно поработать над:», «займись:», «поработай над:». "
+                            "Запрещены инфинитивы в поручении: не «найти контакты», а «найди контакты»; не «отправить письмо», а «отправь письмо». "
                             "Только живая речь. Кратко и по делу."
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=500)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=800)
                         _VAGUE_COORD_PATTERNS = (
                             'посмотри что можно', 'поработай над', 'займись',
                             'сделай что-нибудь', 'подумай что можно', 'проверь что можно',
@@ -6095,7 +6097,13 @@ class AnchorEngine:
                             )
                             if _is_vague_gen:
                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
-                                # Оставляем _coord_text (конкретный fallback), не перезаписываем
+                                # Fallback coord_text: тоже прогоняем через INF→IMP чтобы не было инфинитивов
+                                for _cinf, _cimp in _COORD_INF_MAP.items():
+                                    _coord_text = re.sub(
+                                        rf'\bпожалуйста\s+{_cinf}\b',
+                                        f'пожалуйста, {_cimp}',
+                                        _coord_text, flags=re.IGNORECASE,
+                                    )
                             else:
                                 _coord_text = _gen_s
                                 # ── INF→IMP: нормализуем "пожалуйста использовать" → "пожалуйста, используй" ──
@@ -6163,6 +6171,11 @@ class AnchorEngine:
                                         logger.debug('[ANCHOR-AUTOPILOT] loop retry: %s', _retry_err)
                             _coord_text = re.sub(r'через\s+—', 'через другой канал —', _coord_text, flags=re.IGNORECASE)
                             _coord_text = re.sub(r'через\s{2,}', 'через ', _coord_text, flags=re.IGNORECASE)
+                            # Канцеляризмы — заменяем на живые конструкции
+                            _coord_text = re.sub(r'\bвозьми на себя:\s*', '', _coord_text, flags=re.IGNORECASE)
+                            _coord_text = re.sub(r'\bнужно поработать над:\s*', 'разберись с ', _coord_text, flags=re.IGNORECASE)
+                            _coord_text = re.sub(r'\bзаймись:\s*', '', _coord_text, flags=re.IGNORECASE)
+                            _coord_text = re.sub(r'\bпоработай над:\s*', 'разберись с ', _coord_text, flags=re.IGNORECASE)
                             # LinkedIn/неподключённые сервисы — убираем из самого поручения (а не только из отображения)
                             for _banned_svc in ('linkedin', r'sales\s*navigator', r'apollo\.io', r'calendly', r'hubspot'):
                                 _coord_text = re.sub(
@@ -11386,10 +11399,10 @@ class AnchorEngine:
                         else:
                             # Описательная задача: "найденные авторы для outreach"
                             _assign_templates = [
-                                f'{_ag_name}, займись: {_t}.',
-                                f'{_ag_name}, нужно поработать над: {_t}.',
-                                f'{_ag_name}, вот задача — {_t}.',
-                                f'{_ag_name}, возьми на себя: {_t}.',
+                                f'{_ag_name}, есть задача — {_t}.',
+                                f'{_ag_name}, вот что нужно сделать: {_t}.',
+                                f'{_ag_name}, давай разберёмся с этим — {_t}.',
+                                f'{_ag_name}, нужна твоя помощь — {_t}.',
                             ]
                         _asi_assign_text = _rnd_assign.choice(_assign_templates)
                         # Фильтруем технические reason-коды — не добавляем в текст пользователю
@@ -11415,9 +11428,9 @@ class AnchorEngine:
                     _aac_raw = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:80]
                     _aac_t = _aac_raw.lower() if _aac_raw[:1].isupper() else _aac_raw
                     _asi_assign_text = _rnd_aac.choice([
-                        f'{_ag_name}, займись: {_aac_t}.',
-                        f'{_ag_name}, возьми на себя: {_aac_t}.',
-                        f'{_ag_name}, вот задача — {_aac_t}.',
+                        f'{_ag_name}, есть задача — {_aac_t}.',
+                        f'{_ag_name}, вот что нужно — {_aac_t}.',
+                        f'{_ag_name}, нужна твоя помощь — {_aac_t}.',
                         f'{_ag_name}, можешь {_aac_t}?',
                     ])
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
@@ -11518,9 +11531,9 @@ class AnchorEngine:
                             _is_vague_task = True
                     if _is_vague_task:
                         if _tool_hint:
-                            _task_title_short = f"{_tool_hint.replace('_', ' ').title()}: {_ag_goal_title[:70]}"
+                            _task_title_short = f"{_tool_hint.replace('_', ' ').title()}: {_ag_goal_title[:150]}"
                         else:
-                            _task_title_short = f"Шаг к цели: {_ag_goal_title[:80]}"
+                            _task_title_short = f"Шаг к цели: {_ag_goal_title[:150]}"
                         logger.info("[COORD] vague task remapped for %s: tool=%s title=%s", _ag_name, _tool_hint, _task_title_short[:60])
 
                     # ── DEDUP: не создавать задачу если аналогичная уже была за 8 часов ──
