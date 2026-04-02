@@ -2386,7 +2386,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             elif _has_imap:
                 # Email-агент с IMAP — проверяем реальные результаты outreach
                 try:
-                    from models import EmailOutreach as _EO_gs
+                    from models import EmailOutreach as _EO_gs, EmailContact as _EC_gs
                     from models import Session as _Session_gs
                     _sess_gs = _Session_gs()
                     try:
@@ -2394,6 +2394,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                             _EO_gs.user_id == user.id,
                             _EO_gs.status == 'replied',
                         ).count() if user else 0
+                        # Fallback: считаем через email_contacts.status если email_outreach не обновился
+                        if _gs_replied == 0 and user:
+                            _gs_replied = _sess_gs.query(_EC_gs).filter(
+                                _EC_gs.user_id == user.id,
+                                _EC_gs.status.in_(['replied', 'interested']),
+                            ).count()
                     finally:
                         _sess_gs.close()
                     if _gs_replied > 0:

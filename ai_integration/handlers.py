@@ -522,18 +522,31 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         Task.status == 'pending'
     ).all()
     _title_lc = title.lower().strip()
-    _stop_t = {'для', 'или', 'что', 'как', 'это', 'при', 'через', 'the', 'and', 'for'}
+    _stop_t = {'для', 'или', 'что', 'как', 'это', 'при', 'через', 'the', 'and', 'for',
+               'своем', 'своей', 'свои', 'свой', 'свою', 'данные', 'нужно', 'нашем'}
     _new_t_sig = {w for w in _title_lc.split() if len(w) > 3} - _stop_t
+    # Ищем domain-идентификаторы: r/Community, URL-фрагменты, CamelCase-токены — они весят как 2 слова
+    import re as _re_dup_id
+    _ID_PAT = _re_dup_id.compile(r'\br/[A-Za-z][A-Za-z0-9_]+|[A-Z][a-z]+[A-Z][a-zA-Z]*|https?://\S+')
+    _new_t_ids = set(m.lower() for m in _ID_PAT.findall(title))
     def _task_is_dup(t):
         _et = t.title.lower().strip()
+        _et_orig = t.title
         if _et == _title_lc:
             return True
         # contains-check (одно вложено в другое)
         if _title_lc in _et or _et in _title_lc:
             return True
-        # 3+ общих значимых слова
+        # Проверяем совпадение domain-идентификаторов (r/SyntheticBiology, CamelCase-имена)
+        _et_ids = set(m.lower() for m in _ID_PAT.findall(_et_orig))
+        _common_ids = _new_t_ids & _et_ids
         _et_sig = {w for w in _et.split() if len(w) > 3} - _stop_t
-        return len(_new_t_sig & _et_sig) >= 3
+        _common_words = _new_t_sig & _et_sig
+        # Если есть совпадение идентификатора — достаточно 1 дополнительного общего слова
+        if _common_ids and len(_common_words) >= 1:
+            return True
+        # Стандартная проверка: 3+ общих значимых слова
+        return len(_common_words) >= 3
     existing = next((t for t in existing_tasks if _task_is_dup(t)), None)
     if existing:
         logger.warning(f"[ADD_TASK] Duplicate pending task found: '{existing.title}' (id={existing.id})")
@@ -12404,9 +12417,24 @@ async def reply_to_outreach_email(
                 id=outreach_id, user_id=user.id
             ).first()
         elif recipient_email:
+            # Сначала ищем с status='replied' (идеальный случай — check_emails уже обновил)
             outreach = session.query(EmailOutreach).filter_by(
                 user_id=user.id, recipient_email=recipient_email, status='replied'
             ).order_by(EmailOutreach.reply_at.desc()).first()
+            # Fallback: если check_emails не успел обновить статус — ищем sent/delivered/opened
+            if not outreach:
+                outreach = session.query(EmailOutreach).filter(
+                    EmailOutreach.user_id == user.id,
+                    EmailOutreach.recipient_email == recipient_email,
+                    EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                ).order_by(EmailOutreach.sent_at.desc()).first()
+                # Помечаем как replied раз агент знает об ответе
+                if outreach:
+                    outreach.status = 'replied'
+                    if not outreach.reply_at:
+                        from datetime import datetime as _dt_roe, timezone as _tz_roe
+                        outreach.reply_at = _dt_roe.now(_tz_roe.utc)
+                    session.commit()
 
         if not outreach:
             return " Не найдено письмо для ответа."
@@ -14042,7 +14070,7 @@ async def check_emails(
         # Личный Resend-адрес пользователя (из user_api_keys агентов)
         try:
             from models import UserAgent as _UA_me
-            _ua_rows = session.query(_UA_me).filter_by(user_id=user.id).all()
+            _ua_rows = session.query(_UA_me).filter_by(author_id=user.id).all()
             for _ua_r in _ua_rows:
                 _keys_str = getattr(_ua_r, 'user_api_keys', '') or ''
                 if 'RESEND_FROM=' in _keys_str:
@@ -15658,6 +15686,11 @@ async def save_email_contact(
         # Блокируем generic/корпоративные адреса
         if _is_generic_email(email_clean):
             return f" {email_clean} — это корпоративный/generic адрес. Сохраняй только личные email конкретных людей."
+
+        # ── GUARD: не сохранять адреса собственной платформы (asibiont.com, resend bounce и т.п.) ──
+        _OWN_PLATFORM_DOMAINS = {'asibiont.com'}
+        if _email_domain in _OWN_PLATFORM_DOMAINS:
+            return f"⛔ {email_clean} — это адрес платформы ASI Biont, не внешний контакт. Не сохраняй."
 
         # ── GUARD: не сохранять свой собственный email или IMAP-аккаунт агента ──
         _user_email_own = (getattr(user, 'email', '') or '').strip().lower()
