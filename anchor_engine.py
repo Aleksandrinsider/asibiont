@@ -424,6 +424,18 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
         hint = _CAP_TOOL_HINTS.get(cat, '')
         lines.append(f'  ✅ {name}: {hint}' if hint else f'  ✅ {name}')
 
+    # Показываем Custom API метки по-отдельности (интеграции не из стандартного списка)
+    _known_label_kws = set()
+    for kws, _ in _CAP_CATEGORY_MAP:
+        _known_label_kws.update(kws)
+    for lbl in labels:
+        lbl_l = str(lbl).lower()
+        if lbl_l.startswith('custom api:'):
+            lines.append(f'  ✅ {lbl}: run_agent_action(action="run") или HTTP-запрос')
+        elif not any(kw in lbl_l for kw in _known_label_kws) and 'инструменты' not in lbl_l:
+            # Нераспознанный лейбл из пользовательского кода — показываем явно
+            lines.append(f'  ✅ {lbl}')
+
     # Всегда доступные
     lines.append('  ✅ web_search, research_topic, create_goal — всегда доступны')
 
@@ -442,6 +454,8 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
 # Маппинг подстрок в label (output _parse_agent_integrations) → тип каталога
 # Используется для проактивного советника по интеграциям (_FULL_CATALOG)
 _CATALOG_TYPE_KEYWORDS: list[tuple[tuple[str, ...], str]] = [
+    (('яндекс.метрик', 'yandex_metrika', 'metrika', 'яндекс метрик', 'api-metrika'), 'analytics'),
+    (('google analytics', 'ga4', 'gtag'), 'analytics'),
     (('gmail', 'imap', 'smtp', 'яндекс почт', 'mail.ru', 'email', 'почта', 'resend', 'sendgrid', 'mailgun', 'sparkpost'), 'email'),
     (('github', 'gitlab'), 'github'),
     (('rss', 'лента', 'feed'), 'rss'),

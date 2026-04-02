@@ -42,6 +42,17 @@ from .self_learning import get_learner
 
 logger = logging.getLogger(__name__)
 
+
+def _decrypt_keys(raw: str) -> str:
+    """Расшифровывает user_api_keys если зашифрованы (Fernet/obf), иначе возвращает как есть."""
+    if not raw or not raw.startswith(('enc:', 'obf:')):
+        return raw or ''
+    try:
+        from config import decrypt_token as _dt
+        return _dt(raw)
+    except Exception:
+        return raw
+
 # ── Integration hint patterns: (substring_in_tool_result_lower, user_recommendation) ─────
 # Используются в _extract_intg_hints() для детектирования ограничений инструментов
 # и автоматической простановки рекомендаций в ответ агента.
@@ -1467,7 +1478,7 @@ class HybridAutonomousAgent:
             _supported_l = [s.lower().strip() for s in _supported_actions]
 
             if _orig_action and _supported_actions and _orig_l not in _supported_l:
-                _api_keys = (agent_data.get('user_api_keys') or '').lower()
+                _api_keys = _decrypt_keys(agent_data.get('user_api_keys') or '').lower()
                 _ctx = ' '.join([
                     _orig_action,
                     str(action_params or ''),
@@ -5031,12 +5042,7 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
     found: set = set()
 
     # Расшифровываем user_api_keys если зашифрован (Fernet/obf)
-    if (user_api_keys or '').startswith(('enc:', 'obf:')):
-        try:
-            from config import decrypt_token as _dt
-            user_api_keys = _dt(user_api_keys)
-        except Exception:
-            pass
+    user_api_keys = _decrypt_keys(user_api_keys)
 
     # 1. Из user_api_keys — смотрим имена ключей
     for line in (user_api_keys or '').splitlines():
@@ -5055,14 +5061,21 @@ def _parse_agent_integrations(user_api_keys: str, python_code: str = '',
                 break
         else:
             # Ключ не распознан известными префиксами.
-            # Если выглядит как API-credential — показываем как "Custom API: Xxx".
+            # Если выглядит как API-credential — показываем как "Custom API: Xxx Yyy".
+            # Берём первые 2 части имени (MY_CUSTOM_CRM_TOKEN → "My Custom") для информативности.
             # Это позволяет AI знать, что интеграция есть, даже если она нестандартная.
             _API_SUFFIXES = ('_API', '_KEY', '_TOKEN', '_SECRET', '_ACCESS', '_HOOK', '_URL')
-            _base = key.split('_')[0]
+            _parts = key.split('_')
+            # Убираем общие суффиксы-слова из конца для более чистого имени
+            _GENERIC_SUFFIXES = {'API', 'KEY', 'TOKEN', 'SECRET', 'ACCESS', 'HOOK', 'URL', 'PASS', 'PASSWORD'}
+            while _parts and _parts[-1] in _GENERIC_SUFFIXES:
+                _parts = _parts[:-1]
+            _base = _parts[0] if _parts else key.split('_')[0]
+            _service_name = ' '.join(p.title() for p in _parts[:3]) if len(_parts) > 1 else _base.title()
             if (
                 any(key.endswith(s) for s in _API_SUFFIXES) or 'API' in key or 'TOKEN' in key
-            ) and len(_base) >= 3 and _base not in ('NONE', 'NULL', 'TRUE', 'FALSE', 'DEBUG', 'ENV'):
-                found.add(f'Custom API: {_base.title()}')
+            ) and len(_service_name) >= 3 and _base not in ('NONE', 'NULL', 'TRUE', 'FALSE', 'DEBUG', 'ENV'):
+                found.add(f'Custom API: {_service_name}')
 
     # 2. Из python_code — ищем import и характерные строки
     code_lc = (python_code or '').lower()
@@ -5856,7 +5869,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             if _em == '📧' and '📧' not in _seen_emojis:
                 _acc = next((
                     lk.split('=', 1)[1].strip()
-                    for lk in (agent.get('user_api_keys') or '').splitlines()
+                    for lk in _decrypt_keys(agent.get('user_api_keys') or '').splitlines()
                     if '=' in lk and any(
                         f'{p}_USER' in lk.upper()
                         for p in ('GMAIL', 'YANDEX', 'MAILRU', 'IMAP', 'EMAIL', 'SMTP')
@@ -6405,7 +6418,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             if any(w in _tm_spec for w in ('dev', 'код', 'разраб', 'python', 'script')):
                                 _caps.append('скрипты/интеграции')
                         # 3. Инferируем из api_keys (наличие ключей = доступ к сервису)
-                        _tm_keys = (_tm.user_api_keys or '').lower()
+                        _tm_keys = _decrypt_keys(_tm.user_api_keys or '').lower()
                         if any(w in _tm_keys for w in ('gmail', 'imap', 'smtp', 'mail')):
                             if 'email' not in ' '.join(_caps):
                                 _caps.append('email (ключи)')
@@ -7063,7 +7076,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     # Определяем наличие интеграций для адаптивных лимитов (больше интеграций = больше цепочек)
     _has_outreach_intg = any(
-        w in (agent.get('user_api_keys', '') or '').lower()
+        w in _decrypt_keys(agent.get('user_api_keys', '') or '').lower()
         for w in ('github', 'gitlab', 'resend', 'sendgrid', 'mailgun', 'gmail_pass', 'gmail_app')
     )
     # Определяем тип цели для адаптивных подсказок
