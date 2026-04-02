@@ -6172,6 +6172,32 @@ class AnchorEngine:
                             _coord_text = ' '.join(_coord_clean_lines).strip()
                             # Не ограничиваем до 2-3 предложений: сохраняем глубину,
                             # оставляя только защиту от структурных блоков.
+
+                            # ── Telegram-guard для coord_text: если email-only агент получает
+                            # Telegram-поручение — заменяем прямо здесь, до сохранения в чат ──
+                            _caps_chosen_ct = _agent_caps_categories.get(_chosen_name, set())
+                            if 'telegram' not in _caps_chosen_ct and _coord_text:
+                                _ct_lower_tg = _coord_text.lower()
+                                _tg_ct_kws = ('telegram', 'тг-', 't.me/', '@ai_', '@hiai', 'hiai', 'hi,ai',
+                                              'канал', 'группу', 'группа', 'чате', 'чат')
+                                _tg_act_kws = ('контакт', 'напиши', 'свяжись', 'outreach',
+                                               'admin', 'администр', 'dm', 'сообщ')
+                                _is_tg_coord = (
+                                    any(kw in _ct_lower_tg for kw in _tg_ct_kws)
+                                    and any(kw in _ct_lower_tg for kw in _tg_act_kws)
+                                )
+                                if _is_tg_coord:
+                                    logger.info(
+                                        "[ANCHOR-AUTOPILOT] coord-tg-guard: replaced Telegram coord_text"
+                                        " for email-only agent %s", _chosen_name,
+                                    )
+                                    _goal_titles_tg = [g.get('title', '')[:40] for g in data.get('goals', [])[:1] if g.get('title')]
+                                    _goal_hint_tg = f' для цели «{_goal_titles_tg[0]}»' if _goal_titles_tg else ''
+                                    _coord_text = (
+                                        f'{_chosen_name}, найди через web_search email-контакты авторов'
+                                        f' AI-блогов и разработчиков{_goal_hint_tg} — dev.to, Hacker News,'
+                                        f' ProductHunt. Сохрани найденные адреса через save_email_contact.'
+                                    )
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     try:
