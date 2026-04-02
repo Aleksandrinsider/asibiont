@@ -490,7 +490,14 @@ def _detect_integration_signal(service_label: str, text_lc: str, text_raw: str):
     text_clean = text_raw.strip()
     if not text_clean or len(text_clean) < 20:
         return (None, None)
-    reason = next((l.strip() for l in text_clean.splitlines() if l.strip()), text_clean[:80])
+    import re as _re_signals
+    # Пропускаем строки-заголовки секций вида '# === ... ===' или '=== ... ==='
+    _header_pat = _re_signals.compile(r'^#?\s*={2,}.*={2,}\s*$')
+    reason = next(
+        (l.strip() for l in text_clean.splitlines()
+         if l.strip() and not _header_pat.match(l.strip())),
+        text_clean[:80]
+    )
     return ('MEDIUM', reason[:80])
 
 
@@ -569,11 +576,18 @@ def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: s
         ).first()
         if _recent:
             return
+        # Если service_label совпадает с agent_name — не дублируем
+        _svc_display = service_label if service_label and service_label != agent_name else ''
+        _topic_parts = [agent_name]
+        if _svc_display:
+            _topic_parts.append(_svc_display)
+        _topic_parts.append(reason)
+        _topic_str = ': '.join(_topic_parts[:2]) + ' — ' + _topic_parts[-1] if len(_topic_parts) > 1 else reason
         _ias.add(_Anch(
             user_id=user_db_id,
             anchor_type='integration_alert',
             source=_src,
-            topic=f'{agent_name}: {service_label} — {reason}',
+            topic=_topic_str,
             priority=priority,
             data=_json_ia.dumps({
                 'agent_name': agent_name,

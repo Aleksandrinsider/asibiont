@@ -9108,7 +9108,10 @@ class AnchorEngine:
                             f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
                             f" ⚠️ ЧЕРЕДОВАНИЕ ИНБОКСА: {_p_cr['name']} оснащён IMAP-почтой."
                             f" В КАЖДОМ цикле или через цикл назначай ему check_emails (чтобы не пропустить ответы контактов)."
-                            f" Хорошая цепочка: check_emails → reply_to_outreach_email (ответить всем кто отписал) → send_follow_up_email (тем кто молчит 3+ дня)."
+                            f" Алгоритм после check_emails:"
+                            f" 1) Есть ответы (status=replied в email_outreach)? → reply_to_outreach_email(outreach_id=ID)."
+                            f" 2) Нет ответов? → send_follow_up_email тем кто молчит 3+ дня."
+                            f" Если reply_to_outreach_email вернул 'не найдено письмо' — это нормально: никто ещё не ответил, переключайся на follow-up."
                         )
                     if 'git' in _cats_cr:
                         _do_not_lines.append(
@@ -10221,7 +10224,9 @@ class AnchorEngine:
                 + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
                 + (
                     f"⚡ ОБЯЗАТЕЛЬНО: Есть {_email_sent} отправленных писем — назначь IMAP-агенту check_emails "
-                    f"(проверить ответы: reply_to_outreach_email для ответивших, follow-up для молчащих >2дн).\n"
+                    f"(проверить ответы: если кто-то ответил → reply_to_outreach_email(outreach_id=...) по ID записи; "
+                    f"если нет ответов → send_follow_up_email тем кто молчит >2дн; "
+                    f"если reply_to_outreach_email возвращает ошибку 'не найдено' → значит никто ещё не ответил, переходи к follow-up).\n"
                     if _email_sent > 0 and
                     any('email' in _agent_caps_categories.get(a.name, set()) for a in real_agents)
                     else ''
