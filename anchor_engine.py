@@ -6079,6 +6079,32 @@ class AnchorEngine:
                             except Exception:
                                 pass
 
+                        # ── Динамические примеры: строятся из реальных интеграций агента, а не захардкожены ──
+                        _COORD_EXAMPLE_BY_CAT: dict[str, str] = {
+                            'email': '«{name}, загляни в почту через check_emails — если кто-то заинтересовался, сразу договаривайся о следующем шаге.»',
+                            'git': '«{name}, через run_agent_action search_users найди 10 профильных специалистов с публичным email, сохрани контакты через save_email_contact.»',
+                            'analytics': '«{name}, проверь аналитику за неделю — какие страницы дают максимум конверсий, создай заметку с выводами через save_note.»',
+                            'rss': '«{name}, проверь RSS-ленты на свежие публикации, выдели топ-3 и создай обзорную заметку через save_note.»',
+                            'telegram': '«{name}, создай пост через create_post с ключевыми инсайтами и опубликуй в Telegram-канал.»',
+                            'discord': '«{name}, опубликуй в Discord обновление по прогрессу цели через publish_to_discord.»',
+                            'social': '«{name}, подготовь пост для соцсетей через create_post — с конкретными фактами из последнего исследования.»',
+                            'calendar': '«{name}, создай напоминание через set_reminder с дедлайном по ближайшей задаче.»',
+                            'crm': '«{name}, обнови CRM через run_agent_action — проверь статус сделок и зафиксируй прогресс.»',
+                        }
+                        _COORD_UNIVERSAL_EXAMPLES = [
+                            '«{name}, запусти research_topic по теме цели — найди 3 свежих подхода, сохрани через save_note и создай задачу (add_task) с конкретным шагом.»',
+                            '«{name}, через web_search найди 5 экспертов по теме на профильных площадках, сохрани данные через save_note.»',
+                        ]
+                        _dynamic_examples: list[str] = []
+                        for _cat_ex in sorted(_cats_c):
+                            if _cat_ex in _COORD_EXAMPLE_BY_CAT and len(_dynamic_examples) < 4:
+                                _dynamic_examples.append(_COORD_EXAMPLE_BY_CAT[_cat_ex].format(name=_chosen_name))
+                        if len(_dynamic_examples) < 2:
+                            for _ue in _COORD_UNIVERSAL_EXAMPLES:
+                                if len(_dynamic_examples) < 3:
+                                    _dynamic_examples.append(_ue.format(name=_chosen_name))
+                        _dynamic_examples_str = '\n'.join(f'  {e}' for e in _dynamic_examples)
+
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
@@ -6125,8 +6151,8 @@ class AnchorEngine:
                             "  — КАКОЙ результат ты ждёшь (N контактов, пост, письмо, заметка)\n"
                             "Если в твоём поручении нет ни одного инструмента и ни одной конкретной цифры —\n"
                             "ты дал пустышку. Перепиши.\n"
-                            "Пример пустышки: «Марк, посмотри что можно сделать по нашим целям» — ЭТО БЕСПОЛЕЗНО.\n"
-                            "Пример хорошего: «Марк, запусти web_search по AI-стартапам на dev.to, найди 3 автора с публичным email и сохрани через save_note.»\n\n"
+                            "Пример пустышки: «Агент, посмотри что можно сделать по нашим целям» — ЭТО БЕСПОЛЕЗНО.\n"
+                            f"Пример хорошего: «{_chosen_name}, запусти web_search по [конкретная тема] на dev.to, найди 3 автора с публичным email и сохрани через save_note.»\n\n"
                             "Объясни почему именно этот подход и что ждёшь в итоге — всё в одном потоке, без заголовков и нумерации.\n"
                             "Работай только с теми инструментами, которые перечислены в карточке выше — остальных у агента нет.\n"
                             "Если один агент собрал данные — назначь другому использовать ЭТИ данные для действия (письмо, пост, заметка, задача).\n"
@@ -6134,17 +6160,8 @@ class AnchorEngine:
                             "Если есть «Последний результат» — отталкивайся от него: что уже сделано, какой следующий шаг.\n"
                             "Если для выполнения шага не хватает данных пользователя — зафиксируй недостающий факт коротко, без открытого вопроса в конце поручения.\n"
                             "В конце можешь дать одну идею улучшения процесса (только из подключённых каналов).\n"
-                            "✅ ОБРАЗЦЫ (разные типы целей):\n"
-                            "  «Кристина, через run_agent_action search_users найди 10 разработчиков AI-агентов "
-                            "с публичным email, сохрани контакты и подготовь персональные письма лучшим из них.»\n"
-                            "  «Кристина, проверь Яндекс.Метрику за неделю — какие страницы дают максимум конверсий, "
-                            "и создай заметку с выводами через save_note.»\n"
-                            "  «Марк, исследуй через research_topic лучшие подходы к изучению Python — "
-                            "сохрани подборку через save_note и создай 3 задачи (add_task) с конкретными шагами.»\n"
-                            "  «Марк, проверь RSS-ленты на свежие статьи по нашей теме, выдели топ-3 автора "
-                            "и передай их данные Кристине через DELEGATE для outreach.»\n"
-                            "  «Кристина, загляни в почту через check_emails — "
-                            "если кто-то заинтересовался, сразу договаривайся о тестировании.»\n"
+                            f"✅ ОБРАЗЦЫ (адаптированы под интеграции {_chosen_name}):\n"
+                            f"{_dynamic_examples_str}\n"
                             "❌ ЗАПРЕЩЕНО: заголовки (ДЕЙСТВИЕ:, СТРАТЕГИЯ:, Задача:, Шаги:), "
                             "нумерованные списки, маркеры (•, -, *), markdown. "
                             "Запрещены канцеляризмы: «возьми на себя:», «нужно поработать над:», «займись:», «поработай над:». "
@@ -7316,7 +7333,7 @@ class AnchorEngine:
                             f"Предупреждения: {'; '.join(str(w)[:100] for w in _fw_dir[:2])}\n\n"
                             "Напиши ОДНО короткое предложение (15-25 слов) ДЛЯ ПОЛЬЗОВАТЕЛЯ: "
                             "что агенты сделали и что будет дальше. "
-                            "НЕ обращайся к агентам (Марк, Кристина) — пиши ПОЛЬЗОВАТЕЛЮ. "
+                            "НЕ обращайся к агентам по имени — пиши ПОЛЬЗОВАТЕЛЮ. "
                             "Прямо и конкретно — без общих слов. Живо. Без markdown."
                         )
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_d
@@ -9736,17 +9753,19 @@ class AnchorEngine:
                 'finance':  'Используй: research_topic (основной!), get_news_trends, web_search. Если есть RSS с финансовой лентой — run_agent_action первым. НЕ email для анализа.',
                 'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
                 'dev':      (
-                    'Используй: run_agent_action(action="search_users", params={"query":"language:python repos:>3 followers:10..100"}) '
-                    'для поиска разработчиков. Результат — самоценный: сохрани через save_note или save_email_contact. '
+                    ('Если у агента есть GitHub API — run_agent_action(action="search_users", params={"query":"language:python repos:>3 followers:10..100"}) для поиска разработчиков. МЕНЯЙ query каждый цикл.'
+                     if 'git' in _all_connected_types else
+                     'GitHub API не подключён. Используй: web_search("разработчики [технология] open source") или find_relevant_contacts_for_task.')
+                    + ' Результат — самоценный: сохрани через save_note или save_email_contact. '
                     'Если цель подразумевает outreach — продолжи цепочку send_outreach_email. '
-                    'Если цель аналитическая — сохрани находки, подготовь обзор через create_post. '
-                    'МЕНЯЙ query каждый цикл: другой language, followers, topic, location.'
+                    'Если цель аналитическая — сохрани находки, подготовь обзор через create_post.'
                     + _github_dedup_note
                 ),
                 'people':   (
-                    'Для поиска людей: если у агента GITHUB_TOKEN → run_agent_action(action="search_users", params={"query":"<тема> repos:>2 followers:5..80"}). '
-                    'Если нет — find_relevant_contacts_for_task или web_search. '
-                    'Найденных людей сохрани (save_email_contact или save_note). '
+                    ('Для поиска людей: у агента есть GitHub API → run_agent_action(action="search_users", params={"query":"<тема> repos:>2 followers:5..80"}).'
+                     if 'git' in _all_connected_types else
+                     'Для поиска людей: find_relevant_contacts_for_task или web_search("[профиль] contacts email").')
+                    + ' Найденных людей сохрани (save_email_contact или save_note). '
                     'Дальнейший шаг зависит от цели: outreach, заметка, обзор, делегирование.'
                     + _github_dedup_note
                 ),
