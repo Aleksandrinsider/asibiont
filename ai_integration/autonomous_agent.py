@@ -144,24 +144,31 @@ def _extract_intg_hints(messages: list) -> list[str]:
 
 
 def _get_active_agent_integration_snapshot(user_id: int) -> dict:
-    """Возвращает срез интеграций активного агента для проверки доступности сервисов."""
+    """Возвращает срез интеграций ВСЕХ активных агентов для проверки доступности сервисов."""
     try:
-        from .user_agents import get_user_active_agent, load_agent_personality
+        from .user_agents import get_user_active_agents, load_agent_personality
 
-        _aid = get_user_active_agent(user_id)
-        if not _aid:
+        _aids = get_user_active_agents(user_id)
+        if not _aids:
             return {'labels': [], 'caps_text': '', 'keys_text': ''}
-        _adata = load_agent_personality(_aid) or {}
-        _keys = _adata.get('user_api_keys') or ''
-        _tools = _adata.get('tools_allowed') or ''
-        if isinstance(_tools, list):
-            _tools = json.dumps(_tools, ensure_ascii=False)
-        _code = _adata.get('python_code') or ''
-        _caps = _parse_agent_integrations(_keys, _code, _tools)
+        _all_labels: list[str] = []
+        _all_caps: list[str] = []
+        _all_keys: list[str] = []
+        for _aid in _aids:
+            _adata = load_agent_personality(_aid) or {}
+            _keys = _adata.get('user_api_keys') or ''
+            _tools = _adata.get('tools_allowed') or ''
+            if isinstance(_tools, list):
+                _tools = json.dumps(_tools, ensure_ascii=False)
+            _code = _adata.get('python_code') or ''
+            _caps = _parse_agent_integrations(_keys, _code, _tools)
+            _all_labels.extend(c for c in _caps if c not in _all_labels)
+            _all_caps.extend(str(c).lower() for c in _caps)
+            _all_keys.append(str(_keys).lower())
         return {
-            'labels': _caps,
-            'caps_text': ' '.join(str(c).lower() for c in _caps),
-            'keys_text': str(_keys).lower(),
+            'labels': _all_labels,
+            'caps_text': ' '.join(_all_caps),
+            'keys_text': ' '.join(_all_keys),
         }
     except Exception as _ih_err:
         logger.debug("[INTG HINT] integration check failed: %s", _ih_err)
