@@ -16936,8 +16936,31 @@ async def start_content_campaign(
         if not name or not goal:
             return " Укажи название и цель кампании"
 
+        # Авто-подбор времени из расписания пользователя если не указано
         if not post_time:
-            return "В какое время публиковать посты? Например: '09:00', '18:00', '21:00'."
+            try:
+                from datetime import datetime as _dt_cc, timedelta as _td_cc
+                _today = _dt_cc.utcnow().date()
+                _tasks_today = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['active', 'pending']),
+                    Task.reminder_time.isnot(None),
+                ).all()
+                _busy_hours = set()
+                for _t in _tasks_today:
+                    _rt = _t.reminder_time
+                    if _rt and hasattr(_rt, 'hour'):
+                        _busy_hours.add(_rt.hour)
+                # Предпочтительные слоты: 10:00, 18:00, 09:00, 19:00, 12:00, 15:00
+                for _candidate in ['10:00', '18:00', '09:00', '19:00', '12:00', '15:00']:
+                    _ch = int(_candidate.split(':')[0])
+                    if _ch not in _busy_hours:
+                        post_time = _candidate
+                        break
+                if not post_time:
+                    post_time = '10:00'
+            except Exception:
+                post_time = '10:00'
 
         if platforms is None:
             platforms = ['feed']
