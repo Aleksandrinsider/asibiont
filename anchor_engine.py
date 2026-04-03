@@ -5482,6 +5482,32 @@ class AnchorEngine:
                         except Exception as _cc_err:
                             logger.debug('[ANCHOR-AUTOPILOT] last cycle ctx: %s', _cc_err)
 
+                        # ── Active email campaigns context ──
+                        _active_campaigns_ctx = ''
+                        if 'email' in _cats_c:
+                            try:
+                                from models import EmailCampaign as _EC_camp_ctx
+                                _active_camps = session.query(_EC_camp_ctx).filter(
+                                    _EC_camp_ctx.user_id == user.id,
+                                    _EC_camp_ctx.status == 'active',
+                                ).all()
+                                if _active_camps:
+                                    _camp_parts = []
+                                    for _ac in _active_camps[:3]:
+                                        _camp_parts.append(
+                                            f'  #{_ac.id} «{_ac.name}»: отправлено {_ac.emails_sent}/{_ac.max_emails or "∞"}, '
+                                            f'дневной лимит {_ac.daily_limit}'
+                                        )
+                                    _active_campaigns_ctx = (
+                                        '\n📧 АКТИВНЫЕ EMAIL-КАМПАНИИ (уже созданы — НЕ создавай новые!):\n'
+                                        + '\n'.join(_camp_parts)
+                                        + '\n  → НЕ вызывай start_email_campaign — кампания уже есть.\n'
+                                        '  → Для отправки писем используй send_outreach_email(recipient_email, subject, body).\n'
+                                        '  → Для поиска контактов — web_search или save_email_contact.\n'
+                                    )
+                            except Exception:
+                                pass
+
                         # ── DO NOT CONTACT list (single-agent mode) ──
                         _dnc_str_c = ''
                         if 'email' in _cats_c:
@@ -5503,7 +5529,7 @@ class AnchorEngine:
 
                         # ── Динамические примеры: строятся из реальных интеграций агента, а не захардкожены ──
                         _COORD_EXAMPLE_BY_CAT: dict[str, str] = {
-                            'email': '«{name}, загляни в почту через check_emails — если кто-то заинтересовался, сразу договаривайся о следующем шаге.»',
+                            'email': '«{name}, отправь персональное письмо через send_outreach_email контакту из базы — с коротким B2B-питчем под его сферу. Если контактов нет — найди через web_search и сохрани через save_email_contact.»',
                             'git': '«{name}, через run_agent_action search_users найди 10 профильных специалистов с публичным email, сохрани контакты через save_email_contact.»',
                             'analytics': '«{name}, проверь аналитику за неделю — какие страницы дают максимум конверсий, создай заметку с выводами через save_note.»',
                             'rss': '«{name}, проверь RSS-ленты на свежие публикации, выдели топ-3 и создай обзорную заметку через save_note.»',
@@ -5550,6 +5576,7 @@ class AnchorEngine:
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
                             + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
                             + (_dnc_str_c if _dnc_str_c else '')
+                            + (_active_campaigns_ctx if _active_campaigns_ctx else '')
 
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
                             f"  0) Посмотри на список инструментов выше. Задай себе: «Каким конкретным инструментом\n"
@@ -5615,6 +5642,7 @@ class AnchorEngine:
                                 'web_search', 'check_emails', 'research_topic', 'create_post',
                                 'save_note', 'delegate_task', 'find_relevant', 'run_agent_action',
                                 'add_task', 'set_reminder', 'generate_image', 'save_email_contact',
+                                'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
                             )
                             _COORD_PLATFORM_HINTS = (
                                 'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
@@ -5640,6 +5668,20 @@ class AnchorEngine:
                                     )
                             else:
                                 _coord_text = _gen_s
+                                # ── Guard: координатор назначил start_email_campaign при активной кампании ──
+                                if _active_campaigns_ctx and 'start_email_campaign' in _gen_lower:
+                                    import re as _re_secamp
+                                    _coord_text = _re_secamp.sub(
+                                        r'start_email_campaign',
+                                        'send_outreach_email',
+                                        _coord_text,
+                                    )
+                                    _coord_text = _re_secamp.sub(
+                                        r'[Зз]апусти\s+массовую\s+email[- ]кампанию',
+                                        'Отправь персональное письмо через send_outreach_email',
+                                        _coord_text,
+                                    )
+                                    logger.info("[ANCHOR-AUTOPILOT] COORD-GUARD: replaced start_email_campaign → send_outreach_email")
                                 # ── INF→IMP: нормализуем "пожалуйста использовать" → "пожалуйста, используй" ──
                                 _COORD_INF_MAP = {
                                     'использовать': 'используй', 'найти': 'найди', 'проверить': 'проверь',

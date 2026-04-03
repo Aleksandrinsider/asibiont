@@ -6929,7 +6929,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "4. Если один инструмент заблокирован/недоступен — сразу вызови другой из твоего списка.\n"
             "5. Нашёл задачу для коллеги → DELEGATE[Имя]: задача с конкретными данными.\n"
             "6. Если check_emails вернул 'нет новых писем от незнакомых контактов' → НЕ повторяй check_emails! "
-            "Вместо этого вызови start_email_campaign или find_relevant_contacts_for_task.\n"
+            "Вместо этого вызови send_outreach_email (если есть контакты) или find_relevant_contacts_for_task (если нужны новые контакты).\n"
             "7. ФИНАЛЬНЫЙ ТЕКСТ (когда пишешь отчёт без tool-вызовов):\n"
             "   ❌ НЕЛЬЗЯ: «Кампания #1: ...\\n\\nКампания #2: ...» — это списки, ЗАПРЕЩЕНО.\n"
             "   ❌ НЕЛЬЗЯ: двойные переносы строк между абзацами.\n"
@@ -7088,7 +7088,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         system_prompt += (
                             "🤔 Ты используешь только 1 канал. Какой ДРУГОЙ канал дополнит стратегию?\n"
                             "  💡 find_and_message_relevant_users = бесплатно, без лимитов\n"
-                            "  💡 start_email_campaign = авто-поиск контактов + до 100 писем/день\n"
+                            "  💡 send_outreach_email = персональное письмо контакту (кампания уже создана)\n"
                             "  💡 publish_to_telegram/create_post = контент привлекает аудиторию\n"
                         )
             finally:

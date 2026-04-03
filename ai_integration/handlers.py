@@ -11565,8 +11565,16 @@ async def start_email_campaign(
                 session.commit()
                 lang = getattr(user, 'language_code', 'ru') or 'ru'
                 if lang == 'en':
-                    return f" Campaign #{ex.id} «{ex.name}» already exists and is active! Updated daily_limit to {ex.daily_limit}. Leads will be found automatically."
-                return f" Кампания #{ex.id} «{ex.name}» уже существует и активна! Обновил daily_limit до {ex.daily_limit}. Лиды будут найдены автоматически."
+                    return (
+                        f" Campaign #{ex.id} «{ex.name}» already exists and is active (sent {ex.emails_sent}/{ex.max_emails or '∞'}, today limit {ex.daily_limit})! "
+                        f"DO NOT call start_email_campaign again. "
+                        f"To send emails use send_outreach_email(recipient_email, subject, body) for each contact individually."
+                    )
+                return (
+                    f" Кампания #{ex.id} «{ex.name}» уже существует и активна (отправлено {ex.emails_sent}/{ex.max_emails or '∞'}, дневной лимит {ex.daily_limit})! "
+                    f"НЕ вызывай start_email_campaign повторно. "
+                    f"Для отправки писем используй send_outreach_email(recipient_email, subject, body) — по одному письму на контакт."
+                )
 
         campaign = EmailCampaign(
             user_id=user.id,
