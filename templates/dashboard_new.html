@@ -3655,29 +3655,98 @@ except Exception as e:
                 name: 'Google Sheets',
                 fields: [
                     {k:'GSHEETS_ID', label:'ID таблицы (из URL между /d/ и /edit)', ph:'1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', t:'text'},
-                    {k:'GSHEETS_SHEET', label:'Название листа', ph:'Sheet1', t:'text', opt:true}
+                    {k:'GSHEETS_SHEET', label:'Название листа', ph:'Sheet1', t:'text', opt:true},
+                    {k:'GSHEETS_CREDENTIALS', label:'Google Service Account JSON (для записи, опционально)', ph:'{"type":"service_account","project_id":"..."}', t:'text', opt:true}
                 ],
-                hint: 'Таблица должна быть открыта для просмотра: Файл → Поделиться → Все с ссылкой → Читатель',
-                code: `import urllib.request, csv, io, os
+                hint: 'Для чтения: таблица должна быть открыта для просмотра (Файл → Поделиться → Все с ссылкой → Читатель). Для записи: Google Cloud Console → APIs → Sheets API → Service Account → скачать JSON ключ. Дайте доступ сервис-аккаунту к таблице (Editor).',
+                code: `import urllib.request, json, csv, io, os
 SHEET_ID = os.environ.get('GSHEETS_ID', '')
 SHEET_NAME = os.environ.get('GSHEETS_SHEET', 'Sheet1')
+CREDS_JSON = os.environ.get('GSHEETS_CREDENTIALS', '')
+ACTION = os.environ.get('AGENT_ACTION', '')
+
+def get_token():
+    import base64, time as _time
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+    creds = json.loads(CREDS_JSON)
+    iat = int(_time.time())
+    header = base64.urlsafe_b64encode(json.dumps({"alg":"RS256","typ":"JWT"}).encode()).rstrip(b'=').decode()
+    payload = base64.urlsafe_b64encode(json.dumps({"iss":creds["client_email"],"scope":"https://www.googleapis.com/auth/spreadsheets","aud":"https://oauth2.googleapis.com/token","iat":iat,"exp":iat+3600}).encode()).rstrip(b'=').decode()
+    key = serialization.load_pem_private_key(creds["private_key"].encode(), password=None)
+    sig = base64.urlsafe_b64encode(key.sign((header+'.'+payload).encode(), padding.PKCS1v15(), hashes.SHA256())).rstrip(b'=').decode()
+    token_data = json.dumps({"grant_type":"urn:ietf:params:oauth:grant-type:jwt-bearer","assertion":header+'.'+payload+'.'+sig}).encode()
+    req = urllib.request.Request('https://oauth2.googleapis.com/token', data=token_data, headers={'Content-Type':'application/json'})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())['access_token']
+
+def sheets_api(path, data=None, method='GET'):
+    token = get_token()
+    url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + path
+    body = json.dumps(data).encode() if data else None
+    req = urllib.request.Request(url, data=body, method=method)
+    req.add_header('Authorization', 'Bearer ' + token)
+    req.add_header('Content-Type', 'application/json')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+
 try:
     if not SHEET_ID:
         print('GSHEETS_ID не задан')
+    elif ACTION == 'append_row':
+        if not CREDS_JSON:
+            print('Для записи нужен GSHEETS_CREDENTIALS (Service Account JSON)')
+        else:
+            row_data = os.environ.get('AGENT_PARAM_ROW', os.environ.get('AGENT_PARAM_VALUES', ''))
+            if not row_data:
+                print('Ошибка: укажи данные строки в params.row (JSON-массив или через запятую)')
+            else:
+                try:
+                    values = json.loads(row_data) if row_data.strip().startswith('[') else [v.strip() for v in row_data.split(',')]
+                except Exception:
+                    values = [v.strip() for v in row_data.split(',')]
+                import urllib.parse
+                rng = urllib.parse.quote(SHEET_NAME + '!A:A')
+                result = sheets_api('/values/' + rng + ':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS', data={'values': [values]}, method='POST')
+                updates = result.get('updates', {})
+                print('OK: строка добавлена в ' + updates.get('updatedRange', SHEET_NAME) + ', ячеек: ' + str(updates.get('updatedCells', len(values))))
+    elif ACTION == 'update_cell':
+        if not CREDS_JSON:
+            print('Для записи нужен GSHEETS_CREDENTIALS (Service Account JSON)')
+        else:
+            cell_range = os.environ.get('AGENT_PARAM_RANGE', os.environ.get('AGENT_PARAM_CELL', ''))
+            value = os.environ.get('AGENT_PARAM_VALUE', '')
+            if not cell_range or not value:
+                print('Ошибка: укажи range (напр. A1 или A1:C3) и value')
+            else:
+                import urllib.parse
+                rng = urllib.parse.quote(SHEET_NAME + '!' + cell_range)
+                try:
+                    val_parsed = json.loads(value) if value.strip().startswith('[') else [[value]]
+                except Exception:
+                    val_parsed = [[value]]
+                result = sheets_api('/values/' + rng + '?valueInputOption=USER_ENTERED', data={'values': val_parsed}, method='PUT')
+                print('OK: обновлено ' + str(result.get('updatedCells', 1)) + ' ячеек в ' + result.get('updatedRange', cell_range))
     else:
-        url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + SHEET_NAME
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            content = r.read().decode('utf-8', errors='replace')
-        rows = list(csv.reader(io.StringIO(content)))
+        if CREDS_JSON:
+            import urllib.parse
+            rng = urllib.parse.quote(SHEET_NAME)
+            result = sheets_api('/values/' + rng)
+            rows = result.get('values', [])
+        else:
+            url = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?tqx=out:csv&sheet=' + SHEET_NAME
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                content = r.read().decode('utf-8', errors='replace')
+            rows = list(csv.reader(io.StringIO(content)))
         if not rows:
             print('Таблица пуста')
         else:
             print('Таблица: ' + str(len(rows)) + ' строк, ' + str(len(rows[0])) + ' столбцов')
-            print('Заголовки: ' + ' | '.join(rows[0][:8]))
+            print('Заголовки: ' + ' | '.join(str(h) for h in rows[0][:8]))
             print('---')
             for row in rows[1:8]:
-                print(' | '.join((v or '')[:25] for v in row[:8]))
+                print(' | '.join((str(v) or '')[:25] for v in row[:8]))
 except Exception as e:
     print('Ошибка Google Sheets: ' + str(e))`
             },
@@ -4227,19 +4296,117 @@ try:
         title = os.environ.get('AGENT_PARAM_TITLE', 'Новый лид')
         name = os.environ.get('AGENT_PARAM_NAME', '')
         phone = os.environ.get('AGENT_PARAM_PHONE', '')
+        email = os.environ.get('AGENT_PARAM_EMAIL', '')
         fields = {'TITLE': title}
         if name: fields['NAME'] = name
         if phone: fields['PHONE'] = [{'VALUE': phone, 'VALUE_TYPE': 'WORK'}]
+        if email: fields['EMAIL'] = [{'VALUE': email, 'VALUE_TYPE': 'WORK'}]
         result = b24('crm.lead.add', {'fields': fields})
         if result.get('result'):
             print('OK: лид создан, ID=' + str(result['result']))
         else:
-            print(t('n-error') + ': ' + json.dumps(result.get('error_description', result)))
+            print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+
+    elif ACTION == 'update_lead':
+        lead_id = os.environ.get('AGENT_PARAM_ID', '')
+        if not lead_id:
+            print('Ошибка: укажи ID лида в params.id')
+        else:
+            fields = {}
+            new_title = os.environ.get('AGENT_PARAM_TITLE', '')
+            new_status = os.environ.get('AGENT_PARAM_STATUS_ID', '')
+            new_name = os.environ.get('AGENT_PARAM_NAME', '')
+            if new_title: fields['TITLE'] = new_title
+            if new_status: fields['STATUS_ID'] = new_status
+            if new_name: fields['NAME'] = new_name
+            if not fields:
+                print('Ошибка: укажи хотя бы одно поле (title, status_id, name)')
+            else:
+                result = b24('crm.lead.update', {'id': int(lead_id), 'fields': fields})
+                if result.get('result'):
+                    print('OK: лид ' + lead_id + ' обновлён. ' + json.dumps(fields))
+                else:
+                    print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+
+    elif ACTION == 'get_pipelines':
+        result = b24('crm.status.list', {'filter': {'ENTITY_ID': 'STATUS'}})
+        statuses = result.get('result', [])
+        if not statuses:
+            print('Статусов лидов не найдено')
+        else:
+            print('Статусы лидов:')
+            for s in statuses:
+                print('  ' + s.get('NAME', '') + ' (STATUS_ID=' + s.get('STATUS_ID', '') + ')')
+
+    elif ACTION in ('create_contact', 'add_contact'):
+        name = os.environ.get('AGENT_PARAM_NAME', '')
+        last_name = os.environ.get('AGENT_PARAM_LAST_NAME', '')
+        email = os.environ.get('AGENT_PARAM_EMAIL', '')
+        phone = os.environ.get('AGENT_PARAM_PHONE', '')
+        fields = {}
+        if name: fields['NAME'] = name
+        if last_name: fields['LAST_NAME'] = last_name
+        if email: fields['EMAIL'] = [{'VALUE': email, 'VALUE_TYPE': 'WORK'}]
+        if phone: fields['PHONE'] = [{'VALUE': phone, 'VALUE_TYPE': 'WORK'}]
+        if not fields:
+            print('Ошибка: укажи хотя бы имя контакта')
+        else:
+            result = b24('crm.contact.add', {'fields': fields})
+            if result.get('result'):
+                print('OK: контакт создан, ID=' + str(result['result']))
+            else:
+                print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+
+    elif ACTION == 'get_contacts':
+        query = os.environ.get('AGENT_PARAM_QUERY', '')
+        params = {'order': {'DATE_CREATE': 'DESC'}, 'select': ['ID','NAME','LAST_NAME','EMAIL','PHONE','DATE_CREATE'], 'start': 0}
+        if query:
+            params['filter'] = {'%NAME': query}
+        result = b24('crm.contact.list', params)
+        contacts = result.get('result', [])
+        if not contacts:
+            print('Контактов не найдено')
+        else:
+            print('Найдено ' + str(len(contacts)) + ' контактов:')
+            for c in contacts[:10]:
+                em = ''
+                ph = ''
+                if c.get('EMAIL') and isinstance(c['EMAIL'], list) and c['EMAIL']:
+                    em = c['EMAIL'][0].get('VALUE', '')
+                if c.get('PHONE') and isinstance(c['PHONE'], list) and c['PHONE']:
+                    ph = c['PHONE'][0].get('VALUE', '')
+                print('ID=' + str(c.get('ID','')) + ' | ' + (c.get('NAME','') + ' ' + c.get('LAST_NAME','')).strip() + ' | ' + em + ' | ' + ph)
+
+    elif ACTION == 'add_note':
+        entity_id = os.environ.get('AGENT_PARAM_ID', '')
+        entity_type = os.environ.get('AGENT_PARAM_ENTITY_TYPE', 'lead')
+        text = os.environ.get('AGENT_PARAM_TEXT', '')
+        if not entity_id or not text:
+            print('Ошибка: укажи ID сущности (params.id) и текст (params.text)')
+        else:
+            result = b24('crm.timeline.comment.add', {'fields': {'ENTITY_ID': int(entity_id), 'ENTITY_TYPE': entity_type, 'COMMENT': text}})
+            if result.get('result'):
+                print('OK: комментарий добавлен к ' + entity_type + ' ID=' + entity_id)
+            else:
+                print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+
+    elif ACTION == 'link_contact':
+        lead_id = os.environ.get('AGENT_PARAM_LEAD_ID', '')
+        contact_id = os.environ.get('AGENT_PARAM_CONTACT_ID', '')
+        if not lead_id or not contact_id:
+            print('Ошибка: укажи lead_id и contact_id')
+        else:
+            result = b24('crm.lead.contact.add', {'id': int(lead_id), 'fields': {'CONTACT_ID': int(contact_id)}})
+            if result.get('result'):
+                print('OK: контакт ' + contact_id + ' привязан к лиду ' + lead_id)
+            else:
+                print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+
     else:
         result = b24('crm.lead.list', {'order': {'DATE_CREATE': 'DESC'}, 'select': ['ID','TITLE','NAME','STATUS_ID','DATE_CREATE'], 'start': 0})
         leads = result.get('result', [])
         if not leads:
-            print('Битрикс24: лидов не найдено')
+            print('Битрикс24 подключён. Лидов пока нет.')
         else:
             print('Последние ' + str(len(leads)) + ' лидов:')
             for l in leads[:10]:
@@ -4424,7 +4591,7 @@ except Exception as e:
                 fields: [
                     {k:'HUBSPOT_API_KEY', label:'Private App Token', ph:'pat-eu1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', t:'text'}
                 ],
-                hint: 'HubSpot → Settings → Integrations → Private Apps → Create → All scopes: crm.objects.contacts + crm.objects.deals → Generate token.',
+                hint: 'HubSpot → Settings → Integrations → Private Apps → Create → All scopes: crm.objects.contacts + crm.objects.deals + crm.objects.notes → Generate token.',
                 code: `import urllib.request, json, os
 TOKEN = os.environ.get('HUBSPOT_API_KEY', '')
 ACTION = os.environ.get('AGENT_ACTION', '')
@@ -4439,30 +4606,132 @@ def hs(path, data=None, method='GET'):
 try:
     if ACTION == 'create_contact':
         email = os.environ.get('AGENT_PARAM_EMAIL', '')
-        firstname = os.environ.get('AGENT_PARAM_FIRSTNAME', '')
-        lastname = os.environ.get('AGENT_PARAM_LASTNAME', '')
+        firstname = os.environ.get('AGENT_PARAM_FIRSTNAME', os.environ.get('AGENT_PARAM_FIRST_NAME', ''))
+        lastname = os.environ.get('AGENT_PARAM_LASTNAME', os.environ.get('AGENT_PARAM_LAST_NAME', ''))
+        phone = os.environ.get('AGENT_PARAM_PHONE', '')
         if not email:
             print('Ошибка: не указан email (AGENT_PARAM_EMAIL)')
         else:
             props = {'email': email}
             if firstname: props['firstname'] = firstname
             if lastname: props['lastname'] = lastname
+            if phone: props['phone'] = phone
             result = hs('/crm/v3/objects/contacts', data={'properties': props}, method='POST')
             if result.get('id'):
                 print('OK: контакт создан, ID=' + result['id'] + ', email=' + email)
             else:
-                print(t('n-error') + ': ' + json.dumps(result))
-    else:
-        result = hs('/crm/v3/objects/contacts?limit=10&properties=email,firstname,lastname,lifecyclestage')
+                print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION in ('create_deal', 'create_lead'):
+        dealname = os.environ.get('AGENT_PARAM_NAME', os.environ.get('AGENT_PARAM_DEALNAME', 'New deal'))
+        amount = os.environ.get('AGENT_PARAM_AMOUNT', os.environ.get('AGENT_PARAM_PRICE', ''))
+        stage = os.environ.get('AGENT_PARAM_DEALSTAGE', os.environ.get('AGENT_PARAM_STAGE', ''))
+        pipeline = os.environ.get('AGENT_PARAM_PIPELINE', '')
+        props = {'dealname': dealname}
+        if amount: props['amount'] = amount
+        if stage: props['dealstage'] = stage
+        if pipeline: props['pipeline'] = pipeline
+        result = hs('/crm/v3/objects/deals', data={'properties': props}, method='POST')
+        if result.get('id'):
+            print('OK: сделка создана, ID=' + result['id'] + ', name=' + dealname)
+        else:
+            print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION == 'update_deal':
+        deal_id = os.environ.get('AGENT_PARAM_ID', '')
+        if not deal_id:
+            print('Ошибка: укажи ID сделки в params.id')
+        else:
+            props = {}
+            name = os.environ.get('AGENT_PARAM_NAME', os.environ.get('AGENT_PARAM_DEALNAME', ''))
+            amount = os.environ.get('AGENT_PARAM_AMOUNT', os.environ.get('AGENT_PARAM_PRICE', ''))
+            stage = os.environ.get('AGENT_PARAM_DEALSTAGE', os.environ.get('AGENT_PARAM_STAGE', ''))
+            if name: props['dealname'] = name
+            if amount: props['amount'] = amount
+            if stage: props['dealstage'] = stage
+            if not props:
+                print('Ошибка: укажи хотя бы одно поле (name, amount, dealstage)')
+            else:
+                result = hs('/crm/v3/objects/deals/' + str(deal_id), data={'properties': props}, method='PATCH')
+                if result.get('id'):
+                    print('OK: сделка ' + deal_id + ' обновлена. ' + json.dumps(props))
+                else:
+                    print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION == 'get_contacts':
+        query = os.environ.get('AGENT_PARAM_QUERY', '')
+        if query:
+            result = hs('/crm/v3/objects/contacts/search', data={'filterGroups': [{'filters': [{'propertyName': 'email', 'operator': 'CONTAINS_TOKEN', 'value': '*' + query + '*'}]}], 'properties': ['email','firstname','lastname','phone'], 'limit': 20}, method='POST')
+        else:
+            result = hs('/crm/v3/objects/contacts?limit=20&properties=email,firstname,lastname,phone')
         contacts = result.get('results', [])
         if not contacts:
-            print('HubSpot: контактов не найдено')
+            print('Контактов не найдено' + (': ' + query if query else ''))
         else:
-            print('Последние ' + str(len(contacts)) + ' контактов:')
+            print('Найдено ' + str(len(contacts)) + ' контактов:')
             for c in contacts:
                 p = c.get('properties', {})
-                name_str = (p.get('firstname','') + ' ' + p.get('lastname','')).strip()
-                print('ID=' + c['id'] + ' | ' + (name_str or '(без имени)') + ' | ' + p.get('email','') + ' | ' + p.get('lifecyclestage',''))
+                name_str = ((p.get('firstname','') or '') + ' ' + (p.get('lastname','') or '')).strip()
+                print('ID=' + c['id'] + ' | ' + (name_str or '(без имени)') + ' | ' + (p.get('email','') or '') + ' | ' + (p.get('phone','') or ''))
+
+    elif ACTION == 'add_note':
+        text = os.environ.get('AGENT_PARAM_TEXT', '')
+        contact_id = os.environ.get('AGENT_PARAM_CONTACT_ID', os.environ.get('AGENT_PARAM_ID', ''))
+        deal_id = os.environ.get('AGENT_PARAM_DEAL_ID', '')
+        if not text:
+            print('Ошибка: укажи текст заметки (params.text)')
+        else:
+            import datetime as _dt
+            body = {'properties': {'hs_note_body': text, 'hs_timestamp': _dt.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')}}
+            assoc = []
+            if contact_id:
+                assoc.append({'to': {'id': int(contact_id)}, 'types': [{'associationCategory': 'HUBSPOT_DEFINED', 'associationTypeId': 202}]})
+            if deal_id:
+                assoc.append({'to': {'id': int(deal_id)}, 'types': [{'associationCategory': 'HUBSPOT_DEFINED', 'associationTypeId': 214}]})
+            if assoc:
+                body['associations'] = assoc
+            result = hs('/crm/v3/objects/notes', data=body, method='POST')
+            if result.get('id'):
+                target = 'контакту ' + str(contact_id) if contact_id else ('сделке ' + str(deal_id) if deal_id else 'без привязки')
+                print('OK: заметка добавлена к ' + target + ', note_id=' + result['id'])
+            else:
+                print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION == 'get_pipelines':
+        result = hs('/crm/v3/pipelines/deals')
+        pipelines = result.get('results', [])
+        if not pipelines:
+            print('Воронок не найдено')
+        else:
+            for p in pipelines:
+                print('Воронка: ' + p.get('label','') + ' (ID=' + p.get('id','') + ')')
+                for s in p.get('stages', []):
+                    print('  Этап: ' + s.get('label','') + ' (stage=' + s.get('id','') + ', order=' + str(s.get('displayOrder','')) + ')')
+
+    else:
+        result = hs('/crm/v3/objects/deals?limit=10&properties=dealname,amount,dealstage,pipeline,createdate')
+        deals = result.get('results', [])
+        if not deals:
+            result_c = hs('/crm/v3/objects/contacts?limit=10&properties=email,firstname,lastname,lifecyclestage')
+            contacts = result_c.get('results', [])
+            if not contacts:
+                print('HubSpot подключён. Контактов и сделок пока нет.')
+            else:
+                print('Последние ' + str(len(contacts)) + ' контактов:')
+                for c in contacts:
+                    p = c.get('properties', {})
+                    name_str = ((p.get('firstname','') or '') + ' ' + (p.get('lastname','') or '')).strip()
+                    print('ID=' + c['id'] + ' | ' + (name_str or '(без имени)') + ' | ' + (p.get('email','') or '') + ' | ' + (p.get('lifecyclestage','') or ''))
+        else:
+            print('Последние ' + str(len(deals)) + ' сделок:')
+            for d in deals:
+                p = d.get('properties', {})
+                print('ID=' + d['id'] + ' | ' + (p.get('dealname','') or '') + ' | ' + (p.get('amount','0') or '0') + ' | stage=' + (p.get('dealstage','') or ''))
+except urllib.error.HTTPError as he:
+    body = ''
+    try: body = he.read().decode()[:200]
+    except: pass
+    print('Ошибка HubSpot: HTTP ' + str(he.code) + ' ' + body)
 except Exception as e:
     print('Ошибка HubSpot: ' + str(e))`
             },
@@ -5236,7 +5505,7 @@ except Exception as e:
                     {k:'GOOGLE_CALENDAR_CREDENTIALS', label:'Google Service Account JSON (содержимое файла)', ph:'{"type":"service_account","project_id":"..."}', t:'text'},
                     {k:'GOOGLE_CALENDAR_ID', label:'ID календаря', ph:'your-email@gmail.com', t:'text'}
                 ],
-                hint: 'Google Cloud Console → APIs → Calendar API → Service Account → скачать JSON ключ. Далите доступ сервис-аккаунту к вашему календарю.',
+                hint: 'Google Cloud Console → APIs → Calendar API → Service Account → скачать JSON ключ. Дайте доступ сервис-аккаунту к вашему календарю (Editor для создания событий).',
                 code: `import urllib.request, json, os, datetime
 CREDS_JSON = os.environ.get('GOOGLE_CALENDAR_CREDENTIALS', '')
 CAL_ID = os.environ.get('GOOGLE_CALENDAR_ID', 'primary')
@@ -5262,20 +5531,53 @@ try:
     with urllib.request.urlopen(req, timeout=10) as r:
         token_resp = json.loads(r.read().decode())
     access_token = token_resp['access_token']
-    # List events
-    now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-    url = 'https://www.googleapis.com/calendar/v3/calendars/' + CAL_ID + '/events?timeMin=' + now + '&maxResults=10&singleEvents=true&orderBy=startTime'
-    req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + access_token})
-    with urllib.request.urlopen(req, timeout=10) as r:
-        events = json.loads(r.read().decode())
-    items = events.get('items', [])
-    if not items:
-        print('Нет предстоящих событий в календаре.')
+
+    if ACTION == 'create_event':
+        summary = os.environ.get('AGENT_PARAM_SUMMARY', os.environ.get('AGENT_PARAM_TITLE', ''))
+        description = os.environ.get('AGENT_PARAM_DESCRIPTION', '')
+        start = os.environ.get('AGENT_PARAM_START', '')
+        end = os.environ.get('AGENT_PARAM_END', '')
+        if not summary or not start:
+            print('Ошибка: укажи summary (название) и start (2026-04-03T10:00:00+03:00 или 2026-04-03 для весь день)')
+        else:
+            event = {'summary': summary}
+            if description: event['description'] = description
+            if 'T' in start:
+                event['start'] = {'dateTime': start}
+                if not end:
+                    try:
+                        dt = datetime.datetime.fromisoformat(start)
+                        end = (dt + datetime.timedelta(hours=1)).isoformat()
+                    except Exception:
+                        end = start
+                event['end'] = {'dateTime': end}
+            else:
+                event['start'] = {'date': start}
+                event['end'] = {'date': end if end else start}
+            url = 'https://www.googleapis.com/calendar/v3/calendars/' + CAL_ID + '/events'
+            body = json.dumps(event).encode()
+            req = urllib.request.Request(url, data=body, method='POST')
+            req.add_header('Authorization', 'Bearer ' + access_token)
+            req.add_header('Content-Type', 'application/json')
+            with urllib.request.urlopen(req, timeout=10) as r:
+                result = json.loads(r.read().decode())
+            ev_start = result.get('start', {}).get('dateTime', result.get('start', {}).get('date', ''))
+            print('OK: событие создано. ' + result.get('summary','') + ' — ' + ev_start[:16].replace('T', ' '))
     else:
-        print('Ближайшие события:')
-        for ev in items:
-            start = ev['start'].get('dateTime', ev['start'].get('date', ''))
-            print('  ' + start[:16].replace('T', ' ') + ' — ' + ev.get('summary', '(без названия)'))
+        # List events
+        now = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        url = 'https://www.googleapis.com/calendar/v3/calendars/' + CAL_ID + '/events?timeMin=' + now + '&maxResults=10&singleEvents=true&orderBy=startTime'
+        req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + access_token})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            events = json.loads(r.read().decode())
+        items = events.get('items', [])
+        if not items:
+            print('Нет предстоящих событий в календаре.')
+        else:
+            print('Ближайшие события:')
+            for ev in items:
+                start = ev['start'].get('dateTime', ev['start'].get('date', ''))
+                print('  ' + start[:16].replace('T', ' ') + ' — ' + ev.get('summary', '(без названия)'))
 except Exception as e:
     print('Ошибка Google Calendar: ' + str(e))`
             },

@@ -2484,7 +2484,7 @@ class HybridAutonomousAgent:
                     "category": "Productivity"
                 },
                 "Google Sheets": {
-                    "env_vars": ["GSHEETS_ID", "GSHEETS_SHEET", "GOOGLE_SHEETS_CREDENTIALS"],
+                    "env_vars": ["GSHEETS_ID", "GSHEETS_SHEET", "GSHEETS_CREDENTIALS"],
                     "keywords": ("sheets", "google sheets", "pandas"),
                     "category": "Data"
                 },
