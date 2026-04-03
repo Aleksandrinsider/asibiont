@@ -7008,10 +7008,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 if _hist_logs:
                     _hist_lines = []
                     _used_qp: list[str] = []
+                    _had_error_hist = False
+                    _ERROR_KW_HIST = ('ошибк', 'error', 'не смог', 'не удал', 'сбой', 'fail', 'timeout', 'не работ', 'не отправ')
                     for _hl in _hist_logs:
                         _ts = _hl.created_at.strftime('%H:%M') if _hl.created_at else '?'
                         _title = (_hl.title or '')[:80]
                         _content = (_hl.content or '')[:100]
+                        # Sanitize: strip error descriptions to prevent hallucination loops
+                        _combined_hist = (_title + ' ' + _content).lower()
+                        if any(ew in _combined_hist for ew in _ERROR_KW_HIST):
+                            _had_error_hist = True
+                            _content = '[была ошибка — ПОВТОРИ вызов инструмента]'
                         _hist_lines.append(f"  [{_ts}] {_title} — {_content}")
                         # Парсим query+page из search-действий (GitHub search_users и подобные)
                         _m_qp = _re_hist.search(r'\[q=(.+?)\s+p=(\d+)\]', _hl.title or '')
@@ -7025,6 +7032,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         + "\n⚡ Выбери ПРИНЦИПИАЛЬНО ДРУГОЙ подход из доступных интеграций. "
                         "Чередуй каналы: поиск → заметки → задачи → посты → контакты → письма.\n"
                     )
+                    if _had_error_hist:
+                        system_prompt += (
+                            "\n⚠️ ВАЖНО: ошибки в истории могут быть ВРЕМЕННЫМИ. "
+                            "ВСЕГДА вызывай инструмент заново — НЕ пересказывай старые ошибки. "
+                            "Если send_outreach_email/send_email ранее не сработал — ПОПРОБУЙ СНОВА.\n"
+                        )
                     if _used_qp:
                         _qp_str = '\n  '.join(_used_qp[:10])
                         system_prompt += (
@@ -7235,6 +7248,47 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _content = _re_sub.sub(
                     r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
                 ).strip()
+
+            # ── Anti-hallucination: agent claims tool error without calling tool ──
+            # If autopilot agent says "error/can't send" in text but never called the tool,
+            # force it to actually call the tool instead of fabricating errors from history.
+            _HALLUCINATION_KW = ('ошибк', 'не смог', 'не удал', 'сбой', 'не работ', 'не отправ', 'не получил', 'техническ')
+            if (_is_autopilot_task and _iter == 0 and not _tool_calls and _tool_call_count == 0
+                    and _content and any(kw in _content.lower() for kw in _HALLUCINATION_KW)):
+                logger.warning(
+                    "[DIRECTOR-EXEC] anti-hallucination: %s claims error without tool call, forcing retry",
+                    agent.get('name'),
+                )
+                _messages.append({"role": "assistant", "content": _content})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Ты описал ошибку, но НЕ ВЫЗВАЛ ни одного инструмента. "
+                    "Ошибки из предыдущих сессий могут быть уже исправлены. "
+                    "ОБЯЗАТЕЛЬНО вызови инструмент прямо сейчас — НЕ пересказывай старые проблемы. "
+                    "Выполни задачу через вызов инструмента!"
+                )})
+                try:
+                    _ah_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=1200,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _ah_resp and _ah_resp.get('choices'):
+                        _ah_msg = _ah_resp['choices'][0]['message']
+                        _ah_tools = _ah_msg.get('tool_calls') or []
+                        if _ah_tools:
+                            logger.info("[DIRECTOR-EXEC] anti-hallucination retry succeeded: %d tools", len(_ah_tools))
+                            # Replace previous text-only response with actual tool calls
+                            _tool_calls = _ah_tools
+                            _msg = _ah_msg
+                            _content = _ah_msg.get('content') or ''
+                except Exception as _ah_err:
+                    logger.warning("[DIRECTOR-EXEC] anti-hallucination retry error: %s", _ah_err)
 
             # ── Autopilot retry: save_email_contact без send_outreach_email ──
             # Принудительный retry ТОЛЬКО для outreach-целей. Для других целей сохранение контакта самоценно.
@@ -9071,7 +9125,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _md_resp = await _exec_agent_for_director(_md_ag, _md_agent_task, user_id, dialog_context=_md_full_ctx)
                 _md_resp_text = _md_resp[0] if isinstance(_md_resp, tuple) else str(_md_resp or '')
                 if _md_resp_text:
-                    _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_resp_text[:400]}")
+                    # Sanitize error descriptions to prevent cross-agent contamination
+                    _md_clean = _md_resp_text[:400]
+                    _ERR_KW_MD = ('ошибк', 'сбой', 'не смог', 'не удал', 'не работ', 'не отправ')
+                    if any(ew in _md_clean.lower() for ew in _ERR_KW_MD):
+                        _md_clean = _md_clean + ' [⚠ ошибки могут быть временными — повтори инструмент]'
+                    _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_clean}")
                     await _send_visible(_md_resp_text)
                     _save_interaction_for_director(user_id, _md_resp_text, message_type='ai')
             return '__agent_handled__'
