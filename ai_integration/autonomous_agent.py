@@ -192,7 +192,7 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'label': 'Slack',
         'keywords': ('slack',),
         'presence': ('slack', 'slack_bot_token', 'slack_token'),
-        'setup': 'SLACK_BOT_TOKEN',
+        'setup': 'SLACK_TOKEN',
     },
     {
         'label': 'Discord',
@@ -209,8 +209,8 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
     {
         'label': 'Google Sheets',
         'keywords': ('google sheets', 'sheets', 'гугл таблиц', 'таблиц'),
-        'presence': ('google sheets', 'google_sheets', 'gspread', 'sheets'),
-        'setup': 'GOOGLE_SHEETS_CREDENTIALS',
+        'presence': ('google sheets', 'google_sheets', 'gspread', 'sheets', 'gsheets'),
+        'setup': 'GSHEETS_ID/GSHEETS_SHEET',
     },
     {
         'label': 'Jira',
@@ -222,7 +222,7 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'label': 'Trello',
         'keywords': ('trello',),
         'presence': ('trello',),
-        'setup': 'TRELLO_API_KEY/TRELLO_TOKEN',
+        'setup': 'TRELLO_KEY/TRELLO_TOKEN',
     },
     {
         'label': 'HubSpot',
@@ -245,14 +245,14 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
     {
         'label': 'Twitter/X',
         'keywords': ('twitter', 'x.com', 'твиттер'),
-        'presence': ('twitter', 'x_api_key', 'x api'),
-        'setup': 'X_API_KEY/X_API_SECRET',
+        'presence': ('twitter', 'x_api_key', 'x api', 'twitter_api'),
+        'setup': 'TWITTER_API_KEY/TWITTER_API_SECRET/TWITTER_ACCESS_TOKEN/TWITTER_ACCESS_SECRET',
     },
     {
         'label': 'hh.ru',
         'keywords': ('hh.ru', 'headhunter', 'хх.ру'),
-        'presence': ('hh.ru', 'hh_', 'headhunter', 'hh_api_token'),
-        'setup': 'HH_API_TOKEN',
+        'presence': ('hh.ru', 'hh_', 'headhunter', 'hh_query'),
+        'setup': 'HH_QUERY/HH_AREA',
     },
 ]
 
@@ -2459,12 +2459,12 @@ class HybridAutonomousAgent:
                     "category": "HR/Networking"
                 },
                 "Twitter/X": {
-                    "env_vars": ["X_API_KEY", "X_API_SECRET"],
+                    "env_vars": ["TWITTER_API_KEY", "TWITTER_API_SECRET", "TWITTER_ACCESS_TOKEN", "TWITTER_ACCESS_SECRET"],
                     "keywords": ("twitter", "x_api", "твиттер"),
                     "category": "Content"
                 },
                 "Telegram": {
-                    "env_vars": ["TELEGRAM_BOT_TOKEN"],
+                    "env_vars": ["TG_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"],
                     "keywords": ("telegram", "телеграм"),
                     "category": "Content"
                 },
@@ -2474,7 +2474,7 @@ class HybridAutonomousAgent:
                     "category": "Content"
                 },
                 "Slack": {
-                    "env_vars": ["SLACK_BOT_TOKEN"],
+                    "env_vars": ["SLACK_TOKEN", "SLACK_BOT_TOKEN"],
                     "keywords": ("slack",),
                     "category": "Collaboration"
                 },
@@ -2484,17 +2484,17 @@ class HybridAutonomousAgent:
                     "category": "Productivity"
                 },
                 "Google Sheets": {
-                    "env_vars": ["GOOGLE_SHEETS_CREDENTIALS"],
+                    "env_vars": ["GSHEETS_ID", "GSHEETS_SHEET", "GOOGLE_SHEETS_CREDENTIALS"],
                     "keywords": ("sheets", "google sheets", "pandas"),
                     "category": "Data"
                 },
                 "Airtable": {
-                    "env_vars": ["AIRTABLE_API_KEY"],
+                    "env_vars": ["AIRTABLE_TOKEN", "AIRTABLE_API_KEY"],
                     "keywords": ("airtable",),
                     "category": "Data"
                 },
                 "Trello": {
-                    "env_vars": ["TRELLO_API_KEY", "TRELLO_TOKEN"],
+                    "env_vars": ["TRELLO_KEY", "TRELLO_TOKEN"],
                     "keywords": ("trello",),
                     "category": "PM"
                 },
@@ -2519,7 +2519,7 @@ class HybridAutonomousAgent:
                     "category": "CRM"
                 },
                 "Bitrix24": {
-                    "env_vars": ["BITRIX24_TOKEN", "BITRIX24_URL"],
+                    "env_vars": ["BITRIX24_WEBHOOK"],
                     "keywords": ("bitrix", "битрикс"),
                     "category": "CRM"
                 },
@@ -2529,7 +2529,7 @@ class HybridAutonomousAgent:
                     "category": "CRM"
                 },
                 "Stripe": {
-                    "env_vars": ["STRIPE_SECRET_KEY"],
+                    "env_vars": ["STRIPE_SK", "STRIPE_SECRET_KEY"],
                     "keywords": ("stripe",),
                     "category": "Payments"
                 },
@@ -2554,7 +2554,7 @@ class HybridAutonomousAgent:
                     "category": "Finance"
                 },
                 "OpenWeatherMap": {
-                    "env_vars": ["OPENWEATHERMAP_API_KEY"],
+                    "env_vars": ["WEATHER_API_KEY", "OPENWEATHERMAP_API_KEY"],
                     "keywords": ("weather", "погод"),
                     "category": "Data"
                 },
@@ -2564,42 +2564,42 @@ class HybridAutonomousAgent:
                     "category": "Data"
                 },
                 "Wildberries": {
-                    "env_vars": ["WILDBERRIES_API_KEY"],
+                    "env_vars": ["WB_API_KEY", "WILDBERRIES_API_KEY"],
                     "keywords": ("wildberries",),
                     "category": "E-commerce"
                 },
                 "Ozon": {
-                    "env_vars": ["OZON_API_KEY"],
+                    "env_vars": ["OZON_CLIENT_ID", "OZON_API_KEY"],
                     "keywords": ("ozon",),
                     "category": "E-commerce"
                 },
                 "Shopify": {
-                    "env_vars": ["SHOPIFY_API_KEY", "SHOPIFY_STORE"],
+                    "env_vars": ["SHOPIFY_SHOP", "SHOPIFY_TOKEN"],
                     "keywords": ("shopify",),
                     "category": "E-commerce"
                 },
                 "Яндекс.Маркет": {
-                    "env_vars": ["YANDEX_MARKET_API_KEY"],
+                    "env_vars": ["YANDEX_MARKET_TOKEN", "YANDEX_MARKET_CAMPAIGN_ID"],
                     "keywords": ("yandex", "маркет", "яндекс"),
                     "category": "E-commerce"
                 },
                 "Avito": {
-                    "env_vars": ["AVITO_API_KEY"],
+                    "env_vars": ["AVITO_CLIENT_ID", "AVITO_CLIENT_SECRET"],
                     "keywords": ("avito", "авито"),
                     "category": "E-commerce"
                 },
                 "HH.ru": {
-                    "env_vars": ["HH_API_TOKEN"],
+                    "env_vars": ["HH_QUERY", "HH_API_TOKEN"],
                     "keywords": ("hh.ru", "headhunter"),
                     "category": "HR"
                 },
                 "Firebase": {
-                    "env_vars": ["FIREBASE_CONFIG"],
+                    "env_vars": ["FIREBASE_PROJECT_ID", "FIREBASE_API_KEY"],
                     "keywords": ("firebase",),
                     "category": "Development"
                 },
                 "CoinGecko": {
-                    "env_vars": ["COINGECKO_API_KEY"],
+                    "env_vars": ["CRYPTO_COINS", "COINGECKO_API_KEY"],
                     "keywords": ("coingecko",),
                     "category": "Finance"
                 },
@@ -2634,12 +2634,12 @@ class HybridAutonomousAgent:
                     "category": "Development"
                 },
                 "MoySklad": {
-                    "env_vars": ["MOYSKLAD_API_KEY"],
+                    "env_vars": ["MOYSKLAD_TOKEN", "MOYSKLAD_API_KEY"],
                     "keywords": ("moysklad", "мой склад"),
                     "category": "ERP"
                 },
                 "1C": {
-                    "env_vars": ["1C_API_KEY"],
+                    "env_vars": ["ONEC_URL", "ONEC_USER", "ONEC_PASSWORD"],
                     "keywords": ("1c", "1с"),
                     "category": "ERP"
                 },

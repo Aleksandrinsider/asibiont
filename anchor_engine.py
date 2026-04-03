@@ -174,34 +174,34 @@ _CAP_CATEGORY_NAMES: dict[str, str] = {
 # Инструменты по категории (для координатора)
 _CAP_TOOL_HINTS: dict[str, str] = {
     'email': 'check_emails, send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task',
-    'git': 'run_agent_action(точное action-имя GitHub-скрипта агента), save_email_contact',
+    'git': 'run_agent_action(action="create_issue", params={"title":"...","body":"..."}), save_email_contact',
     'rss': 'run_agent_action(точное action-имя RSS-скрипта агента), get_news_trends, create_post',
     'telegram': 'publish_to_telegram, create_post',
     'discord': 'publish_to_discord',
     'crm': 'run_agent_action(action="get_contacts"|"create_lead"|"update_lead"|"add_note"|"create_contact"|"link_contact"|"get_pipelines", params={...})',
-    'marketplace': 'run_agent_action(action="get_products"|"check_stock"|"update_price"|"get_orders")',
-    'pm': 'run_agent_action(action="list_issues"|"create_task"|"update_status", params={"project":"..."})',
-    'notion': 'run_agent_action(action="create_page"|"update_page"|"query_db")',
-    'sheets': 'run_agent_action(action="update_sheet"|"append_row"|"read_range", params={"row":[...]})',
-    'crypto': 'run_agent_action(action="get_price"|"get_balance"|"get_ticker", params={"symbol":"BTC"})',
+    'marketplace': 'run_agent_action — читает каталог/товары/заказы (write-операции зависят от конкретного маркетплейса)',
+    'pm': 'run_agent_action(action="create_issue"|"create_card"|"create_task", params={"title":"..."})',
+    'notion': 'run_agent_action(action="add_page"|"query_db", params={"title":"...","content":"..."})',
+    'sheets': 'run_agent_action — читает таблицу (write через GSHEETS_ID)',
+    'crypto': 'run_agent_action — читает цены монет (CoinGecko)',
     'finance': 'run_agent_action(action="get_price", symbol="BRENT"|"LKOH.MCX"), get_stock_price',
     'news': 'run_agent_action(action="get_news", query="..."), get_news_trends',
-    'slack': 'run_agent_action(action="post_message"|"list_channels", params={"channel":"#general"})',
-    'social': 'run_agent_action(action="post"|"get_stats"|"search", params={"text":"..."})',
-    'payments': 'run_agent_action(action="get_charges"|"list_invoices"|"get_revenue")',
-    'calendar': 'run_agent_action(action="list_events"|"create_event"|"find_free_slot", params={"date":"2026-04-01"})',
-    'calls': 'run_agent_action(action="send_sms"|"make_call", params={"to":"+7...", "message":"..."})',
+    'slack': 'run_agent_action(action="send_message", params={"text":"..."})',
+    'social': 'run_agent_action(action="post_wall", params={"text":"..."}) для VK',
+    'payments': 'run_agent_action(action="create_payment_link", params={"amount":..., "name":"..."})',
+    'calendar': 'run_agent_action — просмотр событий календаря',
+    'calls': 'run_agent_action(action="send_sms"|"send", params={"to":"+7...","message":"..."})',
     'script': 'run_agent_action(action="[точное имя ACTION из python_code агента]")',
     'image_gen': 'generate_image(prompt="...")',
     'storage': 'run_agent_action(action="upload"|"download"|"list_files", params={"path":"..."})',
     'analytics': 'run_agent_action(action="get_metrics"|"get_report", params={"period":"7d"})',
-    'ms_teams': 'run_agent_action(action="post_message"|"list_channels", params={"channel":"..."})',
-    'automation': 'run_agent_action(action="trigger"|"send_webhook", params={"event":"..."})',
-    'database': 'run_agent_action(action="query"|"insert"|"update", params={"query":"SELECT ..."})',
-    'hr': 'run_agent_action(action="search_vacancies"|"get_resumes", params={"query":"...","area":1})',
-    'advertising': 'run_agent_action(action="get_stats"|"pause_campaign"|"update_bid", params={"login":"..."})',
-    'scraping': 'run_agent_action(action="scrape"|"parse", params={"url":"...","selector":"..."})',
-    'ai_api': 'run_agent_action(action="generate"|"analyze"|"summarize", params={"prompt":"..."})',
+    'ms_teams': 'run_agent_action(action="send_message", params={"text":"..."})',
+    'automation': 'run_agent_action(action="trigger", params={"event":"..."})',
+    'database': 'run_agent_action(action="query"|"insert", params={"query":"SELECT ..."})',
+    'hr': 'run_agent_action — поиск вакансий hh.ru/SuperJob',
+    'advertising': 'run_agent_action — читает статистику рекламы',
+    'scraping': 'run_agent_action — скрейпит URL по CSS-селектору',
+    'ai_api': 'run_agent_action(action="ask"|"analyze", params={"prompt":"..."})',
 }
 
 
@@ -1356,42 +1356,43 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
         elif _cat == 'marketplace':
             _intg_connected.append(
-                '✅ Маркетплейс — run_agent_action(action="get_products") — каталог/список товаров\n'
-                '  run_agent_action(action="check_stock", params={"sku":"..."}) — остатки\n'
-                '  run_agent_action(action="get_orders") — последние заказы\n'
-                '  run_agent_action(action="update_price", params={"sku":"...", "price":...})\n'
-                '  🔗 Цепочки: check_stock → send_message_to_user (алерт) | get_orders → save_note → research_topic\n'
-                '  ⚠️ action-имена точно из python_code агента.'
+                '✅ Маркетплейс — run_agent_action() без action → аналитика (продажи, товары, заказы)\n'
+                '  WB: выручка и топ-артикулы за 7 дней | Ozon: выручка/заказы/возвраты за 30 дней\n'
+                '  Shopify: последние 10 заказов | Яндекс.Маркет: первые 5 товаров\n'
+                '  🔗 Цепочки: run_agent_action → save_note → send_message_to_user (алерт)\n'
+                '  ⚠️ Только чтение. Для write-операций нужен кастомный скрипт агента.'
             )
         elif _cat == 'pm':
             _intg_connected.append(
-                '✅ Трекер задач (Jira/Trello) — run_agent_action(action="list_issues", params={"project":"..."})\n'
-                '  run_agent_action(action="create_task", params={"title":"...", "assignee":"..."})\n'
-                '  run_agent_action(action="update_status", params={"id":"...", "status":"done"})\n'
-                '  🔗 Цепочки: list_issues → delegate_task | create_task → update_goal_progress\n'
-                '  ⚠️ action-имена точно из python_code агента.'
+                '✅ Трекер задач — run_agent_action() без action → список задач\n'
+                '  Jira: action="create_issue", params={"summary":"...","description":"...","priority":"Medium"}\n'
+                '  Trello: action="create_card", params={"name":"...","desc":"...","list_id":"..."}\n'
+                '  ClickUp: action="create_task", params={"name":"...","description":"...","priority":3}\n'
+                '  Linear: action="create_issue", params={"title":"...","description":"..."}\n'
+                '  🔗 Цепочки: run_agent_action → delegate_task | create_issue → update_goal_progress\n'
+                '  ⚠️ action-имена зависят от конкретного трекера! Используй точное имя.'
             )
         elif _cat == 'hr':
             _intg_connected.append(
-                '✅ HR / Работа (hh.ru/SuperJob) — run_agent_action(action="search_vacancies", params={"query":"Python developer", "area":1})\n'
-                '  run_agent_action(action="get_resumes", params={"query":"...", "experience":"between3And6"})\n'
-                '  🔗 Цепочки: search_vacancies → save_email_contact | get_resumes → save_email_contact → send_outreach_email\n'
-                '  ℹ️ area: 1=Москва, 2=Санкт-Петербург, 113=Россия. Меняй query каждый цикл.'
+                '✅ HR / Работа (hh.ru/SuperJob) — run_agent_action() без action → список вакансий по запросу\n'
+                '  hh.ru: ищет вакансии по HH_QUERY в области HH_AREA (1=Москва, 2=СПб, 113=Россия)\n'
+                '  SuperJob: последние 5 вакансий по запросу\n'
+                '  🔗 Цепочки: run_agent_action → save_note → send_message_to_user\n'
+                '  ⚠️ Только чтение (поиск). Для отклика на вакансию нужен кастомный скрипт.'
             )
         elif _cat == 'database':
             _intg_connected.append(
-                '✅ БД (PostgreSQL/MongoDB/Firebase) — run_agent_action(action="query", params={"query":"SELECT ..."})\n'
-                '  run_agent_action(action="insert", params={"table":"...", "data":{...}})\n'
-                '  run_agent_action(action="update", params={"table":"...", "condition":{...}, "data":{...}})\n'
-                '  🔗 Цепочки: query → research_topic (анализ) | insert → update_goal_progress\n'
-                '  ⚠️ Используй параметризованные запросы, НЕ конкатенируй строки SQL.'
+                '✅ БД — PostgreSQL: run_agent_action(action="query", params={"query":"SELECT ..."}) → до 20 строк\n'
+                '  MongoDB: run_agent_action(action="insert", params={"document":{...}}) | без action → поиск\n'
+                '  Firebase: run_agent_action(action="add", params={"fields":{...}}) | без action → листинг\n'
+                '  🔗 Цепочки: query → research_topic (анализ) | insert/add → update_goal_progress\n'
+                '  ⚠️ PostgreSQL: только SELECT (read-only). MongoDB/Firebase: insert/add + чтение.'
             )
         elif _cat == 'ai_api':
             _intg_connected.append(
-                '✅ AI/LLM API — run_agent_action(action="generate", params={"prompt":"..."})\n'
-                '  run_agent_action(action="analyze", params={"text":"...", "task":"classify|summarize|extract"})\n'
-                '  run_agent_action(action="summarize", params={"text":"..."})\n'
-                '  🔗 Цепочки: get_news → analyze → create_post | web_search → summarize → publish_to_telegram'
+                '✅ AI/LLM API — run_agent_action(action="ask"|"analyze", params={"prompt":"..."})\n'
+                '  🔗 Цепочки: get_news → analyze → create_post | web_search → ask → publish_to_telegram\n'
+                '  ⚠️ action-имена точно из python_code агента.'
             )
         elif _cat_hint:
             _intg_connected.append(f'✅ {_cat_name}: {_cat_hint}')
