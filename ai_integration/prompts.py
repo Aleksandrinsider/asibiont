@@ -129,9 +129,9 @@ Costs (1 token = 1 rub): message {msg_cost}, task {task_cost_min}-{task_cost_max
             profile += f"\n[{not_filled}: {', '.join(empty_fields)} — {ask}]"
     else:
         if lang == 'en':
-            profile = "\n[ profile is empty: you know NOTHING about this person — find out through conversation]"
+            profile = "\n[ profile fields not filled — learn city/field/goals through conversation, but use goals/tasks/agents context you already have]"
         else:
-            profile = "\n[ профиль пуст: НИЧЕГО не знаешь о человеке — узнай через живой разговор]"
+            profile = "\n[ поля профиля не заполнены — узнай город/сферу/цели через разговор, но ИСПОЛЬЗУЙ контекст целей/задач/агентов который у тебя УЖЕ ЕСТЬ]"
 
     # Search history
     search_context = ""
@@ -262,7 +262,7 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
                 profile_instruction = (
                     f"\n\nCRITICAL — PROFILE IS EMPTY (missing: {missing_str}). "
                     f"The person is writing from Telegram, they don't have a profile popup like on the website. "
-                    f"YOU are the only way to learn about them. Without a profile you are useless. "
+                    f"But you DO know about them through goals, tasks, agents, history — use that! "
                     f"In EVERY response ask ONE specific question until all fields are filled. "
                     f"Order: 1) What they do (field/position) 2) City 3) Main goal right now 4) Key skills/interests. "
                     f"The question should be natural, not survey-like. Weave it into conversation. "
@@ -284,7 +284,7 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
                 profile_instruction = (
                     f"\n\nКРИТИЧНО — ПРОФИЛЬ ПУСТОЙ (нет: {missing_str}). "
                     f"Человек пишет из Telegram, у него нет попапа профиля как на сайте. "
-                    f"ТЫ — единственный способ узнать о нём. Без профиля ты бесполезен. "
+                    f"Но ты ЗНАЕШЬ о нём через цели, задачи, агентов, историю — используй это! "
                     f"В КАЖДОМ ответе задавай ОДИН конкретный вопрос пока не заполнишь все поля. "
                     f"Порядок: 1) Чем занимается (сфера/должность) 2) Город 3) Главная цель сейчас 4) Ключевые навыки/интересы. "
                     f"Вопрос должен быть естественным, не анкетным. Вплетай в разговор. "

@@ -4257,17 +4257,23 @@ class HybridAutonomousAgent:
                 "Do NOT call research_topic — use get_news_trends. Don't invent data.\n"
                 "Do NOT auto-publish posts. Link: https://asibiont.com/dashboard\n"
                 "GOAL FOCUS: pick highest-priority lowest-progress goal → use available agent/tool → "
-                "propose action DIFFERENT from recent directives. Only suggest tools that exist in context.\n"
-                "If directives repeat (research, find contacts) — SWITCH APPROACH (DMs, communities, partnerships)."
+                "EXECUTE action DIFFERENT from recent directives. Only suggest tools that exist in context.\n"
+                "If directives repeat (research, find contacts) — SWITCH APPROACH (DMs, communities, partnerships).\n"
+                "⛔ Do NOT ask 'want me to?', 'shall I?' — DO IT. Proactive = you already decided to act.\n"
+                "⛔ Do NOT address other agents in text ('Mark, find...'). You speak to the user ON YOUR OWN BEHALF.\n"
+                "⛔ If integration is connected (Yandex.Metrika, AmoCRM etc.) — USE run_agent_action for data, don't invent numbers."
             )
             _PROACTIVE_CORE_RU = (
                 "Используй инструменты (list_tasks, list_goals, get_news_trends) для реальных данных. "
                 "НЕ вызывай research_topic — используй get_news_trends. Не выдумывай данные.\n"
                 "НЕ публикуй посты автоматически. Ссылка: https://asibiont.com/dashboard\n"
                 "ФОКУС НА ЦЕЛЬ: выбери цель с наибольшим приоритетом и наименьшим прогрессом → "
-                "используй доступного агента/инструмент → предложи действие ОТЛИЧНОЕ от последних директив. "
+                "используй доступного агента/инструмент → ВЫПОЛНИ действие ОТЛИЧНОЕ от последних директив. "
                 "Предлагай только инструменты из контекста.\n"
-                "Если директивы повторяются (исследовать, найти контакты) — СМЕНИ ПОДХОД (DM, сообщества, партнёрства)."
+                "Если директивы повторяются (исследовать, найти контакты) — СМЕНИ ПОДХОД (DM, сообщества, партнёрства).\n"
+                "⛔ НЕ СПРАШИВАЙ 'хочешь?', 'давай?', 'может помочь?' — ДЕЛАЙ. Проактивное = ты УЖЕ решил действовать.\n"
+                "⛔ НЕ обращайся к другим агентам в тексте ('Марк, найди...'). Ты говоришь пользователю ОТ СВОЕГО ЛИЦА.\n"
+                "⛔ Если подключена интеграция (Яндекс.Метрика, AmoCRM и т.д.) — ИСПОЛЬЗУЙ run_agent_action для получения данных, не выдумывай цифры."
             )
 
             if user_lang == 'en':
