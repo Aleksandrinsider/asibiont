@@ -3555,17 +3555,17 @@ class HybridAutonomousAgent:
                         continue
                     seen_tools.add(dedup_key)
 
-                    # Fuzzy dedup for research/web_search — skip if >50% keyword overlap
+                    # Fuzzy dedup for research/web_search — block only near-identical queries (>70% overlap)
                     if name in ('research_topic', 'web_search'):
                         _q_raw = (args.get('query') or args.get('topic') or args.get('prompt') or '').lower()
                         _q_kws = set(w for w in _q_raw.split() if len(w) > 2)
                         if _q_kws:
                             for _prev_kws in _seen_research_kws:
                                 _overlap = len(_q_kws & _prev_kws) / max(len(_q_kws | _prev_kws), 1)
-                                if _overlap > 0.5:
-                                    logger.warning(f"[FUZZY_DEDUP] Skipping similar {name}: {_q_raw[:80]}")
+                                if _overlap > 0.7:
+                                    logger.warning(f"[FUZZY_DEDUP] Skipping near-identical {name}: {_q_raw[:80]}")
                                     messages.append({"role": "tool", "tool_call_id": tc_item['id'],
-                                        "content": '{"status": "skipped: similar query already executed this session — try a different topic"}'})
+                                        "content": '{"status": "skipped: nearly identical query already executed this session. Rethink: what NEW information do you need?"}'})
                                     _q_kws = None
                                     break
                             if _q_kws is None:
@@ -4497,7 +4497,7 @@ class HybridAutonomousAgent:
                         continue
                     seen_tools.add(dedup_key)
 
-                    # Fuzzy dedup for research/web_search
+                    # Fuzzy dedup for research/web_search — block only near-identical (>70%)
                     if name in ('research_topic', 'web_search'):
                         _q_raw_s = (args.get('query') or args.get('topic') or args.get('prompt') or '').lower()
                         _q_kws_s = set(w for w in _q_raw_s.split() if len(w) > 2)
@@ -4505,12 +4505,12 @@ class HybridAutonomousAgent:
                             _fuzzy_dup = False
                             for _prev_kws_s in _seen_research_kws_sys:
                                 _overlap_s = len(_q_kws_s & _prev_kws_s) / max(len(_q_kws_s | _prev_kws_s), 1)
-                                if _overlap_s > 0.5:
+                                if _overlap_s > 0.7:
                                     _fuzzy_dup = True
                                     break
                             if _fuzzy_dup:
                                 messages.append({"role": "tool", "tool_call_id": tc_item['id'],
-                                    "content": '{"status": "skipped: similar query already executed"}'})
+                                    "content": '{"status": "skipped: nearly identical query already executed. What NEW angle do you need?"}'})
                                 continue
                             _seen_research_kws_sys.append(_q_kws_s)
 

@@ -1475,7 +1475,7 @@ class OfficeEngine:
                     _Task_l2f.created_at >= _fail_c_l2,
                 ).order_by(_Task_l2f.created_at.desc()).limit(8).all()
                 if _ftasks:
-                    _fl = ['ПРОВАЛИВШИЕСЯ ЗАДАЧИ 24ч (НЕ повторяй — дай ДРУГОЕ):']
+                    _fl = ['КОНТЕКСТ — ПРОВАЛИВШИЕСЯ ЗАДАЧИ 24ч (учти при планировании):']
                     for _ft in _ftasks:
                         _fl.append(f"  - {_ft.delegated_to_username or '?'}: {(_ft.title or '')[:70]}")
                     _failed_tasks_l2 = '\n'.join(_fl) + '\n'
@@ -1491,7 +1491,7 @@ class OfficeEngine:
                     AgentActivityLog.created_at >= _fail_aal_cutoff,
                 ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
                 if _failed_aal:
-                    _fl2 = ['⛔ ПРОВАЛИВШИЕСЯ ДЕЙСТВИЯ 12ч (НЕ повторяй то же самое — смени подход):']
+                    _fl2 = ['КОНТЕКСТ — ПРОВАЛИВШИЕСЯ ДЕЙСТВИЯ 12ч (почему не сработало? что делать иначе?):']
                     for _fa in _failed_aal:
                         _agent_t = (_fa.target or '').replace('agent:', '')
                         _fl2.append(f"  - {_agent_t}: {(_fa.title or '')[:80]}")
@@ -1791,9 +1791,9 @@ class OfficeEngine:
                         _old_words = set(w for w in _old_text.split() if len(w) > 4)
                         if _old_words and _task_words:
                             _overlap = len(_task_words & _old_words) / min(len(_task_words), len(_old_words))
-                            if _overlap > 0.35:
+                            if _overlap > 0.5:
                                 _high_overlap_count += 1
-                    if _high_overlap_count >= 1:
+                    if _high_overlap_count >= 2:
                         logger.info("[OFFICE-L2] TEACH-MISS antiloop: user=%d, %s has %d similar tasks in 24h — skipping: %s",
                                     user_db_id, _aname, _high_overlap_count, _atask[:60])
                         continue
