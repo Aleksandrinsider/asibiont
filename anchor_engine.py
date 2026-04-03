@@ -1070,6 +1070,13 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         'content': "Черновик ≠ прогресс. Опубликовано = шаг. Аудитория отреагировала = +1.",
         'research': "Инструмент вызван ≠ прогресс. Данные обработаны и дан вывод = +1.",
         'dev': "Код написан ≠ прогресс. Тест прошёл, задача закрыта = +1.",
+        'finance': "Прочитал статью ≠ прогресс. Сделка/вложение/бюджет обновлён = +1.",
+        'travel': "Мечтал ≠ прогресс. Билет/виза/бронь/маршрут готов = +1.",
+        'startup': "Идея ≠ прогресс. MVP/прототип/питч/клиент = +1.",
+        'ecommerce': "Настроил ≠ прогресс. Заказ/продажа/отзыв = +1.",
+        'legal': "Изучил ≠ прогресс. Документ подписан/подан = +1.",
+        'hr': "Вакансия ≠ прогресс. Кандидат на собеседовании/нанят = +1.",
+        'logistics': "Запланировал ≠ прогресс. Груз доставлен/отправлен = +1.",
     }.get(goal_type, "Инструмент вызван ≠ прогресс. Метрика цели сдвинулась = +1.")
 
     return (
@@ -2207,13 +2214,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         'пользователь', 'клиент', 'подписчик', 'лид', 'lead', 'специалист', 'инженер',
         'найти людей', 'найти человек', 'набрать', 'рекрут', 'recruit', 'наём', 'нанять',
         'аудитория', 'участник', 'бета-тестер', 'бета тестер',
+        'тренер', 'ментор', 'репетитор', 'учитель', 'преподаватель', 'coach', 'mentor',
+        'партнёр', 'партнер', 'сотрудник', 'исполнитель', 'фрилансер', 'freelancer',
     )
     _goals_text_for_map = ' '.join(
         (g.get('title', '') + ' ' + (g.get('description', '') or '')).lower()
         for g in goals_summary
     )
     _is_people_goal = any(w in _goals_text_for_map for w in _PEOPLE_KW)
-    if _is_people_goal and _goal_type in ('outreach', 'general', 'dev'):
+    if _is_people_goal and _goal_type in ('outreach', 'general', 'dev', 'hr', 'startup', 'learning', 'health'):
         # Определяем предметную область из цели для точных примеров
         _domain_hint = 'QA automation'
         _habr_query = 'тестировщик OR "QA engineer" OR "автоматизатор"'
@@ -2499,7 +2508,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # ── Intelligence Block: Email Success Patterns ──────────────────
     # Запрашиваем паттерны из БД — что реально давало ответы
     _email_intelligence_block = ''
-    if user and _goal_type in ('outreach', 'general') and _has_imap:
+    if user and _goal_type in ('outreach', 'general', 'ecommerce', 'startup', 'finance', 'hr') and _has_imap:
         try:
             from models import Session as _Sess_ei, EmailOutreach as _EO_ei, EmailContactPreference as _ECP_ei
             _sess_ei = _Sess_ei()
