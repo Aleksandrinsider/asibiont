@@ -4104,6 +4104,24 @@ class AnchorEngine:
             await asyncio.sleep(2)  # Пауза между системными и агентскими сообщениями
             await _deliver_batch(agent_dialog_anchors, 'agent')
 
+        # ── DIAGNOSTIC BREADCRUMB (temporary — remove after debug) ──
+        try:
+            from models import AgentActivityLog as _AAL_bc
+            _bc_ap_ids = [a.id for a in autopilot_anchors] if autopilot_anchors else []
+            session.add(_AAL_bc(
+                user_id=user.id,
+                activity_type='_pipeline_trace',
+                title=f'pre_autopilot: ap={len(autopilot_anchors)} ids={_bc_ap_ids[:3]} night={is_night}',
+                content=f'sys_dlg={len(system_dialog_anchors)} ag_dlg={len(agent_dialog_anchors)} '
+                        f'ready={len(ready)} reg={len(regular_anchors)} dlg_cnt={dialog_count} gap_ok={proactive_gap_ok}',
+                status='completed',
+            ))
+            session.commit()
+        except Exception as _bc_err:
+            logger.debug("breadcrumb write failed: %s", _bc_err)
+            try: session.rollback()
+            except Exception: pass
+
         # ── 3b. GOAL AUTOPILOT — ПЕРВЫМ после dialog, до постов/email ──
         # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
         # Gap check по DELIVERED autopilot-якорям — надёжнее чем Interaction content.
@@ -4130,6 +4148,17 @@ class AnchorEngine:
                 logger.debug("suppressed: %s", _e)
 
             if _ap_gap_ok:
+                # ── DIAGNOSTIC BREADCRUMB (temporary) ──
+                try:
+                    session.add(_AAL_bc(
+                        user_id=user.id, activity_type='_pipeline_trace',
+                        title=f'autopilot_gap_ok: gap={_ap_gap:.0f}m goal={len(_goal_review_anchors)} chat={len(_chat_review_anchors)}' if '_ap_gap' in dir() else f'autopilot_gap_ok: no_prev goal={len(_goal_review_anchors)}',
+                        status='completed',
+                    ))
+                    session.commit()
+                except Exception:
+                    try: session.rollback()
+                    except Exception: pass
                 _today_start_ap = self._user_day_start_utc(user)
                 try:
                     _ap_today_count = session.query(Interaction).filter(
@@ -4154,6 +4183,17 @@ class AnchorEngine:
                                 _ap.delivered_at = datetime.now(timezone.utc)
                             session.commit()
                         else:
+                            # ── DIAGNOSTIC BREADCRUMB (temporary) ──
+                            try:
+                                session.add(_AAL_bc(
+                                    user_id=user.id, activity_type='_pipeline_trace',
+                                    title=f'dispatch_goal: anchor={_goal_review_anchors[0].id} cap={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY}',
+                                    status='completed',
+                                ))
+                                session.commit()
+                            except Exception:
+                                try: session.rollback()
+                                except Exception: pass
                             logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
                             async with self._ai_semaphore:
                                 await self._dispatch_agent_for_anchor(user, _goal_review_anchors[0], session)
@@ -4320,6 +4360,18 @@ class AnchorEngine:
         try:
             from ai_integration.autonomous_agent import _exec_agent_for_director
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
+
+            # ── DIAGNOSTIC BREADCRUMB (temporary) ──
+            try:
+                session.add(_AAL_ap(
+                    user_id=user.id, activity_type='_pipeline_trace',
+                    title=f'dispatch_enter: anchor={anchor.id} type={anchor.anchor_type}',
+                    status='completed',
+                ))
+                session.commit()
+            except Exception:
+                try: session.rollback()
+                except Exception: pass
 
             # ── Guard: предотвращаем дублирование при параллельных scan-циклах ──
             # Проверяем: нет ли ЛЮБОГО dispatch (любой target) в in_progress < 5 мин.
@@ -4718,6 +4770,17 @@ class AnchorEngine:
                     _coord_real = [a for a in agents if getattr(a, 'id', 0) != 0]
                     logger.info("[COORD] entry check: _coord_real=%d agent(s): %s",
                                 len(_coord_real), [a.name for a in _coord_real])
+                    # ── DIAGNOSTIC BREADCRUMB (temporary) ──
+                    try:
+                        session.add(_AAL_ap(
+                            user_id=user.id, activity_type='_pipeline_trace',
+                            title=f'coord_entry: real_agents={len(_coord_real)} names={[a.name for a in _coord_real][:3]}',
+                            status='completed',
+                        ))
+                        session.commit()
+                    except Exception:
+                        try: session.rollback()
+                        except Exception: pass
                     if len(_coord_real) >= 1:
                         try:
                             # timeout = 240s per agent × number of agents + 60s overhead
