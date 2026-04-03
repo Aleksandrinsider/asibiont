@@ -1494,7 +1494,12 @@ class OfficeEngine:
                 from models import UserAgent as _UA_coord
                 _ua_c = s.query(_UA_coord).filter_by(id=aid).first()
                 if _ua_c:
-                    _keys_c = (getattr(_ua_c, 'user_api_keys', '') or '').lower()
+                    _raw_keys = getattr(_ua_c, 'user_api_keys', '') or ''
+                    try:
+                        from config import decrypt_token as _dt_coord
+                        _keys_c = (_dt_coord(_raw_keys) if _raw_keys.startswith(('enc:', 'obf:')) else _raw_keys).lower()
+                    except Exception:
+                        _keys_c = _raw_keys.lower()
                     _all_agent_keys += ' ' + _keys_c
                     _caps_c = []
                     if any(k in _keys_c for k in ('smtp_', 'resend_', 'sendgrid_', 'mailgun_', 'gmail_', 'yandex_', 'mailru_')):
@@ -1586,8 +1591,22 @@ class OfficeEngine:
             )
         _integrations_block += "\n"
 
+        # ── Правила пользователя из memory['rules'] ───
+        _user_rules_block = ''
+        try:
+            from ai_integration.memory import decrypt_data as _dec_rules_coord
+            _mem_raw_coord = _dec_rules_coord(user.memory) if user.memory else '{}'
+            _mem_dict_coord = json.loads(_mem_raw_coord) if _mem_raw_coord else {}
+            _u_rules = _mem_dict_coord.get('rules', [])
+            if _u_rules:
+                _rules_lines = '\n'.join(f'  • {r}' for r in _u_rules[:10])
+                _user_rules_block = f"📌 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательны к исполнению):\n{_rules_lines}\n\n"
+        except Exception:
+            pass
+
         prompt = (
             "Ты — ASI-координатор. Назначаешь агентам КОНКРЕТНЫЕ микро-задачи, которые двигают цели вперёд.\n\n"
+            f"{_user_rules_block}"
             f"ЦЕЛИ:\n{goals_text}\n\n"
             f"АГЕНТЫ (и их реальные возможности):\n{agents_caps_text}\n\n"
             f"{_integrations_block}"

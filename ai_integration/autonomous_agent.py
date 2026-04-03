@@ -4870,6 +4870,7 @@ _INTEGRATION_LABELS: dict = {
     'WILDBERRIES': 'Wildberries',
     'WB_': 'Wildberries',
     'AMOCRM': 'AmoCRM',
+    'AMO_': 'AmoCRM',
     'BITRIX': 'Битрикс24',
     'NOTION': 'Notion',
     'VK_': 'ВКонтакте',
