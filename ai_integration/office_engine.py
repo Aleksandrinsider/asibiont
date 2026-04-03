@@ -1461,6 +1461,7 @@ class OfficeEngine:
 
         # Собираем реальные инструменты каждого агента
         _agents_caps = []
+        _all_agent_keys = ''  # собираем ключи ВСЕХ агентов для проверки интеграций
         for aid, aname, aspec, adesc in agents:
             _line = f"- {aname} ({aspec or 'специалист'})"
             # Инferируем возможности из api_keys
@@ -1469,6 +1470,7 @@ class OfficeEngine:
                 _ua_c = s.query(_UA_coord).filter_by(id=aid).first()
                 if _ua_c:
                     _keys_c = (getattr(_ua_c, 'user_api_keys', '') or '').lower()
+                    _all_agent_keys += ' ' + _keys_c
                     _caps_c = []
                     if any(k in _keys_c for k in ('smtp_', 'resend_', 'sendgrid_', 'mailgun_', 'gmail_', 'yandex_', 'mailru_')):
                         _caps_c.append('отправка email')
@@ -1484,6 +1486,26 @@ class OfficeEngine:
                         _caps_c.append('AmoCRM (сделки, контакты)')
                     if any(k in _keys_c for k in ('alphavantage', 'alpha_vantage')):
                         _caps_c.append('биржевые данные (Alpha Vantage)')
+                    if any(k in _keys_c for k in ('slack', 'slack_bot')):
+                        _caps_c.append('Slack')
+                    if any(k in _keys_c for k in ('notion', 'notion_token')):
+                        _caps_c.append('Notion')
+                    if any(k in _keys_c for k in ('linkedin', 'li_at')):
+                        _caps_c.append('LinkedIn')
+                    if any(k in _keys_c for k in ('vk_', 'vkontakte')):
+                        _caps_c.append('ВКонтакте')
+                    if any(k in _keys_c for k in ('twitter', 'x_api')):
+                        _caps_c.append('Twitter/X')
+                    if any(k in _keys_c for k in ('youtube', 'yt_api')):
+                        _caps_c.append('YouTube')
+                    if any(k in _keys_c for k in ('jira', 'atlassian')):
+                        _caps_c.append('Jira')
+                    if any(k in _keys_c for k in ('trello',)):
+                        _caps_c.append('Trello')
+                    if any(k in _keys_c for k in ('hubspot',)):
+                        _caps_c.append('HubSpot')
+                    if any(k in _keys_c for k in ('google_sheets', 'gsheets')):
+                        _caps_c.append('Google Sheets')
                     if _caps_c:
                         _line += f" [{', '.join(_caps_c)}]"
                     else:
@@ -1510,8 +1532,23 @@ class OfficeEngine:
                 _connected.append('Google/Gmail OAuth')
             else:
                 _missing.append('Google/Gmail OAuth')
-        _always_missing = ['LinkedIn', 'Calendly', 'Apollo.io', 'Sales Navigator', 'Slack', 'Notion']
-        _missing.extend(_always_missing)
+        # Динамически определяем недоступные сервисы — только те, что НЕ найдены нигде
+        _truly_unavailable = ['Calendly', 'Apollo.io', 'Sales Navigator']  # эти платформа не поддерживает
+        _conditionally_available = {
+            'LinkedIn': ('linkedin', 'li_at'),
+            'Slack': ('slack',),
+            'Notion': ('notion',),
+            'ВКонтакте': ('vk_',),
+            'Twitter/X': ('twitter', 'x_api'),
+            'YouTube': ('youtube', 'yt_api'),
+        }
+        for _svc_name, _svc_keys in _conditionally_available.items():
+            if any(k in _all_agent_keys for k in _svc_keys):
+                if _svc_name not in _connected:
+                    _connected.append(_svc_name)
+            else:
+                _missing.append(_svc_name)
+        _missing.extend(_truly_unavailable)
         _integrations_block = ''
         if _missing:
             _integrations_block = (
