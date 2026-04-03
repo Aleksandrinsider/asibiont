@@ -9441,7 +9441,7 @@ async def find_and_message_relevant_users(
             if sender_profile.city:
                 sender_info += f" ({sender_profile.city})"
         
-        limit = min(max(limit, 1), 5)
+        limit = min(max(limit, 1), 10)
         
         # Извлекаем ключевые слова из purpose
         stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'найти', 'ищу', 'кто', 'нужен', 'для', 'в', 'на', 'с', 'по'}
@@ -11559,7 +11559,7 @@ async def start_email_campaign(
             if len(goal_overlap) >= 2 or len(name_overlap) >= 2:
                 # Обновляем существующую кампанию вместо создания новой
                 if daily_limit > ex.daily_limit:
-                    ex.daily_limit = min(daily_limit, 50)
+                    ex.daily_limit = min(daily_limit, 100)
                 if max_emails and max_emails > (ex.max_emails or 0):
                     ex.max_emails = max_emails
                 session.commit()
@@ -11578,7 +11578,7 @@ async def start_email_campaign(
             sender_name=sender_name,
             sender_email=sender_email,
             max_emails=max_emails,
-            daily_limit=min(daily_limit, 50),
+            daily_limit=min(daily_limit, 100),
             status='active',
         )
         session.add(campaign)
@@ -11717,7 +11717,7 @@ async def update_email_campaign(
             campaign.max_emails = max(0, int(max_emails))
             changes.append(f"макс. писем: {max_emails if max_emails > 0 else 'безлимитно'}")
         if daily_limit is not None:
-            campaign.daily_limit = min(max(1, int(daily_limit)), 50)
+            campaign.daily_limit = min(max(1, int(daily_limit)), 100)
             changes.append(f"лимит/день: {campaign.daily_limit}")
         if status is not None and status in ('active', 'paused', 'completed', 'cancelled'):
             campaign.status = status
@@ -11994,8 +11994,9 @@ async def send_outreach_email(
         if sent_today >= campaign.daily_limit:
             return f" Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
 
-        # Глобальный дневной лимит: не более 50 УНИКАЛЬНЫХ получателей на пользователя в сутки
-        GLOBAL_DAILY_LIMIT = 50
+        # Глобальный дневной лимит: УНИКАЛЬНЫХ получателей на пользователя в сутки
+        _tier = getattr(user, 'subscription_tier', 'LIGHT') or 'LIGHT'
+        GLOBAL_DAILY_LIMIT = 100 if _tier.upper() in ('PRO', 'BUSINESS', 'ULTIMATE') else 50
         from sqlalchemy import func, distinct as _distinct
         global_recipients_today = session.query(
             func.count(_distinct(EmailOutreach.recipient_email))

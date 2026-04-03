@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 MONITOR_INTERVAL_SEC = (25 * 60, 45 * 60)   # legacy, сохранён для совместимости
 L1_TICK_SEC = 15 * 60                        # тик планировщика L1: каждые 15 мин проверяем due-агентов
 L1_DEFAULT_INTERVAL_SEC = 60 * 60           # дефолтный интервал агента если run_interval_minutes не задан
-OFFICE_INTERVAL_SEC  = (2 * 3600, 4 * 3600) # 2-4 ч между координаторскими сессиями
+OFFICE_INTERVAL_SEC  = (30 * 60, 60 * 60) # 30-60 мин между координаторскими сессиями
 from config import API_TIMEOUT_SCRIPT
 SCRIPT_TIMEOUT_SEC   = API_TIMEOUT_SCRIPT    # таймаут на один скрипт агента
 
@@ -188,7 +188,7 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         _s = _Db()
         try:
-            _cutoff = _dt.now(_tz.utc) - _td(hours=2)
+            _cutoff = _dt.now(_tz.utc) - _td(minutes=45)
             _recent = _s.query(_AAL).filter(
                 _AAL.user_id == user_id,
                 _AAL.target == f'agent:{agent_name}',
@@ -224,8 +224,8 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         _s = _Db()
         try:
-            # Дедупликация: не логируем дубль завершения за 2ч
-            _cutoff = _dt.now(_tz.utc) - _td(hours=2)
+            # Дедупликация: не логируем дубль завершения за 45 мин
+            _cutoff = _dt.now(_tz.utc) - _td(minutes=45)
             _recent = _s.query(_AAL).filter(
                 _AAL.user_id == user_id,
                 _AAL.target == f'agent:{agent_name}',
@@ -1318,7 +1318,7 @@ class OfficeEngine:
                 )
                 if not agents:
                     continue
-                # Cooldown: не было ли L2-координации за последние 2 часа?
+                # Cooldown: не было ли L2-координации за последние 30 минут?
                 from models import Anchor
                 _now = datetime.now(timezone.utc)
                 recent = (
@@ -1327,7 +1327,7 @@ class OfficeEngine:
                         Anchor.user_id == prof.user_id,
                         Anchor.anchor_type == 'agent_office_update',
                         Anchor.source.like('l2-coord:%'),
-                        Anchor.created_at >= _now - timedelta(hours=2),
+                        Anchor.created_at >= _now - timedelta(minutes=30),
                     )
                     .first()
                 )

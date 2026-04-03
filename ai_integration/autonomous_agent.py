@@ -3367,7 +3367,7 @@ class HybridAutonomousAgent:
 
             # ===== Tool calling loop =====
             all_execution_results = []
-            MAX_ITERATIONS = 2
+            MAX_ITERATIONS = 3
             # 5 параллельных инструментов/итерацию: больше работы за один API-вызов → меньше round-trips → меньше токенов
             MAX_TOOLS_PER_ITERATION = 5
             seen_tools = set()  # Для предотвращения дублей
