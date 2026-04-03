@@ -3852,7 +3852,9 @@ class AnchorEngine:
                 _tr = _sa.triggered_at
                 if _tr and (_tr.tzinfo is None and _tr < _stuck_threshold.replace(tzinfo=None)
                             or _tr.tzinfo is not None and _tr < _stuck_threshold):
-                    _sa.delivered_at = datetime.now(timezone.utc)
+                    # Ставим delivered_at = created_at, а НЕ now() — чтобы gap-check
+                    # не считал это свежей доставкой и не блокировал следующий dispatch
+                    _sa.delivered_at = _sa.created_at or datetime.now(timezone.utc)
                     _stuck_cleared += 1
         if _stuck_cleared:
             session.commit()
@@ -4106,7 +4108,7 @@ class AnchorEngine:
         # Агенты работают 24/7 автономно, не зависят от has_proactive_tokens и is_night.
         # Gap check по DELIVERED autopilot-якорям — надёжнее чем Interaction content.
         # Cooldown на source уже блокирует, но этот guard — двойная защита.
-        if autopilot_anchors and has_proactive_tokens:
+        if autopilot_anchors:
             _goal_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'goal_autopilot_review']
             _chat_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'chat_ai_review']
             _ap_gap_ok = True
