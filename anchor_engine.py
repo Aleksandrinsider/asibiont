@@ -9278,6 +9278,7 @@ class AnchorEngine:
                 'github_search': {'run_agent_action'},
                 'rss_analysis': {'run_agent_action', 'get_news_trends'},
                 'email_outreach': {'send_outreach_email', 'negotiate_by_email'},
+                'email_campaign': {'start_email_campaign', 'add_email_leads'},
                 'email_check': {'check_emails', 'reply_to_outreach_email'},
                 'research': {'research_topic', 'web_search'},
                 'content': {'create_post', 'publish_to_telegram', 'publish_to_discord'},
@@ -9326,6 +9327,7 @@ class AnchorEngine:
                         'github_search': 'поиск через GitHub',
                         'rss_analysis': 'анализ RSS/новостных лент',
                         'email_outreach': 'email-рассылка',
+                        'email_campaign': 'массовые email-кампании',
                         'email_check': 'проверка входящей почты',
                         'research': 'глубокое исследование темы',
                         'content': 'создание контента (посты, статьи)',
@@ -9843,6 +9845,7 @@ class AnchorEngine:
                     'GitHub-поиск': ['github'],
                     'RSS/Хабр': ['rss', 'хабр', 'vc.ru'],
                     'web_search-контакты': ['поиск в интернете', 'web_search', 'найди контакт', 'найди email'],
+                    'email-кампания': ['start_email_campaign', 'email-кампанию', 'массовую email', 'email кампани', 'email_campaign', 'массов'],
                     'email-лимит-упомин': ['лимит писем', 'лимит на email', 'исчерпан'],
                     'таймаут-упомин': ['таймаут', 'timeout', 'прервал', 'прервать'],
                     'смена-тактики': ['сменим тактику', 'смени тактику', 'сменим площадку'],
@@ -9871,6 +9874,7 @@ class AnchorEngine:
                         'GitHub-поиск': 'Хабр авторы, dev.to, RSS-ленты техблогов, ProductHunt makers',
                         'RSS/Хабр': 'web_search по нишевым блогам, GitHub trending, ProductHunt',
                         'web_search-контакты': 'check_emails (входящие), create_post (inbound-стратегия), research_topic (аналитика для контента)',
+                        'email-кампания': 'create_post + publish_to_telegram (контент-маркетинг), find_and_message_relevant_users, publish_to_discord — НЕ повторяй start_email_campaign',
                         'email-лимит-упомин': 'create_post + publish_to_telegram (контент-маркетинг), research_topic + save_note (аналитика), update_goal_progress',
                         'таймаут-упомин': 'более простые задачи: save_note, update_goal_progress, create_post из уже собранных данных',
                         'смена-тактики': 'КОНКРЕТНО смени: другой поисковый запрос, другая платформа, другой тип контента',
@@ -10132,6 +10136,92 @@ class AnchorEngine:
                         _plan_content_deduped.append(_pcd)
                 if _plan_content_deduped:
                     _plan = _plan_content_deduped
+
+            # ── Failed-task cooldown: не переназначаем провалившиеся задачи в том же цикле ──
+            try:
+                from models import AgentActivityLog as _AAL_fc
+                _fail_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _recent_fails = session.query(_AAL_fc).filter(
+                    _AAL_fc.user_id == user.id,
+                    _AAL_fc.status == 'failed',
+                    _AAL_fc.created_at >= _fail_cutoff,
+                ).all()
+                if _recent_fails:
+                    _fail_titles_lower = [(f.title or '').lower() for f in _recent_fails]
+                    _plan_fail_filtered = []
+                    for _pff in _plan:
+                        _pff_task = (_pff.get('task') or '').lower()
+                        _pff_words = {w for w in _pff_task.split() if len(w) > 4}
+                        _is_failed_repeat = False
+                        for _ft in _fail_titles_lower:
+                            _ft_words = {w for w in _ft.split() if len(w) > 4}
+                            if _ft_words and _pff_words:
+                                _common = len(_ft_words & _pff_words)
+                                _ratio = _common / max(min(len(_ft_words), len(_pff_words)), 1)
+                                if _ratio > 0.4 and _common >= 3:
+                                    _is_failed_repeat = True
+                                    logger.info("[COORD] failed-cooldown: skip '%s' (similar to failed '%s')",
+                                                _pff_task[:60], _ft[:60])
+                                    break
+                        if not _is_failed_repeat:
+                            _plan_fail_filtered.append(_pff)
+                    if _plan_fail_filtered:
+                        _plan = _plan_fail_filtered
+            except Exception as _ffc_err:
+                logger.debug("[COORD] failed-task cooldown: %s", _ffc_err)
+
+            # ── Cross-cycle tool dedup: если тот же агент+инструмент назначался >=3 раз за 3ч → блок ──
+            try:
+                from models import AgentActivityLog as _AAL_xc
+                _xc_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
+                _xc_recent = session.query(_AAL_xc).filter(
+                    _AAL_xc.user_id == user.id,
+                    _AAL_xc.activity_type == 'agent_task',
+                    _AAL_xc.created_at >= _xc_cutoff,
+                ).all()
+                # Подсчёт (agent, tool_keyword) из title
+                _xc_counts: dict = {}  # (agent_lower, tool_keyword) → count
+                _TOOL_KEYWORDS = {
+                    'start_email_campaign': ['start_email_campaign', 'email-кампанию', 'массовую email'],
+                    'create_post': ['создай пост', 'визуальный пост', 'аналитический пост', 'пост-сравнение', 'пост-опрос'],
+                    'publish_to_telegram': ['publish_to_telegram', 'в telegram'],
+                    'research_topic': ['research_topic', 'исследование', 'анализ рынка'],
+                    'check_emails': ['check_emails', 'проверь входящие', 'проверь почт'],
+                }
+                for _xc_r in _xc_recent:
+                    _xc_title = (_xc_r.title or '').lower()
+                    # Извлекаем имя агента из начала title (формат "Имя: задача")
+                    for _ra in real_agents:
+                        _ra_name_lower = (_ra.name or '').lower().strip()
+                        if _ra_name_lower and _ra_name_lower in _xc_title:
+                            for _tk_name, _tk_kws in _TOOL_KEYWORDS.items():
+                                if any(kw in _xc_title for kw in _tk_kws):
+                                    _key = (_ra_name_lower, _tk_name)
+                                    _xc_counts[_key] = _xc_counts.get(_key, 0) + 1
+                _xc_blocked = {k for k, v in _xc_counts.items() if v >= 3}
+                if _xc_blocked:
+                    _plan_xc_filtered = []
+                    for _pxc in _plan:
+                        _pxc_agent = (_pxc.get('agent') or '').lower().strip()
+                        _pxc_task = (_pxc.get('task') or '').lower()
+                        _pxc_tool = (_pxc.get('tool') or '').lower()
+                        _blocked = False
+                        for (_ba, _bt) in _xc_blocked:
+                            if _ba in _pxc_agent:
+                                _bt_kws = _TOOL_KEYWORDS.get(_bt, [_bt])
+                                if _pxc_tool == _bt or any(kw in _pxc_task for kw in _bt_kws):
+                                    logger.info("[COORD] cross-cycle-dedup: BLOCK %s/%s (assigned %dx in 3h)",
+                                                _pxc_agent, _bt, _xc_counts[(_ba, _bt)])
+                                    _blocked = True
+                                    break
+                        if not _blocked:
+                            _plan_xc_filtered.append(_pxc)
+                    if _plan_xc_filtered:
+                        _plan = _plan_xc_filtered
+                    elif _plan:
+                        logger.warning("[COORD] cross-cycle-dedup: ALL steps blocked — keeping original plan")
+            except Exception as _xc_err:
+                logger.debug("[COORD] cross-cycle dedup: %s", _xc_err)
 
             # ── Adaptive plan normalization: мягкая коррекция на основе опыта и валидности ──
             # 1) Предупреждаем о рисках по агенту, но не выкидываем шаги без крайней причины
