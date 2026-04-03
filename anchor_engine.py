@@ -178,7 +178,7 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'rss': 'run_agent_action(точное action-имя RSS-скрипта агента), get_news_trends, create_post',
     'telegram': 'publish_to_telegram, create_post',
     'discord': 'publish_to_discord',
-    'crm': 'run_agent_action(action="get_contacts"|"create_deal"|"update_lead"|"add_note", params={...})',
+    'crm': 'run_agent_action(action="get_contacts"|"create_lead"|"update_lead"|"add_note"|"create_contact"|"link_contact"|"get_pipelines", params={...})',
     'marketplace': 'run_agent_action(action="get_products"|"check_stock"|"update_price"|"get_orders")',
     'pm': 'run_agent_action(action="list_issues"|"create_task"|"update_status", params={"project":"..."})',
     'notion': 'run_agent_action(action="create_page"|"update_page"|"query_db")',
@@ -1344,12 +1344,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
         elif _cat == 'crm':
             _intg_connected.append(
-                '✅ CRM — run_agent_action(action="get_contacts") — просмотреть базу контактов\n'
-                '  run_agent_action(action="create_deal", params={"title":"...", "contact_id":...})\n'
-                '  run_agent_action(action="update_lead", params={"id":..., "status":"qualified"})\n'
-                '  run_agent_action(action="add_note", params={"contact_id":..., "text":"..."})\n'
-                '  🔗 Цепочки: get_contacts → add_note (фоллоу-ап) | create_deal → update_lead (воронка)\n'
-                '  ⚠️ action-имена точно из python_code агента — проверь список доступных action выше.'
+                '✅ CRM — run_agent_action(action="get_contacts", params={"query":"имя или email"}) — поиск контактов\n'
+                '  run_agent_action(action="create_lead", params={"name":"Название сделки", "price":5000})\n'
+                '  run_agent_action(action="update_lead", params={"id":12345, "status_id":142, "pipeline_id":789}) — передвинуть по воронке\n'
+                '  run_agent_action(action="create_contact", params={"name":"Имя", "email":"...", "phone":"..."})\n'
+                '  run_agent_action(action="link_contact", params={"lead_id":..., "contact_id":...}) — привязать контакт к сделке\n'
+                '  run_agent_action(action="add_note", params={"id":12345, "entity_type":"leads", "text":"..."})\n'
+                '  run_agent_action(action="get_pipelines") — показать воронки и этапы (status_id)\n'
+                '  🔗 Цепочки: create_contact → create_lead → link_contact | get_pipelines → update_lead (двинуть по воронке)\n'
+                '  ⚠️ Для update_lead нужен status_id этапа — сначала вызови get_pipelines чтобы узнать ID.'
             )
         elif _cat == 'marketplace':
             _intg_connected.append(

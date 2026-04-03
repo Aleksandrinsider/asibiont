@@ -2514,8 +2514,8 @@ class HybridAutonomousAgent:
                     "category": "PM"
                 },
                 "AmoCRM": {
-                    "env_vars": ["AMOCRM_TOKEN", "AMOCRM_URL"],
-                    "keywords": ("amocrm", "амокр"),
+                    "env_vars": ["AMO_ACCESS_TOKEN", "AMO_SUBDOMAIN"],
+                    "keywords": ("amocrm", "амокр", "амо срм"),
                     "category": "CRM"
                 },
                 "Bitrix24": {

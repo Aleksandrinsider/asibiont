@@ -4271,12 +4271,20 @@ def amo(path, data=None, method='GET'):
             return {}
         return json.loads(raw)
 try:
-    if ACTION == 'create_lead':
+    if ACTION in ('create_lead', 'create_deal'):
         name = os.environ.get('AGENT_PARAM_NAME', 'Новая сделка')
         price = os.environ.get('AGENT_PARAM_PRICE', '')
+        status_id = os.environ.get('AGENT_PARAM_STATUS_ID', '')
+        pipeline_id = os.environ.get('AGENT_PARAM_PIPELINE_ID', '')
         lead = {'name': name}
         if price:
             try: lead['price'] = int(price)
+            except: pass
+        if status_id:
+            try: lead['status_id'] = int(status_id)
+            except: pass
+        if pipeline_id:
+            try: lead['pipeline_id'] = int(pipeline_id)
             except: pass
         result = amo('/leads', data=[lead], method='POST')
         items = result.get('_embedded', {}).get('leads', [])
@@ -4284,6 +4292,111 @@ try:
             print('OK: сделка создана, ID=' + str(items[0]['id']))
         else:
             print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION == 'update_lead':
+        lead_id = os.environ.get('AGENT_PARAM_ID', '')
+        if not lead_id:
+            print('Ошибка: укажи ID сделки в params.id')
+        else:
+            patch = {}
+            new_name = os.environ.get('AGENT_PARAM_NAME', '')
+            new_price = os.environ.get('AGENT_PARAM_PRICE', '')
+            new_status = os.environ.get('AGENT_PARAM_STATUS_ID', '')
+            new_pipeline = os.environ.get('AGENT_PARAM_PIPELINE_ID', '')
+            if new_name: patch['name'] = new_name
+            if new_price:
+                try: patch['price'] = int(new_price)
+                except: pass
+            if new_status:
+                try: patch['status_id'] = int(new_status)
+                except: pass
+            if new_pipeline:
+                try: patch['pipeline_id'] = int(new_pipeline)
+                except: pass
+            if not patch:
+                print('Ошибка: укажи хотя бы одно поле для обновления (name, price, status_id, pipeline_id)')
+            else:
+                result = amo('/leads/' + str(lead_id), data=patch, method='PATCH')
+                print('OK: сделка ' + str(lead_id) + ' обновлена. ' + json.dumps(patch))
+
+    elif ACTION == 'get_pipelines':
+        result = amo('/leads/pipelines')
+        pipelines = result.get('_embedded', {}).get('pipelines', [])
+        if not pipelines:
+            print('Воронок не найдено')
+        else:
+            for p in pipelines:
+                print('Воронка: ' + p.get('name','') + ' (ID=' + str(p.get('id','')) + ')')
+                for s in p.get('_embedded', {}).get('statuses', []):
+                    print('  Этап: ' + s.get('name','') + ' (status_id=' + str(s.get('id','')) + ')')
+
+    elif ACTION in ('create_contact', 'add_contact'):
+        first_name = os.environ.get('AGENT_PARAM_FIRST_NAME', os.environ.get('AGENT_PARAM_NAME', ''))
+        last_name = os.environ.get('AGENT_PARAM_LAST_NAME', '')
+        email = os.environ.get('AGENT_PARAM_EMAIL', '')
+        phone = os.environ.get('AGENT_PARAM_PHONE', '')
+        contact = {}
+        if first_name: contact['first_name'] = first_name
+        if last_name: contact['last_name'] = last_name
+        cf = []
+        if email: cf.append({'field_code': 'EMAIL', 'values': [{'value': email, 'enum_code': 'WORK'}]})
+        if phone: cf.append({'field_code': 'PHONE', 'values': [{'value': phone, 'enum_code': 'WORK'}]})
+        if cf: contact['custom_fields_values'] = cf
+        if not contact:
+            print('Ошибка: укажи хотя бы имя контакта')
+        else:
+            result = amo('/contacts', data=[contact], method='POST')
+            items = result.get('_embedded', {}).get('contacts', [])
+            if items:
+                print('OK: контакт создан, ID=' + str(items[0]['id']))
+            else:
+                print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION == 'get_contacts':
+        query = os.environ.get('AGENT_PARAM_QUERY', '')
+        url = '/contacts?limit=20&order[created_at]=desc'
+        if query:
+            url += '&query=' + urllib.parse.quote(query)
+        result = amo(url)
+        contacts = result.get('_embedded', {}).get('contacts', [])
+        if not contacts:
+            print('Контактов не найдено' + (': ' + query if query else ''))
+        else:
+            print('Найдено ' + str(len(contacts)) + ' контактов:')
+            for c in contacts:
+                cfs = c.get('custom_fields_values') or []
+                em = ''
+                ph = ''
+                for f in cfs:
+                    if f.get('field_code') == 'EMAIL': em = f['values'][0]['value']
+                    if f.get('field_code') == 'PHONE': ph = f['values'][0]['value']
+                print('ID=' + str(c['id']) + ' | ' + c.get('name','') + ' | ' + em + ' | ' + ph)
+
+    elif ACTION == 'add_note':
+        entity_id = os.environ.get('AGENT_PARAM_ID', os.environ.get('AGENT_PARAM_LEAD_ID', os.environ.get('AGENT_PARAM_CONTACT_ID', '')))
+        entity_type = os.environ.get('AGENT_PARAM_ENTITY_TYPE', 'leads')
+        text = os.environ.get('AGENT_PARAM_TEXT', '')
+        if not entity_id or not text:
+            print('Ошибка: укажи ID сущности (params.id) и текст (params.text)')
+        else:
+            note = {'note_type': 'common', 'params': {'text': text}}
+            result = amo('/' + entity_type + '/' + str(entity_id) + '/notes', data=[note], method='POST')
+            items = result.get('_embedded', {}).get('notes', [])
+            if items:
+                print('OK: заметка добавлена к ' + entity_type + ' ID=' + str(entity_id))
+            else:
+                print('Ошибка: ' + json.dumps(result))
+
+    elif ACTION == 'link_contact':
+        lead_id = os.environ.get('AGENT_PARAM_LEAD_ID', '')
+        contact_id = os.environ.get('AGENT_PARAM_CONTACT_ID', '')
+        if not lead_id or not contact_id:
+            print('Ошибка: укажи lead_id и contact_id')
+        else:
+            link = [{'to_entity_id': int(contact_id), 'to_entity_type': 'contacts'}]
+            result = amo('/leads/' + str(lead_id) + '/link', data=link, method='POST')
+            print('OK: контакт ' + str(contact_id) + ' привязан к сделке ' + str(lead_id))
+
     else:
         result = amo('/leads?order[created_at]=desc&limit=10')
         leads = result.get('_embedded', {}).get('leads', [])
@@ -4299,7 +4412,10 @@ except urllib.error.HTTPError as he:
     elif he.code == 401:
         print('Ошибка AmoCRM: токен невалиден или истёк. Перегенерируй токен в настройках интеграции.')
     else:
-        print('Ошибка AmoCRM: HTTP ' + str(he.code))
+        body = ''
+        try: body = he.read().decode()[:200]
+        except: pass
+        print('Ошибка AmoCRM: HTTP ' + str(he.code) + ' ' + body)
 except Exception as e:
     print('Ошибка AmoCRM: ' + str(e))`
             },
