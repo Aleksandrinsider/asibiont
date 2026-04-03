@@ -1583,7 +1583,8 @@ class OfficeEngine:
             "КОМАНДНАЯ СТРАТЕГИЯ:\n"
             "Агенты — КОМАНДА. Каждый делает СВОЁ, исходя из ЦЕЛИ пользователя:\n"
             "  БИЗНЕС/OUTREACH-цели:\n"
-            "  • Агент С email → OUTREACH: отправляет письма, проверяет входящие, отвечает, фоллоу-апы\n"
+            "  • Агент С email+GitHub → МАССОВЫЙ OUTREACH одной задачей: «Найди 15-20 профилей через search_users по [критерий цели], сохрани контакты (save_email_contact), отправь каждому персональное письмо (send_outreach_email)». Это ОДНА задача = десятки писем.\n"
+            "  • Агент С email (без GitHub) → ЦЕПОЧКИ: check_emails → reply_to_outreach_email → фоллоу-апы всем неответившим. Не «напиши 1 письмо», а «обработай все входящие и отправь фоллоу-апы».\n"
             "  • Агент БЕЗ email → КОНТЕНТ/РЕСЁРЧ: посты, тренды, аналитика, публикации\n"
             "  ОБУЧЕНИЕ/РАЗВИТИЕ/ЛИЧНЫЕ цели:\n"
             "  • Один агент → ИССЛЕДОВАНИЕ: research_topic по теме цели, поиск материалов/курсов/экспертов\n"
@@ -1608,6 +1609,7 @@ class OfficeEngine:
             "   ПЛОХО: «Проведи анализ» без конкретного инструмента и результата.\n"
             "2. Называй КОНКРЕТНЫЙ инструмент: web_search, research_topic, create_post, add_task, save_note, set_reminder, check_emails, send_outreach_email, publish_to_telegram,\n"
             "   find_and_message_relevant_users (поиск и рассылка пользователям платформы — БЕСПЛАТНО, без лимитов!),\n"
+            "   start_email_campaign (ЛУЧШИЙ инструмент для массового outreach — создаёт кампанию, автоматически ищет контакты и рассылает до 50 писем/день),\n"
             "   negotiate_by_email (многошаговые переговоры по email), start_content_campaign (серия публикаций),\n"
             "   generate_image (визуал для постов), publish_to_discord (публикация в Discord), set_contact_alert (мониторинг контакта).\n"
             "3. Каждый агент получает РАЗНУЮ задачу.\n"
@@ -1617,7 +1619,11 @@ class OfficeEngine:
             "7. Задача ДОЛЖНА быть полной цепочкой до конкретного результата.\n"
             "8. ПРИОРИТЕТ ДЕЙСТВИЙ: минимум 50% задач — ПРЯМЫЕ ДЕЙСТВИЯ (email, пост, CRM, рассылка, публикация). save_note и research — вспомогательные.\n"
             "   Если СТАТИСТИКА показывает дисбаланс — ОБЯЗАТЕЛЬНО назначь действие, а не ещё один анализ.\n"
-            "9. find_and_message_relevant_users — МОЩНЫЙ канал: ищи пользователей платформы по теме цели и пиши им напрямую. Это бесплатно.\n\n"
+            "9. find_and_message_relevant_users — МОЩНЫЙ канал: ищи пользователей платформы по теме цели и пиши им напрямую. Это бесплатно.\n"
+            "10. OUTREACH = ПАКЕТАМИ, НЕ ПОШТУЧНО. Никогда не давай задачу «напиши письмо Ивану».\n"
+            "   ЛУЧШИЙ ВАРИАНТ: «Запусти email-кампанию (start_email_campaign) по [аудитория] с предложением [оффер]» — одна команда = автоматический поиск + до 50 писем/день.\n"
+            "   АЛЬТЕРНАТИВА: «Найди 15-20 контактов через search_users по [критерий] и отправь каждому через send_outreach_email».\n"
+            "   Одна задача агента должна генерировать 10-50 писем за цикл, а не одно.\n\n"
             "Ответь JSON (без ```):\n"
             '{"action": "delegate", "agent_name": "имя", "task": "...", "goal": "...", "urgency": "normal"}\n'
             'или {"action": "delegate_multiple", "assignments": [{"agent_name": "...", "task": "...", "goal": "...", "urgency": "normal"}, ...]}\n'
@@ -1631,7 +1637,7 @@ class OfficeEngine:
                     "https://api.deepseek.com/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                     json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                          "max_tokens": 600, "temperature": 0.4},
+                          "max_tokens": 800, "temperature": 0.4},
                     timeout=aiohttp.ClientTimeout(total=15),
                 ) as resp:
                     if resp.status != 200:

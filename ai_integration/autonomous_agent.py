@@ -7343,9 +7343,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             break
 
         # Агент вызвал инструменты — выполняем
-        # Autopilot: до 3 за итерацию (search + action + progress)
+        # Autopilot: до 5 за итерацию (search + save contacts + send + progress + delegate)
         # Regular: до 2
-        _tc_limit = 3 if _is_autopilot_task else 2
+        _tc_limit = 5 if _is_autopilot_task else 2
         _messages.append(_msg)
         for _tc in _tool_calls[:_tc_limit]:
             _tname = _tc.get('function', {}).get('name', '')
