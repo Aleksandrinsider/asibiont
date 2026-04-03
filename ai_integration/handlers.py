@@ -2020,7 +2020,7 @@ async def delegate_task(
                                 source='agent',
                                 created_by_agent_id=_agent_recipient.id,
                                 delegated_to_username=_agent_name,
-                                status='pending',
+                                status='in_progress',
                             )
                             if reminder_time:
                                 try:

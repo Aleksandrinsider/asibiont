@@ -4272,7 +4272,7 @@ class HybridAutonomousAgent:
                 "Предлагай только инструменты из контекста.\n"
                 "Если директивы повторяются (исследовать, найти контакты) — СМЕНИ ПОДХОД (DM, сообщества, партнёрства).\n"
                 "⛔ НЕ СПРАШИВАЙ 'хочешь?', 'давай?', 'может помочь?' — ДЕЛАЙ. Проактивное = ты УЖЕ решил действовать.\n"
-                "⛔ НЕ обращайся к другим агентам в тексте ('Марк, найди...'). Ты говоришь пользователю ОТ СВОЕГО ЛИЦА.\n"
+                "⛔ НЕ упоминай имена других агентов (Кристина, Марк и т.д.) — НИ в обращении, НИ в отчёте. Пиши только о СВОИХ действиях от СВОЕГО лица.\n"
                 "⛔ Если подключена интеграция (Яндекс.Метрика, AmoCRM и т.д.) — ИСПОЛЬЗУЙ run_agent_action для получения данных, не выдумывай цифры."
             )
 
@@ -4398,19 +4398,20 @@ class HybridAutonomousAgent:
             # Определяем какие инструменты ИСКЛЮЧИТЬ по режиму
             # update_profile ЗАПРЕЩЁН в любом не-chat режиме: AI не должен обновлять профиль
             # на основе контекста якорей (может случайно скопировать данные другого пользователя)
-            _PROFILE_TOOLS = {'update_profile', 'save_user_rule'}
+            # update_profile ЗАПРЕЩЁН в не-chat режимах, save_user_rule — разрешён везде (пользователь сам просит)
+            _UNSAFE_PROFILE = {'update_profile'}
             exclude_tools = set()
             if mode == 'reminder':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _PROFILE_TOOLS
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _UNSAFE_PROFILE
             elif mode == 'task_assist':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _PROFILE_TOOLS
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _UNSAFE_PROFILE
             elif mode == 'result_check':
                 exclude_tools = {'add_task', 'create_goal', 'delegate_task',
-                                 'edit_task', 'reschedule_task'} | _PROFILE_TOOLS
+                                 'edit_task', 'reschedule_task'} | _UNSAFE_PROFILE
             elif mode == 'proactive':
-                exclude_tools = {'delegate_task'} | _PROFILE_TOOLS
+                exclude_tools = {'delegate_task'} | _UNSAFE_PROFILE
             elif mode == 'anchor':
-                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _PROFILE_TOOLS
+                exclude_tools = {'add_task', 'create_goal', 'delegate_task'} | _UNSAFE_PROFILE
 
             # ===== Tool calling loop (облегчённый) =====
             all_execution_results = []
@@ -6900,6 +6901,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "   ✅ НУЖНО: сплошной текст, 2-3 абзаца через ОДИНАРНЫЙ перенос строки.\n"
             "   ✅ НУЖНО: перечислять через запятую — «Нашёл X, добавил Y, написал Z».\n"
             "   ✅ НЕ УПОМИНАЙ Discord/Slack/GitHub если они не в списке интеграций.\n"
+            "   ✅ НЕ упоминай имена других агентов (Кристина, Марк и т.д.) — пиши только о СВОИХ действиях.\n"
             "8. ПОСЛЕ ИССЛЕДОВАНИЯ: покажи мышление по аудитории — кто сегмент, какая боль, какое персональное предложение.\n"
             "   Дай 1-2 КОНКРЕТНЫХ примера как это реализовать в проекте пользователя через доступные интеграции.\n"
             + (_intg_action_hint or '')

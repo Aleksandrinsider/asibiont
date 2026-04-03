@@ -10945,12 +10945,12 @@ class AnchorEngine:
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
-                    # Cleanup: отменяем застрявшие in_progress задачи агента старше 30 минут
+                    # Cleanup: отменяем застрявшие in_progress И pending задачи агента старше 30 минут
                     try:
                         _stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
                         session.execute(
                             text("UPDATE tasks SET status='cancelled', completion_notes='Прервано: новый цикл агента' "
-                                 "WHERE user_id=:uid AND source='agent' AND status='in_progress' "
+                                 "WHERE user_id=:uid AND source='agent' AND status IN ('in_progress','pending') "
                                  "AND delegated_to_username=:ag AND created_at < :cutoff"),
                             {'uid': user.id, 'ag': _ag_name, 'cutoff': _stuck_cutoff}
                         )
