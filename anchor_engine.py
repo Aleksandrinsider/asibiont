@@ -2808,24 +2808,30 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "  → Сообщи пользователю через send_message_to_user: 'Контент готов — скажи куда публиковать'\n"
         "  → ИЛИ: DELEGATE[коллега с Telegram-ботом]: опубликуй этот контент: [текст]\n"
 
-        # run_agent_action — нет ключей / авторизация
-        "⚙️ run_agent_action вернул «no token» / «не настроен» / «ошибка авторизации»:\n"
-        "  → Используй web_search или research_topic для той же задачи\n"
-        "  → Сообщи пользователю: 'Нужен [ключ] для [действия] — подключи в настройках агента'\n"
-        "  → НЕ пытайся снова тот же action без ключа.\n"
+        # run_agent_action — нет ключей / авторизация (только если есть скрипт)
+        + (
+            "⚙️ run_agent_action вернул «no token» / «не настроен» / «ошибка авторизации»:\n"
+            "  → Используй web_search или research_topic для той же задачи\n"
+            "  → Сообщи пользователю: 'Нужен [ключ] для [действия] — подключи в настройках агента'\n"
+            "  → НЕ пытайся снова тот же action без ключа.\n"
+            if python_code and python_code.strip() else ''
+        )
 
-        # AmoCRM — действия с контактами и сделками
-        "📋 AmoCRM — доступные действия через run_agent_action:\n"
-        "  → create_contact(name, email, phone) — создать контакт в AmoCRM\n"
-        "  → search_contacts(query) — поиск контактов по имени/email/телефону\n"
-        "  → get_contact(id) — получить контакт с привязанными сделками\n"
-        "  → create_lead(name, price) — создать сделку\n"
-        "  → link_contact_to_lead(lead_id, contact_id) — привязать контакт к сделке\n"
-        "  → add_note(entity_type, entity_id, text) — добавить примечание к контакту/сделке\n"
-        "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n"
+        # AmoCRM — действия с контактами и сделками (только если CRM подключена)
+        + (
+            "📋 AmoCRM — доступные действия через run_agent_action:\n"
+            "  → create_contact(name, email, phone) — создать контакт в AmoCRM\n"
+            "  → search_contacts(query) — поиск контактов по имени/email/телефону\n"
+            "  → get_contact(id) — получить контакт с привязанными сделками\n"
+            "  → create_lead(name, price) — создать сделку\n"
+            "  → link_contact_to_lead(lead_id, contact_id) — привязать контакт к сделке\n"
+            "  → add_note(entity_type, entity_id, text) — добавить примечание к контакту/сделке\n"
+            "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n"
+            if 'crm' in _caps_cats else ''
+        )
 
-        # check_emails — нет IMAP
-        "📬 check_emails недоступен (нет IMAP у этого агента):\n"
+        # check_emails — нет IMAP (показываем только если email в капсах, но без IMAP)
+        + "📬 check_emails недоступен (нет IMAP у этого агента):\n"
         "  → Сразу DELEGATE[агент с Gmail]: проверь входящие по [цели]\n"
         "  → НЕ пытайся вызвать check_emails самостоятельно если IMAP не подключён.\n"
 
@@ -2835,14 +2841,17 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "  → ИЛИ: используй research_topic — LLM-анализ без поиска\n"
         "  → ИЛИ: смени площадку (site:habr.com, site:github.com, site:dev.to)\n"
 
-        # GitHub — 0 результатов
-        "🐙 run_agent_action(search_users) вернул пустой список:\n"
-        "  → ПРИЧИНА: в query нет GitHub-квалификаторов. Используй: language:X followers:>N repos:>N location:X\n"
-        "  → ❌ Неправильно: 'AI testing developers' → Правильно: 'language:python repos:>3'\n"
-        "  → Смени query и page → если page 1 пустой, НЕ пробуй page 2 с тем же query.\n"
+        # GitHub — 0 результатов (только если есть скрипт с github)
+        + (
+            "🐙 run_agent_action(search_users) вернул пустой список:\n"
+            "  → ПРИЧИНА: в query нет GitHub-квалификаторов. Используй: language:X followers:>N repos:>N location:X\n"
+            "  → ❌ Неправильно: 'AI testing developers' → Правильно: 'language:python repos:>3'\n"
+            "  → Смени query и page → если page 1 пустой, НЕ пробуй page 2 с тем же query.\n"
+            if python_code and 'github' in (python_code or '').lower() else ''
+        )
 
         # Инструмент не существует / название неверное
-                "❗ Инструмент вернул 'function not found' / 'tool does not exist':\n"
+        + "❗ Инструмент вернул 'function not found' / 'tool does not exist':\n"
         "  → Название неверное — сверься с каталогом инструментов выше и выбери ближайший аналог.\n"
         "  Все доступные инструменты перечислены в разделе ИНСТРУМЕНТЫ.\n"
 
