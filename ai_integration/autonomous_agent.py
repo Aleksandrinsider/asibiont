@@ -6929,7 +6929,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "4. Если один инструмент заблокирован/недоступен — сразу вызови другой из твоего списка.\n"
             "5. Нашёл задачу для коллеги → DELEGATE[Имя]: задача с конкретными данными.\n"
             "6. Если check_emails вернул 'нет новых писем от незнакомых контактов' → НЕ повторяй check_emails! "
-            "Вместо этого вызови send_outreach_email (если есть контакты) или find_relevant_contacts_for_task (если нужны новые контакты).\n"
+            "Вместо этого: если кампания уже создана — вызови send_outreach_email для отправки письма конкретному контакту. "
+            "Если кампании ещё нет — вызови start_email_campaign. Для поиска контактов — find_relevant_contacts_for_task.\n"
             "7. ФИНАЛЬНЫЙ ТЕКСТ (когда пишешь отчёт без tool-вызовов):\n"
             "   ❌ НЕЛЬЗЯ: «Кампания #1: ...\\n\\nКампания #2: ...» — это списки, ЗАПРЕЩЕНО.\n"
             "   ❌ НЕЛЬЗЯ: двойные переносы строк между абзацами.\n"
@@ -7085,10 +7086,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             f"🤔 {_sb_search} поисков без конверсии. Что полезного ты нашёл? Как это использовать?\n"
                         )
                     if _sb_channels_used <= 1 and (_sb_search + _sb_actions) > 3:
+                        _email_hint = (
+                            "  💡 send_outreach_email = персональное письмо контакту (кампания уже создана)\n"
+                            if _sb_campaign > 0 else
+                            "  💡 start_email_campaign = создай кампанию, потом send_outreach_email для отправки\n"
+                        )
                         system_prompt += (
                             "🤔 Ты используешь только 1 канал. Какой ДРУГОЙ канал дополнит стратегию?\n"
                             "  💡 find_and_message_relevant_users = бесплатно, без лимитов\n"
-                            "  💡 send_outreach_email = персональное письмо контакту (кампания уже создана)\n"
+                            + _email_hint +
                             "  💡 publish_to_telegram/create_post = контент привлекает аудиторию\n"
                         )
             finally:

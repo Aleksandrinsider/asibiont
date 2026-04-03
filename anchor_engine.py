@@ -5529,7 +5529,11 @@ class AnchorEngine:
 
                         # ── Динамические примеры: строятся из реальных интеграций агента, а не захардкожены ──
                         _COORD_EXAMPLE_BY_CAT: dict[str, str] = {
-                            'email': '«{name}, отправь персональное письмо через send_outreach_email контакту из базы — с коротким B2B-питчем под его сферу. Если контактов нет — найди через web_search и сохрани через save_email_contact.»',
+                            'email': (
+                                '«{name}, отправь персональное письмо через send_outreach_email контакту из базы — с коротким B2B-питчем под его сферу. Если контактов нет — найди через web_search и сохрани через save_email_contact.»'
+                                if _active_campaigns_ctx else
+                                '«{name}, запусти email-кампанию через start_email_campaign — цель, аудитория, тон. Потом отправляй письма через send_outreach_email.»'
+                            ),
                             'git': '«{name}, через run_agent_action search_users найди 10 профильных специалистов с публичным email, сохрани контакты через save_email_contact.»',
                             'analytics': '«{name}, проверь аналитику за неделю — какие страницы дают максимум конверсий, создай заметку с выводами через save_note.»',
                             'rss': '«{name}, проверь RSS-ленты на свежие публикации, выдели топ-3 и создай обзорную заметку через save_note.»',
