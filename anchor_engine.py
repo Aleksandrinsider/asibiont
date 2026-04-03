@@ -5487,6 +5487,8 @@ class AnchorEngine:
                         if 'email' in _cats_c:
                             try:
                                 from models import EmailCampaign as _EC_camp_ctx
+                                from models import EmailOutreach as _EO_camp_ctx
+                                from sqlalchemy import func as _fn_camp
                                 _active_camps = session.query(_EC_camp_ctx).filter(
                                     _EC_camp_ctx.user_id == user.id,
                                     _EC_camp_ctx.status == 'active',
@@ -5494,8 +5496,19 @@ class AnchorEngine:
                                 if _active_camps:
                                     _camp_parts = []
                                     for _ac in _active_camps[:3]:
+                                        # Статистика эффективности
+                                        _delivered = session.query(_fn_camp.count(_EO_camp_ctx.id)).filter(
+                                            _EO_camp_ctx.campaign_id == _ac.id,
+                                            _EO_camp_ctx.status.in_(['delivered', 'opened']),
+                                        ).scalar() or 0
+                                        _replied = _ac.emails_replied or 0
+                                        _bounced = session.query(_fn_camp.count(_EO_camp_ctx.id)).filter(
+                                            _EO_camp_ctx.campaign_id == _ac.id,
+                                            _EO_camp_ctx.status == 'bounced',
+                                        ).scalar() or 0
                                         _camp_parts.append(
-                                            f'  #{_ac.id} «{_ac.name}»: отправлено {_ac.emails_sent}/{_ac.max_emails or "∞"}, '
+                                            f'  #{_ac.id} «{_ac.name}»: отправлено {_ac.emails_sent}, '
+                                            f'доставлено {_delivered}, ответов {_replied}, bounced {_bounced}, '
                                             f'дневной лимит {_ac.daily_limit}'
                                         )
                                     _active_campaigns_ctx = (
