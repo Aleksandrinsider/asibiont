@@ -5227,7 +5227,7 @@ class AnchorEngine:
                         f"Реальные возможности {_chosen_name} прямо сейчас:\n"
                         f"  Подключено: {', '.join(_connected_names)}\n"
                         + (f"  Конкретные инструменты:\n    " + '\n    '.join(_can_tools_by_cat) + '\n' if _can_tools_by_cat else '')
-                        + (f"  ❗ ВАЖНО: используй ВСЕ подключённые интеграции по очереди, не только email.\n    Если в предыдущем цикле далал email-задачу — сейчас дай задачу через другую интеграцию: {', '.join(_CAP_CATEGORY_NAMES.get(c,c) for c in sorted(_cats_c - {'email'})) or 'web_search'}.\n" if len(_cats_c) > 1 else '')
+                        + (f"  Интеграции: {', '.join(_CAP_CATEGORY_NAMES.get(c,c) for c in sorted(_cats_c))} — выбирай ту, которая лучше подходит для текущего шага.\n" if len(_cats_c) > 1 else '')
                         + (
                             f"  Не подключено: {', '.join(_cannot_ctx)}\n"
                             f"  → Задача через неподключённый канал не выполнится — агент сделает что сможет,\n"
@@ -5400,6 +5400,29 @@ class AnchorEngine:
                                         f'⚠️ GitHub использовался {_gh_count_c} раз — попробуй другой канал: '
                                         f'{_alt_str_c}.'
                                     )
+                                # ── Email-loop: координатор зацикливается на email-задачах ──
+                                _email_count_c = (
+                                    _all_recent_text_c.count('email')
+                                    + _all_recent_text_c.count('send_outreach')
+                                    + _all_recent_text_c.count('start_email_campaign')
+                                    + _all_recent_text_c.count('check_emails')
+                                    + _all_recent_text_c.count('outreach')
+                                    + _all_recent_text_c.count('рассылк')
+                                    + _all_recent_text_c.count('письм')
+                                )
+                                _has_other_intg = bool(_cats_c - {'email'})
+                                if _email_count_c >= 4 and _has_other_intg and not _loop_channel_hint_c:
+                                    _other_names = ', '.join(
+                                        _CAP_CATEGORY_NAMES.get(c, c)
+                                        for c in sorted(_cats_c - {'email'})
+                                    )
+                                    _loop_channel_hint_c = (
+                                        f'⚠️ Email упоминался {_email_count_c} раз за последние циклы — '
+                                        f'{_chosen_name} может больше, чем рассылки! '
+                                        f'У агента подключены другие интеграции: {_other_names}. '
+                                        f'Дай задачу через одну из них — например, '
+                                        f'зафиксировать контакты в CRM, проверить аналитику или найти профили на GitHub.'
+                                    )
                                 # RSS-петля: Марк/RSS-агент читает ленту без действий
                                 _rss_count_c = (
                                     _all_recent_text_c.count('habr.com')
@@ -5443,6 +5466,32 @@ class AnchorEngine:
                                         _bn_create_post += _bnc.count('create_post') + _bnc.count('publish_to_telegram')
                                         _bn_universal += _bnc.count('save_note') + _bnc.count('add_task') + _bnc.count('set_reminder') + _bnc.count('run_agent_action') + _bnc.count('generate_image')
                                     _bn_actions = _bn_send + _bn_save_contact + _bn_create_post + _bn_universal
+                                    # ── Статистика использования интеграций за 24ч ──
+                                    _intg_usage: dict[str, int] = {}
+                                    for _bnl2 in _bn_logs:
+                                        _bnc2 = (_bnl2.content or '').lower() + ' ' + (_bnl2.title or '').lower()
+                                        for _ucat in _cats_c:
+                                            _ucount = 0
+                                            if _ucat == 'email':
+                                                _ucount = sum(1 for kw in ('email', 'send_outreach', 'check_emails', 'start_email_campaign', 'письм', 'рассылк') if kw in _bnc2)
+                                            elif _ucat == 'crm':
+                                                _ucount = sum(1 for kw in ('crm', 'amocrm', 'сделк', 'лид', 'create_lead', 'get_contacts') if kw in _bnc2)
+                                            elif _ucat == 'git':
+                                                _ucount = sum(1 for kw in ('github', 'search_users', 'git') if kw in _bnc2)
+                                            elif _ucat == 'analytics':
+                                                _ucount = sum(1 for kw in ('метрик', 'аналитик', 'analytics', 'yandex') if kw in _bnc2)
+                                            else:
+                                                _ucount = 1 if _ucat in _bnc2 else 0
+                                            if _ucount > 0:
+                                                _intg_usage[_ucat] = _intg_usage.get(_ucat, 0) + 1
+                                    _intg_usage_str = ''
+                                    if len(_cats_c) > 1:
+                                        _usage_parts = []
+                                        for _uc in sorted(_cats_c):
+                                            _uname = _CAP_CATEGORY_NAMES.get(_uc, _uc)
+                                            _ucnt = _intg_usage.get(_uc, 0)
+                                            _usage_parts.append(f'{_uname}: {_ucnt}x')
+                                        _intg_usage_str = ', '.join(_usage_parts)
                                     if _bn_search >= 5 and _bn_actions <= 2:
                                         _bottleneck_hint_c = (
                                             f'� ФАЗА КОНВЕРСИИ: за 24ч команда сделала {_bn_search} поисков, '
@@ -5554,7 +5603,7 @@ class AnchorEngine:
                             'discord': '«{name}, опубликуй в Discord обновление по прогрессу цели через publish_to_discord.»',
                             'social': '«{name}, подготовь пост для соцсетей через create_post — с конкретными фактами из последнего исследования.»',
                             'calendar': '«{name}, создай напоминание через set_reminder с дедлайном по ближайшей задаче.»',
-                            'crm': '«{name}, обнови CRM через run_agent_action — проверь статус сделок и зафиксируй прогресс.»',
+                            'crm': '«{name}, зафиксируй в CRM через run_agent_action(action="create_lead") всех, кому мы отправляли письма — имя, email, тему. Потом проверь через get_contacts, кто уже в воронке, и обнови статус сделок.»',
                         }
                         _COORD_UNIVERSAL_EXAMPLES = [
                             '«{name}, запусти research_topic по теме цели — найди 3 свежих подхода, сохрани через save_note и создай задачу (add_task) с конкретным шагом.»',
@@ -5599,7 +5648,11 @@ class AnchorEngine:
                             f"  0) Посмотри на список инструментов выше. Задай себе: «Каким конкретным инструментом\n"
                             f"     из этого списка {_chosen_name} выполнит задачу?» Если ответа нет — задача не для этого агента.\n"
                             + (f"  0b) У {_chosen_name} подключено несколько интеграций: {_caps_c['categories_str']}.\n"
-                               f"     Не привязывайся только к email — используй ВСЕ интеграции осознанно.\n"
+                               f"     Не привязывайся к одной — подумай, какая интеграция полезнее СЕЙЧАС для прогресса цели.\n"
+                               + (f"     📊 Использование за 24ч: {_intg_usage_str}\n"
+                                  f"     Если одна интеграция доминирует, а другие на нуле — значит ты не используешь потенциал агента.\n"
+                                  f"     Спроси себя: что даст БОЛЬШИЙ результат — ещё одно письмо или, например, синхронизация данных в CRM?\n"
+                                  if _intg_usage_str else '')
                                if len(_cats_c) > 1 else '')
                             + f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
                             f"  2) Если результат был слабым или повторяется «поиск / исследование» без конкретных итогов — "
