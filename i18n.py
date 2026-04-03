@@ -76,6 +76,26 @@ def detect_lang_from_telegram(language_code: str) -> str:
     return 'en'
 
 
+def detect_lang_from_text(text: str) -> Optional[str]:
+    """Определить язык сообщения по тексту (ru/en/None).
+
+    Простая эвристика по доле кириллических символов.
+    Возвращает None если текст слишком короткий или неопределённый.
+    """
+    if not text or len(text.strip()) < 4:
+        return None
+    letters = [ch for ch in text if ch.isalpha()]
+    if len(letters) < 3:
+        return None
+    cyrillic = sum(1 for ch in letters if '\u0400' <= ch <= '\u04ff')
+    ratio = cyrillic / len(letters)
+    if ratio >= 0.5:
+        return 'ru'
+    if ratio <= 0.2:
+        return 'en'
+    return None
+
+
 def get_user_lang_by_db_id(db_user_id: int, session=None) -> str:
     """Get language of a user by their database ID (not telegram_id)."""
     try:

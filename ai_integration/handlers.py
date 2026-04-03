@@ -14319,6 +14319,8 @@ async def check_emails(
                     _preview_m = _re_snip.search(r'[Пп]ревью:\s*(.+)', _blk, _re_snip.DOTALL)
                     if _em_in_blk and _preview_m:
                         _snip_raw = _preview_m.group(1).strip()[:3000]
+                        # Отрезаем служебные аннотации outreach (не должны попадать в reply_text в БД)
+                        _snip_raw = _re_snip.split(r'\n?⚡ ИСХОДЯЩИЙ OUTREACH', _snip_raw, maxsplit=1)[0]
                         # Очищаем MIME boundary/header артефакты (защита от старых raw-ответов IMAP)
                         _snip_raw = _re_snip.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _snip_raw)
                         _snip_raw = _re_snip.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _snip_raw)

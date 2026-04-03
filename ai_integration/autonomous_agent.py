@@ -2776,6 +2776,22 @@ class HybridAutonomousAgent:
             sub_tier = ctx['sub_tier']
             user_lang = ctx.get('user_lang', user_lang)
 
+            # ═══ ОПРЕДЕЛЕНИЕ ЯЗЫКА ПО ТЕКСТУ СООБЩЕНИЯ ═══
+            from i18n import detect_lang_from_text
+            _detected_lang = detect_lang_from_text(user_message)
+            if _detected_lang and _detected_lang != user_lang:
+                user_lang = _detected_lang
+                if _detected_lang == 'en':
+                    dynamic_context += (
+                        "\n\n[LANGUAGE OVERRIDE] The user wrote in English. "
+                        "Reply ONLY in English regardless of their profile language."
+                    )
+                else:
+                    dynamic_context += (
+                        "\n\n[ЯЗЫК] Пользователь написал на русском. "
+                        "Отвечай ТОЛЬКО на русском."
+                    )
+
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
             full_history = get_conversation_history(user_id, session=None, limit=6)

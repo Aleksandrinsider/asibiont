@@ -4250,10 +4250,10 @@ except Exception as e:
             amocrm: {
                 name: 'AmoCRM',
                 fields: [
-                    {k:'AMO_SUBDOMAIN', label:'Субдомен (часть до .amocrm.ru)', ph:'mycompany', t:'text'},
-                    {k:'AMO_ACCESS_TOKEN', label:'Access Token (долгосрочный)', ph:'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...', t:'text'}
+                    {k:'AMO_SUBDOMAIN', label:'Субдомен (часть адреса до .amocrm.ru)', ph:'mycompany', t:'text'},
+                    {k:'AMO_ACCESS_TOKEN', label:'Долгосрочный токен (Long-lived token)', ph:'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...', t:'text'}
                 ],
-                hint: 'AmoCRM → Настройки → Интеграции → создать интеграцию → Ключи и токены → скопировать долгосрочный токен.',
+                hint: '1. В amoCRM открой раздел «аmoМаркет» (иконка в боковом меню).\n2. Нажми три точки (•••) в правом верхнем углу → «Создать интеграцию».\n3. Укажи любое название; в поле «Ссылка для перенаправления» вставь https://asibiont.com (нужна любая рабочая HTTPS-ссылка — сам токен от неё не зависит). Поле «Ссылка для хука» оставь пустым.\n4. Нажми «Сохранить». Откроется окно созданной интеграции — перейди на вкладку «Ключи».\n5. Нажми «Сгенерировать токен», выбери срок до 5 лет, скопируй токен сразу — он показывается только один раз!\n6. Субдомен: возьми часть адреса до .amocrm.ru. Если URL = mycompany.amocrm.ru, субдомен = mycompany.',
                 code: `import urllib.request, json, os
 SUBDOMAIN = os.environ.get('AMO_SUBDOMAIN', '')
 TOKEN = os.environ.get('AMO_ACCESS_TOKEN', '')
@@ -4266,7 +4266,10 @@ def amo(path, data=None, method='GET'):
     req.add_header('Authorization', 'Bearer ' + TOKEN)
     req.add_header('Content-Type', 'application/json')
     with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read().decode())
+        raw = r.read().decode()
+        if not raw.strip():
+            return {}
+        return json.loads(raw)
 try:
     if ACTION == 'create_lead':
         name = os.environ.get('AGENT_PARAM_NAME', 'Новая сделка')
@@ -4280,16 +4283,23 @@ try:
         if items:
             print('OK: сделка создана, ID=' + str(items[0]['id']))
         else:
-            print(t('n-error') + ': ' + json.dumps(result))
+            print('Ошибка: ' + json.dumps(result))
     else:
         result = amo('/leads?order[created_at]=desc&limit=10')
         leads = result.get('_embedded', {}).get('leads', [])
         if not leads:
-            print('AmoCRM: сделок не найдено')
+            print('AmoCRM подключён. Сделок пока нет — воронка пуста.')
         else:
             print('Последние ' + str(len(leads)) + ' сделок:')
             for l in leads:
                 print('ID=' + str(l.get('id','')) + ' | ' + l.get('name','') + ' | ' + str(l.get('price',0)) + ' руб. | статус=' + str(l.get('status_id','')))
+except urllib.error.HTTPError as he:
+    if he.code == 204:
+        print('AmoCRM подключён. Сделок пока нет.')
+    elif he.code == 401:
+        print('Ошибка AmoCRM: токен невалиден или истёк. Перегенерируй токен в настройках интеграции.')
+    else:
+        print('Ошибка AmoCRM: HTTP ' + str(he.code))
 except Exception as e:
     print('Ошибка AmoCRM: ' + str(e))`
             },
@@ -4968,28 +4978,6 @@ try:
         print('  ' + p.get('name','?') + ' — ' + str(price_val) + ' руб.')
 except Exception as e:
     print('Ошибка МойСклад: ' + str(e))`
-            },
-            linkedin: {
-                name: 'LinkedIn',
-                fields: [
-                    {k:'LINKEDIN_ACCESS_TOKEN', label:'Access Token (LinkedIn Developer → OAuth 2.0)', ph:'AQXxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'}
-                ],
-                hint: 'LinkedIn → developers.linkedin.com → Создать приложение → OAuth 2.0 → Request Access Token. Разрешения: r_liteprofile, r_emailaddress.',
-                code: `import urllib.request, json, os
-TOKEN = os.environ.get('LINKEDIN_ACCESS_TOKEN', '')
-hdrs  = {'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'application/json'}
-try:
-    req = urllib.request.Request('https://api.linkedin.com/v2/me?projection=(id,firstName,lastName,headline)', headers=hdrs)
-    with urllib.request.urlopen(req, timeout=10) as r:
-        d = json.loads(r.read().decode())
-    first = (d.get('firstName',{}).get('localized',{}) or {}).get('ru_RU', list((d.get('firstName',{}).get('localized',{}) or {}).values() or ['?'])[0])
-    last  = (d.get('lastName',{}).get('localized',{}) or {}).get('ru_RU', list((d.get('lastName',{}).get('localized',{}) or {}).values() or ['?'])[0])
-    headline = (d.get('headline',{}).get('localized',{}) or {}).get('en_US', '')
-    print('LinkedIn профиль: ' + str(first) + ' ' + str(last))
-    if headline: print('Позиция: ' + str(headline))
-    print('ID: ' + d.get('id','?'))
-except Exception as e:
-    print('Ошибка LinkedIn: ' + str(e))`
             },
             superjob: {
                 name: 'SuperJob',
@@ -8451,7 +8439,8 @@ except Exception as e:
                                 bodyHtml += `</div>`;
                                 if (replyFrom) bodyHtml += `<div style="font-size: 12px; color: #8C959F; margin-bottom: 8px;">${t('from-label')} ${replyFrom}</div>`;
                                 if (o.reply_text) {
-                                    bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${escapeHtml(o.reply_text)}</div>`;
+                                    let _cleanReply = o.reply_text.split('\n⚡ ИСХОДЯЩИЙ OUTREACH')[0].split('⚡ ИСХОДЯЩИЙ OUTREACH')[0].trim();
+                                    bodyHtml += `<div style="font-size: 13px; color: #374151; white-space: pre-wrap; word-break: break-word; line-height: 1.6; font-weight: 400;">${escapeHtml(_cleanReply)}</div>`;
                                 } else {
                                     bodyHtml += `<div id="reply-placeholder-${o.id}" style="font-size: 13px; color: #9CA3AF; font-style: italic;">Загрузка ответа...</div>`;
                                     setTimeout(() => loadOutreachReply(o.id), 300);
@@ -16477,7 +16466,7 @@ except Exception as e:
       'msg-placeholder':'Сообщение...',
       'opt-messages':'Сообщения','opt-fav':'Избранное','opt-rec':'Рекомендуемые','opt-del-me':'Поручают мне','opt-del-by':'Поручаю я','opt-blocked':'Заблокировано',
       'no-messages':'Нет сообщений','msg-from':'от','msg-to':'для','replied':'ответили','read':'прочитано','delivered':'доставлено','pending':'ожидание',
-      'reply':'Ответ','reply-btn':'Ответить','reply-prompt':'Введите ответ:','reply-sent':'Ответ отправлен',
+      'reply':'Ответ','reply-btn':'Ответить','reply-prompt':'Введите ответ:','reply-sent':'Ответ отправлен','mp-agent-reply':'Ответ агента',
       'new-message':'Новое сообщение','compose-username':'Введите @username получателя:','compose-text':'Введите сообщение:',
       'send-msg-title':'Отправить сообщение','reply-title':'Ответить','recipient-label':'Получатель','message-label':'Сообщение','send-btn':'Отправить','msg-deleted':'Сообщение удалено',
       'tf-all':'Все','tf-my':'Личные','tf-agent':'Поручения агентам','tf-to-me':'Поручили мне','tf-by-me':'Поручил я','tf-overdue':'Просрочено','tf-done':'Выполнено',
@@ -16773,7 +16762,7 @@ except Exception as e:
       'msg-placeholder':'Message...',
       'opt-messages':'Messages','opt-fav':'Favorites','opt-rec':'Recommended','opt-del-me':'Assigned to me','opt-del-by':'Assigned by me','opt-blocked':'Blocked',
       'no-messages':'No messages','msg-from':'from','msg-to':'to','replied':'replied','read':'read','delivered':'delivered','pending':'pending',
-      'reply':'Reply','reply-btn':'Reply','reply-prompt':'Enter reply:','reply-sent':'Reply sent',
+      'reply':'Reply','reply-btn':'Reply','reply-prompt':'Enter reply:','reply-sent':'Reply sent','mp-agent-reply':'Agent reply',
       'new-message':'New message','compose-username':'Enter recipient @username:','compose-text':'Enter message:',
       'send-msg-title':'Send message','reply-title':'Reply','recipient-label':'Recipient','message-label':'Message','send-btn':'Send','msg-deleted':'Message deleted',
       'tf-all':'All','tf-my':'Personal','tf-agent':'Agent tasks','tf-to-me':'Assigned to me','tf-by-me':'Assigned by me','tf-overdue':'Overdue','tf-done':'Completed',
