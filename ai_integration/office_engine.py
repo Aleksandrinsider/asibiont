@@ -1394,6 +1394,50 @@ class OfficeEngine:
                 for a in recent_acts
             ) if recent_acts else "(нет недавней активности)"
 
+            # ── Счётчик действий vs анализа за 24ч ──
+            _action_stats_l2 = ''
+            try:
+                _stats_cutoff = _now - timedelta(hours=24)
+                _all_acts_24 = (
+                    s.query(AgentActivityLog)
+                    .filter(
+                        AgentActivityLog.user_id == user_db_id,
+                        AgentActivityLog.created_at >= _stats_cutoff,
+                    )
+                    .all()
+                )
+                _emails_sent = 0
+                _posts_made = 0
+                _notes_saved = 0
+                _research_done = 0
+                _crm_done = 0
+                _other_actions = 0
+                for _act in _all_acts_24:
+                    _t = ((_act.title or '') + ' ' + (_act.content or '')).lower()
+                    if any(kw in _t for kw in ('отправила письмо', 'отправил письмо', 'send_email', 'outreach')):
+                        _emails_sent += 1
+                    elif any(kw in _t for kw in ('опубликовала', 'опубликовал', 'publish_to', 'пост в')):
+                        _posts_made += 1
+                    elif any(kw in _t for kw in ('amocrm', 'сделку', 'контакт в crm')):
+                        _crm_done += 1
+                    elif any(kw in _t for kw in ('сохранил', 'сохранила', 'save_note', 'заметк')):
+                        _notes_saved += 1
+                    elif any(kw in _t for kw in ('проанализировал', 'исследовал', 'research', 'анализ')):
+                        _research_done += 1
+                    else:
+                        _other_actions += 1
+                _total_24 = len(_all_acts_24)
+                _real_actions = _emails_sent + _posts_made + _crm_done
+                _action_stats_l2 = (
+                    f"📊 СТАТИСТИКА 24Ч: всего={_total_24}, "
+                    f"реальные действия={_real_actions} (email={_emails_sent}, посты={_posts_made}, CRM={_crm_done}), "
+                    f"заметки={_notes_saved}, анализ={_research_done}\n"
+                )
+                if _total_24 > 5 and _real_actions < _total_24 * 0.2:
+                    _action_stats_l2 += "⚠️ ДИСБАЛАНС: менее 20% реальных действий. Назначь ДЕЙСТВИЕ, а не анализ.\n"
+            except Exception:
+                pass
+
             # Провалившиеся задачи за 24ч — координатор должен избегать повторов
             _failed_tasks_l2 = ''
             try:
@@ -1434,6 +1478,12 @@ class OfficeEngine:
                         _caps_c.append('Telegram')
                     if 'github' in _keys_c:
                         _caps_c.append('GitHub search_users→save_email_contact→send_outreach_email')
+                    if any(k in _keys_c for k in ('rss_', 'rss')):
+                        _caps_c.append('RSS-мониторинг')
+                    if any(k in _keys_c for k in ('amo_', 'amocrm')):
+                        _caps_c.append('AmoCRM (сделки, контакты)')
+                    if any(k in _keys_c for k in ('alphavantage', 'alpha_vantage')):
+                        _caps_c.append('биржевые данные (Alpha Vantage)')
                     if _caps_c:
                         _line += f" [{', '.join(_caps_c)}]"
                     else:
@@ -1479,6 +1529,7 @@ class OfficeEngine:
             f"ЦЕЛИ:\n{goals_text}\n\n"
             f"АГЕНТЫ (и их реальные возможности):\n{agents_caps_text}\n\n"
             f"{_integrations_block}"
+            f"{_action_stats_l2}"
             f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
             f"{_failed_tasks_l2}"
 
@@ -1518,12 +1569,18 @@ class OfficeEngine:
             "   ХОРОШО: «Найди через web_search актуальную программу тренировок для цели Y, создай план через add_task.»\n"
             "   ХОРОШО: «Подготовь экспертный пост (research_topic → create_post) и опубликуй через publish_to_telegram.»\n"
             "   ПЛОХО: «Проведи анализ» без конкретного инструмента и результата.\n"
-            "2. Называй КОНКРЕТНЫЙ инструмент: web_search, research_topic, create_post, add_task, save_note, set_reminder, check_emails, send_outreach_email, publish_to_telegram и др.\n"
+            "2. Называй КОНКРЕТНЫЙ инструмент: web_search, research_topic, create_post, add_task, save_note, set_reminder, check_emails, send_outreach_email, publish_to_telegram,\n"
+            "   find_and_message_relevant_users (поиск и рассылка пользователям платформы — БЕСПЛАТНО, без лимитов!),\n"
+            "   negotiate_by_email (многошаговые переговоры по email), start_content_campaign (серия публикаций),\n"
+            "   generate_image (визуал для постов), publish_to_discord (публикация в Discord), set_contact_alert (мониторинг контакта).\n"
             "3. Каждый агент получает РАЗНУЮ задачу.\n"
             "4. Агент БЕЗ email-ключей НЕ МОЖЕТ отправлять/читать письма.\n"
             "5. Если цель имеет конкретный дедлайн — urgency=high.\n"
             "6. Если все задачи уже выполняются или прогресс застрял и новый подход не ясен — 'wait' с объяснением.\n"
-            "7. Задача ДОЛЖНА быть полной цепочкой до конкретного результата.\n\n"
+            "7. Задача ДОЛЖНА быть полной цепочкой до конкретного результата.\n"
+            "8. ПРИОРИТЕТ ДЕЙСТВИЙ: минимум 50% задач — ПРЯМЫЕ ДЕЙСТВИЯ (email, пост, CRM, рассылка, публикация). save_note и research — вспомогательные.\n"
+            "   Если СТАТИСТИКА показывает дисбаланс — ОБЯЗАТЕЛЬНО назначь действие, а не ещё один анализ.\n"
+            "9. find_and_message_relevant_users — МОЩНЫЙ канал: ищи пользователей платформы по теме цели и пиши им напрямую. Это бесплатно.\n\n"
             "Ответь JSON (без ```):\n"
             '{"action": "delegate", "agent_name": "имя", "task": "...", "goal": "...", "urgency": "normal"}\n'
             'или {"action": "delegate_multiple", "assignments": [{"agent_name": "...", "task": "...", "goal": "...", "urgency": "normal"}, ...]}\n'
@@ -1606,13 +1663,13 @@ class OfficeEngine:
                 _task_words = set(w.lower() for w in _atask.split() if len(w) > 4)
                 _s_dup = Db2()
                 try:
-                    _dup_cutoff = _now - timedelta(hours=6)
+                    _dup_cutoff = _now - timedelta(hours=24)
                     _recent_aal = _s_dup.query(AgentActivityLog).filter(
                         AgentActivityLog.user_id == user_db_id,
                         AgentActivityLog.activity_type == 'agent_task',
                         AgentActivityLog.target == f'agent:{_aname}',
                         AgentActivityLog.created_at >= _dup_cutoff,
-                    ).order_by(AgentActivityLog.created_at.desc()).limit(6).all()
+                    ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
 
                     _high_overlap_count = 0
                     for _aal_row in _recent_aal:
@@ -1620,10 +1677,10 @@ class OfficeEngine:
                         _old_words = set(w for w in _old_text.split() if len(w) > 4)
                         if _old_words and _task_words:
                             _overlap = len(_task_words & _old_words) / min(len(_task_words), len(_old_words))
-                            if _overlap > 0.45:
+                            if _overlap > 0.35:
                                 _high_overlap_count += 1
                     if _high_overlap_count >= 2:
-                        logger.info("[OFFICE-L2] TEACH-MISS antiloop: user=%d, %s has %d similar tasks in 6h — skipping: %s",
+                        logger.info("[OFFICE-L2] TEACH-MISS antiloop: user=%d, %s has %d similar tasks in 24h — skipping: %s",
                                     user_db_id, _aname, _high_overlap_count, _atask[:60])
                         continue
                 finally:
