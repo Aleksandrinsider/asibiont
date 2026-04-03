@@ -16936,11 +16936,10 @@ async def start_content_campaign(
         if not name or not goal:
             return " Укажи название и цель кампании"
 
-        # Авто-подбор времени из расписания пользователя если не указано
+        # Если время не указано — найти свободный слот и ПРЕДЛОЖИТЬ пользователю
         if not post_time:
+            _suggested_time = '10:00'
             try:
-                from datetime import datetime as _dt_cc, timedelta as _td_cc
-                _today = _dt_cc.utcnow().date()
                 _tasks_today = session.query(Task).filter(
                     Task.user_id == user.id,
                     Task.status.in_(['active', 'pending']),
@@ -16951,16 +16950,19 @@ async def start_content_campaign(
                     _rt = _t.reminder_time
                     if _rt and hasattr(_rt, 'hour'):
                         _busy_hours.add(_rt.hour)
-                # Предпочтительные слоты: 10:00, 18:00, 09:00, 19:00, 12:00, 15:00
                 for _candidate in ['10:00', '18:00', '09:00', '19:00', '12:00', '15:00']:
                     _ch = int(_candidate.split(':')[0])
                     if _ch not in _busy_hours:
-                        post_time = _candidate
+                        _suggested_time = _candidate
                         break
-                if not post_time:
-                    post_time = '10:00'
             except Exception:
-                post_time = '10:00'
+                pass
+            _busy_info = f" (занято: {', '.join(f'{h}:00' for h in sorted(_busy_hours))})" if _busy_hours else ""
+            return (
+                f"У тебя свободно в {_suggested_time}{_busy_info}. "
+                f"Запускаю кампанию «{name}» на {_suggested_time}? "
+                f"Или скажи другое время (например 09:00, 18:00, 21:00)."
+            )
 
         if platforms is None:
             platforms = ['feed']
