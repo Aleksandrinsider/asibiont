@@ -3712,9 +3712,23 @@ class AnchorEngine:
                 Anchor.expires_at.isnot(None),
                 Anchor.expires_at < cleanup_threshold,
             ).delete(synchronize_session=False)
-            if expired_gone > 0:
+            # Также: snoozed якоря с suppress_until > expires_at — мертвые (никогда не проснутся)
+            _now_cleanup = datetime.now(timezone.utc)
+            snoozed_dead = session.query(Anchor).filter(
+                Anchor.user_id == user.id,
+                Anchor.delivered_at.is_(None),
+                Anchor.expires_at.isnot(None),
+                Anchor.suppress_until.isnot(None),
+                Anchor.expires_at < _now_cleanup,
+                Anchor.suppress_until >= Anchor.expires_at,
+            ).all()
+            for _sd in snoozed_dead:
+                _sd.delivered_at = _sd.expires_at  # пометить как мёртвый
+            snoozed_dead_count = len(snoozed_dead)
+            total_cleaned = expired_gone + snoozed_dead_count
+            if total_cleaned > 0:
                 session.commit()
-                logger.info(f"[ANCHOR] User {user_id}: 🧹 cleaned {expired_gone} expired-but-undelivered anchors")
+                logger.info(f"[ANCHOR] User {user_id}: 🧹 cleaned {expired_gone} expired + {snoozed_dead_count} snoozed-dead anchors")
         except Exception as _cleanup_err:
             logger.debug(f"[ANCHOR] Cleanup error (non-critical): {_cleanup_err}")
             session.rollback()
@@ -3835,10 +3849,17 @@ class AnchorEngine:
                 )
 
         # 2. EVALUATE — собрать доставляемые якоря
+        _now_eval = datetime.now(timezone.utc)
+        from sqlalchemy import or_ as _or_eval
         deliverable = session.query(Anchor).filter(
             Anchor.user_id == user.id,
             Anchor.delivered_at.is_(None),
             Anchor.triggered_at.isnot(None),
+            # suppress_until: snoozed якоря не обрабатывать раньше времени
+            _or_eval(
+                Anchor.suppress_until.is_(None),
+                Anchor.suppress_until <= _now_eval,
+            ),
         ).order_by(
             Anchor.priority.asc(),  # CRITICAL first (enum order)
             Anchor.created_at.asc()
@@ -15745,7 +15766,7 @@ class AnchorEngine:
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_outreach_send',
-                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d")}',  # дедупликация по дню (было по часу → дубли)
+                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H")}',  # дедупликация по часу (по дню блокировало весь день при snooze)
                     topic=_t(user,
                         f'Email-кампания «{campaign.name}» — {len(drafts)} черновиков ждут отправки ({remaining_daily} осталось сегодня)',
                         f'Email campaign «{campaign.name}» — {len(drafts)} drafts pending ({remaining_daily} remaining today)'),
