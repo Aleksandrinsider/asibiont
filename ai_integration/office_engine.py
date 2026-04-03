@@ -1411,6 +1411,8 @@ class OfficeEngine:
                 _notes_saved = 0
                 _research_done = 0
                 _crm_done = 0
+                _dm_sent = 0
+                _campaigns = 0
                 _other_actions = 0
                 for _act in _all_acts_24:
                     _t = ((_act.title or '') + ' ' + (_act.content or '')).lower()
@@ -1420,6 +1422,10 @@ class OfficeEngine:
                         _posts_made += 1
                     elif any(kw in _t for kw in ('amocrm', 'сделку', 'контакт в crm')):
                         _crm_done += 1
+                    elif any(kw in _t for kw in ('find_and_message', 'message_relevant', 'написал пользовател', 'dm ')):
+                        _dm_sent += 1
+                    elif any(kw in _t for kw in ('start_email_campaign', 'start_content_campaign', 'кампани')):
+                        _campaigns += 1
                     elif any(kw in _t for kw in ('сохранил', 'сохранила', 'save_note', 'заметк')):
                         _notes_saved += 1
                     elif any(kw in _t for kw in ('проанализировал', 'исследовал', 'research', 'анализ')):
@@ -1427,14 +1433,33 @@ class OfficeEngine:
                     else:
                         _other_actions += 1
                 _total_24 = len(_all_acts_24)
-                _real_actions = _emails_sent + _posts_made + _crm_done
+                _real_actions = _emails_sent + _posts_made + _crm_done + _dm_sent + _campaigns
+                # ── Каналы: сколько задействовано из доступных ──
+                _channels_used = sum(1 for c in [_emails_sent, _posts_made, _crm_done, _dm_sent, _campaigns] if c > 0)
                 _action_stats_l2 = (
-                    f"📊 СТАТИСТИКА 24Ч: всего={_total_24}, "
-                    f"реальные действия={_real_actions} (email={_emails_sent}, посты={_posts_made}, CRM={_crm_done}), "
-                    f"заметки={_notes_saved}, анализ={_research_done}\n"
+                    f"📊 ТВОЯ СТАТИСТИКА 24Ч (изучи и сделай выводы):\n"
+                    f"  Всего действий: {_total_24}\n"
+                    f"  📧 Email: {_emails_sent}  📝 Посты: {_posts_made}  💼 CRM: {_crm_done}\n"
+                    f"  💬 DM (платформа): {_dm_sent}  🚀 Кампании: {_campaigns}\n"
+                    f"  📋 Заметки: {_notes_saved}  🔍 Анализ: {_research_done}\n"
+                    f"  Каналов задействовано: {_channels_used}/5\n"
                 )
-                if _total_24 > 5 and _real_actions < _total_24 * 0.2:
-                    _action_stats_l2 += "⚠️ ДИСБАЛАНС: менее 20% реальных действий. Назначь ДЕЙСТВИЕ, а не анализ.\n"
+                # Самообучение: вместо директив — рефлексия
+                if _total_24 > 5 and _real_actions < _total_24 * 0.3:
+                    _action_stats_l2 += (
+                        "🤔 РЕФЛЕКСИЯ: большинство действий = анализ/заметки. Подумай:\n"
+                        "  — Хватит ли данных чтобы СДЕЛАТЬ что-то конкретное (отправить, опубликовать, написать)?\n"
+                        "  — Какой канал принесёт результат быстрее всего?\n"
+                    )
+                if _channels_used <= 1 and _total_24 > 3:
+                    _action_stats_l2 += (
+                        "🤔 РЕФЛЕКСИЯ: используется только 1 канал. Подумай:\n"
+                        "  — Какой ДРУГОЙ канал может дополнить текущую стратегию?\n"
+                        "  — find_and_message_relevant_users = бесплатно, без лимитов\n"
+                        "  — start_email_campaign = авто-поиск + до 100 писем/день одной командой\n"
+                        "  — publish_to_telegram/create_post = контент привлекает аудиторию\n"
+                    )
+                _action_stats_l2 += "\n"
             except Exception:
                 pass
 
@@ -1617,9 +1642,12 @@ class OfficeEngine:
             "5. Если цель имеет конкретный дедлайн — urgency=high.\n"
             "6. Если все задачи уже выполняются или прогресс застрял и новый подход не ясен — 'wait' с объяснением.\n"
             "7. Задача ДОЛЖНА быть полной цепочкой до конкретного результата.\n"
-            "8. ПРИОРИТЕТ ДЕЙСТВИЙ: минимум 50% задач — ПРЯМЫЕ ДЕЙСТВИЯ (email, пост, CRM, рассылка, публикация). save_note и research — вспомогательные.\n"
-            "   Если СТАТИСТИКА показывает дисбаланс — ОБЯЗАТЕЛЬНО назначь действие, а не ещё один анализ.\n"
-            "   ⚡ ОТВЕТЫ НА ВХОДЯЩИЕ — ВЫСШИЙ ПРИОРИТЕТ: если есть агент с email → ПЕРВАЯ задача = «check_emails. Если есть ответы — reply_to_outreach_email с персональным предложением. Сохрани контакты в AmoCRM (save_email_contact).»\n"
+            "8. РЕФЛЕКСИЯ КАНАЛОВ: посмотри СТАТИСТИКУ 24Ч выше. Подумай:\n"
+            "   — Какие каналы НЕ задействованы? Может ли другой канал дополнить стратегию?\n"
+            "   — Много анализа/заметок, но мало реальных действий? Значит данных достаточно — пора действовать.\n"
+            "   — Один канал = одна точка отказа. Диверсификация повышает шансы на результат.\n"
+            "   💡 Стоимость инструментов: find_and_message_relevant_users = бесплатно, без лимитов; start_email_campaign = 1 вызов → до 100 писем/день; publish_to_telegram = мгновенная публикация.\n"
+            "   ⚡ ОТВЕТЫ НА ВХОДЯЩИЕ — ВЫСШИЙ ПРИОРИТЕТ: если есть агент с email → ПЕРВАЯ задача = «check_emails. Если есть ответы — reply_to_outreach_email с персональным предложением.»\n"
             "9. find_and_message_relevant_users — МОЩНЫЙ канал: ищи пользователей платформы по теме цели и пиши им напрямую. Это бесплатно.\n"
             "10. OUTREACH = ПАКЕТАМИ, НЕ ПОШТУЧНО. Никогда не давай задачу «напиши письмо Ивану».\n"
             "   ЛУЧШИЙ ВАРИАНТ: «Запусти email-кампанию (start_email_campaign) по [аудитория] с предложением [оффер]» — одна команда = автоматический поиск + до 50 писем/день.\n"

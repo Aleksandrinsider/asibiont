@@ -7000,37 +7000,45 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _sb_send = 0
                     _sb_save = 0
                     _sb_post = 0
+                    _sb_dm = 0
+                    _sb_campaign = 0
                     for _sbl in _hist_logs:
                         _sbc = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
                         _sb_search += _sbc.count('web_search') + _sbc.count('research_topic')
                         _sb_send += _sbc.count('send_outreach_email') + _sbc.count('send_email')
                         _sb_save += _sbc.count('save_email_contact')
                         _sb_post += _sbc.count('create_post') + _sbc.count('publish_to_telegram')
+                        _sb_dm += _sbc.count('find_and_message_relevant_users') + _sbc.count('message_relevant')
+                        _sb_campaign += _sbc.count('start_email_campaign') + _sbc.count('start_content_campaign')
                     # Универсальные действия: save_note, add_task, set_reminder, run_agent_action
                     _sb_universal = 0
                     for _sbl in _hist_logs:
                         _sbc2 = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
                         _sb_universal += _sbc2.count('save_note') + _sbc2.count('add_task') + _sbc2.count('set_reminder') + _sbc2.count('run_agent_action') + _sbc2.count('generate_image')
-                    _sb_actions = _sb_send + _sb_save + _sb_post + _sb_universal
+                    _sb_actions = _sb_send + _sb_save + _sb_post + _sb_universal + _sb_dm + _sb_campaign
+                    # ── Канальная рефлексия: покажи ИИ его собственную статистику ──
+                    _sb_channels_used = sum(1 for c in [_sb_send, _sb_post, _sb_dm, _sb_campaign] if c > 0)
+                    system_prompt += (
+                        f"\n\n📊 ТВОИ КАНАЛЫ ЗА 24Ч (изучи и сделай выводы):\n"
+                        f"  📧 Email: {_sb_send}  📝 Контент: {_sb_post}  💬 DM: {_sb_dm}  🚀 Кампании: {_sb_campaign}  🔍 Поиск: {_sb_search}\n"
+                        f"  Каналов задействовано: {_sb_channels_used}/4\n"
+                    )
                     if _sb_search >= 4 and _sb_actions <= 1:
                         system_prompt += (
-                            f"\n\n🔄 ФАЗА КОНВЕРСИИ: ты уже выполнил {_sb_search} поисков за 24ч — "
-                            "данных достаточно. Пора ИСПОЛЬЗОВАТЬ результаты. Варианты:\n"
-                            "  1. ЗАМЕТКИ → save_note (выводы, конспект, подборка, рекомендации)\n"
-                            "  2. ЗАДАЧИ → add_task (конкретные шаги на основе находок)\n"
-                            "  3. КОНТЕНТ → create_post (аналитика, обзор, статья)\n"
-                            "  4. КОНТАКТЫ → save_email_contact + send_outreach_email (если цель связана с людьми)\n"
-                            "  5. ДЕЛЕГАЦИЯ → delegate_task коллеге с конкретными данными из поиска\n"
-                            "Выбери вариант, ПОДХОДЯЩИЙ ПОД ЦЕЛЬ. "
-                            "Если вызываешь web_search — он должен быть ТОЧЕЧНЫМ, "
-                            "не общим обзорным. Общие поиски уже сделаны.\n"
+                            "🤔 Много поисков, мало результатов. Подумай: данных уже достаточно?\n"
+                            "  Варианты конверсии: save_note (выводы), add_task (шаги), create_post (контент),\n"
+                            "  save_email_contact + send_outreach_email (контакты), delegate_task (коллеге).\n"
                         )
                     elif _sb_search >= 3 and _sb_actions == 0:
                         system_prompt += (
-                            f"\n\n⚠️ ВНИМАНИЕ: {_sb_search} поисков за 24ч без конвертации в результат. "
-                            "Поиск полезен только когда результаты используются. Выбери: "
-                            "save_note (заметка/план), add_task (конкретный шаг), create_post (контент), "
-                            "или передай данные коллеге (delegate_task).\n"
+                            f"🤔 {_sb_search} поисков без конверсии. Что полезного ты нашёл? Как это использовать?\n"
+                        )
+                    if _sb_channels_used <= 1 and (_sb_search + _sb_actions) > 3:
+                        system_prompt += (
+                            "🤔 Ты используешь только 1 канал. Какой ДРУГОЙ канал дополнит стратегию?\n"
+                            "  💡 find_and_message_relevant_users = бесплатно, без лимитов\n"
+                            "  💡 start_email_campaign = авто-поиск контактов + до 100 писем/день\n"
+                            "  💡 publish_to_telegram/create_post = контент привлекает аудиторию\n"
                         )
             finally:
                 _db_hist.close()
