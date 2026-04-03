@@ -592,7 +592,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (25 мин)
+MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -605,7 +605,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 25  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
