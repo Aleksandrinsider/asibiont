@@ -592,7 +592,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
+MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (25 мин)
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -605,7 +605,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 25  # Интервал между autopilot dispatch'ами
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
@@ -2736,6 +2736,55 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_ct
             _log_ct.getLogger(__name__).debug('[AUTOPILOT] cancelled tasks block: %s', _e_ct)
 
+    # ── Cross-session dedup: что уже исследовано / сделано за последние 12ч ──
+    _recent_research_block = ''
+    if user:
+        try:
+            from models import Session as _Sess_rr, Note as _Note_rr, AgentActivityLog as _AAL_rr
+            import datetime as _dt_rr
+            _sess_rr = _Sess_rr()
+            try:
+                _cutoff_rr = _dt_rr.datetime.utcnow() - _dt_rr.timedelta(hours=12)
+                # 1) Recent research notes (auto-saved from research_topic)
+                _recent_notes = _sess_rr.query(_Note_rr.title).filter(
+                    _Note_rr.user_id == user.id,
+                    _Note_rr.created_at >= _cutoff_rr,
+                ).order_by(_Note_rr.created_at.desc()).limit(20).all()
+                _note_titles = list(dict.fromkeys(
+                    (n[0] or '').strip()[:120] for n in _recent_notes if n[0]
+                ))[:12]
+                # 2) Recent completed AAL actions (agent tasks, integrations)
+                _recent_aal = _sess_rr.query(_AAL_rr.title).filter(
+                    _AAL_rr.user_id == user.id,
+                    _AAL_rr.status == 'completed',
+                    _AAL_rr.created_at >= _cutoff_rr,
+                ).order_by(_AAL_rr.created_at.desc()).limit(20).all()
+                _aal_titles = list(dict.fromkeys(
+                    (a[0] or '').strip()[:120] for a in _recent_aal if a[0]
+                ))[:12]
+                _dedup_lines = []
+                if _note_titles:
+                    _dedup_lines.append("  Исследования (заметки):")
+                    for _nt in _note_titles:
+                        _dedup_lines.append(f"    • {_nt}")
+                if _aal_titles:
+                    _dedup_lines.append("  Выполненные действия:")
+                    for _at in _aal_titles:
+                        _dedup_lines.append(f"    • {_at}")
+                if _dedup_lines:
+                    _recent_research_block = (
+                        "\n\n🔍 УЖЕ СДЕЛАНО ЗА 12ч (НЕ ПОВТОРЯЙ — ищи НОВЫЕ подходы):\n"
+                        + '\n'.join(_dedup_lines) + '\n'
+                        "  → Если тема уже исследована — НЕ запускай research_topic/web_search с тем же запросом.\n"
+                        "  → Если действие уже выполнено — переходи к СЛЕДУЮЩЕМУ шагу или другому методу.\n"
+                        "  → Разнообразие: пробуй другие инструменты, другие контакты, другие темы.\n"
+                    )
+            finally:
+                _sess_rr.close()
+        except Exception as _e_rr:
+            import logging as _log_rr
+            _log_rr.getLogger(__name__).debug('[AUTOPILOT] recent research block: %s', _e_rr)
+
     # ── Adaptive Decisions Block: работай с тем что есть ──────────────────────────
     # Конкретные правила поведения при блокировках, лимитах, ошибках инструментов.
     # Принцип: каждый тупик имеет обходной путь — ИИ должен ЗНАТЬ эти пути заранее.
@@ -2844,6 +2893,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_recent_dialog_block}"
         f"{_capability_limits_block}"
         f"{_cancelled_tasks_block}"
+        f"{_recent_research_block}"
         f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"

@@ -3371,6 +3371,7 @@ class HybridAutonomousAgent:
             # 5 параллельных инструментов/итерацию: больше работы за один API-вызов → меньше round-trips → меньше токенов
             MAX_TOOLS_PER_ITERATION = 5
             seen_tools = set()  # Для предотвращения дублей
+            _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
             once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз
             multi_limit_tools = {'add_task': 5, 'update_profile': 2, 'create_goal': 3, 'run_agent_action': 8, 'send_email': 5, 'delegate_task': 5}  # лимиты per turn
@@ -3553,6 +3554,23 @@ class HybridAutonomousAgent:
                             "content": '{"status": "skipped: duplicate call"}'})
                         continue
                     seen_tools.add(dedup_key)
+
+                    # Fuzzy dedup for research/web_search — skip if >50% keyword overlap
+                    if name in ('research_topic', 'web_search'):
+                        _q_raw = (args.get('query') or args.get('topic') or args.get('prompt') or '').lower()
+                        _q_kws = set(w for w in _q_raw.split() if len(w) > 2)
+                        if _q_kws:
+                            for _prev_kws in _seen_research_kws:
+                                _overlap = len(_q_kws & _prev_kws) / max(len(_q_kws | _prev_kws), 1)
+                                if _overlap > 0.5:
+                                    logger.warning(f"[FUZZY_DEDUP] Skipping similar {name}: {_q_raw[:80]}")
+                                    messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                                        "content": '{"status": "skipped: similar query already executed this session — try a different topic"}'})
+                                    _q_kws = None
+                                    break
+                            if _q_kws is None:
+                                continue
+                            _seen_research_kws.append(_q_kws)
 
                     # Once-only
                     if name in once_only_tools:
@@ -4415,6 +4433,7 @@ class HybridAutonomousAgent:
             # ===== Tool calling loop (облегчённый) =====
             all_execution_results = []
             seen_tools = set()
+            _seen_research_kws_sys = []  # Fuzzy dedup for research/web_search
 
             # Для anchor/proactive — первая итерация ОБЯЗАТЕЛЬНО вызывает инструменты
             # чтобы AI не выдумывал данные, а получал реальные
@@ -4477,6 +4496,23 @@ class HybridAutonomousAgent:
                             "content": '{"status": "skipped: duplicate"}'})
                         continue
                     seen_tools.add(dedup_key)
+
+                    # Fuzzy dedup for research/web_search
+                    if name in ('research_topic', 'web_search'):
+                        _q_raw_s = (args.get('query') or args.get('topic') or args.get('prompt') or '').lower()
+                        _q_kws_s = set(w for w in _q_raw_s.split() if len(w) > 2)
+                        if _q_kws_s:
+                            _fuzzy_dup = False
+                            for _prev_kws_s in _seen_research_kws_sys:
+                                _overlap_s = len(_q_kws_s & _prev_kws_s) / max(len(_q_kws_s | _prev_kws_s), 1)
+                                if _overlap_s > 0.5:
+                                    _fuzzy_dup = True
+                                    break
+                            if _fuzzy_dup:
+                                messages.append({"role": "tool", "tool_call_id": tc_item['id'],
+                                    "content": '{"status": "skipped: similar query already executed"}'})
+                                continue
+                            _seen_research_kws_sys.append(_q_kws_s)
 
                     # Blocked
                     if name in exclude_tools:

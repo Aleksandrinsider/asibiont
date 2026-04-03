@@ -1471,7 +1471,7 @@ class OfficeEngine:
                 _ftasks = s.query(_Task_l2f).filter(
                     _Task_l2f.user_id == user_db_id,
                     _Task_l2f.source == 'agent',
-                    _Task_l2f.status.in_(['cancelled']),
+                    _Task_l2f.status.in_(['cancelled', 'failed']),
                     _Task_l2f.created_at >= _fail_c_l2,
                 ).order_by(_Task_l2f.created_at.desc()).limit(8).all()
                 if _ftasks:
@@ -1479,6 +1479,23 @@ class OfficeEngine:
                     for _ft in _ftasks:
                         _fl.append(f"  - {_ft.delegated_to_username or '?'}: {(_ft.title or '')[:70]}")
                     _failed_tasks_l2 = '\n'.join(_fl) + '\n'
+            except Exception:
+                pass
+
+            # Также берём failed из AgentActivityLog (AAL) — они часто НЕ отражены в Task.status
+            try:
+                _fail_aal_cutoff = _now - timedelta(hours=12)
+                _failed_aal = s.query(AgentActivityLog).filter(
+                    AgentActivityLog.user_id == user_db_id,
+                    AgentActivityLog.status == 'failed',
+                    AgentActivityLog.created_at >= _fail_aal_cutoff,
+                ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
+                if _failed_aal:
+                    _fl2 = ['⛔ ПРОВАЛИВШИЕСЯ ДЕЙСТВИЯ 12ч (НЕ повторяй то же самое — смени подход):']
+                    for _fa in _failed_aal:
+                        _agent_t = (_fa.target or '').replace('agent:', '')
+                        _fl2.append(f"  - {_agent_t}: {(_fa.title or '')[:80]}")
+                    _failed_tasks_l2 += '\n'.join(_fl2) + '\n'
             except Exception:
                 pass
         finally:
@@ -1776,7 +1793,7 @@ class OfficeEngine:
                             _overlap = len(_task_words & _old_words) / min(len(_task_words), len(_old_words))
                             if _overlap > 0.35:
                                 _high_overlap_count += 1
-                    if _high_overlap_count >= 2:
+                    if _high_overlap_count >= 1:
                         logger.info("[OFFICE-L2] TEACH-MISS antiloop: user=%d, %s has %d similar tasks in 24h — skipping: %s",
                                     user_db_id, _aname, _high_overlap_count, _atask[:60])
                         continue
