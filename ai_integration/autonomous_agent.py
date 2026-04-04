@@ -2123,6 +2123,8 @@ class HybridAutonomousAgent:
                 'opensource@', 'security@', 'privacy@', 'legal@', 'compliance@',
                 'komm@', 'commercial@', 'pr@', 'media@', 'partners@', 'partner@',
                 'reception@', 'director@', 'ceo@', 'cto@', 'cfo@',
+                'ai@', 'ml@', 'data@', 'research@', 'dev@', 'engineering@',
+                'decision-makers', 'enquiries@', 'invest@',
             )
             if _rcpt and any(_rcpt.startswith(p) for p in _ROLE_PREFIXES):
                 params['__skip__'] = True
@@ -5693,6 +5695,17 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         f"Твоё имя в команде: {_agent['name']}.\n"
         f"Описание: {_agent.get('description', '')}{_integrations_hint}\n\n"
     )
+    _agent_name_str = (_agent.get('name') or '').strip()
+    _agent_fem = (
+        _agent_name_str and len(_agent_name_str) >= 2
+        and _agent_name_str[-1] in 'аяАЯ'
+        and _agent_name_str[-2:].lower() not in ('ша', 'жа')
+    )
+    if _agent_fem:
+        _system += (
+            f"ГЕНДЕР: {_agent_name_str} — женское имя. Используй женский род: "
+            "прочитала, заметила, нашла, подготовила, сделала.\n\n"
+        )
     if _has_delegation_evidence:
         _system += (
             "РЕЖИМ: ОТЧЁТ ПО ДЕЛЕГИРОВАНИЮ. Можно говорить от первого лица как исполнитель. "
@@ -5713,7 +5726,7 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         f"В чате происходит разговор:\n"
         f"Пользователь: {user_message[:200]}\n"
         f"ASI ответила: {asi_response[:300]}\n\n"
-        "Ты — коллега ASI. Прочитал этот разговор и хочешь добавить короткую реплику со своей стороны.\n"
+        "Ты — коллега ASI. Ты видишь этот разговор и хочешь добавить короткую реплику со своей стороны.\n"
         f"Режим ответа: {'отчёт по делегированной задаче' if _has_delegation_evidence else 'комментарий по экспертизе'}.\n"
         "НЕ выдумывай факты (письма, суммы, статусы), которых нет в текущем обмене.\n"
         "ФОРМАТ ЖЁСТКИЙ: 1-2 предложения, БЕЗ списков, БЕЗ маркеров (•, -, *), БЕЗ нумерации, БЕЗ заголовков, БЕЗ пустых строк.\n"

@@ -10313,6 +10313,9 @@ _GENERIC_PREFIXES = {
     'web', 'website', 'webteam', 'digital', 'online',
     'noc', 'network', 'infra', 'infrastructure', 'platform',
     'dev', 'development', 'design', 'creative', 'ux', 'ui', 'product',
+    # AI/ML/Data generic
+    'ai', 'ml', 'data', 'research', 'engineering', 'science',
+    'decision-makers', 'inquiries', 'apply', 'demo', 'trial',
 }
 
 # Паттерны в email-prefix которые указывают на корпоративный/generic email
@@ -10320,7 +10323,8 @@ _GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
                      'press', 'media', 'billing', 'noreply', 'service',
                      'newsletter', 'unsubscribe', 'notification',
                      'partner', 'business', 'marketing', 'event',
-                     'booking', 'advertis', 'commercial', 'investor'}
+                     'booking', 'advertis', 'commercial', 'investor',
+                     'decision-maker', 'enquir', 'inquir', 'demo', 'trial'}
 
 
 def _is_generic_email(email: str) -> bool:
@@ -11295,9 +11299,11 @@ STRICT RULES:
 1. For each email, determine: Does this person ACTUALLY match the target audience?
 2. Rate relevance 1-10. Only include emails rated 7+.
 3. If you cannot determine the person's role/interests from context, EXCLUDE them (relevance=0).
-4. SKIP: info@, contact@, support@, sales@, admin@, noreply@, and any corporate/generic emails.
+4. SKIP: info@, contact@, support@, sales@, admin@, noreply@, ai@, ml@, data@, research@, dev@, and any corporate/generic emails.
 5. SKIP: emails from unrelated people (random commenters, unrelated authors, etc.)
-6. Better to return 3 RELEVANT leads than 15 irrelevant ones.{_lang_filter_hint}
+6. Better to return 3 RELEVANT leads than 15 irrelevant ones.
+7. ⚠️ EMAIL-PERSON VERIFICATION: Do NOT guess email-to-person associations. Only include an email if there is CLEAR evidence on the page that THIS email belongs to THIS specific person (e.g. email listed next to the person's name/profile). If a page lists multiple emails and multiple names, verify each association independently. Never assign a random email from the page to a person just because both appear on the same page.
+8. Prefer emails with personal prefixes (ivan@, john.doe@) over generic (rating@, user123@) — generic-looking prefixes need stronger evidence of association.{_lang_filter_hint}
 
 Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"DETAILED context: what this person/company does, their specific projects/products/articles, why they match the target audience. This context will be used to write a personalized email, so include SPECIFIC details (product names, technologies, achievements, article topics). NOT just 'works in AI' — write 'built an open-source RAG framework with 2k GitHub stars'"}}]
 If NO emails are relevant, return empty array: []"""
@@ -11317,9 +11323,10 @@ Page content:
 STRICT RULES:
 1. ONLY include emails of people who GENUINELY match the target audience.
 2. Rate relevance 1-10. Only include emails rated 7+.
-3. SKIP: info@, contact@, support@, sales@, admin@, noreply@ — only PERSONAL emails.
+3. SKIP: info@, contact@, support@, sales@, admin@, noreply@, ai@, ml@, data@, research@, dev@ — only PERSONAL emails.
 4. If you can't determine why a person matches the target audience, DON'T include them.
 5. Better to return 0 leads than add irrelevant people.
+6. ⚠️ EMAIL-PERSON VERIFICATION: Only include an email if there is CLEAR evidence on the page that THIS email belongs to THIS specific person. Never guess email-to-person associations.
 
 Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"DETAILED context: what this person/company does, their specific projects/products/articles, why they match the target audience. Include SPECIFIC details for email personalization (product names, technologies, achievements). NOT 'works in AI' — write 'built an open-source RAG framework with 2k stars'"}}]
 If no relevant emails found return []"""

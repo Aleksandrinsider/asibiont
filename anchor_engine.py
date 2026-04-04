@@ -17697,6 +17697,23 @@ class AnchorEngine:
                         d_obj.status = 'failed'
                         logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: recipient is user's own email")
                         continue
+
+                    # ── GUARD: пропускаем generic/role-based email ──
+                    _email_lower = email.strip().lower()
+                    _email_prefix = _email_lower.split('@')[0] if '@' in _email_lower else ''
+                    _GENERIC_SKIP = {
+                        'info', 'contact', 'contacts', 'hello', 'support', 'sales',
+                        'admin', 'office', 'team', 'help', 'mail', 'noreply',
+                        'hr', 'press', 'media', 'marketing', 'general', 'ai', 'ml',
+                        'data', 'research', 'dev', 'engineering', 'feedback', 'service',
+                        'partners', 'partner', 'business', 'invest', 'investor',
+                        'legal', 'privacy', 'security', 'billing', 'jobs', 'careers',
+                    }
+                    if _email_prefix in _GENERIC_SKIP or 'decision-maker' in _email_prefix:
+                        d_obj.status = 'failed'
+                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: generic email prefix '{_email_prefix}'")
+                        continue
+
                     name = d_obj.recipient_name or '?'
                     company = d_obj.recipient_company or ''
                     context = d_obj.recipient_context or ''
@@ -17707,10 +17724,25 @@ class AnchorEngine:
                         campaign_goal=campaign_goal, campaign_offer=offer,
                     )
 
+                    # ── Определяем гендер отправителя ──
+                    _sender_fem = (
+                        sender_name and len(sender_name) >= 2
+                        and sender_name.strip()[-1] in 'аяАЯ'
+                        and sender_name.strip()[-2:].lower() not in ('ша', 'жа')
+                    )
+                    _gender_hint = ""
+                    if _sender_fem:
+                        _gender_hint = (
+                            f"\n⚠️ ГЕНДЕР: {sender_name} — ЖЕНСКОЕ имя. Пиши ОТ ЖЕНСКОГО ЛИЦА: "
+                            f"'прочитала', 'заметила', 'подумала', 'обратила внимание', 'нашла', 'изучила'. "
+                            f"НИКОГДА 'прочитал', 'заметил', 'подумал' — это мужские формы.\n"
+                        )
+
                     compose_prompt = (
                         f"Write a cold outreach email for this specific person.\n\n"
                         f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n"
-                        f"Offer: {offer}\nTone: {tone}\nSender: {sender_name}\n\n"
+                        f"Offer: {offer}\nTone: {tone}\nSender: {sender_name}\n"
+                        f"{_gender_hint}\n"
                         f"Recipient: {email}\nName: {name}\n"
                         f"{'Company/project: ' + company if company else ''}\n"
                         f"Research context about recipient: {context or 'none'}\n"
