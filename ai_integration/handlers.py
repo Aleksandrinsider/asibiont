@@ -10632,12 +10632,19 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     if not github_token:
         try:
             from models import UserAgent as _UA_gl
+            from config import decrypt_token as _dt_gl
             _agents_with_keys = session.query(_UA_gl).filter(
                 _UA_gl.author_id == user.id,
                 _UA_gl.user_api_keys.isnot(None),
             ).all()
             for _ag_gl in _agents_with_keys:
-                for _line in (_ag_gl.user_api_keys or '').splitlines():
+                _raw_keys = _ag_gl.user_api_keys or ''
+                # Decrypt encrypted keys before searching
+                try:
+                    _decrypted_keys = _dt_gl(_raw_keys)
+                except Exception:
+                    _decrypted_keys = _raw_keys
+                for _line in _decrypted_keys.splitlines():
                     if _line.strip().upper().startswith('GITHUB_TOKEN='):
                         github_token = _line.split('=', 1)[1].strip()
                         logger.info(f'[AUTO_LEADS] Using GITHUB_TOKEN from agent {_ag_gl.name}')
@@ -10696,8 +10703,12 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         # AI/ML инженеры (роль, не интерес к продукту)
         'ml engineer', 'ai engineer', 'data scientist', 'data science',
         'machine learning', 'langchain', 'llm developer', 'llm engineer',
+        # AI/ML — широкие маркеры (люди в AI-сфере ищутся на GitHub)
+        'ai-', 'ai ', 'ml-', 'ml ', 'artificial intelligence', 'искусственн',
+        'нейросет', 'deep learning', 'llm', 'gpt', 'технологич',
+        'автоматизац', 'automation', 'no-code', 'low-code',
         # SaaS-строители / tech-founders (явный код/продуктовый контекст)
-        'saas founder', 'tech founder', 'технический директор',
+        'saas founder', 'tech founder', 'технический директор', 'tech lead',
     ]
     _is_tech_audience = any(t in _audience_text for t in _tech_markers)
     # Предпринимательский контекст без явно технической роли → НЕ ищем на GitHub
@@ -10710,7 +10721,11 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     _is_business_audience = any(b in _audience_text for b in _business_markers)
     if _is_business_audience and not any(
         t in _audience_text for t in ['developer', 'разработ', 'программист', 'engineer', 'инженер',
-                                       'backend', 'frontend', 'fullstack', 'тестировщ', 'tester']
+                                       'backend', 'frontend', 'fullstack', 'тестировщ', 'tester',
+                                       'ai-', 'ai ', 'ml ', 'ml-', 'artificial intelligence',
+                                       'машинн', 'нейросет', 'deep learning', 'llm',
+                                       'технологич', 'tech', 'saas', 'автоматизац',
+                                       'data scien', 'open source', 'github']
     ):
         _is_tech_audience = False
 
