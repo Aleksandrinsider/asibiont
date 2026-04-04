@@ -17836,6 +17836,7 @@ class AnchorEngine:
                 remaining = max(0, live_campaign.daily_limit - _sent_today_live)
 
                 sent_count = 0
+                _draft_failures = []  # track failure reasons for 0-sent diagnostics
                 _owner_email = (getattr(user, 'email', '') or '').strip().lower()
                 for d_obj in live_drafts:
                     if sent_count >= remaining:
@@ -17930,6 +17931,7 @@ class AnchorEngine:
                         )
                         if not ai_result:
                             logger.warning(f"[ANCHOR] AI compose failed for {redact_email(email)}: empty result")
+                            _draft_failures.append(f'{d_obj.id}:compose_empty')
                             continue
 
                         # Парсим JSON
@@ -17949,6 +17951,7 @@ class AnchorEngine:
 
                         if not subject or not body:
                             logger.warning(f"[ANCHOR] AI compose: missing subject/body for {redact_email(email)}")
+                            _draft_failures.append(f'{d_obj.id}:no_subj_body')
                             continue
 
                         # Отправляем напрямую через send_outreach_email
@@ -17973,6 +17976,7 @@ class AnchorEngine:
                         elif result and '⛔' in result:
                             # Постоянная ошибка валидации (guard) — черновик не отправится никогда
                             d_obj.status = 'failed'
+                            _draft_failures.append(f'{d_obj.id}:guard')
                             logger.info(f"[ANCHOR] Draft #{d_obj.id} permanently failed guard: {(result or '')[:120]}")
                             continue
                         elif result and ('resend api' in result.lower() or 'не настроен' in result.lower() or 'domain' in result.lower()):
@@ -17994,6 +17998,7 @@ class AnchorEngine:
 
                     except Exception as _compose_err:
                         logger.error(f"[ANCHOR] Compose/send error for {redact_email(email)}: {_compose_err}")
+                        _draft_failures.append(f'{d_obj.id}:exception:{str(_compose_err)[:60]}')
                         continue
 
                 logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(live_drafts)} for campaign #{campaign_id}")
@@ -18004,6 +18009,15 @@ class AnchorEngine:
                 if sent_count == 0:
                     anchor.delivered_at = datetime.now(timezone.utc)
                     anchor.suppress_until = datetime.now(timezone.utc) + timedelta(hours=2)
+                    # Логируем факт 0-отправок для диагностики
+                    _fail_summary = '; '.join(_draft_failures[:10]) if _draft_failures else 'unknown'
+                    log_0 = AnchorDeliveryLog(
+                        user_id=user.id,
+                        anchor_ids=json.dumps([anchor.id]),
+                        message_text=f'[EMAIL_SILENT] email_outreach_send: sent 0/{len(live_drafts)} for «{campaign_name}» — {_fail_summary}'[:500],
+                        anchor_types=json.dumps([anchor.anchor_type]),
+                    )
+                    session.add(log_0)
                     # Чистим все старые undelivered email_outreach_send для этой кампании
                     _stale_prefix = f'email_campaign:{campaign_id}:send:'
                     try:
