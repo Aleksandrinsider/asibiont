@@ -134,10 +134,21 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
-# Test database connection
-with engine.connect() as conn:
-    conn.execute(text("SELECT 1"))
-logger.info("✅ Database connection successful")
+# Test database connection with retry (Railway DB may not be ready immediately)
+_db_max_retries = 10
+for _db_attempt in range(1, _db_max_retries + 1):
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("✅ Database connection successful")
+        break
+    except Exception as _db_err:
+        if _db_attempt == _db_max_retries:
+            logger.error(f"❌ Database connection failed after {_db_max_retries} attempts: {_db_err}")
+            raise
+        _wait = min(2 ** _db_attempt, 30)
+        logger.warning(f"⏳ DB connection attempt {_db_attempt}/{_db_max_retries} failed: {_db_err}. Retrying in {_wait}s...")
+        time.sleep(_wait)
 
 # Clear database if requested (LOCAL only — safety guard)
 if os.getenv('CLEAR_DB') == '1':
