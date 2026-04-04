@@ -4362,6 +4362,7 @@ class HybridAutonomousAgent:
                 if active_agent_id:
                     agent_data = load_agent_personality(active_agent_id)
                     if agent_data:
+                        self._active_agent_data[user_id] = agent_data  # нужно для run_agent_action в anchor/proactive режимах
                         system_prompt = build_agent_system_prompt(agent_data, system_prompt)
                         logger.info(f"[AGENT] Injected personality: {agent_data['name']} (id={active_agent_id})")
                         # Акцент на интеграцию агента в проактивных / якорных / reminder режимах

@@ -18741,7 +18741,7 @@ class AnchorEngine:
                     "    • Три интерфейса: Telegram-бот, Discord, веб-дашборд",
                     "    • AI Arena — публичные дебаты агентов (asibiont.com/arena)",
                     "— email_follow_up: follow-up через send_outreach_email. Ненавязчиво. Верни SKIP.",
-                    "— email_reply_received: КРИТИЧНО! Прочитай цепочку original_body→reply_text→ai_previous_reply. НЕ повторяй уже заданные вопросы. Ответь через reply_to_outreach_email. ⚠ ЯЗЫК: если reply_text на другом языке (греческий, немецкий и т.д.) — ОТВЕЧАЙ на языке КОНТАКТА, не на языке оригинала! ОБЯЗАТЕЛЬНО уведоми пользователя. Не завершай кампанию без явного подтверждения целевого действия.",
+                    "— email_reply_received: КРИТИЧНО! Прочитай цепочку original_body→reply_text→ai_previous_reply. НЕ повторяй уже заданные вопросы. Ответь через reply_to_outreach_email. 📋 CRM (Правило пользователя: всех с кем переписка — в AmoCRM): 1) run_agent_action(action='search_contacts', params={'query': recipient_email}) → если НЕ найден: 2) run_agent_action(action='create_contact', params={'name': recipient_name, 'email': recipient_email}) → 3) run_agent_action(action='create_lead', params={'name': 'Лид: {recipient_name} — ASI Biont'}) → 4) run_agent_action(action='link_contact_to_lead', params={'lead_id': ..., 'contact_id': ...}). ⚠ ЯЗЫК: если reply_text на другом языке (греческий, немецкий и т.д.) — ОТВЕЧАЙ на языке КОНТАКТА, не на языке оригинала! ОБЯЗАТЕЛЬНО уведоми пользователя. Не завершай кампанию без явного подтверждения целевого действия.",
                     "— email_campaign_report: краткая сводка: отправлено, ответов, что дальше.",
                     "— email_need_leads: engine ищет лидов автоматически. Верни SKIP.",
                     "",
@@ -19074,8 +19074,26 @@ class AnchorEngine:
                     _ai_max_iter = 1
                 else:
                     _ai_mode = 'anchor'
-                    _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
-                    _ai_max_iter = 2
+                    # Email-действия: ответ на письмо, рассылка, follow-up — нужны email/CRM инструменты, а не веб-поиск
+                    _EMAIL_ACTIVE_T = {'email_reply_received', 'email_outreach_send', 'email_follow_up'}
+                    if _anchor_types_set & _EMAIL_ACTIVE_T:
+                        _has_reply = 'email_reply_received' in _anchor_types_set
+                        _ai_instruction = (
+                            "СТРОГО выполни Email-действие по ПРАВИЛАМ ДЛЯ EMAIL из контекста. "
+                            + ("email_reply_received: используй reply_to_outreach_email для ответа. "
+                               "ОБЯЗАТЕЛЬНО также добавь контакт в CRM через run_agent_action: "
+                               "1) action='search_contacts' (query=email контакта) — если не найден: "
+                               "2) action='create_contact' (name, email) → запомни contact_id; "
+                               "3) action='create_lead' (name='Лид: {имя} — ASI Biont') → запомни lead_id; "
+                               "4) action='link_contact_to_lead' (lead_id, contact_id). "
+                               "Правило пользователя: все контакты с кем идёт переписка — в AmoCRM. " if _has_reply
+                               else "Используй send_outreach_email для отправки писем. ")
+                            + "Напиши пользователю КРАТКОЕ подтверждение (1-2 предложения): что ответили и зафиксировали в CRM."
+                        )
+                        _ai_max_iter = 3
+                    else:
+                        _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
+                        _ai_max_iter = 2
 
             result = await agent.generate_system_message(
                 user_id=user.telegram_id,
