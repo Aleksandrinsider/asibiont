@@ -10715,6 +10715,62 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         _is_tech_audience = False
 
     # ══════════════════════════════════════════════════════════════════════
+    # PASS -1: CRM CONTACTS — используем уже известные контакты из email_contacts
+    # Быстрый путь: email_contacts(status='new') → email_outreach(status='draft')
+    # Создаёт черновики ДО внешнего поиска, экономит API-вызовы
+    # ══════════════════════════════════════════════════════════════════════
+    _crm_added = 0
+    try:
+        _crm_contacts = session.query(EmailContact).filter(
+            EmailContact.user_id == user.id,
+            EmailContact.status == 'new',
+        ).all()
+        _crm_candidates = []
+        for _ec in _crm_contacts:
+            _ec_email = (_ec.email or '').strip().lower()
+            if not _ec_email or '@' not in _ec_email:
+                continue
+            # Пропускаем если уже есть в outreach этой кампании
+            _already = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id,
+                recipient_email=_ec_email,
+            ).first()
+            if _already:
+                continue
+            _crm_candidates.append({
+                'email': _ec_email,
+                'name': _ec.name or '',
+                'company': _ec.company or '',
+                'context': _ec.notes or f'CRM contact ({_ec.source or "manual"})',
+                'relevance': 8,
+            })
+        if _crm_candidates:
+            _crm_leads_json = json.dumps(_crm_candidates[:50], ensure_ascii=False)
+            _crm_result = await add_email_leads(
+                campaign_id=campaign.id,
+                leads=_crm_leads_json,
+                user_id=user.telegram_id,
+                session=session,
+                close_session=False,
+            )
+            _crm_m = _re_al.search(r'(\d+)\s*email', _crm_result or '')
+            _crm_added = int(_crm_m.group(1)) if _crm_m else 0
+            # Обновляем статус контактов на 'contacted'
+            if _crm_added > 0:
+                _added_emails = {c['email'] for c in _crm_candidates[:50]}
+                for _ec in _crm_contacts:
+                    if (_ec.email or '').strip().lower() in _added_emails:
+                        _ec.status = 'contacted'
+                        _ec.last_contacted_at = datetime.now(timezone.utc)
+                session.commit()
+            logger.info(f"[AUTO_LEADS] PASS -1 CRM contacts: {len(_crm_contacts)} total, "
+                        f"{len(_crm_candidates)} candidates → {_crm_added} added to campaign #{campaign.id}")
+        else:
+            logger.info(f"[AUTO_LEADS] PASS -1 CRM contacts: {len(_crm_contacts)} total, 0 new candidates for campaign #{campaign.id}")
+    except Exception as _crm_err:
+        logger.warning(f"[AUTO_LEADS] PASS -1 CRM contacts error: {_crm_err}")
+
+    # ══════════════════════════════════════════════════════════════════════
     # PASS 0: GitHub API — ТОЛЬКО для технической аудитории
     # (маркетологи, дизайнеры, бизнес и т.д. — GitHub бесполезен)
     # ══════════════════════════════════════════════════════════════════════
@@ -10722,7 +10778,7 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
     if _is_tech_audience:
         try:
             gh_queries = []
-            _found_techs = [t for t in _tech_markers if t in _all_text and len(t) > 2]
+            _found_techs = [t for t in _tech_markers if t in _audience_text and len(t) > 2]
             
             # Перевод русских терминов в английские для GitHub
             _ru_to_en = {
@@ -11490,6 +11546,9 @@ If no relevant emails found return []"""
                 "Регистрация бесплатна: resend.com"
             )
         _hint_msg = ("\n⚠️ Интеграции для улучшения поиска: \n" + "\n".join(_intg_hints)) if _intg_hints else ""
+        # Если CRM contacts были добавлены в PASS -1, считаем их
+        if _crm_added > 0:
+            return _crm_added, ""
         return 0, _hint_msg
 
     logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}: "
@@ -11509,7 +11568,7 @@ If no relevant emails found return []"""
     m = _re_al.search(r'(\d+)\s*email', result_msg or '')
     count = int(m.group(1)) if m else 0
 
-    return count, ""
+    return count + _crm_added, ""
 
 async def start_email_campaign(
     name: str,
