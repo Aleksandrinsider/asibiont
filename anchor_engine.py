@@ -5939,6 +5939,8 @@ class AnchorEngine:
                                         logger.debug("suppressed: %s", _e)
 
                                 # ── Tool-keyword dedup: ловит перефразированные повторы одного инструмента ──
+                                # Repeatable tools (search_users, check_emails и пр.) — порог 4;
+                                # one-shot (start_email_campaign, generate_image) — порог 2.
                                 if not _skip_coord and _coord_text:
                                     _COORD_TOOL_KW = {
                                         'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
@@ -5951,6 +5953,7 @@ class AnchorEngine:
                                         'web_search': ('web_search',),
                                         'research_topic': ('research_topic',),
                                     }
+                                    _COORD_REPEATABLE = {'search_users', 'check_emails', 'web_search', 'research_topic', 'send_outreach_email'}
                                     _ct_low = _coord_text.lower()
                                     _new_tools_c = set()
                                     for _ctk, _ctkws in _COORD_TOOL_KW.items():
@@ -5972,11 +5975,13 @@ class AnchorEngine:
                                                         break
                                             except Exception:
                                                 pass
-                                        if _tool_rep_c >= 2:
+                                        _is_rep_c = bool(_new_tools_c & _COORD_REPEATABLE)
+                                        _thresh_c = 4 if _is_rep_c else 2
+                                        if _tool_rep_c >= _thresh_c:
                                             _skip_coord = True
                                             logger.info(
-                                                "[ANCHOR-AUTOPILOT] TOOL-DEDUP: tool=%s repeated %dx to %s in 6h — skip",
-                                                _new_tools_c, _tool_rep_c, _chosen_name,
+                                                "[ANCHOR-AUTOPILOT] TOOL-DEDUP: tool=%s repeated %dx to %s in 6h (threshold=%d) — skip",
+                                                _new_tools_c, _tool_rep_c, _chosen_name, _thresh_c,
                                             )
                             except Exception as _dc_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)

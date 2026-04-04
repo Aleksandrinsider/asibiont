@@ -1823,6 +1823,8 @@ class OfficeEngine:
                     ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
 
                     # ── Tool-keyword dedup: блокируем повторное назначение одного инструмента ──
+                    # Repeatable tools (источники данных) — порог 4; one-shot tools — порог 2.
+                    # Если outcome_memory показывает успех — порог ещё выше.
                     _TOOL_KEYWORDS = {
                         'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
                         'generate_image': ('generate_image',),
@@ -1830,7 +1832,10 @@ class OfficeEngine:
                         'check_emails': ('check_emails', 'проверь входящие', 'проверки входящих'),
                         'search_users': ('search_users',),
                         'find_and_message': ('find_and_message', 'message_relevant'),
+                        'web_search': ('web_search',),
+                        'research_topic': ('research_topic',),
                     }
+                    _REPEATABLE_TOOLS = {'search_users', 'check_emails', 'web_search', 'research_topic', 'send_outreach_email'}
                     _task_tools = set()
                     for _tk, _tkws in _TOOL_KEYWORDS.items():
                         if any(kw in _task_lower for kw in _tkws):
@@ -1844,10 +1849,29 @@ class OfficeEngine:
                                 if _tk in _task_tools and any(kw in _old_text for kw in _tkws):
                                     _tool_repeat_count += 1
                                     break
-                        if _tool_repeat_count >= 2:
+                        # Определяем порог: repeatable + успешные outcome → мягче
+                        _is_repeatable = bool(_task_tools & _REPEATABLE_TOOLS)
+                        _base_threshold = 4 if _is_repeatable else 2
+                        if _is_repeatable and _tool_repeat_count >= 2:
+                            # Проверяем outcome_memory: если последние исполнения были успешны — повышаем порог
+                            try:
+                                _outcomes = _s_dup.query(AgentActivityLog).filter(
+                                    AgentActivityLog.user_id == user_db_id,
+                                    AgentActivityLog.activity_type == 'outcome_memory',
+                                    AgentActivityLog.target == f'agent:{_aname}',
+                                    AgentActivityLog.created_at >= _dup_cutoff,
+                                ).order_by(AgentActivityLog.created_at.desc()).limit(5).all()
+                                _success_count = sum(1 for o in _outcomes if o.status == 'completed'
+                                                     and any(kw in (o.title or '').lower() + (o.content or '').lower()
+                                                             for kw in _TOOL_KEYWORDS.get(list(_task_tools & _REPEATABLE_TOOLS)[0], ())))
+                                if _success_count >= 2:
+                                    _base_threshold = 6  # инструмент доказал эффективность
+                            except Exception:
+                                pass
+                        if _tool_repeat_count >= _base_threshold:
                             logger.info(
-                                "[OFFICE-L2] TOOL-DEDUP: user=%d, %s tool=%s repeated %dx in 24h — skip: %s",
-                                user_db_id, _aname, _task_tools, _tool_repeat_count, _atask[:60],
+                                "[OFFICE-L2] TOOL-DEDUP: user=%d, %s tool=%s repeated %dx in 24h (threshold=%d) — skip: %s",
+                                user_db_id, _aname, _task_tools, _tool_repeat_count, _base_threshold, _atask[:60],
                             )
                             continue
 
