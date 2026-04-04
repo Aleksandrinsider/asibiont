@@ -12679,21 +12679,31 @@ async def reply_to_outreach_email(
                 return f"⛔ {_reply_rcpt} просил не писать — ответ заблокирован. Контакт отмечен как отписавшийся."
 
         # Защита от спама: не более 2 AI-ответов одному контакту суммарно по всем записям
+        # Считаем SUM(ai_reply_count), а не количество СТРОК — иначе 1 строка с 10 ответами пройдёт guard
         _MAX_AI_REPLIES = 2
         _email_to_check = (recipient_email or outreach.recipient_email or '').strip().lower()
         _ai_reply_count = 0
         _last_ai_reply_at = outreach.ai_reply_sent_at
         if _email_to_check:
-            _all_replied_rows = session.query(EmailOutreach).filter(
+            from sqlalchemy import func as _func_spam
+            _total_replies = session.query(
+                _func_spam.coalesce(_func_spam.sum(EmailOutreach.ai_reply_count), 0)
+            ).filter(
                 EmailOutreach.user_id == user.id,
                 EmailOutreach.recipient_email == _email_to_check,
                 EmailOutreach.ai_reply_sent_at.isnot(None),
-            ).order_by(EmailOutreach.ai_reply_sent_at.desc()).all()
-            _ai_reply_count = len(_all_replied_rows)
-            if _all_replied_rows:
-                _last_ai_reply_at = _all_replied_rows[0].ai_reply_sent_at
+            ).scalar() or 0
+            _ai_reply_count = int(_total_replies)
+            # Get last reply time
+            _last_row = session.query(EmailOutreach.ai_reply_sent_at).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == _email_to_check,
+                EmailOutreach.ai_reply_sent_at.isnot(None),
+            ).order_by(EmailOutreach.ai_reply_sent_at.desc()).first()
+            if _last_row:
+                _last_ai_reply_at = _last_row[0]
         elif outreach.ai_reply_sent_at:
-            _ai_reply_count = 1
+            _ai_reply_count = outreach.ai_reply_count or 1
         if _ai_reply_count >= _MAX_AI_REPLIES:
             sent_str = _last_ai_reply_at.strftime('%d.%m %H:%M') if _last_ai_reply_at else '?'
             return (f"🛑 Стоп-спам: {_email_to_check or outreach.recipient_email} уже получил {_ai_reply_count} AI-ответа "

@@ -12756,6 +12756,37 @@ class AnchorEngine:
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:
                         _report_text = _report_gen.strip()
+                    else:
+                        # AI вернул пустую строку — всё равно сохраняем минимальный coordinator_summary в AAL
+                        try:
+                            from models import Session as _EmptyAI_Sess, AgentActivityLog as _EmptyAI_AAL
+                            _ea_sess = _EmptyAI_Sess()
+                            try:
+                                _goals_titles_ea = ', '.join(
+                                    (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
+                                    for g in _goals[:2]
+                                )
+                                _ea_sess.add(_EmptyAI_AAL(
+                                    user_id=user.id,
+                                    activity_type='coordinator_summary',
+                                    title=f'Цикл завершён: {_goals_titles_ea}'[:120],
+                                    content='Агенты работали, но AI-отчёт пуст (нет конкретных новых результатов).',
+                                    status='completed',
+                                    result='ai_report_empty',
+                                ))
+                                _ea_sess.commit()
+                                logger.info("[COORD] coordinator_summary saved (AI report empty) for user %d", user.id)
+                            except Exception as _ea_err:
+                                logger.debug("[COORD] empty AI report save failed: %s", _ea_err)
+                                try: _ea_sess.rollback()
+                                except Exception: pass
+                            finally:
+                                try: _ea_sess.close()
+                                except Exception: pass
+                        except Exception:
+                            pass
+                        return True
+                    if _report_text:
                         try:
                             from models import Session as _Sum_Sess_cls
                             import datetime as _dt_sumchk
@@ -15840,6 +15871,16 @@ class AnchorEngine:
                 remaining_total = 999999  # безлимит
 
             if drafts and remaining_daily > 0 and remaining_total > 0:
+                # Защита от flood: не создаём новый anchor если уже есть ≥3 непрочитанных для этой кампании
+                _pending_send_count = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'email_outreach_send',
+                    Anchor.delivered_at.is_(None),
+                    Anchor.source.like(f'email_campaign:{campaign.id}:send:%'),
+                ).count()
+                if _pending_send_count >= 3:
+                    logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
+                    continue
                 batch_size = min(len(drafts), remaining_daily, 10)
                 anchors.append(Anchor(
                     user_id=user.id,
@@ -17929,6 +17970,11 @@ class AnchorEngine:
                         elif result and ('лимит' in result.lower() or 'limit' in result.lower()):
                             logger.info(f"[ANCHOR] Daily limit reached, stopping batch")
                             break
+                        elif result and '⛔' in result:
+                            # Постоянная ошибка валидации (guard) — черновик не отправится никогда
+                            d_obj.status = 'failed'
+                            logger.info(f"[ANCHOR] Draft #{d_obj.id} permanently failed guard: {(result or '')[:120]}")
+                            continue
                         elif result and ('resend api' in result.lower() or 'не настроен' in result.lower() or 'domain' in result.lower()):
                             # Постоянная ошибка конфигурации — прекращаем всю партию,
                             # уведомляем пользователя один раз
@@ -17952,13 +17998,30 @@ class AnchorEngine:
 
                 logger.info(f"[ANCHOR] ✅ Direct email batch: sent {sent_count}/{len(live_drafts)} for campaign #{campaign_id}")
 
-                # ── 0-sent loop guard: если ни одно письмо не ушло — снузим якорь на 2ч ──
-                # Вместо delivered_at=now ставим suppress_until, чтобы dedup-фильтр
-                # не создал новый якорь с тем же source раньше времени (избегаем tight retry loop).
+                # ── 0-sent loop guard: все черновики не отправились — помечаем delivered + снузим ──
+                # Помечаем delivered_at чтобы якорь не висел навсегда.
+                # Также чистим другие pending anchors для этой кампании → flood guard.
                 if sent_count == 0:
+                    anchor.delivered_at = datetime.now(timezone.utc)
                     anchor.suppress_until = datetime.now(timezone.utc) + timedelta(hours=2)
+                    # Чистим все старые undelivered email_outreach_send для этой кампании
+                    _stale_prefix = f'email_campaign:{campaign_id}:send:'
+                    try:
+                        _stale_anchors = session.query(Anchor).filter(
+                            Anchor.user_id == user.id,
+                            Anchor.anchor_type == 'email_outreach_send',
+                            Anchor.delivered_at.is_(None),
+                            Anchor.source.like(f'{_stale_prefix}%'),
+                            Anchor.id != anchor.id,
+                        ).all()
+                        for _sa in _stale_anchors:
+                            _sa.delivered_at = datetime.now(timezone.utc)
+                        if _stale_anchors:
+                            logger.info(f"[ANCHOR] Cleaned {len(_stale_anchors)} stale email_outreach_send anchors for campaign #{campaign_id}")
+                    except Exception as _clean_err:
+                        logger.debug(f"[ANCHOR] cleanup stale anchors: {_clean_err}")
                     session.commit()
-                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: 0 sent — snoozed 2h (suppress_until)")
+                    logger.info(f"[ANCHOR] Email anchor #{anchor.id}: 0 sent — marked delivered + snoozed 2h")
                     return
 
                 # Списываем токены: по одному за каждое реально отправленное письмо
