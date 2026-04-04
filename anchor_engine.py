@@ -592,7 +592,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (25 мин)
+MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -605,7 +605,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 25  # Интервал между autopilot dispatch'ами (было 15)
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
@@ -13120,7 +13120,7 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 0.42,  # ~25 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
+            'goal_autopilot_review': 0.25,  # ~15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
             'email_need_leads': 3.0,
             'chat_ai_review': 1.5,
         }
@@ -15339,7 +15339,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.42,  # ~25 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
+            cooldown_hours=0.25,  # ~15 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
             batch_group='goals',
         )]
 
