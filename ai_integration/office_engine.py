@@ -1817,13 +1817,12 @@ class OfficeEngine:
             _anchor_priority = AnchorPriority.HIGH if _urgency == 'high' else AnchorPriority.LOW
 
             # Создаём задачу-делегирование + лог (без лишних якорей/сообщений)
-            _auto_delegate_to_agent_sync(user_db_id, _agent_id, _agent_name_db, _atask[:200])
-
-            _log_agent_activity_sync(
-                user_db_id, _agent_name_db, _agent_id,
-                f'{_agent_name_db}: {_atask[:120]}',
-                f'Цель: {_agoal}. Задача: {_atask}',
-                activity_type='agent_task',
+            # NB: _auto_delegate_to_agent_sync создаёт agent_task(status='accepted').
+            # Раньше здесь был _log_agent_activity_sync, который создавал второй agent_task
+            # с status='completed' и без result — ложное завершение.
+            _auto_delegate_to_agent_sync(
+                user_db_id, _agent_id, _agent_name_db,
+                f'Цель: {_agoal[:80]}. {_atask[:200]}',
             )
 
             logger.info("[OFFICE-L2] user=%d: delegated to %s [%s]: %s",

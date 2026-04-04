@@ -1504,6 +1504,9 @@ class HybridAutonomousAgent:
         # ── Адаптивная нормализация action по реальным возможностям скрипта ──
         # Этот путь нужен, т.к. run_agent_action в execute_actions может идти напрямую
         # в _run_external_action (мимо handlers.run_agent_action).
+        # Платформенные action (send_email, search_users) обрабатываются кодом выше/ниже,
+        # а не python_code subprocess — нормализация их убивает.
+        _PLATFORM_HANDLED = {'send_email', 'search_users'}
         try:
             _py_src = (agent_data.get('python_code') or '').strip()
             _supported_actions = []
@@ -1521,7 +1524,7 @@ class HybridAutonomousAgent:
             _orig_l = _orig_action.lower().strip()
             _supported_l = [s.lower().strip() for s in _supported_actions]
 
-            if _orig_action and _supported_actions and _orig_l not in _supported_l:
+            if _orig_action and _supported_actions and _orig_l not in _supported_l and _orig_l not in _PLATFORM_HANDLED:
                 _api_keys = _decrypt_keys(agent_data.get('user_api_keys') or '').lower()
                 _ctx = ' '.join([
                     _orig_action,
@@ -1576,13 +1579,22 @@ class HybridAutonomousAgent:
                         _best = _cand
                         _best_sc = _sc
 
-                action = _best
-                logger.info(
-                    "[ACTION] adaptive normalize in _run_external_action: %s -> %s (user=%s)",
-                    _orig_action,
-                    action,
-                    user_id,
-                )
+                # ── Signal-family mismatch guard ──
+                _req_sig = _sig(_orig_l)
+                _best_sig = _sig(_best.lower())
+                if _req_sig and _best_sig and not (_req_sig & _best_sig):
+                    logger.warning(
+                        "[ACTION] signal mismatch: %s (%s) vs %s (%s) — skip normalize",
+                        _orig_action, _req_sig, _best, _best_sig,
+                    )
+                else:
+                    action = _best
+                    logger.info(
+                        "[ACTION] adaptive normalize in _run_external_action: %s -> %s (user=%s)",
+                        _orig_action,
+                        action,
+                        user_id,
+                    )
         except Exception as _norm_err:
             logger.debug("[ACTION] normalize skipped: %s", _norm_err)
 

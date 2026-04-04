@@ -17815,7 +17815,11 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
         _orig_action = (action or '').strip()
         _action_l = _orig_action.lower()
 
-        if _orig_action and _supported and _action_l not in _supported_l:
+        # Платформенные action (send_email, search_users) обрабатываются _run_external_action
+        # напрямую — нормализация их превращает в чужие действия (search_users → search_contacts).
+        _PLATFORM_HANDLED_RA = {'send_email', 'search_users'}
+
+        if _orig_action and _supported and _action_l not in _supported_l and _action_l not in _PLATFORM_HANDLED_RA:
             _context_hint = ' '.join([
                 _orig_action,
                 str(params or ''),
@@ -17904,7 +17908,18 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
                 _agent_name or '?',
                 _cand_score_map.get(_replacement_l, 0.0),
             )
-            action = _replacement
+            # ── Signal-family mismatch guard ──
+            # Если сигналы запроса и лучшего кандидата не пересекаются,
+            # нормализация семантически неверна (github → email и т.п.)
+            _req_action_signals = _signals(_orig_action)
+            _best_signals = _signals(_replacement_l)
+            if _req_action_signals and _best_signals and not (_req_action_signals & _best_signals):
+                logger.warning(
+                    "[RUN_AGENT_ACTION] signal mismatch: %s (%s) vs %s (%s) — skip normalize",
+                    _orig_action, _req_action_signals, _replacement, _best_signals,
+                )
+            else:
+                action = _replacement
     except Exception as _norm_e:
         logger.debug("[RUN_AGENT_ACTION] action normalize skipped: %s", _norm_e)
 
