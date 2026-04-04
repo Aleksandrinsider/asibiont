@@ -13125,7 +13125,7 @@ class AnchorEngine:
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
             'goal_autopilot_review': 0.25,  # ~15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
-            'email_need_leads': 3.0,
+            'email_need_leads': 1.5,  # was 3.0 — too slow, limits to ~8 sessions/day
             'chat_ai_review': 1.5,
         }
         _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
@@ -16089,7 +16089,7 @@ class AnchorEngine:
                             }),
                             triggered_at=now_utc,
                             expires_at=now_utc + timedelta(hours=6),
-                            cooldown_hours=3.0,  # раз в 3ч (было 0.5h=47/день)
+                            cooldown_hours=1.5,  # was 3.0h — too slow for maintaining draft pipeline
                             batch_group='email',
                         ))
 
@@ -17868,9 +17868,29 @@ class AnchorEngine:
                         logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: generic email prefix '{_email_prefix}'")
                         continue
 
-                    name = d_obj.recipient_name or '?'
+                    name = (d_obj.recipient_name or '').strip()
                     company = d_obj.recipient_company or ''
                     context = d_obj.recipient_context or ''
+
+                    # ── GUARD: имя получателя — извлечь из email prefix или пропустить ──
+                    if not name or name == '?':
+                        # Try to extract a human-like name from email prefix
+                        # e.g. john.doe@co.com → John Doe, ivan_petrov@ → Ivan Petrov
+                        _prefix = email.split('@')[0] if '@' in email else ''
+                        _parts = re.split(r'[._\-]', _prefix)
+                        # Filter: each part must be 2+ alpha chars, not digits
+                        _parts = [p.capitalize() for p in _parts
+                                  if len(p) >= 2 and p.isalpha() and not p.isdigit()]
+                        if 1 <= len(_parts) <= 3:
+                            name = ' '.join(_parts)
+                            d_obj.recipient_name = name
+                            logger.info(f"[ANCHOR] Draft #{d_obj.id}: extracted name '{name}' from email prefix")
+                        else:
+                            # Cannot determine name — skip BEFORE wasting AI compose tokens
+                            d_obj.status = 'failed'
+                            _draft_failures.append(f'{d_obj.id}:no_name')
+                            logger.info(f"[ANCHOR] Draft #{d_obj.id}: no name, can't extract from '{_prefix}' — skipping")
+                            continue
 
                     # Определяем язык получателя (домен, имя, платформы) → фолбэк на язык кампании
                     lang_hint = _detect_recipient_lang(
@@ -17962,7 +17982,7 @@ class AnchorEngine:
                         result = await send_outreach_email(
                             campaign_id=campaign_id,
                             recipient_email=email,
-                            recipient_name=name if name != '?' else None,
+                            recipient_name=name,
                             recipient_company=company or None,
                             recipient_context=context or None,
                             subject=subject,

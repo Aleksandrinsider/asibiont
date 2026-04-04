@@ -868,9 +868,40 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             session.commit()
 
         from models import Note
+        import datetime as _dt_sn
+
+        _note_title = (title or content[:60]).strip()
+
+        # --- Дедуп: проверяем похожий заголовок за последние 24ч ---
+        _since_24h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=24)
+        _recent_notes = session.query(Note).filter(
+            Note.user_id == user.id,
+            Note.created_at >= _since_24h,
+        ).all()
+
+        # Простое сравнение: совпадение >60% слов в заголовке
+        _title_words = set(_note_title.lower().split())
+        for _rn in _recent_notes:
+            _rn_words = set((_rn.title or '').lower().split())
+            if _title_words and _rn_words:
+                _overlap = len(_title_words & _rn_words) / max(len(_title_words), len(_rn_words))
+                if _overlap > 0.6:
+                    logger.info(f"[SAVE_NOTE] Dedup: similar note exists (id={_rn.id}, overlap={_overlap:.0%}): «{_rn.title}»")
+                    return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
+
+        # --- Дневной лимит: макс 20 заметок/день ---
+        _today_start = _dt_sn.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        _today_count = session.query(Note).filter(
+            Note.user_id == user.id,
+            Note.created_at >= _today_start,
+        ).count()
+        if _today_count >= 20:
+            logger.info(f"[SAVE_NOTE] Daily limit reached: {_today_count} notes today")
+            return "Достигнут дневной лимит заметок (20). Попробуй завтра."
+
         note = Note(
             user_id=user.id,
-            title=(title or content[:60]).strip(),
+            title=_note_title,
             content=content.strip(),
             source='chat',
         )
@@ -10858,10 +10889,12 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
 
             gh_queries = list(dict.fromkeys(gh_queries))[:6]  # дедупликация, лимит 6
             if gh_queries:
-                # Циклируем страницы 1-8 — не уходим выше 8 (location-сегменты ограничены).
+                # Циклируем страницы 1-12 с элементом случайности для разнообразия
                 # Дедуп в add_email_leads не даст повторно добавить уже отправленных.
-                _gh_page_base = max(1, ((campaign.emails_sent or 0) // 15) % 8 + 1)
-                _gh_pages = [_gh_page_base, _gh_page_base + 1]
+                import random as _rnd_gh
+                _gh_page_base = max(1, ((campaign.emails_sent or 0) // 10) % 12 + 1)
+                _gh_page_alt = _rnd_gh.randint(1, 12)
+                _gh_pages = list(dict.fromkeys([_gh_page_base, _gh_page_alt]))  # dedup
                 logger.info(f"[AUTO_LEADS] Tech audience → GitHub search pages={_gh_pages}: {gh_queries}")
                 for _gh_page in _gh_pages:
                     _page_leads = await api.github_multi_search(
@@ -11514,9 +11547,17 @@ If no relevant emails found return []"""
         if validated_fallback:
             logger.info(f"[AUTO_LEADS] Fallback: {len(validated_fallback)} emails passed MX validation")
             for em in validated_fallback:
+                # Try to extract name from email prefix (john.doe@ → John Doe)
+                _fb_prefix = em.split('@')[0] if '@' in em else ''
+                _fb_parts = [p.capitalize() for p in _re_al.split(r'[._\-]', _fb_prefix)
+                             if len(p) >= 2 and p.isalpha()]
+                _fb_name = ' '.join(_fb_parts) if 1 <= len(_fb_parts) <= 3 else ''
+                if not _fb_name:
+                    logger.info(f"[AUTO_LEADS] Fallback skip (can't extract name): {em}")
+                    continue
                 parsed_leads.append({
                     'email': em,
-                    'name': '',
+                    'name': _fb_name,
                     'company': '',
                     'relevance': 5,
                     'context': 'Found via web search regex (MX-verified domain)',
