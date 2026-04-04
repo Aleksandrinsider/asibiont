@@ -1148,6 +1148,22 @@ engine = create_engine(
     echo=False  # Disable SQL logging in production
 )
 
+# Safety: release all advisory locks when connection returns to pool.
+# Prevents lock leaks when session.close() returns connection to pool
+# without explicit pg_advisory_unlock.
+if db_url and db_url.startswith('postgresql'):
+    from sqlalchemy import event
+
+    @event.listens_for(engine, "checkin")
+    def _release_advisory_locks_on_checkin(dbapi_conn, connection_record):
+        try:
+            cursor = dbapi_conn.cursor()
+            cursor.execute("SELECT pg_advisory_unlock_all()")
+            cursor.close()
+            dbapi_conn.commit()
+        except Exception:
+            pass
+
 def init_db():
     """Initialize database tables. Call this after ensuring DB is accessible."""
     try:

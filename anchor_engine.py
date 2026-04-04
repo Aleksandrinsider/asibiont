@@ -3569,22 +3569,19 @@ class AnchorEngine:
             try:
                 await self._process_user_inner(user_id, session)
             finally:
-                # ВСЕГДА освобождаем lock — даже при ошибках
+                # Пробуем явно снять lock (best-effort).
+                # Даже если не получится — pool checkin event в models.py
+                # вызовет pg_advisory_unlock_all() при возврате соединения в пул.
                 if use_advisory_lock:
-                    for _unlock_attempt in range(3):
+                    try:
+                        session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+                        session.commit()
+                    except Exception as _unlock_err:
+                        logger.warning(f"[ANCHOR] User {user_id}: advisory unlock failed ({_unlock_err}), will release on pool checkin")
                         try:
-                            try:
-                                session.rollback()
-                            except Exception:
-                                pass
-                            session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
-                            session.commit()
-                            break
-                        except Exception as _unlock_err:
-                            if _unlock_attempt == 2:
-                                logger.error(f"[ANCHOR] User {user_id}: advisory unlock FAILED after 3 attempts ({_unlock_err}), forcing session close")
-                            else:
-                                logger.debug(f"[ANCHOR] User {user_id}: advisory unlock attempt {_unlock_attempt+1} failed: {_unlock_err}")
+                            session.rollback()
+                        except Exception:
+                            pass
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
@@ -3593,13 +3590,8 @@ class AnchorEngine:
             except Exception:
                 pass
         finally:
-            # Safety: перед закрытием сессии снимаем ВСЕ advisory locks этой сессии
-            if use_advisory_lock:
-                try:
-                    session.execute(text("SELECT pg_advisory_unlock_all()"))
-                    session.commit()
-                except Exception:
-                    pass
+            # pool checkin event (models.py) вызовет pg_advisory_unlock_all()
+            # при возврате соединения в пул после session.close()
             session.close()
 
     async def _process_user_inner(self, user_id: int, session):
