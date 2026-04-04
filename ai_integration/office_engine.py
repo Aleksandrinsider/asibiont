@@ -1394,6 +1394,41 @@ class OfficeEngine:
                 for a in recent_acts
             ) if recent_acts else "(нет недавней активности)"
 
+            # ── Список последних задач по агентам (чтобы AI видел повторы) ──
+            _recent_tasks_block = ''
+            try:
+                _rt_cutoff = _now - timedelta(hours=12)
+                _rt_rows = (
+                    s.query(AgentActivityLog)
+                    .filter(
+                        AgentActivityLog.user_id == user_db_id,
+                        AgentActivityLog.activity_type == 'agent_task',
+                        AgentActivityLog.created_at >= _rt_cutoff,
+                    )
+                    .order_by(AgentActivityLog.created_at.desc())
+                    .limit(20)
+                    .all()
+                )
+                if _rt_rows:
+                    _by_agent = {}
+                    for _rt in _rt_rows:
+                        _ag = (_rt.target or '').replace('agent:', '')
+                        _by_agent.setdefault(_ag, []).append(
+                            (_rt.content or _rt.title or '')[:100]
+                        )
+                    _lines = []
+                    for _ag, _tasks in _by_agent.items():
+                        _lines.append(f"  {_ag} ({len(_tasks)} задач):")
+                        for _t in _tasks[:4]:
+                            _lines.append(f"    • {_t[:90]}")
+                    _recent_tasks_block = (
+                        "⚠️ ЗАДАЧИ ЗА 12Ч (НЕ ПОВТОРЯЙ те же инструменты/подходы!):\n"
+                        + "\n".join(_lines) + "\n"
+                        "Если задача с тем же инструментом уже была 2+ раз → СМЕНИ инструмент или выбери 'wait'.\n\n"
+                    )
+            except Exception:
+                pass
+
             # ── Счётчик действий vs анализа за 24ч ──
             _action_stats_l2 = ''
             try:
@@ -1629,6 +1664,7 @@ class OfficeEngine:
             f"{_integrations_block}"
             f"{_action_stats_l2}"
             f"АКТИВНОСТЬ ЗА 6Ч:\n{activity_text}\n\n"
+            f"{_recent_tasks_block}"
             f"{_failed_tasks_l2}"
 
             "🧠 САМОПРОВЕРКА (выполни ПЕРЕД назначением):\n"
@@ -1774,6 +1810,7 @@ class OfficeEngine:
 
             # ── Safety net: мягкий антилуп (промпт учит не повторяться, но на всякий случай) ──
             try:
+                _task_lower = _atask.lower()
                 _task_words = set(w.lower() for w in _atask.split() if len(w) > 4)
                 _s_dup = Db2()
                 try:
@@ -1785,6 +1822,36 @@ class OfficeEngine:
                         AgentActivityLog.created_at >= _dup_cutoff,
                     ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
 
+                    # ── Tool-keyword dedup: блокируем повторное назначение одного инструмента ──
+                    _TOOL_KEYWORDS = {
+                        'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
+                        'generate_image': ('generate_image',),
+                        'start_content_campaign': ('start_content_campaign',),
+                        'check_emails': ('check_emails', 'проверь входящие', 'проверки входящих'),
+                        'search_users': ('search_users',),
+                        'find_and_message': ('find_and_message', 'message_relevant'),
+                    }
+                    _task_tools = set()
+                    for _tk, _tkws in _TOOL_KEYWORDS.items():
+                        if any(kw in _task_lower for kw in _tkws):
+                            _task_tools.add(_tk)
+
+                    if _task_tools:
+                        _tool_repeat_count = 0
+                        for _aal_row in _recent_aal:
+                            _old_text = ((_aal_row.title or '') + ' ' + (_aal_row.content or '')).lower()
+                            for _tk, _tkws in _TOOL_KEYWORDS.items():
+                                if _tk in _task_tools and any(kw in _old_text for kw in _tkws):
+                                    _tool_repeat_count += 1
+                                    break
+                        if _tool_repeat_count >= 2:
+                            logger.info(
+                                "[OFFICE-L2] TOOL-DEDUP: user=%d, %s tool=%s repeated %dx in 24h — skip: %s",
+                                user_db_id, _aname, _task_tools, _tool_repeat_count, _atask[:60],
+                            )
+                            continue
+
+                    # ── Word-overlap dedup (оригинальная проверка) ──
                     _high_overlap_count = 0
                     for _aal_row in _recent_aal:
                         _old_text = ((_aal_row.title or '') + ' ' + (_aal_row.content or '')).lower()

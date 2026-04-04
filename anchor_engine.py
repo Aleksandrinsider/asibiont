@@ -5937,6 +5937,47 @@ class AnchorEngine:
                                                 break
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
+
+                                # ── Tool-keyword dedup: ловит перефразированные повторы одного инструмента ──
+                                if not _skip_coord and _coord_text:
+                                    _COORD_TOOL_KW = {
+                                        'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
+                                        'generate_image': ('generate_image',),
+                                        'start_content_campaign': ('start_content_campaign',),
+                                        'check_emails': ('check_emails', 'проверь входящие', 'проверки входящих'),
+                                        'search_users': ('search_users',),
+                                        'find_and_message': ('find_and_message', 'message_relevant'),
+                                        'send_outreach_email': ('send_outreach_email',),
+                                        'web_search': ('web_search',),
+                                        'research_topic': ('research_topic',),
+                                    }
+                                    _ct_low = _coord_text.lower()
+                                    _new_tools_c = set()
+                                    for _ctk, _ctkws in _COORD_TOOL_KW.items():
+                                        if any(kw in _ct_low for kw in _ctkws):
+                                            _new_tools_c.add(_ctk)
+                                    if _new_tools_c:
+                                        _tool_rep_c = 0
+                                        for _rc2 in _recent_coords:
+                                            try:
+                                                _rc2_d = json.loads(_rc2.content or '{}')
+                                                if _rc2_d.get('__to_agent') != _chosen_name:
+                                                    continue
+                                                if _rc2_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
+                                                    continue
+                                                _rc2_t = (_rc2_d.get('text', '') or '').lower()
+                                                for _ctk2, _ctkws2 in _COORD_TOOL_KW.items():
+                                                    if _ctk2 in _new_tools_c and any(kw in _rc2_t for kw in _ctkws2):
+                                                        _tool_rep_c += 1
+                                                        break
+                                            except Exception:
+                                                pass
+                                        if _tool_rep_c >= 2:
+                                            _skip_coord = True
+                                            logger.info(
+                                                "[ANCHOR-AUTOPILOT] TOOL-DEDUP: tool=%s repeated %dx to %s in 6h — skip",
+                                                _new_tools_c, _tool_rep_c, _chosen_name,
+                                            )
                             except Exception as _dc_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
 
