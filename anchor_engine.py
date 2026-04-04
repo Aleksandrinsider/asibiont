@@ -15868,6 +15868,29 @@ class AnchorEngine:
             )
 
             remaining_daily = max(0, campaign.daily_limit - sent_today)
+
+            # ── AUTO-SCALE daily_limit: если лимит исчерпан и кампания даёт результат ──
+            # Увеличиваем на 50% (до 500 макс) если есть replied/interested контакты
+            if remaining_daily == 0 and not is_paused:
+                _positive_signals = sum(
+                    1 for o in _camp_outreach
+                    if o.status in ('replied', 'interested', 'opened')
+                )
+                _reply_rate = _positive_signals / max(1, campaign.emails_sent or 1)
+                # Автоувеличение если: ≥2 позитивных сигнала ИЛИ reply rate > 5%
+                if _positive_signals >= 2 or (_reply_rate > 0.05 and (campaign.emails_sent or 0) >= 20):
+                    _old_limit = campaign.daily_limit
+                    _new_limit = min(int(_old_limit * 1.5), 500)
+                    if _new_limit > _old_limit:
+                        campaign.daily_limit = _new_limit
+                        remaining_daily = _new_limit - sent_today
+                        session.commit()
+                        logger.info(
+                            f"[ANCHOR] Auto-scaled daily_limit for campaign #{campaign.id} "
+                            f"«{campaign.name}»: {_old_limit} → {_new_limit} "
+                            f"(positive_signals={_positive_signals}, reply_rate={_reply_rate:.1%})"
+                        )
+
             # max_emails=0 означает безлимитную кампанию
             if campaign.max_emails and campaign.max_emails > 0:
                 remaining_total = max(0, campaign.max_emails - (campaign.emails_sent or 0))
