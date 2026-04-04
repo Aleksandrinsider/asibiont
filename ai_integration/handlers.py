@@ -10703,14 +10703,23 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         # AI/ML инженеры (роль, не интерес к продукту)
         'ml engineer', 'ai engineer', 'data scientist', 'data science',
         'machine learning', 'langchain', 'llm developer', 'llm engineer',
-        # AI/ML — широкие маркеры (люди в AI-сфере ищутся на GitHub)
-        'ai-', 'ai ', 'ml-', 'ml ', 'artificial intelligence', 'искусственн',
-        'нейросет', 'deep learning', 'llm', 'gpt', 'технологич',
-        'автоматизац', 'automation', 'no-code', 'low-code',
         # SaaS-строители / tech-founders (явный код/продуктовый контекст)
         'saas founder', 'tech founder', 'технический директор', 'tech lead',
     ]
     _is_tech_audience = any(t in _audience_text for t in _tech_markers)
+
+    # Если пользователь явно настроил GITHUB_TOKEN — он хочет GitHub-поиск,
+    # расширяем маркеры чтобы покрыть AI/ML/tech аудитории (гибкость per-user).
+    if github_token and not _is_tech_audience:
+        _broad_tech_markers = [
+            'ai-', 'ai ', 'ml-', 'ml ', 'artificial intelligence', 'искусственн',
+            'нейросет', 'deep learning', 'llm', 'gpt', 'технологич',
+            'автоматизац', 'automation', 'no-code', 'low-code',
+        ]
+        if any(t in _audience_text for t in _broad_tech_markers):
+            _is_tech_audience = True
+            logger.info('[AUTO_LEADS] Broad tech audience match (user has GITHUB_TOKEN)')
+
     # Предпринимательский контекст без явно технической роли → НЕ ищем на GitHub
     _business_markers = [
         'предпринимател', 'бизнесмен', 'владелец бизнеса', 'собственник бизнеса',
@@ -10719,14 +10728,7 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         'директор', 'генеральный директор', 'руководитель компании',
     ]
     _is_business_audience = any(b in _audience_text for b in _business_markers)
-    if _is_business_audience and not any(
-        t in _audience_text for t in ['developer', 'разработ', 'программист', 'engineer', 'инженер',
-                                       'backend', 'frontend', 'fullstack', 'тестировщ', 'tester',
-                                       'ai-', 'ai ', 'ml ', 'ml-', 'artificial intelligence',
-                                       'машинн', 'нейросет', 'deep learning', 'llm',
-                                       'технологич', 'tech', 'saas', 'автоматизац',
-                                       'data scien', 'open source', 'github']
-    ):
+    if _is_business_audience and not _is_tech_audience:
         _is_tech_audience = False
 
     # ══════════════════════════════════════════════════════════════════════
