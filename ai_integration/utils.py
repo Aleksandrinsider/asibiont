@@ -727,7 +727,7 @@ def sanitize_live_team_chat_text(
     _a = (anchor_type or '').lower().strip()
     if max_chars is None:
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
-            max_chars = 700
+            max_chars = 1200
         elif _a == 'coordinator_result':
             max_chars = 900
         else:

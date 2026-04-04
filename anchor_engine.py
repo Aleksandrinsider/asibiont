@@ -6269,7 +6269,7 @@ class AnchorEngine:
                     if _coord_text and not _skip_coord and len(_coord_text.strip()) > 15:
                         _coord_inject = (
                             f"🎯 ПОРУЧЕНИЕ КООРДИНАТОРА (выполни это ПЕРВЫМ ДЕЛОМ):\n"
-                            f"{_coord_text.strip()[:350]}\n\n"
+                            f"{_coord_text.strip()[:800]}\n\n"
                             "Сначала выполни это поручение своими инструментами — потом контекст целей.\n\n"
                         )
                         task_text = _coord_inject + task_text
