@@ -999,12 +999,26 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         mt = g.get('metric_target')
         prog = g.get('progress', 0) or 0
         mu = (g.get('metric_unit', '') or '').strip()
+        # Goal age for context
+        _age_suffix = ''
+        _ca_gl = g.get('created_at')
+        if _ca_gl:
+            try:
+                import datetime as _dt_gl
+                if isinstance(_ca_gl, str):
+                    _ca_gl = _dt_gl.datetime.fromisoformat(_ca_gl.replace('Z', '+00:00'))
+                _age_d = (_dt_gl.datetime.now(_dt_gl.timezone.utc) - _ca_gl.replace(
+                    tzinfo=_dt_gl.timezone.utc if _ca_gl.tzinfo is None else _ca_gl.tzinfo)).days
+                if _age_d >= 2:
+                    _age_suffix = f' [{_age_d}д]'
+            except Exception:
+                pass
         if mt:
             goal_lines.append(
-                f"  • «{title}»: нужно {int(mt)}{(' ' + mu) if mu else ''}, подтверждено: {mc}"
+                f"  • «{title}»{_age_suffix}: нужно {int(mt)}{(' ' + mu) if mu else ''}, подтверждено: {mc}"
             )
         else:
-            goal_lines.append(f"  • «{title}» ({prog}%)")
+            goal_lines.append(f"  • «{title}»{_age_suffix} ({prog}%)")
 
     # ── Авто-приоритизация: лучшая интеграция под каждую цель ──
     _priority_lines = []
@@ -8669,13 +8683,27 @@ class AnchorEngine:
                                          'рекрутинг', 'резюме', 'подбор персонал')):
                     return 'hr'
                 return None
+            def _goal_age_str(g_):
+                """Calculate goal age in days for coordinator context."""
+                _ca = g_.get('created_at')
+                if not _ca:
+                    return ''
+                try:
+                    import datetime as _dt_ga
+                    if isinstance(_ca, str):
+                        _ca = _dt_ga.datetime.fromisoformat(_ca.replace('Z', '+00:00'))
+                    _age = (_dt_ga.datetime.now(_dt_ga.timezone.utc) - _ca.replace(tzinfo=_dt_ga.timezone.utc if _ca.tzinfo is None else _ca.tzinfo)).days
+                    return f', {_age}д' if _age > 0 else ''
+                except Exception:
+                    return ''
             _goals_str = '; '.join(
-                "[{}] {} ({}%, {}/{})".format(
+                "[{}] {} ({}%, {}/{}{})".format(
                     _crd_goal_type(g),
                     g['title'],
                     g.get('progress', 0),
                     g.get('metric_current', 0),
-                    g.get('metric_target', '?')
+                    g.get('metric_target', '?'),
+                    _goal_age_str(g),
                 )
                 for g in _goals[:5]
             )
@@ -10162,6 +10190,52 @@ class AnchorEngine:
             except Exception as _dnc_err:
                 logger.debug('[COORD] do_not_contact: %s', _dnc_err)
 
+            # ── Multi-day strategic review: detect stuck goals and escalate ──
+            _multiday_review_str = ''
+            _stuck_notify_goals = []  # goals to notify user about
+            for _g_md in _goals[:5]:
+                _ca_md = _g_md.get('created_at')
+                _prog_md = _g_md.get('progress', 0) or 0
+                if not _ca_md:
+                    continue
+                try:
+                    import datetime as _dt_md
+                    if isinstance(_ca_md, str):
+                        _ca_md = _dt_md.datetime.fromisoformat(_ca_md.replace('Z', '+00:00'))
+                    _age_days = (_dt_md.datetime.now(_dt_md.timezone.utc) - _ca_md.replace(
+                        tzinfo=_dt_md.timezone.utc if _ca_md.tzinfo is None else _ca_md.tzinfo)).days
+                except Exception:
+                    _age_days = 0
+                if _age_days < 2:
+                    continue
+                _gt_md = _g_md.get('title', '')[:60]
+                # Critically stuck: 3+ days with <15% progress
+                if _age_days >= 3 and _prog_md < 15:
+                    _multiday_review_str += (
+                        f"\n🔴 ЗАСТОЙ «{_gt_md}»: {_age_days} дней, прогресс {_prog_md}%.\n"
+                        f"  → Текущая стратегия НЕ РАБОТАЕТ. Кардинальная смена подхода:\n"
+                        f"  1. Другая целевая аудитория / другой канал поиска\n"
+                        f"  2. Контент вместо outreach (или наоборот)\n"
+                        f"  3. Партнёрство / коллаборация вместо холодных контактов\n"
+                        f"  4. Уведоми пользователя: send_message_to_user о застое и предложи варианты\n"
+                    )
+                    _stuck_notify_goals.append((_gt_md, _age_days, _prog_md))
+                # Slow progress: 2+ days but some movement
+                elif _age_days >= 2 and _prog_md < 50:
+                    _rate = round(_prog_md / max(_age_days, 1), 1)
+                    _multiday_review_str += (
+                        f"\n⚠️ МЕДЛЕННЫЙ ПРОГРЕСС «{_gt_md}»: {_prog_md}% за {_age_days} дней ({_rate}%/день).\n"
+                        f"  → Проанализируй что давало результат, что нет. Удвой усилия на работающее направление.\n"
+                    )
+            # If there are stuck goals 5+ days — add strong escalation directive
+            if any(d >= 5 for _, d, _ in _stuck_notify_goals):
+                _multiday_review_str += (
+                    "\n🚨 КРИТИЧЕСКИЙ ЗАСТОЙ (5+ дней без прогресса):\n"
+                    "  → ОБЯЗАТЕЛЬНО назначь одному агенту: send_message_to_user с отчётом о застое\n"
+                    "  → Включи: что пробовали, почему не сработало, 2-3 варианта что делать дальше\n"
+                    "  → Пользователь должен знать и принять решение о смене стратегии.\n"
+                )
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -10170,6 +10244,7 @@ class AnchorEngine:
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
                 + _agent_results_str
+                + _multiday_review_str
                 + f"{_degraded_note}"
                 + _pending_replies_str
                 + _unsent_contacts_str
@@ -14779,6 +14854,7 @@ class AnchorEngine:
                 'metric_target': g.metric_target,
                 'metric_current': g.metric_current,
                 'target_date': g.target_date.isoformat() if g.target_date else None,
+                'created_at': g.created_at.isoformat() if g.created_at else None,
                 'tasks': tasks_detail,
             })
 
