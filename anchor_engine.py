@@ -18811,30 +18811,34 @@ class AnchorEngine:
             except Exception:
                 pass
 
-            # ── Универсальный блок: интеграции и возможности активного агента ──
+            # ── Универсальный блок: интеграции и возможности ВСЕХ агентов пользователя ──
             try:
-                from ai_integration.user_agents import get_user_active_agent as _guaa_da
                 from models import UserAgent as _UA_da
-                _active_aid_da = _guaa_da(user.telegram_id)
-                if _active_aid_da:
-                    _ua_da = session.query(_UA_da).filter_by(id=_active_aid_da).first()
-                    if _ua_da:
+                _all_agents = session.query(_UA_da).filter(
+                    _UA_da.author_id == user.id,
+                    _UA_da.status.in_(('active', 'draft')),
+                ).all()
+                if _all_agents:
+                    from ai_integration.autonomous_agent import _parse_agent_integrations
+                    _agents_block = []
+                    for _ua_da in _all_agents:
                         _py_code_da = _ua_da.python_code or ''
                         _api_keys_da = _ua_da.user_api_keys or ''
                         _search_scope_da = _ua_da.search_scope or ''
                         _tools_da = _ua_da.tools_allowed or ''
-                        # Определяем интеграции
-                        from ai_integration.autonomous_agent import _parse_agent_integrations
                         _integs = _parse_agent_integrations(_api_keys_da, _py_code_da, _tools_da, _search_scope_da)
-                        # Определяем доступные ACTION из python_code
                         _py_acts = _extract_python_actions(_py_code_da)
                         if _integs or _py_acts:
-                            prompt_parts.append(f"\n=== ИНТЕГРАЦИИ АГЕНТА {_ua_da.name} (используй через run_agent_action) ===")
+                            _parts = [f"  🔧 {_ua_da.name}"]
                             if _integs:
-                                prompt_parts.append("Подключённые сервисы: " + ', '.join(_integs[:15]))
+                                _parts.append(f"    Сервисы: {', '.join(_integs[:12])}")
                             if _py_acts:
-                                prompt_parts.append("Доступные action: " + ', '.join(_py_acts[:20]) + " → run_agent_action(action=<имя>, params={...})")
-                            prompt_parts.append("Думай: какие из этих интеграций помогут выполнить задачу якоря + правила пользователя?")
+                                _parts.append(f"    Actions: {', '.join(_py_acts[:15])} → run_agent_action(agent_name=\"{_ua_da.name}\", action=<имя>, params={{...}})")
+                            _agents_block.extend(_parts)
+                    if _agents_block:
+                        prompt_parts.append("\n=== ИНТЕГРАЦИИ АГЕНТОВ (используй через run_agent_action) ===")
+                        prompt_parts.extend(_agents_block)
+                        prompt_parts.append("Соотнеси: якорь + правила пользователя + доступные интеграции → какое действие выполнить?")
             except Exception:
                 pass
 

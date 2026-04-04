@@ -1454,7 +1454,44 @@ class HybridAutonomousAgent:
         """Re-runs agent python_code with AGENT_ACTION env vars to perform write operations."""
         import os as _os_ea, sys as _sys_ea, asyncio as _aio_ea, re as _re_ea
         from difflib import SequenceMatcher as _SM_ea
+
+        # ── Выбор агента: по agent_name (если указан) или active agent ──
+        _requested_agent_name = str(params.get('agent_name', '')).strip()
         agent_data = self._active_agent_data.get(user_id)
+
+        if _requested_agent_name:
+            # AI запросил конкретного агента по имени — ищем среди всех агентов пользователя
+            try:
+                from models import Session as _SessAN, UserAgent as _UAAN
+                from ai_integration.user_agents import load_agent_personality as _load_ap
+                _s_an = _SessAN()
+                try:
+                    _tg_user = _s_an.execute(
+                        __import__('sqlalchemy').text("SELECT id FROM users WHERE telegram_id = :tid"),
+                        {"tid": user_id}
+                    ).fetchone()
+                    if _tg_user:
+                        _db_uid = _tg_user[0]
+                        _req_lower = _requested_agent_name.lower()
+                        _candidates = _s_an.query(_UAAN).filter(
+                            _UAAN.author_id == _db_uid,
+                            _UAAN.status.in_(('active', 'draft')),
+                        ).all()
+                        for _ca in _candidates:
+                            if (_ca.name or '').lower() == _req_lower:
+                                _loaded = _load_ap(_ca.id, session=_s_an)
+                                if _loaded and _loaded.get('python_code', '').strip():
+                                    agent_data = _loaded
+                                    logger.info(
+                                        "[ACTION] routed to agent '%s' (id=%s) by agent_name param (user=%s)",
+                                        _ca.name, _ca.id, user_id,
+                                    )
+                                break
+                finally:
+                    _s_an.close()
+            except Exception as _an_err:
+                logger.debug("[ACTION] agent_name lookup failed: %s", _an_err)
+
         if not agent_data or not agent_data.get('python_code', '').strip():
             return {"error": "Агент не имеет подключённого скрипта"}
         action = str(params.get('action', '')).strip()
