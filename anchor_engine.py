@@ -16747,7 +16747,7 @@ class AnchorEngine:
                 _entity_source_prefixes = (
                     'agent:', 'dispatch:', 'autopilot:', 'agent_scheduled:',
                     'task:', 'goal:', 'weather:', 'service_health:',
-                    'email_campaign:',
+                    'email_campaign:', 'integration:',
                 )
                 if anchor.source.startswith(_entity_source_prefixes):
                     # Entity-source: используем только per-(type,source) — уже проверили выше, не совпало
@@ -16760,7 +16760,7 @@ class AnchorEngine:
                 _entity_source_prefixes2 = (
                     'agent:', 'dispatch:', 'autopilot:', 'agent_scheduled:',
                     'task:', 'goal:', 'weather:', 'service_health:',
-                    'email_campaign:',
+                    'email_campaign:', 'integration:',
                 )
                 _no_type_fallback = (
                     (anchor.source and anchor.source.startswith(_entity_source_prefixes2))
