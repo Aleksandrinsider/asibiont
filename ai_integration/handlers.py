@@ -2196,6 +2196,7 @@ async def delegate_task(
                             content=_result[:500],
                             target=f'agent:{_agent_name}',
                             status='completed',
+                            result=_result[:500] if _result else f'Задача выполнена агентом {_agent_name}',
                         ))
                         # Помечаем Task как выполненную
                         if _agent_task_id:
@@ -11842,9 +11843,38 @@ async def send_outreach_email(
             return (f" Нельзя отправлять outreach на {_rcpt} — это ваша почта или IMAP-аккаунт агента. "
                     f"Найди email реального внешнего получателя.")
 
+        # ── GUARD: не отправлять на домен собственной платформы ──
+        if _rcpt and '@' in _rcpt:
+            _OWN_PLATFORM_DOMAINS_SEND = {'asibiont.com'}
+            _rcpt_domain_chk = _rcpt.rsplit('@', 1)[1]
+            if _rcpt_domain_chk in _OWN_PLATFORM_DOMAINS_SEND:
+                return f"⛔ {_rcpt} — адрес платформы ASI Biont. Не отправляй outreach на собственный домен."
+
         # ── GUARD: фейковый / generic email ──
         if _rcpt and _is_generic_email(_rcpt):
             return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
+
+        # ── GUARD: фейковое / корпоративное имя получателя ──
+        _rname_chk = (recipient_name or '').strip()
+        if _rname_chk:
+            import re as _re_fn
+            # Слова-признаки команды/компании вместо реального человека
+            _FAKE_NAME_WORDS = {
+                'team', 'founders', 'автор', 'author', 'редакция', 'редактор',
+                'компания', 'company', 'group', 'corp', 'inc', 'llc', 'ltd',
+                'department', 'отдел', 'команда', 'коллектив', 'staff',
+            }
+            _name_lower = _rname_chk.lower()
+            _name_words = set(_re_fn.findall(r'[a-zA-Zа-яА-ЯёЁ]+', _name_lower))
+            if _name_words & _FAKE_NAME_WORDS:
+                return (f"⛔ «{_rname_chk}» — это не имя конкретного человека (команда/компания/автор). "
+                        f"Найди ФИО реального получателя.")
+            # Имя = один токен И всё в нижнем или начинается с заглавной — фамилия без имени
+            _name_parts = _rname_chk.split()
+            if len(_name_parts) == 1 and len(_rname_chk) > 2:
+                # Одно слово — OK только если это явно имя (Liam, Марк), иначе предупреждение
+                # Но если нет имени в body, то лучше иметь полное имя
+                pass  # Допускаем одно слово — NAME_NOT_IN_BODY поймает
 
         # ── GUARD: C-suite крупнейших мировых корпораций ──
         # Холодный outreach на CEO/CTO Fortune 500 вредит репутации домена и бесполезен
@@ -11892,6 +11922,19 @@ async def send_outreach_email(
             if _ph_m_oe:
                 return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_oe.group()}». "
                         f"Замени на реальные данные или убери. Нельзя отправлять шаблон клиенту.")
+
+        # ── GUARD: имя получателя обязательно ──
+        _rname_send = (recipient_name or '').strip()
+        if not _rname_send:
+            return ("⛔ Не указано имя получателя (recipient_name). "
+                    "Нельзя отправлять холодное письмо без имени — сначала найди ФИО контакта.")
+
+        # ── GUARD: имя получателя должно быть в теле письма (персонализация) ──
+        if _rname_send and body:
+            _first_name_oe = _rname_send.split()[0]
+            if len(_first_name_oe) >= 2 and _first_name_oe not in body:
+                return (f"⛔ Имя получателя «{_first_name_oe}» не упоминается в теле письма. "
+                        f"Добавь персональное обращение — холодное письмо без имени выглядит как спам.")
 
         # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
         # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"

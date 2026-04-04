@@ -592,7 +592,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
+MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (25 мин)
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -605,7 +605,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 25  # Интервал между autopilot dispatch'ами (было 15)
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
@@ -12233,7 +12233,7 @@ class AnchorEngine:
                     # Также логируем agent_task в AAL — для контекста ASI (context_builder читает AAL)
                     from ai_integration.utils import normalize_task_title as _ntt_aal
                     _aal_task_title, _ = _ntt_aal(_step.get('task') or 'задача', agent_name=_ag_name)
-                    _aal_result = (_cleaned or '')[:600]
+                    _aal_result = (_cleaned or '')[:600] or f'Задача выполнена агентом {_ag_name}'
                     session.add(AgentActivityLog(
                         user_id=user.id,
                         activity_type='agent_task',
@@ -13011,7 +13011,7 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 0.25,  # 15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
+            'goal_autopilot_review': 0.42,  # ~25 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
             'email_need_leads': 3.0,
             'chat_ai_review': 1.5,
         }
@@ -15230,7 +15230,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.25,  # раз в 15 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
+            cooldown_hours=0.42,  # ~25 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
             batch_group='goals',
         )]
 
@@ -16757,6 +16757,16 @@ class AnchorEngine:
                         session.rollback()
                     return
 
+                # ── DEDUP: проверяем похожесть с последними постами пользователя ──
+                if self._is_post_duplicate(user, post_text, session):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — feed post too similar to existing, skip")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
+
                 post = Post(
                     user_id=user.id,
                     username=user.username or user.first_name or f'user_{user.telegram_id}',
@@ -16848,6 +16858,16 @@ class AnchorEngine:
                         session.rollback()
                     return
 
+                # ── DEDUP: проверяем похожесть с последними постами ──
+                if self._is_post_duplicate(user, post_text, session):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — channel post too similar, skip")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
+
                 # Публикуем в канал
                 published = False
                 if self.bot:
@@ -16893,6 +16913,16 @@ class AnchorEngine:
                 post_text = await self._ai_compose_post(user, anchor_data, session, mode='discord')
                 if not post_text:
                     logger.debug(f"[ANCHOR] User {user.telegram_id}: AI decided SKIP for discord post")
+                    try:
+                        session.delete(anchor)
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return
+
+                # ── DEDUP: проверяем похожесть с последними постами ──
+                if self._is_post_duplicate(user, post_text, session):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: DEDUP — discord post too similar, skip")
                     try:
                         session.delete(anchor)
                         session.commit()
@@ -18509,6 +18539,25 @@ class AnchorEngine:
         except Exception as e:
             logger.error(f"[ANCHOR] _ai_compose_post error: {e}\n{traceback.format_exc()}")
             return None
+
+    def _is_post_duplicate(self, user, new_text: str, session) -> bool:
+        """Проверяет, похож ли новый пост на последние посты пользователя (Jaccard > 0.6)."""
+        try:
+            _recent = session.query(Post.content).filter(
+                Post.user_id == user.id,
+            ).order_by(Post.created_at.desc()).limit(5).all()
+            _new_words = set(new_text.lower().split())
+            for (_old,) in _recent:
+                if not _old:
+                    continue
+                _old_words = set(_old.lower().split())
+                _inter = len(_new_words & _old_words)
+                _union = len(_new_words | _old_words)
+                if _union > 0 and _inter / _union > 0.6:
+                    return True
+        except Exception as _e:
+            logger.debug(f"[ANCHOR] post dedup check failed: {_e}")
+        return False
 
     def _compose_always_deliver_fallback(self, anchors: list, user) -> str | None:
         """Шаблонный fallback для ALWAYS_DELIVER якорей когда AI недоступен.
