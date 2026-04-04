@@ -6902,40 +6902,43 @@ class AnchorEngine:
                                 MAX_AGENT_PERSONA_MSG_PER_DAY,
                             )
                         else:
-                            await _safe_send(
-                                self.bot, user.telegram_id,
-                                _cleaned_result,
-                            )
-                            # Оборачиваем в __agent JSON для корректного отображения в веб-чате
-                            # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
-                            # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
-                            _result_anchor_type = (
-                                'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
-                            )
-                            _agent_content = json.dumps({
-                                '__agent': {
-                                    'name': _chosen_name,
-                                    'id': _chosen_id,
-                                    'avatar_url': _chosen_avatar,
-                                },
-                                'text': _strip_html(_cleaned_result),
-                                '__tools_used': _tools_used,
-                                '__anchor_type': _result_anchor_type,
-                            }, ensure_ascii=False)
-                            # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
-                            # ASI сохраняем как proactive — координаторская инициатива
-                            _msg_type_result = 'agent_msg' if _chosen_id != 0 else 'proactive'
-                            session.add(Interaction(
-                                user_id=user.id,
-                                message_type=_msg_type_result,
-                                content=_agent_content,
-                            ))
-                            session.commit()
-                            try:
-                                from ai_integration.conversation_history import save_message_to_history as _smh_r
-                                _smh_r(user.telegram_id, 'assistant', result.strip(), session=session)
-                            except Exception as _e:
-                                logger.debug("suppressed: %s", _e)
+                            if not _cleaned_result or not _cleaned_result.strip():
+                                logger.info("[ANCHOR-AUTOPILOT] user %d: skip empty cleaned result from %s", user.id, _chosen_name)
+                            else:
+                                await _safe_send(
+                                    self.bot, user.telegram_id,
+                                    _cleaned_result,
+                                )
+                                # Оборачиваем в __agent JSON для корректного отображения в веб-чате
+                                # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
+                                # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
+                                _result_anchor_type = (
+                                    'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
+                                )
+                                _agent_content = json.dumps({
+                                    '__agent': {
+                                        'name': _chosen_name,
+                                        'id': _chosen_id,
+                                        'avatar_url': _chosen_avatar,
+                                    },
+                                    'text': _strip_html(_cleaned_result),
+                                    '__tools_used': _tools_used,
+                                    '__anchor_type': _result_anchor_type,
+                                }, ensure_ascii=False)
+                                # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
+                                # ASI сохраняем как proactive — координаторская инициатива
+                                _msg_type_result = 'agent_msg' if _chosen_id != 0 else 'proactive'
+                                session.add(Interaction(
+                                    user_id=user.id,
+                                    message_type=_msg_type_result,
+                                    content=_agent_content,
+                                ))
+                                session.commit()
+                                try:
+                                    from ai_integration.conversation_history import save_message_to_history as _smh_r
+                                    _smh_r(user.telegram_id, 'assistant', result.strip(), session=session)
+                                except Exception as _e:
+                                    logger.debug("suppressed: %s", _e)
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
 
