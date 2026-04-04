@@ -3548,9 +3548,9 @@ class AnchorEngine:
         session = Session()
         try:
             # ── DB-LEVEL ADVISORY LOCK — атомарная защита от параллельных процессов ──
-            # pg_try_advisory_lock не блокирует, а возвращает False если lock занят другим процессом
-            # PostgreSQL advisory lock — атомарная защита от параллельных процессов
-            # SQLite не поддерживает advisory locks — пропускаем
+            # Используем pg_try_advisory_xact_lock — lock автоматически освобождается
+            # при commit/rollback транзакции (не зависит от session.close).
+            # Это предотвращает утечку lock'ов при ошибках/таймаутах.
             lock_id = abs(user_id) % 2147483647
             use_advisory_lock = False
             try:
@@ -3569,17 +3569,22 @@ class AnchorEngine:
             try:
                 await self._process_user_inner(user_id, session)
             finally:
+                # ВСЕГДА освобождаем lock — даже при ошибках
                 if use_advisory_lock:
-                    try:
-                        # Rollback failed state перед unlock — иначе execute тоже падает
+                    for _unlock_attempt in range(3):
                         try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                        session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
-                        session.commit()
-                    except Exception as _unlock_err:
-                        logger.warning(f"[ANCHOR] User {user_id}: advisory unlock failed ({_unlock_err}), lock may leak")
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+                            session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
+                            session.commit()
+                            break
+                        except Exception as _unlock_err:
+                            if _unlock_attempt == 2:
+                                logger.error(f"[ANCHOR] User {user_id}: advisory unlock FAILED after 3 attempts ({_unlock_err}), forcing session close")
+                            else:
+                                logger.debug(f"[ANCHOR] User {user_id}: advisory unlock attempt {_unlock_attempt+1} failed: {_unlock_err}")
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
@@ -3588,6 +3593,13 @@ class AnchorEngine:
             except Exception:
                 pass
         finally:
+            # Safety: перед закрытием сессии снимаем ВСЕ advisory locks этой сессии
+            if use_advisory_lock:
+                try:
+                    session.execute(text("SELECT pg_advisory_unlock_all()"))
+                    session.commit()
+                except Exception:
+                    pass
             session.close()
 
     async def _process_user_inner(self, user_id: int, session):
