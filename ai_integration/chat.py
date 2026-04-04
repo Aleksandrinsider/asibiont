@@ -1120,12 +1120,23 @@ async def _build_proactive_context(user_id, lang='ru'):
             user_memory += f"\n\n{_t('insights_section', lang)}:\n" + "\n".join(f"- {i}" for i in insights)
         ctx['insights'] = insights
         
-        # Последние ответы агента — для антиповторов
+        # Последние ответы агента — для антиповторов (включая проактивные)
         last_ai_msgs = db_session.query(Interaction).filter(
             Interaction.user_id == user.id,
-            Interaction.message_type == 'ai'
-        ).order_by(Interaction.created_at.desc()).limit(5).all()
-        ctx['last_responses'] = [m.content[:80] for m in last_ai_msgs if m.content and len(m.content) > 10]
+            Interaction.message_type.in_(['ai', 'proactive', 'agent_msg'])
+        ).order_by(Interaction.created_at.desc()).limit(8).all()
+        _last_resp_list = []
+        for m in last_ai_msgs:
+            _content = m.content or ''
+            if m.message_type in ('proactive', 'agent_msg'):
+                try:
+                    _parsed = json.loads(_content) if isinstance(_content, str) else _content
+                    _content = _parsed.get('text', '') if isinstance(_parsed, dict) else _content
+                except Exception:
+                    pass
+            if _content and len(_content) > 10:
+                _last_resp_list.append(_content[:80])
+        ctx['last_responses'] = _last_resp_list[:8]
         
         # Последние проактивные сообщения — для предотвращения повторений тем
         last_proactive_msgs = db_session.query(Interaction).filter(

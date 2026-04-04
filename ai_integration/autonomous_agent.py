@@ -3387,12 +3387,8 @@ class HybridAutonomousAgent:
             if dynamic_context:
                 messages.append({"role": "system", "content": dynamic_context})
 
-            # ═══ АНТИ-ПОВТОР: для коротких реплик (привет/привет) инжектируем предыдущие ответы ═══
-            _msg_lower_ar = (user_message or '').strip().lower().rstrip('!., ')
-            _trivial_ar = _msg_lower_ar in ('привет', 'хай', 'здравствуй', 'здравствуйте',
-                                             'добрый день', 'доброе утро', 'добрый вечер',
-                                             'как дела', 'что нового', 'что делаешь')
-            if _trivial_ar and history:
+            # ═══ АНТИ-ПОВТОР: инжектируем предыдущие ответы для ВСЕХ сообщений ═══
+            if history:
                 _prev_ai_responses = []
                 for _h_msg in reversed(history):
                     if _h_msg.get('role') == 'assistant' and _h_msg.get('content'):
@@ -3401,11 +3397,22 @@ class HybridAutonomousAgent:
                         break
                 if _prev_ai_responses:
                     _ar_block = '\n---\n'.join(_prev_ai_responses)
-                    messages.append({"role": "system", "content": (
-                        f"АНТИ-ПОВТОР: вот твои последние ответы пользователю — НЕ ПОВТОРЯЙ их содержание. "
-                        f"Скажи что-то ПРИНЦИПИАЛЬНО ДРУГОЕ. Другой тон, другая тема, другой подход.\n"
-                        f"Уже сказано:\n{_ar_block}"
-                    )})
+                    _msg_lower_ar = (user_message or '').strip().lower().rstrip('!., ')
+                    _trivial_ar = _msg_lower_ar in ('привет', 'хай', 'здравствуй', 'здравствуйте',
+                                                     'добрый день', 'доброе утро', 'добрый вечер',
+                                                     'как дела', 'что нового', 'что делаешь')
+                    if _trivial_ar:
+                        messages.append({"role": "system", "content": (
+                            f"АНТИ-ПОВТОР: вот твои последние ответы пользователю — НЕ ПОВТОРЯЙ их содержание. "
+                            f"Скажи что-то ПРИНЦИПИАЛЬНО ДРУГОЕ. Другой тон, другая тема, другой подход.\n"
+                            f"Уже сказано:\n{_ar_block}"
+                        )})
+                    else:
+                        messages.append({"role": "system", "content": (
+                            f"АНТИ-ПОВТОР: НЕ ПОВТОРЯЙ мысли/советы/факты из своих предыдущих ответов. "
+                            f"Если пользователь спрашивает то же — дай ДРУГОЙ угол, НОВЫЕ детали.\n"
+                            f"Твои последние ответы:\n{_ar_block}"
+                        )})
 
             if history:
                 messages.extend(history)

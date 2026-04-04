@@ -17978,6 +17978,29 @@ class AnchorEngine:
                     campaign_offer=anchor_data.get('offer', ''),
                 )
 
+                # Подгружаем тексты предыдущих follow-up из activity log
+                _prev_followups_text = ''
+                if follow_up_number > 1:
+                    try:
+                        from models import AgentActivityLog as _AAL_fu
+                        _prev_fu_logs = session.query(_AAL_fu).filter(
+                            _AAL_fu.user_id == user.id,
+                            _AAL_fu.activity_type == 'email',
+                            _AAL_fu.target == recipient_email,
+                            _AAL_fu.title.like('Follow-up%'),
+                            _AAL_fu.status == 'sent',
+                        ).order_by(_AAL_fu.created_at.desc()).limit(3).all()
+                        if _prev_fu_logs:
+                            _parts_fu = []
+                            for _fl in reversed(_prev_fu_logs):
+                                _parts_fu.append(f"--- {_fl.title} ---\n{(_fl.content or '')[:300]}")
+                            _prev_followups_text = (
+                                f"\n\nPREVIOUS FOLLOW-UPS ALREADY SENT (DO NOT REPEAT their content):\n"
+                                + '\n'.join(_parts_fu)
+                            )
+                    except Exception as _pf_err:
+                        logger.debug(f"[ANCHOR] follow-up history lookup: {_pf_err}")
+
                 compose_prompt = (
                     f"Write a follow-up email (#{follow_up_number}) for an unanswered cold outreach.\n\n"
                     f"Campaign: {anchor_data.get('campaign_name', '')}\n"
@@ -17987,9 +18010,10 @@ class AnchorEngine:
                     f"Recipient: {recipient_email} ({recipient_name})\n"
                     f"{'Company: ' + company_info if company_info else ''}\n"
                     f"Days since sent: {days_since}\n"
-                    f"Language: {lang_hint} — write the entire follow-up in {lang_hint} only (auto-detected from recipient).\n\n"
-                    f"Return ONLY a JSON object: {{\"body\": \"...\"}}\n"
-                    f"Rules: short (60-100 words), 2-3 paragraphs, add new value, don't repeat original, be polite, no pressure.\n"
+                    f"Language: {lang_hint} — write the entire follow-up in {lang_hint} only (auto-detected from recipient).\n"
+                    + _prev_followups_text +
+                    f"\n\nReturn ONLY a JSON object: {{\"body\": \"...\"}}\n"
+                    f"Rules: short (60-100 words), 2-3 paragraphs, add NEW value not mentioned before, don't repeat original or previous follow-ups, be polite, no pressure.\n"
                     f"PARAGRAPH BREAKS: separate every paragraph with a blank line (\\n\\n) in the body field. Plain text only."
                 )
 
@@ -18210,6 +18234,21 @@ class AnchorEngine:
                     anchor.delivered_at = datetime.now(timezone.utc)
                     session.commit()
                     return
+
+                # ── PRE-CHECK: _MAX_AI_REPLIES лимит ДО генерации (экономим токены) ──
+                _MAX_AI_REPLIES_PRE = 2
+                _pre_email = (recipient_email or '').strip().lower()
+                if _pre_email:
+                    _pre_count = session.query(EmailOutreach).filter(
+                        EmailOutreach.user_id == user.id,
+                        EmailOutreach.recipient_email == _pre_email,
+                        EmailOutreach.ai_reply_sent_at.isnot(None),
+                    ).count()
+                    if _pre_count >= _MAX_AI_REPLIES_PRE:
+                        logger.info(f"[ANCHOR] email_reply_received #{anchor.id}: pre-check limit reached ({_pre_count}/{_MAX_AI_REPLIES_PRE}) for {redact_email(_pre_email)}, skip compose")
+                        anchor.delivered_at = datetime.now(timezone.utc)
+                        session.commit()
+                        return
 
                 # Определяем язык ответа (по языку контакта)
                 lang_hint = _detect_recipient_lang(
