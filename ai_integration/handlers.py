@@ -12007,8 +12007,9 @@ async def send_outreach_email(
             return f" Дневной лимит ({campaign.daily_limit} писем) исчерпан. Попробуй завтра."
 
         # Глобальный дневной лимит: УНИКАЛЬНЫХ получателей на пользователя в сутки
-        _tier = getattr(user, 'subscription_tier', 'LIGHT') or 'LIGHT'
-        GLOBAL_DAILY_LIMIT = 100 if _tier.upper() in ('PRO', 'BUSINESS', 'ULTIMATE') else 50
+        _tier_raw = getattr(user, 'subscription_tier', 'LIGHT') or 'LIGHT'
+        _tier = (_tier_raw.value if hasattr(_tier_raw, 'value') else str(_tier_raw)).upper()
+        GLOBAL_DAILY_LIMIT = 100 if _tier in ('PRO', 'BUSINESS', 'ULTIMATE') else 50
         from sqlalchemy import func, distinct as _distinct
         global_recipients_today = session.query(
             func.count(_distinct(EmailOutreach.recipient_email))
