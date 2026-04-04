@@ -18741,7 +18741,7 @@ class AnchorEngine:
                     "    • Три интерфейса: Telegram-бот, Discord, веб-дашборд",
                     "    • AI Arena — публичные дебаты агентов (asibiont.com/arena)",
                     "— email_follow_up: follow-up через send_outreach_email. Ненавязчиво. Верни SKIP.",
-                    "— email_reply_received: КРИТИЧНО! Прочитай цепочку original_body→reply_text→ai_previous_reply. НЕ повторяй уже заданные вопросы. Ответь через reply_to_outreach_email. 📋 CRM (Правило пользователя: всех с кем переписка — в AmoCRM): 1) run_agent_action(action='search_contacts', params={'query': recipient_email}) → если НЕ найден: 2) run_agent_action(action='create_contact', params={'name': recipient_name, 'email': recipient_email}) → 3) run_agent_action(action='create_lead', params={'name': 'Лид: {recipient_name} — ASI Biont'}) → 4) run_agent_action(action='link_contact_to_lead', params={'lead_id': ..., 'contact_id': ...}). ⚠ ЯЗЫК: если reply_text на другом языке (греческий, немецкий и т.д.) — ОТВЕЧАЙ на языке КОНТАКТА, не на языке оригинала! ОБЯЗАТЕЛЬНО уведоми пользователя. Не завершай кампанию без явного подтверждения целевого действия.",
+                    "— email_reply_received: КРИТИЧНО! Прочитай цепочку original_body→reply_text→ai_previous_reply. НЕ повторяй уже заданные вопросы. Ответь через reply_to_outreach_email. Если в ПРАВИЛАХ ПОЛЬЗОВАТЕЛЯ или в ИНТЕГРАЦИЯХ АГЕНТА есть CRM — ОБЯЗАТЕЛЬНО зафиксируй контакт/сделку через run_agent_action. ⚠ ЯЗЫК: если reply_text на другом языке (греческий, немецкий и т.д.) — ОТВЕЧАЙ на языке КОНТАКТА, не на языке оригинала! ОБЯЗАТЕЛЬНО уведоми пользователя. Не завершай кампанию без явного подтверждения целевого действия.",
                     "— email_campaign_report: краткая сводка: отправлено, ответов, что дальше.",
                     "— email_need_leads: engine ищет лидов автоматически. Верни SKIP.",
                     "",
@@ -18790,6 +18790,53 @@ class AnchorEngine:
                 f"Баланс: {token_balance} токенов",
                 f"{delivery_stats}",
             ]
+
+            # ── Универсальный блок: правила пользователя (из user.memory) ──
+            try:
+                _raw_mem_da = getattr(user, 'memory', None) or ''
+                if _raw_mem_da:
+                    try:
+                        from ai_integration.memory import decrypt_data as _decrypt_da
+                        _dec_mem_da = _decrypt_da(_raw_mem_da)
+                    except Exception:
+                        _dec_mem_da = _raw_mem_da
+                    if _dec_mem_da and _dec_mem_da.strip().startswith('{'):
+                        import json as _json_da
+                        _m_da = _json_da.loads(_dec_mem_da.strip())
+                        _user_rules_da = _m_da.get('rules', [])
+                        if _user_rules_da:
+                            prompt_parts.append("\n=== ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательно выполняй) ===")
+                            for _r in _user_rules_da[:15]:
+                                prompt_parts.append(f"  • {_r}")
+            except Exception:
+                pass
+
+            # ── Универсальный блок: интеграции и возможности активного агента ──
+            try:
+                from ai_integration.user_agents import get_user_active_agent as _guaa_da
+                from models import UserAgent as _UA_da
+                _active_aid_da = _guaa_da(user.telegram_id)
+                if _active_aid_da:
+                    _ua_da = session.query(_UA_da).filter_by(id=_active_aid_da).first()
+                    if _ua_da:
+                        _py_code_da = _ua_da.python_code or ''
+                        _api_keys_da = _ua_da.user_api_keys or ''
+                        _search_scope_da = _ua_da.search_scope or ''
+                        _tools_da = _ua_da.tools_allowed or ''
+                        # Определяем интеграции
+                        from ai_integration.autonomous_agent import _parse_agent_integrations
+                        _integs = _parse_agent_integrations(_api_keys_da, _py_code_da, _tools_da, _search_scope_da)
+                        # Определяем доступные ACTION из python_code
+                        _py_acts = _extract_python_actions(_py_code_da)
+                        if _integs or _py_acts:
+                            prompt_parts.append(f"\n=== ИНТЕГРАЦИИ АГЕНТА {_ua_da.name} (используй через run_agent_action) ===")
+                            if _integs:
+                                prompt_parts.append("Подключённые сервисы: " + ', '.join(_integs[:15]))
+                            if _py_acts:
+                                prompt_parts.append("Доступные action: " + ', '.join(_py_acts[:20]) + " → run_agent_action(action=<имя>, params={...})")
+                            prompt_parts.append("Думай: какие из этих интеграций помогут выполнить задачу якоря + правила пользователя?")
+            except Exception:
+                pass
 
             prompt_parts.append(f"\n=== ЯКОРЯ ({len(anchors)} шт) ===")
             # Типы якорей, для которых нужно передавать полные данные (data) в промпт
@@ -19074,26 +19121,15 @@ class AnchorEngine:
                     _ai_max_iter = 1
                 else:
                     _ai_mode = 'anchor'
-                    # Email-действия: ответ на письмо, рассылка, follow-up — нужны email/CRM инструменты, а не веб-поиск
-                    _EMAIL_ACTIVE_T = {'email_reply_received', 'email_outreach_send', 'email_follow_up'}
-                    if _anchor_types_set & _EMAIL_ACTIVE_T:
-                        _has_reply = 'email_reply_received' in _anchor_types_set
-                        _ai_instruction = (
-                            "СТРОГО выполни Email-действие по ПРАВИЛАМ ДЛЯ EMAIL из контекста. "
-                            + ("email_reply_received: используй reply_to_outreach_email для ответа. "
-                               "ОБЯЗАТЕЛЬНО также добавь контакт в CRM через run_agent_action: "
-                               "1) action='search_contacts' (query=email контакта) — если не найден: "
-                               "2) action='create_contact' (name, email) → запомни contact_id; "
-                               "3) action='create_lead' (name='Лид: {имя} — ASI Biont') → запомни lead_id; "
-                               "4) action='link_contact_to_lead' (lead_id, contact_id). "
-                               "Правило пользователя: все контакты с кем идёт переписка — в AmoCRM. " if _has_reply
-                               else "Используй send_outreach_email для отправки писем. ")
-                            + "Напиши пользователю КРАТКОЕ подтверждение (1-2 предложения): что ответили и зафиксировали в CRM."
-                        )
-                        _ai_max_iter = 3
-                    else:
-                        _ai_instruction = "Подумай о ситуации этого человека. Вызови инструменты по релевантным темам из якорей — research_topic или get_news_trends. На основе реальных данных реши: стоит ли писать (или SKIP). Если пишешь — покажи что нашёл и задай вопрос, который двигает вперёд."
-                        _ai_max_iter = 2
+                    _ai_instruction = (
+                        "Подумай о ситуации этого человека. "
+                        "В контексте есть ПРАВИЛА ПОЛЬЗОВАТЕЛЯ и ИНТЕГРАЦИИ АГЕНТА — учитывай их. "
+                        "Если якорь требует действия (email, CRM, git и т.д.) — используй доступные инструменты и run_agent_action. "
+                        "Если нужны данные — вызови research_topic или get_news_trends. "
+                        "На основе реальных данных реши: стоит ли писать (или SKIP). "
+                        "Если пишешь — покажи что сделал/нашёл и задай вопрос, который двигает вперёд."
+                    )
+                    _ai_max_iter = 3
 
             result = await agent.generate_system_message(
                 user_id=user.telegram_id,
