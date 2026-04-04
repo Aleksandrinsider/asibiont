@@ -11641,7 +11641,7 @@ async def start_email_campaign(
     sender_email: str = None,
     tone: str = 'professional',
     max_emails: int = 0,
-    daily_limit: int = 50,
+    daily_limit: int = 100,
     user_id: int = None,
     session=None,
     close_session: bool = True,
@@ -11656,7 +11656,7 @@ async def start_email_campaign(
 
     max_emails: 0 = безлимитно (рекомендуется). Кампания работает пока AI видит отдачу.
         НЕ ставь произвольные числа вроде 100 — автопилот сам решает когда остановиться.
-    daily_limit: макс. писем в день (обычно 50).
+    daily_limit: макс. писем в день (обычно 100).
     """
     if not session:
         session = Session()
