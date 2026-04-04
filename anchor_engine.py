@@ -33,7 +33,7 @@ import time
 import logging
 import re
 import traceback
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 import pytz
@@ -9789,6 +9789,31 @@ class AnchorEngine:
                     + '\n'.join(_ar_lines) + '\n'
                 )
 
+            # ── Agent monotony detector: flag agents stuck in same tool pattern ──
+            _monotony_str = ''
+            if _all_cycles_tools:
+                _mono_lines = []
+                for _pn_mono, _cycles_mono in _all_cycles_tools.items():
+                    if len(_cycles_mono) < 3:
+                        continue
+                    # Check last 4 cycles for same dominant tool
+                    _recent_4 = _cycles_mono[-4:]
+                    _flat_tools = [t for cycle in _recent_4 for t in cycle]
+                    _tool_counts = Counter(_flat_tools)
+                    _dominant = _tool_counts.most_common(1)[0] if _tool_counts else None
+                    if _dominant and _dominant[1] >= 3 and _dominant[1] / max(len(_flat_tools), 1) > 0.4:
+                        _mono_lines.append(
+                            f"  ⚠️ {_pn_mono} зациклился на {_dominant[0]} ({_dominant[1]}x за 4 цикла) — "
+                            f"ОБЯЗАТЕЛЬНО дай другой инструмент/подход в этом цикле!"
+                        )
+                if _mono_lines:
+                    _monotony_str = (
+                        "\n🔴 МОНОТОННОСТЬ АГЕНТОВ (агент повторяет один инструмент каждый цикл):\n"
+                        + '\n'.join(_mono_lines) + '\n'
+                        "  → Исследование без действия = 0 пользы. Если агент только ищет/сохраняет заметки —\n"
+                        "    дай ему задачу на ДЕЙСТВИЕ: create_post, send_outreach_email, publish, delegate с данными.\n"
+                    )
+
             # ── Блок ротации целей: если одна цель доминирует — переключайся ──
             _goal_rotation_str = ''
             if _overworked_goals:
@@ -10254,6 +10279,7 @@ class AnchorEngine:
                 + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
+                + f"{_monotony_str}"
                 + f"{_recent_done_str}"
                 + f"{_loop_detection_str}"
                 + f"{_recent_suggestion_guard}"
@@ -12816,9 +12842,52 @@ class AnchorEngine:
                                 + '\n'.join(f"  • {a}" for a in _adapt_lines[:3]) + "\n\n"
                             )
 
+                    # ── Anti-repetition: fetch last 2 coordinator summaries ──
+                    _prev_summaries_text = ''
+                    try:
+                        _prev_sums = session.execute(text(
+                            "SELECT content FROM interactions "
+                            "WHERE user_id=:uid AND message_type='proactive' "
+                            "AND content LIKE '%coordinator_summary%' "
+                            "ORDER BY created_at DESC LIMIT 2"
+                        ), {'uid': user.id}).fetchall()
+                        if _prev_sums:
+                            _prev_texts = []
+                            for _ps in _prev_sums:
+                                try:
+                                    _pj = json.loads(_ps[0])
+                                    _pt = (_pj.get('text', '') or '')[:200]
+                                except Exception:
+                                    _pt = (_ps[0] or '')[:200]
+                                if _pt:
+                                    _prev_texts.append(_pt)
+                            if _prev_texts:
+                                _prev_summaries_text = (
+                                    "ПРЕДЫДУЩИЕ ОТЧЁТЫ (НЕ ПОВТОРЯЙ структуру и формулировки):\n"
+                                    + '\n---\n'.join(_prev_texts) + "\n\n"
+                                )
+                    except Exception:
+                        pass
+
+                    # ── Progress delta: highlight only if changed ──
+                    _progress_changed = False
+                    for _gfr in _goals_for_report[:3]:
+                        _mc_now = int(_gfr.get('metric_current', 0) or 0)
+                        _mt_now = _gfr.get('metric_target')
+                        if _mt_now and _mc_now > 0:
+                            _progress_changed = True
+                            break
+                    _progress_rule = (
+                        "- Прогресс цели: упоминай ТОЛЬКО если метрика ИЗМЕНИЛАСЬ в этом цикле. "
+                        "Если прогресс тот же что и раньше — НЕ ПИШИ 'прогресс X из Y', просто опусти.\n"
+                        if not _progress_changed else
+                        "- Прогресс цели изменился — упомяни новую цифру.\n"
+                    )
+
                     _report_prompt = (
                         f"Ты — ASI, координатор. Пишешь короткий отчёт пользователю в чате.\n\n"
-                        f"Что сделала команда:\n{_report_items}\n\n"
+                        + _prev_summaries_text
+                        + f"Что сделала команда:\n{_report_items}\n\n"
                         + (f"Ход работы:\n{_bridge_flow}\n\n" if _bridge_flow else '')
                         + _strategy_adaptation
                         + f"Состояние целей:\n{_goals_state_now}\n\n"
@@ -12827,12 +12896,15 @@ class AnchorEngine:
                         f"- Называй агентов по именам как живых людей: '[Имя] проверила почту...', '[Имя] нашёл 3 контакта...'.\n"
                         f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
                         f"- Не зацикливайся на слове 'таймаут': если это уже недавно упоминалось, пиши мягко 'автоканал нестабилен, переключились'.\n"
-                        f"- Оценка прогресса: одним предложением — конкретный результат или следующий шаг.\n"
-                        f"- НЕ ЗАДАВАЙ вопросов пользователю ('какой приоритет?', 'что выбрать?', 'давай обсудим?'). "
+                        + _progress_rule
+                        + f"- НЕ ЗАДАВАЙ вопросов пользователю ('какой приоритет?', 'что выбрать?', 'давай обсудим?'). "
                         f"Автопилот должен ДЕЙСТВОВАТЬ и ИНФОРМИРОВАТЬ. Если данных не хватает — сам прими решение и сообщи что сделал.\n"
                         f"- Если агент не привёл конкретного результата — не упоминай его.\n"
                         + _note_hint
-                        + f"- 3-5 предложений. Без markdown. Начни сразу с конкретики: кто что сделал.\n"
+                        + f"- АНТИПОВТОР: каждый отчёт должен быть УНИКАЛЬНЫМ по структуре. "
+                        f"Меняй порядок, стиль, фокус. Не начинай каждый раз с одного агента. "
+                        f"Не используй шаблон 'X сделал A. Y сделал B. Прогресс Z.' каждый раз.\n"
+                        f"- 3-5 предложений. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
                     _report_gen = await asyncio.wait_for(
