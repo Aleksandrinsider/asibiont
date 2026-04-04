@@ -1823,36 +1823,25 @@ class OfficeEngine:
                     ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
 
                     # ── Tool-keyword dedup: блокируем повторное назначение одного инструмента ──
-                    # Порог динамический на основе outcome_memory:
-                    #   base=3 → success outcomes (2+) поднимают до 6 → failure (2+) снижают до 2
-                    # Никакой инструмент не захардкожен как "repeatable" — эффективность решает.
-                    _TOOL_KEYWORDS = {
-                        'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
-                        'generate_image': ('generate_image',),
-                        'start_content_campaign': ('start_content_campaign',),
-                        'check_emails': ('check_emails', 'проверь входящие', 'проверки входящих'),
-                        'search_users': ('search_users',),
-                        'find_and_message': ('find_and_message', 'message_relevant'),
-                        'web_search': ('web_search',),
-                        'research_topic': ('research_topic',),
-                        'send_outreach_email': ('send_outreach_email',),
-                        'create_post': ('create_post',),
-                        'publish_to_telegram': ('publish_to_telegram',),
-                        'publish_to_discord': ('publish_to_discord',),
-                    }
-                    _task_tools = set()
-                    for _tk, _tkws in _TOOL_KEYWORDS.items():
-                        if any(kw in _task_lower for kw in _tkws):
-                            _task_tools.add(_tk)
+                    # Список инструментов динамический: извлекается из tool_discovery + regex.
+                    # Порог динамический на основе outcome_memory.
+                    import re as _re_td
+                    try:
+                        from ai_integration.dynamic_tools import tool_discovery as _td
+                        _known_tools = set(_td.discovered_tools.keys()) if _td.discovered_tools else set()
+                    except Exception:
+                        _known_tools = set()
+                    # Дополняем snake_case именами из текста задачи (ловим новые инструменты)
+                    _known_tools.update(_re_td.findall(r'\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b', _task_lower))
+                    _known_tools -= {'user_id', 'task_id', 'goal_id', 'agent_id'}  # исключаем не-инструменты
+                    _task_tools = {t for t in _known_tools if t in _task_lower and len(t) >= 5}
 
                     if _task_tools:
                         _tool_repeat_count = 0
                         for _aal_row in _recent_aal:
                             _old_text = ((_aal_row.title or '') + ' ' + (_aal_row.content or '')).lower()
-                            for _tk, _tkws in _TOOL_KEYWORDS.items():
-                                if _tk in _task_tools and any(kw in _old_text for kw in _tkws):
-                                    _tool_repeat_count += 1
-                                    break
+                            if any(t in _old_text for t in _task_tools):
+                                _tool_repeat_count += 1
                         # Динамический порог на основе outcome
                         _base_threshold = 3
                         if _tool_repeat_count >= 2:
@@ -1863,14 +1852,10 @@ class OfficeEngine:
                                     AgentActivityLog.target == f'agent:{_aname}',
                                     AgentActivityLog.created_at >= _dup_cutoff,
                                 ).order_by(AgentActivityLog.created_at.desc()).limit(6).all()
-                                # Ищем outcomes с тем же инструментом
-                                _tool_kws_flat = set()
-                                for _tk3 in _task_tools:
-                                    _tool_kws_flat.update(_TOOL_KEYWORDS.get(_tk3, ()))
                                 _ok = sum(1 for o in _outcomes if o.status == 'completed'
-                                          and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _tool_kws_flat))
+                                          and any(t in ((o.title or '') + ' ' + (o.content or '')).lower() for t in _task_tools))
                                 _fail = sum(1 for o in _outcomes if o.status == 'failed'
-                                            and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _tool_kws_flat))
+                                            and any(t in ((o.title or '') + ' ' + (o.content or '')).lower() for t in _task_tools))
                                 if _ok >= 2 and _ok > _fail:
                                     _base_threshold = 6  # инструмент доказал эффективность
                                 elif _fail >= 2 and _fail >= _ok:

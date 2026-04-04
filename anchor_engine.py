@@ -5938,28 +5938,18 @@ class AnchorEngine:
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
 
-                                # ── Tool-keyword dedup: ловит перефразированные повторы одного инструмента ──
-                                # Порог динамический: base=3, outcome success → 6, failure → 2.
+                                # ── Tool-keyword dedup: динамическое обнаружение инструментов + outcome-порог ──
                                 if not _skip_coord and _coord_text:
-                                    _COORD_TOOL_KW = {
-                                        'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
-                                        'generate_image': ('generate_image',),
-                                        'start_content_campaign': ('start_content_campaign',),
-                                        'check_emails': ('check_emails', 'проверь входящие', 'проверки входящих'),
-                                        'search_users': ('search_users',),
-                                        'find_and_message': ('find_and_message', 'message_relevant'),
-                                        'send_outreach_email': ('send_outreach_email',),
-                                        'web_search': ('web_search',),
-                                        'research_topic': ('research_topic',),
-                                        'create_post': ('create_post',),
-                                        'publish_to_telegram': ('publish_to_telegram',),
-                                        'publish_to_discord': ('publish_to_discord',),
-                                    }
+                                    import re as _re_ctd
+                                    try:
+                                        from ai_integration.dynamic_tools import tool_discovery as _td_c
+                                        _known_tools_c = set(_td_c.discovered_tools.keys()) if _td_c.discovered_tools else set()
+                                    except Exception:
+                                        _known_tools_c = set()
                                     _ct_low = _coord_text.lower()
-                                    _new_tools_c = set()
-                                    for _ctk, _ctkws in _COORD_TOOL_KW.items():
-                                        if any(kw in _ct_low for kw in _ctkws):
-                                            _new_tools_c.add(_ctk)
+                                    _known_tools_c.update(_re_ctd.findall(r'\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b', _ct_low))
+                                    _known_tools_c -= {'user_id', 'task_id', 'goal_id', 'agent_id'}
+                                    _new_tools_c = {t for t in _known_tools_c if t in _ct_low and len(t) >= 5}
                                     if _new_tools_c:
                                         _tool_rep_c = 0
                                         for _rc2 in _recent_coords:
@@ -5970,10 +5960,8 @@ class AnchorEngine:
                                                 if _rc2_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
                                                     continue
                                                 _rc2_t = (_rc2_d.get('text', '') or '').lower()
-                                                for _ctk2, _ctkws2 in _COORD_TOOL_KW.items():
-                                                    if _ctk2 in _new_tools_c and any(kw in _rc2_t for kw in _ctkws2):
-                                                        _tool_rep_c += 1
-                                                        break
+                                                if any(t in _rc2_t for t in _new_tools_c):
+                                                    _tool_rep_c += 1
                                             except Exception:
                                                 pass
                                         # Динамический порог по outcome_memory
@@ -5987,13 +5975,10 @@ class AnchorEngine:
                                                     _AAL_c.target == f'agent:{_chosen_name}',
                                                     _AAL_c.created_at >= datetime.now(timezone.utc) - timedelta(hours=24),
                                                 ).order_by(_AAL_c.created_at.desc()).limit(6).all()
-                                                _kws_flat_c = set()
-                                                for _ctk3 in _new_tools_c:
-                                                    _kws_flat_c.update(_COORD_TOOL_KW.get(_ctk3, ()))
                                                 _ok_c = sum(1 for o in _oc_rows if o.status == 'completed'
-                                                            and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _kws_flat_c))
+                                                            and any(t in ((o.title or '') + ' ' + (o.content or '')).lower() for t in _new_tools_c))
                                                 _fl_c = sum(1 for o in _oc_rows if o.status == 'failed'
-                                                            and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _kws_flat_c))
+                                                            and any(t in ((o.title or '') + ' ' + (o.content or '')).lower() for t in _new_tools_c))
                                                 if _ok_c >= 2 and _ok_c > _fl_c:
                                                     _thresh_c = 6
                                                 elif _fl_c >= 2 and _fl_c >= _ok_c:
