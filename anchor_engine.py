@@ -592,7 +592,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 200  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
+MAX_AUTOPILOT_MSG_PER_DAY = 500  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
 MAX_FEED_PER_DAY = 1
 MAX_CHANNEL_PER_DAY = 1  # 1 пост в канал в день — рандомно
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
