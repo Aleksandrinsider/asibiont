@@ -1823,8 +1823,9 @@ class OfficeEngine:
                     ).order_by(AgentActivityLog.created_at.desc()).limit(10).all()
 
                     # ── Tool-keyword dedup: блокируем повторное назначение одного инструмента ──
-                    # Repeatable tools (источники данных) — порог 4; one-shot tools — порог 2.
-                    # Если outcome_memory показывает успех — порог ещё выше.
+                    # Порог динамический на основе outcome_memory:
+                    #   base=3 → success outcomes (2+) поднимают до 6 → failure (2+) снижают до 2
+                    # Никакой инструмент не захардкожен как "repeatable" — эффективность решает.
                     _TOOL_KEYWORDS = {
                         'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
                         'generate_image': ('generate_image',),
@@ -1834,8 +1835,11 @@ class OfficeEngine:
                         'find_and_message': ('find_and_message', 'message_relevant'),
                         'web_search': ('web_search',),
                         'research_topic': ('research_topic',),
+                        'send_outreach_email': ('send_outreach_email',),
+                        'create_post': ('create_post',),
+                        'publish_to_telegram': ('publish_to_telegram',),
+                        'publish_to_discord': ('publish_to_discord',),
                     }
-                    _REPEATABLE_TOOLS = {'search_users', 'check_emails', 'web_search', 'research_topic', 'send_outreach_email'}
                     _task_tools = set()
                     for _tk, _tkws in _TOOL_KEYWORDS.items():
                         if any(kw in _task_lower for kw in _tkws):
@@ -1849,23 +1853,28 @@ class OfficeEngine:
                                 if _tk in _task_tools and any(kw in _old_text for kw in _tkws):
                                     _tool_repeat_count += 1
                                     break
-                        # Определяем порог: repeatable + успешные outcome → мягче
-                        _is_repeatable = bool(_task_tools & _REPEATABLE_TOOLS)
-                        _base_threshold = 4 if _is_repeatable else 2
-                        if _is_repeatable and _tool_repeat_count >= 2:
-                            # Проверяем outcome_memory: если последние исполнения были успешны — повышаем порог
+                        # Динамический порог на основе outcome
+                        _base_threshold = 3
+                        if _tool_repeat_count >= 2:
                             try:
                                 _outcomes = _s_dup.query(AgentActivityLog).filter(
                                     AgentActivityLog.user_id == user_db_id,
                                     AgentActivityLog.activity_type == 'outcome_memory',
                                     AgentActivityLog.target == f'agent:{_aname}',
                                     AgentActivityLog.created_at >= _dup_cutoff,
-                                ).order_by(AgentActivityLog.created_at.desc()).limit(5).all()
-                                _success_count = sum(1 for o in _outcomes if o.status == 'completed'
-                                                     and any(kw in (o.title or '').lower() + (o.content or '').lower()
-                                                             for kw in _TOOL_KEYWORDS.get(list(_task_tools & _REPEATABLE_TOOLS)[0], ())))
-                                if _success_count >= 2:
+                                ).order_by(AgentActivityLog.created_at.desc()).limit(6).all()
+                                # Ищем outcomes с тем же инструментом
+                                _tool_kws_flat = set()
+                                for _tk3 in _task_tools:
+                                    _tool_kws_flat.update(_TOOL_KEYWORDS.get(_tk3, ()))
+                                _ok = sum(1 for o in _outcomes if o.status == 'completed'
+                                          and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _tool_kws_flat))
+                                _fail = sum(1 for o in _outcomes if o.status == 'failed'
+                                            and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _tool_kws_flat))
+                                if _ok >= 2 and _ok > _fail:
                                     _base_threshold = 6  # инструмент доказал эффективность
+                                elif _fail >= 2 and _fail >= _ok:
+                                    _base_threshold = 2  # инструмент проваливается
                             except Exception:
                                 pass
                         if _tool_repeat_count >= _base_threshold:

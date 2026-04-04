@@ -5939,8 +5939,7 @@ class AnchorEngine:
                                         logger.debug("suppressed: %s", _e)
 
                                 # ── Tool-keyword dedup: ловит перефразированные повторы одного инструмента ──
-                                # Repeatable tools (search_users, check_emails и пр.) — порог 4;
-                                # one-shot (start_email_campaign, generate_image) — порог 2.
+                                # Порог динамический: base=3, outcome success → 6, failure → 2.
                                 if not _skip_coord and _coord_text:
                                     _COORD_TOOL_KW = {
                                         'start_email_campaign': ('start_email_campaign', 'email-кампани', 'email_campaign'),
@@ -5952,8 +5951,10 @@ class AnchorEngine:
                                         'send_outreach_email': ('send_outreach_email',),
                                         'web_search': ('web_search',),
                                         'research_topic': ('research_topic',),
+                                        'create_post': ('create_post',),
+                                        'publish_to_telegram': ('publish_to_telegram',),
+                                        'publish_to_discord': ('publish_to_discord',),
                                     }
-                                    _COORD_REPEATABLE = {'search_users', 'check_emails', 'web_search', 'research_topic', 'send_outreach_email'}
                                     _ct_low = _coord_text.lower()
                                     _new_tools_c = set()
                                     for _ctk, _ctkws in _COORD_TOOL_KW.items():
@@ -5975,8 +5976,30 @@ class AnchorEngine:
                                                         break
                                             except Exception:
                                                 pass
-                                        _is_rep_c = bool(_new_tools_c & _COORD_REPEATABLE)
-                                        _thresh_c = 4 if _is_rep_c else 2
+                                        # Динамический порог по outcome_memory
+                                        _thresh_c = 3
+                                        if _tool_rep_c >= 2:
+                                            try:
+                                                from models import AgentActivityLog as _AAL_c
+                                                _oc_rows = _cs.query(_AAL_c).filter(
+                                                    _AAL_c.user_id == user.id,
+                                                    _AAL_c.activity_type == 'outcome_memory',
+                                                    _AAL_c.target == f'agent:{_chosen_name}',
+                                                    _AAL_c.created_at >= datetime.now(timezone.utc) - timedelta(hours=24),
+                                                ).order_by(_AAL_c.created_at.desc()).limit(6).all()
+                                                _kws_flat_c = set()
+                                                for _ctk3 in _new_tools_c:
+                                                    _kws_flat_c.update(_COORD_TOOL_KW.get(_ctk3, ()))
+                                                _ok_c = sum(1 for o in _oc_rows if o.status == 'completed'
+                                                            and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _kws_flat_c))
+                                                _fl_c = sum(1 for o in _oc_rows if o.status == 'failed'
+                                                            and any(kw in ((o.title or '') + ' ' + (o.content or '')).lower() for kw in _kws_flat_c))
+                                                if _ok_c >= 2 and _ok_c > _fl_c:
+                                                    _thresh_c = 6
+                                                elif _fl_c >= 2 and _fl_c >= _ok_c:
+                                                    _thresh_c = 2
+                                            except Exception:
+                                                pass
                                         if _tool_rep_c >= _thresh_c:
                                             _skip_coord = True
                                             logger.info(
