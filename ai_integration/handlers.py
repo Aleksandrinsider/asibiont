@@ -10769,6 +10769,10 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             logger.info(f"[AUTO_LEADS] PASS -1 CRM contacts: {len(_crm_contacts)} total, 0 new candidates for campaign #{campaign.id}")
     except Exception as _crm_err:
         logger.warning(f"[AUTO_LEADS] PASS -1 CRM contacts error: {_crm_err}")
+        try:
+            session.rollback()
+        except Exception:
+            pass
 
     # ══════════════════════════════════════════════════════════════════════
     # PASS 0: GitHub API — ТОЛЬКО для технической аудитории

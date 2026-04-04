@@ -3571,6 +3571,11 @@ class AnchorEngine:
             finally:
                 if use_advisory_lock:
                     try:
+                        # Rollback failed state перед unlock — иначе execute тоже падает
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                         session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
                         session.commit()
                     except Exception as _unlock_err:
@@ -3578,7 +3583,10 @@ class AnchorEngine:
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
-            session.rollback()
+            try:
+                session.rollback()
+            except Exception:
+                pass
         finally:
             session.close()
 
@@ -4101,6 +4109,10 @@ class AnchorEngine:
                     )
             except (asyncio.TimeoutError, Exception) as _db_err:
                 logger.warning(f"[ANCHOR] User {user_id}: _deliver_batch({label}) AI call failed/timeout: {_db_err}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
                 msg = None
             _elapsed = time.monotonic() - _t0
             if not msg:
@@ -4114,6 +4126,10 @@ class AnchorEngine:
                                 timeout=120,
                             )
                     except (asyncio.TimeoutError, Exception):
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                         msg = None
                 elif always:
                     logger.warning(f"[ANCHOR] User {user_id}: AI timeout ({_elapsed:.1f}s) — skipping {label} retry")
@@ -6973,7 +6989,15 @@ class AnchorEngine:
 
             # Помечаем якорь доставленным
             anchor.delivered_at = datetime.now(timezone.utc)
-            session.commit()
+            try:
+                session.commit()
+            except Exception as _commit_err:
+                logger.error(f"[ANCHOR] anchor #{anchor.id} commit failed: {_commit_err}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                return
 
             # ── Проверяем: закрыл ли агент цель в этом сеансе ──
             # Ищем goal_completed события за последние 5 минут для этого пользователя.
