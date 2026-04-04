@@ -1133,7 +1133,7 @@ except ImportError:
 connect_args = {}
 if db_url and db_url.startswith('postgresql'):
     connect_args = {
-        "connect_timeout": 30,
+        "connect_timeout": 10,
         "options": "-c statement_timeout=30000"  # 30 seconds
     }
 
