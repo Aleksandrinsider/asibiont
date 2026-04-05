@@ -47,7 +47,7 @@ from models import (
     EmailCampaign, EmailOutreach, ContentCampaign,
     DelegationCampaign, AgentActivityLog,
 )
-from config import DEEPSEEK_API_KEY, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, redact_email
+from config import DEEPSEEK_API_KEY, DEFAULT_OUTREACH_EMAIL, PROACTIVE_NO_SEND_START_HOUR, PROACTIVE_SEND_START_HOUR, redact_email
 
 logger = logging.getLogger(__name__)
 
@@ -1315,7 +1315,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # ── Тип цели: research / outreach / content / dev / learning / health / personal / general ──
     _RESEARCH_KW = ('анализ', 'исследован', 'мониторинг', 'обзор', 'рынок', 'нефт', 'газ',
                     'биржа', 'котировк', 'тренды', 'данные', 'аналитик', 'прогноз',
-                    'статистик', 'oil', 'stock', 'commodity', 'forex', 'сырьё', 'металл', 'отчёт')
+                    'статистик', 'oil', 'stock', 'commodity', 'forex', 'сырьё', 'металл', 'отчёт',
+                    'analysis', 'research', 'monitoring', 'review', 'market', 'trend', 'data',
+                    'analytics', 'forecast', 'statistics', 'report', 'survey', 'study')
     _OUTREACH_KW = ('найти клиент', 'привлеч', 'подписчик', 'пользовател',
                     'набор', 'аудитор', 'лид', 'lead', 'beta', 'бета', 'тестировщик', 'рекрутинг',
                     'продаж', 'b2b', 'партнёр', 'сделк', 'клиентск',
@@ -1324,33 +1326,56 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     'участник', 'комьюнити', 'member', 'contributor', 'беты', 'регистрац',
                     'продвижен', 'маркетинг', 'реклам', 'раскрутк', 'охват', 'брендинг',
                     'популяризац', 'пиар', ' pr ', 'growth', 'запуск', 'launch', 'promotion',
-                    'диджитал', 'digital', 'осведомлённост', 'осведомленност')
-    _CONTENT_KW  = ('контент', 'smm', 'reels', 'видео', 'медиаплан')
-    _DEV_KW      = ('разработ', 'программ', 'github', 'backend', 'frontend', 'developer', 'деплой')
+                    'диджитал', 'digital', 'осведомлённост', 'осведомленност',
+                    'find client', 'attract', 'subscriber', 'user acquisition', 'audience',
+                    'sales', 'partner', 'deal', 'customer', 'outreach', 'recruit',
+                    'investor', 'funding', 'fundraising', 'community', 'registration',
+                    'marketing', 'advertising', 'branding', 'awareness')
+    _CONTENT_KW  = ('контент', 'smm', 'reels', 'видео', 'медиаплан',
+                    'content', 'video', 'media plan', 'blog', 'article', 'post', 'newsletter')
+    _DEV_KW      = ('разработ', 'программ', 'github', 'backend', 'frontend', 'developer', 'деплой',
+                    'develop', 'code', 'deploy', 'api', 'software', 'engineer', 'devops')
     _FINANCE_KW  = ('финанс', 'инвест', 'трейд', 'биржа', 'акции', 'облигац', 'крипт', 'доход', 'выручк',
-                    'бюджет', 'налог', 'бухгалт', 'profit', 'revenue', 'trading', 'портфель')
+                    'бюджет', 'налог', 'бухгалт', 'profit', 'revenue', 'trading', 'портфель',
+                    'finance', 'invest', 'budget', 'tax', 'accounting', 'portfolio', 'crypto',
+                    'income', 'expense', 'dividend')
     _ECOMM_KW    = ('магазин', 'товар', 'продукт', 'ozon', 'wildberries', 'shopify', 'авито',
                     'маркетплейс', 'каталог', 'sku', 'остатки', 'заказ', 'клиент-виз', 'выкуп',
-                    'wb', 'ecommerce', 'e-commerce', 'интернет-магазин')
+                    'wb', 'ecommerce', 'e-commerce', 'интернет-магазин',
+                    'store', 'product', 'marketplace', 'catalog', 'inventory', 'order', 'amazon', 'etsy')
     _LEARNING_KW = ('изучить', 'научиться', 'курс', 'обучен', 'практик', 'навык', 'книг', 'читать',
                     'сертификат', 'диплом', 'урок', 'освоить', 'skill', 'учёб', 'прочитать',
-                    'лекц', 'workshop', 'тренинг', 'язык программирован', 'английск', 'язык')
+                    'лекц', 'workshop', 'тренинг', 'язык программирован', 'английск', 'язык',
+                    'learn', 'study', 'course', 'training', 'education', 'certificate', 'lesson',
+                    'tutorial', 'practice', 'knowledge')
     _HEALTH_KW   = ('спорт', 'тренировк', 'похудеть', 'похуд', 'здоровь', 'пробежать', 'бег',
                     'марафон', 'питание', 'диета', 'сон', 'медитац', ' кг', 'килограмм',
                     'workout', 'fitness', 'фитнес', 'km', 'км пробег', 'пресс', 'бросить курить',
-                    'калори', 'вес тела', 'зарядк', 'йога', 'плавани')
+                    'калори', 'вес тела', 'зарядк', 'йога', 'плавани',
+                    'health', 'exercise', 'diet', 'sleep', 'meditation', 'weight loss',
+                    'running', 'marathon', 'nutrition', 'gym', 'sport')
     _PERSONAL_KW = ('путешеств', 'поездк', 'привычк', 'ежедневн', 'streak', 'хобби', 'творч',
                     'музыка', 'рисован', 'дневник', 'саморазвит', 'мечт', 'написать книг',
-                    'личный проект', 'личная цель', 'жизнь', 'счастье', 'отдых', 'баланс')
+                    'личный проект', 'личная цель', 'жизнь', 'счастье', 'отдых', 'баланс',
+                    'habit', 'hobby', 'creative', 'music', 'drawing', 'journal', 'self-improvement',
+                    'dream', 'personal goal', 'life', 'happiness', 'relaxation', 'balance')
     _LEGAL_KW    = ('юридическ', 'юрист', 'закон', 'договор', 'лицензия', 'патент',
-                    'комплайенс', 'декларация', 'налоговая', 'судебн', 'иск', 'право')
+                    'комплайенс', 'декларация', 'налоговая', 'судебн', 'иск', 'право',
+                    'legal', 'lawyer', 'law', 'contract', 'license', 'patent', 'compliance',
+                    'litigation', 'court', 'regulation')
     _TRAVEL_KW   = ('путешеств', 'поездк', 'отпуск', 'авиабилет', 'виза', 'маршрут путешеств',
-                    'перелёт', 'турпоездк', 'aviasales', 'бронирован отел', 'эмиграция', 'релокация')
+                    'перелёт', 'турпоездк', 'aviasales', 'бронирован отел', 'эмиграция', 'релокация',
+                    'travel', 'trip', 'vacation', 'flight', 'visa', 'hotel booking', 'emigration',
+                    'relocation', 'tourism', 'destination')
     _STARTUP_KW  = ('стартап', 'startup', 'mvp', 'питч', 'акселератор',
-                    'product market fit', 'фандрейзинг', 'валидация гипотез', 'раунд инвест')
-    _LOGISTICS_KW = ('логистик', 'грузоперевозк', 'склад хранен', 'сдэк', 'моясклад')
+                    'product market fit', 'фандрейзинг', 'валидация гипотез', 'раунд инвест',
+                    'pitch', 'accelerator', 'hypothesis validation', 'seed round', 'venture')
+    _LOGISTICS_KW = ('логистик', 'грузоперевозк', 'склад хранен', 'сдэк', 'моясклад',
+                     'logistics', 'shipping', 'warehouse', 'supply chain', 'delivery', 'freight')
     _HR_KW       = ('найти сотрудник', 'нанять', 'рекрутинг', 'резюме кандидат',
-                    'подбор персонал', 'hh.ru', 'headhunter', 'hr менедж', 'вакансия открыт')
+                    'подбор персонал', 'hh.ru', 'headhunter', 'hr менедж', 'вакансия открыт',
+                    'hire', 'recruit', 'resume', 'candidate', 'talent', 'staffing',
+                    'job opening', 'interview', 'onboarding')
     _gtype_scores = {
         'research':  sum(1 for w in _RESEARCH_KW   if w in _goals_text_all),
         'outreach':  sum(1 for w in _OUTREACH_KW   if w in _goals_text_all),
@@ -9498,39 +9523,46 @@ class AnchorEngine:
 
             # ── STRATEGY OUTCOME SCORECARD: quantity-based view of what works ──
             _strategy_scorecard_str = ''
+            # Init outside try so stagnation blocker can always access it
+            _strat_counts = {
+                'outbound_search': 0,
+                'email_outreach': 0,
+                'content_creation': 0,
+                'check_replies': 0,
+                'data_analysis': 0,
+                'community': 0,
+            }
             try:
                 # 1) Email campaign metrics (actual numbers)
                 _sc_lines = []
                 _campaigns_data = data.get('email_campaigns', [])
                 _total_email_sent = data.get('total_emails_sent', 0) or 0
-                _n_replied = _status_counts_data.get('replied', 0)
-                _n_interested = _status_counts_data.get('interested', 0)
+                _n_replied = (_status_counts_data or {}).get('replied', 0)
+                _n_interested = (_status_counts_data or {}).get('interested', 0)
                 _email_reply_rate = round((_n_replied + _n_interested) / max(_total_email_sent, 1) * 100, 1)
 
-                # 2) Classify recent tasks into strategy categories
-                _strat_counts = {
-                    'outbound_search': 0,    # web_search, research, find contacts
-                    'email_outreach': 0,     # send_outreach, email campaign
-                    'content_creation': 0,   # create_post, publish
-                    'check_replies': 0,      # check_emails, reply
-                    'data_analysis': 0,      # analyze, metrics, report
-                    'community': 0,          # discord, telegram groups, forums
-                }
+                # 2) Classify recent tasks into strategy categories (bilingual keywords)
                 _strat_keywords = {
                     'outbound_search': ['web_search', 'research', 'найди контакт', 'найди email',
                                        'найди автор', 'поиск', 'search', 'найди через',
                                        'нашёл контакт', 'сохрани контакт', 'save_email_contact',
-                                       'find_relevant', 'find_and_message'],
+                                       'find_relevant', 'find_and_message',
+                                       'find contact', 'find email', 'find author',
+                                       'found contact', 'save contact'],
                     'email_outreach': ['send_outreach', 'email', 'письмо', 'outreach',
-                                      'start_email_campaign', 'follow_up', 'follow-up'],
+                                      'start_email_campaign', 'follow_up', 'follow-up',
+                                      'send email', 'send letter', 'mail campaign'],
                     'content_creation': ['create_post', 'publish', 'опубликуй', 'пост',
-                                        'статью', 'контент', 'blog', 'article'],
+                                        'статью', 'контент', 'blog', 'article',
+                                        'write post', 'create content', 'write article'],
                     'check_replies': ['check_emails', 'проверь входящ', 'проверь почт',
-                                     'reply_to', 'ответь на'],
+                                     'reply_to', 'ответь на',
+                                     'check inbox', 'check mail', 'reply to'],
                     'data_analysis': ['проанализируй', 'анализ', 'метрик', 'отчёт',
-                                     'report', 'analytics', 'research_topic'],
+                                     'report', 'analytics', 'research_topic',
+                                     'analyze', 'analysis', 'metrics', 'dashboard'],
                     'community': ['discord', 'telegram', 'канал', 'группа', 'форум',
-                                 'сообщество', 'community'],
+                                 'сообщество', 'community', 'channel', 'group', 'forum'],
                 }
                 for _pn_sc, _hist_sc in _per_agent_history.items():
                     for _h_sc in _hist_sc[:8]:
@@ -9815,19 +9847,24 @@ class AnchorEngine:
                 ).order_by(_Inter_loop.created_at.asc()).all()
 
                 # Ключевые паттерны подходов которые координатор мог повторять
+                # Generic platform-level keywords (work for any user/language)
                 _approach_keywords = {
                     'LinkedIn': ['linkedin'],
                     'Discord': ['discord'],
-                    'GitHub-поиск': ['github'],
-                    'RSS/Хабр': ['rss', 'хабр', 'vc.ru'],
-                    'web_search-контакты': ['поиск в интернете', 'web_search', 'найди контакт', 'найди email'],
-                    'email-кампания': ['start_email_campaign', 'email-кампанию', 'массовую email', 'email кампани', 'email_campaign', 'массов'],
-                    'email-лимит-упомин': ['лимит писем', 'лимит на email', 'исчерпан'],
-                    'таймаут-упомин': ['таймаут', 'timeout', 'прервал', 'прервать'],
-                    'смена-тактики': ['сменим тактику', 'смени тактику', 'сменим площадку'],
-                    'Hi,AI-Telegram': ['hi,ai', 'hi ai', 'hiai'],
-                    'SyntheticBiology': ['syntheticbiology', 'synthetic biology', 'r/syntheticbiology'],
-                    'Reddit-нерелев': ['reddit.com', 'subreddit', '/r/'],
+                    'GitHub': ['github'],
+                    'RSS': ['rss', 'хабр', 'habr', 'vc.ru', 'dev.to', 'medium'],
+                    'web_search': ['web_search', 'найди контакт', 'найди email',
+                                   'find contact', 'find email', 'поиск в интернете'],
+                    'email_campaign': ['start_email_campaign', 'email_campaign',
+                                       'массовую email', 'mass email', 'bulk email'],
+                    'email_limit': ['лимит писем', 'лимит на email', 'исчерпан',
+                                    'rate limit', 'email limit', 'exhausted'],
+                    'timeout': ['таймаут', 'timeout', 'прервал', 'interrupted'],
+                    'tactic_change': ['сменим тактику', 'смени тактику', 'change tactic',
+                                     'switch approach', 'сменим площадку'],
+                    'Telegram': ['telegram', 'телеграм'],
+                    'Reddit': ['reddit.com', 'subreddit', '/r/'],
+                    'ProductHunt': ['producthunt', 'product hunt'],
                 }
                 _approach_counts: dict = {}
                 for _lm in _loop_msgs:
@@ -9843,25 +9880,14 @@ class AnchorEngine:
                 # Подходы которые координатор предлагал 3+ раз → петля
                 _looped = {k: v for k, v in _approach_counts.items() if v >= 3}
                 if _looped:
-                    # Конкретные альтернативы для каждого заблокированного подхода
-                    _alternatives_map = {
-                        'LinkedIn': 'Хабр, dev.to, GitHub, ProductHunt, тематические Telegram-каналы',
-                        'Discord': 'Telegram-группы, форумы, комментарии на Хабре/dev.to',
-                        'GitHub-поиск': 'Хабр авторы, dev.to, RSS-ленты техблогов, ProductHunt makers',
-                        'RSS/Хабр': 'web_search по нишевым блогам, GitHub trending, ProductHunt',
-                        'web_search-контакты': 'check_emails (входящие), create_post (inbound-стратегия), research_topic (аналитика для контента)',
-                        'email-кампания': 'create_post + publish_to_telegram (контент-маркетинг), find_and_message_relevant_users, publish_to_discord — НЕ повторяй start_email_campaign',
-                        'email-лимит-упомин': 'create_post + publish_to_telegram (контент-маркетинг), research_topic + save_note (аналитика), update_goal_progress',
-                        'таймаут-упомин': 'более простые задачи: save_note, update_goal_progress, create_post из уже собранных данных',
-                        'смена-тактики': 'КОНКРЕТНО смени: другой поисковый запрос, другая платформа, другой тип контента',
-                        'Hi,AI-Telegram': 'email-рассылка авторам AI-блогов, ProductHunt launch, Хабр-статья — НЕ Telegram-контакт (интеграции нет)',
-                        'SyntheticBiology': 'AI/tech аудитория: dev.to, ProductHunt, GitHub trending, Hacker News, Хабр',
-                        'Reddit-нерелев': 'Хабр, dev.to, ProductHunt (Reddit-аудитория нерелевантна — проверь нишу перед назначением)',
-                    }
+                    # Dynamic alternatives: suggest channels the user hasn't used
+                    _all_channels = set(_approach_keywords.keys())
+                    _used_channels = set(_looped.keys())
+                    _unused_channels = _all_channels - _used_channels - {'email_limit', 'timeout', 'tactic_change'}
+                    _alt_default = ', '.join(sorted(_unused_channels)[:4]) if _unused_channels else 'create_post, check_emails, save_note'
                     _loop_lines = ['\n🚨 ВНИМАНИЕ: ОБНАРУЖЕНА ПЕТЛЯ (координатор повторял одно и то же):']
                     for _lap, _lcnt in sorted(_looped.items(), key=lambda x: -x[1]):
-                        _alt = _alternatives_map.get(_lap, 'другой подход')
-                        _loop_lines.append(f'  ⛔ «{_lap}» — упоминалось {_lcnt} раз за 3ч БЕЗ результата → ЗАМЕНА: {_alt}')
+                        _loop_lines.append(f'  ⛔ «{_lap}» — упоминалось {_lcnt} раз за 3ч БЕЗ результата → ЗАМЕНА: {_alt_default}')
                     _loop_lines.append('')
                     _loop_lines.append('  ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ВЫХОДА ИЗ ПЕТЛИ:')
                     _loop_lines.append('  1. Ни один агент НЕ должен получить задачу с заблокированным подходом выше.')
@@ -9877,9 +9903,9 @@ class AnchorEngine:
                 # ── STRATEGY-LEVEL loop: group channels into meta-strategies ──
                 # Even if no single channel hits 3+, the meta-strategy might
                 _meta_strategies = {
-                    'outbound_search': ['web_search-контакты', 'GitHub-поиск', 'LinkedIn',
-                                       'RSS/Хабр', 'Hi,AI-Telegram', 'SyntheticBiology', 'Reddit-нерелев'],
-                    'email_blast': ['email-кампания', 'email-лимит-упомин'],
+                    'outbound_search': ['web_search', 'GitHub', 'LinkedIn',
+                                       'RSS', 'Reddit', 'ProductHunt', 'Telegram'],
+                    'email_blast': ['email_campaign', 'email_limit'],
                 }
                 _meta_counts = {}
                 for _ms_name, _ms_channels in _meta_strategies.items():
@@ -10212,21 +10238,24 @@ class AnchorEngine:
             # If outbound search is dominant (>60%) AND goal progress <10% for 3+ days → block pure search steps
             try:
                 _stagnant_block_active = False
+                _stag_total = sum(_strat_counts.values())
                 _stag_progress_low = any(
                     (_g.get('progress', 0) or 0) < 10
                     and _g.get('created_at')
                     for _g in _goals[:3]
-                )
+                ) if _goals else False
                 _stag_search_dominant = (
-                    sum(v for v in _strat_counts.values()) > 0
-                    and _strat_counts.get('outbound_search', 0) / max(sum(v for v in _strat_counts.values()), 1) > 0.6
+                    _stag_total > 0
+                    and _strat_counts.get('outbound_search', 0) / max(_stag_total, 1) > 0.6
                 )
                 if _stag_progress_low and _stag_search_dominant and _plan:
                     _search_kws = ['web_search', 'найди', 'поиск', 'search', 'find',
-                                   'найти контакт', 'найти email', 'ищи', 'разыщи']
+                                   'найти контакт', 'найти email', 'ищи', 'разыщи',
+                                   'find contact', 'find email', 'look for', 'discover']
                     _action_kws = ['create_post', 'publish', 'send_outreach', 'check_emails',
                                    'reply', 'отправь', 'опубликуй', 'проверь почт', 'ответь',
-                                   'follow_up', 'save_note', 'report', 'update_goal']
+                                   'follow_up', 'save_note', 'report', 'update_goal',
+                                   'send email', 'write', 'create', 'analyze']
                     _plan_stag_filtered = []
                     _n_search_blocked = 0
                     for _ps in _plan:
@@ -15639,7 +15668,7 @@ class AnchorEngine:
                             offer=campaign.offer or campaign.task_template or campaign.goal or '',
                             tone=campaign.tone or 'professional',
                             sender_name=_sender_name,
-                            sender_email='outreach@asibiont.com',
+                            sender_email=DEFAULT_OUTREACH_EMAIL,
                             max_emails=campaign.max_delegations or 20,
                             daily_limit=min(campaign.daily_limit or 5, 50),
                             status='active',
@@ -15773,7 +15802,7 @@ class AnchorEngine:
                 for email in unreplied:
                     _rcpt_norm = (email.recipient_email or '').strip().lower()
                     _sender_norm = (campaign.sender_email or '').strip().lower()
-                    if _rcpt_norm and ((_sender_norm and _rcpt_norm == _sender_norm) or _rcpt_norm == 'outreach@asibiont.com'):
+                    if _rcpt_norm and ((_sender_norm and _rcpt_norm == _sender_norm) or _rcpt_norm == DEFAULT_OUTREACH_EMAIL.lower()):
                         logger.info(f"[ANCHOR] Skip self-reply personal email #{email.id} to {redact_email(_rcpt_norm)}")
                         continue
                     # Dedup: проверяем нет ли уже якоря
@@ -15954,7 +15983,7 @@ class AnchorEngine:
             for email in unreplied:
                 _rcpt_norm = (email.recipient_email or '').strip().lower()
                 _sender_norm = (campaign.sender_email or '').strip().lower()
-                if _rcpt_norm and ((_sender_norm and _rcpt_norm == _sender_norm) or _rcpt_norm == 'outreach@asibiont.com'):
+                if _rcpt_norm and ((_sender_norm and _rcpt_norm == _sender_norm) or _rcpt_norm == DEFAULT_OUTREACH_EMAIL.lower()):
                     logger.info(f"[ANCHOR] Skip self-reply campaign email #{email.id} to {redact_email(_rcpt_norm)}")
                     continue
                 # Dedup: проверяем нет ли уже якоря для этого email
