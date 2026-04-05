@@ -8789,6 +8789,10 @@ except Exception as e:
                             if (o.sent_at) {
                                 const d = new Date(o.sent_at);
                                 dk = d.toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', timeZone: _tz});
+                            } else if (o.status === 'failed' && o.created_at) {
+                                // Failed emails have no sent_at — group by created_at instead of lumping into "Drafts"
+                                const d = new Date(o.created_at);
+                                dk = d.toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric', timeZone: _tz});
                             }
                             if (!_dayGroups[dk]) _dayGroups[dk] = [];
                             _dayGroups[dk].push(o);

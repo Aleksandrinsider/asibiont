@@ -8897,6 +8897,7 @@ async def api_reports_handler(request):
                             'body': o.body,
                             'status': o.status,
                             'sent_at': (o.sent_at.isoformat() + 'Z') if o.sent_at else None,
+                            'created_at': (o.created_at.isoformat() + 'Z') if o.created_at else None,
                             'reply_text': o.reply_text,
                             'reply_at': (o.reply_at.isoformat() + 'Z') if o.reply_at else None,
                             'ai_reply_text': o.ai_reply_text or None,
