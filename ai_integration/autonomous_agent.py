@@ -4378,8 +4378,7 @@ class HybridAutonomousAgent:
                 "GOAL FOCUS: pick highest-priority lowest-progress goal → use available agent/tool → "
                 "EXECUTE action DIFFERENT from recent directives. Only suggest tools that exist in context.\n"
                 "If directives repeat (research, find contacts) — SWITCH APPROACH (DMs, communities, partnerships).\n"
-                "⛔ Do NOT ask 'want me to?', 'shall I?' — DO IT. Proactive = you already decided to act.\n"
-                "⛔ Do NOT address other agents in text ('Mark, find...'). You speak to the user ON YOUR OWN BEHALF.\n"
+                "⛔ Do NOT ask 'want me to?', 'shall I?', 'need me to?' — DO IT. Proactive = you already decided to act.\n"
                 "⛔ If integration is connected (Yandex.Metrika, AmoCRM etc.) — USE run_agent_action for data, don't invent numbers."
             )
             _PROACTIVE_CORE_RU = (
@@ -4391,8 +4390,6 @@ class HybridAutonomousAgent:
                 "Предлагай только инструменты из контекста.\n"
                 "Если директивы повторяются (исследовать, найти контакты) — СМЕНИ ПОДХОД (DM, сообщества, партнёрства).\n"
                 "⛔ НЕ СПРАШИВАЙ 'хочешь?', 'давай?', 'может помочь?', 'нужно ли?' — ДЕЛАЙ. Проактивное = ты УЖЕ решил действовать.\n"
-                "⛔ НЕ обращайся к другим агентам в тексте ('Марк, найди...', 'Кристина, отправь...'). Ты пишешь ПОЛЬЗОВАТЕЛЮ от своего имени.\n"
-                "⛔ НЕ пересылай запросы агентов ('Кристина просит помочь...', 'Марк предлагает...'). Делегируй через DELEGATE[], не через чат.\n"
                 "⛔ Если подключена интеграция (Яндекс.Метрика, AmoCRM и т.д.) — ИСПОЛЬЗУЙ run_agent_action для получения данных, не выдумывай цифры."
             )
 
