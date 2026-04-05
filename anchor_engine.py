@@ -11459,26 +11459,27 @@ class AnchorEngine:
                     _task_short = _task_clean
                     if len(_task_short) > 140:
                         _task_short = _task_short[:140].rsplit(' ', 1)[0].rstrip('.,;:')
-                    # Убираем ведущий глагол «займись/начни/сделай» чтобы шаблон не дублировал его
+                    # Убираем ведущий глагол-команду чтобы шаблон не дублировал его
                     import re as _re_verb
                     _task_body = _re_verb.sub(
-                        r'^(?:займись|начни|сделай|проверь|возьмись за|найди|создай|проанализируй)\s+',
+                        r'^(\w+(?:ись|ись|ай|ей|уй|ой|и|ь|й))\s+',
                         '', _task_short, flags=_re_verb.IGNORECASE
                     ).strip()
+                    # Проверяем что не отрезали существительное (по окончанию)
+                    _stripped_w = _re_verb.match(r'^(\w+)', _task_short)
+                    if _stripped_w and _re_verb.search(r'(ость|ение|ание|ция|ство|ок|ка|ие|тель)$', _stripped_w.group(1)):
+                        _task_body = _task_short  # это было существительное, вернуть
                     if not _task_body:
                         _task_body = _task_short
                     # Формируем естественное обращение вместо тикета
                     _ag_is_fem_c = (_ag_name or '')[-1:] in 'аяАЯ'
                     _t = _task_body.lower() if _task_body and _task_body[0].isupper() and not _task_body[:3].isupper() else _task_body
-                    # Определяем: задача начинается с глагола или нет
+                    # Определяем: задача начинается с глагола (по окончаниям) или нет
                     import re as _re_vcheck
+                    _fw = (_t.split()[0] if _t else '').lower().rstrip('.,;:')
                     _is_verb_start = bool(_re_vcheck.match(
-                        r'^(?:найти|найди|проверить|проверь|отправить|отправь|создать|создай|написать|напиши|'
-                        r'собрать|собери|подготовить|подготовь|исследовать|исследуй|поискать|поищи|'
-                        r'сделать|сделай|проанализировать|проанализируй|запустить|запусти|использовать|используй|'
-                        r'связаться|свяжись|обновить|обнови|опубликовать|опубликуй)\b',
-                        _t, _re_vcheck.IGNORECASE
-                    ))
+                        r'.+(ть|ться|чь|чься)$|.+(и|й|ись|йся|йте|ьте|ьтесь)$', _fw
+                    )) and not _re_vcheck.match(r'.+(ость|ение|ание|ция|ство|ок|ка|ие|тель)$', _fw)
                     # Конвертируем инфинитив → императив для естественного обращения
                     _INF_TO_IMP = {
                         'найти': 'найди', 'проверить': 'проверь', 'отправить': 'отправь',
@@ -11542,9 +11543,10 @@ class AnchorEngine:
                         f'{_ag_name}, можешь {_aac_t}?',
                     ])
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
-                # ── POST-PROCESS: INF→IMP в итоговом тексте поручения ──
-                # Ловит случаи когда инфинитив проскочил через fallback-шаблоны
-                _POST_INF_IMP = {
+                # ── POST-PROCESS: INF→IMP ТОЛЬКО для первого глагола после имени агента ──
+                # Безопаснее чем замена всех инфинитивов — не ломает модальные конструкции
+                import re as _re_post_inf
+                _INF_IMP_FIRST = {
                     'найти': 'найди', 'проверить': 'проверь', 'отправить': 'отправь',
                     'создать': 'создай', 'написать': 'напиши', 'собрать': 'собери',
                     'подготовить': 'подготовь', 'исследовать': 'исследуй',
@@ -11553,25 +11555,16 @@ class AnchorEngine:
                     'использовать': 'используй', 'опубликовать': 'опубликуй',
                     'обновить': 'обнови', 'связаться': 'свяжись',
                 }
-                import re as _re_post_inf
-                for _pinf, _pimp in _POST_INF_IMP.items():
-                    _asi_assign_text = _re_post_inf.sub(
-                        rf'(?<=[\s,—:])({_pinf})\b',
-                        _pimp,
-                        _asi_assign_text,
-                        flags=_re_post_inf.IGNORECASE,
-                    )
-                # FIX: модальные слова требуют инфинитив — откатываем ошибочные замены
-                # "нужно сделай" → "нужно сделать", "чтобы найди" → "чтобы найти"
-                _IMP_TO_INF = {v.lower(): k for k, v in _POST_INF_IMP.items()}
-                _imp_alts = '|'.join(_re_post_inf.escape(v) for v in _POST_INF_IMP.values())
-                _modal_fix_pat = _re_post_inf.compile(
-                    rf'\b(нужно|чтобы|чтоб|можно|надо|стоит|необходимо|следует|пора)\s+({_imp_alts})\b',
-                    _re_post_inf.IGNORECASE,
-                )
-                _asi_assign_text = _modal_fix_pat.sub(
-                    lambda m: m.group(1) + ' ' + _IMP_TO_INF.get(m.group(2).lower(), m.group(2)),
+                # Заменяем только первый инфинитив сразу после имени агента + разделителя
+                def _fix_first_inf(m):
+                    return m.group(1) + _INF_IMP_FIRST.get(m.group(2).lower(), m.group(2))
+                _inf_alts = '|'.join(_re_post_inf.escape(k) for k in _INF_IMP_FIRST)
+                _asi_assign_text = _re_post_inf.sub(
+                    rf'(^[^,]+,\s*(?:пожалуйста[,]?\s*)?)({_inf_alts})\b',
+                    _fix_first_inf,
                     _asi_assign_text,
+                    count=1,
+                    flags=_re_post_inf.IGNORECASE,
                 )
                 # Сохраняем живое поручение в чат
                 _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)

@@ -1781,17 +1781,13 @@ async def delegate_task(
                 _base = _truncate_by_word(_base, 160)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
-                # Detect if _base starts with a verb (imperative/infinitive) for natural phrasing
+                # Эвристика: глагол (инфинитив/императив) или существительное?
                 _first_w = (_base.split()[0] if _base else '').lower().rstrip('.,;:')
-                _verb_starts = {
-                    'найди', 'проверь', 'отправь', 'создай', 'напиши', 'собери',
-                    'подготовь', 'исследуй', 'поищи', 'сделай', 'проанализируй',
-                    'запусти', 'используй', 'опубликуй', 'обнови', 'свяжись', 'займись',
-                    'найти', 'проверить', 'отправить', 'создать', 'написать', 'собрать',
-                    'подготовить', 'исследовать', 'поискать', 'сделать', 'проанализировать',
-                    'запустить', 'использовать', 'опубликовать', 'обновить', 'связаться',
-                }
-                if _first_w in _verb_starts:
+                _is_verb = bool(_ren.match(
+                    r'.+(ть|ться|чь|чься)$|.+(и|й|ись|йся|йте|ьте|ьтесь)$',
+                    _first_w,
+                )) and not _ren.match(r'.+(ость|ение|ание|ция|ство|ок|ка|ие|тель)$', _first_w)
+                if _is_verb:
                     _msg = f'{_agent_name}, пожалуйста, {_base}.'
                 else:
                     _msg = f'{_agent_name}, есть задача — {_base}.'
