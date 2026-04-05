@@ -13788,14 +13788,12 @@ class AnchorEngine:
                         c_prof = contact_profiles_map.get(t.user_id)
                         contact_activities[t.user_id] = {
                             'username': c_user.username if c_user else 'unknown',
-                            'match_count': 0,
+                            'activities': [],
                             'interests': (c_prof.interests or '')[:150] if c_prof else '',
                             'skills': (c_prof.skills or '')[:150] if c_prof else '',
                             'position': (c_prof.position or '')[:80] if c_prof else '',
                         }
-                    # Privacy: НЕ передаём task titles и plans другого пользователя.
-                    # Только факт наличия совпадающей активности.
-                    contact_activities[t.user_id]['match_count'] = contact_activities[t.user_id].get('match_count', 0) + 1
+                    contact_activities[t.user_id]['activities'].append(t.title[:80])
 
                 # Также проверяем current_plans контактов (даже без задач)
                 for cp in same_city_profiles:
@@ -13805,10 +13803,10 @@ class AnchorEngine:
                     if any(pw in plans for pw in profile_words):
                         c_user = _ca_user_by_id.get(cp.user_id)
                         if c_user and c_user.username:
-                            # Privacy: только публичные данные (interests, skills, position)
                             contact_activities[cp.user_id] = {
                                 'username': c_user.username,
-                                'match_count': 1,
+                                'activities': [],
+                                'plans': (cp.current_plans or '')[:200],
                                 'interests': (cp.interests or '')[:150],
                                 'skills': (cp.skills or '')[:150],
                                 'position': (cp.position or '')[:80],
@@ -13828,6 +13826,8 @@ class AnchorEngine:
                             'user_profile': {
                                 'interests': (interests or '')[:200],
                                 'skills': (getattr(profile, 'skills', '') or '')[:200],
+                                'goals': (goals or '')[:200],
+                                'plans': (getattr(profile, 'current_plans', '') or '')[:200],
                             },
                             'contacts': top_contacts,
                         }),
@@ -18809,7 +18809,7 @@ class AnchorEngine:
                 _rules += [
                     "ПРАВИЛА ДЛЯ КОНТАКТОВ:",
                     "— contact_match: нашёлся @username. Объясни почему полезен, предложи написать.",
-                    "— contact_activity: выбери 1-2 релевантных контакта, объясни пересечение с целями.",
+                    "— contact_activity: выбери 1-2 релевантных контакта, опиши ТЕМУ пересечения (общее направление), НЕ цитируй конкретные задачи/планы контакта дословно — обобщай.",
                     "",
                 ]
 
@@ -18930,10 +18930,15 @@ class AnchorEngine:
                     elif ad['type'] == 'contact_activity':
                         contacts = d.get('contacts', [])
                         up = d.get('user_profile', {})
-                        prompt_parts.append(f"   Город: {d.get('city','')}, профиль: {up.get('skills','')} / {up.get('interests','')}")
+                        prompt_parts.append(f"   Город: {d.get('city','')}, профиль: {up.get('skills','')} / {up.get('interests','')}, цели: {up.get('goals','')}")
                         for c in contacts[:3]:
-                            # Privacy: передаём только публичные данные (навыки, интересы, должность)
+                            acts = ', '.join(c.get('activities', [])[:3])
+                            plans = c.get('plans', '')
                             prompt_parts.append(f"   • @{c.get('username','')}: {c.get('position','')} | навыки: {c.get('skills','')} | интересы: {c.get('interests','')}")
+                            if acts:
+                                prompt_parts.append(f"     активности: {acts}")
+                            if plans:
+                                prompt_parts.append(f"     планы: {plans[:200]}")
                     elif ad['type'] == 'agent_delegation':
                         prompt_parts.append(f"   Агент: {d.get('agent_name','')}, задача: {d.get('task','')}")
                         _res = str(d.get('result', ''))[:300]
