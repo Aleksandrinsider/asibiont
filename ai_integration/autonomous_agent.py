@@ -8349,7 +8349,7 @@ def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, 
         _s = _Db()
         try:
             _aname = agent.get('name', 'Агент')
-            _title, _overflow = normalize_task_title(task_text, agent_name=_aname, max_len=200)
+            _title, _overflow = normalize_task_title(task_text, agent_name=_aname, max_len=100)
             # description = результат агента; если пусто — полный текст задачи (не только overflow)
             _desc = result_summary[:1000] if result_summary else (task_text[:1000] if task_text else _overflow[:1000])
             # Очищаем description от внутреннего координационного контекста

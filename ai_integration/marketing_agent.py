@@ -452,19 +452,30 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                 if result.get('ok'):
                     logger.info(f"[PUBLISH] Successfully published to {channel}")
 
-                    # Создаем задачу-отчет об успешной публикации
+                    # Создаем задачу-отчет об успешной публикации (с защитой от дублей)
                     if user_id and session:
                         from models import Task
                         img_note = " (с изображением)" if image_url else ""
-                        report_task = Task(
-                            user_id=user.id,
-                            title=f"Пост опубликован в {channel}{img_note}",
-                            description=f"Контент:\n{post_text[:200]}...",
-                            status='completed',
-                            actual_completion_time=datetime.now(timezone.utc)
-                        )
-                        session.add(report_task)
-                        session.commit()
+                        _pub_title = f"Пост опубликован в {channel}{img_note}"
+                        # Дедупликация: не создаём если такой отчёт уже есть за последние 2 часа
+                        _cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+                        _existing_pub = session.query(Task).filter(
+                            Task.user_id == user.id,
+                            Task.title.like(f'%Пост опубликован в {channel}%'),
+                            Task.status == 'completed',
+                            Task.created_at >= _cutoff,
+                        ).first()
+                        if not _existing_pub:
+                            report_task = Task(
+                                user_id=user.id,
+                                title=_pub_title,
+                                description=f"Контент:\n{post_text[:200]}...",
+                                status='completed',
+                                source='agent',
+                                actual_completion_time=datetime.now(timezone.utc)
+                            )
+                            session.add(report_task)
+                            session.commit()
 
                     return {
                         "success": True,
