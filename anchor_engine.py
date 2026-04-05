@@ -2863,91 +2863,51 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_gh
             _log_gh.getLogger(__name__).debug('[AUTOPILOT] known github block: %s', _e_gh)
 
-    # ── Adaptive Decisions Block: работай с тем что есть ──────────────────────────
-    # Конкретные правила поведения при блокировках, лимитах, ошибках инструментов.
-    # Принцип: каждый тупик имеет обходной путь — ИИ должен ЗНАТЬ эти пути заранее.
+    # ── Adaptive Decisions Block: принципы адаптации ──────────────────────────
+    # Вместо перечисления конкретных сценариев → принципы мышления при блокировках.
+    # ИИ сам решает какой альтернативный путь выбрать из доступных инструментов.
     _adaptive_block = (
-        "\n\n🔧 РАБОТАЙ С ТЕМ ЧТО ЕСТЬ — АДАПТИВНЫЕ РЕШЕНИЯ:\n"
+        "\n\n🔧 РАБОТАЙ С ТЕМ ЧТО ЕСТЬ — ПРИНЦИПЫ АДАПТАЦИИ:\n"
 
-        # Email лимит
-        "📧 send_outreach_email вернул «лимит исчерпан» или «daily limit»:\n"
-        "  → НЕ пытайся снова. Сразу: find_and_message_relevant_users (внутри платформы)\n"
-        + (
-            "  → ИЛИ: create_post + publish_to_telegram (охват аудитории без email)\n"
-            if (_agent_has_tg or _user_tg_ch) else
-            "  → ИЛИ: create_post + send_message_to_user('Контент готов, опубликуй в своём канале')\n"
-        )
-        + "  → ИЛИ: DELEGATE[другой агент с email]: отправь эти контакты — список: ...\n"
-        + "  → ИЛИ: schedule_background_task('завтра отправить письма [список]') — запланируй на завтра.\n"
+        "1️⃣ Инструмент вернул ошибку / лимит / «not found» → НЕ повторяй.\n"
+        "   Выбери альтернативу из каталога ИНСТРУМЕНТЫ. Если нет аналога → DELEGATE[коллега с нужной интеграцией].\n\n"
 
-        # create_post / publish требует канал
-        "📢 create_post или publish-инструмент вернул ошибку (нет канала / нет получателя):\n"
-        "  → Сохрани контент через save_note('Контент готов: [текст]')\n"
-        "  → Сообщи пользователю через send_message_to_user: 'Контент готов — скажи куда публиковать'\n"
-        "  → ИЛИ: DELEGATE[коллега с Telegram-ботом]: опубликуй этот контент: [текст]\n"
+        "2️⃣ Ресурс исчерпан (контакты, лимит API, quota) → переключись на другой канал.\n"
+        "   Не жди — сразу используй то что ДОСТУПНО прямо сейчас.\n\n"
 
-        # run_agent_action — нет ключей / авторизация (только если есть скрипт)
-        + (
-            "⚙️ run_agent_action вернул «no token» / «не настроен» / «ошибка авторизации»:\n"
-            "  → Используй web_search или research_topic для той же задачи\n"
-            "  → Сообщи пользователю: 'Нужен [ключ] для [действия] — подключи в настройках агента'\n"
-            "  → НЕ пытайся снова тот же action без ключа.\n"
-            if python_code and python_code.strip() else ''
-        )
+        "3️⃣ Нулевой результат поиска → перефразируй (другие ключевые слова, EN, меньше фильтров).\n"
+        "   Если 2 попытки пустые → смени подход: другой инструмент, другая аудитория/площадка.\n\n"
+
+        "4️⃣ Нет интеграции / ключа → web_search или research_topic как fallback.\n"
+        "   Сообщи пользователю что нужно подключить для полного функционала.\n\n"
+
+        "5️⃣ Застрял на задаче → DELEGATE[коллега]: конкретная задача + данные.\n"
+        "   Формат: DELEGATE[ИМЯ]: задача с контекстом (email/текст/query/ссылки).\n\n"
+
+        "6️⃣ Цель на 85%+ → финальный рывок, не новые кампании.\n"
+        "   Закрой точечно: проверь ответы, follow-up тёплым контактам.\n"
+        "   update_goal_progress только при подтверждённом результате.\n\n"
 
         # AmoCRM — действия с контактами и сделками (только если CRM подключена)
         + (
             "📋 AmoCRM — доступные действия через run_agent_action:\n"
-            "  → create_contact(name, email, phone) — создать контакт в AmoCRM\n"
-            "  → search_contacts(query) — поиск контактов по имени/email/телефону\n"
+            "  → create_contact(name, email, phone) — создать контакт\n"
+            "  → search_contacts(query) — поиск контактов\n"
             "  → get_contact(id) — получить контакт с привязанными сделками\n"
             "  → create_lead(name, price) — создать сделку\n"
             "  → link_contact_to_lead(lead_id, contact_id) — привязать контакт к сделке\n"
-            "  → add_note(entity_type, entity_id, text) — добавить примечание к контакту/сделке\n"
-            "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n"
+            "  → add_note(entity_type, entity_id, text) — примечание к контакту/сделке\n"
+            "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n\n"
             if 'crm' in _caps_cats else ''
         )
 
-        # check_emails — нет IMAP (показываем только если email в капсах, но без IMAP)
-        + "📬 check_emails недоступен (нет IMAP у этого агента):\n"
-        "  → Сразу DELEGATE[агент с Gmail]: проверь входящие по [цели]\n"
-        "  → НЕ пытайся вызвать check_emails самостоятельно если IMAP не подключён.\n"
-
-        # web_search — нет результатов / пустой ответ
-        "🔍 web_search вернул пустой результат или 'не найдено':\n"
-        "  → Перефразируй запрос: другие ключевые слова, меньше уточнений, другой язык (EN)\n"
-        "  → ИЛИ: используй research_topic — LLM-анализ без поиска\n"
-        "  → ИЛИ: смени площадку (site:habr.com, site:github.com, site:dev.to)\n"
-
-        # GitHub — 0 результатов (только если есть скрипт с github)
+        # GitHub qualifiers (только если есть скрипт с github)
         + (
-            "🐙 run_agent_action(search_users) вернул пустой список:\n"
-            "  → ПРИЧИНА: в query нет GitHub-квалификаторов. Используй: language:X followers:>N repos:>N location:X\n"
-            "  → ❌ Неправильно: 'AI testing developers' → Правильно: 'language:python repos:>3'\n"
-            "  → Смени query и page → если page 1 пустой, НЕ пробуй page 2 с тем же query.\n"
+            "🐙 GitHub search: используй квалификаторы (language:X followers:>N repos:>N location:X).\n"
+            "  ❌ Неправильно: 'AI testing developers' → ✅ Правильно: 'language:python repos:>3'\n"
+            "  Пустой page 1 → смени query, НЕ пробуй page 2 с тем же запросом.\n\n"
             if python_code and 'github' in (python_code or '').lower() else ''
         )
-
-        # Инструмент не существует / название неверное
-        + "❗ Инструмент вернул 'function not found' / 'tool does not exist':\n"
-        "  → Название неверное — сверься с каталогом инструментов выше и выбери ближайший аналог.\n"
-        "  Все доступные инструменты перечислены в разделе ИНСТРУМЕНТЫ.\n"
-
-        # delegate_task — нет подходящего исполнителя
-        "🤝 ДЕЛЕГИРОВАНИЕ КОГДА ЗАСТРЯЛ:\n"
-        "  → Не можешь отправить email? → DELEGATE[агент с Email/Gmail]: отправь письмо [кому] [текст]\n"
-        "  → Не можешь опубликовать пост? → DELEGATE[агент с Telegram]: опубликуй [текст]\n"
-        "  → Нет GitHub? → DELEGATE[агент с GitHub]: поиск людей, анализ репо, создание issue\n"
-        "  → Нужен контент по исследованию? → DELEGATE[коллега]: исследуй [тему] и создай пост с выводами\n"
-        "  → Формат делегирования: DELEGATE[ИМЯ]: конкретная задача с данными (email/текст/query)\n"
-
-        # Цель застряла на высоком % (85-99%)
-        "🎯 Цель на 85%+ но не завершена — финальный рывок:\n"
-        "  → Не нужны НОВЫЕ кампании. Нужно закрыть 1-2 конкретных человека.\n"
-        "  → Шаги: check_emails (кто ответил, но не конвертировался?) → negotiate_by_email (тёплые)\n"
-        "  → ИЛИ: list_email_contacts → find_relevant_contacts_for_task (ещё не охваченные)\n"
-        "  → ИЛИ: send_follow_up_email (тем кто не ответил > 3 дня назад)\n"
-        "  → update_goal_progress когда ФАКТ: человек ответил/зарегистрировался/подтвердил интерес.\n"
     )
 
     # ── Свежие данные интеграций (Метрика, GitHub, RSS и т.д.) ──────────────
@@ -8067,148 +8027,100 @@ class AnchorEngine:
     def _compute_state_directives(goals: list, data: dict, profiles: list) -> list:
         """Universal data-driven state machine.
 
-        Определяет КАНАЛ (email/telegram/github/rss/crm/marketplace/etc.)
-        и подбирает стратегию под конкретные capabilities агентов.
-        Работает для ВСЕХ 13+ интеграций одинаково.
+        Capability-first: определяет директивы на основе РЕАЛЬНОГО состояния БД
+        и ДОСТУПНЫХ интеграций агентов, а не по ключевым словам в цели.
+
+        Координатор LLM получает:
+        - Профили агентов (их интеграции)
+        - Стратегическую карту (что пробовали, эмпирика)
+        - От этой функции: ФАКТЫ о ресурсах (email pipeline, каналы)
+        и сам решает как скомбинировать цели с каналами.
 
         Возвращает: [{'goal': str, 'tool': str, 'task': str, 'agent_domain': str, 'reason': str}]
         """
         directives = []
 
-        # ── Universal state extraction ──
-        contacts_list = data.get('known_contacts', [])
-        n_contacts = data.get('n_total_email_contacts') or len(contacts_list)
+        # ── Data-driven state extraction ──
+        n_contacts = data.get('n_total_email_contacts') or len(data.get('known_contacts', []))
         already_sent = set(data.get('already_sent_emails', []))
         unsent_from_data = data.get('unsent_contacts', [])
-        email_campaigns = data.get('email_campaigns', [])
         total_sent = data.get('total_emails_sent', 0)
-        pending_replies = data.get('pending_replies', [])
+        email_campaigns = data.get('email_campaigns', [])
         failed_tools = data.get('failed_tools', {})
-        per_history = data.get('per_agent_history', {})
-        recent_txt = ' '.join(data.get('recent_actions', [])).lower()
+        _sent_today = data.get('emails_sent_today', 0)
+        _daily_limit = data.get('email_daily_limit', 50)
 
-        # ── Degraded agents ──
-        degraded_agents = set()
-        for ag_name, hist in per_history.items():
-            _r2 = list(hist)[-2:]
-            if sum(1 for h in _r2 if 'технические трудности' in h.lower() or 'не успел' in h.lower()) >= 2:
-                degraded_agents.add(ag_name)
-
-        # ── Agent domain map (extended for ALL integrations) ──
-        _domain_agents: dict = {
-            'email': [], 'rss': [], 'github': [], 'research': [],
-            'telegram': [], 'discord': [], 'crm': [], 'marketplace': [],
-            'jira': [], 'notion': [], 'sheets': [], 'crypto': [],
-            'alpha': [], 'any': [],
-        }
-        for p in profiles:
-            caps_str = ' '.join(c.lower() for c in p.get('caps', []))
-            _name = p.get('name', '')
-            if any(w in caps_str for w in ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru', 'resend')):
-                _domain_agents['email'].append(_name)
-            if any(w in caps_str for w in ('rss', 'feed', 'лент', 'newsapi', 'news_api')):
-                _domain_agents['rss'].append(_name)
-            if any(w in caps_str for w in ('github', 'gitlab')):
-                _domain_agents['github'].append(_name)
-            if any(w in caps_str for w in ('alpha_vantage', 'alphavantage')):
-                _domain_agents['alpha'].append(_name)
-                _domain_agents['research'].append(_name)
-            if any(w in caps_str for w in ('telegram_channel', 'tg_channel', 'publish_telegram')):
-                _domain_agents['telegram'].append(_name)
-            if any(w in caps_str for w in ('discord', 'discord_webhook')):
-                _domain_agents['discord'].append(_name)
-            if any(w in caps_str for w in ('amocrm', 'hubspot', 'bitrix', 'crm')):
-                _domain_agents['crm'].append(_name)
-            if any(w in caps_str for w in ('ozon', 'wildberries', 'wb_api', 'shopify', 'marketplace')):
-                _domain_agents['marketplace'].append(_name)
-            if any(w in caps_str for w in ('jira', 'trello')):
-                _domain_agents['jira'].append(_name)
-            if any(w in caps_str for w in ('notion',)):
-                _domain_agents['notion'].append(_name)
-            if any(w in caps_str for w in ('gsheets', 'google_sheets', 'spreadsheet')):
-                _domain_agents['sheets'].append(_name)
-            if any(w in caps_str for w in ('binance', 'bybit', 'crypto_exchange')):
-                _domain_agents['crypto'].append(_name)
-            _domain_agents['any'].append(_name)
-
-        def _agent_for(domain: str) -> str:
-            return (_domain_agents.get(domain) or _domain_agents['any'] or [''])[0]
-
-        def _is_tool_failed(tool: str) -> bool:
-            return failed_tools.get(tool, 0) >= 2
-
-        # ══════════════════════════════════════════════════════════
-        #  CHANNEL DETECTION: keywords → integration channel
-        #  Определяет какой КАНАЛ нужен цели
-        # ══════════════════════════════════════════════════════════
-        _CHANNEL_MAP = [
-            # (keywords, channel, primary_tools, search_tool, domain)
-            (('рассылк', 'outreach', 'email', 'письм', 'e-mail', 'рекрутинг', 'найм', 'наём'),
-             'email', ['send_outreach_email', 'check_emails', 'reply_to_outreach_email'], 'find_relevant_contacts_for_task', 'email'),
-            (('github', 'gitlab', 'open-source', 'open source', 'репозитор', 'pull request', 'issue'),
-             'github', ['run_agent_action'], 'run_agent_action', 'github'),
-            (('telegram', 'тг канал', 'tg', 'телеграм'),
-             'telegram', ['publish_to_telegram', 'create_post'], 'research_topic', 'telegram'),
-            (('discord', 'дискорд'),
-             'discord', ['publish_to_discord', 'create_post'], 'research_topic', 'discord'),
-            (('crm', 'воронк', 'pipeline', 'amocrm', 'hubspot', 'bitrix'),
-             'crm', ['run_agent_action'], 'run_agent_action', 'crm'),
-            (('маркетплейс', 'ozon', 'озон', 'wildberries', 'вайлдберриз', 'wb', 'shopify', 'товар', 'склад', 'заказ'),
-             'marketplace', ['run_agent_action'], 'run_agent_action', 'marketplace'),
-            (('jira', 'trello', 'спринт', 'бэклог', 'канбан', 'agile'),
-             'jira', ['run_agent_action'], 'run_agent_action', 'jira'),
-            (('notion', 'вики', 'база знаний', 'knowledge base'),
-             'notion', ['run_agent_action'], 'run_agent_action', 'notion'),
-            (('таблиц', 'google sheets', 'excel', 'gsheets', 'отчёт по данным'),
-             'sheets', ['run_agent_action'], 'run_agent_action', 'sheets'),
-            (('binance', 'bybit', 'крипто торговл', 'криптобирж'),
-             'crypto', ['run_agent_action', 'get_stock_price'], 'web_search', 'crypto'),
-            (('акци', 'котировк', 'инвестиц', 'портфел', 'фондов', 'нефт', 'oil', 'stock', 'forex'),
-             'alpha', ['get_stock_price', 'web_search'], 'web_search', 'alpha'),
-            (('rss', 'лент', 'фид', 'news feed'),
-             'rss', ['run_agent_action', 'get_news_trends'], 'get_news_trends', 'rss'),
-        ]
-
-        # ── Email pipeline state (computed once) ──
         has_unsent = len(unsent_from_data) > 0
         has_active_campaign = any('отправлено' in ec or 'active' in ec.lower() for ec in email_campaigns)
         has_campaign_replies = has_active_campaign and any(
             'ответов=' in ec and 'ответов=0' not in ec for ec in email_campaigns
         )
-        has_github = bool(_domain_agents.get('github'))
+        _email_limit_exhausted = _sent_today >= _daily_limit
         _status_counts_c = data.get('status_counts', {})
         _n_sendable = _status_counts_c.get('new', 0) + _status_counts_c.get('potential', 0) + _status_counts_c.get('active', 0)
         contacts_exhausted = (
             n_contacts > 0 and not has_unsent
             and (_n_sendable == 0 or len(already_sent) >= max(1, n_contacts) * 0.85)
         )
-        # Daily email limit awareness
-        _sent_today = data.get('emails_sent_today', 0)
-        _daily_limit = data.get('email_daily_limit', 50)
-        _email_limit_exhausted = _sent_today >= _daily_limit
 
-        # ── Broader need keywords ──
-        _OUTREACH_KW = (
-            'пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор',
-            'участник', 'лид', 'продаж', 'партнёр', 'b2b', 'сделк', 'переговор',
-            'разработчик', 'developer', 'кандидат', 'привлеч',
-            'продвижен', 'промо', 'реклам', 'маркетинг',
-        )
-        _RESEARCH_KW = (
-            'рынок', 'биржа', 'финанс', 'инвест',
-            'новост', 'мониторинг', 'тренды', 'медиа',
-            'пресс', 'обзор', 'аналитик', 'исследован', 'дайджест',
-        )
-        _CONTENT_KW = ('контент', 'smm', 'пост', 'публикац', 'блог')
+        def _is_tool_failed(tool: str) -> bool:
+            return failed_tools.get(tool, 0) >= 2
+
+        # ── Capability detection from actual agent profiles ──
+        _DOMAIN_SIGNALS = {
+            'email': ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru', 'resend'),
+            'rss': ('rss', 'feed', 'лент', 'newsapi', 'news_api'),
+            'github': ('github', 'gitlab'),
+            'alpha': ('alpha_vantage', 'alphavantage'),
+            'telegram': ('telegram_channel', 'tg_channel', 'publish_telegram'),
+            'discord': ('discord', 'discord_webhook'),
+            'crm': ('amocrm', 'hubspot', 'bitrix', 'crm'),
+            'marketplace': ('ozon', 'wildberries', 'wb_api', 'shopify', 'marketplace'),
+            'jira': ('jira', 'trello'),
+            'notion': ('notion',),
+            'sheets': ('gsheets', 'google_sheets', 'spreadsheet'),
+            'crypto': ('binance', 'bybit', 'crypto_exchange'),
+        }
+        _available_domains: dict = {}
+        for p in profiles:
+            caps_str = ' '.join(c.lower() for c in p.get('caps', []))
+            _name = p.get('name', '')
+            for domain, signals in _DOMAIN_SIGNALS.items():
+                if any(w in caps_str for w in signals):
+                    _available_domains.setdefault(domain, []).append(_name)
+        _channels_list = sorted(_available_domains.keys())
+        _channels_summary = ', '.join(_channels_list) if _channels_list else 'встроенные (research, web_search, tasks)'
+
+        # ── Email pipeline state (data-driven, goal-agnostic) ──
+        _email_fact = ''
+        _email_priority_tool = 'research_topic'
+        if _available_domains.get('email'):
+            if has_campaign_replies:
+                _email_fact = 'есть непрочитанные ответы — приоритет: ответить'
+                _email_priority_tool = 'reply_to_outreach_email'
+            elif _email_limit_exhausted:
+                _email_fact = f'дневной лимит исчерпан ({_sent_today}/{_daily_limit}) — переключись на другие каналы'
+            elif has_unsent:
+                _email_fact = f'{len(unsent_from_data)} контактов без писем'
+                _email_priority_tool = 'send_outreach_email'
+            elif contacts_exhausted:
+                _email_fact = f'база исчерпана ({n_contacts} конт., {len(already_sent)} отправлено) — ищи новые или смени канал'
+                _email_priority_tool = 'find_relevant_contacts_for_task'
+            elif n_contacts == 0:
+                _email_fact = 'контактов нет — сначала найди'
+                _email_priority_tool = 'find_relevant_contacts_for_task'
+            elif total_sent == 0:
+                _email_fact = f'{n_contacts} контактов, 0 отправлено'
+                _email_priority_tool = 'send_outreach_email'
+            else:
+                _email_fact = f'рассылка: {int(total_sent)} отправлено из {n_contacts}'
+                _email_priority_tool = 'send_outreach_email'
 
         # ══════════════════════════════════════════════════════════
-        #  PROCESS EACH GOAL
+        #  PROCESS EACH GOAL — data + capabilities, not keywords
         # ══════════════════════════════════════════════════════════
         for g in goals[:5]:
             title = g.get('title', '')
-            title_l = title.lower()
-            desc_l = (g.get('description', '') or '').lower()
-            full_l = title_l + ' ' + desc_l
             progress = g.get('progress', 0)
             mc = g.get('metric_current', 0) or 0
             mt = g.get('metric_target') or 0
@@ -8227,443 +8139,29 @@ class AnchorEngine:
                 })
                 continue
 
-            # ── STEP 1: Detect SPECIFIC CHANNEL from goal keywords ──
-            detected_channel = None
-            channel_tools = None
-            channel_search = None
-            channel_domain = None
-            for _kws, _ch, _tools, _search, _dom in _CHANNEL_MAP:
-                if any(w in full_l for w in _kws):
-                    detected_channel = _ch
-                    channel_tools = _tools
-                    channel_search = _search
-                    channel_domain = _dom
-                    break
+            # ── Build situation context from FACTS ──
+            _facts = []
+            if _email_fact:
+                _facts.append(f'email: {_email_fact}')
+            _facts.append(f'каналы: {_channels_summary}')
 
-            # ── STEP 2: If specific channel detected → use channel-specific strategy ──
-            if detected_channel:
-                _ch_agent = _agent_for(channel_domain)
-                _has_ch_agent = bool(_domain_agents.get(channel_domain))
+            _reason = '; '.join(_facts)
 
-                # ═══ EMAIL CHANNEL (full pipeline with contacts/campaigns) ═══
-                if detected_channel == 'email':
-                    if has_campaign_replies:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'reply_to_outreach_email',
-                            'task': 'Есть ответы на письма. check_emails → reply_to_outreach_email.',
-                            'reason': 'есть ответы на письма',
-                        })
-                    elif _email_limit_exhausted:
-                        # Лимит исчерпан — НЕ назначаем send_outreach_email
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'research_topic',
-                            'task': (
-                                f'Дневной лимит email исчерпан ({_sent_today}/{_daily_limit}). '
-                                f'НЕ отправляй письма. ПЕРЕКЛЮЧИСЬ на другие каналы: '
-                                f'GitHub (search_repos, create_issue, comment_on_issue), '
-                                f'контент (create_post → publish_to_telegram), '
-                                f'исследование + ДЕЙСТВИЕ (web_search → save_note со стратегией или create_post). '
-                                f'Также: find_relevant_contacts_for_task → save_email_contact (на завтра).'
-                            ),
-                            'reason': f'email лимит исчерпан ({_sent_today}/{_daily_limit})',
-                        })
-                    elif has_unsent:
-                        _names = ', '.join(c.split('<')[0].strip() for c in unsent_from_data[:3])
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'send_outreach_email',
-                            'task': (
-                                f'{len(unsent_from_data)} контактов БЕЗ писем: {_names}...\n'
-                                f'send_outreach_email(goal="{title[:50]}", limit={min(len(unsent_from_data), 5)})'
-                            ),
-                            'reason': f'{len(unsent_from_data)} несотправленных',
-                        })
-                    elif contacts_exhausted and has_github:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'github',
-                            'tool': 'run_agent_action',
-                            'task': (
-                                f'БАЗА ИСЧЕРПАНА ({n_contacts}). '
-                                f'run_agent_action(search_users) → save_email_contact → send_outreach_email.'
-                            ),
-                            'reason': 'база исчерпана, GitHub-поиск',
-                        })
-                    elif contacts_exhausted:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'find_relevant_contacts_for_task',
-                            'task': f'БАЗА ИСЧЕРПАНА ({n_contacts}). find_relevant_contacts_for_task → save_email_contact.',
-                            'reason': 'база исчерпана',
-                        })
-                    elif n_contacts == 0:
-                        tool = 'run_agent_action' if has_github else 'find_relevant_contacts_for_task'
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any', 'tool': tool,
-                            'task': f'Найди контакты для «{title}» → save_email_contact → send_outreach_email.',
-                            'reason': 'нет контактов',
-                        })
-                    elif total_sent == 0:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'send_outreach_email',
-                            'task': f'{n_contacts} контактов, 0 отправлено. send_outreach_email(goal="{title[:50]}").',
-                            'reason': f'{n_contacts} контактов, 0 отправлено',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'email',
-                            'tool': 'send_outreach_email',
-                            'task': f'Продолжи рассылку для «{title}». Отправлено: {int(total_sent)}, прогресс: {int(mc)}/{int(mt) or "?"}.',
-                            'reason': 'продолжаем outreach',
-                        })
-                    continue
+            # Smart fallback tool: prefer email-priority if available, else research
+            _fb_tool = _email_priority_tool if _available_domains.get('email') else 'research_topic'
+            if _is_tool_failed(_fb_tool):
+                _fb_tool = 'web_search'
 
-                # ═══ GITHUB CHANNEL (code search, issues, PRs) ═══
-                if detected_channel == 'github':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'github',
-                            'tool': 'run_agent_action',
-                            'task': (
-                                f'Для цели «{title}»: используй GitHub API. '
-                                f'Действия: search_users/search_repos/create_issue/list_issues — выбери подходящее. '
-                                f'Результаты → save_note/save_email_contact → update_goal_progress.'
-                            ),
-                            'reason': 'GitHub интеграция доступна',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'web_search',
-                            'task': f'GitHub интеграция не подключена. web_search("site:github.com {title_l[:40]}") → save_note.',
-                            'reason': 'нет GitHub-агента, fallback web_search',
-                        })
-                    continue
-
-                # ═══ TELEGRAM CHANNEL (publish content) ═══
-                if detected_channel == 'telegram':
-                    directives.append({
-                        'goal': title, 'agent_domain': 'any',
-                        'tool': 'publish_to_telegram' if not _is_tool_failed('publish_to_telegram') else 'create_post',
-                        'task': (
-                            f'Для цели «{title}»: создай пост и опубликуй в Telegram-канал. '
-                            f'research_topic → create_post → publish_to_telegram. '
-                            f'Если канал не подключён → save_note с готовым текстом поста.'
-                        ),
-                        'reason': 'Telegram-канал',
-                    })
-                    continue
-
-                # ═══ DISCORD CHANNEL ═══
-                if detected_channel == 'discord':
-                    directives.append({
-                        'goal': title, 'agent_domain': 'any',
-                        'tool': 'publish_to_discord' if not _is_tool_failed('publish_to_discord') else 'create_post',
-                        'task': (
-                            f'Для цели «{title}»: создай пост → publish_to_discord. '
-                            f'Если webhook не подключён → save_note с готовым текстом.'
-                        ),
-                        'reason': 'Discord',
-                    })
-                    continue
-
-                # ═══ CRM CHANNEL (AmoCRM/HubSpot/Bitrix) ═══
-                if detected_channel == 'crm':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'crm',
-                            'tool': 'run_agent_action',
-                            'task': (
-                                f'CRM для «{title}»: run_agent_action → '
-                                f'создай/обнови сделки, проверь воронку, обнови статусы. '
-                                f'Результат → save_note с отчётом → update_goal_progress.'
-                            ),
-                            'reason': 'CRM интеграция',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'save_note',
-                            'task': (
-                                f'CRM не подключена. '
-                                f'save_note для фиксации статусов сделок по «{title}».'
-                            ),
-                            'reason': 'нет CRM, fallback на задачи',
-                        })
-                    continue
-
-                # ═══ MARKETPLACE (Ozon/WB/Shopify) ═══
-                if detected_channel == 'marketplace':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'marketplace',
-                            'tool': 'run_agent_action',
-                            'task': (
-                                f'Маркетплейс для «{title}»: run_agent_action → '
-                                f'проверь остатки/заказы/карточки товаров, обнови цены/описания. '
-                                f'Результат → save_note → update_goal_progress.'
-                            ),
-                            'reason': 'маркетплейс интеграция',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'web_search',
-                            'task': f'Маркетплейс не подключён. web_search("{title_l[:40]} аналитика продаж") → save_note.',
-                            'reason': 'нет маркетплейс-агента',
-                        })
-                    continue
-
-                # ═══ JIRA/TRELLO (project management) ═══
-                if detected_channel == 'jira':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'jira',
-                            'tool': 'run_agent_action',
-                            'task': (
-                                f'Проект-менеджмент для «{title}»: run_agent_action → '
-                                f'создай задачи/тикеты, проверь спринт, обнови статусы.'
-                            ),
-                            'reason': 'Jira/Trello интеграция',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'save_note',
-                            'task': f'Jira не подключена. Используй save_note для трекинга задач по «{title}».',
-                            'reason': 'нет Jira, fallback',
-                        })
-                    continue
-
-                # ═══ NOTION (knowledge base) ═══
-                if detected_channel == 'notion':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'notion',
-                            'tool': 'run_agent_action',
-                            'task': f'Notion для «{title}»: run_agent_action → создай/обнови страницы в базе знаний.',
-                            'reason': 'Notion интеграция',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'save_note',
-                            'task': f'Notion не подключён. save_note для документации по «{title}».',
-                            'reason': 'нет Notion, fallback',
-                        })
-                    continue
-
-                # ═══ GOOGLE SHEETS (data/reports) ═══
-                if detected_channel == 'sheets':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'sheets',
-                            'tool': 'run_agent_action',
-                            'task': f'Google Sheets для «{title}»: run_agent_action → обнови таблицу данными/отчётом.',
-                            'reason': 'Google Sheets интеграция',
-                        })
-                    else:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': 'save_note',
-                            'task': f'Sheets не подключён. save_note с данными/отчётом по «{title}».',
-                            'reason': 'нет Sheets, fallback',
-                        })
-                    continue
-
-                # ═══ CRYPTO (Binance/Bybit trading) ═══
-                if detected_channel == 'crypto':
-                    if _has_ch_agent:
-                        directives.append({
-                            'goal': title, 'agent_domain': 'crypto',
-                            'tool': 'run_agent_action',
-                            'task': (
-                                f'Крипто для «{title}»: run_agent_action → '
-                                f'проверь баланс/позиции/ордера → save_note с отчётом.'
-                            ),
-                            'reason': 'криптобиржа интеграция',
-                        })
-                    else:
-                        _tool = 'get_stock_price' if not _is_tool_failed('get_stock_price') else 'web_search'
-                        directives.append({
-                            'goal': title, 'agent_domain': 'any',
-                            'tool': _tool,
-                            'task': f'Биржа не подключена. {_tool} для мониторинга крипто → save_note.',
-                            'reason': 'нет крипто-агента',
-                        })
-                    continue
-
-                # ═══ ALPHA VANTAGE (stocks/forex) ═══
-                if detected_channel == 'alpha':
-                    _tool = 'get_stock_price' if not _is_tool_failed('get_stock_price') else 'web_search'
-                    directives.append({
-                        'goal': title, 'agent_domain': 'research',
-                        'tool': _tool,
-                        'task': (
-                            f'Котировки для «{title}»: {_tool} → '
-                            f'save_note с аналитикой (цены, тренды, прогнозы) → update_goal_progress.'
-                        ),
-                        'reason': 'финансовый мониторинг',
-                    })
-                    continue
-
-                # ═══ RSS (news monitoring) ═══
-                if detected_channel == 'rss':
-                    _rss_a = _agent_for('rss')
-                    if _rss_a and not _is_tool_failed('run_agent_action'):
-                        tool = 'run_agent_action'
-                    elif not _is_tool_failed('get_news_trends'):
-                        tool = 'get_news_trends'
-                    else:
-                        tool = 'web_search'
-                    directives.append({
-                        'goal': title, 'agent_domain': 'rss',
-                        'tool': tool,
-                        'task': f'Мониторинг для «{title}»: {tool} → save_note с дайджестом → update_goal_progress.',
-                        'reason': 'RSS/новостной мониторинг',
-                    })
-                    continue
-
-            # ── STEP 3: No specific channel → detect NEED type ──
-            needs_outreach = any(w in full_l for w in _OUTREACH_KW)
-            needs_research = any(w in full_l for w in _RESEARCH_KW)
-            needs_content = any(w in full_l for w in _CONTENT_KW)
-
-            # ── OUTREACH (people-focused, channel-agnostic) ──
-            if needs_outreach:
-                # Email pipeline (responds→unsent→exhausted→bootstrap)
-                if has_campaign_replies:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'reply_to_outreach_email',
-                        'task': 'Есть ответы. check_emails → reply_to_outreach_email.',
-                        'reason': 'ответы на письма',
-                    })
-                elif has_unsent:
-                    _names = ', '.join(c.split('<')[0].strip() for c in unsent_from_data[:3])
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'send_outreach_email',
-                        'task': f'{len(unsent_from_data)} несотправленных: {_names}... send_outreach_email.',
-                        'reason': f'{len(unsent_from_data)} несотправленных',
-                    })
-                elif contacts_exhausted and has_github:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'github',
-                        'tool': 'run_agent_action',
-                        'task': f'БАЗА ИСЧЕРПАНА ({n_contacts}). run_agent_action(search_users) → save_email_contact.',
-                        'reason': 'база исчерпана, GitHub',
-                    })
-                elif contacts_exhausted:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'any',
-                        'tool': 'find_relevant_contacts_for_task',
-                        'task': f'БАЗА ИСЧЕРПАНА. find_relevant_contacts_for_task → save_email_contact.',
-                        'reason': 'база исчерпана',
-                    })
-                elif n_contacts == 0:
-                    _tried = {
-                        'find': any(w in recent_txt for w in ('find_relevant', 'save_email_contact', 'контакт')),
-                        'community': any(w in recent_txt for w in ('telegram', 'тг', 'group', 'reddit', 'форум')),
-                        'content': any(w in recent_txt for w in ('create_post', 'публикац', 'контент')),
-                    }
-                    if has_github and not _tried['find']:
-                        tool, task = 'run_agent_action', f'GitHub-поиск для «{title}» → save_email_contact.'
-                    elif not _tried['find']:
-                        tool, task = 'find_relevant_contacts_for_task', f'Найди контакты для «{title}».'
-                    elif not _tried['community']:
-                        tool, task = 'research_topic', f'Найди сообщества для «{title}» → save_note.'
-                    elif not _tried['content']:
-                        tool, task = 'create_post', f'Контент-магнит для «{title}» → publish_to_telegram.'
-                    else:
-                        tool, task = 'research_topic', f'Смена сегмента для «{title}»: другая аудитория.'
-                    directives.append({'goal': title, 'agent_domain': 'any', 'tool': tool, 'task': task, 'reason': 'нет контактов'})
-                elif total_sent == 0:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'send_outreach_email',
-                        'task': f'{n_contacts} контактов, 0 отправлено. send_outreach_email.',
-                        'reason': f'{n_contacts} контактов, 0 отправлено',
-                    })
-                else:
-                    directives.append({
-                        'goal': title, 'agent_domain': 'email',
-                        'tool': 'send_outreach_email',
-                        'task': f'Продолжи outreach для «{title}». {int(total_sent)} отправлено.',
-                        'reason': 'продолжаем outreach',
-                    })
-                continue
-
-            # ── RESEARCH ──
-            if needs_research:
-                _rss_a = _agent_for('rss') or _agent_for('research')
-                if _rss_a and not _is_tool_failed('run_agent_action'):
-                    tool = 'run_agent_action'
-                elif not _is_tool_failed('research_topic'):
-                    tool = 'research_topic'
-                else:
-                    tool = 'web_search'
-                directives.append({
-                    'goal': title, 'agent_domain': 'research',
-                    'tool': tool,
-                    'task': f'Исследуй «{title}» ({int(progress)}%): {tool} → save_note → update_goal_progress.',
-                    'reason': 'аналитика/мониторинг',
-                })
-                continue
-
-            # ── CONTENT ──
-            if needs_content:
-                directives.append({
-                    'goal': title, 'agent_domain': 'any',
-                    'tool': 'create_post',
-                    'task': f'Контент для «{title}»: research_topic → create_post → publish_to_telegram.',
-                    'reason': 'контент/публикация',
-                })
-                continue
-
-            # ── UNIVERSAL FALLBACK ──
-            # Вместо бездумного research → даём контекстную подсказку
-            _fb_tool = 'research_topic' if not _is_tool_failed('research_topic') else 'web_search'
-            # Определяем класс цели для осмысленного fallback
-            _goal_class = 'общий'
-            _goal_hint = f'{_fb_tool}("{title[:80]} — пошаговый план") → save_note → update_goal_progress.'
-            _GOAL_CLASS_MAP = [
-                (('недвижим', 'квартир', 'застройщик', 'новостройк', 'риелтор', 'ипотек', 'аренд'),
-                 'недвижимость',
-                 f'{_fb_tool}("маркетинг недвижимости — лидогенерация") → web_search("площадки для объявлений недвижимости") → save_note. '
-                 'Подумай: ЦИАН/Авито, показы, CRM/воронка, WhatsApp для клиентов.'),
-                (('ресторан', 'кафе', 'доставк', 'общепит', 'кухн', 'повар', 'рецепт', 'меню'),
-                 'общепит/HoReCa',
-                 f'{_fb_tool}("продвижение ресторана — каналы привлечения") → save_note. '
-                 'Подумай: Google Maps, Instagram, доставка (Яндекс.Еда/Delivery Club), отзывы.'),
-                (('фитнес', 'тренер', 'зал', 'психолог', 'коуч', 'репетитор', 'юрист', 'стоматолог', 'врач', 'клиник', 'салон'),
-                 'услуги',
-                 f'{_fb_tool}("привлечение клиентов в {title[:30]}") → save_note. '
-                 'Подумай: запись на приём (YClients/Calendly), отзывы (Google Maps/2GIS), WhatsApp/Telegram.'),
-                (('курс', 'школа', 'образован', 'обучен', 'вебинар', 'инфопродукт'),
-                 'EdTech',
-                 f'{_fb_tool}("продвижение онлайн-курса") → create_post → save_note. '
-                 'Подумай: Telegram-канал, воронка (лид-магнит → email), YouTube.'),
-                (('стартап', 'приложен', 'mvp', 'saas', 'сервис', 'платформ'),
-                 'стартап/tech',
-                 f'{_fb_tool}("growth hacking для стартапа") → web_search("Product Hunt launch checklist") → save_note. '
-                 'Подумай: landing page, AppSumo, Product Hunt, beta-тестеры.'),
-            ]
-            for _gc_kw, _gc_name, _gc_hint in _GOAL_CLASS_MAP:
-                if any(w in full_l for w in _gc_kw):
-                    _goal_class = _gc_name
-                    _goal_hint = _gc_hint
-                    break
             directives.append({
                 'goal': title, 'agent_domain': 'any',
                 'tool': _fb_tool,
                 'task': (
-                    f'Цель «{title}» ({int(progress)}%) — класс: {_goal_class}. '
-                    f'{_goal_hint}'
+                    f'Цель «{title}» ({int(progress)}%). '
+                    f'Доступные каналы: {_channels_summary}. '
+                    + (f'Email: {_email_fact}. ' if _email_fact else '')
+                    + f'Определи лучший подход через доступные каналы → конкретное действие → update_goal_progress.'
                 ),
-                'reason': f'универсальный подход ({_goal_class})',
+                'reason': _reason,
             })
 
         return directives
@@ -9459,84 +8957,17 @@ class AnchorEngine:
             else:
                 _intg_advisor_str = "\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ АГЕНТОВ]: нет подключённых\n"
 
-            # ── Строим per-goal блок: для каждой цели — её тематика и подходящие инструменты ──
+            # ── Строим per-goal блок: capability-driven вместо keyword-matching ──
+            # Координатор видит профили агентов (интеграции) + цели → сам решает как их связать.
+            # Мы лишь даём ФАКТЫ: какие каналы доступны и принцип выбора инструмента.
             _goal_blocks = []
-            _DOMAIN_TOOLS = {
-                'finance':  ('нефт', 'газ', 'биржа', 'акции', 'финанс', 'трейдинг', 'инвест', 'рынок', 'котировк', 'oil', 'stock', 'forex', 'крипто', 'crypto'),
-                'news':     ('новост', 'мониторинг', 'тренды', 'медиа', 'сми', 'пресс', 'обзор', 'аналитик'),
-                'dev':      ('разработ', 'программ', 'github', 'developer', 'код', 'приложен', 'репозитор'),
-                'people':   ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'аудитор', 'рекрутинг', 'нанять', 'участник'),
-                'content':  ('контент', 'smm', 'пост', 'публикац', 'канал', 'telegram', 'discord'),
-                'sales':    ('продаж', 'лид', 'партнёр', 'сделка', 'b2b', 'outreach'),
-                'realestate': (
-                    'недвижим', 'квартир', 'новостройк', 'застройщик', 'риелтор', 'риэлтор',
-                    'ипотек', 'жильё', 'жилье', 'дом ', 'домов', 'коттедж', 'аренд жиль',
-                    'показ квартир', 'циан', 'авито недвижим',
-                ),
-                'services': (
-                    'салон', 'клиник', 'стоматолог', 'врач', 'юрист', 'консультац',
-                    'ресторан', 'кафе', 'доставк', 'ремонт', 'установк', 'монтаж',
-                    'автосервис', 'химчистк', 'клининг', 'фотограф', 'дизайнер интерьер',
-                    'репетитор', 'психолог', 'коуч', 'тренер', 'фитнес',
-                ),
-                'ecommerce': (
-                    'магазин', 'товар', 'склад', 'wildberries', 'ozon', 'маркетплейс',
-                    'shopify', 'интернет-магазин', 'карточк товар',
-                ),
-                'edtech': (
-                    'онлайн-курс', 'вебинар', 'инфопродукт', 'школа ', 'образован',
-                    'обучающ', 'edtech', 'платформа обучен',
-                ),
-                'learning': (
-                    'изучить', 'выучить', 'научиться', 'курс', 'обучен', 'навык', 'книг',
-                    'читать', 'сертификат', 'урок', 'освоить', 'учёб', 'тренинг',
-                    'английск', 'язык', 'грамматик', 'словар', 'практик', 'профессию',
-                    'специальност', 'квалификац', 'диплом',
-                ),
-                'health':   (
-                    'спорт', 'тренировк', 'похудеть', 'здоровь', 'здоров', 'бег',
-                    'марафон', 'питание', 'диета', 'сон', 'медитац', 'фитнес', 'йога',
-                    'вес ', 'весу', 'весом', 'калори', 'бросить куриль', 'алкоголь',
-                    'давление', 'осанк', 'растяжк', 'восстановлен',
-                    'страва', 'strava', 'км ', 'пробежал', 'километр', 'пресс', 'тяга', 'workout',
-                    'лекарств', 'анализ крови', 'врач', 'медицин', 'самочувствие', 'поликлиника',
-                ),
-                'personal': (
-                    'привычк', 'хобби', 'творч', 'музыка', 'рисован',
-                    'дневник', 'саморазвит', 'мечт', 'личный проект',
-                    'отношени', 'семь', 'друзь', 'волонтёр', 'благотворит',
-                    'список покупок', 'покупки', 'переезд', 'найти жильё',
-                ),
-                'travel': (
-                    'путешеств', 'поездк', 'отпуск', 'отель', 'билет', 'авиабилет', 'жд билет',
-                    'виза', 'заграниц', 'тур', 'путёвка', 'маршрут',
-                    'перелёт', 'пыжки', ' страна ', 'город От', 'эмиграция', 'релокация',
-                    'aviasales', 'booking', 'аэропорт', 'багаж',
-                ),
-                'legal': (
-                    'юридическ', 'юрист', 'закон', 'налог', 'договор', 'суд', 'иск', 'право',
-                    'регулирование', 'лицензия', 'патент', 'комплайенс', 'декларация',
-                    'отчётность', 'офз', 'ндс', 'возврат налог', 'иП ', 'ооо ',
-                    'приказ фнс', 'выписка счёт', 'корпоратив',
-                ),
-                'startup': (
-                    'стартап', 'startup', 'mvp', 'приложение ', 'запустить ', 'продукт',
-                    'инвестор', 'финансировани', 'saas', 'питч', 'акселератор', 'грант',
-                    'пользователи 0', 'product market fit', 'валидация гипотез',
-                ),
-                'logistics': (
-                    'логистик', 'склад', 'доставк', 'отправк', 'посылка', 'трек',
-                    'сдэк', 'моясклад', 'остатки', 'зацвка', 'ведущий склад',
-                    'грузоперевозк', 'перевозчик', 'себестоимость', 'штрихкод',
-                ),
-            }
+
             # Извлекаем GitHub query-строки из истории агентов — чтобы ИИ не повторял те же запросы
             _used_github_queries: list = []
             for _pn_ghq, _hn_ghq in _per_agent_history.items():
                 for _entry_ghq in _hn_ghq:
                     _el = _entry_ghq.lower()
                     if 'run_agent_action' in _el and ('language:' in _el or 'search_users' in _el or 'github' in _el):
-                        # Вытаскиваем фрагмент с параметрами запроса
                         _snip = _entry_ghq[_entry_ghq.lower().find('language:'):_entry_ghq.lower().find('language:') + 80] if 'language:' in _el else \
                                 _entry_ghq[_entry_ghq.lower().find('github'):_entry_ghq.lower().find('github') + 80]
                         _snip = _snip.strip()[:80]
@@ -9548,70 +8979,15 @@ class AnchorEngine:
                 if _used_github_queries else ''
             )
 
-            _DOMAIN_TOOL_MAP = {
-                'finance':  'Используй: research_topic (основной!), get_news_trends, web_search. Если есть RSS с финансовой лентой — run_agent_action первым. НЕ email для анализа.',
-                'news':     'Используй: get_news_trends, web_search, research_topic, run_agent_action (RSS). НЕ email как основное.',
-                'dev':      (
-                    ('Если у агента есть GitHub API — run_agent_action(action="search_users", params={"query":"language:python repos:>3 followers:10..100"}) для поиска разработчиков. МЕНЯЙ query каждый цикл.'
-                     if 'git' in _all_connected_types else
-                     'GitHub API не подключён. Используй: web_search("разработчики [технология] open source") или find_relevant_contacts_for_task.')
-                    + ' Результат — самоценный: сохрани через save_note или save_email_contact. '
-                    'Если цель подразумевает outreach — продолжи цепочку send_outreach_email. '
-                    'Если цель аналитическая — сохрани находки, подготовь обзор через create_post.'
-                    + _github_dedup_note
-                ),
-                'people':   (
-                    ('Для поиска людей: у агента есть GitHub API → run_agent_action(action="search_users", params={"query":"<тема> repos:>2 followers:5..80"}).'
-                     if 'git' in _all_connected_types else
-                     'Для поиска людей: find_relevant_contacts_for_task или web_search("[профиль] contacts email").')
-                    + ' Найденных людей сохрани (save_email_contact или save_note). '
-                    'Дальнейший шаг зависит от цели: outreach, заметка, обзор, делегирование.'
-                    + _github_dedup_note
-                ),
-                'content':  'Используй: create_post, publish_to_telegram/discord, generate_image. research_topic для идей контента.',
-                'sales':    'Используй: find_relevant_contacts_for_task → save_email_contact. web_search для поиска лидов. Далее — send_outreach_email или create_post с кейсом.',
-                'realestate': (
-                    'Недвижимость: research_topic("где искать покупателей квартир/домов") → web_search("площадки объявлений недвижимости") → save_note. '
-                    'Ключевые каналы: ЦИАН/Авито (публикация), CRM (воронка), WhatsApp (переписка с клиентами), показы (календарь). '
-                    'Контент: create_post с планировками/ценами → publish_to_telegram. НЕ GitHub/RSS.'
-                ),
-                'services': (
-                    'Услуги/сервис: research_topic("продвижение [тип услуги] — каналы лидогенерации") → web_search → save_note. '
-                    'Ключевые каналы: Google Maps/2GIS (карточка + отзывы), запись онлайн (YClients/Calendly), WhatsApp. '
-                    'Контент: create_post (до/после, отзывы) → Telegram/Instagram. НЕ GitHub.'
-                ),
-                'ecommerce': (
-                    'E-commerce: run_agent_action (если есть WB/Ozon API) → аналитика продаж/остатков. '
-                    'Без API: web_search("оптимизация карточки товара [тип]") → save_note → update_goal_progress. '
-                    'Контент: create_post с товарами → publish_to_telegram.'
-                ),
-                'edtech': (
-                    'EdTech: research_topic("воронка продаж онлайн-курса") → web_search → save_note. '
-                    'Стратегия: лид-магнит (бесплатный урок) → email-воронка (send_outreach_email) → Telegram-канал. '
-                    'Контент: create_post → publish_to_telegram.'
-                ),
-                'learning': 'Используй: research_topic("[тема] best course / как освоить") → web_search → set_reminder("урок X до [дата]") → save_note(результат). НЕ email-рассылки.',
-                'health':   'Используй: research_topic("программа тренировок / план питания / как похудеть") → set_reminder("тренировка [время]") → save_note("результат") → update_goal_progress. Если есть Strava → run_agent_action("получить активность"). НЕ email-рассылки.',
-                'personal': 'Используй: research_topic("[цель] — с чего начать?") → web_search → save_note(прогресс) → update_goal_progress. НЕ email-рассылки если не нужен контакт.',
-                'travel':   'Путешествия: если есть Aviasales/Tutu → run_agent_action("поиск билетов") → save_note. web_search("отель [город] цены") → set_reminder("забронировать отель") → google_calendar("даты поездки"). Погода: run_agent_action(openweather). НЕ GitHub/CRM.',
-                'legal':    'Юридические: research_topic("закон [тема] 2025-2026") → web_search → save_note("КЛЮЧЕВОЕ") → set_reminder("дедлайн по документу"). Если есть RSS – мониторинг изменений в законодательстве. Google Calendar — напоминания по отчётности.',
-                'startup':  'Стартап: research_topic("рынок [ниша]") → web_search("конкуренты [продукт]") → save_note. Поиск инвесторов: find_relevant_contacts_for_task("инвестор [ниша]") → send_outreach_email. Лид-магнит: create_post → publish_to_telegram.',
-                'logistics': 'Логистика: если есть СДЭК/МойСклад/1С → run_agent_action("трекинг / остатки") → save_note. web_search("оптимизация [процесс]") → add_task. Если есть база данных → SQL-анализ остатков.',
-                'universal': 'Определи сам подход под цель: research_topic("[цель] — лучший способ") → web_search → save_note → update_goal_progress. Адаптируй инструменты под конкретную задачу.',
-            }
             for _g_plan in _goals[:5]:
-                _gt = (_g_plan.get('title') or '').lower()
-                _gd = (_g_plan.get('description') or '').lower()
-                _gfull = _gt + ' ' + _gd
-                _domain = 'universal'  # дефолт — безопасный, не навязывает outreach
-                for _dom, _kws in _DOMAIN_TOOLS.items():
-                    if any(w in _gfull for w in _kws):
-                        _domain = _dom
-                        break
+                _g_title = (_g_plan.get('title') or '')[:50]
+                _g_prog = _g_plan.get('progress', 0)
                 _goal_blocks.append(
-                    f"  Цель «{_g_plan['title'][:50]}» ({_g_plan.get('progress',0)}%) "
-                    f"→ домен: {_domain} → {_DOMAIN_TOOL_MAP[_domain]}"
+                    f"  Цель «{_g_title}» ({_g_prog}%) → "
+                    f"определи лучший подход из доступных каналов ({', '.join(sorted(_all_connected_types)) or 'встроенные'})"
                 )
+            if _github_dedup_note:
+                _goal_blocks.append(_github_dedup_note)
             _goal_domain_str = '\n'.join(_goal_blocks) if _goal_blocks else ''
 
             # ── Pre-computed State Machine: вычисляем директивы из реального состояния БД ──
@@ -10403,7 +9779,7 @@ class AnchorEngine:
                 + _known_dedup_str
                 + f"{_strategy_map_str}\n"
                 + f"{_situation_str}\n"
-                + (f"Типы инструментов по доменам целей:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
+                + (f"Цели и доступные каналы:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_goal_rotation_str}"
                 + f"{_anti_repeat_str}"
                 + f"{_monotony_str}"

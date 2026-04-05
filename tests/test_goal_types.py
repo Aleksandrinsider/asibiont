@@ -160,18 +160,17 @@ _csd = AnchorEngine._compute_state_directives
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g1_people_goal_github_agent_search():
-    """Цель «тестировщики» + GitHub-агент → директива run_agent_action."""
+    """Цель «тестировщики» + GitHub-агент → директива с упоминанием доступных каналов."""
     goals = [_goal("Найти 50 тестировщиков для ASI Biont", progress=10, mc=5, mt=50)]
     profiles = [_profiles_for("Кристина", ["GitHub API Token", "Gmail IMAP"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives, "Должна быть хотя бы одна директива"
-    tools = [d["tool"] for d in directives]
-    assert "run_agent_action" in tools, f"Ожидался run_agent_action, получили: {tools}"
-    # Задача должна содержать инструкцию о GitHub-поиске
-    task_texts = " ".join(d.get("task", "") for d in directives)
-    assert "search_users" in task_texts or "github" in task_texts.lower(), \
-        f"Задача должна упоминать search_users или github: {task_texts[:300]}"
+    # Capability-driven: task should mention available channels (email, github)
+    task_texts = " ".join(d.get("task", "") for d in directives).lower()
+    reason_texts = " ".join(d.get("reason", "") for d in directives).lower()
+    assert "email" in task_texts or "github" in task_texts or "email" in reason_texts, \
+        f"Задача должна упоминать доступные каналы: {task_texts[:300]}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -232,27 +231,28 @@ def test_g3b_news_goal_directive():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g4_content_goal_directive():
-    """Цель «контент, smm» → директива create_post (generate_marketing_content исключён из тулсета)."""
+    """Цель «контент, smm» → директива с доступными каналами (capability-driven)."""
     goals = [_goal("Создать контент-план SMM на месяц", progress=0)]
     profiles = [_profiles_for("Арина", ["Telegram API", "SMM контент"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
-    tools = [d["tool"] for d in directives]
-    assert "create_post" in tools or "generate_marketing_content" in tools, \
-        f"Контентная цель должна использовать create_post или generate_marketing_content: {tools}"
+    # Capability-driven: system provides universal directive, LLM coordinator decides tools
+    task_texts = " ".join(d.get("task", "") for d in directives).lower()
+    assert "telegram" in task_texts or "канал" in task_texts, \
+        f"Задача должна упоминать доступный канал telegram: {task_texts[:300]}"
 
 
 def test_g4b_smm_post_goal():
-    """Цель с keyword «публикация» + Telegram → telegram-директива."""
+    """Цель с keyword «публикация» + Telegram → task mentions telegram channel."""
     goals = [_goal("Публикация постов в Telegram-канал 5 раз в неделю", progress=10)]
     profiles = [_profiles_for("Арина", ["Telegram публикация", "контент"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
-    tools = [d["tool"] for d in directives]
-    allowed = {"generate_marketing_content", "publish_to_telegram", "create_post"}
-    assert any(t in allowed for t in tools), f"SMM цель: {tools}"
+    # Capability-driven: task should mention telegram as available channel
+    task_texts = " ".join(d.get("task", "") for d in directives).lower()
+    assert "telegram" in task_texts, f"SMM цель должна упоминать telegram: {task_texts[:300]}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -260,25 +260,27 @@ def test_g4b_smm_post_goal():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g5_dev_goal_github_directive():
-    """Цель с GitHub-keyword → директива run_agent_action."""
+    """Цель с GitHub-keyword → task mentions github as available channel."""
     goals = [_goal("Создать issue на GitHub для отслеживания багов", progress=30)]
     profiles = [_profiles_for("Дев", ["GitHub API Token"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
-    tools = [d["tool"] for d in directives]
-    assert "run_agent_action" in tools, f"Dev цель должна использовать run_agent_action: {tools}"
+    # Capability-driven: task should mention github as available channel
+    task_texts = " ".join(d.get("task", "") for d in directives).lower()
+    assert "github" in task_texts, f"Dev цель должна упоминать github: {task_texts[:300]}"
 
 
 def test_g5b_code_goal():
-    """Цель с GitHub keyword → run_agent_action."""
+    """Цель с GitHub keyword → task mentions github channel."""
     goals = [_goal("Проверить pull request в репозитории", progress=0)]
     profiles = [_profiles_for("Дев", ["GitHub API Token", "Python Script"])]
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
-    tools = [d["tool"] for d in directives]
-    assert "run_agent_action" in tools, f"Code цель: {tools}"
+    # Capability-driven: task should mention github as available channel
+    task_texts = " ".join(d.get("task", "") for d in directives).lower()
+    assert "github" in task_texts, f"Code цель должна упоминать github: {task_texts[:300]}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -320,15 +322,17 @@ def test_g6b_finance_goal_100pct_skipped():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g7_people_goal_no_email_agent_fallback():
-    """People goal без email/GitHub агента → find_relevant_contacts_for_task."""
+    """People goal без агентов → research_topic as universal fallback."""
     goals = [_goal("Набрать 100 тестировщиков", progress=5, mc=5, mt=100)]
     profiles = []  # нет агентов
     data = _base_data()
     directives = _csd(goals, data, profiles)
     assert directives
     tools = [d["tool"] for d in directives]
-    assert "find_relevant_contacts_for_task" in tools, \
-        f"Без email-агента должен быть fallback на find_relevant_contacts: {tools}"
+    # Without agents, universal fallback is research_topic or web_search
+    allowed = {"research_topic", "web_search"}
+    assert any(t in allowed for t in tools), \
+        f"Без агентов должен быть fallback на research/web_search: {tools}"
 
 
 def test_g7b_people_goal_rss_only_agent():
