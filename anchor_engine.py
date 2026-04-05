@@ -3528,11 +3528,24 @@ class AnchorEngine:
                 UserProfile.goal_autopilot_enabled == True,
             ).all()} if _pf_uids else set()
 
+            # Engagement check: пользователи которые отправили хотя бы 1 сообщение.
+            # Молчащие пользователи (0 messages) получают проактивные как спам → удаляют аккаунт.
+            _engaged_uids = {row[0] for row in session.query(Interaction.user_id).filter(
+                Interaction.user_id.in_(_pf_uids),
+                Interaction.message_type == 'user'
+            ).distinct().all()} if _pf_uids else set()
+
             eligible = []
             skipped_night = 0
             skipped_dnd = 0
+            skipped_silent = 0
 
             for u in users:
+                # Silent user check — skip users who never sent a message
+                if u.id not in _engaged_uids:
+                    skipped_silent += 1
+                    continue
+
                 # DND check
                 if u.do_not_disturb_until:
                     dnd = u.do_not_disturb_until
@@ -3575,7 +3588,7 @@ class AnchorEngine:
 
             logger.info(
                 f"[ANCHOR] Pre-filter: {len(users)} total → {len(eligible)} eligible "
-                f"(skipped: {skipped_night} night, {skipped_dnd} DND)"
+                f"(skipped: {skipped_night} night, {skipped_dnd} DND, {skipped_silent} silent)"
             )
         finally:
             session.close()
@@ -3861,6 +3874,14 @@ class AnchorEngine:
         except Exception as _stuck_err:
             logger.debug(f"[ANCHOR] Stuck log cleanup error: {_stuck_err}")
             session.rollback()
+
+        # ── Гард: не спамить пользователей которые ни разу не написали ──
+        # Если пользователь не отправил ни одного сообщения (только /start) —
+        # не генерировать и не доставлять проактивные. Welcome-сообщение от /start достаточно,
+        # дальнейшие проактивные сообщения воспринимаются как спам и ведут к удалению аккаунта.
+        if not last_user_msg:
+            logger.info(f"[ANCHOR] User {user_id}: ⛔ silent user (0 messages ever) — skip proactive scan & delivery")
+            return
 
         # 1. SCAN — обнаружить новые якоря
         new_anchors = await self._scan_anchors(user, session)
