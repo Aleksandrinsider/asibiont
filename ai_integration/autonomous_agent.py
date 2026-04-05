@@ -740,7 +740,7 @@ class HybridAutonomousAgent:
         data = {
             "model": chosen_model,
             "messages": messages,
-            "max_tokens": kwargs.pop("max_tokens", 1200),
+            "max_tokens": kwargs.pop("max_tokens", 1800),
             "temperature": kwargs.pop("temperature", 0.7),
             **kwargs
         }

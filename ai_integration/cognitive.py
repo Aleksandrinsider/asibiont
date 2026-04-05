@@ -612,8 +612,8 @@ class CognitiveEngine:
         # 6. Обрезаем ЕСЛИ ответ слишком длинный
         # Увеличиваем лимит если есть URL-ссылки (чтобы не обрезать их)
         has_urls = bool(re.search(r'https?://', text))
-        max_len = 1500 if has_urls else 800
-        cut_at = 1400 if has_urls else 700
+        max_len = 2500 if has_urls else 1800
+        cut_at = 2400 if has_urls else 1500
         if len(text) > max_len:
             cut = text[:cut_at]
             last_end = max(cut.rfind('.'), cut.rfind('!'), cut.rfind('?'))

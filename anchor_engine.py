@@ -2667,7 +2667,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         if _rules:
                             _rules_text = '\n'.join(f"  • {r}" for r in _rules[:15])
                             _user_rules_block = (
-                                "\n\n📋 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательно учитывай):\n"
+                                "\n\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ к выполнению при КАЖДОМ действии):\n"
                                 + _rules_text + '\n'
                             )
                     except Exception:
@@ -9802,7 +9802,7 @@ class AnchorEngine:
                 + f"{_do_not_contact_str}"
                 + _missing_intg_str_c
                 + _intg_advisor_str
-                + (f"Правила: {'; '.join(_user_rules_coord[:2])}\n" if _user_rules_coord else '')
+                + (f"📋 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательны для ВСЕХ агентов):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_coord[:10])) + '\n' if _user_rules_coord else '')
                 + (_check_emails_cooldown_note if _check_emails_cooldown_note else '')
                 + (
                     f"⚡ ОБЯЗАТЕЛЬНО: Есть {_email_sent} отправленных писем — назначь IMAP-агенту check_emails "
@@ -10833,8 +10833,8 @@ class AnchorEngine:
                         pass
                     # Короткая версия задачи для живого обращения (до 140 символов, по слову)
                     _task_short = _task_clean
-                    if len(_task_short) > 140:
-                        _task_short = _task_short[:140].rsplit(' ', 1)[0].rstrip('.,;:')
+                    if len(_task_short) > 300:
+                        _task_short = _task_short[:300].rsplit(' ', 1)[0].rstrip('.,;:')
                     # Убираем ведущий глагол-команду чтобы шаблон не дублировал его
                     import re as _re_verb
                     _task_body = _re_verb.sub(
@@ -11534,7 +11534,7 @@ class AnchorEngine:
                     + _dedup_hint
                     + _intg_live_block
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
-                    + (f"\n📌 Правила пользователя:\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:5])) + "\n" if _user_rules_ag else '')
+                    + (f"\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:10])) + "\n" if _user_rules_ag else '')
                           + _runtime_quality_hints
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\n📋 Люди, которых ты уже нашла и добавила в систему (это твоя прошлая работа, не новые находки):\n{_agent_contacts_block}\n"
