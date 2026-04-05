@@ -402,6 +402,24 @@ def _normalize_coordinator_assignment_by_capabilities(
             'внешние Telegram-чаты недоступны, задача переведена в выполнимый формат',
         )
 
+    # Telegram DM / личные сообщения — невозможно без userbot
+    _tg_dm_words = (
+        'написать @', 'отправить @', 'связаться через телеграм',
+        'dm ', 'личное сообщение', 'персональное предложение через telegram',
+        'написать администратору', 'предложение о партнёрстве через telegram',
+        'отправить предложение через telegram',
+    )
+    if any(w in task_l for w in _tg_platform_words) and any(w in task_l for w in _tg_dm_words):
+        return (
+            'send_outreach_email' if 'email' in cats else 'web_search',
+            (
+                'Отправить личное сообщение в Telegram НЕВОЗМОЖНО — у платформы нет userbot. '
+                + ('Найди email этого контакта через web_search и отправь письмо через send_outreach_email.' if 'email' in cats else
+                   'Найди email этого контакта через web_search и сохрани через save_note для дальнейшей работы.')
+            ),
+            'Telegram DM невозможен, переведено в email/web_search',
+        )
+
     return tool_norm, task_norm, ''
 
 
@@ -5333,7 +5351,7 @@ class AnchorEngine:
                         _first_tool = _hint_c.split(',')[0].strip() if _hint_c else ''
                         if _first_tool:
                             _can_tools_by_cat.append(f'{_cname} → {_first_tool}')
-                    _can_tools_by_cat.append('Всегда → web_search, research_topic, save_note, add_task, create_post')
+                    _can_tools_by_cat.append('Всегда → web_search, research_topic, save_note, add_task')
 
                     # Что НЕ подключено (для контекста рассуждений координатора)
                     _CAP_CANNOT_EXAMPLES: dict[str, str] = {
@@ -5356,9 +5374,12 @@ class AnchorEngine:
                         + (f"  Конкретные инструменты:\n    " + '\n    '.join(_can_tools_by_cat) + '\n' if _can_tools_by_cat else '')
                         + (f"  Интеграции: {', '.join(_CAP_CATEGORY_NAMES.get(c,c) for c in sorted(_cats_c))} — выбирай ту, которая лучше подходит для текущего шага.\n" if len(_cats_c) > 1 else '')
                         + (
-                            f"  Не подключено: {', '.join(_cannot_ctx)}\n"
-                            f"  → Задача через неподключённый канал не выполнится — агент сделает что сможет,\n"
-                            f"    но результата не будет. Подбирай задачу под реальные инструменты выше.\n"
+                            f"  ⛔ НЕ подключено (задачи через эти каналы НЕВЫПОЛНИМЫ):\n"
+                            f"    {', '.join(_cannot_ctx)}\n"
+                            f"  → НЕ поручай задачи через неподключённые каналы. Агент НЕ МОЖЕТ:\n"
+                            f"    отправить личное сообщение в Telegram, вступить в группу/чат,\n"
+                            f"    опубликовать в Telegram-канал или Discord без подключённой интеграции.\n"
+                            f"  → Если нужен Telegram/Discord — ищи контакт через EMAIL или web_search.\n"
                             if _cannot_ctx else ''
                         )
                     )
@@ -5850,7 +5871,12 @@ class AnchorEngine:
                             "Агент не должен знать что ты о нём думаешь — он должен знать что ДЕЛАТЬ.\n"
                             "  ШАГ 4. ЖИВАЯ РЕЧЬ: Нет канцеляризмов? «возьми на себя:», «нужно поработать над:», «займись:» — это бюрократия. "
                             "Пиши как коллега: «Разберись с...», «Проверь...», «Найди...»\n"
-                            "  ШАГ 5. ИМЕНА СОБСТВЕННЫЕ: ASI Biont, GitHub, Артём, Алексей — всегда с заглавной.\n\n"
+                            "  ШАГ 5. ИМЕНА СОБСТВЕННЫЕ: ASI Biont, GitHub, Артём, Алексей — всегда с заглавной.\n"
+                            "  ШАГ 6. ВЫПОЛНИМОСТЬ: Может ли агент РЕАЛЬНО выполнить это задание? "
+                            "Агент НЕ МОЖЕТ: отправить DM/личное сообщение в Telegram, "
+                            "вступить в группу/чат, опубликовать в канал без интеграции. "
+                            "Если задача требует Telegram-контакта — замени на: «найди email через web_search и отправь через send_outreach_email». "
+                            "DELEGATE другому агенту бесполезен если у ТОГО тоже нет нужной интеграции.\n\n"
                             "❌ ПРИМЕРЫ ПЛОХИХ ПОРУЧЕНИЙ:\n"
                             "  BAD: «Марк, есть задача — марк зациклен на поиске, нужно перевести его в режим создания ценности.» "
                             "← мета-комментарий. Правильно: «Марк, запусти web_search по dev.to, найди 3 автора с email.»\n"
