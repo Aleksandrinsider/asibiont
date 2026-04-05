@@ -18207,6 +18207,15 @@ class AnchorEngine:
                             f"НИКОГДА 'прочитал', 'заметил', 'подумал' — это мужские формы.\n"
                         )
 
+                    _BANNED_SUBJECT_WORDS = (
+                        "BANNED WORDS IN SUBJECT (will be auto-rejected if used):\n"
+                        "- Russian: тест, тестирование, платформа, платформы, сотрудничество, "
+                        "предложение о сотрудничестве, AI сотрудник, ASI Biont\n"
+                        "- English: test, testing, partnership opportunity, business opportunity, "
+                        "cooperation offer, AI employee, ASI Biont, platform\n"
+                        "Use SPECIFIC subject about THIS person's project/company instead.\n\n"
+                    )
+
                     compose_prompt = (
                         f"Write a cold outreach email for this specific person.\n\n"
                         f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n"
@@ -18217,6 +18226,7 @@ class AnchorEngine:
                         f"Research context about recipient: {context or 'none'}\n"
                         f"USE THE CONTEXT ABOVE to personalize the email! If context mentions specific "
                         f"projects, products, articles, or achievements — reference them in your opening.\n\n"
+                        f"{_BANNED_SUBJECT_WORDS}"
                         f"Language: {lang_hint} — write the ENTIRE email (subject AND body) in {lang_hint} only. "
                         f"Language was auto-detected from recipient signals (domain, name, context language). "
                         f"Do NOT mix languages.\n\n"
@@ -18293,10 +18303,56 @@ class AnchorEngine:
                             logger.info(f"[ANCHOR] Daily limit reached, stopping batch")
                             break
                         elif result and '⛔' in result:
-                            # Постоянная ошибка валидации (guard) — черновик не отправится никогда
+                            # ── RETRY: если guard отклонил тему/тело — перегенерируем с явным указанием ──
+                            _guard_reason = (result or '').replace('⛔', '').strip()[:200]
+                            _retry_key = f'{d_obj.id}:retry'
+                            if _retry_key not in _draft_failures:
+                                logger.info(f"[ANCHOR] Draft #{d_obj.id} guard fired, retrying: {_guard_reason[:100]}")
+                                _draft_failures.append(_retry_key)
+                                try:
+                                    _retry_prompt = (
+                                        compose_prompt +
+                                        f"\n\n⚠️ PREVIOUS ATTEMPT WAS REJECTED: {_guard_reason}\n"
+                                        f"FIX the issue and rewrite. Make subject SPECIFIC to recipient, "
+                                        f"do NOT use generic words. Include recipient name in body."
+                                    )
+                                    _retry_result = await api.deepseek_analyze(
+                                        prompt=_retry_prompt,
+                                        system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields.",
+                                        max_tokens=500,
+                                        temperature=0.8,
+                                    )
+                                    if _retry_result:
+                                        _rt = _retry_result.strip()
+                                        if '```' in _rt:
+                                            for _rp in _rt.split('```'):
+                                                _rp = _rp.strip()
+                                                if _rp.startswith('json'): _rp = _rp[4:].strip()
+                                                if _rp.startswith('{'): _rt = _rp; break
+                                        _rp2 = json.loads(_rt)
+                                        subject = _rp2.get('subject', '')
+                                        body = _rp2.get('body', '')
+                                        if subject and body:
+                                            result = await send_outreach_email(
+                                                campaign_id=campaign_id,
+                                                recipient_email=email,
+                                                recipient_name=name,
+                                                recipient_company=company or None,
+                                                recipient_context=context or None,
+                                                subject=subject, body=body,
+                                                user_id=user.telegram_id,
+                                                session=session, close_session=False,
+                                            )
+                                            if result and ('отправлено' in result.lower() or 'sent' in result.lower()):
+                                                sent_count += 1
+                                                logger.info(f"[ANCHOR] Draft #{d_obj.id} RETRY SUCCESS")
+                                                continue
+                                except Exception as _retry_err:
+                                    logger.warning(f"[ANCHOR] Draft #{d_obj.id} retry error: {_retry_err}")
+                            # Retry failed or already retried — mark permanently failed
                             d_obj.status = 'failed'
-                            _draft_failures.append(f'{d_obj.id}:guard')
-                            logger.info(f"[ANCHOR] Draft #{d_obj.id} permanently failed guard: {(result or '')[:120]}")
+                            _draft_failures.append(f'{d_obj.id}:guard:{_guard_reason[:60]}')
+                            logger.info(f"[ANCHOR] Draft #{d_obj.id} permanently failed guard: {_guard_reason[:120]}")
                             continue
                         elif result and ('resend api' in result.lower() or 'не настроен' in result.lower() or 'domain' in result.lower()):
                             # Постоянная ошибка конфигурации — прекращаем всю партию,
