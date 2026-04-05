@@ -16012,12 +16012,23 @@ async def save_email_contact(
             'fake.com', 'fake.ru', 'placeholder.com',
             'domain.com', 'email.com', 'yourdomain.com',
         }
+        # Домены сервисов — email не доставляется, нет смысла сохранять
+        _SERVICE_DOMAINS = {
+            'linkedin.com', 'users.noreply.github.com',
+            'reply.github.com', 'notifications.github.com',
+            'facebook.com', 'twitter.com', 'instagram.com',
+        }
         _email_domain = email_clean.split('@')[-1] if '@' in email_clean else ''
         if _email_domain in _FAKE_DOMAINS:
             return (
                 f"⛔ {email_clean} — это placeholder/фейковый адрес. "
                 "Сохраняй только РЕАЛЬНЫЕ email, найденные через поиск или входящие письма. "
                 "НЕ придумывай адреса из имён пользователей."
+            )
+        if _email_domain in _SERVICE_DOMAINS:
+            return (
+                f"⛔ {email_clean} — адрес сервиса {_email_domain}, email не доставляется. "
+                "Найди реальный рабочий email этого человека через web_search."
             )
 
         # Блокируем generic/корпоративные адреса

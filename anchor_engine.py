@@ -6268,7 +6268,7 @@ class AnchorEngine:
                     _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
                     # Приоритет: координаторское поручение (_coord_text) > task_hint > цель
                     if _coord_text and len(_coord_text) > 15 and _coord_text != f"{agent_name}, займись текущими задачами.":
-                        _ap_task_text = _smart_trunc(_coord_text, 200)
+                        _ap_task_text = _smart_trunc(_coord_text, 500)
                     elif _task_hint_human and _task_hint_human != 'займись активными целями':
                         _goal_prefix = _gl_titles_s[0][:40] if _gl_titles_s else ''
                         _ap_task_text = f"{_goal_prefix}: {_task_hint_human}" if _goal_prefix else _task_hint_human
@@ -6331,7 +6331,7 @@ class AnchorEngine:
                             _ack_role = (agent_data.get('job_title') or agent_data.get('specialization') or 'специалист')[:60]
                             _ack_prompt = (
                                 f"Ты — {_chosen_name}, {_ack_role}. "
-                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_smart_trunc(_coord_text, 200)}».\n"
+                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_smart_trunc(_coord_text, 400)}».\n"
                                 f"Напиши 1-2 предложения — ОТВЕТ в чате, как живой коллега.\n"
                                 f"Стиль: неформальный рабочий чат между коллегами. Ты — реальный человек, не бот.\n"
                                 f"От первого лица, {'по-женски' if _is_ack_fem else 'по-мужски'}. С характером, живо.\n"
