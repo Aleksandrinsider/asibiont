@@ -18906,7 +18906,7 @@ class AnchorEngine:
                 from models import UserAgent as _UA_da
                 _all_agents = session.query(_UA_da).filter(
                     _UA_da.author_id == user.id,
-                    _UA_da.status.in_(('active', 'draft')),
+                    _UA_da.status.in_(('active', 'draft', 'paused')),
                 ).all()
                 if _all_agents:
                     from ai_integration.autonomous_agent import _parse_agent_integrations

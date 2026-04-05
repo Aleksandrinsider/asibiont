@@ -1475,7 +1475,7 @@ class HybridAutonomousAgent:
                         _req_lower = _requested_agent_name.lower()
                         _candidates = _s_an.query(_UAAN).filter(
                             _UAAN.author_id == _db_uid,
-                            _UAAN.status.in_(('active', 'draft')),
+                            _UAAN.status.in_(('active', 'draft', 'paused')),
                         ).all()
                         for _ca in _candidates:
                             if (_ca.name or '').lower() == _req_lower:
