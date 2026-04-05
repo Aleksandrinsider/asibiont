@@ -3032,7 +3032,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "• Контент = инструмент, а не рутина. Каждый пост — под конкретную аудиторию с конкретным посылом.\n"
         "  Меняй формат: кейс → совет → статистика → вопрос → визуал (generate_image).\n"
         "• add_note/save_note = фиксация завершённого результата, не черновик.\n"
-        "• Нашёл email/контакт → save_email_contact НАПРЯМУЮ. НЕ save_note с email и НЕ delegate_task если инструмент доступен.\n"
+        "  ⛔ НЕ СОЗДАВАЙ ЗАМЕТКУ если:\n"
+        "    — промежуточный результат (ещё не доделано)\n"
+        "    — информация уже сохранена как задача, контакт или пост\n"
+        "    — нашёл email/контакт → save_email_contact НАПРЯМУЮ (не save_note)\n"
+        "    — результат поиска/исследования → ДЕЙСТВИЕ (create_post, send_outreach_email), не заметка\n"
+        "    — дублирует уже существующую заметку\n"
+        "  ✅ СОЗДАВАЙ ЗАМЕТКУ только если:\n"
+        "    — пользователь явно попросил ('запиши', 'в заметки')\n"
+        "    — готовый план/конспект/чеклист для пользователя\n"
+        "    — подборка ресурсов/ссылок которую нужно сохранить\n"
         "• После исследования → ДЕЙСТВИЕ: create_post (контент), save_email_contact (контакты), send_outreach_email (аутрич).\n"
         "• Ответы на письма — по контексту:\n"
         "   🟢 ИНТЕРЕС → ответь быстро + ссылка → negotiate → update_goal_progress(+1)\n"
@@ -11552,6 +11561,18 @@ class AnchorEngine:
                         _asi_assign_text,
                         flags=_re_post_inf.IGNORECASE,
                     )
+                # FIX: модальные слова требуют инфинитив — откатываем ошибочные замены
+                # "нужно сделай" → "нужно сделать", "чтобы найди" → "чтобы найти"
+                _IMP_TO_INF = {v.lower(): k for k, v in _POST_INF_IMP.items()}
+                _imp_alts = '|'.join(_re_post_inf.escape(v) for v in _POST_INF_IMP.values())
+                _modal_fix_pat = _re_post_inf.compile(
+                    rf'\b(нужно|чтобы|чтоб|можно|надо|стоит|необходимо|следует|пора)\s+({_imp_alts})\b',
+                    _re_post_inf.IGNORECASE,
+                )
+                _asi_assign_text = _modal_fix_pat.sub(
+                    lambda m: m.group(1) + ' ' + _IMP_TO_INF.get(m.group(2).lower(), m.group(2)),
+                    _asi_assign_text,
+                )
                 # Сохраняем живое поручение в чат
                 _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)
                 _loop_risk_step = bool(_assignment_health.get('stalled'))

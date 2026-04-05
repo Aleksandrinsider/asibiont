@@ -895,9 +895,9 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             Note.user_id == user.id,
             Note.created_at >= _today_start,
         ).count()
-        if _today_count >= 20:
+        if _today_count >= 10:
             logger.info(f"[SAVE_NOTE] Daily limit reached: {_today_count} notes today")
-            return "Достигнут дневной лимит заметок (20). Попробуй завтра."
+            return "Достигнут дневной лимит заметок (10). Попробуй завтра."
 
         note = Note(
             user_id=user.id,
@@ -1781,7 +1781,20 @@ async def delegate_task(
                 _base = _truncate_by_word(_base, 160)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
-                _msg = f'{_agent_name}, пожалуйста {_base}.'
+                # Detect if _base starts with a verb (imperative/infinitive) for natural phrasing
+                _first_w = (_base.split()[0] if _base else '').lower().rstrip('.,;:')
+                _verb_starts = {
+                    'найди', 'проверь', 'отправь', 'создай', 'напиши', 'собери',
+                    'подготовь', 'исследуй', 'поищи', 'сделай', 'проанализируй',
+                    'запусти', 'используй', 'опубликуй', 'обнови', 'свяжись', 'займись',
+                    'найти', 'проверить', 'отправить', 'создать', 'написать', 'собрать',
+                    'подготовить', 'исследовать', 'поискать', 'сделать', 'проанализировать',
+                    'запустить', 'использовать', 'опубликовать', 'обновить', 'связаться',
+                }
+                if _first_w in _verb_starts:
+                    _msg = f'{_agent_name}, пожалуйста, {_base}.'
+                else:
+                    _msg = f'{_agent_name}, есть задача — {_base}.'
                 return sanitize_live_team_chat_text(
                     _msg,
                     anchor_type='agent_delegation',
