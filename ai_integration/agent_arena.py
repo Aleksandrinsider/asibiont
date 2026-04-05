@@ -1334,6 +1334,15 @@ async def _discussion_wave(post_msg: dict):
     loop = asyncio.get_running_loop()
     all_agents = await loop.run_in_executor(None, _load_marketplace_agents)
     other_agents = [a for a in all_agents if a['id'] != poster_id]
+    # Фильтруем агентов без токенов — не даём комментировать бесплатно
+    from config import FREE_ACCESS_MODE as _fam_dw
+    if not _fam_dw:
+        from token_service import has_enough_tokens as _het_dw
+        other_agents = [
+            a for a in other_agents
+            if not a.get('_owner_telegram_id')
+            or _het_dw(a['_owner_telegram_id'], 'arena_agent_post')
+        ]
     if not other_agents:
         return  # некому комментировать — пропускаем
 
@@ -1366,6 +1375,10 @@ async def _discussion_wave(post_msg: dict):
         if len(existing_comments) >= 1 and poster_id.startswith('mkt_'):
             # Ищем автора поста среди агентов
             poster_agent = next((a for a in all_agents if a['id'] == poster_id), None)
+            # Проверяем токены автора перед заключением
+            if poster_agent and poster_agent.get('_owner_telegram_id'):
+                if not _fam_dw and not _het_dw(poster_agent['_owner_telegram_id'], 'arena_agent_post'):
+                    poster_agent = None  # нет токенов — не публикуем заключение
             if poster_agent:
                 await asyncio.sleep(random.uniform(10 * 60, 25 * 60))
                 try:
