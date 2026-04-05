@@ -10268,7 +10268,11 @@ class AnchorEngine:
                 "• Диверсификация: если 3 агента — они должны работать по РАЗНЫМ направлениям.\n"
                 "• Данные — для действий. Если данные собраны → ИСПОЛЬЗУЙ их, не ищи снова.\n"
                 "• DELEGATE: агент нашёл данные → передай другому для действия.\n"
-                "• Баланс: исследование-действие-проверка. Не застревай на одном этапе.\n\n"
+                "• Баланс: исследование-действие-проверка. Не застревай на одном этапе.\n"
+                "• ГИБКОСТЬ: если один подход не работает 2+ цикла — ПОЛНОСТЬЮ СМЕНИ стратегию.\n"
+                "  Примеры смены: email-outreach → контент-маркетинг → community → партнёрства → SEO → реклама.\n"
+                "• УНИВЕРСАЛЬНОСТЬ: ты управляешь ЛЮБЫМИ целями (бизнес, обучение, здоровье, творчество).\n"
+                "  Подбирай инструменты и подходы ПОД ЦЕЛЬ, а не шаблонно.\n\n"
 
                 "ИСПОЛЬЗУЙ ВСЕ ИНТЕГРАЦИИ АГЕНТА:\n"
                 "У каждого агента может быть несколько интеграций (email, GitHub, RSS, метрика, CRM, и т.д.).\n"
@@ -11431,12 +11435,12 @@ class AnchorEngine:
                 try:
                     from models import Task as _Task_c2
                     import datetime as _dt_c2
-                    # Cleanup: отменяем застрявшие in_progress И pending задачи агента старше 30 минут
+                    # Cleanup: отменяем застрявшие in_progress задачи агента старше 4 часов
                     try:
-                        _stuck_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                        _stuck_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
                         session.execute(
-                            text("UPDATE tasks SET status='cancelled', completion_notes='Прервано: новый цикл агента' "
-                                 "WHERE user_id=:uid AND source='agent' AND status IN ('in_progress','pending') "
+                            text("UPDATE tasks SET status='cancelled', completion_notes='Прервано: долгое бездействие' "
+                                 "WHERE user_id=:uid AND source='agent' AND status='in_progress' "
                                  "AND delegated_to_username=:ag AND created_at < :cutoff"),
                             {'uid': user.id, 'ag': _ag_name, 'cutoff': _stuck_cutoff}
                         )
@@ -12283,13 +12287,17 @@ class AnchorEngine:
                     )
 
                 if not _real_action_tools and not _is_hollow:
-                    # Агент не вызвал ни одного действующего tool → partial
-                    _task_status = 'in_progress'
-                    # Добавляем пометку для следующего цикла
-                    _prev_steps_context += (
-                        f"• {_ag_name}: ТОЛЬКО исследовал (tools: {', '.join(_step_tools) or 'нет'}), "
-                        f"но не сделал реального действия. В следующий раз — довести до конца.\n"
-                    )
+                    # Агент вызвал только passive tools — если результат содержит данные, это completed (research — тоже работа)
+                    _has_substantial_data = len((_cleaned or '').strip()) > 150
+                    if _has_substantial_data and _step_tools:
+                        # Исследование дало данные — это завершённая задача
+                        pass  # _task_status остаётся 'completed'
+                    else:
+                        _task_status = 'in_progress'
+                        _prev_steps_context += (
+                            f"• {_ag_name}: ТОЛЬКО исследовал (tools: {', '.join(_step_tools) or 'нет'}), "
+                            f"но не сделал реального действия. В следующий раз — довести до конца.\n"
+                        )
                 else:
                     # ── Проверка: инструмент был вызван, но вернул ошибку ──
                     _failure_phrases = [
@@ -12337,6 +12345,20 @@ class AnchorEngine:
                             session.rollback()
                         except Exception:
                             pass
+
+                # ── Auto-track goal progress: если задача completed и привязана к цели ──
+                if _task_status == 'completed' and _ag_goal_title and (_real_action_tools or _step_tools):
+                    try:
+                        from ai_integration.handlers import update_goal_progress as _ugp_auto
+                        _ugp_auto(
+                            goal_title=_ag_goal_title,
+                            notes=f"[auto] {_ag_name}: {', '.join(_step_tools)}. {(_cleaned or '')[:200]}",
+                            user_id=user.telegram_id,
+                            session=session,
+                        )
+                        logger.info("[COORD] auto goal progress for '%s' by %s", _ag_goal_title[:40], _ag_name)
+                    except Exception as _ugp_err:
+                        logger.debug("[COORD] auto goal progress error: %s", _ugp_err)
 
                 _is_minor_update = (
                     (_task_status != 'completed' or _is_hollow)
