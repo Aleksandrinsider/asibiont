@@ -6193,7 +6193,7 @@ class AnchorEngine:
                                 _deleg_brief = re.sub(r'\n+', ' ', _coord_text_clean_save or _coord_text).strip()
                                 if len(_deleg_brief) > 300:
                                     _deleg_brief = _deleg_brief[:300].rsplit(' ', 1)[0] + '…'
-                                await _safe_send(self.bot, user.telegram_id, f"📋 Поручение → {_chosen_name}:\n{_deleg_brief}")
+                                await _safe_send(self.bot, user.telegram_id, f"Поручение → {_chosen_name}:\n{_deleg_brief}")
                             except Exception as _deleg_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] delegation send: %s", _deleg_err)
                     except Exception as _cas_err:
@@ -7036,7 +7036,7 @@ class AnchorEngine:
                             else:
                                 await _safe_send(
                                     self.bot, user.telegram_id,
-                                    f"📊 {_chosen_name} — отчёт:\n{_cleaned_result}",
+                                    f"{_chosen_name} — отчёт:\n{_cleaned_result}",
                                 )
                                 # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                                 # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
@@ -12049,9 +12049,9 @@ class AnchorEngine:
                             _assign_brief = re.sub(r'\n+', ' ', _asi_assign_text).strip()
                             if len(_assign_brief) > 300:
                                 _assign_brief = _assign_brief[:300].rsplit(' ', 1)[0] + '…'
-                            await _safe_send(self.bot, user.telegram_id, f"📋 Поручение → {_ag_name}:\n{_assign_brief}")
+                            await _safe_send(self.bot, user.telegram_id, f"Поручение → {_ag_name}:\n{_assign_brief}")
                             await asyncio.sleep(1)
-                        _tg_text = f"📊 {_ag_name} — отчёт:\n{_cleaned_tg}"
+                        _tg_text = f"{_ag_name} — отчёт:\n{_cleaned_tg}"
                         await _safe_send(self.bot, user.telegram_id, _tg_text)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
