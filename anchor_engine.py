@@ -10140,6 +10140,9 @@ class AnchorEngine:
                 team_history=_per_agent_history,
             )
 
+            # ── Situation analysis (computed later, init here for _plan_prompt) ──
+            _situation_analysis_str = ''
+
             # ── DO NOT CONTACT list: bounced/unsubscribed — явно запрещаем упоминание ──
             _do_not_contact_str = ''
             try:
