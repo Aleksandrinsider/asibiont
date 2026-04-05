@@ -8257,6 +8257,150 @@ class AnchorEngine:
 
         return directives
 
+    @staticmethod
+    def _build_email_diagnostics(emails, total_sent: int, reply_rate: float) -> str:
+        """Analyze email outreach data and return actionable diagnostics for the coordinator.
+
+        Instead of blocking the email channel, identifies WHAT to change:
+        - Audience (recipient domains/segments)
+        - Tone/style (formal vs friendly)
+        - Personalization level
+        - Subject line patterns
+        - Send timing
+        - Body length
+        Returns a compact diagnostic string for the coordinator prompt.
+        """
+        if not emails or total_sent < 5:
+            return ''
+
+        # Group by status
+        replied = [e for e in emails if e.status == 'replied']
+        opened = [e for e in emails if e.status == 'opened']
+        bounced = [e for e in emails if e.status in ('bounced', 'failed')]
+        sent = [e for e in emails if e.status in ('sent', 'delivered')]
+
+        lines = [f'\n📊 EMAIL АНАЛИТИКА (умная диагностика, {total_sent} писем):']
+
+        # 1. Bounce rate — indicates bad contact quality
+        bounce_rate = len(bounced) / max(total_sent, 1) * 100
+        if bounce_rate > 15:
+            lines.append(
+                f'  🔴 Высокий bounce: {bounce_rate:.0f}% — контакты некачественные. '
+                'Нужна другая аудитория или верификация email перед отправкой.'
+            )
+
+        # 2. Tone analysis — what tones were used, any pattern in replies
+        tone_stats = {}
+        for e in emails:
+            t = getattr(e, 'tone_type', None) or 'unknown'
+            if t not in tone_stats:
+                tone_stats[t] = {'sent': 0, 'replied': 0}
+            tone_stats[t]['sent'] += 1
+            if e.status == 'replied':
+                tone_stats[t]['replied'] += 1
+
+        _tone_insights = []
+        for tone, stats in tone_stats.items():
+            if stats['sent'] >= 3:
+                rate = stats['replied'] / stats['sent'] * 100
+                _tone_insights.append(f'{tone}={stats["sent"]}шт/{rate:.0f}%')
+        if _tone_insights:
+            lines.append(f'  Тон: {", ".join(_tone_insights)}')
+            # Recommend trying different tone
+            used_tones = set(tone_stats.keys()) - {'unknown'}
+            all_tones = {'formal', 'friendly', 'technical', 'commercial'}
+            untried = all_tones - used_tones
+            if untried:
+                lines.append(f'  → Попробуй тон: {", ".join(list(untried)[:2])} (ещё не тестировали)')
+
+        # 3. Personalization analysis
+        personalized = [e for e in emails if getattr(e, 'has_personalization', False)]
+        non_personalized = [e for e in emails if not getattr(e, 'has_personalization', False)]
+        p_replied = sum(1 for e in personalized if e.status == 'replied')
+        np_replied = sum(1 for e in non_personalized if e.status == 'replied')
+        if len(personalized) >= 3 and len(non_personalized) >= 3:
+            p_rate = p_replied / len(personalized) * 100
+            np_rate = np_replied / len(non_personalized) * 100
+            lines.append(
+                f'  Персонализация: с={len(personalized)}шт/{p_rate:.0f}% vs без={len(non_personalized)}шт/{np_rate:.0f}%'
+            )
+            if p_rate <= np_rate and len(non_personalized) > 5:
+                lines.append('  → Персонализация не помогает — проблема в оффере или аудитории')
+        elif len(personalized) < 3:
+            lines.append(f'  → Мало персонализированных писем ({len(personalized)}). '
+                         'Попробуй: упомяни проект/статью получателя, конкретную проблему.')
+
+        # 4. Body length analysis
+        short_emails = [e for e in emails if (getattr(e, 'body_length', 0) or 0) < 500]
+        long_emails = [e for e in emails if (getattr(e, 'body_length', 0) or 0) >= 500]
+        if short_emails and long_emails:
+            short_r = sum(1 for e in short_emails if e.status == 'replied') / max(len(short_emails), 1) * 100
+            long_r = sum(1 for e in long_emails if e.status == 'replied') / max(len(long_emails), 1) * 100
+            if short_r != long_r:
+                better = 'короткие (<500 символов)' if short_r > long_r else 'длинные (500+ символов)'
+                lines.append(f'  Длина: {better} работают лучше')
+
+        # 5. CTA analysis
+        with_cta = [e for e in emails if getattr(e, 'has_call_to_action', False)]
+        without_cta = [e for e in emails if not getattr(e, 'has_call_to_action', False)]
+        if len(without_cta) > len(with_cta) and len(without_cta) > 5:
+            lines.append('  → Мало писем с CTA. Добавь конкретный призыв: демо, звонок, ссылку на продукт.')
+
+        # 6. Send timing
+        hour_stats = {}
+        for e in emails:
+            h = getattr(e, 'sent_at_hour_utc', None)
+            if h is not None:
+                if h not in hour_stats:
+                    hour_stats[h] = {'sent': 0, 'replied': 0}
+                hour_stats[h]['sent'] += 1
+                if e.status == 'replied':
+                    hour_stats[h]['replied'] += 1
+        if hour_stats:
+            best_hour = max(hour_stats.items(), key=lambda x: x[1]['replied'] / max(x[1]['sent'], 1))
+            worst_hours = [h for h, s in hour_stats.items() if s['sent'] >= 3 and s['replied'] == 0]
+            if worst_hours and best_hour[1]['replied'] > 0:
+                lines.append(f'  Время: лучше {best_hour[0]}:00 UTC, избегай часов {worst_hours[:3]}')
+
+        # 7. Recipient domain clustering — are we emailing wrong type?
+        domain_stats = {}
+        for e in emails:
+            addr = getattr(e, 'recipient_email', '') or ''
+            domain = addr.split('@')[-1].lower() if '@' in addr else 'unknown'
+            # Group domains
+            if domain in domain_stats:
+                domain_stats[domain]['n'] += 1
+            else:
+                domain_stats[domain] = {'n': 1, 'replied': 0}
+            if e.status == 'replied':
+                domain_stats[domain]['replied'] += 1
+        top_domains = sorted(domain_stats.items(), key=lambda x: -x[1]['n'])[:5]
+        if len(top_domains) >= 2:
+            domain_info = [f'{d}({s["n"]}шт,{s["replied"]}отв)' for d, s in top_domains]
+            lines.append(f'  Домены: {", ".join(domain_info)}')
+            zero_domains = [d for d, s in top_domains if s['n'] >= 3 and s['replied'] == 0]
+            if zero_domains:
+                lines.append(f'  → 0 ответов от: {", ".join(zero_domains[:3])} — смени аудиторию')
+
+        # 8. Overall recommendation
+        if reply_rate == 0 and total_sent > 30:
+            lines.append(
+                '\n  📋 РЕКОМЕНДАЦИЯ: 0% конверсия — НЕ значит «бросить email». Значит «сменить подход»:\n'
+                '    1. НОВАЯ АУДИТОРИЯ — email другому сегменту (мелкие компании вместо крупных, или наоборот)\n'
+                '    2. ДРУГОЙ ОФФЕР — вместо «попробуйте наш продукт» → «вот бесплатный инструмент/исследование»\n'
+                '    3. ПЕРСОНАЛИЗАЦИЯ — упомяни конкретный проект/статью/достижение получателя\n'
+                '    4. ДРУГОЙ ТОН — friendly вместо formal, или наоборот\n'
+                '    5. ДИВЕРСИФИКАЦИЯ — параллельно с email используй контент и community\n'
+                '  Лимит: макс 3 email за цикл, каждый — с НОВЫМ подходом (не повторяй шаблон).'
+            )
+        elif reply_rate < 2 and total_sent > 20:
+            lines.append(
+                '\n  📋 РЕКОМЕНДАЦИЯ: конверсия низкая — тестируй другую аудиторию/тон/оффер.\n'
+                '  Лимит: макс 3 email за цикл. Параллельно усиль контент и community.'
+            )
+
+        return '\n'.join(lines) + '\n' if len(lines) > 1 else ''
+
     async def _run_coordinator_dispatch(
         self, user, data: dict, real_agents: list, base_task_text: str, anchor, session,
     ) -> bool:
@@ -8954,17 +9098,21 @@ class AnchorEngine:
                             _fully_blocked_agents.add(_ag_bt)
                             _banned_tools_str += f'  ℹ️ {_ag_bt}: все инструменты уже использованы → рассмотри другого агента или ASI.\n'
 
-            # Email tools ban: block outreach tools when conversion = 0% with 30+ sent
+            # Smart email analytics: diagnose WHY email underperforms, guide improvements
+            _email_analytics_str = ''
             try:
-                if _email_sent > 30 and _email_reply_rate == 0:
-                    _banned_tools_str += (
-                        '\n🚫 ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ (0% конверсия email):\n'
-                        '  send_outreach_email, send_follow_up_email, start_email_campaign, '
-                        'find_relevant_contacts_for_task — НЕ ИСПОЛЬЗОВАТЬ.\n'
-                        '  Допущены: check_emails (проверка ответов), reply_to_outreach_email (ответ на полученное).\n'
-                    )
-            except Exception:
-                pass
+                if _email_sent > 10:
+                    from models import EmailOutreach as _EO_diag
+                    _eo_all = session.query(_EO_diag).filter(
+                        _EO_diag.user_id == user.id,
+                        _EO_diag.status.in_(['sent', 'delivered', 'opened', 'replied', 'bounced', 'failed']),
+                    ).limit(200).all()
+                    if _eo_all:
+                        _diag = _build_email_diagnostics(_eo_all, _email_sent, _email_reply_rate)
+                        if _diag:
+                            _email_analytics_str = _diag
+            except Exception as _ead_err:
+                logger.debug('[COORD] email analytics: %s', _ead_err)
 
             # ── Форсированный outreach при стагнации цели ──
             _stagnant_instr = ''
@@ -9599,19 +9747,11 @@ class AnchorEngine:
                         f'{_n_replied} ответов, {_n_interested} заинтересованных '
                         f'({_email_reply_rate}% конверсия)'
                     )
-                    if _email_reply_rate == 0 and _total_email_sent > 30:
+                    if _email_reply_rate < 2 and _total_email_sent > 20:
                         _sc_lines.append(
-                            f'    🚫 EMAIL ЗАБЛОКИРОВАН: 0 ответов на {_total_email_sent} писем = полный провал стратегии.\n'
-                            '    НЕ назначай задачи с email/outreach/письмо. Переключись ПОЛНОСТЬЮ на:\n'
-                            '    — контент (посты, кейсы, аналитика)\n'
-                            '    — community (Discord, Telegram-группы, форумы)\n'
-                            '    — партнёрства (DELEGATE другому агенту для коллабораций)'
-                        )
-                    elif _email_reply_rate < 2 and _total_email_sent > 20:
-                        _sc_lines.append(
-                            f'    ⚠️ Конверсия <2% при {_total_email_sent} письмах — '
-                            'шаблоны/аудитория не работают. Смени подход: персональные письма, '
-                            'другая аудитория, или переключись на контент/community.'
+                            f'    ⚠️ Низкая конверсия ({_email_reply_rate}%) при {_total_email_sent} письмах.\n'
+                            '    Это НЕ значит что email не работает — значит ТЕКУЩИЙ подход неэффективен.\n'
+                            '    ОБЯЗАТЕЛЬНО измени подход перед следующей рассылкой (см. EMAIL АНАЛИТИКА ниже).'
                         )
 
                 # Show strategy distribution
@@ -10031,6 +10171,7 @@ class AnchorEngine:
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + _effectiveness_str
                 + _strategy_scorecard_str
+                + _email_analytics_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
                 + _agent_results_str
@@ -10347,52 +10488,60 @@ class AnchorEngine:
             except Exception as _stb_err:
                 logger.debug("[COORD] stagnation blocker: %s", _stb_err)
 
-            # ── Scorecard-driven filter: block ineffective strategies based on real metrics ──
+            # ── Scorecard-driven email quality guard: inject improvement directives instead of blocking ──
             try:
-                if _plan and _strat_counts:
+                if _plan and _email_sent > 20 and _email_reply_rate < 2:
                     _email_kws = ['send_outreach', 'email', 'outreach', 'письм', 'follow_up', 'send_follow']
-                    # If email sent >20 and reply rate <2% → block new outreach, redirect to content/other
-                    if _email_sent > 20:
-                        _email_replied = sum(1 for _ in session.query(
-                            __import__('models', fromlist=['OutreachEmail']).OutreachEmail
-                        ).filter_by(user_id=user.id).filter(
-                            __import__('models', fromlist=['OutreachEmail']).OutreachEmail.status.in_(['replied', 'interested'])
-                        ).limit(100).all()) if _email_sent > 0 else 0
-                        _email_rate = _email_replied / max(_email_sent, 1)
-                        if _email_rate < 0.02:
-                            # Block ALL outreach email steps (not just 1) — redirect to content/community
-                            _email_block_limit = 10 if _email_rate == 0 and _email_sent > 30 else 2
-                            _plan_email_filtered = []
-                            _n_email_blocked = 0
-                            _content_alternatives = [
-                                'create_post', 'run_agent_action', 'research_topic', 'web_search'
-                            ]
-                            for _pef in _plan:
-                                _pef_task = (_pef.get('task') or '').lower()
-                                _pef_tool = (_pef.get('tool') or '').lower()
-                                _is_email_step = (
-                                    any(kw in _pef_task or kw in _pef_tool for kw in _email_kws)
-                                    and 'check_emails' not in _pef_tool  # don't block checking replies
-                                    and 'reply_to' not in _pef_tool  # don't block replying
+                    _plan_email_improved = []
+                    _n_email_redirected = 0
+                    # Smart limit: allow 1 email step per cycle but REQUIRE quality improvement
+                    # At 0% with 50+ sent → limit to 1 per cycle; at <2% → limit to 2
+                    _email_step_limit = 1 if (_email_reply_rate == 0 and _email_sent > 50) else 2
+                    _n_email_steps_seen = 0
+                    for _pef in _plan:
+                        _pef_task = (_pef.get('task') or '').lower()
+                        _pef_tool = (_pef.get('tool') or '').lower()
+                        _is_email_step = (
+                            any(kw in _pef_task or kw in _pef_tool for kw in _email_kws)
+                            and 'check_emails' not in _pef_tool
+                            and 'reply_to' not in _pef_tool
+                        )
+                        if _is_email_step:
+                            _n_email_steps_seen += 1
+                            if _n_email_steps_seen <= _email_step_limit:
+                                # KEEP the email step but INJECT quality improvement directive
+                                _improved = dict(_pef)
+                                _improved['task'] = (
+                                    f'⚠️ Текущая конверсия {_email_reply_rate}% — ОБЯЗАТЕЛЬНО измени подход: '
+                                    'новая аудитория ИЛИ персональное письмо (упомяни конкретный проект получателя) '
+                                    'ИЛИ другой тон (friendly вместо formal) ИЛИ другой оффер. '
+                                    f'Исходная задача: {(_pef.get("task") or "")[:200]}'
                                 )
-                                if _is_email_step and _n_email_blocked < _email_block_limit:
-                                    _n_email_blocked += 1
-                                    _replacement_ef = dict(_pef)
-                                    _alt_tool = _content_alternatives[_n_email_blocked % len(_content_alternatives)]
-                                    _replacement_ef['tool'] = _alt_tool
-                                    _replacement_ef['task'] = (
-                                        f'Email-конверсия 0% при {_email_sent} отправленных — СТОП email. '
-                                        'Переключись на контент, community или партнёрства: '
-                                        'создай пост/кейс/аналитику, вступи в профильные сообщества, '
-                                        'напиши в открытые чаты по теме проекта'
-                                    )
-                                    _replacement_ef['reason'] = f'pivot: email конверсия {_email_rate*100:.1f}% при {_email_sent} отправленных'
-                                    _plan_email_filtered.append(_replacement_ef)
-                                    logger.info("[COORD] scorecard-filter: blocked email step #%d (rate=%.1f%%)", _n_email_blocked, _email_rate * 100)
-                                    continue
-                                _plan_email_filtered.append(_pef)
-                            if _plan_email_filtered:
-                                _plan = _plan_email_filtered
+                                _improved['reason'] = (
+                                    f'smart-pivot: конверсия {_email_reply_rate}% — '
+                                    'улучшаем качество вместо блокировки канала'
+                                )
+                                _plan_email_improved.append(_improved)
+                                logger.info(
+                                    "[COORD] email-quality-guard: improved email step #%d (rate=%.1f%%)",
+                                    _n_email_steps_seen, _email_reply_rate
+                                )
+                            else:
+                                # Excess email steps → redirect to diversification
+                                _n_email_redirected += 1
+                                _replacement_ef = dict(_pef)
+                                _replacement_ef['tool'] = 'create_post' if _n_email_redirected % 2 else 'run_agent_action'
+                                _replacement_ef['task'] = (
+                                    'Email-лимит на цикл исчерпан (качество > количество). '
+                                    'Привлеки аудиторию через контент, community или партнёрства'
+                                )
+                                _replacement_ef['reason'] = 'diversify: баланс каналов при низкой email-конверсии'
+                                _plan_email_improved.append(_replacement_ef)
+                                logger.info("[COORD] email-quality-guard: redirected excess email step #%d", _n_email_steps_seen)
+                            continue
+                        _plan_email_improved.append(_pef)
+                    if _plan_email_improved:
+                        _plan = _plan_email_improved
             except Exception as _scf_err:
                 logger.debug("[COORD] scorecard filter: %s", _scf_err)
 
