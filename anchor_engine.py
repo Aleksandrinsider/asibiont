@@ -9496,6 +9496,126 @@ class AnchorEngine:
             except Exception as _eff_err:
                 logger.debug("[COORD] effectiveness analysis: %s", _eff_err)
 
+            # ── STRATEGY OUTCOME SCORECARD: quantity-based view of what works ──
+            _strategy_scorecard_str = ''
+            try:
+                # 1) Email campaign metrics (actual numbers)
+                _sc_lines = []
+                _campaigns_data = data.get('email_campaigns', [])
+                _total_email_sent = data.get('total_emails_sent', 0) or 0
+                _n_replied = _status_counts_data.get('replied', 0)
+                _n_interested = _status_counts_data.get('interested', 0)
+                _email_reply_rate = round((_n_replied + _n_interested) / max(_total_email_sent, 1) * 100, 1)
+
+                # 2) Classify recent tasks into strategy categories
+                _strat_counts = {
+                    'outbound_search': 0,    # web_search, research, find contacts
+                    'email_outreach': 0,     # send_outreach, email campaign
+                    'content_creation': 0,   # create_post, publish
+                    'check_replies': 0,      # check_emails, reply
+                    'data_analysis': 0,      # analyze, metrics, report
+                    'community': 0,          # discord, telegram groups, forums
+                }
+                _strat_keywords = {
+                    'outbound_search': ['web_search', 'research', 'найди контакт', 'найди email',
+                                       'найди автор', 'поиск', 'search', 'найди через',
+                                       'нашёл контакт', 'сохрани контакт', 'save_email_contact',
+                                       'find_relevant', 'find_and_message'],
+                    'email_outreach': ['send_outreach', 'email', 'письмо', 'outreach',
+                                      'start_email_campaign', 'follow_up', 'follow-up'],
+                    'content_creation': ['create_post', 'publish', 'опубликуй', 'пост',
+                                        'статью', 'контент', 'blog', 'article'],
+                    'check_replies': ['check_emails', 'проверь входящ', 'проверь почт',
+                                     'reply_to', 'ответь на'],
+                    'data_analysis': ['проанализируй', 'анализ', 'метрик', 'отчёт',
+                                     'report', 'analytics', 'research_topic'],
+                    'community': ['discord', 'telegram', 'канал', 'группа', 'форум',
+                                 'сообщество', 'community'],
+                }
+                for _pn_sc, _hist_sc in _per_agent_history.items():
+                    for _h_sc in _hist_sc[:8]:
+                        _h_sc_l = _h_sc.lower()
+                        for _cat_sc, _kws_sc in _strat_keywords.items():
+                            if any(kw in _h_sc_l for kw in _kws_sc):
+                                _strat_counts[_cat_sc] += 1
+                                break  # one category per action
+
+                # 3) Build scorecard
+                _total_actions = sum(_strat_counts.values()) or 1
+                _sc_lines.append('📈 SCORECARD СТРАТЕГИЙ (факты за последние циклы):')
+
+                if _total_email_sent > 0:
+                    _sc_lines.append(
+                        f'  Email outreach: {_total_email_sent} отправлено, '
+                        f'{_n_replied} ответов, {_n_interested} заинтересованных '
+                        f'({_email_reply_rate}% конверсия)'
+                    )
+                    if _email_reply_rate < 2 and _total_email_sent > 20:
+                        _sc_lines.append(
+                            f'    ⚠️ Конверсия <2% при {_total_email_sent} письмах — '
+                            'шаблоны/аудитория не работают. Смени подход: персональные письма, '
+                            'другая аудитория, или переключись на контент/community.'
+                        )
+
+                # Show strategy distribution
+                _active_strats = [(k, v) for k, v in _strat_counts.items() if v > 0]
+                _active_strats.sort(key=lambda x: -x[1])
+                if _active_strats:
+                    _strat_labels = {
+                        'outbound_search': 'Поиск контактов',
+                        'email_outreach': 'Email рассылка',
+                        'content_creation': 'Контент/посты',
+                        'check_replies': 'Проверка ответов',
+                        'data_analysis': 'Аналитика/отчёты',
+                        'community': 'Сообщества',
+                    }
+                    _sc_lines.append('  Распределение усилий:')
+                    for _sk, _sv in _active_strats:
+                        _pct = round(_sv / _total_actions * 100)
+                        _bar = '█' * max(1, _pct // 10)
+                        _sc_lines.append(f'    {_strat_labels.get(_sk, _sk)}: {_bar} {_pct}% ({_sv}x)')
+
+                    # Detect imbalance: if one strategy > 60% of all actions
+                    if _active_strats[0][1] / _total_actions > 0.6:
+                        _dominant_strat = _strat_labels.get(_active_strats[0][0], _active_strats[0][0])
+                        _unused = [_strat_labels.get(k, k) for k, v in _strat_counts.items()
+                                   if v == 0 and k not in ('check_replies',)]
+                        _sc_lines.append(
+                            f'    🔴 ДИСБАЛАНС: {_dominant_strat} = {round(_active_strats[0][1]/_total_actions*100)}% '
+                            f'всех действий. Неиспользованные стратегии: {", ".join(_unused[:3]) or "нет"}.'
+                        )
+                        _sc_lines.append(
+                            '    → При прогрессе <10% за 3+ дней — ОБЯЗАТЕЛЬНО переключи минимум 1 агента '
+                            'на неиспользованную стратегию.'
+                        )
+
+                # Goal progress velocity
+                for _g_sc in _goals[:3]:
+                    _g_prog = _g_sc.get('progress', 0) or 0
+                    _g_title_sc = _g_sc['title'][:40]
+                    _g_created = _g_sc.get('created_at')
+                    if _g_created:
+                        try:
+                            if isinstance(_g_created, str):
+                                _g_created = datetime.fromisoformat(_g_created.replace('Z', '+00:00'))
+                            _days = max(1, (datetime.now(timezone.utc) - _g_created.replace(
+                                tzinfo=timezone.utc if _g_created.tzinfo is None else _g_created.tzinfo
+                            )).days)
+                            _velocity = round(_g_prog / _days, 1)
+                            if _velocity < 3 and _days >= 3:
+                                _sc_lines.append(
+                                    f'  Цель «{_g_title_sc}»: {_g_prog}% за {_days} дн '
+                                    f'(скорость {_velocity}%/день — при текущем темпе цель займёт '
+                                    f'{round((100-_g_prog)/max(_velocity, 0.1))} дней)'
+                                )
+                        except Exception:
+                            pass
+
+                if _sc_lines:
+                    _strategy_scorecard_str = '\n' + '\n'.join(_sc_lines) + '\n\n'
+            except Exception as _sc_err:
+                logger.debug("[COORD] strategy scorecard: %s", _sc_err)
+
             # ── Self-thinking block: LLM сам придумывает разные режимы применения интеграций ──
             # Без ручного словаря вида "RSS = только новости".
             _integration_hypothesis_str = ''
@@ -9753,6 +9873,35 @@ class AnchorEngine:
                     _loop_lines.append('     не ищи заново. Нашли контакты? Пиши письма. Нашли тренды? Делай пост.')
                     _loop_detection_str = '\n'.join(_loop_lines) + '\n'
                     logger.info("[COORD] Loop detected for user %s: %s", user.telegram_id, _looped)
+
+                # ── STRATEGY-LEVEL loop: group channels into meta-strategies ──
+                # Even if no single channel hits 3+, the meta-strategy might
+                _meta_strategies = {
+                    'outbound_search': ['web_search-контакты', 'GitHub-поиск', 'LinkedIn',
+                                       'RSS/Хабр', 'Hi,AI-Telegram', 'SyntheticBiology', 'Reddit-нерелев'],
+                    'email_blast': ['email-кампания', 'email-лимит-упомин'],
+                }
+                _meta_counts = {}
+                for _ms_name, _ms_channels in _meta_strategies.items():
+                    _ms_total = sum(_approach_counts.get(ch, 0) for ch in _ms_channels)
+                    if _ms_total > 0:
+                        _meta_counts[_ms_name] = _ms_total
+
+                # If outbound_search used 5+ times across all channels but loop not detected per-channel
+                if not _looped and _meta_counts.get('outbound_search', 0) >= 5:
+                    _loop_detection_str += (
+                        '\n🚨 СТРАТЕГИЧЕСКАЯ ПЕТЛЯ: «поиск новых контактов» повторялся '
+                        f'{_meta_counts["outbound_search"]}x за 3ч через РАЗНЫЕ каналы.\n'
+                        '  Поиск меняет каналы (dev.to → GitHub → Хабр → ProductHunt), '
+                        'но СТРАТЕГИЯ та же — холодный поиск.\n'
+                        '  → ОБЯЗАТЕЛЬНО: минимум 1 агент должен работать НЕ с поиском:\n'
+                        '    • Контент: create_post + publish (inbound-стратегия)\n'
+                        '    • Обработка входящих: check_emails, reply_to_outreach_email\n'
+                        '    • Аналитика: research_topic → save_note с конкретным планом\n'
+                        '    • Развитие лидов: follow_up, персональные письма тем кто уже ответил\n'
+                    )
+                    logger.info("[COORD] Meta-strategy loop for user %s: outbound_search=%d",
+                                user.telegram_id, _meta_counts['outbound_search'])
             except Exception as _ld_err:
                 logger.debug("[COORD] loop detection: %s", _ld_err)
 
@@ -9830,6 +9979,7 @@ class AnchorEngine:
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + _effectiveness_str
+                + _strategy_scorecard_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
                 + _agent_results_str
@@ -10057,6 +10207,50 @@ class AnchorEngine:
                         _plan_content_deduped.append(_pcd)
                 if _plan_content_deduped:
                     _plan = _plan_content_deduped
+
+            # ── Strategy-stagnation blocker: reject plan steps repeating proven-ineffective strategies ──
+            # If outbound search is dominant (>60%) AND goal progress <10% for 3+ days → block pure search steps
+            try:
+                _stagnant_block_active = False
+                _stag_progress_low = any(
+                    (_g.get('progress', 0) or 0) < 10
+                    and _g.get('created_at')
+                    for _g in _goals[:3]
+                )
+                _stag_search_dominant = (
+                    sum(v for v in _strat_counts.values()) > 0
+                    and _strat_counts.get('outbound_search', 0) / max(sum(v for v in _strat_counts.values()), 1) > 0.6
+                )
+                if _stag_progress_low and _stag_search_dominant and _plan:
+                    _search_kws = ['web_search', 'найди', 'поиск', 'search', 'find',
+                                   'найти контакт', 'найти email', 'ищи', 'разыщи']
+                    _action_kws = ['create_post', 'publish', 'send_outreach', 'check_emails',
+                                   'reply', 'отправь', 'опубликуй', 'проверь почт', 'ответь',
+                                   'follow_up', 'save_note', 'report', 'update_goal']
+                    _plan_stag_filtered = []
+                    _n_search_blocked = 0
+                    for _ps in _plan:
+                        _ps_task = (_ps.get('task') or '').lower()
+                        _ps_tool = (_ps.get('tool') or '').lower()
+                        _is_pure_search = (
+                            any(kw in _ps_task for kw in _search_kws)
+                            and not any(kw in _ps_task for kw in _action_kws)
+                        )
+                        if _is_pure_search and _n_search_blocked < 1:
+                            # Block at most 1 pure-search step, convert to action
+                            _n_search_blocked += 1
+                            logger.info(
+                                "[COORD] stagnation-blocker: blocked pure-search step: %s",
+                                _ps_task[:80]
+                            )
+                            continue  # drop this step
+                        _plan_stag_filtered.append(_ps)
+                    if _plan_stag_filtered:
+                        _plan = _plan_stag_filtered
+                        _stagnant_block_active = True
+                        logger.info("[COORD] stagnation-blocker: dropped %d search step(s)", _n_search_blocked)
+            except Exception as _stb_err:
+                logger.debug("[COORD] stagnation blocker: %s", _stb_err)
 
             # ── Failed-task cooldown: не переназначаем провалившиеся задачи в том же цикле ──
             try:
