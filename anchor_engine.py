@@ -4329,7 +4329,7 @@ class AnchorEngine:
             email_silent_anchors = []
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
-            for _ea_idx, ea in enumerate(email_silent_anchors[:5]):  # макс 5 за цикл
+            for _ea_idx, ea in enumerate(email_silent_anchors[:12]):  # макс 12 за цикл
                 if _ea_idx > 0:
                     await asyncio.sleep(5)  # Краткая задержка между email-якорями
                 async with self._ai_semaphore:
@@ -8141,9 +8141,11 @@ class AnchorEngine:
             'ответов=' in ec and 'ответов=0' not in ec for ec in email_campaigns
         )
         has_github = bool(_domain_agents.get('github'))
+        _status_counts_c = data.get('status_counts', {})
+        _n_sendable = _status_counts_c.get('new', 0) + _status_counts_c.get('potential', 0) + _status_counts_c.get('active', 0)
         contacts_exhausted = (
             n_contacts > 0 and not has_unsent
-            and len(already_sent) >= max(1, n_contacts) * 0.85
+            and (_n_sendable == 0 or len(already_sent) >= max(1, n_contacts) * 0.85)
         )
         # Daily email limit awareness
         _sent_today = data.get('emails_sent_today', 0)
@@ -14800,6 +14802,17 @@ class AnchorEngine:
             r'@(gmail|yahoo|outlook|hotmail|mail\.ru|yandex|icloud|proton|bk\.ru|list\.ru|inbox\.ru)', _re_ec.I
         )
         _status_counts: dict = {}
+        # Считаем статусы по ВСЕЙ базе контактов (не только limit 50)
+        try:
+            _sc_rows = session.execute(text(
+                "SELECT COALESCE(status, 'new'), COUNT(*) FROM email_contacts WHERE user_id=:uid GROUP BY 1"
+            ), {'uid': user.id}).fetchall()
+            for _sc_st, _sc_cnt in _sc_rows:
+                _status_counts[_sc_st] = _sc_cnt
+        except Exception:
+            for _kc_sc in _contacts_raw:
+                _st_sc = _kc_sc.status or 'new'
+                _status_counts[_st_sc] = _status_counts.get(_st_sc, 0) + 1
         _new_contacts_info: list[str] = []   # статус new — не писали
         _no_reply_info: list[str] = []        # contacted >3д без ответа
         _hot_contacts_info: list[str] = []   # replied/interested
@@ -14807,7 +14820,6 @@ class AnchorEngine:
         _now_for_ec = now_utc
         for _kc in _contacts_raw:
             _st = _kc.status or 'new'
-            _status_counts[_st] = _status_counts.get(_st, 0) + 1
             _em_kc = (_kc.email or '').lower()
             _nm_kc = (_kc.name or _em_kc.split('@')[0])[:30]
             _is_personal = bool(_PERSONAL_EC.search(_em_kc))
@@ -16224,7 +16236,7 @@ class AnchorEngine:
                 and o.follow_up_count < max_follow_ups
                 and o.next_follow_up_at is not None
                 and (_ts_aware(o.next_follow_up_at) or o.next_follow_up_at.replace(tzinfo=timezone.utc)) <= now_utc
-            ][:5]
+            ][:15]
 
             for email in stale_emails:
                 days_since = 0
