@@ -657,7 +657,8 @@ ALWAYS_DELIVER_TYPES = {
     'background_research_ready', # Фоновое исследование завершено — пользователь ждёт результат
     'agent_inbox_reply',         # Агент-почтовик нашёл новые входящие письма
     'agent_task_blocked',        # Агент застрял — нужно решение пользователя
-    'service_degraded',          # Сервис недоступен (веб-поиск, AI, email) — пользователь должен знать
+    # service_degraded убран: информационный якорь, не критический.
+    # Пользователю не нужно знать про временные сбои DDG — система справляется сама.
 }
 
 # Якоря, которые дополнительно ЗАПУСКАЮТ агента (event-driven dispatch)
@@ -3772,9 +3773,10 @@ class AnchorEngine:
                 logger.info(f"[ANCHOR] User {user_id}: 💬 active dialog ({since_last_msg.total_seconds():.0f}s ago) — suppress regular proactive")
 
         # ── Последнее проактивное сообщение (gap между ними, но НЕ блокирует CRITICAL) ──
+        # Учитываем и agent_msg (автопилот) — иначе agent_msg обходит gap-проверку
         last_proactive = session.query(Interaction).filter(
             Interaction.user_id == user.id,
-            Interaction.message_type == 'proactive'
+            Interaction.message_type.in_(['proactive', 'agent_msg'])
         ).order_by(Interaction.created_at.desc()).first()
 
         proactive_gap_ok = True
@@ -13786,18 +13788,14 @@ class AnchorEngine:
                         c_prof = contact_profiles_map.get(t.user_id)
                         contact_activities[t.user_id] = {
                             'username': c_user.username if c_user else 'unknown',
-                            'activities': [],
-                            'plans': (c_prof.current_plans or '')[:150] if c_prof else '',
+                            'match_count': 0,
                             'interests': (c_prof.interests or '')[:150] if c_prof else '',
                             'skills': (c_prof.skills or '')[:150] if c_prof else '',
                             'position': (c_prof.position or '')[:80] if c_prof else '',
                         }
-                    date_str = ''
-                    if t.reminder_time:
-                        date_str = f' ({t.reminder_time.strftime("%d.%m %H:%M")})'
-                    contact_activities[t.user_id]['activities'].append(
-                        f'{t.title[:80]}{date_str}'
-                    )
+                    # Privacy: НЕ передаём task titles и plans другого пользователя.
+                    # Только факт наличия совпадающей активности.
+                    contact_activities[t.user_id]['match_count'] = contact_activities[t.user_id].get('match_count', 0) + 1
 
                 # Также проверяем current_plans контактов (даже без задач)
                 for cp in same_city_profiles:
@@ -13807,10 +13805,10 @@ class AnchorEngine:
                     if any(pw in plans for pw in profile_words):
                         c_user = _ca_user_by_id.get(cp.user_id)
                         if c_user and c_user.username:
+                            # Privacy: только публичные данные (interests, skills, position)
                             contact_activities[cp.user_id] = {
                                 'username': c_user.username,
-                                'activities': [],
-                                'plans': (cp.current_plans or '')[:150],
+                                'match_count': 1,
                                 'interests': (cp.interests or '')[:150],
                                 'skills': (cp.skills or '')[:150],
                                 'position': (cp.position or '')[:80],
@@ -13830,8 +13828,6 @@ class AnchorEngine:
                             'user_profile': {
                                 'interests': (interests or '')[:200],
                                 'skills': (getattr(profile, 'skills', '') or '')[:200],
-                                'goals': goals[:200],
-                                'plans': (getattr(profile, 'current_plans', '') or '')[:200],
                             },
                             'contacts': top_contacts,
                         }),
@@ -18936,8 +18932,8 @@ class AnchorEngine:
                         up = d.get('user_profile', {})
                         prompt_parts.append(f"   Город: {d.get('city','')}, профиль: {up.get('skills','')} / {up.get('interests','')}")
                         for c in contacts[:3]:
-                            acts = ', '.join(c.get('activities', [])[:3])
-                            prompt_parts.append(f"   • @{c.get('username','')}: {c.get('position','')} | {c.get('skills','')} | активности: {acts}")
+                            # Privacy: передаём только публичные данные (навыки, интересы, должность)
+                            prompt_parts.append(f"   • @{c.get('username','')}: {c.get('position','')} | навыки: {c.get('skills','')} | интересы: {c.get('interests','')}")
                     elif ad['type'] == 'agent_delegation':
                         prompt_parts.append(f"   Агент: {d.get('agent_name','')}, задача: {d.get('task','')}")
                         _res = str(d.get('result', ''))[:300]
