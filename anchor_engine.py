@@ -2897,10 +2897,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "  → create_lead(name, price) — создать сделку\n"
             "  → link_contact_to_lead(lead_id, contact_id) — привязать контакт к сделке\n"
             "  → add_note(entity_type, entity_id, text) — примечание к контакту/сделке\n"
-            "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n"
-            "  ⚡ АВТОМАТИКА: после КАЖДОЙ отправки email (send_outreach_email) → "
-            "сразу вызови run_agent_action(action='create_contact', params={name, email, company}).\n"
-            "  Не откладывай — добавляй контакт в CRM сразу после отправки письма.\n\n"
+            "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n\n"
             if 'crm' in _caps_cats else ''
         )
 

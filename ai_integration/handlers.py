@@ -8078,27 +8078,44 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if posts_today >= 1 and not force:
             return " Сегодня пост уже опубликован (лимит — 1 пост в день). Следующий можно опубликовать завтра."
 
-        # ── Авто-генерация картинки если image_url не указан ──
+        # ── Авто-генерация картинки если image_url не указан И пользователь просил картинки в правилах ──
         if not image_url or not image_url.strip():
+            _should_auto_img = False
             try:
-                import re as _re_img
-                _img_keywords = content[:200].replace('\n', ' ').strip()
-                _img_result = await generate_image(
-                    prompt=f"Blog illustration, modern digital art: {_img_keywords}",
-                    style="modern",
-                    user_id=user_id,
-                    session=session,
-                    close_session=False,
-                    send_to_telegram=False,
-                )
-                _img_match = _re_img.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result or '')
-                if _img_match:
-                    image_url = _img_match.group(1)
-                    logger.info(f"[CREATE_POST] Auto-generated image: {image_url[:100]}")
-                else:
-                    logger.info(f"[CREATE_POST] Auto image: no URL in result: {(_img_result or '')[:120]}")
-            except Exception as _img_err:
-                logger.warning(f"[CREATE_POST] Auto image generation failed: {_img_err}")
+                _raw_mem_img = getattr(user, 'memory', None) or ''
+                if _raw_mem_img:
+                    try:
+                        from ai_integration.memory import decrypt_data as _decrypt_img
+                        _dec_img = _decrypt_img(_raw_mem_img)
+                    except Exception:
+                        _dec_img = _raw_mem_img
+                    if _dec_img:
+                        _lo = _dec_img.lower()
+                        _should_auto_img = any(kw in _lo for kw in (
+                            'картинк', 'изображен', 'image', 'визуал', 'иллюстрац', 'фото',
+                        ))
+            except Exception:
+                pass
+            if _should_auto_img:
+                try:
+                    import re as _re_img
+                    _img_keywords = content[:200].replace('\n', ' ').strip()
+                    _img_result = await generate_image(
+                        prompt=f"Blog illustration, modern digital art: {_img_keywords}",
+                        style="modern",
+                        user_id=user_id,
+                        session=session,
+                        close_session=False,
+                        send_to_telegram=False,
+                    )
+                    _img_match = _re_img.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result or '')
+                    if _img_match:
+                        image_url = _img_match.group(1)
+                        logger.info(f"[CREATE_POST] Auto-generated image: {image_url[:100]}")
+                    else:
+                        logger.info(f"[CREATE_POST] Auto image: no URL in result: {(_img_result or '')[:120]}")
+                except Exception as _img_err:
+                    logger.warning(f"[CREATE_POST] Auto image generation failed: {_img_err}")
 
         post = Post(
             user_id=user.id,
