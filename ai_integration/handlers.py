@@ -5762,7 +5762,7 @@ def save_user_rule(rule: str, user_id: int = None, session=None) -> str:
             session.close()
 
 
-def find_relevant_contacts_for_task(task_description: str, user_id: int = None, limit: int = 5, session=None) -> str:
+def find_relevant_contacts_for_task(task_description: str, user_id: int = None, limit: int = 15, session=None) -> str:
     """
     Find contacts relevant for a specific task (bilingual).
     """

@@ -8219,13 +8219,13 @@ class AnchorEngine:
             elif _email_limit_exhausted:
                 _email_fact = f'дневной лимит исчерпан ({_sent_today}/{_daily_limit}) — переключись на другие каналы'
             elif has_unsent:
-                _email_fact = f'{len(unsent_from_data)} контактов без писем'
+                _email_fact = f'{len(unsent_from_data)} контактов без писем — ОТПРАВЛЯЙ СЕЙЧАС, лимит {_daily_limit}/день, отправлено {_sent_today}'
                 _email_priority_tool = 'send_outreach_email'
             elif contacts_exhausted:
-                _email_fact = f'база исчерпана ({n_contacts} конт., {len(already_sent)} отправлено) — ищи новые или смени канал'
+                _email_fact = f'КРИТИЧНО: база исчерпана ({n_contacts} конт., {len(already_sent)} отправлено) — СРОЧНО ищи 20+ новых контактов через web_search и GitHub'
                 _email_priority_tool = 'find_relevant_contacts_for_task'
             elif n_contacts == 0:
-                _email_fact = 'контактов нет — сначала найди'
+                _email_fact = 'КРИТИЧНО: контактов 0 — СРОЧНО ищи 20+ через web_search, GitHub, профильные сайты'
                 _email_priority_tool = 'find_relevant_contacts_for_task'
             elif total_sent == 0:
                 _email_fact = f'{n_contacts} контактов, 0 отправлено'
@@ -9285,9 +9285,9 @@ class AnchorEngine:
             _sm_directives = self._compute_state_directives(_goals, data, _profiles)
             # _situation_str и _strategy_map_str строятся НИЖЕ — после multi-cycle analysis
 
-            # Количество шагов которые просим у LLM-планировщика: min(1 per goal, agents).
-            # Если агентов больше чем целей — добавляем дополнительные шаги для отстающих целей.
-            _n_plan_steps = max(len(_goals[:5]), min(_n_agents, 8))
+            # Количество шагов которые просим у LLM-планировщика: min(2 per agent, 12 max).
+            # Больше шагов = больше шансов что email/контакты/разные каналы получат задачи.
+            _n_plan_steps = max(len(_goals[:5]), min(_n_agents * 2, 12))
 
             # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
@@ -10383,7 +10383,7 @@ class AnchorEngine:
 
             try:
                 # Больше токенов когда шагов больше (180 на шаг, минимум 500, максимум 1200)
-                _plan_max_tokens = min(max(500, _n_plan_steps * 180), 1200)
+                _plan_max_tokens = min(max(500, _n_plan_steps * 180), 2000)
                 _plan_json = await asyncio.wait_for(
                     _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=_plan_max_tokens),
                     timeout=30,
@@ -16165,14 +16165,14 @@ class AnchorEngine:
                     Anchor.delivered_at.is_(None),
                     Anchor.source.like(f'email_campaign:{campaign.id}:send:%'),
                 ).count()
-                if _pending_send_count >= 1:
+                if _pending_send_count >= 3:
                     logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
                     continue
-                batch_size = min(len(drafts), remaining_daily, 10)
+                batch_size = min(len(drafts), remaining_daily, 25)
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_outreach_send',
-                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H")}',  # дедупликация по часу, flood guard=1 предотвращает накопление
+                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H%M")}',  # дедупликация по минуте, flood guard=3 ограничивает параллельных
                     topic=_t(user,
                         f'Email-кампания «{campaign.name}» — {len(drafts)} черновиков ждут отправки ({remaining_daily} осталось сегодня)',
                         f'Email campaign «{campaign.name}» — {len(drafts)} drafts pending ({remaining_daily} remaining today)'),
@@ -18085,7 +18085,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(10).all()
+                ).limit(25).all()
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
@@ -18144,10 +18144,21 @@ class AnchorEngine:
                 except Exception:
                     pass
                 # Собственные домены (по email пользователя + IMAP)
+                # НЕ блокируем публичные провайдеры — only private/corporate domains
+                _PUBLIC_EMAIL_PROVIDERS = {
+                    'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com',
+                    'yahoo.com', 'yahoo.co.uk', 'yandex.ru', 'yandex.com',
+                    'mail.ru', 'bk.ru', 'inbox.ru', 'list.ru',
+                    'icloud.com', 'me.com', 'protonmail.com', 'proton.me',
+                    'aol.com', 'zoho.com', 'tutanota.com', 'gmx.com', 'gmx.de',
+                    'live.com', 'msn.com', 'rambler.ru',
+                }
                 _own_domains_set = set()
                 for _oe in _own_emails_set:
                     if '@' in _oe:
-                        _own_domains_set.add(_oe.rsplit('@', 1)[1])
+                        _d = _oe.rsplit('@', 1)[1]
+                        if _d not in _PUBLIC_EMAIL_PROVIDERS:
+                            _own_domains_set.add(_d)
                 # Домен платформы всегда заблокирован
                 _own_domains_set.add('asibiont.com')
                 # ── Домены, на которые email не доставляется ──
@@ -18189,12 +18200,12 @@ class AnchorEngine:
                     _GENERIC_SKIP = {
                         'info', 'contact', 'contacts', 'hello', 'support', 'sales',
                         'admin', 'office', 'team', 'help', 'mail', 'noreply',
-                        'hr', 'press', 'media', 'marketing', 'general', 'ai', 'ml',
-                        'data', 'research', 'dev', 'engineering', 'feedback', 'service',
+                        'hr', 'press', 'media', 'marketing', 'general',
+                        'feedback', 'service',
                         'partners', 'partner', 'business', 'invest', 'investor',
                         'legal', 'privacy', 'security', 'billing', 'jobs', 'careers',
-                        'career', 'analytics', 'reports',
-                        'awards', 'academy', 'events', 'newsletter', 'news', 'webinar',
+                        'career', 'reports',
+                        'awards', 'events', 'newsletter', 'news', 'webinar',
                         'training', 'education', 'community', 'social', 'podcast',
                         'editor', 'editorial', 'submissions', 'apply', 'donate',
                     }
