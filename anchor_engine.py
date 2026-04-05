@@ -1040,7 +1040,8 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                 pass
         if mt:
             goal_lines.append(
-                f"  • «{title}»{_age_suffix}: нужно {int(mt)}{(' ' + mu) if mu else ''}, подтверждено: {mc}"
+                f"  • «{title}»{_age_suffix}: нужно {int(mt)}{(' ' + mu) if mu else ''}, подтверждено: {mc}. "
+                f"Для +1: update_goal_progress(goal_title=\"{title[:50]}\", metric_current={mc + 1})"
             )
         else:
             goal_lines.append(f"  • «{title}»{_age_suffix} ({prog}%)")
@@ -1124,7 +1125,8 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
         + _priority_block + "\n\n"
         f"⚠️ Что = +1 к метрике? {_progress_hint}\n"
         "update_goal_progress: только при ПОДТВЕРЖДЁННОМ результате. "
-        "НЕ при вызове инструмента / плане / поиске. metric_current = реально достигнутые единицы.\n\n"
+        "НЕ при вызове инструмента / плане / поиске. metric_current = АБСОЛЮТНОЕ число (текущее + прирост).\n"
+        "Пример: сейчас подтверждено 6 → нашёл 1 нового → metric_current=7.\n\n"
         "🔧 ДОСТУПНЫЕ ВОЗМОЖНОСТИ:\n"
         + '\n'.join(avail) + '\n'
     ) + _build_tactic_wheel(goal_type, used_tools, agent_history or [])
@@ -4624,6 +4626,7 @@ class AnchorEngine:
                 goals_block = '\n'.join(
                     f"• {g['title']} ({g['progress']}%)"
                     + (f" [метрика: {g.get('metric_current', 0)}/{g.get('metric_target', '?')}]" if g.get('metric_target') else '')
+                    + (f" → для +1: update_goal_progress(goal_title=\"{g['title'][:50]}\", metric_current={int(g.get('metric_current', 0) or 0) + 1})" if g.get('metric_target') else '')
                     + (f", дедлайн: {g['target_date']}" if g.get('target_date') else '')
                     + self._format_goal_tasks(g.get('tasks', []))
                     for g in goals_info
@@ -6184,21 +6187,9 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
                         finally:
                             _cs.close()
-                        if not _skip_coord and self.bot:
-                            try:
-                                from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
-                                _coord_text_clean = _sltt_coord(
-                                    _coord_text,
-                                    anchor_type='goal_autopilot_assignment',
-                                    speaker_name='ASI',
-                                    target_name=_chosen_name,
-                                ) if _coord_text else _coord_text
-                                await _safe_send(
-                                    self.bot, user.telegram_id,
-                                    _coord_text_clean or _coord_text,
-                                )
-                            except Exception as _e:
-                                logger.debug("suppressed: %s", _e)
+                        # Delegation messages (ASI→agent) are saved to DB (for timeline/dashboard)
+                        # but NOT sent to user via Telegram — they are internal coordination.
+                        # User sees only the agent RESULT messages and coordinator summaries.
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
@@ -6619,6 +6610,40 @@ class AnchorEngine:
                                 _filter_reason = 'dedup_tools'
                                 logger.info("[ANCHOR-AUTOPILOT] tools dedup: %.0f%% overlap with recent tool msg from %s",
                                             _common_t / _total_t * 100, agent_name)
+                                break
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+
+                # ── Same-agent short-window dedup: same agent within 5 min → 40% overlap kills ──
+                # Prevents near-duplicate results like "Нашла Бориса Черны — создателя..."
+                # and "Нашла Бориса Черны — руководителя..." from the same agent seconds apart.
+                if not _is_noise_result and _result_clean and len(_result_clean) > 40:
+                    try:
+                        _same_agent_recent = session.query(Interaction.content).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'agent_msg',
+                            Interaction.created_at >= datetime.now(timezone.utc) - timedelta(minutes=5),
+                        ).order_by(Interaction.created_at.desc()).limit(5).all()
+                        _new_words_sa = set(_result_clean.lower().split())
+                        for (_sa_content,) in _same_agent_recent:
+                            try:
+                                _sa_j = json.loads(_sa_content or '{}')
+                                _sa_agent = (_sa_j.get('__agent', {}) or {}).get('name', '')
+                                if _sa_agent != agent_name:
+                                    continue
+                                _sa_text = _sa_j.get('text', '') or ''
+                            except Exception:
+                                continue
+                            if not _sa_text or len(_sa_text) < 30:
+                                continue
+                            _old_words_sa = set(_sa_text.lower().split())
+                            _common_sa = len(_new_words_sa & _old_words_sa)
+                            _total_sa = max(len(_new_words_sa | _old_words_sa), 1)
+                            if _common_sa / _total_sa > 0.40:
+                                _is_noise_result = True
+                                _filter_reason = 'dedup_same_agent_5min'
+                                logger.info("[ANCHOR-AUTOPILOT] same-agent 5min dedup: %.0f%% overlap from %s",
+                                            _common_sa / _total_sa * 100, agent_name)
                                 break
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
