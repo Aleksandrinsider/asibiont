@@ -8940,7 +8940,7 @@ class AnchorEngine:
             # Агенты у которых ВСЕ инструменты заблокированы — пропустить в этом цикле, покрыть через ASI
             _fully_blocked_agents: set = set()
             if _agent_banned_tools:
-                _banned_tools_str = '\n� Часто используемые инструменты (2+ раз подряд — попробуй другой подход):\n'
+                _banned_tools_str = '\n⚠ Часто используемые инструменты (2+ раз подряд — попробуй другой подход):\n'
                 for _ag_bt, _tl_bt in _agent_banned_tools.items():
                     _banned_tools_str += f'  {_ag_bt}: лучше дать другой инструмент вместо [{", ".join(_tl_bt)}]\n'
                     # Проверяем: если все инструменты агента заблокированы → пропустить агента полностью
@@ -8953,6 +8953,18 @@ class AnchorEngine:
                         if _ag_all_tools and all(t in [x.lower() for x in _tl_bt] for t in _ag_all_tools):
                             _fully_blocked_agents.add(_ag_bt)
                             _banned_tools_str += f'  ℹ️ {_ag_bt}: все инструменты уже использованы → рассмотри другого агента или ASI.\n'
+
+            # Email tools ban: block outreach tools when conversion = 0% with 30+ sent
+            try:
+                if _email_sent > 30 and _email_reply_rate == 0:
+                    _banned_tools_str += (
+                        '\n🚫 ЗАБЛОКИРОВАННЫЕ ИНСТРУМЕНТЫ (0% конверсия email):\n'
+                        '  send_outreach_email, send_follow_up_email, start_email_campaign, '
+                        'find_relevant_contacts_for_task — НЕ ИСПОЛЬЗОВАТЬ.\n'
+                        '  Допущены: check_emails (проверка ответов), reply_to_outreach_email (ответ на полученное).\n'
+                    )
+            except Exception:
+                pass
 
             # ── Форсированный outreach при стагнации цели ──
             _stagnant_instr = ''
@@ -9587,7 +9599,15 @@ class AnchorEngine:
                         f'{_n_replied} ответов, {_n_interested} заинтересованных '
                         f'({_email_reply_rate}% конверсия)'
                     )
-                    if _email_reply_rate < 2 and _total_email_sent > 20:
+                    if _email_reply_rate == 0 and _total_email_sent > 30:
+                        _sc_lines.append(
+                            f'    🚫 EMAIL ЗАБЛОКИРОВАН: 0 ответов на {_total_email_sent} писем = полный провал стратегии.\n'
+                            '    НЕ назначай задачи с email/outreach/письмо. Переключись ПОЛНОСТЬЮ на:\n'
+                            '    — контент (посты, кейсы, аналитика)\n'
+                            '    — community (Discord, Telegram-группы, форумы)\n'
+                            '    — партнёрства (DELEGATE другому агенту для коллабораций)'
+                        )
+                    elif _email_reply_rate < 2 and _total_email_sent > 20:
                         _sc_lines.append(
                             f'    ⚠️ Конверсия <2% при {_total_email_sent} письмах — '
                             'шаблоны/аудитория не работают. Смени подход: персональные письма, '
@@ -10092,6 +10112,20 @@ class AnchorEngine:
                 "• Формулируй задачу так, чтобы она вела к конкретному действию через РЕАЛЬНУЮ интеграцию агента\n"
                 "• Смотри карточку агента (интеграции и инструменты) — задача должна использовать ИХ\n\n"
 
+                "📊 ОБНОВЛЕНИЕ ПРОГРЕССА ЦЕЛИ (ОБЯЗАТЕЛЬНО!):\n"
+                "Если агент в прошлом цикле достиг КОНКРЕТНОГО результата (нашёл контакт, опубликовал пост,\n"
+                "получил ответ, привлёк подписчика) — один из шагов плана ДОЛЖЕН содержать:\n"
+                "  tool='update_goal_progress', task='Обнови прогресс цели: [что именно было достигнуто]'\n"
+                "  Агенту передай metric_current=N или notes='описание прогресса'.\n"
+                "Без этого шага прогресс останется на месте, даже если агенты реально работают.\n"
+                "НЕ ставь этот шаг если НЕТ конкретного прогресса — только при РЕАЛЬНЫХ достижениях.\n\n"
+
+                "⚡ МИНИМУМ ДЕЙСТВИЙ (правило 50%):\n"
+                "Минимум 50% шагов плана должны использовать ДЕЙСТВУЮЩИЕ инструменты:\n"
+                "  run_agent_action, create_post, send_message_to_user, send_outreach_email, check_emails,\n"
+                "  save_email_contact, reply_to_outreach_email, update_goal_progress.\n"
+                "Если все шаги = research_topic / web_search — план ПЛОХОЙ. Добавь действие.\n\n"
+
                 "ИСПОЛЬЗУЙ ВСЕ ИНТЕГРАЦИИ АГЕНТА:\n"
                 "У каждого агента может быть несколько интеграций (email, GitHub, RSS, метрика, CRM, и т.д.).\n"
                 "НЕ зацикливайся на одной! Чередуй интеграции каждый цикл:\n"
@@ -10326,26 +10360,35 @@ class AnchorEngine:
                         ).limit(100).all()) if _email_sent > 0 else 0
                         _email_rate = _email_replied / max(_email_sent, 1)
                         if _email_rate < 0.02:
+                            # Block ALL outreach email steps (not just 1) — redirect to content/community
+                            _email_block_limit = 10 if _email_rate == 0 and _email_sent > 30 else 2
                             _plan_email_filtered = []
                             _n_email_blocked = 0
+                            _content_alternatives = [
+                                'create_post', 'run_agent_action', 'research_topic', 'web_search'
+                            ]
                             for _pef in _plan:
                                 _pef_task = (_pef.get('task') or '').lower()
                                 _pef_tool = (_pef.get('tool') or '').lower()
                                 _is_email_step = (
                                     any(kw in _pef_task or kw in _pef_tool for kw in _email_kws)
                                     and 'check_emails' not in _pef_tool  # don't block checking replies
+                                    and 'reply_to' not in _pef_tool  # don't block replying
                                 )
-                                if _is_email_step and _n_email_blocked < 1:
+                                if _is_email_step and _n_email_blocked < _email_block_limit:
                                     _n_email_blocked += 1
                                     _replacement_ef = dict(_pef)
-                                    _replacement_ef['tool'] = 'create_post'
+                                    _alt_tool = _content_alternatives[_n_email_blocked % len(_content_alternatives)]
+                                    _replacement_ef['tool'] = _alt_tool
                                     _replacement_ef['task'] = (
-                                        'Email-конверсия <2% — смени подход. '
-                                        'Создай ценный контент (пост, кейс, аналитику) который привлечёт аудиторию органически'
+                                        f'Email-конверсия 0% при {_email_sent} отправленных — СТОП email. '
+                                        'Переключись на контент, community или партнёрства: '
+                                        'создай пост/кейс/аналитику, вступи в профильные сообщества, '
+                                        'напиши в открытые чаты по теме проекта'
                                     )
                                     _replacement_ef['reason'] = f'pivot: email конверсия {_email_rate*100:.1f}% при {_email_sent} отправленных'
                                     _plan_email_filtered.append(_replacement_ef)
-                                    logger.info("[COORD] scorecard-filter: blocked email step (rate=%.1f%%)", _email_rate * 100)
+                                    logger.info("[COORD] scorecard-filter: blocked email step #%d (rate=%.1f%%)", _n_email_blocked, _email_rate * 100)
                                     continue
                                 _plan_email_filtered.append(_pef)
                             if _plan_email_filtered:
@@ -15178,9 +15221,12 @@ class AnchorEngine:
         except Exception as _up_err:
             logger.debug("[AUTOPILOT] user profile load failed: %s", _up_err)
 
-        # ── Авто-обновление прогресса цели из EmailContact (только подтверждённые) ──
-        # ВАЖНО: для людей-целей метрика = ТОЛЬКО replied/interested (реальные участники).
-        # email-контакты в базе и отправленные письма ≠ тестировщики/пользователи!
+        # ── Авто-обновление прогресса цели (расширенная метрика) ──
+        # Считаем прогресс из нескольких источников:
+        #   - Email: replied/interested на outreach
+        #   - Контакты: найденные и сохранённые email-контакты (весят меньше)
+        #   - Агентские действия: посты, community, partnerships (через activity log)
+        # Формула: replied × 1.0 + interested × 0.5 + unique_contacts × 0.1 (не клиенты пока)
         # Авто-апдейт никогда не ставит 100% — финальное закрытие только через AI или вручную.
         try:
             from models import EmailContact as _EC_au
@@ -15195,22 +15241,36 @@ class AnchorEngine:
                     or any(u in _gunit_au for u in _PPL_UNIT_AU)
                 )
                 if _is_ppl_goal_au and (_g_au.metric_target or 0) > 0:
-                    # Только реальные ответы на email-outreach (НЕ email_contacts — там статус 'replied' по умолчанию)
                     from models import EmailOutreach as _EO_au
+                    # Replied = confirmed engagement
                     _replied_count = session.query(_EO_au).filter(
                         _EO_au.user_id == user.id,
                         _EO_au.status == 'replied',
                     ).count()
+                    # Interested = soft engagement
+                    _interested_count = session.query(_EO_au).filter(
+                        _EO_au.user_id == user.id,
+                        _EO_au.status == 'interested',
+                    ).count()
+                    # Unique contacts found = pipeline (weighted lower)
+                    _contacts_found = session.query(_EC_au).filter(
+                        _EC_au.user_id == user.id,
+                    ).count()
+                    # Composite metric: real users + weighted leads
+                    _composite_metric = (
+                        float(_replied_count)
+                        + float(_interested_count) * 0.5
+                        + float(min(_contacts_found, 200)) * 0.1  # cap at 20 from contacts
+                    )
                     _cur_mc = _g_au.metric_current or 0
                     _mt_au = _g_au.metric_target or 0
-                    # Корректируем ТОЛЬКО ВВЕРХ: если реальных ответов больше метрики.
-                    # Исключение: metric_current > metric_target (невозможное значение — сбрасываем к 95%).
-                    # НЕ корректируем вниз: снижение прогресса расстраивает пользователя
-                    # и ненадёжно (агент мог считать другие типы контактов).
-                    _needs_upward_correction = _replied_count > _cur_mc
+                    # Корректируем ТОЛЬКО ВВЕРХ: если composite > metric_current.
+                    # Исключение: metric_current > metric_target (невозможное значение — сбрасываем).
+                    # НЕ корректируем вниз: снижение прогресса расстраивает пользователя.
+                    _needs_upward_correction = _composite_metric > _cur_mc
                     _needs_cap_correction = _mt_au > 0 and _cur_mc > _mt_au
                     if _needs_upward_correction or _needs_cap_correction:
-                        _new_mc = max(float(_replied_count), _cur_mc) if not _needs_cap_correction else float(_replied_count)
+                        _new_mc = max(_composite_metric, _cur_mc) if not _needs_cap_correction else _composite_metric
                         _safe_pct = min(95, int(_new_mc * 100 / _mt_au)) if _mt_au else 0
                         if _new_mc > 0 and _safe_pct == 0:
                             _safe_pct = 1
@@ -15220,7 +15280,8 @@ class AnchorEngine:
                             session.commit()
                             logger.info(
                                 f"[AUTOPILOT] Corrected goal #{_g_au.id}: "
-                                f"metric {_cur_mc}→{_new_mc}/{int(_mt_au)} ({_safe_pct}%)"
+                                f"metric {_cur_mc}→{_new_mc}/{int(_mt_au)} ({_safe_pct}%) "
+                                f"[replied={_replied_count}, interested={_interested_count}, contacts={_contacts_found}]"
                             )
                         except Exception:
                             session.rollback()
