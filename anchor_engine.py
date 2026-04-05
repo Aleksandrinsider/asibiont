@@ -2800,6 +2800,51 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             import logging as _log_rr
             _log_rr.getLogger(__name__).debug('[AUTOPILOT] recent research block: %s', _e_rr)
 
+    # ── Known GitHub usernames dedup: extract @mentions from recent agent messages ──
+    _known_github_block = ''
+    if user:
+        try:
+            from models import Session as _Sess_gh, AgentActivityLog as _AAL_gh, Interaction as _Int_gh
+            import datetime as _dt_gh
+            _sess_gh = _Sess_gh()
+            try:
+                _cutoff_gh = _dt_gh.datetime.utcnow() - _dt_gh.timedelta(hours=48)
+                _gh_names: set = set()
+                _gh_re = re.compile(r'@([A-Za-z0-9][-A-Za-z0-9_]{1,38})')
+                # From AAL results
+                _aal_results = _sess_gh.query(_AAL_gh.result).filter(
+                    _AAL_gh.user_id == user.id,
+                    _AAL_gh.created_at >= _cutoff_gh,
+                    _AAL_gh.result.isnot(None),
+                ).limit(30).all()
+                for _ar in _aal_results:
+                    if _ar[0]:
+                        _gh_names.update(_gh_re.findall(_ar[0][:1000]))
+                # From proactive/agent_msg interactions
+                _int_results = _sess_gh.query(_Int_gh.content).filter(
+                    _Int_gh.user_id == user.id,
+                    _Int_gh.message_type.in_(['proactive', 'agent_msg']),
+                    _Int_gh.created_at >= _cutoff_gh,
+                ).order_by(_Int_gh.created_at.desc()).limit(30).all()
+                for _ir in _int_results:
+                    if _ir[0]:
+                        _gh_names.update(_gh_re.findall(_ir[0][:1000]))
+                # Filter out common false positives
+                _gh_skip = {'gmail', 'yahoo', 'outlook', 'hotmail', 'mail',
+                            'example', 'test', 'user', 'email', 'None', 'none'}
+                _gh_names = {n for n in _gh_names if n not in _gh_skip and len(n) > 2}
+                if _gh_names:
+                    _known_github_block = (
+                        f"\n\n⚠️ УЖЕ НАЙДЕННЫЕ КОНТАКТЫ (за 48ч) — НЕ ИЩИ ИХ ПОВТОРНО:\n"
+                        f"  {', '.join('@' + n for n in sorted(_gh_names)[:30])}\n"
+                        f"  → Ищи НОВЫХ людей. Меняй запросы, ниши, платформы.\n"
+                    )
+            finally:
+                _sess_gh.close()
+        except Exception as _e_gh:
+            import logging as _log_gh
+            _log_gh.getLogger(__name__).debug('[AUTOPILOT] known github block: %s', _e_gh)
+
     # ── Adaptive Decisions Block: работай с тем что есть ──────────────────────────
     # Конкретные правила поведения при блокировках, лимитах, ошибках инструментов.
     # Принцип: каждый тупик имеет обходной путь — ИИ должен ЗНАТЬ эти пути заранее.
@@ -2918,6 +2963,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_capability_limits_block}"
         f"{_cancelled_tasks_block}"
         f"{_recent_research_block}"
+        f"{_known_github_block}"
         f"{_people_search_map}"
         f"{_tactics_block}"
         f"\n{_catalog}"
