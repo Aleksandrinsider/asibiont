@@ -1270,9 +1270,22 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _aic_cannot.append("📢 Telegram публикация (нет бота агента / канала пользователя)")
     if _agent_has_discord or _user_discord_wh:
         _aic_can.append("📢 publish_to_discord: отправка webhook в Discord-сервер пользователя")
-    _aic_can.append("🔍 web_search, research_topic — всегда доступны")
+    _aic_can.append("🔍 web_search, research_topic — всегда доступны (но если есть API — используй API!)")
+    # ── Явный перечень НЕнастроенных интеграций ──
+    # AI должен ЧЁТКО видеть что подключено и что НЕТ — без угадывания.
+    _IMPORTANT_CATS = [
+        ('email', 'Email/IMAP/SMTP'), ('git', 'GitHub/GitLab'), ('crm', 'CRM (AmoCRM, HubSpot и др.)'),
+        ('rss', 'RSS-ленты'), ('analytics', 'Яндекс.Метрика / GA'), ('finance', 'Биржевые данные'),
+        ('notion', 'Notion'), ('sheets', 'Google Sheets'), ('slack', 'Slack'), ('calendar', 'Календарь'),
+        ('payments', 'Платежи'), ('social', 'Соцсети'), ('crypto', 'Крипто-биржа'),
+    ]
+    _missing_integrations = []
+    for _cat_key, _cat_label in _IMPORTANT_CATS:
+        if _cat_key not in _caps_cats:
+            _missing_integrations.append(_cat_label)
+    if _missing_integrations:
+        _aic_cannot.append("🔌 НЕ подключены: " + ', '.join(_missing_integrations))
     # Платформенные ограничения: одинаковы для ВСЕХ агентов, не зависят от интеграций
-    _aic_cannot.append("Любая интеграция, которой нет в блоке ДОСТУПНО, для этого агента недоступна прямо сейчас")
     _aic_cannot.append(
         "💬 ЧУЖИЕ Telegram-группы/чаты/сообщества — участие НЕВОЗМОЖНО "
         "(это требует Telegram UserBot API — его в платформе НЕТ)"
@@ -3004,8 +3017,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "Ты — опытный специалист, а не скрипт. Перед каждым действием ДУМАЙ.\n\n"
 
         "▸ ШАГ 0 — САМООЦЕНКА И ПИВОТ (перед первым инструментом):\n"
-        "  Прочитай блоки выше: что уже сделано, какие задачи провалились, какие письма отправлены.\n"
-        "  ОЦЕНИ свои последние 3 действия:\n"
+        "  1) ПРОВЕРЬ СВОИ ИНТЕГРАЦИИ: прочитай блок ЧТО Я УМЕЮ → ДОСТУПНО / НЕДОСТУПНО.\n"
+        "     Есть API (AmoCRM, GitHub, RSS, Метрика) → используй run_agent_action, НЕ web_search!\n"
+        "     web_search = крайний вариант, когда нужного API нет или нужна общая информация.\n"
+        "  2) Прочитай блоки выше: что уже сделано, какие задачи провалились, какие письма отправлены.\n"
+        "  3) ОЦЕНИ свои последние 3 действия:\n"
         "    — Какие дали КОНКРЕТНЫЙ результат (ответ, контакт, публикация)?\n"
         "    — Какие были впустую (поиск без находок, письмо без ответа, таймаут)?\n"
         "  Если 2+ из 3 последних действий были неэффективны — ты ОБЯЗАН сменить подход:\n"
@@ -8938,6 +8954,19 @@ class AnchorEngine:
                             f"  💡 {_p_cr['name']} [RSS]: RSS — источник материала, не конечная цель."
                             f" Хорошая задача: прочитай RSS → создай пост / выдели инсайт / предложи идею команде."
                             f" Если агент 2 цикла подряд только читает RSS без публикации — дай задачу с явным выходным артефактом."
+                        )
+                    # ── Явный перечень отсутствующих API для ЭТОГО агента ──
+                    _coord_missing = []
+                    _COORD_CHECK_CATS = [
+                        ('email', 'Email'), ('git', 'GitHub'), ('crm', 'CRM'),
+                        ('rss', 'RSS'), ('analytics', 'Метрика'), ('finance', 'Биржа'),
+                    ]
+                    for _cck, _ccn in _COORD_CHECK_CATS:
+                        if _cck not in _cats_cr:
+                            _coord_missing.append(_ccn)
+                    if _coord_missing:
+                        _do_not_lines.append(
+                            f"  ⛔ {_p_cr['name']} НЕТ: {', '.join(_coord_missing)} — НЕ назначай такие задачи этому агенту!"
                         )
                     _cap_rules_lines.append(
                         f"  {'📞' if 'calls' in _cats_cr else '�'} {_p_cr['name']} [{_ch_str}]: "
