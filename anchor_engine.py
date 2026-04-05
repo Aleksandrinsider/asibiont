@@ -2992,8 +2992,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + "АВТОПИЛОТ — ПРОТОКОЛ МЫШЛЕНИЯ:\n"
         "Ты — опытный специалист, а не скрипт. Перед каждым действием ДУМАЙ.\n\n"
 
-        "▸ ШАГ 0 — ОЦЕНКА СИТУАЦИИ (перед первым инструментом):\n"
+        "▸ ШАГ 0 — САМООЦЕНКА И ПИВОТ (перед первым инструментом):\n"
         "  Прочитай блоки выше: что уже сделано, какие задачи провалились, какие письма отправлены.\n"
+        "  ОЦЕНИ свои последние 3 действия:\n"
+        "    — Какие дали КОНКРЕТНЫЙ результат (ответ, контакт, публикация)?\n"
+        "    — Какие были впустую (поиск без находок, письмо без ответа, таймаут)?\n"
+        "  Если 2+ из 3 последних действий были неэффективны — ты ОБЯЗАН сменить подход:\n"
+        "    поиск → контент | email → community | исследование → публикация | один канал → другой\n"
         "  Спроси себя: 'Какой ОДИН шаг сейчас даст максимальный результат для цели?'\n"
         "  Если ответ — 'то же, что делал вчера' — ты на автопилоте. Остановись. Подумай иначе.\n\n"
 
@@ -10054,6 +10059,19 @@ class AnchorEngine:
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
                 "Ты — директор офиса. Агенты — твои сотрудники. Оценивай их по РЕЗУЛЬТАТАМ, не по отчётам.\n\n"
 
+                "🔄 ОБЯЗАТЕЛЬНАЯ ОЦЕНКА ПРОШЛОГО ЦИКЛА (перед планированием!):\n"
+                "Прежде чем назначать задачи — ПРОАНАЛИЗИРУЙ данные выше:\n"
+                "  1. ЧТО РАБОТАЛО? Какие действия агентов дали конкретный результат (контакт, ответ, публикация, данные)?\n"
+                "  2. ЧТО НЕ РАБОТАЛО? Какие действия были впустую (поиск без результата, письмо без ответа, таймаут)?\n"
+                "  3. РЕШЕНИЕ О ТАКТИКЕ:\n"
+                "     - Работает → УДВОЙ усилия в этом направлении\n"
+                "     - Не работает 2+ раза → ПОЛНОСТЬЮ СМЕНИ подход (другой канал, другая аудитория, другой тип действия)\n"
+                "     - Нет данных → попробуй НОВОЕ направление, которое ещё не тестировали\n"
+                "  4. ПРИНЦИП ПИВОТА: Если прогресс цели <15% за 3+ дня — текущая стратегия ПРОВАЛИЛАСЬ.\n"
+                "     НЕ повторяй её. Назначай 50%+ шагов на ПРИНЦИПИАЛЬНО ДРУГУЮ стратегию:\n"
+                "     поиск контактов → создание контента | outreach → community building |\n"
+                "     email рассылка → партнёрства | исследование → конкретные действия\n\n"
+
                 "ПРИНЦИП ЦЕПОЧЕК ЦЕННОСТИ (самое важное!):\n"
                 "Каждая задача — это НЕ один шаг, а ЦЕПОЧКА до конечного результата.\n"
                 "Плохо: «Исследуй тему X» (агент сделает web_search и напишет отчёт → 0 пользы)\n"
@@ -10256,6 +10274,14 @@ class AnchorEngine:
                                    'reply', 'отправь', 'опубликуй', 'проверь почт', 'ответь',
                                    'follow_up', 'save_note', 'report', 'update_goal',
                                    'send email', 'write', 'create', 'analyze']
+                    # Alternative actions to inject when search is blocked
+                    import random as _rnd_stag
+                    _alt_actions = [
+                        {'tool': 'create_post', 'task_hint': 'Создай аналитический пост на основе уже собранных данных — поделись инсайтами с аудиторией'},
+                        {'tool': 'send_message_to_user', 'task_hint': 'Отправь пользователю отчёт: что нашли, какие результаты, что предлагаешь делать дальше'},
+                        {'tool': 'run_agent_action', 'task_hint': 'Используй свою интеграцию для конкретного действия — публикация, аналитика или мониторинг'},
+                        {'tool': 'research_topic', 'task_hint': 'Проанализируй эффективность текущего подхода и предложи 3 альтернативные стратегии'},
+                    ]
                     _plan_stag_filtered = []
                     _n_search_blocked = 0
                     for _ps in _plan:
@@ -10266,20 +10292,66 @@ class AnchorEngine:
                             and not any(kw in _ps_task for kw in _action_kws)
                         )
                         if _is_pure_search and _n_search_blocked < 1:
-                            # Block at most 1 pure-search step, convert to action
+                            # Replace search step with action alternative
                             _n_search_blocked += 1
+                            _alt = _rnd_stag.choice(_alt_actions)
+                            _replacement = dict(_ps)  # keep agent, goal, reason
+                            _replacement['tool'] = _alt['tool']
+                            _replacement['task'] = _alt['task_hint']
+                            _replacement['reason'] = 'pivot: поиск не даёт результата, переключаюсь на действие'
+                            _plan_stag_filtered.append(_replacement)
                             logger.info(
-                                "[COORD] stagnation-blocker: blocked pure-search step: %s",
-                                _ps_task[:80]
+                                "[COORD] stagnation-blocker: replaced search with %s: %s",
+                                _alt['tool'], _ps_task[:80]
                             )
-                            continue  # drop this step
+                            continue
                         _plan_stag_filtered.append(_ps)
                     if _plan_stag_filtered:
                         _plan = _plan_stag_filtered
                         _stagnant_block_active = True
-                        logger.info("[COORD] stagnation-blocker: dropped %d search step(s)", _n_search_blocked)
+                        logger.info("[COORD] stagnation-blocker: replaced %d search step(s)", _n_search_blocked)
             except Exception as _stb_err:
                 logger.debug("[COORD] stagnation blocker: %s", _stb_err)
+
+            # ── Scorecard-driven filter: block ineffective strategies based on real metrics ──
+            try:
+                if _plan and _strat_counts:
+                    _email_kws = ['send_outreach', 'email', 'outreach', 'письм', 'follow_up', 'send_follow']
+                    # If email sent >20 and reply rate <2% → block new outreach, redirect to content/other
+                    if _email_sent > 20:
+                        _email_replied = sum(1 for _ in session.query(
+                            __import__('models', fromlist=['OutreachEmail']).OutreachEmail
+                        ).filter_by(user_id=user.id).filter(
+                            __import__('models', fromlist=['OutreachEmail']).OutreachEmail.status.in_(['replied', 'interested'])
+                        ).limit(100).all()) if _email_sent > 0 else 0
+                        _email_rate = _email_replied / max(_email_sent, 1)
+                        if _email_rate < 0.02:
+                            _plan_email_filtered = []
+                            _n_email_blocked = 0
+                            for _pef in _plan:
+                                _pef_task = (_pef.get('task') or '').lower()
+                                _pef_tool = (_pef.get('tool') or '').lower()
+                                _is_email_step = (
+                                    any(kw in _pef_task or kw in _pef_tool for kw in _email_kws)
+                                    and 'check_emails' not in _pef_tool  # don't block checking replies
+                                )
+                                if _is_email_step and _n_email_blocked < 1:
+                                    _n_email_blocked += 1
+                                    _replacement_ef = dict(_pef)
+                                    _replacement_ef['tool'] = 'create_post'
+                                    _replacement_ef['task'] = (
+                                        'Email-конверсия <2% — смени подход. '
+                                        'Создай ценный контент (пост, кейс, аналитику) который привлечёт аудиторию органически'
+                                    )
+                                    _replacement_ef['reason'] = f'pivot: email конверсия {_email_rate*100:.1f}% при {_email_sent} отправленных'
+                                    _plan_email_filtered.append(_replacement_ef)
+                                    logger.info("[COORD] scorecard-filter: blocked email step (rate=%.1f%%)", _email_rate * 100)
+                                    continue
+                                _plan_email_filtered.append(_pef)
+                            if _plan_email_filtered:
+                                _plan = _plan_email_filtered
+            except Exception as _scf_err:
+                logger.debug("[COORD] scorecard filter: %s", _scf_err)
 
             # ── Failed-task cooldown: не переназначаем провалившиеся задачи в том же цикле ──
             try:
@@ -15154,6 +15226,35 @@ class AnchorEngine:
                             session.rollback()
         except Exception as _au_err:
             logger.debug("[AUTOPILOT] auto-update goal metric: %s", _au_err)
+
+        # ── Auto-complete: если metric_current >= metric_target → цель достигнута ──
+        try:
+            for _g_ac in active_goals:
+                _mt_ac = _g_ac.metric_target or 0
+                _mc_ac = _g_ac.metric_current or 0
+                if _mt_ac > 0 and _mc_ac >= _mt_ac and _g_ac.status == 'active':
+                    _g_ac.progress_percentage = 100
+                    _g_ac.status = 'completed'
+                    try:
+                        session.commit()
+                        logger.info(
+                            "[AUTOPILOT] Auto-completed goal #%d '%s': %s/%s achieved",
+                            _g_ac.id, (_g_ac.title or '')[:40], _mc_ac, _mt_ac
+                        )
+                        # Log goal_completed event for notifications
+                        from models import AgentActivityLog as _AAL_ac
+                        session.add(_AAL_ac(
+                            user_id=user.id,
+                            agent_name='autopilot',
+                            activity_type='goal_completed',
+                            title=f'Цель достигнута: {(_g_ac.title or "")[:60]}',
+                            status='completed',
+                        ))
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+        except Exception as _ac_err:
+            logger.debug("[AUTOPILOT] auto-complete goals: %s", _ac_err)
 
         # ── Авто-обновление прогресса для целей БЕЗ metric_target (на основе email ответов) ──
         # Для целей без явной метрики: прогресс = f(количество ответов на outreach).
