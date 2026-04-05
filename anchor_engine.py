@@ -543,6 +543,57 @@ def _strip_md(text: str) -> str:
     return t
 
 
+# ── Tool-name / tech-noise sanitizer for user-facing messages ──
+_TOOL_NAMES_RE = None
+
+def _sanitize_proactive_text(text: str) -> str:
+    """Remove tool names, tech noise from user-facing proactive messages."""
+    if not text:
+        return text or ''
+    import re as _re_san
+    global _TOOL_NAMES_RE
+    if _TOOL_NAMES_RE is None:
+        _tool_names = [
+            'web_search', 'research_topic', 'save_note', 'save_email_contact',
+            'find_relevant_contacts_for_task', 'send_outreach_email', 'check_emails',
+            'reply_to_outreach_email', 'negotiate_by_email', 'update_goal_progress',
+            'run_agent_action', 'create_post', 'send_message_to_user',
+            'get_news_trends', 'get_rss_feed', 'delegate_to_agent',
+        ]
+        _pattern = r'\b(?:через\s+)?(?:' + '|'.join(_re_san.escape(t) for t in _tool_names) + r')\b'
+        _TOOL_NAMES_RE = _re_san.compile(_pattern, _re_san.IGNORECASE)
+    t = _TOOL_NAMES_RE.sub('', text)
+    # "исследование темы через исследование темы" → "исследование темы"
+    t = _re_san.sub(r'(исследование темы)(?:\s+через\s+исследование темы)+', r'\1', t, flags=_re_san.IGNORECASE)
+    # Clean up leftover artifacts: double spaces, dangling dashes/commas
+    t = _re_san.sub(r'\s+—\s+—', ' —', t)
+    t = _re_san.sub(r'\s{2,}', ' ', t)
+    t = _re_san.sub(r'\s+([.,;!?])', r'\1', t)
+    return t.strip()
+
+
+def _is_delegation_message(text: str, agent_names: list) -> bool:
+    """Check if message is agent-to-agent delegation (not meant for user)."""
+    if not text or not agent_names:
+        return False
+    t = text.strip().lower()
+    for name in agent_names:
+        nl = name.lower()
+        # "Марк, проанализируй..." / "ASI, отправь..."
+        if t.startswith(nl + ',') or t.startswith(nl + ', '):
+            return True
+        # "Марк проанализируй" (без запятой, но повелительное наклонение сразу)
+        _IMPERATIVE_VERBS = (
+            'проанализируй', 'отправь', 'проверь', 'найди', 'подготовь',
+            'используй', 'запусти', 'сделай', 'напиши', 'создай',
+            'добавь', 'обнови', 'собери', 'изучи', 'помоги',
+        )
+        for verb in _IMPERATIVE_VERBS:
+            if t.startswith(nl + ' ' + verb):
+                return True
+    return False
+
+
 async def _safe_send(bot, chat_id: int, text: str):
     """Send a message, splitting into chunks if it exceeds Telegram's 4096 char limit."""
     if not text or not text.strip():
@@ -6578,12 +6629,8 @@ class AnchorEngine:
                     'задачу выполнил', 'задачу выполнила',
                 )
                 _is_echo = False  # промпт теперь учит думать правильно
-                # Утечки делегаций: ответ обращается к другому агенту (запятая, пробел, пожалуйста)
-                _is_delegation_leak = any(
-                    _result_lower.startswith(n.lower() + sep)
-                    for n in _all_agent_names
-                    for sep in (',', ', ', ' ', ' пожалуйста')
-                )
+                # Утечки делегаций: ответ обращается к другому агенту (запятая, пробел, повелительный глагол)
+                _is_delegation_leak = _is_delegation_message(_result_clean, _all_agent_names)
                 # Планы без действий: "Поняла, переключаемся...", "Запускаю поиск..."
                 _PLANNING_WITHOUT_FACTS = (
                     'поняла, ', 'понял, ', 'переключаемся', 'переключаюсь',
@@ -7070,6 +7117,8 @@ class AnchorEngine:
                         # Truncate overly long agent messages (keep it concise for chat)
                         if len(_cleaned_result) > 900:
                             _cleaned_result = _cleaned_result[:900].rsplit(' ', 1)[0] + '…'
+                        # Sanitize tool names from user-facing text
+                        _cleaned_result = _sanitize_proactive_text(_cleaned_result)
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
                         await asyncio.sleep(2)
                         try:
@@ -8096,13 +8145,14 @@ class AnchorEngine:
                 )
                 or (not _chain_has_actions and len(_chain_clean) < 80
                     and any(w in _chain_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно')))
-                or any(_chain_lower.startswith(n.lower() + ',') for n in _chain_agent_names)
+                or _is_delegation_message(_chain_clean, _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
+                _chain_sanitized = _sanitize_proactive_text(_chain_clean)
                 try:
                     await self.bot.send_message(
                         chat_id=_user_tg_id,
-                        text=f"{_next_ag.name}:\n\n{_next_result.strip()}",
+                        text=f"{_next_ag.name}:\n\n{_chain_sanitized}",
                     )
                     _chain_agent_content = json.dumps({
                         '__agent': {
@@ -8110,7 +8160,7 @@ class AnchorEngine:
                             'id': _next_ag.id,
                             'avatar_url': _safe_avatar(_next_ag.avatar_url, _next_ag.id),
                         },
-                        'text': _strip_html(_next_result.strip()),
+                        'text': _sanitize_proactive_text(_strip_html(_next_result.strip())),
                         '__tools_used': _chain_tools_used,
                         '__anchor_type': 'agent_chain_continue',
                     }, ensure_ascii=False)
@@ -12868,22 +12918,9 @@ class AnchorEngine:
                                     f"У агента {_tasks[0]['agent']} много незавершённых назначений -- "
                                     f"перенаправляю работу другому специалисту."
                                 )
-                            elif _reason in ('timeout_300s', 'exec_error'):
-                                if _recent_timeout_mentioned:
-                                    _adapt_lines.append(
-                                        f"По '{_tasks[0]['title'][:50]}...' автоканал сработал нестабильно -- "
-                                        f"переключаюсь на ручной сценарий, чтобы не терять темп."
-                                    )
-                                else:
-                                    _adapt_lines.append(
-                                        f"По '{_tasks[0]['title'][:50]}...' был таймаут/технический сбой -- "
-                                        f"переключаюсь на альтернативный канал."
-                                    )
-                            elif _reason == 'tech_unstable_recent':
-                                _adapt_lines.append(
-                                    f"Сценарий '{_tasks[0]['title'][:50]}...' уже показывал техсбои в последних циклах -- "
-                                    f"сразу перехожу на альтернативный маршрут без повторного прогона."
-                                )
+                            elif _reason in ('timeout_300s', 'exec_error', 'tech_unstable_recent'):
+                                # Technical noise — skip, not relevant for user report
+                                pass
                             elif _reason == 'empty_result':
                                 if _tasks[0].get('recs'):
                                     _adapt_lines.append(f"Рекомендация: {_tasks[0]['recs'][0]}")
@@ -12937,6 +12974,19 @@ class AnchorEngine:
                         "- Прогресс цели изменился — упомяни новую цифру.\n"
                     )
 
+                    # Gender hints for agents
+                    _gender_hints_parts = []
+                    for _ag_n in _current_run_agent_tools:
+                        _is_fem_ag = _ag_n and _ag_n[-1] in 'аяАЯ' and _ag_n[-2:].lower() not in ('ша', 'жа')
+                        if _is_fem_ag:
+                            _gender_hints_parts.append(f"{_ag_n} — ж (сделала, нашла, проверила)")
+                        else:
+                            _gender_hints_parts.append(f"{_ag_n} — м (сделал, нашёл, проверил)")
+                    _gender_line = (
+                        f"- Род агентов: {'; '.join(_gender_hints_parts)}. Используй правильные окончания.\n"
+                        if _gender_hints_parts else ''
+                    )
+
                     _report_prompt = (
                         f"Ты — ASI, координатор. Пишешь короткий отчёт пользователю в чате.\n\n"
                         + _prev_summaries_text
@@ -12947,8 +12997,9 @@ class AnchorEngine:
                         f"Правила:\n"
                         f"- Пиши как друг-менеджер в мессенджере — живо, коротко, по делу.\n"
                         f"- Называй агентов по именам как живых людей: '[Имя] проверила почту...', '[Имя] нашёл 3 контакта...'.\n"
-                        f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
-                        f"- Не зацикливайся на слове 'таймаут': если это уже недавно упоминалось, пиши мягко 'автоканал нестабилен, переключились'.\n"
+                        + _gender_line
+                        + f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
+                        f"- НЕ УПОМИНАЙ технические проблемы: таймауты, сбои, нестабильность, переключение каналов. Пиши только о результатах.\n"
                         + _progress_rule
                         + f"- НЕ ЗАДАВАЙ вопросов пользователю ('какой приоритет?', 'что выбрать?', 'давай обсудим?'). "
                         f"Автопилот должен ДЕЙСТВОВАТЬ и ИНФОРМИРОВАТЬ. Если данных не хватает — сам прими решение и сообщи что сделал.\n"
@@ -13058,7 +13109,7 @@ class AnchorEngine:
                                     message_type='proactive',
                                     content=json.dumps({
                                         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                        'text': _strip_md(_report_text),
+                                        'text': _sanitize_proactive_text(_strip_md(_report_text)),
                                         '__anchor_type': 'coordinator_summary',
                                     }, ensure_ascii=False),
                                 ))
