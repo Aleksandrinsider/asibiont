@@ -18036,8 +18036,17 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
                     func.lower(_AAL_cd.title).like(f'%· {_cd_action_l}%'),
                     _AAL_cd.created_at >= _cd_cut,
                 ).scalar() or 0
+                # Short-window cooldown: 2+ за 2 часа — антилуп
+                _cd_cut_short = datetime.now(timezone.utc) - timedelta(hours=2)
+                _cd_count_short = _cd_sess.query(func.count(_AAL_cd.id)).filter(
+                    _AAL_cd.user_id == _cd_uid,
+                    _AAL_cd.activity_type == 'run_agent_action',
+                    func.lower(_AAL_cd.title).like(f'%· {_cd_action_l}%'),
+                    _AAL_cd.created_at >= _cd_cut_short,
+                ).scalar() or 0
             else:
                 _cd_count = 0
+                _cd_count_short = 0
         finally:
             if _cd_close:
                 _cd_sess.close()
@@ -18045,6 +18054,11 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
             return (
                 f"⛔ Действие «{action}» заблокировано: уже вызывалось {_cd_count}x за 48ч. "
                 f"Используй ДРУГОЙ инструмент или стратегию."
+            )
+        if _cd_count_short >= 2:
+            return (
+                f"⛔ Действие «{action}» заблокировано: уже вызывалось {_cd_count_short}x за 2ч. "
+                f"Слишком часто. Используй ДРУГОЙ инструмент или стратегию."
             )
     except Exception as _cd_e:
         logger.debug("run_agent_action cooldown check: %s", _cd_e)

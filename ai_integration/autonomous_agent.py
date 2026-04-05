@@ -1764,6 +1764,17 @@ class HybridAutonomousAgent:
                                 _rc_short = _rc[:100].split('\n')[0]
                                 if _rc_short and _rc_short != '—':
                                     out += f'\n[{_rn}: {_rc_short}]'
+                        elif _sections:
+                            # Секции найдены, но целевая (github/amo/...) отсутствует —
+                            # интеграция не настроена. НЕ возвращаем raw output.
+                            _kw_label = _target.upper()
+                            logger.warning("[EXT-ACT] action=%s target=%s NOT found in script sections: %s",
+                                           action, _target, [s[0] for s in _sections])
+                            out = (
+                                f"⛔ Действие «{action}» требует интеграцию {_kw_label}, "
+                                f"которая НЕ настроена у этого агента. "
+                                f"Используй ДРУГОЙ инструмент или стратегию."
+                            )
                 out = out[:2000]
             except _aio_ea.TimeoutError:
                 proc.kill()
