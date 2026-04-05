@@ -1721,20 +1721,25 @@ class HybridAutonomousAgent:
             _comm_task = _aio_ea.create_task(proc.communicate())
             try:
                 stdout, stderr = await _aio_ea.wait_for(_comm_task, timeout=float(API_TIMEOUT_SCRIPT))
-                out = stdout.decode('utf-8', errors='replace').strip()[:4000]
+                _raw_out = stdout.decode('utf-8', errors='replace').strip()[:32000]
                 err = stderr.decode('utf-8', errors='replace').strip()[:500]
                 # ── Извлечь вывод только релевантной секции (если скрипт многосекционный) ──
                 # python_code содержит несколько интеграций (Gmail, GitHub, AmoCRM, ...),
                 # все выполняются последовательно. Без фильтрации Gmail-inbox забивает вывод.
-                if action and out and '\n# ===' in out:
+                # ВАЖНО: парсим секции из ПОЛНОГО вывода (до truncate), иначе
+                # Gmail (24 письма) может съесть весь буфер и скрыть GitHub/AmoCRM секции.
+                out = _raw_out
+                if action and _raw_out and '# ===' in _raw_out:
                     _ACTION_SECTION_MAP = {
                         'create_lead': 'amo', 'create_contact': 'amo', 'search_contacts': 'amo',
                         'get_contact': 'amo', 'add_note': 'amo', 'link_contact_to_lead': 'amo',
                         'get_leads': 'amo', 'update_lead': 'amo', 'create_deal': 'amo',
                         'send_email': 'gmail', 'check_inbox': 'gmail', 'check_emails': 'gmail',
                         'create_issue': 'github', 'list_issues': 'github',
+                        'search_users': 'github', 'find_contributors': 'github',
                         'check_news': 'rss', 'read_rss': 'rss', 'check_news_and_markets': 'rss',
                         'check_markets': 'rss', 'fetch_rss': 'rss',
+                        'yandex_metrika_report': 'metrika',
                     }
                     _SEC_KEYWORDS = {
                         'amo': ('amocrm', 'amo'),

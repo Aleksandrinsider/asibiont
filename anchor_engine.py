@@ -1911,7 +1911,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "                 ❌ Неправильно: 'AI testing developers QA automation' → 0 результатов!\n"
            "                 Квалификаторы: language:X  followers:>N  repos:>N  location:X  type:user\n"
            "                action='find_contributors' repo='org/repo'\n"
+           "                action='create_issue' title='...' body='...' — создать issue\n"
+           "                action='list_issues' — список открытых issues\n"
            if _has_github else '')
+        + ("  AmoCRM:        action='search_contacts' query='Иван' — поиск контакта в CRM\n"
+           "                 action='create_lead' name='Сделка' price='1000'\n"
+           "                 action='create_contact' name='Имя' email='...' phone='...'\n"
+           "                 action='get_contact' id='...' — карточка контакта со сделками\n"
+           "                 action='add_note' entity_type='contacts' entity_id='...' text='...'\n"
+           "                 action='get_leads' — последние 10 сделок\n"
+           if _has_crm else '')
         + ("  Notion:        action='create_page' / 'update_page'\n" if _has_notion else '')
         + ("  Sheets:        action='update_sheet' / 'append_row'\n" if _has_sheets else '')
         + ("  Slack:         action='post_message' channel='#X'\n" if _has_slack else '')
@@ -1922,6 +1931,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     )
     _sec_research = (
         "\n🔍 Поиск и исследования (LLM + web):\n"
+        "  ⚠️ Если у агента есть run_agent_action с нужным API (AmoCRM, GitHub, RSS) — используй ЕГО, а не web_search.\n"
+        "     web_search = fallback, когда API нет или не хватает общей информации.\n"
         + _td('web_search') + '\n'
         + _td('research_topic') + '\n'
         + _td('get_news_trends') + '\n'
