@@ -10172,6 +10172,7 @@ class AnchorEngine:
                 + _effectiveness_str
                 + _strategy_scorecard_str
                 + _email_analytics_str
+                + _situation_analysis_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
                 + _agent_results_str
@@ -10218,54 +10219,51 @@ class AnchorEngine:
                     else ''
                 )
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
-                "Ты — директор офиса. Агенты — твои сотрудники. Оценивай их по РЕЗУЛЬТАТАМ, не по отчётам.\n\n"
+                "Ты — живой директор офиса. Не следуй шаблонам — ДУМАЙ исходя из ситуации.\n\n"
 
-                "🔄 ОБЯЗАТЕЛЬНАЯ ОЦЕНКА ПРОШЛОГО ЦИКЛА (перед планированием!):\n"
-                "Прежде чем назначать задачи — ПРОАНАЛИЗИРУЙ данные выше:\n"
-                "  1. ЧТО РАБОТАЛО? Какие действия агентов дали конкретный результат (контакт, ответ, публикация, данные)?\n"
-                "  2. ЧТО НЕ РАБОТАЛО? Какие действия были впустую (поиск без результата, письмо без ответа, таймаут)?\n"
-                "  3. РЕШЕНИЕ О ТАКТИКЕ:\n"
-                "     - Работает → УДВОЙ усилия в этом направлении\n"
-                "     - Не работает 2+ раза → ПОЛНОСТЬЮ СМЕНИ подход (другой канал, другая аудитория, другой тип действия)\n"
-                "     - Нет данных → попробуй НОВОЕ направление, которое ещё не тестировали\n"
-                "  4. ПРИНЦИП ПИВОТА: Если прогресс цели <15% за 3+ дня — текущая стратегия ПРОВАЛИЛАСЬ.\n"
-                "     НЕ повторяй её. Назначай 50%+ шагов на ПРИНЦИПИАЛЬНО ДРУГУЮ стратегию:\n"
-                "     поиск контактов → создание контента | outreach → community building |\n"
-                "     email рассылка → партнёрства | исследование → конкретные действия\n\n"
+                "🧠 ПРОТОКОЛ МЫШЛЕНИЯ (как живой человек):\n\n"
 
-                "ПРИНЦИП ЦЕПОЧЕК ЦЕННОСТИ (самое важное!):\n"
-                "Каждая задача — это НЕ один шаг, а ЦЕПОЧКА до конечного результата.\n"
-                "Плохо: «Исследуй тему X» (агент сделает web_search и напишет отчёт → 0 пользы)\n"
-                "Хорошо: «Исследуй тему X → создай заметку с выводами → поставь задачу на следующий шаг»\n"
-                "Хорошо: «Найди 3 контакта в сфере Y → сохрани → напиши каждому персональное письмо»\n"
-                "Хорошо: «Собери данные через run_agent_action → создай пост с аналитикой → опубликуй»\n\n"
+                "ШАГ 1 — ОЦЕНИ СИТУАЦИЮ:\n"
+                "  Прочитай ВСЕ данные выше: scorecard, аналитику, историю агентов, анализ ситуации.\n"
+                "  Ответь себе:\n"
+                "  • Что РЕАЛЬНО сработало? (конкретные результаты: контакт, ответ, публикация)\n"
+                "  • Что НЕ сработало? (и ПОЧЕМУ — плохая аудитория? плохой оффер? неверный канал?)\n"
+                "  • Какие ресурсы есть? (интеграции агентов, собранные данные, контакты)\n\n"
 
-                "КОМАНДНАЯ РАБОТА (агенты помогают друг другу):\n"
-                "Агенты работают как команда в реальном офисе:\n"
-                "• Агент A собирает данные (RSS/GitHub/web/API) → передаёт агенту B для действия\n"
-                "• Агент A готовит контент/аналитику → агент B публикует или применяет\n"
-                "• Агент A мониторит (входящие/метрики/ленты) → выявляет важное → агент B реагирует\n"
-                "В поле task НАПРЯМУЮ указывай: «если найдёшь X → передай через DELEGATE[Имя] данные»\n\n"
+                "ШАГ 2 — ПРИМИ РЕШЕНИЕ:\n"
+                "  На основе ситуации (не шаблона!) выбери стратегию:\n"
+                "  • Если канал работает → УДВОЙ усилия (больше шагов в том же направлении)\n"
+                "  • Если канал не работает → НЕ БЛОКИРУЙ, а ИЗМЕНИ ПОДХОД в нём:\n"
+                "    - email 0% → сменить аудиторию, персонализировать, другой тон — НЕ бросать email\n"
+                "    - поиск без результата → искать ПО-ДРУГОМУ (другие площадки, другие запросы)\n"
+                "    - контент без отклика → другой формат/тема/площадка\n"
+                "  • Если канал не тестировали → ПОПРОБУЙ (community, партнёрства, контент)\n"
+                "  • Если всё застряло → ПИВОТ: радикально новый подход, отчёт пользователю\n\n"
 
-                "КАЧЕСТВО ЗАДАЧ (ценность через действия):\n"
-                "• Задача где агент только искал и написал отчёт — малоценна\n"
-                "• Наибольшая ценность когда агент дошёл до ДЕЙСТВУЮЩЕГО инструмента своей интеграции\n"
-                "• Формулируй задачу так, чтобы она вела к конкретному действию через РЕАЛЬНУЮ интеграцию агента\n"
-                "• Смотри карточку агента (интеграции и инструменты) — задача должна использовать ИХ\n\n"
+                "ШАГ 3 — ПОСТАВЬ ЗАДАЧИ КАК ЖИВОЙ ДИРЕКТОР:\n"
+                "  Живой директор не даёт абстрактные указания — он говорит КОНКРЕТНО:\n"
+                "  ✗ «Исследуй тренды AI» (бесполезно)\n"
+                "  ✓ «Найди 3 статьи про AI-агентов на Хабре, выдели авторов, напиши им»\n"
+                "  ✗ «Привлеки пользователей» (пусто)\n"
+                "  ✓ «Создай пост-кейс: как ASI Biont помог автоматизировать X, опубликуй в канале»\n"
+                "  Каждая задача = ЦЕПОЧКА до конкретного результата.\n\n"
 
-                "📊 ОБНОВЛЕНИЕ ПРОГРЕССА ЦЕЛИ (ОБЯЗАТЕЛЬНО!):\n"
-                "Если агент в прошлом цикле достиг КОНКРЕТНОГО результата (нашёл контакт, опубликовал пост,\n"
-                "получил ответ, привлёк подписчика) — один из шагов плана ДОЛЖЕН содержать:\n"
-                "  tool='update_goal_progress', task='Обнови прогресс цели: [что именно было достигнуто]'\n"
-                "  Агенту передай metric_current=N или notes='описание прогресса'.\n"
-                "Без этого шага прогресс останется на месте, даже если агенты реально работают.\n"
-                "НЕ ставь этот шаг если НЕТ конкретного прогресса — только при РЕАЛЬНЫХ достижениях.\n\n"
+                "ШАГ 4 — УЧТИ КОНТЕКСТ КАЖДОГО АГЕНТА:\n"
+                "  • Какие интеграции у агента? → задача должна использовать ИХ\n"
+                "  • Что агент делал раньше? → не повторяй ту же задачу, дай РАЗВИТИЕ\n"
+                "  • Если агент на кулдауне (почта проверена, инструмент использован) → другая задача\n"
+                "  • Если у агента нет нужной интеграции → переформулируй через то что ЕСТЬ\n\n"
 
-                "⚡ МИНИМУМ ДЕЙСТВИЙ (правило 50%):\n"
-                "Минимум 50% шагов плана должны использовать ДЕЙСТВУЮЩИЕ инструменты:\n"
-                "  run_agent_action, create_post, send_message_to_user, send_outreach_email, check_emails,\n"
-                "  save_email_contact, reply_to_outreach_email, update_goal_progress.\n"
-                "Если все шаги = research_topic / web_search — план ПЛОХОЙ. Добавь действие.\n\n"
+                "ШАГ 5 — ОБНОВИ ПРОГРЕСС:\n"
+                "  Если в прошлом цикле был КОНКРЕТНЫЙ результат — один шаг = update_goal_progress.\n"
+                "  Без этого прогресс цели стоит на месте, даже если агенты работают.\n\n"
+
+                "ПРИНЦИПЫ ЖИВОГО ДИРЕКТОРА:\n"
+                "• Каждый цикл — УНИКАЛЬНЫЙ. Не копируй задачи из прошлого цикла.\n"
+                "• Диверсификация: если 3 агента — они должны работать по РАЗНЫМ направлениям.\n"
+                "• Данные — для действий. Если данные собраны → ИСПОЛЬЗУЙ их, не ищи снова.\n"
+                "• DELEGATE: агент нашёл данные → передай другому для действия.\n"
+                "• Баланс: исследование-действие-проверка. Не застревай на одном этапе.\n\n"
 
                 "ИСПОЛЬЗУЙ ВСЕ ИНТЕГРАЦИИ АГЕНТА:\n"
                 "У каждого агента может быть несколько интеграций (email, GitHub, RSS, метрика, CRM, и т.д.).\n"
@@ -10427,156 +10425,99 @@ class AnchorEngine:
                 if _plan_content_deduped:
                     _plan = _plan_content_deduped
 
-            # ── Strategy-stagnation blocker: reject plan steps repeating proven-ineffective strategies ──
-            # If outbound search is dominant (>60%) AND goal progress <10% for 3+ days → block pure search steps
+            # ── Situation analysis: collect data for AI to reason about (replaces hard blocks) ──
+            # Instead of programmatically blocking/replacing plan steps, we give the AI
+            # rich situational data and let it THINK about what to do.
+            _situation_analysis_parts = []
             try:
-                _stagnant_block_active = False
+                # A) Strategy stagnation detection
                 _stag_total = sum(_strat_counts.values())
-                _stag_progress_low = any(
-                    (_g.get('progress', 0) or 0) < 10
-                    and _g.get('created_at')
-                    for _g in _goals[:3]
-                ) if _goals else False
-                _stag_search_dominant = (
-                    _stag_total > 0
-                    and _strat_counts.get('outbound_search', 0) / max(_stag_total, 1) > 0.6
+                if _stag_total > 0:
+                    _stag_search_pct = round(_strat_counts.get('outbound_search', 0) / max(_stag_total, 1) * 100)
+                    _stag_email_pct = round(_strat_counts.get('email_outreach', 0) / max(_stag_total, 1) * 100)
+                    _stag_content_pct = round(_strat_counts.get('content_creation', 0) / max(_stag_total, 1) * 100)
+                    _stag_progress_low = any(
+                        (_g.get('progress', 0) or 0) < 15
+                        and _g.get('created_at')
+                        for _g in _goals[:3]
+                    ) if _goals else False
+                    if _stag_search_pct > 50 and _stag_progress_low:
+                        _situation_analysis_parts.append(
+                            f'⚠️ ПОИСК ДОМИНИРУЕТ: {_stag_search_pct}% действий = поиск, а прогресс <15%. '
+                            'Поиск даёт сырые данные, но не конвертирует их в результат. '
+                            'Подумай: что делать С НАЙДЕННЫМ? Публикация, outreach, партнёрство — '
+                            'что превратит данные в реальных пользователей/подписчиков?'
+                        )
+                    if _stag_email_pct > 50 and _email_reply_rate < 2:
+                        _situation_analysis_parts.append(
+                            f'⚠️ EMAIL ДОМИНИРУЕТ: {_stag_email_pct}% действий = email при {_email_reply_rate}% конверсии. '
+                            'Количество не компенсирует качество. Варианты: '
+                            '1) Сменить аудиторию, 2) Персонализировать, 3) Другой тон/оффер, '
+                            '4) Параллельно развивать другие каналы (контент, community).'
+                        )
+
+                # B) Email diagnostics (smart, not blocking)
+                if _email_sent > 10:
+                    _diag_parts = []
+                    if _email_reply_rate == 0 and _email_sent > 30:
+                        _diag_parts.append(
+                            f'0 ответов на {_email_sent} писем — текущий подход не работает. '
+                            'Но это НЕ значит что email мёртв. Значит нужно ИЗМЕНИТЬ: '
+                            'аудиторию, тон, длину, персонализацию или оффер. '
+                            'Каждое новое письмо должно отличаться от предыдущих.'
+                        )
+                    elif _email_reply_rate < 2 and _email_sent > 20:
+                        _diag_parts.append(
+                            f'Конверсия {_email_reply_rate}% при {_email_sent} письмах — ниже нормы. '
+                            'Тестируй: другой сегмент аудитории, короткие vs длинные письма, '
+                            'friendly vs formal тон, конкретный оффер vs общее знакомство.'
+                        )
+                    if _diag_parts:
+                        _situation_analysis_parts.extend(_diag_parts)
+
+                # C) Failed tasks (inform, don't block)
+                from models import AgentActivityLog as _AAL_sit
+                _fail_cutoff_sit = datetime.now(timezone.utc) - timedelta(hours=3)
+                _recent_fails_sit = session.query(_AAL_sit).filter(
+                    _AAL_sit.user_id == user.id,
+                    _AAL_sit.status == 'failed',
+                    _AAL_sit.created_at >= _fail_cutoff_sit,
+                ).limit(10).all()
+                if _recent_fails_sit:
+                    _fail_titles = [f'«{(f.title or "?")[:60]}»' for f in _recent_fails_sit[:5]]
+                    _situation_analysis_parts.append(
+                        f'❌ ПРОВАЛЫ за 3ч: {", ".join(_fail_titles)}. '
+                        'Не повторяй ту же задачу — измени подход или переключи агента на другое.'
+                    )
+
+                # D) check_emails cooldown (inform, don't block)
+                if _check_emails_on_cooldown:
+                    _ce_agents = ', '.join(list(_check_emails_on_cooldown)[:3])
+                    _situation_analysis_parts.append(
+                        f'📬 Агенты {_ce_agents} проверяли почту <40 мин назад. '
+                        'Повторная проверка не даст новых результатов — дай им другую задачу.'
+                    )
+
+                # E) Telegram capability gaps (inform, don't block)
+                _tg_capable = {a.name for a in real_agents if 'telegram' in _agent_caps_categories.get(a.name, set())}
+                _tg_incapable = {a.name for a in real_agents} - _tg_capable
+                if _tg_incapable and not _tg_capable:
+                    _situation_analysis_parts.append(
+                        f'📱 Ни у кого нет Telegram-интеграции. '
+                        'Если хочешь задачу на Telegram-контент — используй web_search + create_post вместо прямого Telegram.'
+                    )
+
+            except Exception as _sit_err:
+                logger.debug('[COORD] situation analysis: %s', _sit_err)
+
+            # Build the full situation analysis string for prompt injection
+            _situation_analysis_str = ''
+            if _situation_analysis_parts:
+                _situation_analysis_str = (
+                    '\n🧠 АНАЛИЗ СИТУАЦИИ (факты — учти при планировании):\n'
+                    + '\n'.join(f'  {p}' for p in _situation_analysis_parts)
+                    + '\n\n'
                 )
-                if _stag_progress_low and _stag_search_dominant and _plan:
-                    _search_kws = ['web_search', 'найди', 'поиск', 'search', 'find',
-                                   'найти контакт', 'найти email', 'ищи', 'разыщи',
-                                   'find contact', 'find email', 'look for', 'discover']
-                    _action_kws = ['create_post', 'publish', 'send_outreach', 'check_emails',
-                                   'reply', 'отправь', 'опубликуй', 'проверь почт', 'ответь',
-                                   'follow_up', 'save_note', 'report', 'update_goal',
-                                   'send email', 'write', 'create', 'analyze']
-                    # Alternative actions to inject when search is blocked
-                    import random as _rnd_stag
-                    _alt_actions = [
-                        {'tool': 'create_post', 'task_hint': 'Создай аналитический пост на основе уже собранных данных — поделись инсайтами с аудиторией'},
-                        {'tool': 'send_message_to_user', 'task_hint': 'Отправь пользователю отчёт: что нашли, какие результаты, что предлагаешь делать дальше'},
-                        {'tool': 'run_agent_action', 'task_hint': 'Используй свою интеграцию для конкретного действия — публикация, аналитика или мониторинг'},
-                        {'tool': 'research_topic', 'task_hint': 'Проанализируй эффективность текущего подхода и предложи 3 альтернативные стратегии'},
-                    ]
-                    _plan_stag_filtered = []
-                    _n_search_blocked = 0
-                    for _ps in _plan:
-                        _ps_task = (_ps.get('task') or '').lower()
-                        _ps_tool = (_ps.get('tool') or '').lower()
-                        _is_pure_search = (
-                            any(kw in _ps_task for kw in _search_kws)
-                            and not any(kw in _ps_task for kw in _action_kws)
-                        )
-                        if _is_pure_search and _n_search_blocked < 1:
-                            # Replace search step with action alternative
-                            _n_search_blocked += 1
-                            _alt = _rnd_stag.choice(_alt_actions)
-                            _replacement = dict(_ps)  # keep agent, goal, reason
-                            _replacement['tool'] = _alt['tool']
-                            _replacement['task'] = _alt['task_hint']
-                            _replacement['reason'] = 'pivot: поиск не даёт результата, переключаюсь на действие'
-                            _plan_stag_filtered.append(_replacement)
-                            logger.info(
-                                "[COORD] stagnation-blocker: replaced search with %s: %s",
-                                _alt['tool'], _ps_task[:80]
-                            )
-                            continue
-                        _plan_stag_filtered.append(_ps)
-                    if _plan_stag_filtered:
-                        _plan = _plan_stag_filtered
-                        _stagnant_block_active = True
-                        logger.info("[COORD] stagnation-blocker: replaced %d search step(s)", _n_search_blocked)
-            except Exception as _stb_err:
-                logger.debug("[COORD] stagnation blocker: %s", _stb_err)
-
-            # ── Scorecard-driven email quality guard: inject improvement directives instead of blocking ──
-            try:
-                if _plan and _email_sent > 20 and _email_reply_rate < 2:
-                    _email_kws = ['send_outreach', 'email', 'outreach', 'письм', 'follow_up', 'send_follow']
-                    _plan_email_improved = []
-                    _n_email_redirected = 0
-                    # Smart limit: allow 1 email step per cycle but REQUIRE quality improvement
-                    # At 0% with 50+ sent → limit to 1 per cycle; at <2% → limit to 2
-                    _email_step_limit = 1 if (_email_reply_rate == 0 and _email_sent > 50) else 2
-                    _n_email_steps_seen = 0
-                    for _pef in _plan:
-                        _pef_task = (_pef.get('task') or '').lower()
-                        _pef_tool = (_pef.get('tool') or '').lower()
-                        _is_email_step = (
-                            any(kw in _pef_task or kw in _pef_tool for kw in _email_kws)
-                            and 'check_emails' not in _pef_tool
-                            and 'reply_to' not in _pef_tool
-                        )
-                        if _is_email_step:
-                            _n_email_steps_seen += 1
-                            if _n_email_steps_seen <= _email_step_limit:
-                                # KEEP the email step but INJECT quality improvement directive
-                                _improved = dict(_pef)
-                                _improved['task'] = (
-                                    f'⚠️ Текущая конверсия {_email_reply_rate}% — ОБЯЗАТЕЛЬНО измени подход: '
-                                    'новая аудитория ИЛИ персональное письмо (упомяни конкретный проект получателя) '
-                                    'ИЛИ другой тон (friendly вместо formal) ИЛИ другой оффер. '
-                                    f'Исходная задача: {(_pef.get("task") or "")[:200]}'
-                                )
-                                _improved['reason'] = (
-                                    f'smart-pivot: конверсия {_email_reply_rate}% — '
-                                    'улучшаем качество вместо блокировки канала'
-                                )
-                                _plan_email_improved.append(_improved)
-                                logger.info(
-                                    "[COORD] email-quality-guard: improved email step #%d (rate=%.1f%%)",
-                                    _n_email_steps_seen, _email_reply_rate
-                                )
-                            else:
-                                # Excess email steps → redirect to diversification
-                                _n_email_redirected += 1
-                                _replacement_ef = dict(_pef)
-                                _replacement_ef['tool'] = 'create_post' if _n_email_redirected % 2 else 'run_agent_action'
-                                _replacement_ef['task'] = (
-                                    'Email-лимит на цикл исчерпан (качество > количество). '
-                                    'Привлеки аудиторию через контент, community или партнёрства'
-                                )
-                                _replacement_ef['reason'] = 'diversify: баланс каналов при низкой email-конверсии'
-                                _plan_email_improved.append(_replacement_ef)
-                                logger.info("[COORD] email-quality-guard: redirected excess email step #%d", _n_email_steps_seen)
-                            continue
-                        _plan_email_improved.append(_pef)
-                    if _plan_email_improved:
-                        _plan = _plan_email_improved
-            except Exception as _scf_err:
-                logger.debug("[COORD] scorecard filter: %s", _scf_err)
-
-            # ── Failed-task cooldown: не переназначаем провалившиеся задачи в том же цикле ──
-            try:
-                from models import AgentActivityLog as _AAL_fc
-                _fail_cutoff = datetime.now(timezone.utc) - timedelta(hours=3)
-                _recent_fails = session.query(_AAL_fc).filter(
-                    _AAL_fc.user_id == user.id,
-                    _AAL_fc.status == 'failed',
-                    _AAL_fc.created_at >= _fail_cutoff,
-                ).all()
-                if _recent_fails:
-                    _fail_titles_lower = [(f.title or '').lower() for f in _recent_fails]
-                    _plan_fail_filtered = []
-                    for _pff in _plan:
-                        _pff_task = (_pff.get('task') or '').lower()
-                        _pff_words = {w for w in _pff_task.split() if len(w) > 4}
-                        _is_failed_repeat = False
-                        for _ft in _fail_titles_lower:
-                            _ft_words = {w for w in _ft.split() if len(w) > 4}
-                            if _ft_words and _pff_words:
-                                _common = len(_ft_words & _pff_words)
-                                _ratio = _common / max(min(len(_ft_words), len(_pff_words)), 1)
-                                if _ratio > 0.4 and _common >= 3:
-                                    _is_failed_repeat = True
-                                    logger.info("[COORD] failed-cooldown: skip '%s' (similar to failed '%s')",
-                                                _pff_task[:60], _ft[:60])
-                                    break
-                        if not _is_failed_repeat:
-                            _plan_fail_filtered.append(_pff)
-                    if _plan_fail_filtered:
-                        _plan = _plan_fail_filtered
-            except Exception as _ffc_err:
-                logger.debug("[COORD] failed-task cooldown: %s", _ffc_err)
 
             # ── Cross-cycle tool dedup: если тот же агент+инструмент назначался >=3 раз за 3ч → блок ──
             try:
@@ -10730,62 +10671,9 @@ class AnchorEngine:
             if _plan_normalized:
                 _plan = _plan_normalized
 
-            # ── Telegram-task post-filter: убираем Telegram-задачи для email-only агентов ──
-            # Если агенту нет Telegram-интеграции, задачи на контакт через Telegram/Hi,AI — зависнут.
-            _tg_task_kws = ('hi,ai', 'hiai', 'hi ai', 't.me/', 'telegram.me/', 'telegram-канал', 'телеграм-канал')
-            _tg_action_kws = ('администратор', 'admin', 'написать', 'связаться', 'dm', 'outreach', 'контакт')
-            _plan_tg_filtered = []
-            for _ptg in _plan:
-                _ag_ptg = (_ptg.get('agent') or '').strip()
-                _task_ptg = (_ptg.get('task') or '').lower()
-                _caps_ptg = _agent_caps_categories.get(_ag_ptg, set())
-                _has_tg_cap = 'telegram' in _caps_ptg
-                _is_tg_specific = (
-                    any(kw in _task_ptg for kw in _tg_task_kws)
-                    and any(kw in _task_ptg for kw in _tg_action_kws)
-                )
-                if not _has_tg_cap and _is_tg_specific:
-                    logger.info(
-                        "[COORD] tg-task post-filter: replaced Telegram task for email-only agent %s: %.80s",
-                        _ag_ptg, _task_ptg,
-                    )
-                    _ptg['tool'] = 'find_relevant_contacts_for_task'
-                    _ptg['task'] = (
-                        'Найди потенциальных пользователей ASI Biont через web_search: '
-                        'tech-блоги, Product Hunt, Hacker News, Хабр. '
-                        'Сохрани email-адреса через save_email_contact. '
-                        '(Telegram-интеграции нет — переключаемся на email-охват.)'
-                    )
-                    _ptg['reason'] = 'Telegram-задача заменена: у агента нет Telegram-интеграции'
-                _plan_tg_filtered.append(_ptg)
-            _plan = _plan_tg_filtered
-
-            # ── check_emails cooldown post-filter: заменяем check_emails на альтернативу ──
-            # Для агентов, которые уже проверяли почту < _CE_COOLDOWN_MIN мин назад.
-            if _check_emails_on_cooldown:
-                _plan_ce_filtered = []
-                for _pce in _plan:
-                    _ag_pce = (_pce.get('agent') or '').strip()
-                    _tool_pce = (_pce.get('tool') or '').strip().lower()
-                    _task_pce = (_pce.get('task') or '').strip().lower()
-                    _is_check_emails = (
-                        _tool_pce == 'check_emails'
-                        or ('check_email' in _task_pce and 'входящ' in _task_pce)
-                    )
-                    if _ag_pce in _check_emails_on_cooldown and _is_check_emails:
-                        # Заменяем на продуктивную задачу: поиск новых контактов
-                        logger.info(
-                            "[COORD] cooldown post-filter: replaced check_emails for agent %s", _ag_pce,
-                        )
-                        _pce['tool'] = 'find_relevant_contacts_for_task'
-                        _pce['task'] = (
-                            'Найди новых потенциальных пользователей ASI Biont через web_search или GitHub. '
-                            'Сохрани найденные email-адреса через save_email_contact. '
-                            '(Входящая почта была проверена недавно — сейчас важнее расширить базу контактов.)'
-                        )
-                        _pce['reason'] = 'check_emails на кулдауне — заменено на поиск новых контактов'
-                    _plan_ce_filtered.append(_pce)
-                _plan = _plan_ce_filtered
+            # ── Lightweight post-filters: only technical validation, no strategic overrides ──
+            # Telegram capability note is now in _situation_analysis_str (AI decides what to do)
+            # check_emails cooldown note is now in _situation_analysis_str (AI decides what to do)
 
             # ── Force-reply: если есть входящие без AI-ответа — добавляем reply в план ──
             # Мягкий пост-фильтр: reply добавляется как первый шаг, но НЕ стирает план координатора
