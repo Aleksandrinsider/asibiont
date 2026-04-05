@@ -559,10 +559,13 @@ def _sanitize_proactive_text(text: str) -> str:
             'reply_to_outreach_email', 'negotiate_by_email', 'update_goal_progress',
             'run_agent_action', 'create_post', 'send_message_to_user',
             'get_news_trends', 'get_rss_feed', 'delegate_to_agent',
+            'get_metrics', 'search_contacts', 'get_funnel_data',
         ]
-        _pattern = r'\b(?:через\s+)?(?:' + '|'.join(_re_san.escape(t) for t in _tool_names) + r')\b'
+        _pattern = r'\b(?:(?:через|с помощью|используя|действие)\s+)?(?:' + '|'.join(_re_san.escape(t) for t in _tool_names) + r')\b'
         _TOOL_NAMES_RE = _re_san.compile(_pattern, _re_san.IGNORECASE)
     t = _TOOL_NAMES_RE.sub('', text)
+    # Translated tool names in Russian
+    t = _re_san.sub(r'\b(?:через\s+)?(?:действие агента|сохранение контакта|поиск контактов|отправка письма)\b', '', t, flags=_re_san.IGNORECASE)
     # "исследование темы через исследование темы" → "исследование темы"
     t = _re_san.sub(r'(исследование темы)(?:\s+через\s+исследование темы)+', r'\1', t, flags=_re_san.IGNORECASE)
     # Clean up leftover artifacts: double spaces, dangling dashes/commas
@@ -6281,6 +6284,7 @@ class AnchorEngine:
                                     speaker_name='ASI',
                                     target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
+                                _coord_text_clean_save = _sanitize_proactive_text(_coord_text_clean_save)
                                 _coord_content = json.dumps({
                                     '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
                                     'text': _coord_text_clean_save,
@@ -6461,6 +6465,7 @@ class AnchorEngine:
                                         try:
                                             _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
                                             if not _skip_ack_cap:
+                                                _ack_text = _sanitize_proactive_text(_ack_text)
                                                 _ack_sv.add(Interaction(
                                                     user_id=user.id,
                                                     message_type='agent_msg',
@@ -11498,12 +11503,12 @@ class AnchorEngine:
                         message_type='agent_msg',
                         content=json.dumps({
                             '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                            'text': __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            'text': _sanitize_proactive_text(__import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
                                 _asi_assign_text,
                                 anchor_type='coordinator_assignment',
                                 speaker_name='ASI',
                                 target_name=_ag_name,
-                            ),
+                            )),
                             '__to_agent': _ag_name,
                             '__anchor_type': 'coordinator_assignment',
                         }, ensure_ascii=False),
