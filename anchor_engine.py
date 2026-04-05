@@ -7028,9 +7028,18 @@ class AnchorEngine:
                             if not _cleaned_result or not _cleaned_result.strip():
                                 logger.info("[ANCHOR-AUTOPILOT] user %d: skip empty cleaned result from %s", user.id, _chosen_name)
                             else:
+                                # Составное сообщение: поручение + отчёт
+                                _composed = _cleaned_result
+                                if _coord_text and _chosen_id != 0:
+                                    # Краткое поручение (до 200 символов)
+                                    _task_brief = (_coord_text or '').strip()
+                                    _task_brief = re.sub(r'\n+', ' ', _task_brief)
+                                    if len(_task_brief) > 200:
+                                        _task_brief = _task_brief[:200].rsplit(' ', 1)[0] + '…'
+                                    _composed = f"📋 Поручение → {_chosen_name}:\n{_task_brief}\n\n📊 Отчёт:\n{_cleaned_result}"
                                 await _safe_send(
                                     self.bot, user.telegram_id,
-                                    _cleaned_result,
+                                    _composed,
                                 )
                                 # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                                 # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
@@ -12038,7 +12047,14 @@ class AnchorEngine:
                             anchor_type='coordinator_result',
                             speaker_name=_ag_name,
                         )
-                        _tg_text = f"{_ag_name}:\n{_cleaned_tg}"
+                        # Составное сообщение: поручение + отчёт
+                        if _asi_assign_text and _ag_id != 0:
+                            _assign_brief = re.sub(r'\n+', ' ', _asi_assign_text).strip()
+                            if len(_assign_brief) > 200:
+                                _assign_brief = _assign_brief[:200].rsplit(' ', 1)[0] + '…'
+                            _tg_text = f"📋 Поручение → {_ag_name}:\n{_assign_brief}\n\n📊 Отчёт:\n{_cleaned_tg}"
+                        else:
+                            _tg_text = f"{_ag_name}:\n{_cleaned_tg}"
                         await _safe_send(self.bot, user.telegram_id, _tg_text)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
