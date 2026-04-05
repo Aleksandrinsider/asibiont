@@ -13217,6 +13217,24 @@ async def add_email_leads(
         skipped_generic = 0
         skipped_registered = 0
         _user_email_lower = (getattr(user, 'email', '') or '').strip().lower()
+        # Собираем ВСЕ собственные email (user + IMAP-аккаунты агентов)
+        _own_emails_leads = set()
+        if _user_email_lower:
+            _own_emails_leads.add(_user_email_lower)
+        try:
+            from models import UserAgent as _UA_leads
+            for _ag_leads in session.query(_UA_leads).filter(
+                _UA_leads.author_id == user.id,
+                _UA_leads.user_api_keys.isnot(None),
+            ).all():
+                for _ln_leads in (_ag_leads.user_api_keys or '').splitlines():
+                    _ln_leads = _ln_leads.strip()
+                    if _ln_leads.upper().startswith(('GMAIL_USER=', 'IMAP_USER=')):
+                        _imap_v = _ln_leads.split('=', 1)[1].strip().lower()
+                        if _imap_v and '@' in _imap_v:
+                            _own_emails_leads.add(_imap_v)
+        except Exception:
+            pass
         # Предвыбираем emails зарегистрированных пользователей для быстрой проверки
         from sqlalchemy import func as _func_leads
         _registered_emails_set: set = set()
@@ -13247,8 +13265,8 @@ async def add_email_leads(
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
                 continue
-            # ── GUARD: не добавлять email самого пользователя как лид ──
-            if _user_email_lower and email == _user_email_lower:
+            # ── GUARD: не добавлять email самого пользователя / IMAP-аккаунт как лид ──
+            if email in _own_emails_leads:
                 skipped += 1
                 continue
             # ── GUARD: не добавлять уже зарегистрированных пользователей платформы ──
@@ -13271,8 +13289,12 @@ async def add_email_leads(
             _BLOCKED_LEAD_DOMAINS = {
                 'linkedin.com', 'users.noreply.github.com',
                 'reply.github.com', 'notifications.github.com',
-                'asibiont.com',
+                'asibiont.com', 'example.com', 'test.com', 'localhost',
             }
+            # Добавляем собственные домены пользователя
+            for _oe_l in _own_emails_leads:
+                if '@' in _oe_l:
+                    _BLOCKED_LEAD_DOMAINS.add(_oe_l.rsplit('@', 1)[1])
             if _lead_domain in _BLOCKED_LEAD_DOMAINS:
                 skipped += 1
                 continue

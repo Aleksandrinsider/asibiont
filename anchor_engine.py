@@ -18084,19 +18084,67 @@ class AnchorEngine:
                 sent_count = 0
                 _draft_failures = []  # track failure reasons for 0-sent diagnostics
                 _owner_email = (getattr(user, 'email', '') or '').strip().lower()
+                # ── Собираем ВСЕ собственные email (user + IMAP-аккаунты агентов) ──
+                _own_emails_set = set()
+                if _owner_email:
+                    _own_emails_set.add(_owner_email)
+                try:
+                    from models import UserAgent as _UA_anchor
+                    for _ag_anchor in session.query(_UA_anchor).filter(
+                        _UA_anchor.author_id == user.id,
+                        _UA_anchor.user_api_keys.isnot(None),
+                    ).all():
+                        for _ln_anchor in (_ag_anchor.user_api_keys or '').splitlines():
+                            _ln_anchor = _ln_anchor.strip()
+                            if _ln_anchor.upper().startswith(('GMAIL_USER=', 'IMAP_USER=')):
+                                _imap_val = _ln_anchor.split('=', 1)[1].strip().lower()
+                                if _imap_val and '@' in _imap_val:
+                                    _own_emails_set.add(_imap_val)
+                except Exception:
+                    pass
+                # Собственные домены (по email пользователя + IMAP)
+                _own_domains_set = set()
+                for _oe in _own_emails_set:
+                    if '@' in _oe:
+                        _own_domains_set.add(_oe.rsplit('@', 1)[1])
+                # Домен платформы всегда заблокирован
+                _own_domains_set.add('asibiont.com')
+                # ── Домены, на которые email не доставляется ──
+                _BLOCKED_DOMAINS_ANCHOR = {
+                    'linkedin.com', 'users.noreply.github.com',
+                    'reply.github.com', 'notifications.github.com',
+                    'example.com', 'test.com', 'localhost',
+                }
                 for d_obj in live_drafts:
                     if sent_count >= remaining:
                         break
                     email = d_obj.recipient_email or ''
-                    # ── GUARD: пропускаем draft на email самого пользователя ──
-                    if _owner_email and email.strip().lower() == _owner_email:
+                    _email_lower = email.strip().lower()
+                    _email_domain = _email_lower.rsplit('@', 1)[1] if '@' in _email_lower else ''
+                    _email_prefix = _email_lower.split('@')[0] if '@' in _email_lower else ''
+
+                    # ── GUARD: пропускаем draft на email самого пользователя / IMAP-аккаунт ──
+                    if _email_lower in _own_emails_set:
                         d_obj.status = 'failed'
-                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: recipient is user's own email")
+                        _draft_failures.append(f'{d_obj.id}:own_email')
+                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: recipient is user's own/IMAP email")
+                        continue
+
+                    # ── GUARD: пропускаем email на собственном домене (asibiont.com и т.д.) ──
+                    if _email_domain in _own_domains_set:
+                        d_obj.status = 'failed'
+                        _draft_failures.append(f'{d_obj.id}:own_domain')
+                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: recipient on own domain '{_email_domain}'")
+                        continue
+
+                    # ── GUARD: пропускаем email на заблокированных доменах (linkedin и т.д.) ──
+                    if _email_domain in _BLOCKED_DOMAINS_ANCHOR:
+                        d_obj.status = 'failed'
+                        _draft_failures.append(f'{d_obj.id}:blocked_domain:{_email_domain}')
+                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: blocked domain '{_email_domain}'")
                         continue
 
                     # ── GUARD: пропускаем generic/role-based email ──
-                    _email_lower = email.strip().lower()
-                    _email_prefix = _email_lower.split('@')[0] if '@' in _email_lower else ''
                     _GENERIC_SKIP = {
                         'info', 'contact', 'contacts', 'hello', 'support', 'sales',
                         'admin', 'office', 'team', 'help', 'mail', 'noreply',
@@ -18104,6 +18152,7 @@ class AnchorEngine:
                         'data', 'research', 'dev', 'engineering', 'feedback', 'service',
                         'partners', 'partner', 'business', 'invest', 'investor',
                         'legal', 'privacy', 'security', 'billing', 'jobs', 'careers',
+                        'career', 'analytics', 'reports',
                         'awards', 'academy', 'events', 'newsletter', 'news', 'webinar',
                         'training', 'education', 'community', 'social', 'podcast',
                         'editor', 'editorial', 'submissions', 'apply', 'donate',
@@ -18118,7 +18167,8 @@ class AnchorEngine:
                     context = d_obj.recipient_context or ''
 
                     # ── GUARD: имя получателя — извлечь из email prefix или пропустить ──
-                    if not name or name == '?':
+                    _EMPTY_NAME_MARKERS = {'', '?', 'не указано', 'unknown', 'not specified', 'n/a', 'none', '-'}
+                    if not name or name.strip().lower() in _EMPTY_NAME_MARKERS:
                         # Try to extract a human-like name from email prefix
                         # e.g. john.doe@co.com → John Doe, ivan_petrov@ → Ivan Petrov
                         _prefix = email.split('@')[0] if '@' in email else ''
