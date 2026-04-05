@@ -12019,6 +12019,22 @@ async def send_outreach_email(
             if _rcpt_domain_chk in _OWN_PLATFORM_DOMAINS_SEND:
                 return f"⛔ {_rcpt} — адрес платформы ASI Biont. Не отправляй outreach на собственный домен."
 
+        # ── GUARD: невалидные домены — LinkedIn, noreply, бот-адреса ──
+        if _rcpt and '@' in _rcpt:
+            _rcpt_domain_val = _rcpt.rsplit('@', 1)[1]
+            _BLOCKED_EMAIL_DOMAINS = {
+                'linkedin.com', 'users.noreply.github.com',
+                'reply.github.com', 'notifications.github.com',
+            }
+            if _rcpt_domain_val in _BLOCKED_EMAIL_DOMAINS:
+                return (f"⛔ {_rcpt} — адрес сервиса {_rcpt_domain_val}, email не доставляется. "
+                        f"Найди реальный рабочий email получателя.")
+            _rcpt_local_val = _rcpt.rsplit('@', 1)[0]
+            _BLOCKED_LOCAL_PREFIXES = ('noreply', 'no-reply', 'donotreply', 'do-not-reply',
+                                       'mailer-daemon', 'postmaster', 'abuse', 'bounce')
+            if any(_rcpt_local_val.startswith(p) for p in _BLOCKED_LOCAL_PREFIXES):
+                return (f"⛔ {_rcpt} — системный/noreply адрес. Найди реальный email человека.")
+
         # ── GUARD: фейковый / generic email ──
         if _rcpt and _is_generic_email(_rcpt):
             return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
@@ -13211,6 +13227,22 @@ async def add_email_leads(
             _registered_emails_set = {r[0] for r in _reg_rows if r[0]}
         except Exception as _e_re:
             logger.debug("suppressed registered-emails prefetch: %s", _e_re)
+        # Предвыбираем домены с bounce/failed для быстрой блокировки целых доменов
+        _bounced_domains_set: set = set()
+        try:
+            _bounced_rows = session.query(EmailOutreach.recipient_email).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.status.in_(['bounced', 'failed']),
+            ).all()
+            for _br in _bounced_rows:
+                if _br[0] and '@' in _br[0]:
+                    _bd = _br[0].rsplit('@', 1)[1].lower()
+                    _bounced_domains_set.add(_bd)
+            # Не блокируем крупные домены — gmail, yandex, mail.ru и т.д. (bounce скорее по человеку)
+            _bounced_domains_set -= {'gmail.com', 'yandex.ru', 'mail.ru', 'outlook.com',
+                                      'hotmail.com', 'yahoo.com', 'protonmail.com', 'icloud.com'}
+        except Exception as _e_bd:
+            logger.debug("suppressed bounced-domains prefetch: %s", _e_bd)
         for lead in parsed:
             email = lead.get('email', '').strip().lower()
             if not email or '@' not in email:
@@ -13233,6 +13265,24 @@ async def add_email_leads(
             # Отклоняем generic-адреса через полный фильтр
             if _is_generic_email(email):
                 skipped_generic += 1
+                continue
+            # ── GUARD: сервисные домены (LinkedIn, noreply.github, etc.) ──
+            _lead_domain = email.rsplit('@', 1)[1] if '@' in email else ''
+            _BLOCKED_LEAD_DOMAINS = {
+                'linkedin.com', 'users.noreply.github.com',
+                'reply.github.com', 'notifications.github.com',
+                'asibiont.com',
+            }
+            if _lead_domain in _BLOCKED_LEAD_DOMAINS:
+                skipped += 1
+                continue
+            _lead_local = email.rsplit('@', 1)[0] if '@' in email else ''
+            if _lead_local.startswith(('noreply', 'no-reply', 'donotreply', 'mailer-daemon')):
+                skipped += 1
+                continue
+            # ── GUARD: домен ранее давал bounce/failed — скорее всего весь домен мёртв ──
+            if _lead_domain and _lead_domain in _bounced_domains_set:
+                skipped += 1
                 continue
             # Дубль-проверка в текущей кампании
             exists = session.query(EmailOutreach).filter_by(

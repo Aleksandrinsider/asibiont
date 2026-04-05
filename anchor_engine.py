@@ -5395,33 +5395,34 @@ class AnchorEngine:
                     # Ротируем по непочтовым интеграциям прежде чем давать email
                     _goal_titles_fb = [g.get('title', '')[:40] for g in data.get('goals', [])[:2] if g.get('title')]
                     _non_email_cats = sorted(_cats_c - {'email'})
+                    _has_email_fb = 'email' in _cats_c
+                    # Ротируем fallback-стратегии чтобы не повторяться
+                    import random as _rnd_fb
+                    _fb_strategies = []
                     if _goal_titles_fb and _non_email_cats:
-                        # У агента есть другие (не email) интеграции — используем их для разнообразия
-                        _fb_cat = _non_email_cats[0]
-                        _fb_hint = _CAP_TOOL_HINTS.get(_fb_cat, '')
-                        _fb_tool = (_fb_hint.split(',')[0].split('(')[0].strip() or 'run_agent_action') if _fb_hint else 'web_search'
+                        _fb_cat = _rnd_fb.choice(_non_email_cats)
                         _fb_cat_name = _CAP_CATEGORY_NAMES.get(_fb_cat, _fb_cat)
-                        _coord_text = (
-                            f'{_chosen_name}, используй {_fb_cat_name} — запусти {_fb_tool} '
-                            f'по теме «{_goal_titles_fb[0]}». '
-                            f'Зафиксируй результат через save_note.'
-                        )
-                    elif _goal_titles_fb and 'email' in _cats_c:
-                        _coord_text = (
-                            f'{_chosen_name}, проверь входящие через check_emails — '
-                            f'возможно пришли ответы по цели «{_goal_titles_fb[0]}». '
-                            f'Если есть что-то интересное, сразу отвечай.'
-                        )
+                        _fb_strategies = [
+                            f'{_chosen_name}, через {_fb_cat_name} найди 3 конкретных контакта по теме «{_goal_titles_fb[0]}» и сохрани через save_email_contact с именем, email и контекстом.',
+                            f'{_chosen_name}, сделай research_topic по «{_goal_titles_fb[0]}» — найди свежий подход который мы ещё не пробовали. Результат сохрани через save_note.',
+                            f'{_chosen_name}, проанализируй прогресс по «{_goal_titles_fb[0]}»: что сработало, что нет. Напиши конкретный план следующих 3 шагов через save_note.',
+                        ]
+                    elif _goal_titles_fb and _has_email_fb:
+                        _fb_strategies = [
+                            f'{_chosen_name}, проверь входящие через check_emails — возможно пришли ответы по цели «{_goal_titles_fb[0]}». Если есть ответы — сразу отвечай.',
+                            f'{_chosen_name}, найди через web_search 5 новых контактов по теме «{_goal_titles_fb[0]}» — dev.to, ProductHunt, Хабр. Сохрани адреса через save_email_contact.',
+                            f'{_chosen_name}, подготовь и отправь через send_outreach_email персональное письмо контакту из базы — с конкретным предложением по «{_goal_titles_fb[0]}».',
+                        ]
                     elif _goal_titles_fb:
-                        _coord_text = (
-                            f'{_chosen_name}, сделай research_topic по теме «{_goal_titles_fb[0]}» — '
-                            f'найди 2-3 конкретных контакта или ресурса и сохрани через save_note.'
-                        )
+                        _fb_strategies = [
+                            f'{_chosen_name}, сделай research_topic по теме «{_goal_titles_fb[0]}» — найди 2-3 конкретных контакта или ресурса и сохрани через save_note.',
+                            f'{_chosen_name}, через web_search найди экспертов по «{_goal_titles_fb[0]}» на профильных платформах. Сохрани данные через save_note.',
+                        ]
                     else:
-                        _coord_text = (
-                            f'{_chosen_name}, запусти web_search по своей специализации — '
-                            f'найди свежие тренды и подготовь краткую заметку через save_note.'
-                        )
+                        _fb_strategies = [
+                            f'{_chosen_name}, запусти web_search по своей специализации — найди свежие тренды и подготовь краткую заметку через save_note.',
+                        ]
+                    _coord_text = _rnd_fb.choice(_fb_strategies)
                     try:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
                         # Суть задания — передаём реальный текст из координатора, 
@@ -5563,17 +5564,17 @@ class AnchorEngine:
                                 if _intg_list_c:
                                     _alt_channels_c.append(_intg_list_c)
                                 _alt_str_c = ', '.join(_alt_channels_c)
-                                if _tg_count_c >= 4:
+                                if _tg_count_c >= 6:
                                     _loop_channel_hint_c = (
                                         f'⚠️ Telegram упоминался {_tg_count_c} раз за последние циклы — это зацикливание! '
                                         f'Назначь {_chosen_name} другой ПОДКЛЮЧЁННЫЙ канал: {_alt_str_c}.'
                                     )
-                                elif _disc_count_c >= 3:
+                                elif _disc_count_c >= 5:
                                     _loop_channel_hint_c = (
                                         f'⚠️ Discord использовался {_disc_count_c} раз — зацикливание! '
                                         f'Предложи {_chosen_name} использовать: {_alt_str_c}.'
                                     )
-                                elif _gh_count_c >= 3:
+                                elif _gh_count_c >= 5:
                                     _loop_channel_hint_c = (
                                         f'⚠️ GitHub использовался {_gh_count_c} раз — попробуй другой канал: '
                                         f'{_alt_str_c}.'
@@ -5589,7 +5590,7 @@ class AnchorEngine:
                                     + _all_recent_text_c.count('письм')
                                 )
                                 _has_other_intg = bool(_cats_c - {'email'})
-                                if _email_count_c >= 4 and _has_other_intg and not _loop_channel_hint_c:
+                                if _email_count_c >= 8 and _has_other_intg and not _loop_channel_hint_c:
                                     _other_names = ', '.join(
                                         _CAP_CATEGORY_NAMES.get(c, c)
                                         for c in sorted(_cats_c - {'email'})
@@ -5613,7 +5614,7 @@ class AnchorEngine:
                                     or 'опубликовал' in _all_recent_text_c
                                     or 'создал пост' in _all_recent_text_c
                                 )
-                                if _rss_count_c >= 4 and not _has_rss_output_c and not _loop_channel_hint_c:
+                                if _rss_count_c >= 6 and not _has_rss_output_c and not _loop_channel_hint_c:
                                     _loop_channel_hint_c = (
                                         f'⚠️ {_chosen_name} читал RSS/Хабр {_rss_count_c} раз подряд без публикации — это петля! '
                                         f'Дай задачу с конкретным выходным артефактом: '
@@ -5621,11 +5622,11 @@ class AnchorEngine:
                                         f'«выдели 3 лучшие статьи и создай обзорную заметку через save_note».'
                                     )
                                 # ── Bottleneck detector: search >> action ──
-                                # Считаем инструменты ВСЕХ агентов за 24ч (не только 6ч)
+                                # Считаем инструменты ВСЕХ агентов за 6ч (было 24ч — слишком агрессивно)
                                 _bottleneck_hint_c = ''
                                 try:
                                     import re as _re_bn
-                                    _bn_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=24)
+                                    _bn_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=6)
                                     _bn_logs = session.query(_AAL_coord_ctx).filter(
                                         _AAL_coord_ctx.user_id == user.id,
                                         _AAL_coord_ctx.activity_type == 'agent_task',
@@ -5683,15 +5684,15 @@ class AnchorEngine:
                                             f'  — идеи/данные для коллеги → delegate_task с конкретикой\n'
                                             f'Если назначаешь поиск — он должен быть ТОЧЕЧНЫМ (имя+email), не обзорным.'
                                         )
-                                    elif _bn_search >= 3 and _bn_actions <= 1:
+                                    elif _bn_search >= 5 and _bn_actions <= 1:
                                         _bottleneck_hint_c = (
-                                            f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 24ч, но мало конверсий ({_bn_actions}). '
+                                            f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 6ч, но мало конверсий ({_bn_actions}). '
                                             f'Назначь задачу с КОНКРЕТНЫМ результатом: заметка, задача, пост, письмо, анализ. '
                                             f'Поиск полезен когда результаты превращаются в действия.'
                                         )
                                     # ── Bottleneck → fallback _coord_text меняем на конверсионный ──
                                     # Если AI сгенерирует пустышку — резервный текст тоже должен быть про конверсию
-                                    if _bn_search >= 5 and _bn_actions <= 2 and _goal_titles_fb:
+                                    if _bn_search >= 8 and _bn_actions <= 3 and _goal_titles_fb:
                                         if _has_email_fb:
                                             _coord_text = (
                                                 f'{_chosen_name}, загляни в почту — '
@@ -5943,13 +5944,13 @@ class AnchorEngine:
                                     _tg_still = ('telegram' in _ct_lower or 'тг-' in _ct_lower or 'tg-' in _ct_lower)
                                     _disc_still = 'discord' in _ct_lower
                                     _gh_still = 'github' in _ct_lower
-                                    if _tg_still and _tg_count_c >= 4:
+                                    if _tg_still and _tg_count_c >= 6:
                                         _loop_retry_needed = True
                                         _blocked_ch_name = 'Telegram'
-                                    elif _disc_still and _disc_count_c >= 3:
+                                    elif _disc_still and _disc_count_c >= 5:
                                         _loop_retry_needed = True
                                         _blocked_ch_name = 'Discord'
-                                    elif _gh_still and _gh_count_c >= 3:
+                                    elif _gh_still and _gh_count_c >= 5:
                                         _loop_retry_needed = True
                                         _blocked_ch_name = 'GitHub'
                                 if _loop_retry_needed:
@@ -6057,22 +6058,22 @@ class AnchorEngine:
                                         _rc_bigrams = {(_rc_wl[i], _rc_wl[i+1]) for i in range(len(_rc_wl)-1)} if len(_rc_wl) > 1 else set()
                                         _bi_overlap = (len(_new_bigrams & _rc_bigrams) / max(min(len(_new_bigrams), len(_rc_bigrams)), 1)) if _new_bigrams and _rc_bigrams else 0
                                         _is_same_agent = (_rc_d.get('__to_agent') == _chosen_name)
-                                        # ── Per-agent dedup (прежняя логика) ──
+                                        # ── Per-agent dedup: только высокий overlap считается дублем ──
                                         if _is_same_agent:
-                                            if _overlap > 0.35 or _bi_overlap > 0.30:
+                                            if _overlap > 0.50 or _bi_overlap > 0.45:
                                                 _similar_count += 1
-                                                if _similar_count >= 2:
+                                                if _similar_count >= 3:
                                                     _skip_coord = True
                                                     logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h (word=%.0f%% bi=%.0f%%), skip", _similar_count, _chosen_name, _overlap*100, _bi_overlap*100)
                                                     break
-                                            if _overlap > 0.50 or _bi_overlap > 0.45:
+                                            if _overlap > 0.70 or _bi_overlap > 0.60:
                                                 _skip_coord = True
                                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: word=%.0f%% bi=%.0f%% overlap with recent assign to %s, skip", _overlap * 100, _bi_overlap * 100, _chosen_name)
                                                 break
-                                        # ── Cross-agent dedup: одинаковая фраза разным агентам = петля ──
-                                        if _overlap > 0.45 or _bi_overlap > 0.40:
+                                        # ── Cross-agent dedup: одинаковая фраза разным агентам (высокий порог) ──
+                                        if _overlap > 0.60 or _bi_overlap > 0.55:
                                             _cross_agent_similar += 1
-                                            if _cross_agent_similar >= 3:
+                                            if _cross_agent_similar >= 4:
                                                 _skip_coord = True
                                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS cross-agent loop: phrase repeated %d× across agents (word=%.0f%% bi=%.0f%%), skip", _cross_agent_similar, _overlap*100, _bi_overlap*100)
                                                 break
@@ -15670,14 +15671,14 @@ class AnchorEngine:
                     Anchor.delivered_at.is_(None),
                     Anchor.source.like(f'email_campaign:{campaign.id}:send:%'),
                 ).count()
-                if _pending_send_count >= 3:
+                if _pending_send_count >= 1:
                     logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
                     continue
                 batch_size = min(len(drafts), remaining_daily, 10)
                 anchors.append(Anchor(
                     user_id=user.id,
                     anchor_type='email_outreach_send',
-                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H")}',  # дедупликация по часу (по дню блокировало весь день при snooze)
+                    source=f'email_campaign:{campaign.id}:send:{now_utc.strftime("%Y-%m-%d-%H")}',  # дедупликация по часу, flood guard=1 предотвращает накопление
                     topic=_t(user,
                         f'Email-кампания «{campaign.name}» — {len(drafts)} черновиков ждут отправки ({remaining_daily} осталось сегодня)',
                         f'Email campaign «{campaign.name}» — {len(drafts)} drafts pending ({remaining_daily} remaining today)'),
@@ -15848,7 +15849,7 @@ class AnchorEngine:
                 if remaining_total > drafts_in_pipeline:
                     # Дедупликация: один необработанный email_need_leads на кампанию
                     # (защита от дублей при параллельном запуске нескольких воркеров)
-                    _nl_source = f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}'
+                    _nl_source = f'email_campaign:{campaign.id}:need_leads:{now_utc.strftime("%Y-%m-%d")}:{now_utc.hour // 4}'
                     _nl_exists = session.query(Anchor).filter(
                         Anchor.user_id == user.id,
                         Anchor.anchor_type == 'email_need_leads',
