@@ -117,8 +117,8 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('stripe', 'юкасс', 'yookassa', 'платеж'), 'payments'),
     # Календарь / Встречи
     (('calendar', 'календар', 'zoom', 'google calendar'), 'calendar'),
-    # Телефония / Звонки
-    (('twilio', 'sms', 'звонк', 'call', 'sipuni', 'voip', 'phone'), 'calls'),
+    # Телефония / Звонки / WhatsApp
+    (('twilio', 'sms', 'звонк', 'call', 'sipuni', 'voip', 'phone', 'whatsapp', 'waba'), 'calls'),
     # Python / HTTP / Custom
     (('python', 'http', 'скрипт', 'run_agent', 'все инструменты', 'custom api'), 'script'),
     # Генерация изображений
@@ -156,6 +156,12 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     # ClickUp, Linear — PM-трекеры (могут распознаваться из python)
     (('clickup', 'click up'), 'pm'),
     (('linear app', ' linear '), 'pm'),
+    # Дополнительные интеграции
+    (('1с', '1c', 'onec'), 'marketplace'),
+    (('тинькофф', 'tinkoff'), 'finance'),
+    (('сдэк', 'cdek', 'sdek'), 'marketplace'),
+    (('aviasales',), 'script'),
+    (('tutu',), 'script'),
 ]
 
 # Русские названия для категорий (для вывода в промптах)

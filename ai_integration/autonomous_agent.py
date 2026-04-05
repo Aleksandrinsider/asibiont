@@ -5044,6 +5044,25 @@ _INTEGRATION_LABELS: dict = {
     'TELEGRAM_BOT': 'Telegram Bot',
     'OPENWEATHER': 'Погода (OpenWeatherMap)',
     'WEATHER_API': 'Weather API',
+    # Дополнительные интеграции (ранее отсутствовали)
+    'TWILIO': 'Twilio (звонки/SMS)',
+    'TINKOFF': 'Тинькофф Инвестиции',
+    'TINKOFF_INVEST': 'Тинькофф Инвестиции',
+    'COINGECKO': 'CoinGecko (крипто-данные)',
+    'WHATSAPP': 'WhatsApp Business',
+    'WABA_': 'WhatsApp Business',
+    'CDEK': 'СДЭК (доставка)',
+    'SDEK': 'СДЭК (доставка)',
+    '1C_': '1С',
+    'ONEC_': '1С',
+    'AVIASALES': 'Aviasales',
+    'TUTU': 'Tutu.ru',
+    'SIPUNI': 'Sipuni (телефония)',
+    'VOXIMPLANT': 'VoxImplant (телефония)',
+    'FIREBASE': 'Firebase/Firestore',
+    'FIRESTORE': 'Firebase/Firestore',
+    'CALENDLY': 'Calendly',
+    'PLAYWRIGHT': 'Playwright (scraping)',
 }
 
 
@@ -6680,7 +6699,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             logger.info('[DIRECTOR] Autopilot task → adaptive toolset for %s', agent.get('name'))
             # Core: минимальный набор для любого автопилота (включая поиск — нужен всегда)
             _autopilot_tools = {
-                'complete_task', 'edit_task', 'list_tasks',
+                'complete_task', 'edit_task', 'list_tasks', 'add_task',
                 'update_goal_progress', 'update_goal', 'complete_goal', 'list_goals',
                 'delegate_task', 'run_agent_action',
                 # Поиск/исследование — базово доступны всем, даже если есть спец.интеграция.
@@ -6762,6 +6781,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # CRM/маркетплейс/прочие интеграции — run_agent_action уже в core
             if any(w in _lbl_ap for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'ozon', 'wildberries', 'авито', 'shopify')):
                 _autopilot_tools.update({'find_relevant_contacts_for_task', 'save_email_contact'})
+            # Соцсети — VK/Twitter/LinkedIn/YouTube: если есть ключи интеграции
+            if any(w in _lbl_ap for w in ('вконтакт', 'vk')):
+                _autopilot_tools.add('publish_to_vk')
+            if any(w in _lbl_ap for w in ('twitter', 'x.com')):
+                _autopilot_tools.add('publish_to_twitter')
+            if any(w in _lbl_ap for w in ('linkedin',)):
+                _autopilot_tools.add('publish_to_linkedin')
+            if any(w in _lbl_ap for w in ('youtube',)):
+                _autopilot_tools.add('publish_to_youtube')
+            if any(w in _lbl_ap for w in ('notion',)):
+                _autopilot_tools.add('publish_to_notion')
+            # Звонки/SMS — Twilio/Sipuni/VoxImplant
+            if any(w in _lbl_ap for w in ('twilio', 'sipuni', 'звонк', 'sms', 'voximplant', 'телефон')):
+                _autopilot_tools.add('initiate_phone_call')
+            # Погода — если есть OpenWeatherMap ключ
+            if any(w in _lbl_ap for w in ('openweather', 'погода', 'weather')):
+                _autopilot_tools.add('get_weather_info')
+            # Генерация изображений — если есть Replicate ключ
+            if any(w in _lbl_ap for w in ('replicate', 'генерация изображен')):
+                _autopilot_tools.add('generate_image')
             logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
             try:
                 from .tools import get_available_tools as _gat_ap
@@ -6834,6 +6873,26 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     'send_outreach_email', 'add_email_leads',
                     'find_and_message_relevant_users', 'web_search', 'research_topic',
                 })
+            # Соцсети — VK/Twitter/LinkedIn/YouTube: по лейблу интеграции
+            if any(w in _lbl_ch for w in ('вконтакт', 'vk')):
+                _inferred_tools.add('publish_to_vk')
+            if any(w in _lbl_ch for w in ('twitter', 'x.com')):
+                _inferred_tools.add('publish_to_twitter')
+            if any(w in _lbl_ch for w in ('linkedin',)):
+                _inferred_tools.add('publish_to_linkedin')
+            if any(w in _lbl_ch for w in ('youtube',)):
+                _inferred_tools.add('publish_to_youtube')
+            if any(w in _lbl_ch for w in ('notion',)):
+                _inferred_tools.add('publish_to_notion')
+            # Звонки/SMS — Twilio/Sipuni/VoxImplant
+            if any(w in _lbl_ch for w in ('twilio', 'sipuni', 'звонк', 'sms', 'voximplant', 'телефон')):
+                _inferred_tools.add('initiate_phone_call')
+            # Погода — OpenWeatherMap
+            if any(w in _lbl_ch for w in ('openweather', 'погода', 'weather')):
+                _inferred_tools.add('get_weather_info')
+            # Генерация изображений — Replicate
+            if any(w in _lbl_ch for w in ('replicate', 'генерация изображен')):
+                _inferred_tools.add('generate_image')
             # Задачи всегда доступны
             _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
             # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
