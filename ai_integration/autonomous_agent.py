@@ -1543,6 +1543,7 @@ class HybridAutonomousAgent:
                     'market': ('market', 'finance', 'alpha', 'vantage', 'stock', 'crypto', 'рын', 'котиров'),
                     'social': ('telegram', 'discord', 'post', 'publish', 'канал', 'пост', 'публик'),
                     'code': ('github', 'repo', 'commit', 'issue', 'pull', 'код', 'разработ'),
+                    'crm': ('crm', 'amocrm', 'contact', 'contacts', 'lead', 'сделк', 'контакт', 'воронк'),
                 }
 
                 for _cand in _supported_actions:

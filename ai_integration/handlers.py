@@ -17969,6 +17969,7 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
                 'market': ('market', 'finance', 'alpha', 'vantage', 'stock', 'crypto', 'рын', 'котиров'),
                 'social': ('telegram', 'discord', 'post', 'publish', 'канал', 'пост', 'публик'),
                 'code': ('github', 'repo', 'commit', 'issue', 'pull', 'код', 'разработ'),
+                'crm': ('crm', 'amocrm', 'contact', 'contacts', 'lead', 'сделк', 'контакт', 'воронк'),
             }
 
             def _signals(_txt: str) -> set:

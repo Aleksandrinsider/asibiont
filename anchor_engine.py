@@ -5501,6 +5501,35 @@ class AnchorEngine:
                                 except Exception as _mh_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] my assign history: %s', _mh_err)
 
+                                # ── Провалившиеся задачи: чтобы координатор НЕ повторял невозможные задания ──
+                                _failed_tasks_ctx = ''
+                                try:
+                                    _ft_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=12)
+                                    _ft_rows = session.query(_AAL_coord_ctx.title, _AAL_coord_ctx.result).filter(
+                                        _AAL_coord_ctx.user_id == user.id,
+                                        _AAL_coord_ctx.activity_type == 'agent_task',
+                                        _AAL_coord_ctx.status == 'failed',
+                                        _AAL_coord_ctx.created_at >= _ft_cutoff,
+                                    ).order_by(_AAL_coord_ctx.created_at.desc()).limit(8).all()
+                                    if _ft_rows:
+                                        _ft_lines = []
+                                        _ft_seen = set()
+                                        for _ft_t, _ft_r in _ft_rows:
+                                            _ft_key = (_ft_t or '')[:60]
+                                            if _ft_key in _ft_seen:
+                                                continue
+                                            _ft_seen.add(_ft_key)
+                                            _ft_reason = (_ft_r or '')[:120]
+                                            _ft_lines.append(f'  ✗ {_ft_key}: {_ft_reason}')
+                                        if _ft_lines:
+                                            _failed_tasks_ctx = (
+                                                '\n⚠️ ПРОВАЛИВШИЕСЯ ЗАДАЧИ (за 12ч) — НЕ НАЗНАЧАЙ повторно:\n'
+                                                + '\n'.join(_ft_lines[:5])
+                                                + '\n  → Если задача провалилась — не повторяй. Выбери ДРУГОЙ подход или ДРУГОЙ канал.\n'
+                                            )
+                                except Exception:
+                                    pass
+
                                 # Детектор зацикливания: считаем упоминания каналов в последних циклах
                                 _all_recent_text_c = ' '.join((a.result or '') for a in _last_aals_c).lower()
                                 _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
@@ -5769,6 +5798,7 @@ class AnchorEngine:
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
                             + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
                             + (_dnc_str_c if _dnc_str_c else '')
+                            + (_failed_tasks_ctx if _failed_tasks_ctx else '')
                             + (_active_campaigns_ctx if _active_campaigns_ctx else '')
 
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
@@ -10990,19 +11020,30 @@ class AnchorEngine:
                 # Используем отдельную сессию — основная может быть в ненадёжном состоянии
                 _aal_sess = _AAL_Sess()
                 try:
-                    _aal_c = _AAL_c(
-                        user_id=user.id,
-                        activity_type='goal_autopilot_dispatch',
-                        title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}'[:300],
-                        content=_goals_for_content[:500],
-                        target=str(getattr(anchor, 'source', '') or '')[:300],
-                        status='in_progress',
-                        ref_id=None,
-                    )
-                    _aal_sess.add(_aal_c)
-                    _aal_sess.commit()
-                    _aal_id_c = _aal_c.id
-                    logger.info("[COORD] AAL dispatch created id=%s for user %d", _aal_id_c, user.id)
+                    # Guard: проверяем дубли dispatch за последние 3 мин
+                    _dedup_cutoff = datetime.now(timezone.utc) - timedelta(minutes=3)
+                    _existing_dispatch = _aal_sess.query(_AAL_c.id).filter(
+                        _AAL_c.user_id == user.id,
+                        _AAL_c.activity_type == 'goal_autopilot_dispatch',
+                        _AAL_c.created_at > _dedup_cutoff,
+                    ).first()
+                    if _existing_dispatch:
+                        logger.info("[COORD] skip duplicate AAL dispatch — existing id=%s for user %d", _existing_dispatch[0], user.id)
+                        _aal_id_c = _existing_dispatch[0]
+                    else:
+                        _aal_c = _AAL_c(
+                            user_id=user.id,
+                            activity_type='goal_autopilot_dispatch',
+                            title=f'[Координатор] → {", ".join(p.get("agent", "?") for p in _plan)}'[:300],
+                            content=_goals_for_content[:500],
+                            target=str(getattr(anchor, 'source', '') or '')[:300],
+                            status='in_progress',
+                            ref_id=None,
+                        )
+                        _aal_sess.add(_aal_c)
+                        _aal_sess.commit()
+                        _aal_id_c = _aal_c.id
+                        logger.info("[COORD] AAL dispatch created id=%s for user %d", _aal_id_c, user.id)
                 except Exception as _aal_err:
                     logger.warning("[COORD] AAL create failed: %s", _aal_err)
                     import traceback; logger.warning("[COORD] AAL traceback: %s", traceback.format_exc())
@@ -12946,12 +12987,14 @@ class AnchorEngine:
                     except Exception:
                         pass
 
-                    # ── Progress delta: highlight only if changed ──
+                    # ── Progress delta: highlight only if changed vs pre-cycle snapshot ──
                     _progress_changed = False
+                    _prev_metrics = {g.get('title', ''): int(g.get('metric_current', 0) or 0) for g in _goals}
                     for _gfr in _goals_for_report[:3]:
                         _mc_now = int(_gfr.get('metric_current', 0) or 0)
                         _mt_now = _gfr.get('metric_target')
-                        if _mt_now and _mc_now > 0:
+                        _mc_prev = _prev_metrics.get(_gfr.get('title', ''), 0)
+                        if _mt_now and _mc_now > _mc_prev:
                             _progress_changed = True
                             break
                     _progress_rule = (
@@ -12981,6 +13024,8 @@ class AnchorEngine:
                         + f"- АНТИПОВТОР: каждый отчёт должен быть УНИКАЛЬНЫМ по структуре. "
                         f"Меняй порядок, стиль, фокус. Не начинай каждый раз с одного агента. "
                         f"Не используй шаблон 'X сделал A. Y сделал B. Прогресс Z.' каждый раз.\n"
+                        f"- ЗАВЕРШЁННОСТЬ: каждое предложение ОБЯЗАНО быть закончено — подлежащее, сказуемое, точка. "
+                        f"Перечитай свой ответ: если последнее предложение обрывается без точки — допиши или удали.\n"
                         f"- 3-5 предложений. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
