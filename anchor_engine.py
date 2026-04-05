@@ -4480,6 +4480,26 @@ class AnchorEngine:
             if anchor.anchor_type == 'goal_autopilot_review':
                 # Промпт будет перестроен ПОСЛЕ выбора агента с учётом его интеграций
                 _goals_for_prompt = data.get('goals', []) if isinstance(data, dict) else []
+                # ── Filter out deleted/completed goals (anchor snapshot may be stale) ──
+                if _goals_for_prompt:
+                    try:
+                        from models import Goal as _Goal_flt
+                        _active_ids = {
+                            g.id for g in session.query(_Goal_flt.id).filter(
+                                _Goal_flt.user_id == user.id,
+                                _Goal_flt.status == 'active',
+                            ).all()
+                        }
+                        _before = len(_goals_for_prompt)
+                        _goals_for_prompt = [g for g in _goals_for_prompt if g.get('id') in _active_ids]
+                        if len(_goals_for_prompt) < _before:
+                            logger.info("[DISPATCH] filtered %d stale goals (deleted/completed) from anchor snapshot",
+                                        _before - len(_goals_for_prompt))
+                    except Exception as _gf_err:
+                        logger.debug("[DISPATCH] goal filter failed: %s", _gf_err)
+                if not _goals_for_prompt:
+                    logger.info("[DISPATCH] all goals from anchor were deleted — skipping dispatch")
+                    return
                 task_text = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"  # placeholder — дополнится ниже
             elif anchor.anchor_type == 'chat_ai_review':
                 _recent_chat = data.get('recent_chat', []) if isinstance(data, dict) else []
@@ -8621,6 +8641,19 @@ class AnchorEngine:
                 })
 
             _goals = data.get('goals', [])
+            # ── Filter stale goals from anchor snapshot ──
+            if _goals:
+                try:
+                    from models import Goal as _Goal_flt_c
+                    _active_ids_c = {
+                        g.id for g in session.query(_Goal_flt_c.id).filter(
+                            _Goal_flt_c.user_id == user.id,
+                            _Goal_flt_c.status == 'active',
+                        ).all()
+                    }
+                    _goals = [g for g in _goals if g.get('id') in _active_ids_c]
+                except Exception:
+                    pass
             # Если data пустой (force-created anchor) — загружаем цели напрямую из DB
             if not _goals:
                 try:
@@ -10463,6 +10496,21 @@ class AnchorEngine:
                     _plan_goal_filtered.append(_pgf)
             if _plan_goal_filtered:
                 _plan = _plan_goal_filtered
+
+            # ── Deleted goal guard: drop plan steps referencing non-active goals ──
+            if _plan and _goal_titles_lower:
+                _plan_active_goals = []
+                for _pag in _plan:
+                    _pag_goal = (_pag.get('goal') or '').lower().strip()
+                    if not _pag_goal or any(
+                        len(set(_pag_goal.split()) & set(_gt.split())) / max(len(set(_gt.split())), 1) > 0.5
+                        for _gt in _goal_titles_lower
+                    ):
+                        _plan_active_goals.append(_pag)
+                    else:
+                        logger.info("[COORD] deleted-goal-guard: drop step for unknown goal '%s'", _pag_goal[:60])
+                if _plan_active_goals:
+                    _plan = _plan_active_goals
 
             # ── Контент-дедупликация: пропускаем задачи, дублирующие недавно выполненные ──
             if _plan and _recent_done_str:
