@@ -12847,7 +12847,7 @@ class AnchorEngine:
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
             'goal_autopilot_review': 0.25,  # ~15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
-            'email_need_leads': 1.5,  # was 3.0 — too slow, limits to ~8 sessions/day
+            'email_need_leads': 0.5,  # was 1.5 — too slow (7 searches/day vs ~30 with 0.5h)
             'chat_ai_review': 1.5,
         }
         _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
@@ -15839,7 +15839,7 @@ class AnchorEngine:
                             }),
                             triggered_at=now_utc,
                             expires_at=now_utc + timedelta(hours=6),
-                            cooldown_hours=1.5,  # was 3.0h — too slow for maintaining draft pipeline
+                            cooldown_hours=0.5,  # was 1.5h — need ~30 lead searches/day for active pipeline
                             batch_group='email',
                         ))
 
@@ -17612,6 +17612,9 @@ class AnchorEngine:
                         'data', 'research', 'dev', 'engineering', 'feedback', 'service',
                         'partners', 'partner', 'business', 'invest', 'investor',
                         'legal', 'privacy', 'security', 'billing', 'jobs', 'careers',
+                        'awards', 'academy', 'events', 'newsletter', 'news', 'webinar',
+                        'training', 'education', 'community', 'social', 'podcast',
+                        'editor', 'editorial', 'submissions', 'apply', 'donate',
                     }
                     if _email_prefix in _GENERIC_SKIP or 'decision-maker' in _email_prefix:
                         d_obj.status = 'failed'
