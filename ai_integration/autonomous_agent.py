@@ -1721,8 +1721,50 @@ class HybridAutonomousAgent:
             _comm_task = _aio_ea.create_task(proc.communicate())
             try:
                 stdout, stderr = await _aio_ea.wait_for(_comm_task, timeout=float(API_TIMEOUT_SCRIPT))
-                out = stdout.decode('utf-8', errors='replace').strip()[:2000]
+                out = stdout.decode('utf-8', errors='replace').strip()[:4000]
                 err = stderr.decode('utf-8', errors='replace').strip()[:500]
+                # ── Извлечь вывод только релевантной секции (если скрипт многосекционный) ──
+                # python_code содержит несколько интеграций (Gmail, GitHub, AmoCRM, ...),
+                # все выполняются последовательно. Без фильтрации Gmail-inbox забивает вывод.
+                if action and out and '\n# ===' in out:
+                    _ACTION_SECTION_MAP = {
+                        'create_lead': 'amo', 'create_contact': 'amo', 'search_contacts': 'amo',
+                        'get_contact': 'amo', 'add_note': 'amo', 'link_contact_to_lead': 'amo',
+                        'get_leads': 'amo', 'update_lead': 'amo', 'create_deal': 'amo',
+                        'send_email': 'gmail', 'check_inbox': 'gmail', 'check_emails': 'gmail',
+                        'create_issue': 'github', 'list_issues': 'github',
+                        'check_news': 'rss', 'read_rss': 'rss', 'check_news_and_markets': 'rss',
+                        'check_markets': 'rss', 'fetch_rss': 'rss',
+                    }
+                    _SEC_KEYWORDS = {
+                        'amo': ('amocrm', 'amo'),
+                        'gmail': ('gmail',),
+                        'github': ('github',),
+                        'rss': ('rss',),
+                        'metrika': ('метрик', 'metrik'),
+                    }
+                    _target = _ACTION_SECTION_MAP.get(action.lower(), '')
+                    if _target:
+                        _sections = _parse_integration_sections(out, 'agent')
+                        _matched = None
+                        _rest_parts = []
+                        for _sname, _scontent in _sections:
+                            _sname_l = _sname.lower()
+                            _kws = _SEC_KEYWORDS.get(_target, ())
+                            if any(_kw in _sname_l for _kw in _kws):
+                                _matched = _scontent
+                            else:
+                                _rest_parts.append((_sname, _scontent))
+                        if _matched:
+                            # Ставим целевую секцию первой, остальные коротко
+                            out = _matched
+                            for _rn, _rc in _rest_parts:
+                                if len(out) > 1600:
+                                    break
+                                _rc_short = _rc[:100].split('\n')[0]
+                                if _rc_short and _rc_short != '—':
+                                    out += f'\n[{_rn}: {_rc_short}]'
+                out = out[:2000]
             except _aio_ea.TimeoutError:
                 proc.kill()
                 try:
