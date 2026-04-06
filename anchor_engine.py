@@ -8848,7 +8848,7 @@ class AnchorEngine:
                     )
                 _unsent_contacts_str = (
                     f"\n🟠 КОНТАКТЫ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.) — "
-                    "ПРИОРИТЕТ: напиши им ДО поиска новых!\n"
+                    f"ПРИОРИТЕТ: отправь send_outreach_email КАЖДОМУ (до {min(len(_unsent_contacts_data), 5)} за цикл)!\n"
                     + '\n'.join(_uc_lines) + "\n"
                 )
             elif _email_sent > 0 and _goals:
@@ -8974,7 +8974,7 @@ class AnchorEngine:
             # ── check_emails cooldown: предотвращаем петлю делегирования «проверь почту» ──
             # Запрашиваем ПЕРЕД cap_rules — чтобы использовать при генерации инструкций агентам.
             # ВАЖНО: agent_task записи в AAL имеют ref_id=NULL → ищем по имени агента в title.
-            _CE_COOLDOWN_MIN = 90  # минут между последовательными check_emails одному агенту
+            _CE_COOLDOWN_MIN = 30  # минут между последовательными check_emails одному агенту
             _check_emails_on_cooldown: set = set()  # имена агентов, которым НЕ нужен check_emails
             _check_emails_cooldown_note = ''
             try:
@@ -9065,16 +9065,17 @@ class AnchorEngine:
                             _cant_list.append('соцсети')
                         _cant_str = ', '.join(_cant_list)
                         _do_not_lines.append(
-                            f"  💡 {_p_cr['name']} [email]: думай цепочкой — research/web_search → save_email_contact → send_outreach_email."
-                            f" Если цель задачи — связаться с кем-то, задача должна содержать ВСЮ цепочку, а не только её первый шаг."
-                            f" Если задача 2 цикла подряд останавливается на research без письма — значит что-то пошло не так, нужно действие."
+                            f"  💡 {_p_cr['name']} [email]: КОНВЕЙЕР — web_search → save_email_contact → send_outreach_email → check_emails → reply_to_outreach_email."
+                            f" Если есть готовые контакты без писем — в задаче укажи: 'отправь send_outreach_email КАЖДОМУ из готовых контактов'."
+                            f" За 1 цикл агент может отправить 3-5 писем — РАЗРЕШАЙ ЭТО, не ограничивай одним."
+                            f" Если задача 2 цикла подряд останавливается на research без письма — нужно действие."
                             + (f" У {_p_cr['name']} нет интеграции для: {_cant_str} — задача через эти каналы не выполнится. Предложи email-альтернативу или попроси пользователя подключить." if _cant_str else '')
                             + (
                                 f" ⛔ КУЛДАУН ИНБОКСА: {_p_cr['name']} уже проверял входящие недавно — НЕ назначать check_emails."
                                 f" Дай другую задачу: send_outreach_email, create_post, web_search, find_relevant_contacts_for_task."
                                 if _p_cr['name'] in _check_emails_on_cooldown
                                 else
-                                f" 📬 ИНБОКС: {_p_cr['name']} оснащён IMAP. Назначай check_emails не чаще 1 раза в 90 мин."
+                                f" 📬 ИНБОКС: {_p_cr['name']} оснащён IMAP. Назначай check_emails не чаще 1 раза в 30 мин."
                                 f" Если письма ждут → check_emails → reply или follow-up."
                                 f" Если check_emails был недавно → сразу дай продуктивную задачу (outreach, поиск контактов, пост)."
                             )
@@ -11938,11 +11939,6 @@ class AnchorEngine:
                     f"{_ag_data.get('job_title', '') or _ag_data.get('specialization', 'специалист')}"
                 ).strip()
                 _ag_profile_match = next((p for p in _profiles if p['name'].lower() == _ag_name.lower()), None)
-                _ag_caps_for_prompt = (
-                    ', '.join(_ag_profile_match['caps'][:4])
-                    if _ag_profile_match and _ag_profile_match.get('caps')
-                    else 'нет подключённых интеграций'
-                )
 
                 # ── Живой контекст интеграций агента ─────────────────────────────────────────
                 # Извлекаем конкретные данные из настроек агента, а не абстрактные названия.
@@ -11981,7 +11977,9 @@ class AnchorEngine:
                             f"  📋 КОНТАКТЫ ГОТОВЫ К ОТПРАВКЕ ({len(_unsent_contacts_data)} чел.): "
                             + ', '.join(_uc_list[:5])
                             + ('...' if len(_unsent_contacts_data) > 5 else '')
-                            + "\n   → Вызови send_outreach_email для каждого. НЕ ищи новых — отправь ТЕМ КТО ЕСТЬ!"
+                            + f"\n   → Вызови send_outreach_email для КАЖДОГО (до {min(len(_unsent_contacts_data), 5)} за цикл)."
+                            + "\n   → НЕ ищи новых контактов пока не отправишь этим!"
+                            + "\n   → Каждое письмо: обратись ПО ИМЕНИ, упомяни их проект/нишу, предложи ASI Biont."
                         )
                     # Pending replies для этого агента
                     _pr_for_agent = list(_pending_replies)  # все ответившие контакты
@@ -12143,6 +12141,21 @@ class AnchorEngine:
                     if _intg_live_lines else ''
                 )
 
+                # Полный список интеграций для краткой строки в промпте
+                _ag_caps_for_prompt_parts = []
+                if _ag_profile_match and _ag_profile_match.get('caps'):
+                    _ag_caps_for_prompt_parts.extend(_ag_profile_match['caps'][:6])
+                if _intg_live_lines:
+                    for _il in _intg_live_lines[:3]:
+                        _il_clean = _il.split('→')[0].strip()[:50] if '→' in _il else _il.strip()[:50]
+                        if _il_clean and _il_clean not in _ag_caps_for_prompt_parts:
+                            _ag_caps_for_prompt_parts.append(_il_clean)
+                _ag_caps_for_prompt = (
+                    ', '.join(_ag_caps_for_prompt_parts)
+                    if _ag_caps_for_prompt_parts
+                    else 'нет подключённых интеграций'
+                )
+
                 # ── Долгосрочная память агента: записанные провалы предыдущих циклов ──
                 _agent_failure_memory = ''
                 try:
@@ -12202,6 +12215,9 @@ class AnchorEngine:
                     + f"\n\n🧠 ТЫ — СОТРУДНИК В КОМАНДЕ ({_ag_name}, {_ag_role_str}):"
                     f"\n  • Твои интеграции: {_ag_caps_for_prompt}"
                     f"\n  • Это твой инструментарий — используй его по максимуму."
+                    f"\n  • ПРИНЦИП: смотри выше блок 🔌 ТВОИ ИНТЕГРАЦИИ — там КОНКРЕТНЫЕ tool-функции и API."
+                    f"\n    Если инструмента нет в блоке — значит он у тебя НЕ ПОДКЛЮЧЁН."
+                    f"\n    Не гадай что доступно — читай свой блок интеграций."
                     f"\n  • Говори от первого лица. Ты {'специалист' if not _ag_is_fem else 'специалистка'} со своим мнением и характером."
                     f"\n  • СТИЛЬ: как в рабочем мессенджере — живо, с конкретными результатами."
                     f"\n\n🔗 ЦЕПОЧКА ЦЕННОСТИ (это КРИТИЧЕСКИ важно):"
@@ -12213,6 +12229,12 @@ class AnchorEngine:
                     f"\n  Нашёл данные? → save_email_contact / create_post / DELEGATE[коллега]"
                     f"\n  Написал текст? → publish_to_telegram / send_outreach_email"
                     f"\n  Нет интеграции? → DELEGATE[коллега]: передай ему КОНКРЕТНЫЕ данные для действия"
+                    f"\n\n📧 EMAIL-КОНВЕЙЕР (если есть email-интеграция):"
+                    f"\n  Полная цепочка: web_search/run_agent_action → save_email_contact → send_outreach_email"
+                    f"\n  → check_emails (ответы) → reply_to_outreach_email"
+                    f"\n  ВАЖНО: НЕ останавливайся на поиске! Найденный контакт БЕЗ отправки = 0 результата."
+                    f"\n  За один цикл можно отправить НЕСКОЛЬКО писем — вызови send_outreach_email для каждого контакта."
+                    f"\n  Если есть ГОТОВЫЕ контакты (см. 📋 КОНТАКТЫ ГОТОВЫ) — сначала ОТПРАВЬ им, потом ищи новых."
                     f"\n\n🧩 МЫШЛЕНИЕ:"
                     f"\n  Перед отчётом спроси себя: «Что НОВОГО я узнал или сделал? Чем это отличается от прошлого цикла?»"
                     f" Ценность = новые данные, новые контакты, новые идеи. Повторение старого — не прогресс."
