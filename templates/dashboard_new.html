@@ -8078,7 +8078,7 @@ except Exception as e:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'run_agent_action', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated']);
+            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'run_agent_action', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated', 'goal_autopilot_dispatch']);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
                 // Hide non-terminal autopilot dispatches — completed/failed показываем

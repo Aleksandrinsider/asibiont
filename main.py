@@ -8662,7 +8662,6 @@ _TIMELINE_VISIBLE_TYPES = {
     'email',
     'integration',
     'daily_report',
-    'goal_autopilot_dispatch',
     'coordinator_summary',
 }
 

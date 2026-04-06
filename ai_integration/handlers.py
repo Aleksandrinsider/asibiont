@@ -8443,7 +8443,30 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
             content_data = json.loads(content)
         except (json.JSONDecodeError, TypeError, ValueError):
             content_data = content
-        
+
+        # ── GUARD: не публиковать внутренние отчёты в публичный канал ──
+        _tg_lower = (content if isinstance(content, str) else str(content)).lower()
+        _TG_INTERNAL = (
+            'проверил', 'проверила', 'обновила прогресс', 'обновил прогресс',
+            'update_goal_progress', 'goal_progress', 'save_email_contact',
+            'отправил письм', 'отправила письм', 'нашёл контакт', 'нашла контакт',
+            'сохранила контакт', 'сохранил контакт', 'добавила в crm', 'добавил в crm',
+            'делегиру', 'delegate[',
+        )
+        _TG_PUBLIC = (
+            'тренд', 'обзор', 'кейс', 'инсайт', 'аналитик', 'исследован',
+            'стратеги', 'индустри', 'рынок', 'технолог',
+        )
+        _tg_int = sum(1 for m in _TG_INTERNAL if m in _tg_lower)
+        _tg_pub = sum(1 for m in _TG_PUBLIC if m in _tg_lower)
+        if _tg_int >= 2 and _tg_pub == 0:
+            logger.warning('[TG_GUARD] Blocked internal report from public channel: %.100s', content)
+            return (
+                "⛔ Этот текст похож на внутренний отчёт, а не на публичный пост. "
+                "Telegram-канал — для аудитории: инсайты, кейсы, аналитика. "
+                "Переформулируй контент как экспертный пост для подписчиков."
+            )
+
         result = await marketing_agent.publish_to_telegram(
             content=content_data,
             image_url=image_url,
@@ -16363,6 +16386,29 @@ async def publish_to_discord(
 
         if not user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
             return " Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
+
+        # ── GUARD: не публиковать внутренние отчёты в публичный канал ──
+        _content_lower = (content or '').lower()
+        _INTERNAL_MARKERS = (
+            'проверил', 'проверила', 'обновила прогресс', 'обновил прогресс',
+            'update_goal_progress', 'goal_progress', 'save_email_contact',
+            'отправил письм', 'отправила письм', 'нашёл контакт', 'нашла контакт',
+            'сохранила контакт', 'сохранил контакт', 'добавила в crm', 'добавил в crm',
+            'делегиру', 'delegate[',
+        )
+        _PUBLIC_MARKERS = (
+            'тренд', 'обзор', 'кейс', 'инсайт', 'аналитик', 'исследован',
+            'стратеги', 'индустри', 'рынок', 'технолог',
+        )
+        _has_internal = sum(1 for m in _INTERNAL_MARKERS if m in _content_lower)
+        _has_public = sum(1 for m in _PUBLIC_MARKERS if m in _content_lower)
+        if _has_internal >= 2 and _has_public == 0:
+            logger.warning('[DISCORD_GUARD] Blocked internal report from public channel: %.100s', content)
+            return (
+                "⛔ Этот текст похож на внутренний отчёт, а не на публичный пост. "
+                "Discord-канал — для аудитории: инсайты, кейсы, аналитика. "
+                "Переформулируй контент как экспертный пост для подписчиков."
+            )
 
         # Лимит: 1 пост в Discord в день (можно обойти force=True если пользователь явно просит)
         if not force:
