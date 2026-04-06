@@ -2086,17 +2086,22 @@ async def delegate_task(
                     if not _skip_dir_msg:
                         try:
                             _live_assign = _live_assignment_text(_agent_name, _agent_task_text)
-                            _dir_json = _json_ag.dumps({
-                                '__agent': {
-                                    'name': 'ASI',
-                                    'id': 0,
-                                    'avatar_url': '/static/asibiont.svg',
-                                },
-                                'text': _live_assign,
-                                '__to_agent': _agent_name,
-                                '__anchor_type': 'agent_delegation',
-                            }, ensure_ascii=False)
-                            _save_ifd(user_id, _dir_json)
+                            if not _live_assign or len(_live_assign.strip()) < 5:
+                                logger.warning(
+                                    "[DELEGATE] DIR message skipped — empty text after sanitize for %s", _agent_name
+                                )
+                            else:
+                                _dir_json = _json_ag.dumps({
+                                    '__agent': {
+                                        'name': 'ASI',
+                                        'id': 0,
+                                        'avatar_url': '/static/asibiont.svg',
+                                    },
+                                    'text': _live_assign,
+                                    '__to_agent': _agent_name,
+                                    '__anchor_type': 'agent_delegation',
+                                }, ensure_ascii=False)
+                                _save_ifd(user_id, _dir_json)
                         except Exception as _dir_err:
                             logger.error(f"[DELEGATE] DIR message save failed: {_dir_err}")
 
@@ -2213,17 +2218,22 @@ async def delegate_task(
 
                     # Записываем ответ агента в чат (видно на дашборде с аватаркой)
                     try:
-                        _av = _agent_dict.get('avatar_url', '')
-                        _resp_json = _json_ag.dumps({
-                            '__agent': {
-                                'name': _agent_name,
-                                'id': _agent_recipient.id,
-                                'avatar_url': _av,
-                            },
-                            'text': _result,
-                            '__anchor_type': 'agent_delegation',
-                        }, ensure_ascii=False)
-                        _save_ifd(user_id, _resp_json)
+                        if not _result or len(_result.strip()) < 5:
+                            logger.warning(
+                                "[DELEGATE] agent result skipped — empty text after sanitize for %s", _agent_name
+                            )
+                        else:
+                            _av = _agent_dict.get('avatar_url', '')
+                            _resp_json = _json_ag.dumps({
+                                '__agent': {
+                                    'name': _agent_name,
+                                    'id': _agent_recipient.id,
+                                    'avatar_url': _av,
+                                },
+                                'text': _result,
+                                '__anchor_type': 'agent_delegation',
+                            }, ensure_ascii=False)
+                            _save_ifd(user_id, _resp_json)
                     except Exception as _resp_err:
                         logger.error(f"[DELEGATE] agent response save failed: {_resp_err}")
 
