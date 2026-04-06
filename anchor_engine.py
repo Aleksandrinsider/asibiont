@@ -6893,6 +6893,13 @@ class AnchorEngine:
                     or _is_delegation_leak
                     # Планы без действий: агент описывает намерения без фактов
                     or _is_planning_noise
+                    # «Поиск не дал результатов» — бесполезно для пользователя
+                    or (len(_result_clean) < 200
+                        and any(w in _result_lower for w in (
+                            'не дал контакт', 'не дал email', 'не дал результат',
+                            'не нашёл конкретн', 'не нашла конкретн',
+                            'попробую другой подход', 'нужен другой подход',
+                        )))
                 )
                 if _is_noise_result:
                     _filter_reason = 'noise'
