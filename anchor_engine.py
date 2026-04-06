@@ -6405,15 +6405,8 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign saved user %d → %s", user.id, _chosen_name)
                         finally:
                             _cs.close()
-                        # Поручение — отправляем в Telegram отдельным сообщением
-                        if self.bot and _coord_text and _chosen_id != 0 and not _skip_coord:
-                            try:
-                                _deleg_brief = re.sub(r'\n+', ' ', _coord_text_clean_save or _coord_text).strip()
-                                if len(_deleg_brief) > 300:
-                                    _deleg_brief = _deleg_brief[:300].rsplit(' ', 1)[0] + '…'
-                                await _safe_send(self.bot, user.telegram_id, f"Поручение → {_chosen_name}:\n{_deleg_brief}")
-                            except Exception as _deleg_err:
-                                logger.debug("[ANCHOR-AUTOPILOT] delegation send: %s", _deleg_err)
+                        # Поручение сохранено в БД — НЕ отправляем в Telegram (внутренняя координация)
+                        logger.info("[ANCHOR-AUTOPILOT] coord-assign saved for %s (not sent to TG)", _chosen_name)
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
@@ -6747,11 +6740,18 @@ class AnchorEngine:
                     'запускаю ', 'приступаю ', 'начинаю ', 'погружусь ',
                     'сейчас ', 'попробую ', 'буду ', 'давай ',
                 )
+                # Ack + intent: "Хорошо, сейчас открою базу...", "Ладно, подготовлю..."
+                _ACK_PREFIXES = ('хорошо', 'ладно', 'ok', 'окей', 'конечно', 'разумеется', 'принято', 'есть')
+                _is_ack_planning = (
+                    len(_result_clean) < 250
+                    and any(_result_lower.startswith(p) for p in _ACK_PREFIXES)
+                    and not any(c.isdigit() for c in _result_clean[:80])  # нет цифр/фактов
+                )
                 _is_planning_noise = (
                     not _has_real_actions
                     and len(_result_clean) < 200
                     and any(_result_lower.startswith(p) for p in _PLANNING_WITHOUT_FACTS)
-                )
+                ) or _is_ack_planning
                 _is_noise_result = (
                     # Абсолютный фильтр: hollow acks ВСЕГДА noise, даже если tools вызваны
                     _result_lower.rstrip('.!') in _EMPTY_RESPONSES

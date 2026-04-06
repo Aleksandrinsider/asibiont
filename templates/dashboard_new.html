@@ -1934,12 +1934,17 @@
                     }
                 } catch(e) { /* обычный текст — продолжаем */ }
             }
-            // Скрываем только техническо-шумовые типы
+            // Скрываем техническо-шумовые и координационные типы
             if (_anchorType === 'coordinator_agent_request') return;
-            // coordinator_assignment и agent_delegation от ASI — ПОКАЗЫВАЕМ (задания агентам)
-            // coordinator_summary, asi_director_review, autopilot_escalation — ПОКАЗЫВАЕМ
-            // Это создаёт ощущение живого общения агентов в чате
+            if (_anchorType === 'goal_autopilot_assignment') return;  // internal coordination
             if (_anchorType === 'asi_self_analysis') return;
+            // Скрываем пустые и generic-planning ответы агентов ("Хорошо, сейчас открою базу...")
+            if (_isAgentMsgWithAgent && typeof text === 'string') {
+                const _tl = text.trim().toLowerCase();
+                if (!_tl || _tl === '(нет текста)') return;
+                const _ackPfx = ['хорошо', 'ладно', 'ok', 'окей', 'конечно', 'разумеется', 'принято', 'есть', 'поняла', 'понял', 'сейчас ', 'приступаю', 'начинаю', 'запускаю'];
+                if (_tl.length < 250 && _ackPfx.some(p => _tl.startsWith(p)) && !/\d/.test(_tl.slice(0, 80))) return;
+            }
             // Директивы ASI Biont (agent_msg без __agent): показываем с именем "ASI Biont"
             if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
                 agentInfo = { name: 'ASI Biont', avatar_url: '' };
