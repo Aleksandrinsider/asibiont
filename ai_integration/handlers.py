@@ -16107,6 +16107,19 @@ async def save_email_contact(
             return (f" Нельзя сохранять собственный адрес ({email_clean}) как контакт — "
                     f"это ваша почта или почта агента. Найди внешний email реального человека.")
 
+        # ── GUARD: не сохранять контакт с telegram_id владельца ──
+        _owner_tg_id = str(user.telegram_id) if user.telegram_id else ''
+        _owner_username = (user.username or '').strip().lower()
+        _owner_first = (user.first_name or '').strip().lower()
+        _name_clean = (name or '').strip().lower()
+        # Если имя контакта содержит telegram_id владельца — это он сам
+        if _owner_tg_id and _owner_tg_id in _name_clean:
+            return (f"⛔ Это telegram_id владельца ({_owner_tg_id}). "
+                    "Нельзя сохранять владельца как контакт. Ищи внешних людей.")
+        # Если имя точно совпадает с username или first_name владельца и email тоже его
+        if _owner_username and _name_clean == _owner_username:
+            logger.warning("[SELF-SAVE] agent tried to save owner username=%s as contact", _owner_username)
+
         # Check duplicate
         existing = session.query(EmailContact).filter_by(
             user_id=user.id, email=email_clean

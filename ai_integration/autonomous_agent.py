@@ -5430,12 +5430,20 @@ def _build_user_context_sync(user_db_id: int) -> str:
 
     parts: list[str] = []
 
-    # --- Кто пользователь ---
+    # --- Кто пользователь (ВЛАДЕЛЕЦ — НЕ контакт!) ---
     identity_parts: list[str] = []
+    _owner_ids: list[str] = []  # собираем ВСЕ идентификаторы владельца
     if user:
         name = user.first_name or user.username or ''
         if name:
             identity_parts.append(name)
+        # Собираем все идентификаторы владельца чтобы агент НЕ путал его с внешним контактом
+        if user.email:
+            _owner_ids.append(f'email: {user.email}')
+        if user.username:
+            _owner_ids.append(f'telegram: @{user.username}')
+        if user.telegram_id:
+            _owner_ids.append(f'telegram_id: {user.telegram_id}')
     if profile:
         if profile.position:
             identity_parts.append(profile.position)
@@ -5451,7 +5459,14 @@ def _build_user_context_sync(user_db_id: int) -> str:
             identity_parts.append(f'Контент-стратегия: {profile.content_strategy[:100]}')
 
     if identity_parts:
-        parts.append('ПОЛЬЗОВАТЕЛЬ: ' + ', '.join(identity_parts))
+        _owner_block = '👤 ВЛАДЕЛЕЦ (твой босс, НЕ контакт для outreach!): ' + ', '.join(identity_parts)
+        if _owner_ids:
+            _owner_block += '\n   Его аккаунты: ' + ', '.join(_owner_ids)
+            _owner_block += (
+                '\n   ⛔ ЗАПРЕЩЕНО: записывать владельца в контакты, отправлять ему outreach, '
+                'добавлять его username/email в базу контактов. Он — ЗАКАЗЧИК, а не лид.'
+            )
+        parts.append(_owner_block)
 
     # --- Его цели ---
     if goals:
@@ -5501,7 +5516,10 @@ def _build_user_context_sync(user_db_id: int) -> str:
             if c.notes:
                 line += f' — {c.notes[:80]}'
             contact_lines.append(line)
-        parts.append('EMAIL-КОНТАКТЫ ПОЛЬЗОВАТЕЛЯ:\n' + '\n'.join(contact_lines))
+        parts.append(
+            'EMAIL-КОНТАКТЫ (уже в базе — НЕ ищи их повторно!):\n' + '\n'.join(contact_lines)
+            + '\n⚠️ Эти люди УЖЕ сохранены. Ищи НОВЫХ контактов, не дублируй этих.'
+        )
 
     # --- Активные задачи пользователя ---
     if tasks:
@@ -6358,6 +6376,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
             "🚫 КАЧЕСТВО РАБОТЫ:\n"
             "   НЕ придумывай email (только реальные найденные). @username ≠ email.\n"
+            "   ⛔ НЕ СОХРАНЯЙ ВЛАДЕЛЬЦА КАК КОНТАКТ: если web_search/research нашёл твоего владельца (его имя,\n"
+            "      его telegram, его GitHub, его компанию) — это НЕ лид, это ТВОЙ БОСС. Пропусти его и ищи ДРУГИХ людей.\n"
+            "   ⛔ ДЕДУПЛИКАЦИЯ: если контакт уже есть в «EMAIL-КОНТАКТЫ (уже в базе)» — НЕ ищи его снова,\n"
+            "      НЕ сохраняй повторно, НЕ отправляй тот же outreach. Работай только с НОВЫМИ людьми.\n"
             "   Приоритет — ВЫПОЛНЯЙ задачу сам. add_task допустим только для реального follow-up (перезвонить, проверить ответ через N дней).\n"
             "   Каждый ход — вызывай tool-ы. Ответ без единого вызова инструмента = ты ничего не сделал.\n"
             "   Пустые фразы («Задачу выполнила.» / «Приступаю.» / «Погружусь в поиск.») — это НЕ работа.\n"
