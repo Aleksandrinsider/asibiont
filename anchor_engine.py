@@ -390,12 +390,17 @@ def _normalize_coordinator_assignment_by_capabilities(
     # Внешние Telegram-чаты/группы недоступны без userbot (его нет в платформе)
     _tg_platform_words = ('telegram', 'тг', 'телеграм')
     _tg_external_words = (
-        'чат', 'чаты', 'групп', 'сообществ', 'community',
-        'вступ', 'join', 'пообщ', 'общени', 'написать в', 'писать в',
+        'сообществ', 'community',
+        'вступ', 'join', 'мониторить',
+        'чужой', 'чужих', 'чужие', 'внешн',
     )
+    # Отдельно: 'чат'/'групп' ложно совпадают с "опубликуй в Telegram-чат пользователя"
+    # → считаем внешним только если нет publish_to_telegram в tool
     _asks_external_tg = (
         any(w in task_l for w in _tg_platform_words)
         and any(w in task_l for w in _tg_external_words)
+        and 'publish_to_telegram' not in tool_norm
+        and not (has_user_tg_channel and ('опублик' in task_l or 'пост' in task_l))
     )
     if _asks_external_tg:
         return (
@@ -429,15 +434,18 @@ def _normalize_coordinator_assignment_by_capabilities(
 
     # Чужие Discord/Slack-серверы/сообщества — вступить/участвовать невозможно
     _discord_platform_words = ('discord', 'дискорд', 'slack', 'слак')
+    # Только слова однозначно означающие ЧУЖИЕ серверы/сообщества
+    # НЕ включаем 'канал', 'сервер', 'чат' — могут означать СВОЙ канал/сервер/чат
     _discord_external_words = (
-        'сообществ', 'community', 'серверу', 'сервер', 'вступ', 'join',
-        'присоедин', 'участ', 'пообщ', 'общени', 'написать в', 'мониторить',
-        'отслежива', 'чат', 'канал',
+        'сообществ', 'community', 'вступ', 'join',
+        'присоедин', 'участвовать в', 'мониторить', 'отслежива',
+        'чужой', 'чужих', 'чужие', 'внешн',
     )
     _asks_external_discord = (
         any(w in task_l for w in _discord_platform_words)
         and any(w in task_l for w in _discord_external_words)
         and 'publish_to_discord' not in tool_norm  # не трогаем publish через свой webhook
+        and not (has_user_discord_webhook and 'опублик' in task_l)  # если есть webhook и просят опубликовать — не блокируем
     )
     if _asks_external_discord:
         return (
