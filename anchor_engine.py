@@ -8508,30 +8508,23 @@ class AnchorEngine:
         )
         _channels_summary = ', '.join(_channels_list) if _channels_list else 'встроенные (research, web_search, tasks)'
 
-        # ── Email pipeline state (data-driven, goal-agnostic) ──
+        # ── Email pipeline state (neutral facts for coordinator LLM) ──
         _email_fact = ''
-        _email_priority_tool = 'research_topic'
         if _available_domains.get('email'):
             if has_campaign_replies:
-                _email_fact = 'есть непрочитанные ответы — приоритет: ответить'
-                _email_priority_tool = 'reply_to_outreach_email'
+                _email_fact = 'есть непрочитанные ответы на рассылку'
             elif _email_limit_exhausted:
-                _email_fact = f'дневной лимит исчерпан ({_sent_today}/{_daily_limit}) — переключись на другие каналы'
+                _email_fact = f'дневной лимит email исчерпан ({_sent_today}/{_daily_limit})'
             elif has_unsent:
-                _email_fact = f'{len(unsent_from_data)} контактов без писем — ОТПРАВЛЯЙ СЕЙЧАС, лимит {_daily_limit}/день, отправлено {_sent_today}'
-                _email_priority_tool = 'send_outreach_email'
+                _email_fact = f'{len(unsent_from_data)} контактов в базе без писем, лимит {_daily_limit}/день, отправлено сегодня {_sent_today}'
             elif contacts_exhausted:
-                _email_fact = f'КРИТИЧНО: база исчерпана ({n_contacts} конт., {len(already_sent)} отправлено) — СРОЧНО ищи 20+ новых контактов через web_search и GitHub'
-                _email_priority_tool = 'find_relevant_contacts_for_task'
+                _email_fact = f'все {n_contacts} контактов в базе уже получили письма ({len(already_sent)} отправлено)'
             elif n_contacts == 0:
-                _email_fact = 'КРИТИЧНО: контактов 0 — СРОЧНО ищи 20+ через web_search, GitHub, профильные сайты'
-                _email_priority_tool = 'find_relevant_contacts_for_task'
+                _email_fact = 'контактов в базе 0'
             elif total_sent == 0:
-                _email_fact = f'{n_contacts} контактов, 0 отправлено'
-                _email_priority_tool = 'send_outreach_email'
+                _email_fact = f'{n_contacts} контактов в базе, 0 писем отправлено'
             else:
-                _email_fact = f'рассылка: {int(total_sent)} отправлено из {n_contacts}'
-                _email_priority_tool = 'send_outreach_email'
+                _email_fact = f'{int(total_sent)} писем отправлено из {n_contacts} контактов'
 
         # ══════════════════════════════════════════════════════════
         #  PROCESS EACH GOAL — data + capabilities, not keywords
@@ -8556,35 +8549,23 @@ class AnchorEngine:
                 })
                 continue
 
-            # ── Detect search-for-new intent in goal ──
-            _title_l = title.lower()
-            _desc_l = (g.get('description', '') or '').lower()
-            _goal_text_combined = _title_l + ' ' + _desc_l
-            _is_search_goal = any(k in _goal_text_combined for k in (
-                'найти нов', 'найди нов', 'искать нов', 'ищи нов', 'поиск нов',
-                'привлечь нов', 'привлечение нов', 'новых клиент', 'новых контакт',
-                'новых лид', 'новых партн', 'новых пользовател', 'найти люд',
-                'find new', 'new contacts', 'new leads', 'new clients',
-                'расширить базу', 'расширение базы', 'нарастить базу',
-            ))
-
             # ── Build situation context from FACTS ──
             _facts = []
             if _email_fact:
-                if _is_search_goal and has_unsent:
-                    _facts.append(f'email: в базе {len(unsent_from_data)} без писем, но цель — НАЙТИ НОВЫХ → приоритет: поиск новых контактов')
-                else:
-                    _facts.append(f'email: {_email_fact}')
+                _facts.append(f'email: {_email_fact}')
             _facts.append(f'каналы: {_channels_summary}')
 
             _reason = '; '.join(_facts)
 
-            # Smart fallback tool: prefer email-priority if available, else research
-            # Search-goal override: if goal says "find new" → search, not email existing
-            if _is_search_goal:
-                _fb_tool = 'find_relevant_contacts_for_task' if _available_domains.get('email') else 'web_search'
-            else:
-                _fb_tool = _email_priority_tool if _available_domains.get('email') else 'research_topic'
+            # LLM decides the tool — we only suggest a default based on availability
+            _fb_tool = 'research_topic'
+            if _available_domains.get('email'):
+                if has_campaign_replies:
+                    _fb_tool = 'reply_to_outreach_email'
+                elif contacts_exhausted or n_contacts == 0:
+                    _fb_tool = 'find_relevant_contacts_for_task'
+                else:
+                    _fb_tool = 'research_topic'   # neutral — LLM picks
             if _is_tool_failed(_fb_tool):
                 _fb_tool = 'web_search'
 
@@ -8594,9 +8575,10 @@ class AnchorEngine:
                 'task': (
                     f'Цель «{title}» ({int(progress)}%). '
                     f'Доступные каналы: {_channels_summary}. '
-                    + (f'Email: {_email_fact}. ' if _email_fact and not _is_search_goal else '')
-                    + ('Фокус: ПОИСК НОВЫХ контактов (web_search, GitHub, профильные сайты). Существующие контакты в базе — второй приоритет. ' if _is_search_goal else '')
-                    + f'Определи лучший подход через доступные каналы → конкретное действие → update_goal_progress.'
+                    + (f'Email-статус: {_email_fact}. ' if _email_fact else '')
+                    + f'Проанализируй ТЕКСТ ЦЕЛИ, определи что именно нужно '
+                    + f'(поиск новых контактов / рассылка / контент / аналитика / другое) '
+                    + f'→ выбери подходящий канал и инструмент → конкретное действие → update_goal_progress.'
                 ),
                 'reason': _reason,
             })
@@ -8874,16 +8856,6 @@ class AnchorEngine:
                     except Exception:
                         pass
                 _goals = [g for g in _goals if g.get('id') not in _infeasible_coord_ids]
-            # ── Детектор: есть ли среди целей «поиск новых контактов» ──
-            _has_search_goal = any(
-                any(k in ((g_.get('title', '') + ' ' + (g_.get('description', '') or '')).lower())
-                    for k in ('найти нов', 'найди нов', 'искать нов', 'ищи нов', 'поиск нов',
-                              'привлечь нов', 'привлечение нов', 'новых клиент', 'новых контакт',
-                              'новых лид', 'новых партн', 'новых пользовател', 'найти люд',
-                              'find new', 'new contacts', 'new leads', 'new clients',
-                              'расширить базу', 'расширение базы', 'нарастить базу'))
-                for g_ in _goals
-            )
             # ── Авто-детектор типа цели для координатора ──
             def _crd_goal_type(g_):
                 _t = (g_.get('title', '') + ' ' + (g_.get('description', '') or '')).lower()
@@ -8994,34 +8966,29 @@ class AnchorEngine:
                 # Горячие — отвечали/заинтересованы
                 if _hot_contacts_info_data:
                     _kd_lines.append(
-                        f"  🔥 ГОРЯЧИЕ ({len(_hot_contacts_info_data)}) — ответили или заинтересованы: "
+                        f"  🔥 Горячие ({len(_hot_contacts_info_data)}) — ответили/заинтересованы: "
                         + ', '.join(_hot_contacts_info_data[:5])
-                        + "\n     → negotiate_by_email: персональный диалог, развивай отношения!"
                     )
                 # Не ответили давно
                 if _no_reply_info_data:
                     _kd_lines.append(
-                        f"  ⏰ БЕЗ ОТВЕТА >3Д ({len(_no_reply_info_data)}): "
+                        f"  ⏰ Без ответа >3д ({len(_no_reply_info_data)}): "
                         + ', '.join(_no_reply_info_data[:5])
-                        + "\n     → send_outreach_email: follow-up с новым углом (не копируй первое письмо)!"
                     )
                 # Новые персональные — ещё не писали
                 if _new_contacts_info_data:
                     _kd_lines.append(
-                        f"  👤 НОВЫЕ ЛИЧНЫЕ ({len(_new_contacts_info_data)}) — ещё не получили письма: "
+                        f"  👤 Новые личные ({len(_new_contacts_info_data)}): "
                         + ', '.join(_new_contacts_info_data[:5])
-                        + "\n     → send_outreach_email: первичный контакт"
                     )
                 # Новые корп. — ещё не писали
                 if _corp_new_info_data:
                     _kd_lines.append(
-                        f"  🏢 НОВЫЕ КОРПОРАТИВНЫЕ ({len(_corp_new_info_data)}) — B2B без письма: "
+                        f"  🏢 Новые корпоративные ({len(_corp_new_info_data)}): "
                         + ', '.join(_corp_new_info_data[:5])
-                        + "\n     → send_outreach_email: B2B предложение"
                     )
                 _kd_lines.append(
-                    "  ⚠️ ВАЖНО — 'уже в базе' ≠ новый: если web_search нашёл человека, который УЖЕ есть "
-                    "в системе — это НЕ новый контакт. Для таких — только follow-up или переговоры.\n"
+                    "  ℹ️ 'уже в базе' ≠ новый контакт.\n"
                 )
                 _known_dedup_str = '\n'.join(_kd_lines)
             _unsent_contacts_str = ''
@@ -9030,8 +8997,7 @@ class AnchorEngine:
             _coord_email_limit_hit = _coord_sent_today >= _coord_daily_limit
             if _coord_email_limit_hit:
                 _unsent_contacts_str = (
-                    f"\nℹ️ ЛИМИТ EMAIL: отправлено сегодня {_coord_sent_today}/{_coord_daily_limit}. "
-                    "Назначай задачи на другие инструменты: research_topic, web_search, create_post, save_note.\n"
+                    f"\nℹ️ Лимит email: отправлено сегодня {_coord_sent_today}/{_coord_daily_limit}.\n"
                 )
             elif _unsent_contacts_data:
                 import re as _re_uc
@@ -9051,56 +9017,32 @@ class AnchorEngine:
                 _uc_lines = []
                 if _uc_personal:
                     _uc_lines.append(
-                        f"  👤 ЛИЧНЫЕ ({len(_uc_personal)}): "
+                        f"  👤 Личные ({len(_uc_personal)}): "
                         + ', '.join(f"{n} <{e}>" for n, e in _uc_personal[:5])
-                        + "\n     → send_outreach_email — персональный питч про ASI Biont"
                     )
                 if _uc_corp:
                     _uc_lines.append(
-                        f"  🏢 КОРПОРАТИВНЫЕ ({len(_uc_corp)}): "
+                        f"  🏢 Корпоративные ({len(_uc_corp)}): "
                         + ', '.join(f"{n} <{e}>" for n, e in _uc_corp[:5])
-                        + "\n     → send_outreach_email — B2B питч: ASI Biont как инструмент для БИЗНЕСА "
-                        "(автоматизация, AI-команда под ключ, снижение издержек). "
-                        "Обращайся к конкретному человеку по имени, говори на языке выгоды для компании."
                     )
-                if _has_search_goal:
-                    # Цель — найти НОВЫХ → существующие контакты второстепенны
-                    _unsent_contacts_str = (
-                        f"\nℹ️ В базе {len(_unsent_contacts_data)} контактов без письма — "
-                        "но цель пользователя: НАЙТИ НОВЫХ.\n"
-                        "→ ПРИОРИТЕТ: web_search, GitHub, профильные сайты → save_email_contact для новых.\n"
-                        "→ Существующим можно писать ПОСЛЕ поиска новых, не вместо.\n"
-                        + '\n'.join(_uc_lines) + "\n"
-                    )
-                else:
-                    _unsent_contacts_str = (
-                        f"\n🟠 КОНТАКТЫ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.) — "
-                        f"ПРИОРИТЕТ: отправь send_outreach_email КАЖДОМУ (до {min(len(_unsent_contacts_data), 5)} за цикл)!\n"
-                        + '\n'.join(_uc_lines) + "\n"
-                    )
+                # Нейтральная информация — LLM решает что делать на основе целей
+                _unsent_contacts_str = (
+                    f"\n📋 КОНТАКТЫ В БАЗЕ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.):\n"
+                    + '\n'.join(_uc_lines)
+                    + f"\n  Доступно send_outreach_email (до {min(len(_unsent_contacts_data), 5)} за цикл)."
+                    + "\n  Решай сам: если цель требует поиска НОВЫХ — сначала ищи; "
+                    "если цель — рассылка/outreach — пиши существующим.\n"
+                )
             elif _email_sent > 0 and _goals:
-                # Все контакты уже получили письма — нужны НОВЫЕ контакты
+                # Все контакты уже получили письма — информируем координатора
                 _gap_needed = sum(
                     max(0, int((g.get('metric_target') or 0) - (g.get('metric_current') or 0)))
                     for g in _goals[:3] if g.get('metric_target')
                 )
                 if _gap_needed > 0:
-                    # Определяем наличие GitHub-агента для точных инструкций
-                    _has_gh_unsent = any(
-                        'github_token=' in (getattr(next((a for a in real_agents if a.name == p['name']), None), 'user_api_keys', '') or '').lower()
-                        for p in _profiles
-                    )
-                    _gh_pipeline_hint = (
-                        "\n→ GitHub-агент: run_agent_action(action='search_users', params={query:'language:X followers:>N', page:1}) "
-                        "— меняй query каждый цикл. Затем save_email_contact для найденных."
-                    ) if _has_gh_unsent else ''
                     _unsent_contacts_str = (
-                        f"\n💡 ВСЕ {_email_sent} известных контактов уже получили письма. "
-                        f"Осталось {_gap_needed} единиц до цели.\n"
-                        "→ Нужны новые контакты — назначь GitHub/RSS-агенту поиск.\n"
-                        + _gh_pipeline_hint +
-                        "\n→ RSS-агент: save_email_contact для авторов/разработчиков из ленты."
-                        "\n→ НЕ повторяй check_emails если уже делали недавно — ищи НОВЫЕ контакты!\n"
+                        f"\nℹ️ Все {_email_sent} контактов в базе уже получили письма. "
+                        f"До цели осталось {_gap_needed} единиц.\n"
                     )
 
             # Блок приоритетных ответов на входящие — если есть replied без AI-ответа
@@ -12255,25 +12197,20 @@ class AnchorEngine:
                         break
                 if _ag_email_user:
                     _intg_live_lines.append(
-                        f"📧 Твой email-аккаунт: {_ag_email_user}\n"
-                        f"   → check_emails — получить входящие, увидеть КТО ответил и ЧТО написал\n"
-                        f"   → list_email_contacts — получить ВСЕ сохранённые контакты с email-адресами\n"
-                        f"   → send_outreach_email — отправить письмо конкретному контакту\n"
-                        f"   → reply_to_outreach_email — ответить на ВХОДЯЩЕЕ письмо\n"
-                        f"   ⚡ НЕ ПРОСИ email у пользователя! Вызови list_email_contacts или check_emails — данные УЖЕ ЕСТЬ."
+                        f"📧 Email-аккаунт: {_ag_email_user}\n"
+                        f"   Доступные инструменты: check_emails, list_email_contacts, "
+                        f"send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task."
                     )
-                    # Неотправленные контакты — агент должен знать что они ЕСТЬ
+                    # Неотправленные контакты — нейтральная информация
                     if _unsent_contacts_data:
                         _uc_list = []
                         for _uc_item in _unsent_contacts_data[:8]:
                             _uc_clean = _uc_item.strip() if isinstance(_uc_item, str) else str(_uc_item)[:60]
                             _uc_list.append(_uc_clean)
                         _intg_live_lines.append(
-                            f"  📋 КОНТАКТЫ В БАЗЕ ({len(_unsent_contacts_data)} чел. без письма): "
+                            f"  📋 Контакты без письма ({len(_unsent_contacts_data)}): "
                             + ', '.join(_uc_list[:5])
                             + ('...' if len(_unsent_contacts_data) > 5 else '')
-                            + f"\n   → send_outreach_email для каждого (до {min(len(_unsent_contacts_data), 5)} за цикл)."
-                            + "\n   → Каждое письмо: обратись ПО ИМЕНИ, упомяни их проект/нишу, предложи ASI Biont."
                         )
                     # Pending replies для этого агента
                     _pr_for_agent = list(_pending_replies)  # все ответившие контакты

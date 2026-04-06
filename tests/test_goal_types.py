@@ -178,7 +178,7 @@ def test_g1_people_goal_github_agent_search():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_g2_unsent_contacts_priority_over_github_search():
-    """Есть несотправленные контакты → директива send_outreach_email, не search."""
+    """Есть несотправленные контакты → директива содержит email-факт, LLM решает."""
     goals = [_goal("Найти 50 тестировщиков для ASI Biont", progress=12, mc=6, mt=50)]
     profiles = [_profiles_for("Кристина", ["GitHub API Token", "Gmail IMAP"])]
     data = _base_data(
@@ -188,12 +188,12 @@ def test_g2_unsent_contacts_priority_over_github_search():
     )
     directives = _csd(goals, data, profiles)
     assert directives, "Должна быть директива"
-    tools = [d["tool"] for d in directives]
-    # Приоритет — отправить письмо, не искать новых
-    assert "send_outreach_email" in tools, \
-        f"При несотправленных контактах ожидался send_outreach_email, получили: {tools}"
-    assert "run_agent_action" not in tools, \
-        f"run_agent_action НЕ должен быть при наличии несотправленных контактов: {tools}"
+    # Директива должна содержать факт о контактах без писем — LLM сам решает
+    task_texts = " ".join(d.get("task", "") for d in directives)
+    assert "контакт" in task_texts.lower() or "email" in task_texts.lower(), \
+        f"Директива должна содержать email-факт, получили: {task_texts[:200]}"
+    assert "run_agent_action" not in [d["tool"] for d in directives], \
+        f"run_agent_action НЕ должен быть основным инструментом"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
