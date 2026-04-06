@@ -570,6 +570,18 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             if close_session:
                 session.close()
             return f"⛔ Задача '{_cancelled_dup.title}' уже создавалась и была отменена. Выбери ДРУГОЙ подход."
+
+        # Лимит: максимум 10 pending задач от агентов — не засоряем пользователю список
+        _agent_pending_count = session.query(Task).filter(
+            Task.user_id == user.id,
+            Task.status == 'pending',
+            Task.source == 'agent',
+        ).count()
+        if _agent_pending_count >= 10:
+            logger.warning(f"[ADD_TASK] Agent pending limit reached: {_agent_pending_count} tasks for user {user.id}")
+            if close_session:
+                session.close()
+            return "⛔ Уже 10 незавершённых задач от агентов. Сначала заверши или отмени существующие."
     
     # Create new task — время обязательно для пользовательских задач,
     # но агентские задачи (created_by_agent_id) могут быть без времени (отслеживание прогресса)

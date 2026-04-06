@@ -5765,18 +5765,78 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'instagram': 'контент, аудитория, аналитика',
             'linkedin': 'нетворкинг, поиск контактов, B2B',
         }
+        # Конкретные action-имена для run_agent_action по типу интеграции
+        _INTG_ACTIONS = {
+            'github': (
+                "run_agent_action(action='search_users', params={'query': 'language:python location:...'})\n"
+                "    run_agent_action(action='search_repos', params={'query': 'topic:ai stars:>100'})\n"
+                "    run_agent_action(action='get_user_info', params={'username': '...'})\n"
+                "    run_agent_action(action='create_issue', params={'repo': 'owner/repo', 'title': '...', 'body': '...'})\n"
+                "    run_agent_action(action='comment_on_issue', params={'repo': 'owner/repo', 'issue_number': N, 'body': '...'})"
+            ),
+            'gitlab': (
+                "run_agent_action(action='search_users', params={'query': '...'})\n"
+                "    run_agent_action(action='search_repos', params={'query': '...'})\n"
+                "    run_agent_action(action='create_issue', params={'project': '...', 'title': '...'})"
+            ),
+            'slack': (
+                "run_agent_action(action='send_message', params={'channel': '...', 'text': '...'})\n"
+                "    run_agent_action(action='list_channels', params={})"
+            ),
+            'discord': (
+                "run_agent_action(action='send_message', params={'channel_id': '...', 'content': '...'})"
+            ),
+            'jira': (
+                "run_agent_action(action='create_issue', params={'project': '...', 'summary': '...'})\n"
+                "    run_agent_action(action='search_issues', params={'jql': '...'})"
+            ),
+            'trello': (
+                "run_agent_action(action='create_card', params={'list_id': '...', 'name': '...'})\n"
+                "    run_agent_action(action='list_boards', params={})"
+            ),
+            'notion': (
+                "run_agent_action(action='create_page', params={'database_id': '...', 'title': '...'})\n"
+                "    run_agent_action(action='search', params={'query': '...'})"
+            ),
+            'sheets': (
+                "run_agent_action(action='read_sheet', params={'range': 'A1:Z100'})\n"
+                "    run_agent_action(action='add_row', params={'values': [...]})"
+            ),
+            'ozon': (
+                "run_agent_action(action='get_products', params={})\n"
+                "    run_agent_action(action='get_orders', params={'since': '...'})"
+            ),
+            'wildberries': (
+                "run_agent_action(action='get_products', params={})\n"
+                "    run_agent_action(action='get_orders', params={})"
+            ),
+            'binance': (
+                "run_agent_action(action='get_balance', params={})\n"
+                "    run_agent_action(action='get_price', params={'symbol': 'BTCUSDT'})"
+            ),
+            'hh': (
+                "run_agent_action(action='search_vacancies', params={'text': '...'})\n"
+                "    run_agent_action(action='search_resumes', params={'text': '...'})"
+            ),
+        }
         _connected_caps = []
+        _connected_actions = []
         for _ih in _intg_hint[:8]:
             _ih_low = _ih.lower()
             for _cap_key, _cap_desc in _INTG_CAPABILITIES.items():
                 if _cap_key in _ih_low:
                     _connected_caps.append(f"  • {_ih} = {_cap_desc}")
+                    # Добавляем конкретные action-примеры если есть
+                    if _cap_key in _INTG_ACTIONS:
+                        _connected_actions.append(f"  {_ih}:\n    {_INTG_ACTIONS[_cap_key]}")
                     break
         _caps_block = '\n'.join(_connected_caps) if _connected_caps else ''
+        _actions_block = '\n'.join(_connected_actions) if _connected_actions else ''
         _intg_action_hint = (
             f"\n\n🔗 Твои интеграции: {_intg_names}.\n"
             "Каждая интеграция — это НЕ один инструмент, а НАБОР ВОЗМОЖНОСТЕЙ. Думай шире:\n"
             + (_caps_block + '\n' if _caps_block else '')
+            + (f"\n📋 КОНКРЕТНЫЕ ВЫЗОВЫ run_agent_action (токены УЖЕ подключены — НЕ ПРОСИ у пользователя!):\n{_actions_block}\n" if _actions_block else '')
             + "Для внешних сервисов → run_agent_action. Для email → send_outreach_email / check_emails. "
             "web_search / research_topic — универсальные, доступны всегда. "
             "Комбинируй интеграции с платформенными инструментами для максимального результата.\n"
@@ -5953,18 +6013,25 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "1. ЧТО КОНКРЕТНО Я СДЕЛАЮ? (не «изучу», а «отправлю письмо X» / «создам план Y» / «найду метод Z»)\n"
             "2. КАКОЙ ИНСТРУМЕНТ ВЫЗОВУ? (назови конкретный tool)\n"
             "3. ЧТО ПОЛУЧИТ ПОЛЬЗОВАТЕЛЬ? (контакт? пост? план? заметка? инсайт?)\n"
-            "Если на вопрос 2 ответ «никакой» — переосмысли задачу и найди другой путь.\n\n"
+            "4. ЭТО РЕАЛЬНО ПРОДВИНЕТ ЦЕЛЬ? Спроси себя: если я создам CRM-сделку/заметку/задачу — "
+            "это приблизит к результату или это просто «было бы занятие»?\n"
+            "   Полезно: отправить письмо РЕАЛЬНОМУ человеку, опубликовать пост, получить данные из API.\n"
+            "   Бесполезно: создать CRM-сделку для абстрактной категории ('GitHub Outreach'), "
+            "сохранить контакт без email, написать план вместо действия.\n"
+            "Если на вопрос 2 ответ «никакой» или на 4 ответ «нет» — переосмысли задачу.\n\n"
 
             "ПОСЛЕ каждого действия — проверь себя:\n"
-            "4. Я получил конкретный результат? Если tool вернул ошибку или пустоту — честно скажи что не вышло\n"
+            "5. Я получил конкретный результат? Если tool вернул ошибку или пустоту — честно скажи что не вышло\n"
             "   и предложи другой подход. Не пиши «задачу выполнила» если результата нет.\n"
-            "5. Мой отчёт содержит ФАКТЫ? Каждое предложение = действие + результат. Без воды.\n"
+            "6. Результат ПОЛЕЗНЫЙ? CRM-запись без реальных данных, заметка-планировщик, задача без конкретики —\n"
+            "   это имитация работы. Лучше один реальный контакт, чем 5 пустых CRM-сделок.\n"
+            "7. Мой отчёт содержит ФАКТЫ? Каждое предложение = действие + результат. Без воды.\n"
             "   ФАКТ: «Нашла 3 автора на dev.to с публичным email, сохранила контакты» — конкретные цифры, действия.\n"
             "   НЕ ФАКТ: «Задачу выполнила» — это НОЛЬ информации. Что нашла? Сколько? Где? Кому написала?\n"
-            "6. Я НЕ повторяю тот же подход что и в прошлый раз? Если повторяю — значит я зацикливаюсь.\n"
+            "8. Я НЕ повторяю тот же подход что и в прошлый раз? Если повторяю — значит я зацикливаюсь.\n"
             "   Зацикливание = попробуй другой запрос, другой канал, другой инструмент, или честно скажи:\n"
             "   «пробовал X и Y, результат слабый — нужна другая стратегия».\n"
-            "7. МИНИМАЛЬНЫЙ СТАНДАРТ ОТЧЁТА: назови хотя бы одну конкретную вещь, которую ты сделал/нашёл.\n"
+            "9. МИНИМАЛЬНЫЙ СТАНДАРТ ОТЧЁТА: назови хотя бы одну конкретную вещь, которую ты сделал/нашёл.\n"
             "   Имя, ссылку, цифру, факт. Отчёт без единого конкретного факта = ты ничего не сделал.\n\n"
 
             f"📅 ДАТА И ВРЕМЯ — ТЫ ЖИВЁШЬ В НАСТОЯЩЕМ ({_now_str}):\n"
@@ -6530,7 +6597,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
             _lbl_ap = ' '.join(h.lower() for h in _intg_hint)  # все лейблы в одну строку
             # Email — агент имеет почтовую интеграцию ИЛИ специализируется на email
-            if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'crm', 'контакт', 'sales')) or
+            # ИЛИ сама задача — outreach/привлечение (агент ДОЛЖЕН иметь email инструменты)
+            if (_is_outreach_goal or
+                    any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'crm', 'контакт', 'sales')) or
                     any(w in _lbl_ap for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun'))):
                 _autopilot_tools.update({
                     'send_email', 'check_emails', 'send_outreach_email', 'reply_to_outreach_email',
@@ -7154,10 +7223,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
         _max_tool_calls = min(15 + _intg_count * 3, 30) if _is_autopilot_task else 5
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
-        # required только на первом вызове — гарантирует реальное действие
+        # required на первых 3 итерациях ИЛИ пока агент не вызвал хотя бы один инструмент.
+        # Это заставляет DeepSeek вызывать инструменты, а не писать текстовые описания.
         _tc_mode = "auto"
         if _use_tools_now:
-            if _is_autopilot_task and _tool_call_count == 0:
+            if _is_autopilot_task and (_tool_call_count == 0 or _iter < 3):
                 _tc_mode = "required"
             else:
                 _tc_mode = "auto"
@@ -7335,6 +7405,56 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             _content = _ah_msg.get('content') or ''
                 except Exception as _ah_err:
                     logger.warning("[DIRECTOR-EXEC] anti-hallucination retry error: %s", _ah_err)
+
+            # ── Autopilot: текст содержит email-адреса, но агент не вызвал save_email_contact ──
+            # Принудительный retry: извлекаем email из текста и заставляем агента сохранить контакт.
+            if (_is_autopilot_task and not _tool_calls and _content
+                    and 'save_email_contact' not in _tools_used):
+                import re as _re_email_extract
+                _found_emails_in_text = _re_email_extract.findall(
+                    r'[\w.+-]+@[\w-]+\.[\w.]+', _content
+                )
+                # Фильтруем системные/невалидные адреса
+                _valid_emails = [
+                    e for e in _found_emails_in_text
+                    if not e.endswith(('.png', '.jpg', '.gif', '.svg'))
+                    and 'example.com' not in e and 'test.com' not in e
+                    and '@' in e
+                ][:3]  # Максимум 3 за раз
+                if _valid_emails:
+                    logger.info(
+                        "[DIRECTOR-EXEC] email extraction retry for %s: found %d emails in text",
+                        agent.get('name'), len(_valid_emails),
+                    )
+                    _emails_str = ', '.join(_valid_emails)
+                    _messages.append({"role": "assistant", "content": _content})
+                    _messages.append({"role": "user", "content": (
+                        f"Ты нашёл email-адреса ({_emails_str}), но НЕ сохранил их. "
+                        f"ОБЯЗАТЕЛЬНО вызови save_email_contact для каждого найденного email. "
+                        f"Затем send_outreach_email для отправки персонального письма."
+                    )})
+                    try:
+                        _ee_resp = await asyncio.wait_for(
+                            _agent_inst.call_ai(
+                                _messages,
+                                use_tools=True,
+                                tool_choice="required",
+                                exclude_tools=_exclude_for_agent,
+                                max_tokens=1200,
+                                api_timeout=API_TIMEOUT_LONG,
+                            ),
+                            timeout=API_TIMEOUT_LONG + 5,
+                        )
+                        if _ee_resp and _ee_resp.get('choices'):
+                            _ee_msg = _ee_resp['choices'][0]['message']
+                            _ee_tools = _ee_msg.get('tool_calls') or []
+                            if _ee_tools:
+                                logger.info("[DIRECTOR-EXEC] email extraction retry succeeded: %d tools", len(_ee_tools))
+                                _tool_calls = _ee_tools
+                                _msg = _ee_msg
+                                _content = _ee_msg.get('content') or ''
+                    except Exception as _ee_err:
+                        logger.warning("[DIRECTOR-EXEC] email extraction retry error: %s", _ee_err)
 
             # ── Autopilot retry: save_email_contact без send_outreach_email ──
             # Принудительный retry ТОЛЬКО для outreach-целей. Для других целей сохранение контакта самоценно.
