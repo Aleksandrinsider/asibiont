@@ -3484,9 +3484,9 @@ class HybridAutonomousAgent:
 
             # ===== Tool calling loop =====
             all_execution_results = []
-            MAX_ITERATIONS = 3
+            MAX_ITERATIONS = 4
             # 5 параллельных инструментов/итерацию: больше работы за один API-вызов → меньше round-trips → меньше токенов
-            MAX_TOOLS_PER_ITERATION = 5
+            MAX_TOOLS_PER_ITERATION = 7
             seen_tools = set()  # Для предотвращения дублей
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
@@ -6051,6 +6051,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "Комбинируй интеграции с платформенными инструментами для максимального результата.\n"
             "Сам решай КАК использовать интеграции — исходя из задачи, цели и контекста пользователя."
         )
+        # GitHub API-first directive: если у агента есть GitHub — приоритезируем API над web_search
+        _has_github_intg = any('github' in h.lower() or 'gitlab' in h.lower() for h in _intg_hint)
+        if _has_github_intg:
+            _intg_action_hint += (
+                "\n\n🐙 GITHUB API — ПРИОРИТЕТ НАД WEB_SEARCH:\n"
+                "У тебя подключён GitHub API. Для поиска людей и проектов СНАЧАЛА используй:\n"
+                "  run_agent_action(action='search_users', params={query:'language:python followers:>5', page:1})\n"
+                "  run_agent_action(action='search_repos', params={query:'topic:ai stars:>50', page:1})\n"
+                "GitHub API даёт ТОЧНЫЕ данные (email из коммитов, профили, активность) — web_search НЕ даёт этого.\n"
+                "Варьируй query каждый цикл: другой язык, другие фильтры, page=2,3...\n"
+                "После search_users → save_email_contact → send_outreach_email (полная цепочка за 1 цикл)."
+            )
 
     # === Универсальный парсинг ACTION из скрипта агента (работает для любого агента) ===
     _py_code_sa = agent.get('python_code', '').strip()
@@ -7172,7 +7184,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
-    _max_iters = 5 if _is_autopilot_task else 4  # autopilot: search + save + send + update + summary; regular: до 4 итераций для сложных задач
+    _max_iters = 8 if _is_autopilot_task else 4  # autopilot: search + save + send*N + update + summary; regular: до 4 итераций для сложных задач
     _ACTION_EVIDENCE_TOOLS = {
         'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
         'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
@@ -7302,7 +7314,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _is_outreach_goal = any(w in (task or '').lower() for w in _OUTREACH_KW)
     for _iter in range(_max_iters):
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
-        _max_tool_calls = 10 if _is_autopilot_task else 5
+        _max_tool_calls = 25 if _is_autopilot_task else 5
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -7323,7 +7335,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _was_save = 'save_email_contact' in _tools_used
             _send_count = _tools_used.count('send_outreach_email')
             # Адаптивный порог: агенты с outreach-интеграциями могут отправить больше за сессию
-            _min_sends_before_update = 3 if _has_outreach_intg else 1
+            _min_sends_before_update = 5 if _has_outreach_intg else 2
 
             if _was_send and _send_count >= _min_sends_before_update and 'update_goal_progress' not in _tools_used:
                 # Достаточно писем отправлено → финализируй
