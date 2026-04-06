@@ -10522,17 +10522,22 @@ class AnchorEngine:
             # Дедупликация плана: один агент + один инструмент для ОДНОЙ цели = бессмысленное повторение
             # Но разрешаем одному агенту использовать тот же инструмент для РАЗНЫХ целей
             _seen_agent_tool_goal: set = set()
+            _seen_agents_this_cycle: set = set()  # каждый агент — только 1 шаг за цикл
             _plan_deduped = []
             for _p in _plan:
                 _ak_agent = _p.get('agent', '').strip().lower()
                 _ak_tool = (_p.get('tool') or '').strip().lower()
                 _ak_goal = (_p.get('goal') or '').strip().lower()[:80]
                 _ak = (_ak_agent, _ak_tool, _ak_goal)
-                if _ak_agent and _ak not in _seen_agent_tool_goal:
+                if _ak_agent and _ak not in _seen_agent_tool_goal and _ak_agent not in _seen_agents_this_cycle:
                     _seen_agent_tool_goal.add(_ak)
+                    _seen_agents_this_cycle.add(_ak_agent)
                     _plan_deduped.append(_p)
                 elif _ak_agent:
-                    logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
+                    if _ak_agent in _seen_agents_this_cycle:
+                        logger.info("[COORD] one-per-cycle: skip 2nd step for %s (goal=%s)", _p.get('agent'), _ak_goal[:30])
+                    else:
+                        logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
 
             # ── Goal-title-copy guard: координатор не должен копировать название цели как задачу ──
