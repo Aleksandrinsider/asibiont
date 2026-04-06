@@ -6105,11 +6105,38 @@ class AnchorEngine:
                                 or (len(_gen_s) < 80 and not _has_tool_name and not _has_platform_hint)
                                 # Короткое: площадка есть, но инструмент не указан → пустышка
                                 or (len(_gen_s) < 100 and not _has_tool_name)
+                                # Бессмысленные задания про "альтернативные методы" / "для Telegram пользователей"
+                                or ('альтернативн' in _gen_lower and ('метод' in _gen_lower or 'способ' in _gen_lower or 'канал' in _gen_lower))
+                                # Задания про пользователей платформ без конкретики
+                                or ('для telegram пользователей' in _gen_lower or 'с telegram пользовател' in _gen_lower
+                                    or 'telegram-аудитори' in _gen_lower)
                             )
                             if _is_vague_gen:
                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
                             else:
                                 _coord_text = _gen_s
+                                # ── Fix infinitives after "пожалуйста" → imperative ──
+                                _INF_TO_IMP = {
+                                    'найти': 'найди', 'создать': 'создай', 'проверить': 'проверь',
+                                    'отправить': 'отправь', 'написать': 'напиши', 'сделать': 'сделай',
+                                    'запустить': 'запусти', 'использовать': 'используй', 'подготовить': 'подготовь',
+                                    'провести': 'проведи', 'собрать': 'собери', 'изучить': 'изучи',
+                                    'добавить': 'добавь', 'сохранить': 'сохрани', 'составить': 'составь',
+                                    'поискать': 'поищи', 'выбрать': 'выбери', 'связаться': 'свяжись',
+                                    'открыть': 'открой', 'обновить': 'обнови',
+                                }
+                                for _inf, _imp in _INF_TO_IMP.items():
+                                    _coord_text = re.sub(
+                                        rf'(?i)(пожалуйста,?\s+){_inf}\b',
+                                        rf'\g<1>{_imp}',
+                                        _coord_text,
+                                    )
+                                    # Также "Имя, найти" → "Имя, найди"
+                                    _coord_text = re.sub(
+                                        rf'(?i)({re.escape(_chosen_name)},?\s+){_inf}\b',
+                                        rf'\g<1>{_imp}',
+                                        _coord_text,
+                                    )
                                 # ── Guard: координатор назначил start_email_campaign при активной кампании ──
                                 if _active_campaigns_ctx and 'start_email_campaign' in _gen_lower:
                                     import re as _re_secamp
