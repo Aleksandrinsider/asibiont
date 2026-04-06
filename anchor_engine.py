@@ -11778,11 +11778,27 @@ class AnchorEngine:
                                 _t_imp = _first_word[:-2] + _t[len(_first_word):]
                             elif _first_word.endswith(('ать', 'ять')):
                                 _t_imp = _first_word[:-2] + 'й' + _t[len(_first_word):]
-                    # Контекст цели для обогащения сообщения (доступен всем веткам)
-                    _goal_ctx = ''
-                    if _ag_goal_title and len(_ag_goal_title) > 5:
-                        _gl = _ag_goal_title[:60]
-                        _goal_ctx = f' Это для цели «{_gl}».'
+                    # ── Noun→verb: существительное-действие → императив ──
+                    _NOUN_TO_IMP = {
+                        'поиск': 'поищи', 'анализ': 'проанализируй', 'отправка': 'отправь',
+                        'проверка': 'проверь', 'создание': 'создай', 'подготовка': 'подготовь',
+                        'исследование': 'исследуй', 'публикация': 'опубликуй',
+                        'обновление': 'обнови', 'написание': 'напиши', 'составление': 'составь',
+                        'настройка': 'настрой', 'разработка': 'разработай', 'сбор': 'собери',
+                        'обзор': 'сделай обзор', 'подбор': 'подбери', 'оценка': 'оцени',
+                    }
+                    if not _is_verb_start and _fw in _NOUN_TO_IMP:
+                        _noun_imp = _NOUN_TO_IMP[_fw]
+                        _rest = _t[len(_fw):].lstrip()
+                        _t = f'{_noun_imp} {_rest}' if _rest else _noun_imp
+                        _t_imp = _t
+                        _is_verb_start = True
+                    # Также ловим уже готовые императивы (отправь, проверь, ...)
+                    if not _is_verb_start:
+                        _known_imp_set = set(_INF_TO_IMP.values())
+                        if _fw in _known_imp_set:
+                            _t_imp = _t
+                            _is_verb_start = True
                     # Фильтруем технические reason-коды
                     _INTERNAL_REASON_CODES = frozenset({
                         'fair_assignment diversification', 'fairness backfill',
@@ -11796,28 +11812,19 @@ class AnchorEngine:
                     if _step_reason_show and len(_step_reason_show) > 10:
                         _reason_suffix = f' {_step_reason_show[0].upper()}{_step_reason_show[1:].rstrip(".")}.'
                     if _task_short and len(_task_short) > 15:
-                        if _is_verb_start:
-                            _asi_assign_text = f'{_ag_name}, {_t_imp}.{_reason_suffix}{_goal_ctx}'
-                        else:
-                            _asi_assign_text = f'{_ag_name}, нужна твоя помощь — {_t}.{_reason_suffix}{_goal_ctx}'
+                        _asi_assign_text = f'{_ag_name}, {_t_imp if _is_verb_start else _t}.{_reason_suffix}'
                     elif _step_reason:
                         _r = _step_reason[:90].rsplit(' ', 1)[0] if len(_step_reason) > 90 else _step_reason
                         _r_l = _r.lower() if _r[0].isupper() else _r
-                        _asi_assign_text = f'{_ag_name}, вот задача — {_r_l}.{_goal_ctx}'
+                        _asi_assign_text = f'{_ag_name}, {_r_l}.'
                     else:
                         _tfl_short = _task_first_line[:90].rsplit(' ', 1)[0] if len(_task_first_line) > 90 else _task_first_line
                         _tfl_l = _tfl_short.lower() if _tfl_short and _tfl_short[0].isupper() else _tfl_short
-                        _asi_assign_text = f'{_ag_name}, займись: {_tfl_l}.{_goal_ctx}'
+                        _asi_assign_text = f'{_ag_name}, {_tfl_l}.'
                 except Exception as _aac_err:
                     _aac_raw = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:80]
                     _aac_t = _aac_raw.lower() if _aac_raw[:1].isupper() else _aac_raw
-                    _aac_goal = ''
-                    try:
-                        if _ag_goal_title and len(_ag_goal_title) > 5:
-                            _aac_goal = f' Это для цели «{_ag_goal_title[:60]}».'
-                    except Exception:
-                        pass
-                    _asi_assign_text = f'{_ag_name}, нужна твоя помощь — {_aac_t}.{_aac_goal}'
+                    _asi_assign_text = f'{_ag_name}, {_aac_t}.'
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # ── POST-PROCESS: INF→IMP для первого инфинитива в обращении ──
                 import re as _re_post_inf
