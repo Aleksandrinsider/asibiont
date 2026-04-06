@@ -1856,8 +1856,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             else:
                 _goal_state_hint += (
                     "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
-                    "Следующий шаг — выход на людей: "
-                    "find_relevant_contacts_for_task → send_outreach_email / find_and_message_relevant_users.\n"
+                    "Следующий шаг — выход на НОВЫХ ВНЕШНИХ людей: "
+                    "web_search(ищи тех кого НЕТ в базе) → save_email_contact → send_outreach_email. "
+                    "⚠️ find_and_message_relevant_users — только ВНУТРИ платформы, не для поиска новых.\n"
                 )
         elif _stuck_goals and agent_history and len(agent_history) >= 4 and not _has_outreach_done:
             if _has_rss and not _has_imap and not _has_github:
@@ -1911,7 +1912,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             else:
                 _goal_state_hint += (
                     "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
-                    "Пора действовать: find_relevant_contacts_for_task или find_and_message_relevant_users.\n"
+                    "Пора действовать: найди НОВЫХ людей которых нет в системе — "
+                    "web_search/GitHub search → save_email_contact → send_outreach_email. "
+                    "Не предлагай людей уже из базы как новых лидов.\n"
                 )
         elif _has_find_contacts and _has_outreach_done and not _metric_hints:
             # Агент искал и отправлял, но метрика не отображается — значит прогресс есть
@@ -5523,8 +5526,10 @@ class AnchorEngine:
                     _has_email_fb = 'email' in _cats_c
                     # Объединяем ВСЕ цели для корректного определения типа (не только первую)
                     _g0 = ' '.join(t.lower() for t in _goal_titles_fb)
-                    _goal_is_research = any(w in _g0 for w in ['исследова', 'анализ', 'изучить', 'обучен', 'тренд', 'рынок'])
-                    _goal_is_product  = any(w in _g0 for w in ['разработ', 'функционал', 'код', 'фича', 'реализ', 'техничес'])
+                    _goal_is_outreach = any(w in _g0 for w in ['привлеч', 'клиент', 'продаж', 'тестировщик', 'пользовател', 'контакт', 'аудитор', 'подписчик'])
+                    _goal_is_content  = any(w in _g0 for w in ['контент', 'пост', 'статья', 'блог', 'публикац', 'медиа', 'текст', 'копирайт', 'техничес'])
+                    _goal_is_research = any(w in _g0 for w in ['исследова', 'аналитик', 'аудит', 'мониторинг', 'разведк'])
+                    _goal_is_product  = any(w in _g0 for w in ['продукт', 'разработ', 'фича', 'релиз', 'mvp', 'деплой'])
                     _g_label = _goal_titles_fb[0] if _goal_titles_fb else 'активные цели'
 
                     # Строим стратегии по типу цели
@@ -8759,9 +8764,10 @@ class AnchorEngine:
                         "автоматизация, снижение затрат, AI-команда под ключ)"
                     )
                 _kd_lines.append(
-                    "  💡 Если web_search нашёл кого-то из базы — это сигнал что человек релевантен: "
-                    "проверь его статус и действуй по логике выше (follow-up или pitch), "
-                    "не тренируй поиск на уже охваченных.\n"
+                    "  ⚠️ ВАЖНО — 'уже в базе' ≠ новый: если web_search нашёл человека, который УЖЕ есть "
+                    "в системе (был в кампании, уже клиент) — это НЕ новый лид для цели 'привлечь новых'. "
+                    "Не предлагай его как нового контакта. Для таких — только follow-up или переговоры. "
+                    "Новые лиды = люди, которых НЕТ ни в кампаниях, ни в базе контактов.\n"
                 )
                 _known_dedup_str = '\n'.join(_kd_lines)
             _unsent_contacts_str = ''
