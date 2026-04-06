@@ -6516,11 +6516,14 @@ class AnchorEngine:
                                 ) if _coord_text else _coord_text
                                 _coord_text_clean_save = _sanitize_proactive_text(_coord_text_clean_save)
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
+                                    _ap_assign_goals = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
+                                    _ap_assign_gstr = ', '.join(t for t in _ap_assign_goals if t)
                                     _coord_content = json.dumps({
                                         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
                                         'text': _coord_text_clean_save,
                                         '__to_agent': _chosen_name,
                                         '__anchor_type': 'goal_autopilot_assignment',
+                                        '__goal_title': _ap_assign_gstr[:80],
                                     }, ensure_ascii=False)
                                     _cs.add(Interaction(
                                         user_id=user.id,
@@ -7398,6 +7401,8 @@ class AnchorEngine:
                                 _result_anchor_type = (
                                     'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
                                 )
+                                _ap_goal_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
+                                _ap_goal_str = ', '.join(t for t in _ap_goal_titles if t)
                                 _agent_content = json.dumps({
                                     '__agent': {
                                         'name': _chosen_name,
@@ -7407,6 +7412,7 @@ class AnchorEngine:
                                     'text': _strip_html(_cleaned_result),
                                     '__tools_used': _tools_used,
                                     '__anchor_type': _result_anchor_type,
+                                    '__goal_title': _ap_goal_str[:80],
                                 }, ensure_ascii=False)
                                 # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
                                 # ASI сохраняем как proactive — координаторская инициатива
@@ -11754,53 +11760,46 @@ class AnchorEngine:
                                 _t_imp = _first_word[:-2] + _t[len(_first_word):]
                             elif _first_word.endswith(('ать', 'ять')):
                                 _t_imp = _first_word[:-2] + 'й' + _t[len(_first_word):]
+                    # Контекст цели для обогащения сообщения (доступен всем веткам)
+                    _goal_ctx = ''
+                    if _ag_goal_title and len(_ag_goal_title) > 5:
+                        _gl = _ag_goal_title[:60]
+                        _goal_ctx = f' Это для цели «{_gl}».'
+                    # Фильтруем технические reason-коды
+                    _INTERNAL_REASON_CODES = frozenset({
+                        'fair_assignment diversification', 'fairness backfill',
+                        'backfill', 'diversification', 'fallback',
+                    })
+                    _step_reason_show = (
+                        '' if _step_reason.lower().strip() in _INTERNAL_REASON_CODES
+                        else _step_reason
+                    )
+                    _reason_suffix = ''
+                    if _step_reason_show and len(_step_reason_show) > 10:
+                        _reason_suffix = f' {_step_reason_show[0].upper()}{_step_reason_show[1:].rstrip(".")}.'
                     if _task_short and len(_task_short) > 15:
-                        import random as _rnd_assign
                         if _is_verb_start:
-                            # Глагольная задача: "найди контакты", "проверь email"
-                            _assign_templates = [
-                                f'{_ag_name}, {_t_imp}.',
-                                f'{_ag_name}, пожалуйста, {_t_imp}.',
-                                f'{_ag_name}, можешь {_t}?',
-                                f'{_ag_name}, нужна твоя помощь — {_t_imp}.',
-                            ]
+                            _asi_assign_text = f'{_ag_name}, {_t_imp}.{_reason_suffix}{_goal_ctx}'
                         else:
-                            # Описательная задача: "найденные авторы для outreach"
-                            _assign_templates = [
-                                f'{_ag_name}, есть задача — {_t}.',
-                                f'{_ag_name}, вот что нужно сделать: {_t}.',
-                                f'{_ag_name}, давай разберёмся с этим — {_t}.',
-                                f'{_ag_name}, нужна твоя помощь — {_t}.',
-                            ]
-                        _asi_assign_text = _rnd_assign.choice(_assign_templates)
-                        # Фильтруем технические reason-коды — не добавляем в текст пользователю
-                        _INTERNAL_REASON_CODES = frozenset({
-                            'fair_assignment diversification', 'fairness backfill',
-                            'backfill', 'diversification', 'fallback',
-                        })
-                        _step_reason_show = (
-                            '' if _step_reason.lower().strip() in _INTERNAL_REASON_CODES
-                            else _step_reason
-                        )
-                        if _step_reason_show and len(_step_reason_show) > 10:
-                            _asi_assign_text = _asi_assign_text.rstrip('.?') + f' — {_step_reason_show.lower()}.'
+                            _asi_assign_text = f'{_ag_name}, нужна твоя помощь — {_t}.{_reason_suffix}{_goal_ctx}'
                     elif _step_reason:
                         _r = _step_reason[:90].rsplit(' ', 1)[0] if len(_step_reason) > 90 else _step_reason
-                        _asi_assign_text = f'{_ag_name}, вот задача — {_r.lower() if _r[0].isupper() else _r}.'
+                        _r_l = _r.lower() if _r[0].isupper() else _r
+                        _asi_assign_text = f'{_ag_name}, вот задача — {_r_l}.{_goal_ctx}'
                     else:
                         _tfl_short = _task_first_line[:90].rsplit(' ', 1)[0] if len(_task_first_line) > 90 else _task_first_line
                         _tfl_l = _tfl_short.lower() if _tfl_short and _tfl_short[0].isupper() else _tfl_short
-                        _asi_assign_text = f'{_ag_name}, займись: {_tfl_l}.'
+                        _asi_assign_text = f'{_ag_name}, займись: {_tfl_l}.{_goal_ctx}'
                 except Exception as _aac_err:
-                    import random as _rnd_aac
                     _aac_raw = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:80]
                     _aac_t = _aac_raw.lower() if _aac_raw[:1].isupper() else _aac_raw
-                    _asi_assign_text = _rnd_aac.choice([
-                        f'{_ag_name}, есть задача — {_aac_t}.',
-                        f'{_ag_name}, вот что нужно — {_aac_t}.',
-                        f'{_ag_name}, нужна твоя помощь — {_aac_t}.',
-                        f'{_ag_name}, можешь {_aac_t}?',
-                    ])
+                    _aac_goal = ''
+                    try:
+                        if _ag_goal_title and len(_ag_goal_title) > 5:
+                            _aac_goal = f' Это для цели «{_ag_goal_title[:60]}».'
+                    except Exception:
+                        pass
+                    _asi_assign_text = f'{_ag_name}, нужна твоя помощь — {_aac_t}.{_aac_goal}'
                     logger.debug("[COORD] asi assign text failed: %s", _aac_err)
                 # ── POST-PROCESS: INF→IMP для первого инфинитива в обращении ──
                 import re as _re_post_inf
@@ -11857,6 +11856,8 @@ class AnchorEngine:
                             )),
                             '__to_agent': _ag_name,
                             '__anchor_type': 'coordinator_assignment',
+                            '__goal_title': (_ag_goal_title or '')[:80],
+                            '__tool_hint': (_tool_hint or '')[:40],
                         }, ensure_ascii=False),
                     ))
                     session.commit()
@@ -12957,6 +12958,7 @@ class AnchorEngine:
                                 '__tools_used': _step_tools,
                                 '__anchor_type': 'coordinator_result',
                                 '__minor': True,
+                                '__goal_title': (_ag_goal_title or '')[:80],
                             }, ensure_ascii=False),
                         ))
                         logger.info("[COORD] minor update saved to chat for %s", _ag_name)
@@ -12975,6 +12977,7 @@ class AnchorEngine:
                                 'text': _cleaned_chat,
                                 '__tools_used': _step_tools,
                                 '__anchor_type': 'coordinator_result',
+                                '__goal_title': (_ag_goal_title or '')[:80],
                             }, ensure_ascii=False),
                         ))
                     else:
