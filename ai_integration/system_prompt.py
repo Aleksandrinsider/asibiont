@@ -56,6 +56,7 @@ def _prompt_ru():
 С согласия: add_task, create_post, делегирование людям.
 Навыки/цели в профиле — «добавлю X — ок?»
 Перед create_goal → проверь нет ли дубля.
+Перед create_goal → подумай: КАК мои агенты это сделают? Какие КОНКРЕТНЫЕ инструменты нужны? Если цель требует действий в платформе, к которой нет доступа (DM в Telegram, посты в чужие группы, звонки без SIP) — переформулируй цель через доступные каналы ДО создания. Цель «найти клиентов из Telegram» → «найти клиентов через web_search и email-outreach». Невыполнимая цель = зацикленный автопилот.
 
 ## ВСТРЕЧИ И ЗВОНКИ (КРИТИЧНО)
 Не назначай дату/время созвона/встречи/показа без одобрения пользователя.
@@ -192,6 +193,7 @@ Without asking: update_profile (city/company/position), research, contacts, agen
 With consent: add_task, create_post, delegation to users.
 Skills/goals in profile — "I'll add X — ok?"
 Before create_goal → check for duplicates.
+Before create_goal → think: HOW will my agents achieve this? What SPECIFIC tools are needed? If the goal requires actions on a platform the agents can't access (Telegram DMs, posting in external groups, calls without SIP) — reformulate the goal through available channels BEFORE creating. Goal "find clients from Telegram" → "find clients via web_search and email-outreach". An infeasible goal = stuck autopilot loop.
 
 ## MEETINGS AND CALLS (CRITICAL)
 Don't schedule a date/time for a call/meeting without user approval.
