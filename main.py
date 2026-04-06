@@ -10352,7 +10352,7 @@ async def nowpayments_webhook(request):
         payload_bytes = await request.read()
         signature = request.headers.get('x-nowpayments-sig', '')
 
-        # Verify HMAC signature (mandatory when IPN secret is configured)
+        # Verify HMAC signature (mandatory in production)
         data = json.loads(payload_bytes)
         if NOWPAYMENTS_IPN_SECRET:
             if not signature:
@@ -10363,6 +10363,9 @@ async def nowpayments_webhook(request):
             if not verify_nowpayments_signature(sorted_payload, signature, NOWPAYMENTS_IPN_SECRET):
                 logger.warning('[NOWPAYMENTS] Invalid webhook signature')
                 return web.Response(text='Invalid signature', status=400)
+        elif not LOCAL:
+            logger.error('[NOWPAYMENTS] NOWPAYMENTS_IPN_SECRET not configured in production — rejecting webhook')
+            return web.Response(text='Server misconfigured', status=500)
 
         status = data.get('payment_status', '')
         if status not in ('finished', 'confirmed'):

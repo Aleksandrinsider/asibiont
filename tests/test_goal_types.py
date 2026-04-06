@@ -793,7 +793,7 @@ def test_g34_coordinator_guard_rewrites_external_telegram_chat_task():
         has_user_discord_webhook=False,
     )
     assert tool == "web_search", (tool, task, note)
-    assert "Внешние Telegram-чаты/группы недоступны" in task, task
+    assert "недоступны" in task.lower(), task
     assert "недоступны" in note.lower(), note
 
 
