@@ -6038,30 +6038,67 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _intg_action_hint = ""
     if _intg_hint:
         _intg_names = ', '.join(_intg_hint[:8])
+        # Динамическая карта возможностей — показываем только ПОДКЛЮЧЁННЫЕ интеграции
+        _INTG_CAPABILITIES = {
+            'rss': 'мониторинг конкурентов, поиск авторов/экспертов, подготовка контента, трендовые темы',
+            'mail': 'рассылка, follow-up, нетворкинг, мониторинг ответов, персональные предложения',
+            'github': 'поиск разработчиков, анализ проектов, networking через issues/PR, email из коммитов',
+            'gitlab': 'поиск разработчиков, анализ проектов, networking через issues/PR',
+            'crm': 'аналитика, отчёты, воронка продаж, управление лидами',
+            'slack': 'мониторинг каналов, координация команды, оповещения',
+            'discord': 'community building, мониторинг, постинг',
+            'telegram': 'постинг, мониторинг каналов, рассылка',
+            'ozon': 'аналитика продаж, остатки, заказы, выручка',
+            'wildberries': 'аналитика продаж, остатки, карточки товаров',
+            'shopify': 'заказы, клиенты, метрики магазина',
+            'jira': 'управление задачами, спринты, отчёты',
+            'trello': 'управление задачами, доски, карточки',
+            'notion': 'база знаний, документация, заметки',
+            'sheets': 'данные, отчёты, дашборды, аналитика',
+            'binance': 'торговля, портфель, аналитика рынка',
+            'bybit': 'торговля, портфель, аналитика рынка',
+            'stripe': 'платежи, подписки, аналитика выручки',
+            'hh': 'вакансии, кандидаты, рекрутинг',
+            'twitter': 'мониторинг, постинг, поиск аудитории',
+            'instagram': 'контент, аудитория, аналитика',
+            'linkedin': 'нетворкинг, поиск контактов, B2B',
+        }
+        _connected_caps = []
+        for _ih in _intg_hint[:8]:
+            _ih_low = _ih.lower()
+            for _cap_key, _cap_desc in _INTG_CAPABILITIES.items():
+                if _cap_key in _ih_low:
+                    _connected_caps.append(f"  • {_ih} = {_cap_desc}")
+                    break
+        _caps_block = '\n'.join(_connected_caps) if _connected_caps else ''
         _intg_action_hint = (
             f"\n\n🔗 Твои интеграции: {_intg_names}.\n"
             "Каждая интеграция — это НЕ один инструмент, а НАБОР ВОЗМОЖНОСТЕЙ. Думай шире:\n"
-            "  • RSS = не только новости, но и мониторинг конкурентов, поиск авторов/экспертов, подготовка контента, трендовые темы\n"
-            "  • Почта = не только рассылка, но и follow-up, нетворкинг, мониторинг ответов, персональные предложения\n"
-            "  • GitHub = не только код, но и поиск разработчиков, анализ проектов, networking через issues/PR\n"
-            "  • CRM/Таблицы = не только записи, но и аналитика, отчёты, выгрузка данных для других задач\n"
-            "  • Соцсети/Мессенджеры = не только постинг, но и мониторинг, поиск аудитории, community building\n"
-            "Для внешних сервисов → run_agent_action. Для email → send_outreach_email / check_emails. "
+            + (_caps_block + '\n' if _caps_block else '')
+            + "Для внешних сервисов → run_agent_action. Для email → send_outreach_email / check_emails. "
             "web_search / research_topic — универсальные, доступны всегда. "
             "Комбинируй интеграции с платформенными инструментами для максимального результата.\n"
             "Сам решай КАК использовать интеграции — исходя из задачи, цели и контекста пользователя."
         )
-        # GitHub API-first directive: если у агента есть GitHub — приоритезируем API над web_search
-        _has_github_intg = any('github' in h.lower() or 'gitlab' in h.lower() for h in _intg_hint)
-        if _has_github_intg:
+        # Универсальная директива: API-интеграции → приоритет над web_search
+        # Работает для ЛЮБОЙ интеграции (GitHub, CRM, маркетплейсы, etc.)
+        _api_intg_count = len([h for h in _intg_hint if any(
+            w in h.lower() for w in ('github', 'gitlab', 'crm', 'amocrm', 'bitrix',
+                'hubspot', 'jira', 'trello', 'notion', 'slack', 'discord',
+                'ozon', 'wildberries', 'shopify', 'binance', 'bybit',
+                'rss', 'hh.ru', 'superjob', 'sheets', 'airtable',
+                'twitter', 'instagram', 'linkedin', 'stripe', 'yookassa')
+        )])
+        if _api_intg_count > 0:
             _intg_action_hint += (
-                "\n\n🐙 GITHUB API — ПРИОРИТЕТ НАД WEB_SEARCH:\n"
-                "У тебя подключён GitHub API. Для поиска людей и проектов СНАЧАЛА используй:\n"
-                "  run_agent_action(action='search_users', params={query:'language:python followers:>5', page:1})\n"
-                "  run_agent_action(action='search_repos', params={query:'topic:ai stars:>50', page:1})\n"
-                "GitHub API даёт ТОЧНЫЕ данные (email из коммитов, профили, активность) — web_search НЕ даёт этого.\n"
-                "Варьируй query каждый цикл: другой язык, другие фильтры, page=2,3...\n"
-                "После search_users → save_email_contact → send_outreach_email (полная цепочка за 1 цикл)."
+                "\n\n🔌 ПРИОРИТЕТ API НАД WEB_SEARCH:\n"
+                "У тебя подключены API-интеграции. Для задач, покрываемых ими — СНАЧАЛА run_agent_action:\n"
+                "  API даёт ТОЧНЫЕ структурированные данные (контакты, метрики, статусы).\n"
+                "  web_search даёт ПРИБЛИЗИТЕЛЬНЫЕ неструктурированные результаты.\n"
+                "Правило: если задача покрывается подключённой интеграцией → API первым.\n"
+                "  web_search → только для того, чего НЕТ в твоих интеграциях.\n"
+                "Варьируй параметры каждый цикл: другие фильтры, page+1, другой запрос.\n"
+                "После получения данных → конвертируй: save_email_contact, create_post, add_task."
             )
 
     # === Универсальный парсинг ACTION из скрипта агента (работает для любого агента) ===
@@ -7184,7 +7221,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
     # обычный: action + summary (3 итерации)
-    _max_iters = 8 if _is_autopilot_task else 4  # autopilot: search + save + send*N + update + summary; regular: до 4 итераций для сложных задач
+    # Adaptive iterations: больше интеграций = больше цепочек = больше итераций
+    _intg_count = len(_intg_hint)
+    if _is_autopilot_task:
+        _max_iters = min(5 + _intg_count, 10)  # 5 базовых + 1 за интеграцию, макс 10
+    else:
+        _max_iters = 4
     _ACTION_EVIDENCE_TOOLS = {
         'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
         'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
@@ -7304,6 +7346,96 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _hist_err:
             logger.debug('[DIRECTOR] agent history load: %s', _hist_err)
 
+    # ── Аналитика эффективности: какие подходы дают результат у ЭТОГО пользователя ──
+    if _is_autopilot_task:
+        try:
+            from models import Session as _DBeff, AgentActivityLog as _ALog_eff, User as _Ueff
+            from datetime import datetime as _dt_eff, timezone as _tz_eff, timedelta as _td_eff
+            _db_eff = _DBeff()
+            try:
+                # user_id здесь = telegram_id, нужен внутренний user.id для AgentActivityLog
+                _u_eff = _db_eff.query(_Ueff).filter_by(telegram_id=user_id).first()
+                _db_user_id = _u_eff.id if _u_eff else user_id
+                _eff_since = _dt_eff.now(_tz_eff.utc) - _td_eff(days=7)
+                _eff_logs = _db_eff.query(_ALog_eff).filter(
+                    _ALog_eff.user_id == _db_user_id,
+                    _ALog_eff.created_at >= _eff_since,
+                ).all()
+                if len(_eff_logs) >= 5:
+                    # Считаем по типам действий: сколько completed vs failed
+                    _eff_by_type: dict[str, dict] = {}
+                    for _el in _eff_logs:
+                        _at = _el.activity_type or 'other'
+                        if _at not in _eff_by_type:
+                            _eff_by_type[_at] = {'ok': 0, 'fail': 0, 'total': 0}
+                        _eff_by_type[_at]['total'] += 1
+                        if _el.status in ('completed', 'published', 'accepted', 'sent'):
+                            _eff_by_type[_at]['ok'] += 1
+                        elif _el.status in ('failed', 'rejected', 'error'):
+                            _eff_by_type[_at]['fail'] += 1
+                        else:
+                            _eff_by_type[_at]['ok'] += 1  # in_progress и др. считаем как ok
+
+                    # Также: email outreach конверсия за 30 дней
+                    _email_eff = ''
+                    try:
+                        from models import EmailOutreach as _EO_eff
+                        from sqlalchemy import func as _func_eff
+                        _eo_since = _dt_eff.now(_tz_eff.utc) - _td_eff(days=30)
+                        _eo_total = _db_eff.query(_func_eff.count(_EO_eff.id)).filter(
+                            _EO_eff.user_id == _db_user_id,
+                            _EO_eff.created_at >= _eo_since,
+                        ).scalar() or 0
+                        _eo_replied = _db_eff.query(_func_eff.count(_EO_eff.id)).filter(
+                            _EO_eff.user_id == _db_user_id,
+                            _EO_eff.status == 'replied',
+                            _EO_eff.created_at >= _eo_since,
+                        ).scalar() or 0
+                        _eo_bounced = _db_eff.query(_func_eff.count(_EO_eff.id)).filter(
+                            _EO_eff.user_id == _db_user_id,
+                            _EO_eff.status == 'bounced',
+                            _EO_eff.created_at >= _eo_since,
+                        ).scalar() or 0
+                        if _eo_total >= 3:
+                            _eo_rate = round(_eo_replied / _eo_total * 100)
+                            _email_eff = f"  📧 Email outreach: {_eo_total} отправлено, {_eo_replied} ответов ({_eo_rate}%)"
+                            if _eo_bounced > 0:
+                                _email_eff += f", {_eo_bounced} bounced"
+                    except Exception:
+                        pass
+
+                    # Строим блок аналитики
+                    _eff_lines = []
+                    _TYPE_LABELS = {
+                        'goal_autopilot_dispatch': '🎯 Автопилот',
+                        'delegation': '🤝 Делегирование',
+                        'email': '📧 Email',
+                        'post_telegram': '📢 Telegram',
+                        'post_discord': '💬 Discord',
+                        'post_newsfeed': '📝 Лента',
+                        'user_message': '💬 Сообщения',
+                    }
+                    for _at, _counts in sorted(
+                        _eff_by_type.items(), key=lambda x: x[1]['total'], reverse=True
+                    )[:6]:
+                        _label = _TYPE_LABELS.get(_at, _at)
+                        _rate = round(_counts['ok'] / _counts['total'] * 100) if _counts['total'] > 0 else 0
+                        _status = '✅' if _rate >= 70 else '⚠️' if _rate >= 40 else '❌'
+                        _eff_lines.append(f"  {_status} {_label}: {_counts['total']} действий, {_rate}% успех")
+
+                    if _eff_lines or _email_eff:
+                        system_prompt += (
+                            "\n\n📈 АНАЛИТИКА ЭФФЕКТИВНОСТИ (7 дней) — адаптируй подход:\n"
+                            + '\n'.join(_eff_lines)
+                            + ('\n' + _email_eff if _email_eff else '')
+                            + "\n💡 Масштабируй каналы с высоким % успеха. "
+                            "Каналы с низким % — смени подход или аудиторию.\n"
+                        )
+            finally:
+                _db_eff.close()
+        except Exception as _eff_err:
+            logger.debug('[DIRECTOR] effectiveness analytics: %s', _eff_err)
+
     # Определяем наличие интеграций для адаптивных лимитов (больше интеграций = больше цепочек)
     _has_outreach_intg = any(
         w in _decrypt_keys(agent.get('user_api_keys', '') or '').lower()
@@ -7314,7 +7446,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _is_outreach_goal = any(w in (task or '').lower() for w in _OUTREACH_KW)
     for _iter in range(_max_iters):
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
-        _max_tool_calls = 25 if _is_autopilot_task else 5
+        _max_tool_calls = min(15 + _intg_count * 3, 30) if _is_autopilot_task else 5
         _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
         # required только на первом вызове — гарантирует реальное действие
         _tc_mode = "auto"
@@ -7334,8 +7466,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _was_send = 'send_outreach_email' in _tools_used
             _was_save = 'save_email_contact' in _tools_used
             _send_count = _tools_used.count('send_outreach_email')
-            # Адаптивный порог: агенты с outreach-интеграциями могут отправить больше за сессию
-            _min_sends_before_update = 5 if _has_outreach_intg else 2
+            # Адаптивный порог: больше интеграций = больше действий за сессию
+            _min_sends_before_update = min(2 + _intg_count, 6) if _has_outreach_intg else 2
 
             if _was_send and _send_count >= _min_sends_before_update and 'update_goal_progress' not in _tools_used:
                 # Достаточно писем отправлено → финализируй
