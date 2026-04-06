@@ -414,48 +414,18 @@ def _normalize_coordinator_assignment_by_capabilities(
             'внешние Telegram-чаты недоступны, задача переведена в выполнимый формат',
         )
 
-    # Telegram DM / личные сообщения — невозможно без userbot
-    _tg_dm_words = (
-        'написать @', 'отправить @', 'связаться через телеграм',
-        'dm ', 'личное сообщение', 'персональное предложение через telegram',
-        'написать администратору', 'предложение о партнёрстве через telegram',
-        'отправить предложение через telegram',
-    )
-    if any(w in task_l for w in _tg_platform_words) and any(w in task_l for w in _tg_dm_words):
+    # Safety net: DM через мессенджеры/соцсети — платформенное ограничение (нет userbot)
+    # Минимальный набор — основная логика через рассуждение ИИ в карточке НЕДОСТУПНО
+    _dm_indicators = ('написать @', 'отправить @', 'dm ', 'личное сообщение')
+    _messaging_platforms = ('telegram', 'телеграм', 'тг', 'whatsapp', 'вотсап',
+                            'instagram', 'инстаграм', 'вконтакте', 'vk.com')
+    if any(w in task_l for w in _dm_indicators) and any(p in task_l for p in _messaging_platforms):
         return (
             'send_outreach_email' if 'email' in cats else 'web_search',
-            (
-                'Отправить личное сообщение в Telegram НЕВОЗМОЖНО — у платформы нет userbot. '
-                + ('Найди email этого контакта через web_search и отправь письмо через send_outreach_email.' if 'email' in cats else
-                   'Найди email этого контакта через web_search и сохрани через save_note для дальнейшей работы.')
-            ),
-            'Telegram DM невозможен, переведено в email/web_search',
-        )
-
-    # Чужие Discord/Slack-серверы/сообщества — вступить/участвовать невозможно
-    _discord_platform_words = ('discord', 'дискорд', 'slack', 'слак')
-    # Только слова однозначно означающие ЧУЖИЕ серверы/сообщества
-    # НЕ включаем 'канал', 'сервер', 'чат' — могут означать СВОЙ канал/сервер/чат
-    _discord_external_words = (
-        'сообществ', 'community', 'вступ', 'join',
-        'присоедин', 'участвовать в', 'мониторить', 'отслежива',
-        'чужой', 'чужих', 'чужие', 'внешн',
-    )
-    _asks_external_discord = (
-        any(w in task_l for w in _discord_platform_words)
-        and any(w in task_l for w in _discord_external_words)
-        and 'publish_to_discord' not in tool_norm  # не трогаем publish через свой webhook
-        and not (has_user_discord_webhook and 'опублик' in task_l)  # если есть webhook и просят опубликовать — не блокируем
-    )
-    if _asks_external_discord:
-        return (
-            'web_search',
-            (
-                'Вступить в чужие Discord/Slack-серверы НЕВОЗМОЖНО — у платформы нет клиента для чужих серверов. '
-                'Сделай web_search по нишевым сообществам, найди контакты админов/участников '
-                'и выйди на них через email (save_email_contact → send_outreach_email) или контент в своём канале.'
-            ),
-            'чужие Discord/Slack-серверы недоступны, задача переведена в выполнимый формат',
+            'Личные сообщения через мессенджеры/соцсети недоступны (нет userbot). '
+            + ('Найди email контакта через web_search и используй send_outreach_email.' if 'email' in cats else
+               'Найди email контакта через web_search и сохрани через save_note.'),
+            'DM через мессенджер невозможен — safety net',
         )
 
     return tool_norm, task_norm, ''
@@ -1377,16 +1347,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _missing_integrations:
         _aic_cannot.append("🔌 НЕ подключены: " + ', '.join(_missing_integrations))
     # Платформенные ограничения: одинаковы для ВСЕХ агентов, не зависят от интеграций
+    # Платформенные ограничения: контекст для рассуждений, не запреты
     _aic_cannot.append(
-        "💬 ЧУЖИЕ Telegram-группы/чаты/сообщества — участие НЕВОЗМОЖНО "
-        "(это требует Telegram UserBot API — его в платформе НЕТ)"
+        "Платформа не включает Telegram UserBot — участие в чужих группах/чатах технически невозможно"
     )
     _aic_cannot.append(
-        "💬 ЧУЖИЕ Discord/Slack-серверы — вступить, писать, мониторить НЕВОЗМОЖНО "
-        "(нет клиента для чужих серверов; publish_to_discord = постинг через СВОЙ webhook)"
+        "Нет клиента для чужих Discord/Slack-серверов (publish_to_discord = постинг через СВОЙ webhook)"
     )
-    _aic_cannot.append("📱 DM незнакомым людям в Telegram/WhatsApp/VK/Instagram/Discord — невозможно без userbot")
-    _aic_cannot.append("🔐 Сайты за логином/авторизацией — не могу войти в чужие аккаунты")
+    _aic_cannot.append("DM незнакомым в мессенджерах/соцсетях требует userbot-интеграцию, которой нет")
+    _aic_cannot.append("Сайты за авторизацией — нет доступа к чужим аккаунтам")
     _agent_name_display = agent_name or "агент"
 
     # ── Блок: что подключено у агента, что доступно для целей ──
@@ -1413,11 +1382,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "ДОСТУПНО (есть интеграция / инструмент):\n"
         + "\n".join(f"  ✅ {l}" for l in _aic_can)
         + _goal_fit_block
-        + "\nНЕДОСТУПНО (нет ключей / физически невозможно):\n"
-        + "\n".join(f"  ❌ {l}" for l in _aic_cannot)
-        + "\n→ Если получил задачу с недоступным каналом (напр. «найди Telegram-чаты и пообщайся там») — "
-        "НЕ выполняй буквально. Спроси себя: какой ДОСТУПНЫЙ мне инструмент даёт похожий результат?\n"
-        "→ ПРИНЦИП: планируй только то, что есть в ДОСТУПНО. Нужен недоступный канал — DELEGATE[агент] или сообщи пользователю.\n"
+        + "\nКОНТЕКСТ ОГРАНИЧЕНИЙ (учитывай при планировании):\n"
+        + "\n".join(f"  — {l}" for l in _aic_cannot)
+        + "\n→ Перед каждым шагом спроси себя: через какой КОНКРЕТНЫЙ инструмент из ДОСТУПНО я это сделаю?\n"
+        "→ Если задача требует недоступный канал — подумай: какой доступный инструмент даёт похожий результат?\n"
     )
 
     # ── Тип цели: research / outreach / content / dev / learning / health / personal / general ──
@@ -1575,6 +1543,23 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 '  🔗 Цепочки: get_news → analyze → create_post | web_search → ask → publish_to_telegram\n'
                 '  ⚠️ action-имена точно из python_code агента.'
             )
+        elif _cat == 'analytics':
+            # Ищем конкретные action-имена для аналитики из python_code
+            _analytics_actions = [a for a in _py_actions if any(kw in a.lower() for kw in ('metric', 'metrik', 'analytic', 'report', 'stat', 'ga', 'counter'))]
+            if _analytics_actions:
+                _aa_str = ', '.join(f'"{a}"' for a in _analytics_actions[:3])
+                _intg_connected.append(
+                    f'✅ Аналитика (Яндекс.Метрика / GA) — run_agent_action(action={_aa_str})\n'
+                    f'  🔗 Цепочки: run_agent_action → save_note → send_message_to_user\n'
+                    f'  ✅ Интеграция ПОДКЛЮЧЕНА — используй для сбора данных о посещаемости, конверсиях, аудитории.'
+                )
+            else:
+                _intg_connected.append(
+                    '✅ Аналитика (Яндекс.Метрика / GA) — run_agent_action() без action → сводный отчёт\n'
+                    '  run_agent_action(action="get_metrics", params={"period":"7d"}) — данные за период\n'
+                    '  🔗 Цепочки: run_agent_action → save_note → send_message_to_user (алерт)\n'
+                    '  ✅ Интеграция ПОДКЛЮЧЕНА — используй для аналитики трафика и аудитории.'
+                )
         elif _cat_hint:
             _intg_connected.append(f'✅ {_cat_name}: {_cat_hint}')
         else:
@@ -5525,7 +5510,7 @@ class AnchorEngine:
                         'social': 'Соцсети (нет API)',
                         'git': 'GitHub API (нет токена)',
                         'rss': 'RSS-ленты (нет настроенных источников)',
-                        'analytics': 'Аналитика (Я..Метрика/GA не странице агента)',
+                        'analytics': 'Аналитика (Яндекс.Метрика/GA не подключена)',
                         'calls': 'Звонки/SMS (нет SIP/Twilio)',
                         'crm': 'CRM (нет интеграции)',
                         'calendar': 'Календарь/Zoom (нет API)',
@@ -5539,20 +5524,16 @@ class AnchorEngine:
                         + (f"  Конкретные инструменты:\n    " + '\n    '.join(_can_tools_by_cat) + '\n' if _can_tools_by_cat else '')
                         + (f"  Интеграции: {', '.join(_CAP_CATEGORY_NAMES.get(c,c) for c in sorted(_cats_c))} — выбирай ту, которая лучше подходит для текущего шага.\n" if len(_cats_c) > 1 else '')
                         + (
-                            f"  ⛔ НЕ подключено (задачи через эти каналы НЕВЫПОЛНИМЫ):\n"
-                            f"    {', '.join(_cannot_ctx)}\n"
-                            f"  → НЕ поручай задачи через неподключённые каналы. Агент НЕ МОЖЕТ:\n"
-                            f"    отправить личное сообщение в Telegram, вступить в группу/чат,\n"
-                            f"    опубликовать в Telegram-канал или Discord без подключённой интеграции.\n"
-                            f"  → Если нужен Telegram/Discord — ищи контакт через EMAIL или web_search.\n"
+                            f"  НЕ подключено: {', '.join(_cannot_ctx)}\n"
+                            f"  → Перед поручением спроси себя: через какой КОНКРЕТНЫЙ инструмент из ПОДКЛЮЧЁННЫХ агент это выполнит?\n"
+                            f"    Если ответа нет — перестрой задачу через доступные каналы.\n"
                             if _cannot_ctx else ''
                         )
-                        + "\n📚 ФАКТОЛОГИЯ ПОИСКА КОНТАКТОВ (знай это, прежде чем давать поручение):\n"
-                        + "  • GitHub репозитории и профили редко содержат публичный email — это системная особенность платформы.\n"
-                        + "    → Не поручай 'найди email через GitHub API/профили' — это заведомо низкоэффективно.\n"
-                        + "    Альтернативы: dev.to /about страница, личный сайт github.io, LinkedIn, ProductHunt profile/comments.\n"
-                        + "  • Telegram ник/ID без email-интеграции НЕ РАБОТАЕТ — бот не может писать первым.\n"
-                        + "  • hh.ru/LinkedIn вакансии содержат email HR-отдела, но не личные адреса специалистов.\n"
+                        + "\n📚 КОНТЕКСТ для принятия решений:\n"
+                        + "  • GitHub профили редко содержат публичный email. Альтернативы: dev.to, личный сайт, ProductHunt.\n"
+                        + "  • Бот не может писать первым в мессенджерах без userbot-интеграции.\n"
+                        + "  • Вакансии содержат email HR-отдела, а не личные адреса специалистов.\n"
+                        + "  → Учитывай эти факты при выборе стратегии, а не следуй им как правилам.\n"
                     )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
@@ -6080,19 +6061,19 @@ class AnchorEngine:
                             "  ШАГ 4. ЖИВАЯ РЕЧЬ: Нет канцеляризмов? «возьми на себя:», «нужно поработать над:», «займись:» — это бюрократия. "
                             "Пиши как коллега: «Разберись с...», «Проверь...», «Найди...»\n"
                             "  ШАГ 5. ИМЕНА СОБСТВЕННЫЕ: ASI Biont, GitHub, Артём, Алексей — всегда с заглавной.\n"
-                            "  ШАГ 6. ВЫПОЛНИМОСТЬ: Может ли агент РЕАЛЬНО выполнить это задание? "
-                            "Агент НЕ МОЖЕТ: отправить DM/личное сообщение в Telegram, "
-                            "вступить в группу/чат, опубликовать в канал без интеграции. "
-                            "Если задача требует Telegram-контакта — замени на: «найди email через web_search и отправь через send_outreach_email». "
-                            "DELEGATE другому агенту бесполезен если у ТОГО тоже нет нужной интеграции.\n\n"
+                            "  ШАГ 6. ВЫПОЛНИМОСТЬ — рассуждение:\n"
+                            "    а) Посмотри на карточку возможностей выше. Каждый шаг твоего поручения — через какой КОНКРЕТНЫЙ инструмент из ПОДКЛЮЧЁННЫХ он выполняется?\n"
+                            "    б) Если хоть один шаг требует канал из раздела «НЕ ПОДКЛЮЧЕНО» — перестрой: какой ДОСТУПНЫЙ инструмент даёт похожий результат?\n"
+                            "       Типичные замены: DM в мессенджере → email; чужие группы/серверы → web_search + контент в своём канале; отсутствующая аналитика → web_search по открытым данным.\n"
+                            "    в) DELEGATE другому агенту имеет смысл только если у ТОГО агента есть нужная интеграция.\n"
+                            "    Не заучивай список ограничений — ДУМАЙ от карточки возможностей каждый раз.\n\n"
                             "❌ ПРИМЕРЫ ПЛОХИХ ПОРУЧЕНИЙ:\n"
                             "  BAD: «[Агент], есть задача — агент зациклен на поиске, нужно перевести его в режим создания ценности.» "
-                            "← мета-комментарий. Правильно: «[Агент], запусти web_search по dev.to, найди 3 автора с email.»\n"
+                            "← мета-комментарий вместо задания.\n"
                             "  BAD: «[Агент], пожалуйста создать аналитический пост» "
-                            "← инфинитив + нет запятой. Правильно: «[Агент], пожалуйста, создай аналитический пост».\n"
+                            "← инфинитив. Правильно: «создай».\n"
                             "  BAD: «...поддерживать диалог с.» ← оборванное предложение.\n"
-                            "  BAD: «напиши письма артему фирсову» ← строчные буквы. Правильно: «Артёму Фирсову».\n"
-                            "✅ Если твоё поручение не проходит все 5 шагов — перепиши его."
+                            "✅ Если твоё поручение не проходит все 6 шагов — перепиши его."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=800)
                         _VAGUE_COORD_PATTERNS = (
@@ -6266,13 +6247,13 @@ class AnchorEngine:
                                         _is_same_agent = (_rc_d.get('__to_agent') == _chosen_name)
                                         # ── Per-agent dedup: только высокий overlap считается дублем ──
                                         if _is_same_agent:
-                                            if _overlap > 0.50 or _bi_overlap > 0.45:
+                                            if _overlap > 0.45 or _bi_overlap > 0.40:
                                                 _similar_count += 1
-                                                if _similar_count >= 3:
+                                                if _similar_count >= 2:
                                                     _skip_coord = True
                                                     logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h (word=%.0f%% bi=%.0f%%), skip", _similar_count, _chosen_name, _overlap*100, _bi_overlap*100)
                                                     break
-                                            if _overlap > 0.70 or _bi_overlap > 0.60:
+                                            if _overlap > 0.65 or _bi_overlap > 0.55:
                                                 _skip_coord = True
                                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: word=%.0f%% bi=%.0f%% overlap with recent assign to %s, skip", _overlap * 100, _bi_overlap * 100, _chosen_name)
                                                 break
@@ -6285,6 +6266,34 @@ class AnchorEngine:
                                                 break
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
+
+                                # ── Prefix dedup: начало фразы одинаковое → зацикливание даже при разных деталях ──
+                                if not _skip_coord and _coord_text and len(_coord_text) > 30:
+                                    _new_prefix = (_coord_text or '').lower().strip()[:80]
+                                    _prefix_matches = 0
+                                    for _rc_pf in _recent_coords:
+                                        try:
+                                            _rc_pf_d = json.loads(_rc_pf.content or '{}')
+                                            if _rc_pf_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
+                                                continue
+                                            if _rc_pf_d.get('__to_agent') != _chosen_name:
+                                                continue
+                                            _rc_pf_text = (_rc_pf_d.get('text', '') or '').lower().strip()[:80]
+                                            if not _rc_pf_text:
+                                                continue
+                                            # Считаем пересечение символов первых 80 — если >70%, начало одинаковое
+                                            from difflib import SequenceMatcher as _SM
+                                            _pf_ratio = _SM(None, _new_prefix, _rc_pf_text).ratio()
+                                            if _pf_ratio > 0.65:
+                                                _prefix_matches += 1
+                                        except Exception:
+                                            pass
+                                    if _prefix_matches >= 3:
+                                        _skip_coord = True
+                                        logger.info(
+                                            "[ANCHOR-AUTOPILOT] PREFIX-DEDUP: first 80 chars match %d recent assigns to %s — skip",
+                                            _prefix_matches, _chosen_name,
+                                        )
 
                                 # ── Tool-keyword dedup: динамическое обнаружение инструментов + outcome-порог ──
                                 if not _skip_coord and _coord_text:
@@ -7321,14 +7330,14 @@ class AnchorEngine:
                             for g in data.get('goals', [])[:2]
                         )
                         _dir_p = (
-                            f"Ты — ASI, координатор проекта. Пишешь ПОЛЬЗОВАТЕЛЮ (владельцу проекта) статус-апдейт.\n"
-                            f"Агент {_chosen_name} только что отчитался:\n"
-                            f"«{result.strip()[:400]}»\n\n"
+                            f"Ты — ASI, координатор проекта. Пишешь ПОЛЬЗОВАТЕЛЮ краткий статус.\n"
                             f"Цели пользователя: {_dir_goals}\n"
-                            f"Предупреждения: {'; '.join(str(w)[:100] for w in _fw_dir[:2])}\n\n"
-                            "Напиши 1-2 содержательных предложения (20-40 слов) ДЛЯ ПОЛЬЗОВАТЕЛЯ: "
-                            "что агенты конкретно сделали (имена, числа, адреса) и что будет дальше. "
-                            "НЕ обращайся к агентам по имени — пиши ПОЛЬЗОВАТЕЛЮ. "
+                            f"Предупреждения по текущему циклу: {'; '.join(str(w)[:100] for w in _fw_dir[:2])}\n\n"
+                            "Напиши 1-2 предложения (15-30 слов) ДЛЯ ПОЛЬЗОВАТЕЛЯ:\n"
+                            "— Расскажи о предупреждении: что может помешать прогрессу и что команда планирует.\n"
+                            "— НЕ пересказывай что агент уже сделал (пользователь уже видел отчёт).\n"
+                            "— НЕ упоминай имена агентов — пиши от лица команды: «мы», «команда».\n"
+                            "— Фокус: что ДАЛЬШЕ, а не что БЫЛО.\n"
                             "Прямо и конкретно — без общих слов. Живо. Без markdown."
                         )
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_d
