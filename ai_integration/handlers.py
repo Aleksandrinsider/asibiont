@@ -4648,7 +4648,7 @@ def create_goal(title=None, description=None, category=None, priority=None, targ
             session.close()
 
 
-def update_goal_progress(goal_title=None, progress=None, status=None, notes=None, metric_current=None, user_id=None, session=None):
+def update_goal_progress(goal_title=None, progress=None, status=None, notes=None, metric_current=None, user_id=None, session=None, progress_increment=None):
     """Обновить прогресс или статус цели
     
     Args:
@@ -4659,6 +4659,7 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
         metric_current: Текущее значение метрики (авто-расчёт процента)
         user_id: Telegram ID
         session: SQLAlchemy session
+        progress_increment: Инкрементный прогресс (add N% to current). Used by auto-tracking.
     """
     if not goal_title:
         return "Укажи название цели для обновления."
@@ -4704,6 +4705,39 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
             return f"Цель \"{goal_title}\" не найдена. Активные цели: {titles}"
         
         changes = []
+
+        # ── progress_increment: auto-tracking adds N% to current progress ──
+        if progress_increment is not None and progress is None and metric_current is None:
+            try:
+                _incr = int(progress_increment)
+                _old_pct = matched.progress_percentage or 0
+                _new_pct = min(99, _old_pct + _incr)  # cap at 99% — completion only via metric or explicit
+                if _new_pct > _old_pct:
+                    matched.progress_percentage = _new_pct
+                    changes.append(f"прогресс: {_old_pct}% → {_new_pct}% (+{_incr}%)")
+            except (ValueError, TypeError):
+                pass
+            # Still save notes as AAL even if no progress change
+            if notes:
+                try:
+                    from models import AgentActivityLog as _AAL_incr
+                    session.add(_AAL_incr(
+                        user_id=matched.user_id,
+                        activity_type='goal_updated',
+                        ref_id=matched.id,
+                        result=notes[:500] if notes else '',
+                    ))
+                except Exception:
+                    pass
+            if changes:
+                try:
+                    session.commit()
+                except Exception:
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+            return f"Прогресс цели «{matched.title}»: {', '.join(changes)}" if changes else "OK"
 
         # Авто-определение metric_target из названия цели, если оно None
         if not matched.metric_target:

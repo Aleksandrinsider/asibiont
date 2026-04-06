@@ -5585,13 +5585,13 @@ class AnchorEngine:
                     _goal_is_product  = any(w in _g0 for w in ['продукт', 'разработ', 'фича', 'релиз', 'mvp', 'деплой'])
                     _g_label = _goal_titles_fb[0] if _goal_titles_fb else 'активные цели'
 
-                    # Строим стратегии по типу цели
+                    # Строим стратегии по типу цели — ДЕЙСТВИЕ важнее исследования
                     import random as _rnd_fb
                     if _goal_is_outreach and _has_email_fb:
                         _fb_strategies = [
-                            f'{_chosen_name}, проверь входящие через check_emails — возможно пришли ответы по цели «{_g_label}». Если есть ответы — сразу отвечай.',
-                            f'{_chosen_name}, найди через web_search 5 новых контактов по теме «{_g_label}» на профильных площадках (ProductHunt, dev.to, LinkedIn, Хабр). Сохрани через save_email_contact.',
-                            f'{_chosen_name}, подготовь и отправь через send_outreach_email персональное письмо 1 контакту из базы — с конкретным предложением.',
+                            f'{_chosen_name}, проверь входящие через check_emails — если есть ответы, сразу reply_to_outreach_email. Если нет ответов — send_follow_up_email тем кто молчит 2+ дня.',
+                            f'{_chosen_name}, отправь через send_outreach_email персональное письмо 1-2 контактам из базы — с конкретным предложением по «{_g_label}». Если контактов нет — найди 3 через web_search на dev.to/ProductHunt и сохрани через save_email_contact.',
+                            f'{_chosen_name}, найди через web_search 3 email-адреса авторов/разработчиков по теме «{_g_label}» на dev.to, Hacker News, ProductHunt. Сохрани каждый через save_email_contact. Затем отправь первому через send_outreach_email.',
                         ]
                     elif _goal_is_content:
                         _content_tools = []
@@ -10431,22 +10431,22 @@ class AnchorEngine:
                         tzinfo=_dt_md.timezone.utc if _ca_md.tzinfo is None else _ca_md.tzinfo)).days
                 except Exception:
                     _age_days = 0
-                if _age_days < 2:
+                if _age_days < 1:
                     continue
                 _gt_md = _g_md.get('title', '')[:60]
-                # Critically stuck: 3+ days with <15% progress
-                if _age_days >= 3 and _prog_md < 15:
+                # Critically stuck: 2+ days with <15% progress (was 3 days — accelerated)
+                if _age_days >= 2 and _prog_md < 15:
                     _multiday_review_str += (
                         f"\n🔴 ЗАСТОЙ «{_gt_md}»: {_age_days} дней, прогресс {_prog_md}%.\n"
-                        f"  → Текущая стратегия НЕ РАБОТАЕТ. Кардинальная смена подхода:\n"
-                        f"  1. Другая целевая аудитория / другой канал поиска\n"
-                        f"  2. Контент вместо outreach (или наоборот)\n"
-                        f"  3. Партнёрство / коллаборация вместо холодных контактов\n"
-                        f"  4. Уведоми пользователя: send_message_to_user о застое и предложи варианты\n"
+                        f"  → Текущая стратегия НЕ РАБОТАЕТ. ОБЯЗАТЕЛЬНО:\n"
+                        f"  1. НЕ ПОВТОРЯЙ прошлые действия — они не дали результат.\n"
+                        f"  2. Назначь КОНКРЕТНЫЕ action-tools: send_outreach_email, create_post, check_emails.\n"
+                        f"  3. Если контакты есть → пиши им. Если нет → ищи на ДРУГОЙ платформе.\n"
+                        f"  4. При {_age_days}+ днях застоя — уведоми пользователя через send_message_to_user.\n"
                     )
                     _stuck_notify_goals.append((_gt_md, _age_days, _prog_md))
-                # Slow progress: 2+ days but some movement
-                elif _age_days >= 2 and _prog_md < 50:
+                # Slow progress: 1+ days but little movement
+                elif _age_days >= 1 and _prog_md < 30:
                     _rate = round(_prog_md / max(_age_days, 1), 1)
                     _multiday_review_str += (
                         f"\n⚠️ МЕДЛЕННЫЙ ПРОГРЕСС «{_gt_md}»: {_prog_md}% за {_age_days} дней ({_rate}%/день).\n"
@@ -10515,36 +10515,39 @@ class AnchorEngine:
                     else ''
                 )
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
-                "Ты — живой директор офиса. Думай исходя из ситуации.\n\n"
+                "Ты — живой директор офиса. Думай исходя из ситуации. РЕЗУЛЬТАТ ВАЖНЕЕ ПРОЦЕССА.\n\n"
 
                 "🧠 ПРОТОКОЛ:\n"
-                "1. ОЦЕНИ: что сработало (результаты), что нет (почему), какие ресурсы есть\n"
-                "2. РЕШИ: работает → удвой; не работает → смени подход (не бросай канал); не пробовали → попробуй\n"
-                "3. ВЫПОЛНИМОСТЬ: прочитай название цели. Спроси себя — через какой КОНКРЕТНЫЙ инструмент из ПОДКЛЮЧЁННЫХ агент это сделает?\n"
-                "   Если цель упоминает платформу (Telegram, Discord, LinkedIn, HH.ru) — есть ли подключение? Если НЕТ:\n"
-                "   → НЕ пытайся 'найти контакты из Telegram' — это невозможно без Telegram-интеграции.\n"
-                "   → ПЕРЕВЕДИ цель в выполнимую плоскость: web_search по публичным профилям, email-outreach, контент в своём канале.\n"
-                "   → Упомяни tool=update_goal_progress с reason='цель требует недоступной интеграции, предлагаю переформулировать'.\n"
-                "4. ПОСТАВЬ КОНКРЕТНЫЕ ЗАДАЧИ:\n"
-                "   ✗ «Исследуй тренды» → ✓ «Найди 3 статьи про [тема] на [платформа], выдели ключевые идеи»\n"
-                "   ✗ «Привлеки клиентов» → ✓ «Создай пост-кейс по [тема], опубликуй в канале»\n"
-                "5. УЧТИ КОНТЕКСТ: интеграции агента, его история, кулдауны\n"
-                "6. ОБНОВИ ПРОГРЕСС: был результат → update_goal_progress. Цель без метрики → спроси пользователя\n\n"
+                "1. ОЦЕНИ РЕЗУЛЬТАТЫ: что РЕАЛЬНО сделано (email отправлен, контакт сохранён, пост опубликован)?\n"
+                "   Если за 2+ цикла нет КОНКРЕТНЫХ результатов (только 'исследовал', 'нашёл информацию') — это провал.\n"
+                "2. РЕШИ СТРАТЕГИЮ:\n"
+                "   • Работает (есть ответы/контакты/публикации) → удвой усилия\n"
+                "   • Не работает 2+ цикла → КАРДИНАЛЬНО смени подход: другая аудитория, другой канал, другой формат\n"
+                "   • Только исследования без действий → ЗАПРЕТИ research, НАЗНАЧЬ action-tool (send_outreach_email, create_post)\n"
+                "3. ВЫПОЛНИМОСТЬ: через какой КОНКРЕТНЫЙ инструмент из ПОДКЛЮЧЁННЫХ агент это сделает?\n"
+                "   Если цель упоминает платформу без подключения — переведи в выполнимую плоскость.\n"
+                "4. ЗАДАЧИ — ТОЛЬКО КОНКРЕТНЫЕ ДЕЙСТВИЯ С ИЗМЕРИМЫМ РЕЗУЛЬТАТОМ:\n"
+                "   ✗ «Исследуй тренды» → ✓ «Найди 3 email-адреса AI-разработчиков на dev.to через web_search, сохрани через save_email_contact»\n"
+                "   ✗ «Привлеки клиентов» → ✓ «Отправь персональное письмо через send_outreach_email на адреса из прошлого цикла»\n"
+                "   ✗ «Проанализируй прогресс» → ✓ «Проверь входящие через check_emails — если есть ответы, ответь через reply_to_outreach_email»\n"
+                "5. ЦЕПОЧКА ДЕЙСТВИЙ (каждый цикл — СЛЕДУЮЩИЙ шаг):\n"
+                "   Цикл 1: web_search → найти контакты → save_email_contact\n"
+                "   Цикл 2: send_outreach_email на сохранённые контакты\n"
+                "   Цикл 3: check_emails → reply_to_outreach_email на ответы\n"
+                "   Цикл 4: send_follow_up_email тем кто не ответил\n"
+                "   НЕ ЗАСТРЕВАЙ на одном шаге — двигайся по цепочке!\n"
+                "6. ОБНОВИ ПРОГРЕСС: был конкретный результат → update_goal_progress с metric_current.\n\n"
 
                 "ПРАВИЛА:\n"
-                "• Каждый цикл уникален. Не копируй задачи из прошлого.\n"
-                "• 2+ агента → разные направления. Баланс: исследование/действие/проверка.\n"
-                "• Данные собраны → ИСПОЛЬЗУЙ, не ищи заново. Контакты найдены → пиши письма.\n"
-                "• Не ставь задачу 'спроси пользователя' — агенты действуют сами.\n"
-                "• Агент без интеграций: web_search, research_topic, create_post, DELEGATE[].\n"
-                "• Застой 2+ цикла → полная смена стратегии.\n"
-                "• task = ЧЕЛОВЕКОЧИТАЕМЫЙ текст, повелительное наклонение (найди/проверь/отправь).\n"
-                "• Не копируй название цели в task.\n"
+                "• РЕЗУЛЬТАТ = email отправлен, контакт сохранён, пост опубликован, ответ получен.\n"
+                "• research_topic/web_search — это ПОДГОТОВКА, не результат. Не повторяй исследование если данные уже есть.\n"
+                "• Данные собраны → ДЕЙСТВУЙ: контакты → пиши, информация → публикуй.\n"
+                "• Каждый агент в каждом цикле делает МИНИМУМ 1 action-tool.\n"
+                "• Застой 2+ цикла → ПОЛНАЯ смена стратегии: другой канал, другая аудитория, другой формат.\n"
+                "• task = конкретное действие, повелительное наклонение (найди/отправь/проверь/опубликуй).\n"
                 + (f"• GitHub запросы уже использованные: {'; '.join(_used_github_queries[:4])}\n"
                    if _used_github_queries else '')
                 + "• Агент без интеграций: web_search, research_topic, create_post, DELEGATE[].\n"
-                "• 3+ цикла без прогресса → смени тип деятельности.\n"
-                "• Данные из прошлых циклов (🔁) → используй, не ищи заново.\n"
                 "• Многошаговые цепочки: агент A → данные → агент B → действие.\n\n"
 
                 f"Цели: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
@@ -11297,13 +11300,16 @@ class AnchorEngine:
                             f"Доступные агенты (используй их возможности):\n{_agents_avail_str}\n\n"
                             f"Шагов выполнено: {_executed}. Максимум: {_MAX_DYNAMIC_STEPS}.\n\n"
                             f"Реши: нужен ли ещё один шаг для продвижения к целям?\n"
-                            f"Важно: выбери НОВЫЙ тип результата, а не повтор прошлого шага "
-                            f"(например: данные → контакты, контакты → действия, действия → контент/обучение, и т.д.).\n"
-                            f"Если 2 шага подряд по цели без роста метрики — рассмотри смену класса стратегии: "
-                            f"поиск ↔ outreach ↔ follow-up ↔ контент ↔ партнерства/делегирование.\n"
+                            f"КЛЮЧЕВОЙ ПРИНЦИП: каждый следующий шаг = СЛЕДУЮЩЕЕ ЗВЕНО ЦЕПОЧКИ.\n"
+                            f"  Контакты найдены → ОТПРАВЬ ПИСЬМО (send_outreach_email)\n"
+                            f"  Письмо отправлено → ПРОВЕРЬ ОТВЕТЫ (check_emails)\n"
+                            f"  Ответ получен → ОТВЕТЬ (reply_to_outreach_email)\n"
+                            f"  Нет ответа 2+ дня → FOLLOW-UP (send_follow_up_email)\n"
+                            f"  Информация собрана → СОЗДАЙ КОНТЕНТ (create_post)\n"
+                            f"НЕ повторяй research/web_search если данные уже есть — ДЕЙСТВУЙ с ними.\n"
                             f"💡 В поле task пиши задачу через интеграции из [интеграции: ...] агента. "
                             f"Если нужной интеграции нет — назначь другого агента или пропусти шаг.\n"
-                            f"В поле task пиши одну строку без переносов. НЕ используй \\n\\n в task — только пробел между предложениями.\n"
+                            f"В поле task пиши одну строку без переносов.\n"
                             f"Если все ключевые цели получили прогресс — верни {{\"done\": true}}.\n"
                             f"Если нужен ещё шаг — верни ОДИН JSON-объект:\n"
                             f'[{{"agent": "имя_агента", "task": "конкретная задача исходя из интеграций агента", '
@@ -12607,6 +12613,30 @@ class AnchorEngine:
                         f"В следующем цикле — КОНКРЕТНЫЕ tool-вызовы, а не слова.\n"
                     )
 
+                # ── Concrete result detection: extract verifiable numbers from response ──
+                _concrete_results = []
+                if _cleaned:
+                    import re as _re_conc
+                    _cl = _cleaned_lower
+                    # Count emails found in text
+                    _found_emails = len(_re_conc.findall(r'[\w.+-]+@[\w-]+\.[\w.]+', _cleaned))
+                    if _found_emails:
+                        _concrete_results.append(f'{_found_emails} email-адресов')
+                    # Count URLs found
+                    _found_urls = len(_re_conc.findall(r'https?://[^\s<>"]+', _cleaned))
+                    if _found_urls:
+                        _concrete_results.append(f'{_found_urls} URL')
+                    # Detect specific tool successes
+                    if 'send_outreach_email' in _step_tools and 'отправлен' in _cl:
+                        _concrete_results.append('email отправлен')
+                    if 'save_email_contact' in _step_tools and ('сохран' in _cl or 'добавлен' in _cl):
+                        _concrete_results.append('контакт сохранён')
+                    if 'create_post' in _step_tools and ('опубликован' in _cl or 'создан' in _cl):
+                        _concrete_results.append('пост создан')
+                    if 'check_emails' in _step_tools:
+                        if 'новых писем' in _cl or 'новое письмо' in _cl or 'ответ' in _cl:
+                            _concrete_results.append('проверена почта')
+
                 if not _real_action_tools and not _is_hollow:
                     # Агент вызвал только passive tools — если результат содержит данные, это completed (research — тоже работа)
                     _has_substantial_data = len((_cleaned or '').strip()) > 150
@@ -12644,6 +12674,12 @@ class AnchorEngine:
                             f"• {_ag_name}: вызвал {', '.join(_critical_tools_failed)}, "
                             f"но все они вернули ошибку/лимит. Нужно исправить в следующем цикле.\n"
                         )
+                    elif _real_action_tools:
+                        # Success — include concrete results for coordinator
+                        _conc_str = f' → {", ".join(_concrete_results)}' if _concrete_results else ''
+                        _prev_steps_context += (
+                            f"• {_ag_name}: ✅ {', '.join(_real_action_tools)}{_conc_str}\n"
+                        )
 
                 # ── Помечаем задачу ──
                 if _step_task_id:
@@ -12671,13 +12707,31 @@ class AnchorEngine:
                 if _task_status == 'completed' and _ag_goal_title and (_real_action_tools or _step_tools):
                     try:
                         from ai_integration.handlers import update_goal_progress as _ugp_auto
-                        _ugp_auto(
-                            goal_title=_ag_goal_title,
-                            notes=f"[auto] {_ag_name}: {', '.join(_step_tools)}. {(_cleaned or '')[:200]}",
-                            user_id=user.telegram_id,
-                            session=session,
-                        )
-                        logger.info("[COORD] auto goal progress for '%s' by %s", _ag_goal_title[:40], _ag_name)
+                        # ── Compute real progress increment based on action tools ──
+                        _ACTION_TOOL_WEIGHT = {
+                            'send_outreach_email': 3, 'send_follow_up_email': 2,
+                            'reply_to_outreach_email': 3, 'negotiate_by_email': 3,
+                            'save_email_contact': 2, 'create_post': 3,
+                            'publish_to_telegram': 3, 'publish_to_discord': 3,
+                            'start_email_campaign': 3, 'create_issue': 2,
+                            'send_message_to_user': 1, 'add_task': 1,
+                            'set_reminder': 1, 'save_note': 1,
+                            'generate_image': 2, 'run_agent_action': 2,
+                        }
+                        _auto_incr = sum(_ACTION_TOOL_WEIGHT.get(t, 0) for t in _real_action_tools)
+                        # Passive tools give small progress for research/prep work
+                        if not _auto_incr and _step_tools:
+                            _auto_incr = 1  # at least 1% for research
+                        _auto_incr = min(_auto_incr, 5)  # cap at 5% per step
+                        if _auto_incr > 0:
+                            _ugp_auto(
+                                goal_title=_ag_goal_title,
+                                progress_increment=_auto_incr,
+                                notes=f"[auto] {_ag_name}: {', '.join(_step_tools)}. {(_cleaned or '')[:200]}",
+                                user_id=user.telegram_id,
+                                session=session,
+                            )
+                        logger.info("[COORD] auto goal progress +%d%% for '%s' by %s", _auto_incr, _ag_goal_title[:40], _ag_name)
                     except Exception as _ugp_err:
                         logger.debug("[COORD] auto goal progress error: %s", _ugp_err)
 
