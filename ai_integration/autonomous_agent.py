@@ -2597,12 +2597,34 @@ class HybridAutonomousAgent:
             if cognitive_hints:
                 dynamic_context += cognitive_hints
 
-            # ═══ ИНТЕГРАЦИИ (факты: что подключено) ═══
+            # ═══ ИНТЕГРАЦИИ (факты: что подключено + как использовать) ═══
             try:
                 _intg_snap = _get_active_agent_integration_snapshot(user_id)
                 _active = _intg_snap.get('labels', [])
                 if _active:
                     dynamic_context += f"\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ]: {', '.join(_active[:15])}"
+                    # Добавляем подсказки по инструментам для каждой категории интеграции
+                    try:
+                        from anchor_engine import _CAP_TOOL_HINTS, _parse_agent_integrations, _INTEGRATION_PREFIX_LABELS
+                        _seen_cats: set = set()
+                        for _lbl in _active:
+                            for _cat, _cat_label in (('email', 'Email'), ('git', 'GitHub'), ('crm', 'CRM'),
+                                                     ('telegram', 'Telegram'), ('discord', 'Discord'),
+                                                     ('sheets', 'Google Sheets'), ('notion', 'Notion'),
+                                                     ('slack', 'Slack'), ('calendar', 'Календарь'),
+                                                     ('hr', 'HH.ru'), ('marketplace', 'Маркетплейс'),
+                                                     ('pm', 'Трекер')):
+                                if _cat_label.lower() in _lbl.lower() or _cat in _lbl.lower():
+                                    _seen_cats.add(_cat)
+                        _tool_hints_parts = []
+                        for _cat in _seen_cats:
+                            _hint = _CAP_TOOL_HINTS.get(_cat)
+                            if _hint and _cat != 'email':  # email tools already documented in prompt
+                                _tool_hints_parts.append(f"  {_cat}: {_hint}")
+                        if _tool_hints_parts:
+                            dynamic_context += "\n[КАК ИСПОЛЬЗОВАТЬ ИНТЕГРАЦИИ]:\n" + '\n'.join(_tool_hints_parts[:8])
+                    except Exception:
+                        pass
                 else:
                     dynamic_context += "\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ]: нет"
             except Exception as e:

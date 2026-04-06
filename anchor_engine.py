@@ -6762,7 +6762,9 @@ class AnchorEngine:
                     or (not _has_real_actions and len(_result_clean) < 80
                         and any(w in _result_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно', 'ошибка подключения')))
                     # Шум: инструменты вызваны, но текст ОЧЕНЬ короткий и шаблонный (нет фактов)
+                    # НЕ фильтруем run_agent_action — CRM/GitHub/интеграции часто дают короткие ответы
                     or (_has_real_actions and len(_result_clean) < 60
+                        and 'run_agent_action' not in (_tools_used or [])
                         and any(p in _result_lower for p in _GENERIC_TOOL_PATTERNS))
                     # Утечки делегаций: агент обращается к другому агенту
                     or _is_delegation_leak
@@ -6877,7 +6879,7 @@ class AnchorEngine:
                     try:
                         _skip_contact_guard = any(
                             t in ('check_emails', 'reply_to_outreach_email', 'negotiate_by_email',
-                                  'send_outreach_email', 'save_email_contact')
+                                  'send_outreach_email', 'save_email_contact', 'run_agent_action')
                             for t in (_tools_used or [])
                         )
                         if not _skip_contact_guard:
@@ -8683,7 +8685,8 @@ class AnchorEngine:
                 _t = (g_.get('title', '') + ' ' + (g_.get('description', '') or '')).lower()
                 if any(k in _t for k in ('outreach', 'привлеч', 'клиент', 'партнёр', 'партнер',
                                          'написать', 'рассылк', 'email', 'лид', 'b2b', 'продаж',
-                                         'маркетинг', 'продвиж', 'раскрутк', 'аудитор')):
+                                         'маркетинг', 'продвиж', 'раскрутк', 'аудитор',
+                                         'amocrm', 'bitrix', 'crm', 'воронк', 'конверси')):
                     return 'outreach'
                 if any(k in _t for k in ('контент', 'пост', 'статья', 'публикац', 'smm', 'блог',
                                          'reels', 'видео', 'медиаплан')):
@@ -8692,7 +8695,8 @@ class AnchorEngine:
                                          'язык', 'сертификат', 'урок', 'читать')):
                     return 'learning'
                 if any(k in _t for k in ('разработ', 'github', 'deploy', 'backend', 'frontend',
-                                         'код', 'программ', 'developer', 'деплой')):
+                                         'код', 'программ', 'developer', 'деплой', 'gitlab',
+                                         'issue', 'pull request', 'репозитор', 'коммит')):
                     return 'dev'
                 if any(k in _t for k in ('спорт', 'тренировк', 'похудеть', 'бег', 'марафон',
                                          'здоровь', 'диета', 'фитнес', 'workout')):
@@ -8718,7 +8722,8 @@ class AnchorEngine:
                                          'трекинг', 'грузоперевозк')):
                     return 'logistics'
                 if any(k in _t for k in ('вакансия', 'кандидат', 'найм', 'нанять',
-                                         'рекрутинг', 'резюме', 'подбор персонал')):
+                                         'рекрутинг', 'резюме', 'подбор персонал',
+                                         'hh.ru', 'headhunter', 'superjob', 'разработчик')):
                     return 'hr'
                 return None
             def _goal_age_str(g_):
@@ -10481,20 +10486,21 @@ class AnchorEngine:
             # Дедупликация плана: один агент + один инструмент для ОДНОЙ цели = бессмысленное повторение
             # Но разрешаем одному агенту использовать тот же инструмент для РАЗНЫХ целей
             _seen_agent_tool_goal: set = set()
-            _seen_agents_this_cycle: set = set()  # каждый агент — только 1 шаг за цикл
+            _agent_step_count: dict = {}  # агент → кол-во шагов (max 2 с разными инструментами)
             _plan_deduped = []
             for _p in _plan:
                 _ak_agent = _p.get('agent', '').strip().lower()
                 _ak_tool = (_p.get('tool') or '').strip().lower()
                 _ak_goal = (_p.get('goal') or '').strip().lower()[:80]
                 _ak = (_ak_agent, _ak_tool, _ak_goal)
-                if _ak_agent and _ak not in _seen_agent_tool_goal and _ak_agent not in _seen_agents_this_cycle:
+                _agent_steps = _agent_step_count.get(_ak_agent, 0)
+                if _ak_agent and _ak not in _seen_agent_tool_goal and _agent_steps < 2:
                     _seen_agent_tool_goal.add(_ak)
-                    _seen_agents_this_cycle.add(_ak_agent)
+                    _agent_step_count[_ak_agent] = _agent_steps + 1
                     _plan_deduped.append(_p)
                 elif _ak_agent:
-                    if _ak_agent in _seen_agents_this_cycle:
-                        logger.info("[COORD] one-per-cycle: skip 2nd step for %s (goal=%s)", _p.get('agent'), _ak_goal[:30])
+                    if _agent_steps >= 2:
+                        logger.info("[COORD] max-2-per-cycle: skip 3rd step for %s (goal=%s)", _p.get('agent'), _ak_goal[:30])
                     else:
                         logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
