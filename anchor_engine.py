@@ -13106,46 +13106,7 @@ class AnchorEngine:
                         _step_queue.insert(0, _inject_step)
                         logger.info("[COORD] pipeline-inject: %s→send after %s save_email_contact (goal=%s)",
                                     _email_sender_name, _ag_name, _inject_goal[:40])
-                        # ── Живое сообщение: email-агент принимает контакты от коллеги ──
-                        try:
-                            _is_pipe_fem = (_email_sender_name or '')[-1:] in 'аяАЯ'
-                            _is_ag_nm_fem = (_ag_name or '')[-1:] in 'аяАЯ'
-                            _ag_fnd_verb = 'нашла' if _is_ag_nm_fem else 'нашёл'
-                            _i_got_hf = 'Получила' if _is_pipe_fem else 'Получил'
-                            import random as _rnd_hf
-                            _hf_tmpl = _rnd_hf.choice([
-                                f'{_i_got_hf} контакты от {_ag_name} — уже составляю письма!',
-                                f'Хорошо, {_ag_name} {_ag_fnd_verb} нужных людей — сразу пишу им.',
-                                f'{_i_got_hf} список от {_ag_name}, начинаю рассылку.',
-                                f'Есть контакты! {_ag_name} {_ag_fnd_verb}, я отправляю.',
-                            ])
-                            _hf_sess = Session()
-                            try:
-                                _skip_handoff_cap = self._agent_persona_daily_cap_reached(_hf_sess, user, _email_sender_name)
-                                if not _skip_handoff_cap:
-                                    _hf_sess.add(Interaction(
-                                        user_id=user.id,
-                                        message_type='agent_msg',
-                                        content=json.dumps({
-                                            '__agent': {'name': _email_sender_name, 'id': 0, 'avatar_url': ''},
-                                            'text': _hf_tmpl,
-                                            '__anchor_type': 'goal_autopilot_handoff',
-                                        }, ensure_ascii=False),
-                                    ))
-                                    _hf_sess.commit()
-                                else:
-                                    logger.info(
-                                        "[COORD] user %d: skip handoff from %s (daily cap=%d)",
-                                        user.id,
-                                        _email_sender_name,
-                                        MAX_AGENT_PERSONA_MSG_PER_DAY,
-                                    )
-                            finally:
-                                _hf_sess.close()
-                            if self.bot and not _skip_handoff_cap:
-                                await self.bot.send_message(chat_id=user.telegram_id, text=_hf_tmpl)
-                        except Exception as _hf_err:
-                            logger.debug("[COORD] handoff msg failed: %s", _hf_err)
+                        # Handoff ack suppressed — agent result will speak for itself
 
                 # ── Накапливаем контекст шага для финального отчёта (без лишнего AI-вызова) ──
                 if len(_cleaned) > 40:
