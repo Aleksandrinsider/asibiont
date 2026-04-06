@@ -4704,6 +4704,35 @@ class AnchorEngine:
                                         _before - len(_goals_for_prompt))
                     except Exception as _gf_err:
                         logger.debug("[DISPATCH] goal filter failed: %s", _gf_err)
+                # ── Auto-pause goals with infeasible titles ──
+                _infeasible_ids = set()
+                for _gfp in _goals_for_prompt:
+                    _gt_l = (_gfp.get('title') or '').lower()
+                    _gt_infeasible = (
+                        ('telegram' in _gt_l and ('контакт' in _gt_l or 'адрес' in _gt_l or 'пользовател' in _gt_l)
+                         and ('email' in _gt_l or 'найти' in _gt_l or 'найди' in _gt_l or 'отправ' in _gt_l or 'предложени' in _gt_l))
+                        or ('альтернативн' in _gt_l and ('метод' in _gt_l or 'способ' in _gt_l or 'связ' in _gt_l))
+                    )
+                    if _gt_infeasible:
+                        _infeasible_ids.add(_gfp.get('id'))
+                        logger.info("[DISPATCH] infeasible goal detected: %s", _gfp.get('title', '')[:60])
+                if _infeasible_ids:
+                    try:
+                        from models import Goal as _Goal_ip
+                        for _ip_id in _infeasible_ids:
+                            _ip_goal = session.query(_Goal_ip).filter(_Goal_ip.id == _ip_id, _Goal_ip.user_id == user.id).first()
+                            if _ip_goal and _ip_goal.status == 'active':
+                                _ip_goal.status = 'paused'
+                                _ip_goal.notes = ((_ip_goal.notes or '') + '\nАвтопауза: цель сформулирована невыполнимо (нет нужной интеграции)').strip()
+                                logger.info("[DISPATCH] auto-paused goal id=%s: %s", _ip_id, _ip_goal.title[:60])
+                        session.commit()
+                    except Exception as _ip_err:
+                        logger.debug("[DISPATCH] goal auto-pause failed: %s", _ip_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                    _goals_for_prompt = [g for g in _goals_for_prompt if g.get('id') not in _infeasible_ids]
                 if not _goals_for_prompt:
                     logger.info("[DISPATCH] all goals from anchor were deleted — skipping dispatch")
                     return
@@ -6113,6 +6142,9 @@ class AnchorEngine:
                                 # Задания про пользователей платформ без конкретики
                                 or ('для telegram пользователей' in _gen_lower or 'с telegram пользовател' in _gen_lower
                                     or 'telegram-аудитори' in _gen_lower)
+                                # "email контакты для/из Telegram" — невыполнимо без TG-интеграции
+                                or ('telegram' in _gen_lower and ('контакт' in _gen_lower or 'адрес' in _gen_lower)
+                                    and ('email' in _gen_lower or 'почт' in _gen_lower or 'найти' in _gen_lower or 'найди' in _gen_lower))
                             )
                             if _is_vague_gen:
                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
@@ -8710,6 +8742,34 @@ class AnchorEngine:
                         logger.info("[COORD] loaded %d goals from DB (data was empty)", len(_goals))
                 except Exception as _gl_err:
                     logger.warning("[COORD] failed to load goals from DB: %s", _gl_err)
+            # ── Auto-pause infeasible goals before planning ──
+            _infeasible_coord_ids = set()
+            for _gci in _goals:
+                _gci_l = (_gci.get('title') or '').lower()
+                if (
+                    ('telegram' in _gci_l and ('контакт' in _gci_l or 'адрес' in _gci_l or 'пользовател' in _gci_l)
+                     and ('email' in _gci_l or 'найти' in _gci_l or 'отправ' in _gci_l or 'предложени' in _gci_l))
+                    or ('альтернативн' in _gci_l and ('метод' in _gci_l or 'способ' in _gci_l or 'связ' in _gci_l))
+                ):
+                    _infeasible_coord_ids.add(_gci.get('id'))
+                    logger.info("[COORD] infeasible goal detected: %s", _gci.get('title', '')[:60])
+            if _infeasible_coord_ids:
+                try:
+                    from models import Goal as _Goal_ipc
+                    for _ipc_id in _infeasible_coord_ids:
+                        _ipc_g = session.query(_Goal_ipc).filter(_Goal_ipc.id == _ipc_id, _Goal_ipc.user_id == user.id).first()
+                        if _ipc_g and _ipc_g.status == 'active':
+                            _ipc_g.status = 'paused'
+                            _ipc_g.notes = ((_ipc_g.notes or '') + '\nАвтопауза: цель невыполнима без нужной интеграции').strip()
+                            logger.info("[COORD] auto-paused goal id=%s: %s", _ipc_id, _ipc_g.title[:60])
+                    session.commit()
+                except Exception as _ipc_err:
+                    logger.debug("[COORD] goal auto-pause failed: %s", _ipc_err)
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                _goals = [g for g in _goals if g.get('id') not in _infeasible_coord_ids]
             # ── Авто-детектор типа цели для координатора ──
             def _crd_goal_type(g_):
                 _t = (g_.get('title', '') + ' ' + (g_.get('description', '') or '')).lower()
@@ -11282,6 +11342,42 @@ class AnchorEngine:
                 _tool_hint = (_step.get('tool') or '').strip()
                 _ag_goal_title = (_step.get('goal') or '').strip()   # привязка к цели из плана координатора
                 if not _ag_name or not _ag_task:
+                    continue
+
+                # ── INFEASIBILITY GUARD: пропускаем шаги которые заведомо невыполнимы ──
+                _task_lower_feas = _ag_task.lower()
+                _is_infeasible_step = (
+                    # "email контакты для Telegram пользователей" — нельзя достать email из TG без интеграции
+                    ('telegram' in _task_lower_feas and ('контакт' in _task_lower_feas or 'адрес' in _task_lower_feas)
+                     and ('email' in _task_lower_feas or 'почт' in _task_lower_feas or 'найти' in _task_lower_feas or 'найди' in _task_lower_feas))
+                    # "альтернативные методы/способы/каналы связи" — бессмысленная пустышка
+                    or ('альтернативн' in _task_lower_feas and ('метод' in _task_lower_feas or 'способ' in _task_lower_feas or 'канал' in _task_lower_feas))
+                    # "для telegram пользователей" — невозможно без TG-интеграции
+                    or ('для telegram пользователей' in _task_lower_feas or 'с telegram пользовател' in _task_lower_feas
+                        or 'telegram-аудитори' in _task_lower_feas)
+                )
+                if _is_infeasible_step:
+                    logger.info("[COORD] INFEASIBLE step skipped: %s → %s", _ag_name, _ag_task[:80])
+                    # Автопауза привязанной цели — перестаём тратить ресурсы
+                    if _ag_goal_title:
+                        try:
+                            from models import Goal as _Goal_inf
+                            _inf_goal = session.query(_Goal_inf).filter(
+                                _Goal_inf.user_id == user.id,
+                                _Goal_inf.status == 'active',
+                            ).all()
+                            _inf_match = next((g for g in _inf_goal if _ag_goal_title.lower() in g.title.lower() or g.title.lower() in _ag_goal_title.lower()), None)
+                            if _inf_match:
+                                _inf_match.status = 'paused'
+                                _inf_match.notes = ((_inf_match.notes or '') + '\nАвтопауза: задача требует недоступной интеграции или сформулирована невыполнимо').strip()
+                                session.commit()
+                                logger.info("[COORD] auto-paused infeasible goal id=%s: %s", _inf_match.id, _inf_match.title[:60])
+                        except Exception as _ig_err:
+                            logger.debug("[COORD] infeasible goal pause failed: %s", _ig_err)
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     continue
 
                 # ── Runtime anti-loop: не даём агенту повторять тот же инструмент без необходимости ──
