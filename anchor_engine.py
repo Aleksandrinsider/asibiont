@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 AnchorEngine — единая событийная система автономного агента.
@@ -425,6 +425,29 @@ def _normalize_coordinator_assignment_by_capabilities(
                    'Найди email этого контакта через web_search и сохрани через save_note для дальнейшей работы.')
             ),
             'Telegram DM невозможен, переведено в email/web_search',
+        )
+
+    # Чужие Discord/Slack-серверы/сообщества — вступить/участвовать невозможно
+    _discord_platform_words = ('discord', 'дискорд', 'slack', 'слак')
+    _discord_external_words = (
+        'сообществ', 'community', 'серверу', 'сервер', 'вступ', 'join',
+        'присоедин', 'участ', 'пообщ', 'общени', 'написать в', 'мониторить',
+        'отслежива', 'чат', 'канал',
+    )
+    _asks_external_discord = (
+        any(w in task_l for w in _discord_platform_words)
+        and any(w in task_l for w in _discord_external_words)
+        and 'publish_to_discord' not in tool_norm  # не трогаем publish через свой webhook
+    )
+    if _asks_external_discord:
+        return (
+            'web_search',
+            (
+                'Вступить в чужие Discord/Slack-серверы НЕВОЗМОЖНО — у платформы нет клиента для чужих серверов. '
+                'Сделай web_search по нишевым сообществам, найди контакты админов/участников '
+                'и выйди на них через email (save_email_contact → send_outreach_email) или контент в своём канале.'
+            ),
+            'чужие Discord/Slack-серверы недоступны, задача переведена в выполнимый формат',
         )
 
     return tool_norm, task_norm, ''
@@ -1345,7 +1368,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "💬 ЧУЖИЕ Telegram-группы/чаты/сообщества — участие НЕВОЗМОЖНО "
         "(это требует Telegram UserBot API — его в платформе НЕТ)"
     )
-    _aic_cannot.append("📱 DM незнакомым людям в Telegram/WhatsApp/VK/Instagram — невозможно без userbot")
+    _aic_cannot.append(
+        "💬 ЧУЖИЕ Discord/Slack-серверы — вступить, писать, мониторить НЕВОЗМОЖНО "
+        "(нет клиента для чужих серверов; publish_to_discord = постинг через СВОЙ webhook)"
+    )
+    _aic_cannot.append("📱 DM незнакомым людям в Telegram/WhatsApp/VK/Instagram/Discord — невозможно без userbot")
     _aic_cannot.append("🔐 Сайты за логином/авторизацией — не могу войти в чужие аккаунты")
     _agent_name_display = agent_name or "агент"
 
@@ -2840,7 +2867,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "• ЧУЖИЕ Telegram-группы/чаты/сообщества: НЕЛЬЗЯ писать, вступать, искать людей там — "
         "для этого нужен Telegram UserBot API (Telethon-класс), которого в платформе НЕТ. "
         "publish_to_telegram = постинг в ЛИЧНЫЙ канал пользователя, не в чужие чаты.",
-        "• DM Telegram/WhatsApp/Instagram незнакомым людям: НЕВОЗМОЖНО — нет прямого клиентского API",
+        "• ЧУЖИЕ Discord/Slack-серверы/сообщества: НЕЛЬЗЯ вступать, писать, мониторить — "
+        "платформа не имеет клиента для чужих серверов. publish_to_discord = постинг через СВОЙ webhook, не участие в чужих.",
+        "• DM Telegram/WhatsApp/Instagram/Discord незнакомым людям: НЕВОЗМОЖНО — нет прямого клиентского API",
         "• Страницы за логином/авторизацией: не могу войти в чужие аккаунты",
     ]
     # Предупреждение если нет контент-каналов
@@ -12010,6 +12039,15 @@ class AnchorEngine:
                             f"run_agent_action поддерживает action: {', '.join(list(dict.fromkeys(_gh_actions))[:4])}"
                         )
                     _intg_live_lines.append(
+                        "⚡ КАК РАБОТАЕТ GitHub-поиск email:\n"
+                        "  GitHub НЕ показывает email на веб-странице/профиле — это нормально.\n"
+                        "  НО run_agent_action(action='search_users') извлекает email из COMMIT-ИСТОРИИ\n"
+                        "  (PushEvent → author.email) — это работает для ~40% разработчиков.\n"
+                        "  → НЕ делай web_search по GitHub — это бесполезно для email.\n"
+                        "  → ВСЕГДА используй run_agent_action(action='search_users') — он сам найдёт email.\n"
+                        "  → Результат: список {name, email, bio} — сразу save_email_contact → send_outreach_email.\n"
+                    )
+                    _intg_live_lines.append(
                         "⚠️ КРИТИЧНО — правила GitHub search query:\n"
                         "  ✅ ПРАВИЛЬНО: 'language:python autonomous agent repos:>10'\n"
                         "  ✅ ПРАВИЛЬНО: 'machine learning language:python followers:>15'\n"
@@ -12018,7 +12056,8 @@ class AnchorEngine:
                         "  ❌ ЗАПРЕЩЕНО: имена из переписки ('Georgiou Feng repos:>5') → вернёт 0\n"
                         "  ❌ ЗАПРЕЩЕНО: название задачи ('email_analysis repos:>5') → вернёт 0\n"
                         "  Допустимые квалификаторы: language:, repos:, followers:, location:, type:user\n"
-                        "  ПОСЛЕ поиска → для КАЖДОГО с email: save_email_contact → send_outreach_email"
+                        "  ПОСЛЕ поиска → для КАЖДОГО с email: save_email_contact → send_outreach_email\n"
+                        "  📊 Меняй query каждый цикл! Примеры: 'ai agent language:python', 'llm framework followers:>20', 'chatbot language:typescript'"
                     )
 
                 # ── Универсальный детектор остальных интеграций из api_keys ──
@@ -12106,7 +12145,7 @@ class AnchorEngine:
                             _agent_failure_memory = (
                                 "\n\n📋 ИСТОРИЯ ПРОШЛЫХ ЦИКЛОВ БЕЗ ПРОГРЕССА:\n"
                                 + '\n'.join(f"  {l}" for l in _note_lines[-5:]) + '\n'
-                                "  → Прочитай эти записи как диагностику, а не как запрет:\n"
+                                + "  → Прочитай эти записи как диагностику, а не как запрет:\n"
                                 "     Что общего между этими циклами? Какой тип источника или инструмента повторяется?\n"
                                 "     Почему он не давал результата? Что из твоих интеграций ты ещё не задействовал?\n"
                                 "     Выбери маршрут, который ОТЛИЧАЕТСЯ по логике, а не только по формулировке.\n"
@@ -12183,16 +12222,29 @@ class AnchorEngine:
                     f"\n  Прежде чем завершить цикл, ответь себе на три вопроса:"
                     f"\n    1. ЧТО именно я искал? (email, контакт, статья, данные?)"
                     f"\n    2. ПОЧЕМУ этот источник не дал результата?"
-                    f"\n       📚 Знай: GitHub профили и репозитории системно скрывают email — это особенность платформы."
-                    f"\n       Так устроен GitHub, не твоя ошибка. Поэтому 'GitHub → email разработчика' = почти всегда 0."
-                    f"\n       Разработчики публикуют email на: dev.to /about, личный сайт (github.io), "
-                    f"научные статьи (affiliation), Twitter/X bio, ProductHunt profile."
-                    f"\n    3. ГДЕ ЕЩЁ это реально можно найти? (другая площадка, другой формат запроса, другой инструмент?)"
+                    + (
+                        f"\n       📚 GitHub: web_search по GitHub-профилям бесполезен для email — они скрыты на сайте."
+                        f"\n       НО у тебя есть run_agent_action(action='search_users') — он извлекает email из commit-истории."
+                        f"\n       Используй ЕГО вместо web_search для поиска разработчиков."
+                        if _has_github_live else
+                        f"\n       📚 GitHub профили скрывают email на сайте. Без GitHub-токена поиск email там бесполезен."
+                        f"\n       Разработчики публикуют email на: dev.to /about, личный сайт, ProductHunt, Twitter/X bio."
+                    )
+                    + f"\n    3. ГДЕ ЕЩЁ это реально можно найти? (другая площадка, другой формат запроса, другой инструмент?)"
                     f"\n  Ответив — попробуй ОДИН альтернативный подход прямо сейчас, в этом же цикле."
                     f"\n  Только если и он не дал ничего — соверши ДЕЙСТВИЕ с тем что есть:"
                     f"\n    нашёл что-то частично → save_note с выводами, add_task с новым направлением"
                     f"\n    вообще ничего → create_post / save_note с аналитикой 'почему этот источник не работает и что лучше попробовать далее'"
                     f"\n  Заканчивай цикл ACTION'ом, а не отчётом о провале."
+                    f"\n\n⛔ ЧЕСТНОСТЬ РЕЗУЛЬТАТОВ:"
+                    f"\n  ПРЕЖДЕ чем сообщить результат, спроси себя:"
+                    f"\n    'Могу ли я ФИЗИЧЕСКИ это сделать своими инструментами?'"
+                    f"\n  Посмотри список ДОСТУПНО/НЕДОСТУПНО выше. Если действие НЕ в ДОСТУПНО:"
+                    f"\n    ❌ НЕ пиши 'я сделал X' если ты его физически не выполнил через инструмент"
+                    f"\n    ❌ НЕ пиши 'пост опубликован' если не вызывал publish_to_telegram/publish_to_discord"
+                    f"\n    ❌ НЕ пиши 'вступила в сообщество' если нет инструмента для вступления"
+                    f"\n    ✅ ЧЕСТНО скажи: 'Вступить в X невозможно через мои инструменты. Вместо этого я сделала Y'"
+                    f"\n  Фантазия о выполнении ХУЖЕ чем честный отказ. Пользователь доверяет фактам."
                     f"\n\n📝 КОНТЕНТ-ИНТЕЛЛЕКТ (если задача включает посты/публикации):"
                     f"\n  Перед созданием контента ПОДУМАЙ:"
                     f"\n  1. ЧТО ЗАЦЕПИТ АУДИТОРИЮ? Голая информация скучна — нужна история, цифра, провокация или визуал."
