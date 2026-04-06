@@ -2202,6 +2202,13 @@ class HybridAutonomousAgent:
                 params['__block_error__'] = (f"⛔ {_rcpt} — фейковый или generic email. "
                                              "Найди реальный email получателя через поиск или контакты.")
                 return params
+            # GUARD: блокируем email с невалидными символами в local-part (/, пробелы, +github)
+            _rcpt_local = _rcpt.split('@')[0] if '@' in _rcpt else ''
+            if '/' in _rcpt_local or ' ' in _rcpt or '+github' in _rcpt_local:
+                params['__skip__'] = True
+                params['__block_error__'] = (f"⛔ {_rcpt} — некорректный email (содержит спецсимволы). "
+                                             "Это не персональный адрес. Найди реальный email.")
+                return params
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:

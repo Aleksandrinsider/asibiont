@@ -18371,9 +18371,19 @@ class AnchorEngine:
                         'training', 'education', 'community', 'social', 'podcast',
                         'editor', 'editorial', 'submissions', 'apply', 'donate',
                     }
-                    if _email_prefix in _GENERIC_SKIP or 'decision-maker' in _email_prefix:
+                    # Точное совпадение ИЛИ generic слово в составном префиксе (python-genai-team → 'team')
+                    _prefix_parts_set = set(re.split(r'[._\-+]', _email_prefix))
+                    if _email_prefix in _GENERIC_SKIP or (_prefix_parts_set & _GENERIC_SKIP) or 'decision-maker' in _email_prefix:
                         d_obj.status = 'failed'
+                        _draft_failures.append(f'{d_obj.id}:generic_prefix:{_email_prefix}')
                         logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: generic email prefix '{_email_prefix}'")
+                        continue
+
+                    # ── GUARD: невалидные символы в local-part (/, пробелы, unicode) ──
+                    if '/' in _email_prefix or ' ' in _email_lower or '+github' in _email_prefix:
+                        d_obj.status = 'failed'
+                        _draft_failures.append(f'{d_obj.id}:malformed_email')
+                        logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: malformed email '{_email_lower[:50]}'")
                         continue
 
                     name = (d_obj.recipient_name or '').strip()
@@ -18567,6 +18577,14 @@ class AnchorEngine:
                             d_obj.status = 'failed'
                             _draft_failures.append(f'{d_obj.id}:guard:{_guard_reason[:60]}')
                             logger.info(f"[ANCHOR] Draft #{d_obj.id} permanently failed guard: {_guard_reason[:120]}")
+                            continue
+                        elif result and ('⚠' in result or 'не принимает' in result.lower() or 'уже получал' in result.lower()
+                                          or 'уже ответил' in result.lower() or 'уже отправлено' in result.lower()
+                                          or 'нужны subject' in result.lower()):
+                            # Non-⛔ guard rejections — mark failed, don't retry
+                            d_obj.status = 'failed'
+                            _draft_failures.append(f'{d_obj.id}:guard_soft:{(result or "")[:80]}')
+                            logger.info(f"[ANCHOR] Draft #{d_obj.id} soft guard: {(result or '')[:120]}")
                             continue
                         elif result and ('resend api' in result.lower() or 'не настроен' in result.lower() or 'domain' in result.lower()):
                             # Постоянная ошибка конфигурации — прекращаем всю партию,
