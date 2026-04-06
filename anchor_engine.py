@@ -7353,6 +7353,7 @@ class AnchorEngine:
                         # Truncate overly long agent messages (keep it concise for chat)
                         if len(_cleaned_result) > 900:
                             _cleaned_result = _cleaned_result[:900].rsplit(' ', 1)[0] + '…'
+                        _cleaned_result = _finish_sentence(_cleaned_result)
                         # Sanitize tool names from user-facing text
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result)
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
@@ -13585,6 +13586,7 @@ class AnchorEngine:
                                         except Exception: pass
                                     # Deduped — НЕ отправляем в Telegram, только AAL для хронологии
                                     return True
+                                _report_text = _finish_sentence(_report_text)
                                 _sum_sess.add(Interaction(
                                     user_id=user.id,
                                     message_type='proactive',
