@@ -492,12 +492,21 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         
         logger.info(f"Auto-post created for user {user_id}")
 
-        # === Публикация в Telegram канал с картинкой (если настроен) ===
-        channel_published = False
+        # === Генерация картинки для поста (отображается в дашборде и каналах) ===
         image_url = ""
+        try:
+            image_url = await _generate_image_for_post(content)
+            if image_url:
+                post.image_url = image_url
+                session.commit()
+                logger.info(f"[AUTO_POST] Image saved to post {post.id}")
+        except Exception as img_err:
+            logger.warning(f"[AUTO_POST] Image generation failed for {user_id}: {img_err}")
+
+        # === Публикация в Telegram канал (если настроен) ===
+        channel_published = False
         if user.telegram_channel:
             try:
-                image_url = await _generate_image_for_post(content)
                 channel_published = await _publish_post_to_channel(user_id, content, image_url, session)
                 if channel_published:
                     logger.info(f"[AUTO_POST] Published to channel {user.telegram_channel} for user {user_id}, image={'yes' if image_url else 'no'}")
@@ -524,6 +533,8 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
                 async with aiohttp.ClientSession() as dc_session:
                     dc_payload = {"content": content}
+                    if image_url:
+                        dc_payload["embeds"] = [{"image": {"url": image_url}}]
                     async with dc_session.post(
                         user.discord_webhook,
                         json=dc_payload,

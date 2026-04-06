@@ -1050,7 +1050,7 @@ class HybridAutonomousAgent:
 
     # Единый бюджет символов (~3 chars/token для русского текста)
     MAX_PROMPT_CHARS  = 45000  # reduced from 60K: forces trimming of additions to base prompt
-    MAX_HISTORY_CHARS = 3000   # limit history to ~1K tokens
+    MAX_HISTORY_CHARS = 6000   # ~2K tokens of conversation history
 
     @staticmethod
     def _estimate_tokens(text):

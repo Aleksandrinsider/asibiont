@@ -698,7 +698,7 @@ async def generate_result_check(user_id, task_title):
             user_id=user_id,
             mode='result_check',
             instruction=instruction,
-            max_tokens=150,
+            max_tokens=300,
             max_iterations=1
         )
 

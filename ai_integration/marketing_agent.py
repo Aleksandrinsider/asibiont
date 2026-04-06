@@ -417,17 +417,18 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
             if image_url:
                 # Публикуем фото с подписью
                 tg_method = 'sendPhoto'
+                caption_text = post_text[:1024]  # Telegram caption limit
                 tg_payload = {
                     'chat_id': channel,
                     'photo': image_url,
-                    'caption': post_text[:1024],  # Telegram caption limit
+                    'caption': caption_text,
                     'parse_mode': 'Markdown'
                 }
             else:
                 tg_method = 'sendMessage'
                 tg_payload = {
                     'chat_id': channel,
-                    'text': post_text,
+                    'text': post_text[:4096],  # Telegram message limit
                     'parse_mode': 'Markdown'
                 }
 
@@ -450,6 +451,24 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                             result = await retry_resp.json()
 
                 if result.get('ok'):
+                    # Если текст не влез в caption (>1024) — допосылаем остаток отдельным сообщением
+                    if image_url and len(post_text) > 1024:
+                        remaining_text = post_text[1024:]
+                        try:
+                            _cont_payload = {
+                                'chat_id': channel,
+                                'text': remaining_text[:4096],
+                            }
+                            async with http_session.post(
+                                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
+                                json=_cont_payload
+                            ) as _cont_resp:
+                                _cont_result = await _cont_resp.json()
+                                if not _cont_result.get('ok'):
+                                    logger.warning(f"[PUBLISH] Failed to send continuation text: {_cont_result}")
+                        except Exception as _ce:
+                            logger.warning(f"[PUBLISH] Continuation text error: {_ce}")
+
                     logger.info(f"[PUBLISH] Successfully published to {channel}")
 
                     # Создаем задачу-отчет об успешной публикации (с защитой от дублей)

@@ -6529,7 +6529,7 @@ class AnchorEngine:
                                 f"не сообщают ничего нового. Вместо этого сразу скажи что делаешь: "
                                 f"«Открываю почту, проверю ответы» или «Ищу через web_search авторов на dev.to»."
                             )
-                            _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=120)
+                            _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=250)
                             if _ack_gen and len(_ack_gen.strip()) > 4:
                                 _ack_text = _ack_gen.strip()
                                 # Safety net: если промпт не помог и ack всё равно пустой
@@ -8100,7 +8100,7 @@ class AnchorEngine:
                     f"Пиши от своего имени пользователю. Живо, конкретно. Без [АВТОПИЛОТ], без markdown."
                 )
                 _tr_gen = await asyncio.wait_for(
-                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=70),
+                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=150),
                     timeout=8,
                 )
                 if _tr_gen and len(_tr_gen.strip()) > 15:
@@ -10142,15 +10142,10 @@ class AnchorEngine:
 
                     if _res_lines:
                         _agent_results_str = (
-                            '\n🔁 ДАННЫЕ АГЕНТОВ ИЗ ПРОШЛЫХ ЦИКЛОВ (ОБЯЗАТЕЛЬНО используй при планировании!):\n'
+                            '\n🔁 ДАННЫЕ АГЕНТОВ ИЗ ПРОШЛЫХ ЦИКЛОВ:\n'
                             + '\n'.join(_res_lines)
-                            + '\n  ⚡ ПРАВИЛО ПЕРЕДАЧИ ДАННЫХ: когда даёшь задачу на основе чужих результатов —\n'
-                            + '     КОПИРУЙ конкретные данные (имена, email, ссылки, цифры) В ТЕКСТ ЗАДАЧИ.\n'
-                            + '     ПЛОХО: "Напиши письма найденным контактам" — агент не знает КОМУ.\n'
-                            + '     ХОРОШО: "Напиши персональное письмо Иванову ivan@co.ru (CTO стартапа X, интерес: AI)"\n'
-                            + '  → Если агент A нашёл контакты — передай имена+email агенту B в тексте задачи.\n'
-                            + '  → Если агент A собрал аналитику — передай ключевые факты агенту B для поста/письма.\n'
-                            + '  → Если данных из прошлого цикла достаточно — НЕ повторяй поиск, сразу действуй.\n\n'
+                            + '\n  → Копируй конкретные данные (имена, email, ссылки) в текст задачи.\n'
+                            + '  → Не повторяй поиск если данные уже собраны.\n\n'
                         )
             except Exception as _ar_err:
                 logger.debug("[COORD] agent results harvest: %s", _ar_err)
@@ -12412,7 +12407,7 @@ class AnchorEngine:
                             f" Напиши 1-2 предложения. Разговорно, без markdown."
                         )
                         _relay_txt = await asyncio.wait_for(
-                            _quick_ai_call_raw([{'role': 'user', 'content': _relay_p}], max_tokens=120),
+                            _quick_ai_call_raw([{'role': 'user', 'content': _relay_p}], max_tokens=200),
                             timeout=8,
                         )
                         if _relay_txt and len(_relay_txt.strip()) > 15:
