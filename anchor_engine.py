@@ -989,6 +989,20 @@ def _smart_trunc(text: str, limit: int = 200) -> str:
     return _chunk + '…'
 
 
+def _finish_sentence(text: str) -> str:
+    """Ensure text ends at a sentence boundary, not mid-word."""
+    if not text:
+        return text
+    t = text.rstrip()
+    if t[-1:] in '.!?»)':
+        return t
+    for sep in ('.', '!', '?', '»'):
+        pos = t.rfind(sep)
+        if pos > len(t) // 3:
+            return t[:pos + 1]
+    return t
+
+
 def _build_recent_suggestion_guard(agent_history: list | None = None,
                                    team_history: dict | None = None) -> str:
     """Мягкая самопроверка на повторение одной и той же идеи.
@@ -6748,35 +6762,11 @@ class AnchorEngine:
                     _goals_summary = data.get('goals', [])
                     if _goals_summary and self.bot:
                         _goal_lines = ', '.join(g.get('title', '')[:50] for g in _goals_summary[:3])
-                        _fallback_msg = f"Работаю над целями: {_goal_lines}. Анализирую возможные шаги."
-                        _skip_fallback_cap = (
-                            _chosen_id != 0 and self._agent_persona_daily_cap_reached(session, user, agent_name)
+                        # Hollow fallback suppressed — anchor will be retried in 45 min
+                        logger.info(
+                            "[ANCHOR-AUTOPILOT] user %d: AI call failed, suppressing hollow fallback for %s",
+                            user.id, agent_name,
                         )
-                        if _skip_fallback_cap:
-                            logger.info(
-                                "[ANCHOR-AUTOPILOT] user %d: skip fallback from %s (daily cap=%d)",
-                                user.id,
-                                agent_name,
-                                MAX_AGENT_PERSONA_MSG_PER_DAY,
-                            )
-                        else:
-                            try:
-                                await self.bot.send_message(chat_id=user.telegram_id, text=_fallback_msg)
-                                session.add(Interaction(
-                                    user_id=user.id,
-                                    message_type='proactive',
-                                    content=json.dumps({
-                                        '__agent': {'name': agent_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
-                                        'text': _fallback_msg,
-                                        '__anchor_type': 'goal_autopilot_review',
-                                    }, ensure_ascii=False),
-                                ))
-                                session.commit()
-                            except Exception:
-                                try:
-                                    session.rollback()
-                                except Exception:
-                                    pass
                     # ВАЖНО: якорь уже был помечен delivered до AI-вызова для crash-safety.
                     # Если сам AI-вызов упал, возвращаем якорь в очередь с snooze,
                     # чтобы он был ретраен позже и не терялся навсегда.
@@ -8263,8 +8253,8 @@ class AnchorEngine:
                     f"Пиши от своего имени пользователю. Живо, конкретно. Без [АВТОПИЛОТ], без markdown."
                 )
                 _tr_gen = await asyncio.wait_for(
-                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=150),
-                    timeout=8,
+                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=250),
+                    timeout=10,
                 )
                 if _tr_gen and len(_tr_gen.strip()) > 15:
                     _transfer_text = _tr_gen.strip()
@@ -8285,6 +8275,7 @@ class AnchorEngine:
                 _transfer_text,
                 flags=re.IGNORECASE,
             )
+            _transfer_text = _finish_sentence(_transfer_text)
             # Dedup: пропускаем уведомление если совсем недавно было проактивное сообщение (≤5 мин)
             _chain_transfer_gap_ok = True
             try:
@@ -8411,6 +8402,7 @@ class AnchorEngine:
                 or _is_delegation_message(_chain_clean, _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
+                _chain_clean = _finish_sentence(_chain_clean)
                 _chain_sanitized = _sanitize_proactive_text(_chain_clean)
                 try:
                     await self.bot.send_message(
