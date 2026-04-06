@@ -11854,6 +11854,17 @@ class AnchorEngine:
                         _assignment_health.get('gap', 0),
                     )
                     continue
+                # Гард: пустой/слишком короткий текст — не сохраняем
+                if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
+                    logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
+                    continue
+                # Финализация обрезанных предложений: если текст обрывается на предлоге/союзе — обрезаем до последней точки
+                _DANGLING_ENDS = ('а не', 'и ', 'а ', 'но ', 'это ', 'что ', 'для ', 'от ', 'на ', 'к ', 'по ', 'или ', 'при ', 'в ', 'из ', 'до ')
+                _aat_stripped = _asi_assign_text.rstrip('. ,;:')
+                if any(_aat_stripped.lower().endswith(d.rstrip()) for d in _DANGLING_ENDS):
+                    _last_dot = _asi_assign_text.rfind('.')
+                    if _last_dot > len(_ag_name) + 10:
+                        _asi_assign_text = _asi_assign_text[:_last_dot + 1]
                 try:
                     session.add(Interaction(
                         user_id=user.id,
