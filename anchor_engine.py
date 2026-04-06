@@ -2249,6 +2249,21 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "\nТВОЯ ИСТОРИЯ (последние действия — используй как основу, развивай дальше):\n"
             + '\n'.join(_mem_lines) + '\n'
         )
+        # ── Outcome effectiveness: classify results vs assignments ──
+        _n_results = sum(1 for h in agent_history[:10] if '→ РЕЗУЛЬТАТ' in h)
+        _n_assigns = sum(1 for h in agent_history[:10] if '← ПОРУЧЕНИЕ' in h)
+        if _n_assigns > 0 and _n_results == 0:
+            _memory_block += (
+                "\n⚠️ ЭФФЕКТИВНОСТЬ: за последние циклы ты получил поручения, но не сдал ни одного результата.\n"
+                "→ Сфокусируйся на ДЕЙСТВИИ (send, create, publish), а не на подготовке (search, research).\n"
+            )
+        elif _n_results > 0 and _n_assigns > 0:
+            _result_ratio = round(_n_results / max(_n_assigns, 1) * 100)
+            if _result_ratio < 50:
+                _memory_block += (
+                    f"\n📊 ЭФФЕКТИВНОСТЬ: {_n_results} результатов из {_n_assigns} поручений ({_result_ratio}%).\n"
+                    "→ Меньше половины поручений дают результат. Подумай что мешает и смени подход.\n"
+                )
         _memory_block += _build_recent_suggestion_guard(agent_history=agent_history, team_history=team_history)
         if _force_analyse:
             # Предлагаем конкретные альтернативы с учётом типа агента и типа цели
@@ -6078,6 +6093,31 @@ class AnchorEngine:
                                     _dynamic_examples.append(_ue.format(name=_chosen_name))
                         _dynamic_examples_str = '\n'.join(f'  {e}' for e in _dynamic_examples)
 
+                        # ── Compact effectiveness context for _coord_prompt ──
+                        _coord_effectiveness_c = ''
+                        if 'email' in _cats_c:
+                            try:
+                                _ee_sent = session.query(EmailOutreach).filter(
+                                    EmailOutreach.user_id == user.id,
+                                ).count()
+                                _ee_replied = session.query(EmailOutreach).filter(
+                                    EmailOutreach.user_id == user.id,
+                                    EmailOutreach.status == 'replied',
+                                ).count()
+                                if _ee_sent >= 3:
+                                    _ee_rate = round(_ee_replied / _ee_sent * 100)
+                                    _coord_effectiveness_c = (
+                                        f"\n📊 Email: {_ee_sent} отправлено, {_ee_replied} ответов ({_ee_rate}%)."
+                                    )
+                                    if _ee_rate < 5 and _ee_sent > 20:
+                                        _coord_effectiveness_c += " Конверсия низкая — смени подход: другая тема, другая аудитория, follow-up.\n"
+                                    elif _ee_rate > 15:
+                                        _coord_effectiveness_c += " Конверсия хорошая — продолжай этот подход.\n"
+                                    else:
+                                        _coord_effectiveness_c += "\n"
+                            except Exception:
+                                pass
+
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
@@ -6086,6 +6126,7 @@ class AnchorEngine:
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (f"Результаты команды за последний цикл:\n{_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
+                            + _coord_effectiveness_c
                             + (f"\n💬 ПОСЛЕДНИЙ ОТВЕТ {_chosen_name.upper()} (прочитай внимательно — это реальный результат):\n{_last_agent_reply_c}\n"
                                f"→ Отталкивайся от этого: если агент сообщил о проблеме или результате — твоё новое поручение должно учитывать ЭТО.\n"
                                f"   Если домен не работает — не присылай тот же адрес. Если поиск дал 0 результатов — смени стратегию.\n"
@@ -15324,7 +15365,16 @@ class AnchorEngine:
                     _txt = (_j.get('text', '') or '')[:350]
                     _tl = _j.get('__tools_used', [])
                     _tl_s = f"[{', '.join(_tl)}] " if _tl else ''
-                    _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:300]}"
+                    # ── Outcome tag: classify entry as result/assignment/noise ──
+                    _anchor_t = _j.get('__anchor_type', '')
+                    if _anchor_t in ('goal_autopilot_result', 'coordinator_result', 'agent_chain_continue'):
+                        _outcome_tag = '→ РЕЗУЛЬТАТ'
+                    elif _anchor_t in ('goal_autopilot_assignment', 'coordinator_assignment'):
+                        _outcome_tag = '← ПОРУЧЕНИЕ'
+                    else:
+                        _outcome_tag = ''
+                    _outcome_s = f" {_outcome_tag}" if _outcome_tag else ''
+                    _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:300]}{_outcome_s}"
                     _per_agent_history.setdefault(_ag_nm, [])
                     if len(_per_agent_history[_ag_nm]) < 12:
                         _per_agent_history[_ag_nm].append(_entry)
@@ -15370,6 +15420,11 @@ class AnchorEngine:
                 else:
                     _guessed = '[research_topic]'
                 _entry_aal = f"{_aal_ts} {_guessed} {_aal_title}: {_aal_content}"
+                # ── AAL outcome tag: add result preview if available ──
+                _aal_result = (str(_api.result or '')).strip()
+                if _aal_result and len(_aal_result) > 10:
+                    _aal_res_short = _aal_result[:120].rsplit(' ', 1)[0] if len(_aal_result) > 120 else _aal_result
+                    _entry_aal += f" → {_aal_res_short}"
                 _per_agent_history.setdefault(_ag_nm_aal, [])
                 if len(_per_agent_history[_ag_nm_aal]) < 12:
                     _per_agent_history[_ag_nm_aal].append(_entry_aal)
