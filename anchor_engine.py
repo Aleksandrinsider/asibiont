@@ -5664,6 +5664,52 @@ class AnchorEngine:
                                 except Exception:
                                     pass
 
+                                # ── No-result search pattern detector ──
+                                # Если агент искал одно и то же 2+ раз и каждый раз находил 0 результатов —
+                                # добавляем явный запрет в контекст координатора
+                                try:
+                                    _nr_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=6)
+                                    _nr_logs = session.query(_AAL_coord_ctx.title, _AAL_coord_ctx.result).filter(
+                                        _AAL_coord_ctx.user_id == user.id,
+                                        _AAL_coord_ctx.activity_type == 'agent_task',
+                                        _AAL_coord_ctx.created_at >= _nr_cutoff,
+                                    ).order_by(_AAL_coord_ctx.created_at.desc()).limit(20).all()
+                                    # Группируем шаблоны «нет результатов» по ключевым словам
+                                    _nr_patterns = [
+                                        ('github.*email|email.*github|разработчик.*email|email.*разработчик|поиск.*email.*developer|developer.*email',
+                                         'поиск email разработчиков через GitHub/web',
+                                         'dev.to профили, Hacker News comments, или write.as/hashnode'),
+                                        ('pdf.*email|email.*pdf|документ.*email',
+                                         'поиск email в PDF-документах',
+                                         'LinkedIn через web_search или прямой outreach по известным доменам'),
+                                        ('github.*контакт|контакт.*github',
+                                         'поиск контактов на GitHub',
+                                         'ProductHunt, AngelList или dev.to'),
+                                    ]
+                                    _nr_no_result_phrases = ['не нашёл', 'нет результат', 'нет email', '0 контакт', 'не удалось найти',
+                                                             'нашёл только pdf', 'не дал', 'без результат', 'no results', 'not found']
+                                    import re as _re_nr
+                                    _nr_blocks = []
+                                    for _nr_pattern, _nr_label, _nr_alt in _nr_patterns:
+                                        _nr_hits = 0
+                                        for _nr_t, _nr_r in _nr_logs:
+                                            _nr_combined = ((_nr_t or '') + ' ' + (_nr_r or '')).lower()
+                                            if _re_nr.search(_nr_pattern, _nr_combined) and any(p in _nr_combined for p in _nr_no_result_phrases):
+                                                _nr_hits += 1
+                                        if _nr_hits >= 2:
+                                            _nr_blocks.append(
+                                                f'  🚫 {_nr_label} — {_nr_hits} попыт. подряд без результата. '
+                                                f'Используй вместо этого: {_nr_alt}.'
+                                            )
+                                    if _nr_blocks:
+                                        _failed_tasks_ctx += (
+                                            '\n🛑 ЗАПРЕЩЁННЫЕ ПОДХОДЫ (повторяются без результата):\n'
+                                            + '\n'.join(_nr_blocks)
+                                            + '\n  → Эти стратегии не работают. Выбери ДРУГОЙ источник или канал.\n'
+                                        )
+                                except Exception:
+                                    pass
+
                                 # Детектор зацикливания: считаем упоминания каналов в последних циклах
                                 _all_recent_text_c = ' '.join((a.result or '') for a in _last_aals_c).lower()
                                 _tg_count_c = _all_recent_text_c.count('telegram') + _all_recent_text_c.count('ъелеграм') + _all_recent_text_c.count('tg-') + _all_recent_text_c.count('тг-')
@@ -7146,10 +7192,17 @@ class AnchorEngine:
                             if not _cleaned_result or not _cleaned_result.strip():
                                 logger.info("[ANCHOR-AUTOPILOT] user %d: skip empty cleaned result from %s", user.id, _chosen_name)
                             else:
-                                await _safe_send(
-                                    self.bot, user.telegram_id,
-                                    f"{_chosen_name} — отчёт:\n{_cleaned_result}",
-                                )
+                                # Если результат содержит делегирование — chain_transfer отправит своё сообщение
+                                # (пользователь сказал: format chain_transfer лучше)
+                                # Не дублируем → пропускаем main Telegram send, но сохраняем в БД
+                                _has_delegate = bool(re.search(r'DELEGATE\[', result or ''))
+                                if not _has_delegate:
+                                    await _safe_send(
+                                        self.bot, user.telegram_id,
+                                        f"{_chosen_name} — отчёт:\n{_cleaned_result}",
+                                    )
+                                else:
+                                    logger.info("[ANCHOR-AUTOPILOT] main result send skipped (chain_transfer will handle): %s", _chosen_name)
                                 # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                                 # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
                                 # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
@@ -13390,7 +13443,7 @@ class AnchorEngine:
         _MIN_COOLDOWN_OVERRIDE = {
             'goal_autopilot_review': 0.25,  # ~15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
             'email_need_leads': 0.5,  # was 1.5 — too slow (7 searches/day vs ~30 with 0.5h)
-            'chat_ai_review': 1.5,
+            'chat_ai_review': 3.0,  # min 3ч между одинаковыми review (было 1.5h)
         }
         _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
         try:
@@ -14154,6 +14207,31 @@ class AnchorEngine:
         if _slot <= 0:
             return anchors
 
+        # Topic-based dedup: если последний chat_ai_review был о той же теме — пропускаем
+        try:
+            _last_review_msg = session.query(Interaction.content).filter(
+                Interaction.user_id == user.id,
+                Interaction.message_type == 'proactive',
+                Interaction.content.like('%chat_ai_review%'),
+                Interaction.created_at >= now_utc - timedelta(hours=3),
+            ).order_by(Interaction.created_at.desc()).first()
+            if _last_review_msg:
+                try:
+                    _lrm_j = json.loads(_last_review_msg[0])
+                    _lrm_txt = (_lrm_j.get('text', '') or '').lower()
+                    _last_chat_txt = (last_chat_msg.content or '').lower()
+                    # Общие ключевые слова между последним review и текущим диалогом
+                    _lrm_words = set(w for w in _lrm_txt.split() if len(w) > 5)
+                    _lcm_words = set(w for w in _last_chat_txt.split() if len(w) > 5)
+                    _overlap = _lrm_words & _lcm_words
+                    if len(_overlap) >= 3:
+                        logger.info("[CHAT_REVIEW] skip: same topic overlap %d words with last review", len(_overlap))
+                        return anchors
+                except Exception:
+                    pass
+        except Exception as _e:
+            logger.debug("suppressed chat_review topic check: %s", _e)
+
         _recent_chat = session.query(Interaction).filter(
             Interaction.user_id == user.id,
             Interaction.message_type.in_(['user', 'ai']),
@@ -14184,7 +14262,7 @@ class AnchorEngine:
             }, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=2),
-            cooldown_hours=1.0,  # раз в 1ч (было 0.25h с уникальным source — кулдаун не работал)
+            cooldown_hours=3.0,  # 3ч — чтобы одна тема не дублировалась в чате
             batch_group='engagement',
         ))
 
