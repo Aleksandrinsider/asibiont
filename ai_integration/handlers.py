@@ -12100,18 +12100,20 @@ async def send_outreach_email(
         if _rcpt and '@' in _rcpt:
             _rcpt_local, _rcpt_domain = _rcpt.rsplit('@', 1)
             if _rcpt_domain in _FORTUNE500_DOMAINS:
+                import logging as _log_f500
+                _log_f500.getLogger('anchors').info(f"[EMAIL] Fortune 500 domain skipped: {_rcpt}")
                 return (
-                    f"⛔ {_rcpt} — корпоративный адрес крупнейшей мировой компании ({_rcpt_domain}). "
-                    f"Холодный outreach на адреса Fortune 500 не результативен и вредит репутации домена отправителя. "
-                    f"Целевая аудитория: стартапы, малый/средний бизнес, инди-разработчики, AI-энтузиасты."
+                    f"⚠️ {_rcpt} — корпоративный адрес крупной компании ({_rcpt_domain}). "
+                    f"Холодный outreach на Fortune 500 обычно не результативен. "
+                    f"Лучше писать стартапам, инди-разработчикам, малому/среднему бизнесу — но решать тебе."
                 )
             if any(_rcpt_local.startswith(pref) for pref in _CSUITE_PREFIXES):
                 # Дополнительно проверим: домен крупной компании или C-suite prefix явный?
                 _csuite_explicit = any(_rcpt_local == pref for pref in ('ceo', 'cto', 'cfo', 'coo', 'cmo', 'chairman'))
                 if _csuite_explicit:
                     return (
-                        f"⛔ {_rcpt} — похоже на email C-suite руководителя (префикс '{_rcpt_local}'). "
-                        f"Такие адреса обычно заблокированы или не читаются лично. Найди более подходящий контакт."
+                        f"⚠️ {_rcpt} — похоже на email C-suite руководителя (префикс '{_rcpt_local}'). "
+                        f"Такие адреса обычно не читаются лично. Лучше найти более подходящий контакт."
                     )
 
         # ── GUARD: плейсхолдеры в теле письма ──
