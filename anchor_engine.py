@@ -6161,7 +6161,7 @@ class AnchorEngine:
                             "  BAD: «...поддерживать диалог с.» ← оборванное предложение.\n"
                             "✅ Если твоё поручение не проходит все 6 шагов — перепиши его."
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=800)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=500)
                         _VAGUE_COORD_PATTERNS = (
                             'посмотри что можно', 'поработай над', 'займись',
                             'сделай что-нибудь', 'подумай что можно', 'проверь что можно',
@@ -6202,6 +6202,16 @@ class AnchorEngine:
                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
                             else:
                                 _coord_text = _gen_s
+                                # ── Truncation guard: если LLM обрезал на середине предложения ──
+                                if _coord_text and not _coord_text[-1] in '.!?»")\n':
+                                    _last_sentence_end = max(
+                                        _coord_text.rfind('.'),
+                                        _coord_text.rfind('!'),
+                                        _coord_text.rfind('?'),
+                                    )
+                                    if _last_sentence_end > len(_coord_text) * 0.4:
+                                        _coord_text = _coord_text[:_last_sentence_end + 1].strip()
+                                        logger.info("[COORD] truncation-guard: trimmed to last complete sentence")
                                 # ── Fix infinitives after "пожалуйста" → imperative ──
                                 _INF_TO_IMP = {
                                     'найти': 'найди', 'создать': 'создай', 'проверить': 'проверь',
@@ -10723,6 +10733,38 @@ class AnchorEngine:
                     else:
                         logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
+
+            # ── Capability-mismatch guard: переназначает задачу если агент не имеет нужной интеграции ──
+            _EMAIL_TASK_KW = ('email', 'письм', 'outreach', 'follow-up', 'follow_up', 'рассыл',
+                              'send_outreach', 'check_emails', 'reply_to', 'negotiate_by_email',
+                              'send_follow_up', 'входящ', 'imap', 'smtp', 'почт')
+            _plan_cap_fixed = []
+            for _pcf in _plan:
+                _pcf_agent = (_pcf.get('agent') or '').strip()
+                _pcf_task_l = (_pcf.get('task') or '').lower()
+                _pcf_tool_l = (_pcf.get('tool') or '').lower()
+                _pcf_combined = _pcf_task_l + ' ' + _pcf_tool_l
+                _pcf_caps = _agent_caps_categories.get(_pcf_agent, set())
+                _needs_email = any(kw in _pcf_combined for kw in _EMAIL_TASK_KW)
+                if _needs_email and 'email' not in _pcf_caps:
+                    # Найти агента с email-интеграцией
+                    _email_agent = next(
+                        (p['name'] for p in _profiles if 'email' in _agent_caps_categories.get(p['name'], set())),
+                        None,
+                    )
+                    if _email_agent and _email_agent != _pcf_agent:
+                        logger.info(
+                            "[COORD] cap-mismatch: reroute email task from %s → %s: %s",
+                            _pcf_agent, _email_agent, _pcf_task_l[:80],
+                        )
+                        _pcf['agent'] = _email_agent
+                    else:
+                        # Нет email-агента → дропаем шаг, он невыполним
+                        logger.info("[COORD] cap-mismatch: drop email task for %s (no email agent): %s",
+                                    _pcf_agent, _pcf_task_l[:60])
+                        continue
+                _plan_cap_fixed.append(_pcf)
+            _plan = _plan_cap_fixed if _plan_cap_fixed else _plan
 
             # ── Goal-title-copy guard: координатор не должен копировать название цели как задачу ──
             _goal_titles_lower = {g['title'].lower().strip() for g in _goals if g.get('title')}
@@ -15369,6 +15411,7 @@ class AnchorEngine:
             ).order_by(EmailOutreach.reply_at.desc().nullslast()).limit(10).all()
             # Дедупликация по email: если на этот адрес уже отвечали через другую запись — пропуск
             # Спам-лимит: не более 2 AI-ответов на контакт
+            # + cooldown: если AI-ответ отправлен сегодня — не назначать повторно
             _MAX_AI_REPLIES_COORD = 2
             try:
                 from models import EmailOutreach as _EO_dedup
@@ -15385,6 +15428,18 @@ class AnchorEngine:
                     for r in _reply_counts_rows
                     if (r.cnt or 0) >= _MAX_AI_REPLIES_COORD
                 }
+                # Cooldown: если AI уже ответил этому контакту за последние 24ч — не назначать снова
+                _reply_cooldown_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+                _recent_ai_replied = session.query(
+                    _EO_dedup.recipient_email,
+                ).filter(
+                    _EO_dedup.user_id == user.id,
+                    _EO_dedup.ai_reply_sent_at >= _reply_cooldown_cutoff,
+                ).all()
+                _recently_replied_emails = {
+                    (r.recipient_email or '').lower() for r in _recent_ai_replied
+                }
+                _already_ai_replied_emails |= _recently_replied_emails
             except Exception:
                 _already_ai_replied_emails = set()
             import re as _re_pr_clean
