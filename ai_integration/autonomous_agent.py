@@ -5120,6 +5120,8 @@ _INTEGRATION_LABELS: dict = {
     'FIRESTORE': 'Firebase/Firestore',
     'CALENDLY': 'Calendly',
     'PLAYWRIGHT': 'Playwright (scraping)',
+    'DEEPSEEK_API': 'DeepSeek AI API',
+    'DEEPSEEK_KEY': 'DeepSeek AI API',
 }
 
 

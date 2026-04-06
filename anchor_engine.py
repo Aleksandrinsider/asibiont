@@ -139,8 +139,8 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('яндекс.директ', 'yandex_direct', 'direct_token', 'yandex direct'), 'advertising'),
     # Web Scraping
     (('playwright', 'selenium', 'scrape_url', 'scraping'), 'scraping'),
-    # AI/LLM API (внешние, не DeepSeek платформы)
-    (('openai_api', 'openai_key', 'openai', 'gemini', 'anthropic', 'claude', 'gpt'), 'ai_api'),
+    # AI/LLM API (внешние)
+    (('openai_api', 'openai_key', 'openai', 'gemini', 'anthropic', 'claude', 'gpt', 'deepseek'), 'ai_api'),
     # Airtable (расширение категории sheets)
     (('airtable',), 'sheets'),
     # CoinGecko (крипто-данные)
@@ -196,7 +196,8 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'social': 'run_agent_action(action="post_wall", params={"text":"..."}) для VK',
     'payments': 'run_agent_action(action="create_payment_link", params={"amount":..., "name":"..."})',
     'calendar': 'run_agent_action(action="create_event", params={"summary":"...","start":"2026-04-03T10:00:00+03:00","end":"..."}). Без action — список событий.',
-    'calls': 'run_agent_action(action="send_sms"|"send", params={"to":"+7...","message":"..."})',
+    # WhatsApp: run_agent_action(action="send_message"), Twilio SMS: action="send_sms", телефония: action="send"
+    'calls': 'run_agent_action(action="send_message"|"send_sms"|"send", params={"to":"+7...","message":"..."})',
     'script': 'run_agent_action(action="[точное имя ACTION из python_code агента]")',
     'image_gen': 'generate_image(prompt="...")',
     'storage': 'run_agent_action(action="upload"|"download"|"list_files", params={"path":"..."})',
@@ -5517,16 +5518,11 @@ class AnchorEngine:
                     ) if data.get('goals') else ''
                     # Fallback: конкретное поручение на основе целей и интеграций агента
                     # Ротируем по непочтовым интеграциям прежде чем давать email
-                    _goal_titles_fb = [g.get('title', '')[:40] for g in data.get('goals', [])[:2] if g.get('title')]
+                    _goal_titles_fb = [g.get('title', '')[:40] for g in data.get('goals', [])[:5] if g.get('title')]
                     _non_email_cats = sorted(_cats_c - {'email'})
                     _has_email_fb = 'email' in _cats_c
-                    # Ротируем fallback-стратегии зависимо от ТИПА ЦЕЛИ и ИНТЕГРАЦИЙ агента
-                    import random as _rnd_fb
-                    _fb_strategies = []
-                    _g0 = (_goal_titles_fb[0] if _goal_titles_fb else '').lower()
-                    # Определяем тип цели по ключевым словам
-                    _goal_is_outreach = any(w in _g0 for w in ['привлеч', 'клиент', 'продаж', 'тестировщик', 'пользовател', 'контакт', 'аудитор', 'подписчик'])
-                    _goal_is_content  = any(w in _g0 for w in ['контент', 'публикац', 'пост', 'статья', 'блог', 'видео', 'канал'])
+                    # Объединяем ВСЕ цели для корректного определения типа (не только первую)
+                    _g0 = ' '.join(t.lower() for t in _goal_titles_fb)
                     _goal_is_research = any(w in _g0 for w in ['исследова', 'анализ', 'изучить', 'обучен', 'тренд', 'рынок'])
                     _goal_is_product  = any(w in _g0 for w in ['разработ', 'функционал', 'код', 'фича', 'реализ', 'техничес'])
                     _g_label = _goal_titles_fb[0] if _goal_titles_fb else 'активные цели'
@@ -6043,10 +6039,10 @@ class AnchorEngine:
                             "Если задача требует Telegram-контакта — замени на: «найди email через web_search и отправь через send_outreach_email». "
                             "DELEGATE другому агенту бесполезен если у ТОГО тоже нет нужной интеграции.\n\n"
                             "❌ ПРИМЕРЫ ПЛОХИХ ПОРУЧЕНИЙ:\n"
-                            "  BAD: «Марк, есть задача — марк зациклен на поиске, нужно перевести его в режим создания ценности.» "
-                            "← мета-комментарий. Правильно: «Марк, запусти web_search по dev.to, найди 3 автора с email.»\n"
-                            "  BAD: «Кристина, пожалуйста создать аналитический пост» "
-                            "← инфинитив + нет запятой. Правильно: «Кристина, пожалуйста, создай аналитический пост».\n"
+                            "  BAD: «[Агент], есть задача — агент зациклен на поиске, нужно перевести его в режим создания ценности.» "
+                            "← мета-комментарий. Правильно: «[Агент], запусти web_search по dev.to, найди 3 автора с email.»\n"
+                            "  BAD: «[Агент], пожалуйста создать аналитический пост» "
+                            "← инфинитив + нет запятой. Правильно: «[Агент], пожалуйста, создай аналитический пост».\n"
                             "  BAD: «...поддерживать диалог с.» ← оборванное предложение.\n"
                             "  BAD: «напиши письма артему фирсову» ← строчные буквы. Правильно: «Артёму Фирсову».\n"
                             "✅ Если твоё поручение не проходит все 5 шагов — перепиши его."
@@ -8299,28 +8295,17 @@ class AnchorEngine:
             return failed_tools.get(tool, 0) >= 2
 
         # ── Capability detection from actual agent profiles ──
-        _DOMAIN_SIGNALS = {
-            'email': ('imap', 'gmail', 'почт', 'mail', 'smtp', 'yandex', 'mailru', 'resend'),
-            'rss': ('rss', 'feed', 'лент', 'newsapi', 'news_api'),
-            'github': ('github', 'gitlab'),
-            'alpha': ('alpha_vantage', 'alphavantage'),
-            'telegram': ('telegram_channel', 'tg_channel', 'publish_telegram'),
-            'discord': ('discord', 'discord_webhook'),
-            'crm': ('amocrm', 'hubspot', 'bitrix', 'crm'),
-            'marketplace': ('ozon', 'wildberries', 'wb_api', 'shopify', 'marketplace'),
-            'jira': ('jira', 'trello'),
-            'notion': ('notion',),
-            'sheets': ('gsheets', 'google_sheets', 'spreadsheet'),
-            'crypto': ('binance', 'bybit', 'crypto_exchange'),
-        }
+        # Используем ту же систему категорий что и весь движок (_classify_agent_caps),
+        # вместо отдельного захардкоженного словаря _DOMAIN_SIGNALS.
         _available_domains: dict = {}
         for p in profiles:
-            caps_str = ' '.join(c.lower() for c in p.get('caps', []))
+            _p_caps = _classify_agent_caps(p.get('caps', [])).get('categories', set())
             _name = p.get('name', '')
-            for domain, signals in _DOMAIN_SIGNALS.items():
-                if any(w in caps_str for w in signals):
-                    _available_domains.setdefault(domain, []).append(_name)
-        _channels_list = sorted(_available_domains.keys())
+            for _cat in _p_caps:
+                _available_domains.setdefault(_cat, []).append(_name)
+        _channels_list = sorted(
+            _CAP_CATEGORY_NAMES.get(c, c) for c in _available_domains
+        )
         _channels_summary = ', '.join(_channels_list) if _channels_list else 'встроенные (research, web_search, tasks)'
 
         # ── Email pipeline state (data-driven, goal-agnostic) ──
