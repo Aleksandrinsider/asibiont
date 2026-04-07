@@ -7444,11 +7444,8 @@ class AnchorEngine:
                                 else:
                                     logger.info("[ANCHOR-AUTOPILOT] main result send skipped (chain_transfer will handle): %s", _chosen_name)
                                 # Оборачиваем в __agent JSON для корректного отображения в веб-чате
-                                # Реальные агенты (id!=0): anchor_type → 'goal_autopilot_result' (видимый)
-                                # ASI (id=0): anchor_type → 'goal_autopilot_review' (скрытый, системный)
-                                _result_anchor_type = (
-                                    'goal_autopilot_result' if _chosen_id != 0 else anchor.anchor_type
-                                )
+                                # Все результаты автопилота — видимые (goal_autopilot_result)
+                                _result_anchor_type = 'goal_autopilot_result'
                                 _ap_goal_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
                                 _ap_goal_str = ', '.join(t for t in _ap_goal_titles if t)
                                 _agent_content = json.dumps({

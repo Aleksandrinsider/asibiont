@@ -1119,7 +1119,7 @@
                     <div class="view-container">
                         <!-- Чат с ИИ -->
                         <div id="chat-view" class="view-panel">
-                            <div id="chat-messages" class="chat-messages">
+                            <div id="chat-messages" class="chat-messages" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 20px;">
                         </div>
                         {% if logged_in %}
                         <!-- Бар активных агентов -->
@@ -1903,6 +1903,9 @@
                 console.error('Chat messages container not found');
                 return;
             }
+            // Remove empty-state placeholder when a real message arrives
+            const _emptyEl = messages.querySelector('.chat-empty-state');
+            if (_emptyEl) _emptyEl.remove();
             const _opts = renderOpts || {};
             const _prepend = !!_opts.prepend;
             
@@ -12113,6 +12116,13 @@ except Exception as e:
                         chatHistoryHasMore = !!data.has_more;
                         chatHistoryNextBeforeId = data.next_before_id || null;
                         updateChatHistoryControls();
+                    }
+                    // Show empty-state placeholder if no messages
+                    const chatEl = document.getElementById('chat-messages');
+                    if (displayedMessageIds.size === 0 && chatEl) {
+                        if (!chatEl.querySelector('.chat-empty-state')) {
+                            chatEl.innerHTML = '<div class="chat-empty-state" style="text-align:center;padding:60px 20px;color:#9CA3AF;font-size:15px;"><div style="font-size:40px;margin-bottom:12px;">💬</div>Чат пуст. Автопилот скоро отправит новые сообщения.</div>';
+                        }
                     }
                 }
             } catch (error) {
