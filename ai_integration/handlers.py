@@ -14541,11 +14541,17 @@ async def check_emails(
             logger.debug("suppressed own-emails: %s", _e_me)
         _my_emails.discard('')
         _known_emails: set = set()
+        _registered_emails: set = set()
         try:
             from models import EmailContact as _EC_ce
             _known_emails = {r.email.lower() for r in session.query(_EC_ce.email).filter_by(user_id=user.id).all() if r.email}
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
+        try:
+            from models import User as _U_re
+            _registered_emails = {r.email.lower() for r in session.query(_U_re.email).filter(_U_re.email.isnot(None)).all() if r.email}
+        except Exception as _e_re:
+            logger.debug("suppressed registered_emails: %s", _e_re)
 
         # Словарь outreach: кто из наших агентов писал каждому контакту
         _outreach_map: dict = {}
@@ -14569,9 +14575,9 @@ async def check_emails(
             logger.debug("outreach_map build: %s", _e_om)
 
         if chosen['type'] == 'gmail_oauth':
-            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_emails, _outreach_map)
+            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_emails, _outreach_map, _registered_emails)
         elif chosen['type'] in ('smtp', 'gmail_server'):
-            result = await _check_emails_imap(chosen, limit, _known_emails, _my_emails, _outreach_map)
+            result = await _check_emails_imap(chosen, limit, _known_emails, _my_emails, _outreach_map, _registered_emails)
         elif chosen['type'] == 'resend':
             return "Resend — сервис только для отправки, входящие не поддерживаются."
         else:
@@ -15290,7 +15296,7 @@ async def check_emails(
             session.close()
 
 
-async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_emails: set = None, outreach_map: dict = None) -> str:
+async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_emails: set = None, outreach_map: dict = None, registered_emails: set = None) -> str:
     """Читает входящие через Gmail API v1."""
     import base64 as _b64_r
     import json as _jsn_r
@@ -15421,9 +15427,10 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                     continue
                 # Помечаем известные контакты — но НЕ скрываем их письма
                 _is_known = known_emails and _gm_em_low and _gm_em_low in known_emails
+                _is_registered = registered_emails and _gm_em_low and _gm_em_low in registered_emails
                 if _is_known:
                     skipped_known_g.append(from_hdr)
-                _known_badge = "[email-контакт, не зарегистрирован в сервисе] " if _is_known else ""
+                _known_badge = "[зарегистрированный пользователь] " if _is_registered else ("[email-контакт, не зарегистрирован в сервисе] " if _is_known else "")
                 _gm_outreach_ctx = ""
                 if outreach_map and _gm_em_low and _gm_em_low in outreach_map:
                     _goc = outreach_map[_gm_em_low]
@@ -15443,8 +15450,9 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             if not results:
                 return "Входящих писем нет."
             _known_count = len(skipped_known_g)
-            _known_note = (f"\n⚠️ Примечание: {_known_count} из них помечены [email-контакт] — добавлены в базу контактов, "
-                           f"но НЕ зарегистрированы как пользователи сервиса." if _known_count else "")
+            _known_note = (f"\n⚠️ Примечание: {_known_count} из них помечены [email-контакт]. "
+                           f"Проверяй бейдж: [зарегистрированный пользователь] = есть в сервисе, "
+                           f"[email-контакт, не зарегистрирован в сервисе] = только в контактах." if _known_count else "")
             return (f"Входящие ({gmail_email}, {len(results)} писем){_known_note}:\n\n"
                     + "\n---\n".join(results))
 
@@ -15458,7 +15466,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
     return result
 
 
-async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_emails: set = None, outreach_map: dict = None) -> str:
+async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_emails: set = None, outreach_map: dict = None, registered_emails: set = None) -> str:
     """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""    
     import asyncio
     import imaplib
@@ -15530,6 +15538,7 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
 
                 # Помечаем известные контакты — но НЕ скрываем их письма
                 _is_known_imap = known_emails and _from_low and _from_low in known_emails
+                _is_registered_imap = registered_emails and _from_low and _from_low in registered_emails
                 if _is_known_imap:
                     skipped_known.append(from_addr)
 
@@ -15581,7 +15590,7 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                         except Exception:
                             snippet = ''
                 # Храним полный текст (до 3000 символов) для reply_text в БД
-                _known_badge_imap = "[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else ""
+                _known_badge_imap = "[зарегистрированный пользователь] " if _is_registered_imap else ("[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else "")
                 _im_outreach_ctx = ""
                 if outreach_map and _from_low and _from_low in outreach_map:
                     _ioc = outreach_map[_from_low]
@@ -15602,8 +15611,9 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
             if not results:
                 return "Входящих писем нет."
             _known_cnt = len(skipped_known)
-            _known_n = (f"\n⚠️ Примечание: {_known_cnt} из них помечены [email-контакт] — добавлены в базу контактов, "
-                        f"но НЕ зарегистрированы как пользователи сервиса." if _known_cnt else "")
+            _known_n = (f"\n⚠️ Примечание: {_known_cnt} из них помечены [email-контакт]. "
+                        f"Проверяй бейдж: [зарегистрированный пользователь] = есть в сервисе, "
+                        f"[email-контакт, не зарегистрирован в сервисе] = только в контактах." if _known_cnt else "")
             return (f"Входящие ({email_user}, {len(results)} писем){_known_n}:\n\n"
                     + "\n---\n".join(results))
         except imaplib.IMAP4.error as e:
