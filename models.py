@@ -1134,14 +1134,18 @@ connect_args = {}
 if db_url and db_url.startswith('postgresql'):
     connect_args = {
         "connect_timeout": 10,
-        "options": "-c statement_timeout=30000"  # 30 seconds
+        "options": "-c statement_timeout=30000",  # 30 seconds
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 3,
     }
 
 engine = create_engine(
     db_url,
-    pool_size=10,  # 10 permanent connections
-    max_overflow=15,  # 15 overflow (max 25 total)
-    pool_timeout=15,  # 15s timeout — faster fail under load
+    pool_size=5,  # 5 permanent connections (reduced for faster restart)
+    max_overflow=10,  # 10 overflow (max 15 total)
+    pool_timeout=10,  # 10s timeout — fail fast under load
     pool_recycle=300,  # Recycle every 5 minutes
     pool_pre_ping=True,
     connect_args=connect_args,

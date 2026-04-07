@@ -134,19 +134,41 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 logger.info("Database Connection")
 logger.info("Attempting to connect to the database...")
 
+# Dispose stale pool connections from previous container (Railway restart)
+try:
+    engine.dispose()
+    logger.info("Disposed stale connection pool")
+except Exception:
+    pass
+
 # Test database connection with retry (Railway DB may not be ready immediately)
-_db_max_retries = 10
+_db_max_retries = 5
 for _db_attempt in range(1, _db_max_retries + 1):
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        # Use threading timeout to catch DNS/SSL hangs that connect_timeout misses
+        import threading
+        _conn_result = [None, None]  # [success, error]
+        def _try_connect():
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                _conn_result[0] = True
+            except Exception as e:
+                _conn_result[1] = e
+        _t = threading.Thread(target=_try_connect, daemon=True)
+        _t.start()
+        _t.join(timeout=20)  # 20s hard limit per attempt
+        if _t.is_alive():
+            raise TimeoutError(f"DB connect hung for 20s (attempt {_db_attempt})")
+        if _conn_result[1]:
+            raise _conn_result[1]
         logger.info("✅ Database connection successful")
         break
     except Exception as _db_err:
         if _db_attempt == _db_max_retries:
             logger.error(f"❌ Database connection failed after {_db_max_retries} attempts: {_db_err}")
             raise
-        _wait = min(2 ** _db_attempt, 30)
+        _wait = min(2 ** _db_attempt, 15)
         logger.warning(f"⏳ DB connection attempt {_db_attempt}/{_db_max_retries} failed: {_db_err}. Retrying in {_wait}s...")
         time.sleep(_wait)
 
