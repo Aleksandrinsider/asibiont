@@ -15743,6 +15743,29 @@ async def send_email(
         if not to_clean or '@' not in to_clean:
             return f" Некорректный email получателя: {to!r}. Укажи адрес в формате name@domain.com"
 
+        # ── GUARD: не отправлять email самому себе (user.email / IMAP-аккаунт агента) ──
+        _own_emails_se = set()
+        _user_email_se = (getattr(user, 'email', '') or '').strip().lower()
+        if _user_email_se:
+            _own_emails_se.add(_user_email_se)
+        try:
+            from models import UserAgent as _UA_se
+            for _ag_se in session.query(_UA_se).filter(
+                _UA_se.author_id == user.id,
+                _UA_se.user_api_keys.isnot(None),
+            ).all():
+                for _ln_se in (_ag_se.user_api_keys or '').splitlines():
+                    _ln_se = _ln_se.strip()
+                    if _ln_se.upper().startswith(('GMAIL_USER=', 'IMAP_USER=')):
+                        _v = _ln_se.split('=', 1)[1].strip().lower()
+                        if _v and '@' in _v:
+                            _own_emails_se.add(_v)
+        except Exception:
+            pass
+        if to_clean in _own_emails_se:
+            return (f"⛔ {to_clean} — это ваша собственная почта или IMAP-аккаунт агента. "
+                    f"Нельзя отправлять email самому себе. Найди email реального получателя.")
+
         # ── GUARD: фейковый / generic / сервисный email ──
         if _is_generic_email(to_clean):
             return f"⛔ {to_clean} — фейковый или generic email. Найди реальный email получателя через поиск или контакты."
