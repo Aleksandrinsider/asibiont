@@ -410,7 +410,7 @@ async def _update_arena_summary():
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                     json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
                           "max_tokens": 200, "temperature": 0.3},
-                    timeout=aiohttp.ClientTimeout(total=20)
+                    timeout=aiohttp.ClientTimeout(total=45)
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()

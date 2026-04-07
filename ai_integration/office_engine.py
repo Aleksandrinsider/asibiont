@@ -638,7 +638,7 @@ async def _autonomous_analyze_result(
                     'max_tokens': 150,
                     'temperature': 0.3,
                 },
-                timeout=_aio.ClientTimeout(total=15),
+                timeout=_aio.ClientTimeout(total=30),
             ) as resp:
                 if resp.status != 200:
                     return {'action': 'done'}
@@ -1235,7 +1235,7 @@ class OfficeEngine:
                         "max_tokens": 150,
                         "temperature": 0.7,
                     },
-                    timeout=aiohttp.ClientTimeout(total=12),
+                    timeout=aiohttp.ClientTimeout(total=25),
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
@@ -1745,7 +1745,7 @@ class OfficeEngine:
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                     json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
                           "max_tokens": 800, "temperature": 0.4},
-                    timeout=aiohttp.ClientTimeout(total=45),
+                    timeout=aiohttp.ClientTimeout(total=90),
                 ) as resp:
                     if resp.status != 200:
                         logger.warning("[OFFICE-L2] API error: %d", resp.status)
