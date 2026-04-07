@@ -12141,6 +12141,17 @@ async def send_outreach_email(
         if _rcpt and _is_generic_email(_rcpt):
             return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
 
+        # ── GUARD: не отправлять outreach уже зарегистрированному пользователю платформы ──
+        if _rcpt:
+            _platform_user_chk = session.query(User).filter(
+                User.id != user.id,
+                User.email == _rcpt,
+            ).first()
+            if _platform_user_chk:
+                return (f"⚠️ {_rcpt} — уже зарегистрирован на платформе ASI Biont "
+                        f"(@{_platform_user_chk.username or _platform_user_chk.first_name or '?'}). "
+                        f"Приглашать существующего пользователя бессмысленно. Ищи НОВЫХ людей.")
+
         # ── GUARD: фейковое / корпоративное имя получателя ──
         _rname_chk = (recipient_name or '').strip()
         if _rname_chk:
@@ -16214,6 +16225,16 @@ async def save_email_contact(
         if email_clean in _own_emails:
             return (f" Нельзя сохранять собственный адрес ({email_clean}) как контакт — "
                     f"это ваша почта или почта агента. Найди внешний email реального человека.")
+
+        # ── GUARD: не приглашать/сохранять уже зарегистрированного пользователя платформы ──
+        _existing_platform_user = session.query(User).filter(
+            User.id != user.id,
+            User.email == email_clean,
+        ).first()
+        if _existing_platform_user:
+            return (f"⚠️ {email_clean} — уже зарегистрирован на платформе ASI Biont "
+                    f"(пользователь @{_existing_platform_user.username or _existing_platform_user.first_name or '?'}). "
+                    f"Приглашать его бессмысленно — он уже с нами. Ищи НОВЫХ людей за пределами платформы.")
 
         # ── GUARD: не сохранять контакт с telegram_id владельца ──
         _owner_tg_id = str(user.telegram_id) if user.telegram_id else ''
