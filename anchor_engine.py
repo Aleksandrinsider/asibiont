@@ -11471,6 +11471,39 @@ class AnchorEngine:
             # Формула: max(6, min(agents + goals, 12)) — но не более 12 чтобы цикл не затягивался.
             _MAX_DYNAMIC_STEPS = max(6, min(len(real_agents) + len(_goals), 12))
 
+            # ── Уведомление пользователя о плане делегации (краткое, по делу) ──
+            if _plan and self.bot:
+                try:
+                    _plan_lines = []
+                    for _ps in _plan[:6]:
+                        _ps_agent = (_ps.get('agent') or '').strip()
+                        _ps_task = (_ps.get('task') or '').strip()
+                        if _ps_agent and _ps_task:
+                            _plan_lines.append(f"• {_ps_agent}: {_ps_task[:120]}")
+                    if _plan_lines:
+                        _plan_msg = "🚀 Запускаю цикл:\n" + "\n".join(_plan_lines)
+                        await self.bot.send_message(chat_id=user.telegram_id, text=_plan_msg)
+                        # Сохраняем в interactions для видимости в чате
+                        try:
+                            _plan_sess = Session()
+                            try:
+                                _plan_sess.add(Interaction(
+                                    user_id=user.id,
+                                    message_type='proactive',
+                                    content=json.dumps({
+                                        '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                                        'text': _plan_msg,
+                                        '__anchor_type': 'coordinator_plan',
+                                    }, ensure_ascii=False),
+                                ))
+                                _plan_sess.commit()
+                            finally:
+                                _plan_sess.close()
+                        except Exception:
+                            pass
+                except Exception as _plan_notify_err:
+                    logger.debug("[COORD] plan notify error: %s", _plan_notify_err)
+
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
             _retry_done: dict = {}  # retry-флаги локальны для цикла (не persist между циклами)
@@ -13441,7 +13474,7 @@ class AnchorEngine:
                     )
 
                     _report_prompt = (
-                        f"Ты — ASI, координатор. Пишешь короткий отчёт пользователю в чате.\n\n"
+                        f"Ты — ASI, координатор (МУЖСКОЙ род: я проверил, я нашёл, я отправил). Пишешь короткий отчёт пользователю в чате.\n\n"
                         + _prev_summaries_text
                         + f"Что сделала команда:\n{_report_items}\n\n"
                         + (f"Ход работы:\n{_bridge_flow}\n\n" if _bridge_flow else '')
@@ -13451,7 +13484,8 @@ class AnchorEngine:
                         f"- Пиши как друг-менеджер в мессенджере — живо, коротко, по делу.\n"
                         f"- Называй агентов по именам как живых людей: '[Имя] проверила почту...', '[Имя] нашёл 3 контакта...'.\n"
                         + _gender_line
-                        + f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
+                        + f"- ВАЖНО: ТЫ (ASI) пишешь в МУЖСКОМ роде. Женский род — ТОЛЬКО когда говоришь ОБ агенте-женщине (Кристина сделала). НЕ путай свой род с родом агента.\n"
+                        f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
                         f"- НЕ УПОМИНАЙ технические проблемы: таймауты, сбои, нестабильность, переключение каналов. Пиши только о результатах.\n"
                         + _progress_rule
                         + f"- НЕ ЗАДАВАЙ вопросов пользователю ('какой приоритет?', 'что выбрать?', 'давай обсудим?'). "

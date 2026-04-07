@@ -1624,7 +1624,7 @@ class HybridAutonomousAgent:
                     try:
                         _u_e = _s_e.query(_UserE).filter_by(telegram_id=user_id).first()
                         if _u_e:
-                            _out_e = str(_email_result)[:600]
+                            _out_e = str(_email_result)
                             _s_e.add(_AALE(
                                 user_id=_u_e.id, activity_type='run_agent_action',
                                 title=f'{agent_data.get("name", "Агент")} · send_email',
