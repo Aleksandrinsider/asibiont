@@ -5455,7 +5455,7 @@ class AnchorEngine:
 
                 # Log dispatch — используем raw SQL через отдельное соединение
                 # ORM-вставка через shared session ненадёжна (session state после token spend)
-                _goals_brief = ', '.join(g.get('title', '')[:40] for g in goals_info[:3]) if goals_info else ''
+                _goals_brief = ', '.join(g.get('title', '')[:120] for g in goals_info[:3]) if goals_info else ''
                 _log_content = _goals_brief or anchor.topic or ''
                 _aal_id = None
                 try:
@@ -5542,7 +5542,7 @@ class AnchorEngine:
                         logger.debug("[ANCHOR-AUTOPILOT] pending assignment load failed: %s", _pd_err)
 
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
-                    _gl_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:3]]
+                    _gl_titles = [g.get('title', '')[:120] for g in data.get('goals', [])[:3]]
                     _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
                     _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
                     # ── Карточка возможностей агента через универсальный _classify_agent_caps ──
@@ -5607,12 +5607,12 @@ class AnchorEngine:
                     _user_prof_c = data.get('user_profile', {})
                     _project_c = (_user_prof_c.get('company') or '').strip()
                     _goals_progress_c = ', '.join(
-                        f"«{g.get('title','')[:30]}» {g.get('progress', 0)}%"
+                        f"«{g.get('title','')[:80]}» {g.get('progress', 0)}%"
                         for g in data.get('goals', [])[:2]
                     ) if data.get('goals') else ''
                     # Fallback: конкретное поручение на основе целей и интеграций агента
                     # Ротируем по непочтовым интеграциям прежде чем давать email
-                    _goal_titles_fb = [g.get('title', '')[:40] for g in data.get('goals', [])[:5] if g.get('title')]
+                    _goal_titles_fb = [g.get('title', '')[:120] for g in data.get('goals', [])[:5] if g.get('title')]
                     _non_email_cats = sorted(_cats_c - {'email'})
                     _has_email_fb = 'email' in _cats_c
                     # Объединяем ВСЕ цели для корректного определения типа (не только первую)
@@ -6382,7 +6382,7 @@ class AnchorEngine:
                                         "[ANCHOR-AUTOPILOT] coord-tg-guard: replaced Telegram coord_text"
                                         " for email-only agent %s", _chosen_name,
                                     )
-                                    _goal_titles_tg = [g.get('title', '')[:40] for g in data.get('goals', [])[:1] if g.get('title')]
+                                    _goal_titles_tg = [g.get('title', '')[:120] for g in data.get('goals', [])[:1] if g.get('title')]
                                     _goal_hint_tg = f' для цели «{_goal_titles_tg[0]}»' if _goal_titles_tg else ''
                                     _coord_text = (
                                         f'{_chosen_name}, найди через web_search email-контакты авторов'
@@ -6567,14 +6567,14 @@ class AnchorEngine:
                                 ) if _coord_text else _coord_text
                                 _coord_text_clean_save = _sanitize_proactive_text(_coord_text_clean_save)
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
-                                    _ap_assign_goals = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
+                                    _ap_assign_goals = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
                                     _ap_assign_gstr = ', '.join(t for t in _ap_assign_goals if t)
                                     _coord_content = json.dumps({
                                         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
                                         'text': _coord_text_clean_save,
                                         '__to_agent': _chosen_name,
                                         '__anchor_type': 'goal_autopilot_assignment',
-                                        '__goal_title': _ap_assign_gstr[:80],
+                                        '__goal_title': _ap_assign_gstr[:200],
                                     }, ensure_ascii=False)
                                     _cs.add(Interaction(
                                         user_id=user.id,
@@ -6595,7 +6595,7 @@ class AnchorEngine:
                 elif anchor.anchor_type == 'goal_autopilot_review' and _chosen_id == 0 and self.bot:
                     # ASI сама выполняет анализ — объявляет что начинает работу
                     try:
-                        _asi_gl = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
+                        _asi_gl = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
                         _asi_ann = f"Анализирую цели: {', '.join(_asi_gl)}. Подбираю следующий шаг."
                         await self.bot.send_message(chat_id=user.telegram_id, text=_asi_ann)
                     except Exception as _asi_ann_err:
@@ -6627,7 +6627,7 @@ class AnchorEngine:
                                 _Goal_ap.user_id == user.id,
                                 _Goal_ap.status == 'active',
                             ).order_by(_Goal_ap.created_at.desc()).limit(2).all()
-                            _gl_titles_s = [g.title[:60] for g in _db_goals if g.title and g.title.strip()]
+                            _gl_titles_s = [g.title[:120] for g in _db_goals if g.title and g.title.strip()]
                         except Exception as _e:
                             logger.debug("suppressed: %s", _e)
                     # Формируем task_text для передачи в _cadt (нормализатор сделает title)
@@ -6637,10 +6637,10 @@ class AnchorEngine:
                     if _coord_text and len(_coord_text) > 15 and _coord_text != f"{agent_name}, займись текущими задачами.":
                         _ap_task_text = _smart_trunc(_coord_text, 500)
                     elif _task_hint_human and _task_hint_human != 'займись активными целями':
-                        _goal_prefix = _gl_titles_s[0][:40] if _gl_titles_s else ''
+                        _goal_prefix = _gl_titles_s[0][:120] if _gl_titles_s else ''
                         _ap_task_text = f"{_goal_prefix}: {_task_hint_human}" if _goal_prefix else _task_hint_human
                     elif _gl_titles_s and _agent_spec:
-                        _ap_task_text = f"{_gl_titles_s[0][:40]}: {_agent_spec}"
+                        _ap_task_text = f"{_gl_titles_s[0][:120]}: {_agent_spec}"
                     elif _gl_titles_s:
                         _ap_task_text = _gl_titles_s[0]
                     elif _agent_spec:
@@ -7441,7 +7441,7 @@ class AnchorEngine:
                                 # Оборачиваем в __agent JSON для корректного отображения в веб-чате
                                 # Все результаты автопилота — видимые (goal_autopilot_result)
                                 _result_anchor_type = 'goal_autopilot_result'
-                                _ap_goal_titles = [g.get('title', '')[:50] for g in data.get('goals', [])[:2]]
+                                _ap_goal_titles = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
                                 _ap_goal_str = ', '.join(t for t in _ap_goal_titles if t)
                                 _agent_content = json.dumps({
                                     '__agent': {
@@ -7452,7 +7452,7 @@ class AnchorEngine:
                                     'text': _strip_html(_cleaned_result),
                                     '__tools_used': _tools_used,
                                     '__anchor_type': _result_anchor_type,
-                                    '__goal_title': _ap_goal_str[:80],
+                                    '__goal_title': _ap_goal_str[:200],
                                 }, ensure_ascii=False)
                                 # Реальные агенты (не ASI) сохраняем как agent_msg — отчёт по назначению
                                 # ASI сохраняем как proactive — координаторская инициатива
@@ -11921,7 +11921,7 @@ class AnchorEngine:
                             )),
                             '__to_agent': _ag_name,
                             '__anchor_type': 'coordinator_assignment',
-                            '__goal_title': (_ag_goal_title or '')[:80],
+                            '__goal_title': (_ag_goal_title or '')[:200],
                             '__tool_hint': (_tool_hint or '')[:40],
                         }, ensure_ascii=False),
                     ))
@@ -13028,7 +13028,7 @@ class AnchorEngine:
                                 '__tools_used': _step_tools,
                                 '__anchor_type': 'coordinator_result',
                                 '__minor': True,
-                                '__goal_title': (_ag_goal_title or '')[:80],
+                                '__goal_title': (_ag_goal_title or '')[:200],
                             }, ensure_ascii=False),
                         ))
                         logger.info("[COORD] minor update saved to chat for %s", _ag_name)
@@ -13047,7 +13047,7 @@ class AnchorEngine:
                                 'text': _cleaned_chat,
                                 '__tools_used': _step_tools,
                                 '__anchor_type': 'coordinator_result',
-                                '__goal_title': (_ag_goal_title or '')[:80],
+                                '__goal_title': (_ag_goal_title or '')[:200],
                             }, ensure_ascii=False),
                         ))
                     else:
@@ -13199,7 +13199,7 @@ class AnchorEngine:
                 # Если цикл не дал никакого прогресса → записываем неудачные стратегии в память агентов
                 if not _any_real_progress and _all_tools:
                     _fail_tools_str = ', '.join(sorted(set(_all_tools)))
-                    _fail_goals_str = '; '.join(g.get('title', '')[:40] for g in _goals[:2])
+                    _fail_goals_str = '; '.join(g.get('title', '')[:120] for g in _goals[:2])
                     try:
                         import json as _json_mem
                         from models import UserAgent as _UA_mem, Session as _UA_Sess_mem
