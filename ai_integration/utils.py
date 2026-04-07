@@ -1591,7 +1591,7 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
 
     import aiohttp as _aio_tr
     try:
-        timeout = _aio_tr.ClientTimeout(total=40, connect=5)
+        timeout = _aio_tr.ClientTimeout(total=70, connect=10)
         connector = _aio_tr.TCPConnector(force_close=True)
         async with _aio_tr.ClientSession(timeout=timeout, connector=connector) as session_tr:
             async with session_tr.post(

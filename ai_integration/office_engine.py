@@ -1745,7 +1745,7 @@ class OfficeEngine:
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                     json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
                           "max_tokens": 800, "temperature": 0.4},
-                    timeout=aiohttp.ClientTimeout(total=90),
+                    timeout=aiohttp.ClientTimeout(total=120),
                 ) as resp:
                     if resp.status != 200:
                         logger.warning("[OFFICE-L2] API error: %d", resp.status)

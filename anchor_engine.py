@@ -11708,10 +11708,22 @@ class AnchorEngine:
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
                 # Генерируем поручение от ASI — живое обращение как руководитель к коллеге
                 try:
-                    # Берём оригинальную задачу из плана координатора (первые 2 предложения)
-                    _task_first_line = _ag_task.split('\n')[0].strip()
-                    # Убираем технические маркеры (→, tool:, outreach_id= и т.д.)
+                    # Берём оригинальную задачу из плана координатора — склеиваем строки до структурных заголовков
                     import re as _re_assign
+                    _task_joined_lines = []
+                    for _tl in _ag_task.split('\n'):
+                        _tls = _tl.strip()
+                        if not _tls:
+                            continue
+                        # Останавливаемся на структурных заголовках ("Данные:", "Результат:" и т.д.)
+                        if _re_assign.match(r'^(?:данные|результат|ключевые|детали|описание|шаги|план|каналы|контекст)\s*:', _tls, _re_assign.IGNORECASE):
+                            break
+                        # Пропускаем markdown-списки и заголовки
+                        if _tls.startswith(('#', '-', '*', '•')) or _re_assign.match(r'^\d+[.)\]]\s', _tls):
+                            continue
+                        _task_joined_lines.append(_tls)
+                    _task_first_line = ' '.join(_task_joined_lines).strip() or _ag_task.split('\n')[0].strip()
+                    # Убираем технические маркеры (→, tool:, outreach_id= и т.д.)
                     _task_clean = _re_assign.sub(r'\(outreach_id=\d+\)', '', _task_first_line)
                     # Удаляем → только если за ним идёт имя инструмента (snake_case), а не обычный текст
                     _task_clean = _re_assign.sub(r'\s*→\s+[a-z][a-z_]+_[a-z_]+.*$', '', _task_clean).strip()
@@ -11773,8 +11785,8 @@ class AnchorEngine:
                         pass
                     # Короткая версия задачи для живого обращения (до 140 символов, по слову)
                     _task_short = _task_clean
-                    if len(_task_short) > 300:
-                        _task_short = _task_short[:300].rsplit(' ', 1)[0].rstrip('.,;:')
+                    if len(_task_short) > 600:
+                        _task_short = _task_short[:600].rsplit(' ', 1)[0].rstrip('.,;:')
                     # НЕ стрипим ведущий глагол — он нужен для естественного обращения
                     _task_body = _task_short
                     # Формируем естественное обращение вместо тикета
@@ -11915,13 +11927,7 @@ class AnchorEngine:
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
                     continue
-                # Финализация обрезанных предложений: если текст обрывается на предлоге/союзе — обрезаем до последней точки
-                _DANGLING_ENDS = ('а не', 'и ', 'а ', 'но ', 'это ', 'что ', 'для ', 'от ', 'на ', 'к ', 'по ', 'или ', 'при ', 'в ', 'из ', 'до ')
-                _aat_stripped = _asi_assign_text.rstrip('. ,;:')
-                if any(_aat_stripped.lower().endswith(d.rstrip()) for d in _DANGLING_ENDS):
-                    _last_dot = _asi_assign_text.rfind('.')
-                    if _last_dot > len(_ag_name) + 10:
-                        _asi_assign_text = _asi_assign_text[:_last_dot + 1]
+                # sanitize_live_team_chat_text уже обрабатывает обрывы — дублирование удалено
                 try:
                     session.add(Interaction(
                         user_id=user.id,
