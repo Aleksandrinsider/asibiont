@@ -3328,7 +3328,7 @@ class AnchorEngine:
                             .filter(
                                 _RecAAL2.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch', 'agent_chain_continue']),
                                 _RecAAL2.status == 'in_progress',
-                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=15),
+                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=10),
                             )
                             .all()
                         )
@@ -4650,15 +4650,16 @@ class AnchorEngine:
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
 
             # ── Guard: предотвращаем дублирование при параллельных scan-циклах ──
-            # Проверяем: нет ли ЛЮБОГО dispatch (любой target) в in_progress.
-            # Один пользователь — один активный dispatch в момент времени.
-            # Cleanup (15 мин) пометит зависший dispatch как failed, разблокируя новый.
+            # Проверяем: нет ли недавнего dispatch в in_progress (< 10 мин).
+            # После 10 мин in_progress считается зависшим — разрешаем новый dispatch.
             try:
+                _guard_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
                 from models import AgentActivityLog as _AAL_guard
                 _recent = session.query(_AAL_guard.id, _AAL_guard.target, _AAL_guard.created_at).filter(
                     _AAL_guard.user_id == user.id,
                     _AAL_guard.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch']),
                     _AAL_guard.status == 'in_progress',
+                    _AAL_guard.created_at > _guard_cutoff,
                 ).first()
                 if _recent:
                     _age_min = (datetime.now(timezone.utc) - (_recent[2].replace(tzinfo=timezone.utc) if _recent[2].tzinfo is None else _recent[2])).total_seconds() / 60
@@ -6802,6 +6803,21 @@ class AnchorEngine:
                             "[ANCHOR-AUTOPILOT] user %d: AI call failed, suppressing hollow fallback for %s",
                             user.id, agent_name,
                         )
+                    # Помечаем AAL как failed — чтобы guard не блокировал следующие dispatches
+                    if _aal_id:
+                        try:
+                            from sqlalchemy import text as _aal_fail_text
+                            session.execute(_aal_fail_text(
+                                "UPDATE agent_activity_log SET status='failed', result=:res, updated_at=NOW() WHERE id=:aid"
+                            ), {'aid': _aal_id, 'res': f'AI call error: {str(_ai_err)[:200]}'})
+                            session.commit()
+                            logger.info("[ANCHOR-AUTOPILOT] AAL %s marked failed after AI error", _aal_id)
+                        except Exception as _aal_fail_err:
+                            logger.debug("[ANCHOR-AUTOPILOT] AAL fail-mark error: %s", _aal_fail_err)
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     # ВАЖНО: якорь уже был помечен delivered до AI-вызова для crash-safety.
                     # Если сам AI-вызов упал, возвращаем якорь в очередь с snooze,
                     # чтобы он был ретраен позже и не терялся навсегда.
