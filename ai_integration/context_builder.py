@@ -661,7 +661,7 @@ class ContextBuilder:
                         else:
                             status_badge = f' {c.status}'
                         camp_lines.append(f"  {status_badge} id={c.id} «{c.name}» — отправлено: {c.emails_sent or 0}/{c.max_emails or '∞'}")
-                    hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ — УЖЕ ЗАПУЩЕНЫ, НЕ создавай новые:\n" + "\n".join(camp_lines))
+                    hints.append("АКТИВНЫЕ EMAIL-КАМПАНИИ (учти их перед созданием новой — возможно стоит добавить лиды в существующую):\n" + "\n".join(camp_lines))
 
                 # ═══ Завершённые кампании с активными диалогами ═══
                 from sqlalchemy import func as _func_ccd
@@ -728,7 +728,7 @@ class ContextBuilder:
                             f"опубликовано: {c.posts_published or 0}/{c.max_posts or '∞'}"
                         )
                     hints.append(
-                        "КОНТЕНТ-КАМПАНИИ — УЖЕ ЗАПУЩЕНЫ, НЕ предлагай создавать новые:\n" + "\n".join(cc_lines)
+                        "АКТИВНЫЕ КОНТЕНТ-КАМПАНИИ (учти их — если нужна новая с другой темой/аудиторией, можешь создать):\n" + "\n".join(cc_lines)
                     )
             except Exception as e:
                 logger.warning(f"[CONTENT_CAMP_CTX] Error: {e}")
@@ -752,7 +752,7 @@ class ContextBuilder:
                             f"лимит/день: {d.daily_limit or '?'}"
                         )
                     hints.append(
-                        "КАМПАНИИ ДЕЛЕГИРОВАНИЯ — УЖЕ ЗАПУЩЕНЫ, НЕ предлагай создавать новые:\n" + "\n".join(dc_lines)
+                        "АКТИВНЫЕ КАМПАНИИ ДЕЛЕГИРОВАНИЯ (учти их перед созданием новой):\n" + "\n".join(dc_lines)
                     )
             except Exception as e:
                 logger.warning(f"[DELEG_CAMP_CTX] Error: {e}")
