@@ -6156,7 +6156,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "найди реальный адрес через web_search. Placeholder (mark@example.com, test@, name@company.com) "
         "заблокированы системой. Пропусти контакт, если реальный email найти не удалось.\n"
         "⚠️ ВЛАДЕНИЕ EMAIL-ПЕРЕПИСКОЙ: reply_to_outreach_email делает ТОТ агент, кто отправлял исходное письмо.\n"
-        "Если check_emails показал sent_by_agent=Кристина → отвечает Кристина. Не бери чужую переписку.\n\n"
+        "Если check_emails показал sent_by_agent=<имя> → отвечает именно тот агент. Не бери чужую переписку.\n\n"
 
         + (f"ТВОИ ИНТЕГРАЦИИ (активированы и готовы к использованию):\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "")
         + (_intg_action_hint.strip() + "\n\n" if _intg_action_hint.strip() else "")
