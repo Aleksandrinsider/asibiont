@@ -473,7 +473,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
     # Единая нормализация title через централизованный нормализатор
     from .utils import normalize_task_title
     original_title = title
-    title, _overflow = normalize_task_title(title, max_len=100)
+    title, _overflow = normalize_task_title(title, max_len=200)
     if not title:
         return 'Название задачи пустое после очистки.'
     if title != original_title:

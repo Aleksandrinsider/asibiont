@@ -293,7 +293,7 @@ _TASK_DESC_STRIP_PATS = [
 ]
 
 
-def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 100) -> tuple:
+def normalize_task_title(raw_title: str, agent_name: str = None, max_len: int = 200) -> tuple:
     """Нормализует заголовок задачи. Возвращает (short_title, overflow_for_description).
 
     - Удаляет мусор (system prompt, [АВТОПИЛОТ], имя агента)
