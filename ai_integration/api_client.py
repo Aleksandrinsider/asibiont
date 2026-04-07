@@ -529,8 +529,8 @@ class ExternalAPIClient:
                         err_str = str(e)
                         # 202 Ratelimit или DuckDuckGoRatelimitException
                         _is_ratelimit = '202' in err_str or 'atelimit' in err_str or 'Ratelimit' in err_str
-                        # Транзиентные ошибки декодирования тела ответа (httpx/DDGS)
-                        _is_transient = 'DecodeError' in err_str or 'decode' in err_str.lower() or 'Body collection' in err_str or 'body' in err_str.lower()
+                        # Транзиентные ошибки: декодирование, соединение, таймаут сети
+                        _is_transient = 'DecodeError' in err_str or 'decode' in err_str.lower() or 'Body collection' in err_str or 'body' in err_str.lower() or 'RequestError' in err_str or 'ConnectError' in err_str or 'error sending request' in err_str.lower()
                         if (_is_ratelimit or _is_transient) and attempt < max_retries - 1:
                             wait = base_delay * (2 ** attempt) + (2.0 if _is_ratelimit else 1.0)
                             logger.warning(f"[DDG] {'Rate limit' if _is_ratelimit else 'Transient error'} on attempt {attempt+1}, retry in {wait:.1f}s: {err_str[:80]}")

@@ -1139,10 +1139,10 @@ if db_url and db_url.startswith('postgresql'):
 
 engine = create_engine(
     db_url,
-    pool_size=20,  # 20 permanent connections
-    max_overflow=30,  # 30 overflow (max 50 total)
+    pool_size=10,  # 10 permanent connections
+    max_overflow=15,  # 15 overflow (max 25 total)
     pool_timeout=15,  # 15s timeout — faster fail under load
-    pool_recycle=600,  # Recycle every 10 minutes
+    pool_recycle=300,  # Recycle every 5 minutes
     pool_pre_ping=True,
     connect_args=connect_args,
     echo=False  # Disable SQL logging in production
