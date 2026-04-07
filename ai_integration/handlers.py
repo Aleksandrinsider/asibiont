@@ -15066,16 +15066,32 @@ async def check_emails(
                                     user_id=user_id,
                                 )
                                 logger.info(f'[CHECK_EMAILS] Auto-updated goal metric: {_g_ce2.title} +{_newly_replied_this_call} → {_new_metric}')
-                                # Логируем inbox_reply в AgentActivityLog для сигнала другим инструментам
+                                # Логируем inbox_reply в AgentActivityLog — status='new' чтобы
+                                # _scan_agent_inbox_replies создал CRITICAL якорь → пользователь получит уведомление
                                 try:
                                     from models import AgentActivityLog as _AAL_ce_ir
+                                    # Собираем preview ответов для content
+                                    _reply_preview_lines = []
+                                    for _rp_em, _rp_snip in list(_reply_snippets.items())[:5]:
+                                        _rp_name = ''
+                                        try:
+                                            _rp_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_rp_em).first()
+                                            _rp_name = getattr(_rp_ec, 'name', '') or ''
+                                        except Exception:
+                                            pass
+                                        _reply_preview_lines.append(
+                                            f"От: {_rp_name} <{_rp_em}>\n"
+                                            f"Тема: ответ на outreach\n"
+                                            f"Превью: {(_rp_snip or '')[:300]}"
+                                        )
+                                    _reply_content = '\n---\n'.join(_reply_preview_lines) if _reply_preview_lines else f'Новые ответы: {_newly_replied_this_call}'
                                     _aal_ir = _AAL_ce_ir(
                                         user_id=user.id,
                                         activity_type='inbox_reply',
-                                        title=f'+{_newly_replied_this_call} новых ответов на письма',
-                                        content=f'Обновлена цель «{_g_ce2.title}»',
-                                        target='email_inbox',
-                                        status='completed',
+                                        title=f'check_emails: {_newly_replied_this_call} новых ответов на письма',
+                                        content=_reply_content[:2000],
+                                        target=f'agent:{chosen.get("agent_name", chosen.get("label", "email"))}',
+                                        status='new',
                                     )
                                     session.add(_aal_ir)
                                     session.commit()
