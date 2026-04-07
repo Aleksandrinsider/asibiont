@@ -673,7 +673,7 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'agent_chain_continue',
     'agent_chain_transfer',
 }
-MAX_AUTOPILOT_MSG_PER_DAY = 500  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES (15 мин)
+MAX_AUTOPILOT_MSG_PER_DAY = 500  # Лимит-предохранитель. Реальное ограничение — MIN_AUTOPILOT_GAP_MINUTES
 MAX_FEED_PER_DAY = 3
 MAX_CHANNEL_PER_DAY = 3  # постов в канал в день
 # CRITICAL/HIGH якоря НЕ считаются в лимите — доставляются всегда
@@ -5322,10 +5322,10 @@ class AnchorEngine:
                             }
                             agent_name = chosen.name
                         else:
-                            anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+                            anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=15)
                             session.commit()
                             logger.info(
-                                "[ANCHOR-AUTOPILOT] no healthy agent for user %d; snooze 30m (stalled=%s)",
+                                "[ANCHOR-AUTOPILOT] no healthy agent for user %d; snooze 15m (stalled=%s)",
                                 user.id,
                                 chosen.name,
                             )
@@ -6827,10 +6827,10 @@ class AnchorEngine:
                         pass
                     try:
                         anchor.delivered_at = None
-                        anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=45)
+                        anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=15)
                         session.commit()
                         logger.info(
-                            "[ANCHOR-AUTOPILOT] user %d: requeued anchor #%d after AI failure (retry in 45m)",
+                            "[ANCHOR-AUTOPILOT] user %d: requeued anchor #%d after AI failure (retry in 15m)",
                             user.id,
                             anchor.id,
                         )
