@@ -3328,7 +3328,7 @@ class AnchorEngine:
                             .filter(
                                 _RecAAL2.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch', 'agent_chain_continue']),
                                 _RecAAL2.status == 'in_progress',
-                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=25),
+                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=15),
                             )
                             .all()
                         )
@@ -4046,10 +4046,10 @@ class AnchorEngine:
             logger.debug(f"[ANCHOR] Dedup error (non-critical): {_e_dedup}")
             session.rollback()
 
-        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>22 мин) как failed
-        # Порог 22 мин: координатор может запускать 2 агентов × до 300с = 10мин + запас
+        # 0d. STUCK LOGS — помечаем зависшие in_progress activity logs (>15 мин) как failed
+        # Порог 15 мин: координатор + агент ≤ 10 мин реально, 15 мин = запас на медленный API
         try:
-            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=22)  # naive UTC — PostgreSQL возвращает naive datetime
+            _stuck_cutoff = datetime.utcnow() - timedelta(minutes=15)  # naive UTC — PostgreSQL возвращает naive datetime
             from models import AgentActivityLog as _AAL_stuck
             _stuck_logs = session.query(_AAL_stuck).filter(
                 _AAL_stuck.user_id == user.id,
@@ -4650,26 +4650,37 @@ class AnchorEngine:
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
 
             # ── Guard: предотвращаем дублирование при параллельных scan-циклах ──
-            # Проверяем: нет ли ЛЮБОГО dispatch (любой target) в in_progress < 5 мин.
+            # Проверяем: нет ли ЛЮБОГО dispatch (любой target) в in_progress.
             # Один пользователь — один активный dispatch в момент времени.
+            # Cleanup (15 мин) пометит зависший dispatch как failed, разблокируя новый.
             try:
-                # Используем ORM вместо raw SQL для совместимости SQLite/PostgreSQL
-                _guard_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
                 from models import AgentActivityLog as _AAL_guard
-                _recent = session.query(_AAL_guard.id, _AAL_guard.target).filter(
+                _recent = session.query(_AAL_guard.id, _AAL_guard.target, _AAL_guard.created_at).filter(
                     _AAL_guard.user_id == user.id,
-                    _AAL_guard.activity_type == 'goal_autopilot_dispatch',
+                    _AAL_guard.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch']),
                     _AAL_guard.status == 'in_progress',
-                    _AAL_guard.created_at > _guard_cutoff,
                 ).first()
                 if _recent:
+                    _age_min = (datetime.now(timezone.utc) - (_recent[2].replace(tzinfo=timezone.utc) if _recent[2].tzinfo is None else _recent[2])).total_seconds() / 60
                     logger.info(
-                        "[DISPATCH-GUARD] Skip dispatch for %s — already running AAL id=%s (target=%s)",
-                        anchor.source, _recent[0], _recent[1]
+                        "[DISPATCH-GUARD] Skip dispatch for %s — already running AAL id=%s (target=%s, age=%.0fmin)",
+                        anchor.source, _recent[0], _recent[1], _age_min
                     )
                     return
             except Exception as _guard_err:
                 logger.debug("[DISPATCH-GUARD] guard check failed (non-critical): %s", _guard_err)
+
+            # ── Помечаем якорь доставленным СРАЗУ — защита от бесконечных retry при crash/restart ──
+            try:
+                from sqlalchemy import text as _del_text
+                session.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': anchor.id})
+                session.commit()
+            except Exception as _del_err:
+                logger.debug("[DISPATCH] delivered_at early-set failed: %s", _del_err)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
 
             # Используем только агентов с AgentSubscription — те что пользователь активировал в чате
             from models import AgentSubscription as _AS_ap
@@ -5104,10 +5115,9 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
-                            # timeout = 240s per agent × number of agents + 60s overhead
-                            # Per-agent inner timeout is 300s, so outer must leave room for N agents
-                            _n_coord_agents = len(_coord_real)
-                            _coord_timeout = max(480, _n_coord_agents * 240 + 60)
+                            # timeout = max 600s (10 min) — coordinator + agents должны уложиться
+                            # per-agent inner timeout 300s, но обычно 30-60s достаточно
+                            _coord_timeout = 600
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
@@ -5439,32 +5449,9 @@ class AnchorEngine:
                 if not _FAM_ap:
                     if not _het_ap(user.telegram_id, 'agent_task', session=session):
                         logger.info("[ANCHOR-AUTOPILOT] user %d: skip — not enough tokens", user.id)
-                        anchor.delivered_at = datetime.now(timezone.utc)
-                        session.commit()
                         return
                 # Биллинг производится ПОСЛЕ AI-вызова (динамически по факту токенов)
-
-                # Помечаем якорь доставленным ДО AI-вызова — защита от перезапуска Railway
-                anchor.delivered_at = datetime.now(timezone.utc)
-                try:
-                    session.commit()
-                except Exception as _commit_err:
-                    logger.warning("[ANCHOR-AUTOPILOT] commit anchor.delivered_at failed: %s", _commit_err)
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
-                    # Retry without the log entry
-                    anchor.delivered_at = datetime.now(timezone.utc)
-                    try:
-                        session.commit()
-                    except Exception:
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                        # Не прерываем — даже без commit продолжаем диспатч агента
-                        logger.warning("[ANCHOR-AUTOPILOT] delivered_at commit failed twice — continuing dispatch anyway")
+                # delivered_at уже поставлен в начале функции через raw SQL
 
                 # Log dispatch — используем raw SQL через отдельное соединение
                 # ORM-вставка через shared session ненадёжна (session state после token spend)
@@ -7675,15 +7662,7 @@ class AnchorEngine:
                     session.rollback()
                 except Exception:
                     pass
-            # Ensure anchor.delivered_at is committed
-            try:
-                anchor.delivered_at = datetime.now(timezone.utc)
-                session.commit()
-            except Exception:
-                try:
-                    session.rollback()
-                except Exception:
-                    pass
+            # delivered_at уже поставлен в начале функции через raw SQL
 
     async def _dispatch_agents_for_new_anchors(self, user, new_anchors: list):
         """
