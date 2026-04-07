@@ -11471,39 +11471,6 @@ class AnchorEngine:
             # Формула: max(6, min(agents + goals, 12)) — но не более 12 чтобы цикл не затягивался.
             _MAX_DYNAMIC_STEPS = max(6, min(len(real_agents) + len(_goals), 12))
 
-            # ── Уведомление пользователя о плане делегации (краткое, по делу) ──
-            if _plan and self.bot:
-                try:
-                    _plan_lines = []
-                    for _ps in _plan[:6]:
-                        _ps_agent = (_ps.get('agent') or '').strip()
-                        _ps_task = (_ps.get('task') or '').strip()
-                        if _ps_agent and _ps_task:
-                            _plan_lines.append(f"• {_ps_agent}: {_ps_task[:120]}")
-                    if _plan_lines:
-                        _plan_msg = "🚀 Запускаю цикл:\n" + "\n".join(_plan_lines)
-                        await self.bot.send_message(chat_id=user.telegram_id, text=_plan_msg)
-                        # Сохраняем в interactions для видимости в чате
-                        try:
-                            _plan_sess = Session()
-                            try:
-                                _plan_sess.add(Interaction(
-                                    user_id=user.id,
-                                    message_type='proactive',
-                                    content=json.dumps({
-                                        '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
-                                        'text': _plan_msg,
-                                        '__anchor_type': 'coordinator_plan',
-                                    }, ensure_ascii=False),
-                                ))
-                                _plan_sess.commit()
-                            finally:
-                                _plan_sess.close()
-                        except Exception:
-                            pass
-                except Exception as _plan_notify_err:
-                    logger.debug("[COORD] plan notify error: %s", _plan_notify_err)
-
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
             _retry_done: dict = {}  # retry-флаги локальны для цикла (не persist между циклами)
@@ -11980,8 +11947,12 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
-                # Поручение сохранено в БД для веб-чата — в Telegram НЕ отправляем
-                # (пользователь видит в веб-чате, но не спамим Telegram внутренними назначениями)
+                # Поручение сохранено в БД для веб-чата — отправляем и в Telegram (отдельным сообщением)
+                if self.bot and _asi_assign_text and len(_asi_assign_text.strip()) > 15:
+                    try:
+                        await _safe_send(self.bot, user.telegram_id, f"→ {_asi_assign_text}")
+                    except Exception:
+                        pass
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
@@ -13087,13 +13058,6 @@ class AnchorEngine:
                             anchor_type='coordinator_result',
                             speaker_name=_ag_name,
                         )
-                        # Поручение — отдельным сообщением (уже сохранено в БД выше)
-                        if _asi_assign_text and _ag_id != 0:
-                            _assign_brief = re.sub(r'\n+', ' ', _asi_assign_text).strip()
-                            if len(_assign_brief) > 300:
-                                _assign_brief = _assign_brief[:300].rsplit(' ', 1)[0] + '…'
-                            await _safe_send(self.bot, user.telegram_id, f"Поручение → {_ag_name}:\n{_assign_brief}")
-                            await asyncio.sleep(1)
                         _tg_text = f"{_ag_name} — отчёт:\n{_cleaned_tg}"
                         await _safe_send(self.bot, user.telegram_id, _tg_text)
                     except Exception as _e:
