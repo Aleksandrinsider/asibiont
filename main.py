@@ -275,6 +275,14 @@ def get_context_from_db(user_id, limit=10):
                     'agent': _strip_avatar_from_content(msg.content)
                 })
                 i += 1
+            
+            # Agent messages (autopilot agent-to-agent dialogue) — include for AI awareness
+            elif msg.message_type == 'agent_msg':
+                context.append({
+                    'user': '[сообщение агента]',
+                    'agent': _strip_avatar_from_content(msg.content)
+                })
+                i += 1
             else:
                 i += 1
         
