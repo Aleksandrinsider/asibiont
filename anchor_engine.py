@@ -12677,7 +12677,27 @@ class AnchorEngine:
                         )
                         # Объясняем провал в контексте для следующих агентов
                         _prev_steps_context += f"• {_ag_name}: не выполнил задачу (пустой результат для «{_ag_task[:80]}»)\n"
-                    # _done_fb: агент выполнил задачу без детального отчёта — тихо пропускаем
+                    else:
+                        # done_fb — агент выполнил задачу, просто ответил кратко → засчитываем как результат
+                        _results_summary.append(f"{_ag_name}: {_result_stripped[:150]}")
+                        _prev_steps_context += f"💬 {_ag_name}: {_result_stripped[:200]}\n"
+                    # ── Сохраняем coordinator_result чтобы health-check считал ответ агента ──
+                    # Без этого assignment растёт, result не растёт → ложный stall → порочный круг блокировки
+                    try:
+                        _cr_text = _result_stripped if _is_done_fb else f"Пустой результат: {_ag_task[:100]}"
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id_c, 'avatar_url': _ag_avatar_c},
+                                'text': _cr_text,
+                                '__anchor_type': 'coordinator_result',
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception:
+                        try: session.rollback()
+                        except Exception: pass
                     continue
 
                 # ── Обучающий retry: если агент ограничился исследованием, просим довести до действия ──
