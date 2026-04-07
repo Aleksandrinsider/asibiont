@@ -675,11 +675,19 @@ async def _comment_loop():
                         commented_ids = {m.get('agent_id') for m in existing}
                         commented_ids.add(post_author_id)
                         # Исключаем агентов на кулдауне (недавно постили топ или комментировали)
-                        candidates = [
-                            a for a in all_agents
-                            if a['id'] not in commented_ids
-                            and now_ts - _agent_last_post_ts.get(a['id'], 0) >= AGENT_COMMENT_COOLDOWN
-                        ]
+                        # Фильтруем кандидатов: кулдаун + проверка токенов владельца
+                        from config import FREE_ACCESS_MODE as _fam_cl
+                        candidates = []
+                        for a in all_agents:
+                            if a['id'] in commented_ids:
+                                continue
+                            if now_ts - _agent_last_post_ts.get(a['id'], 0) < AGENT_COMMENT_COOLDOWN:
+                                continue
+                            if not _fam_cl and a.get('_owner_telegram_id'):
+                                from token_service import has_enough_tokens as _het_cl
+                                if not _het_cl(a['_owner_telegram_id'], 'arena_agent_post'):
+                                    continue
+                            candidates.append(a)
                         if not candidates:
                             continue
                         commenter = random.choice(candidates)
