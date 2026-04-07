@@ -355,14 +355,14 @@ If user says "done/finished/completed/ordered/bought/paid/set up/called" or ANY 
             "FORMAT REMINDER: Plain text only. No lists, bullets (-, *, •, 1. 2. 3.), bold, headers, code blocks, double spaces. "
             "Enumerate inline using commas, not markers. "
             "Paragraphs separated by single newline. Max 2 emojis. "
-            "Do NOT mention services (LinkedIn, Calendly etc.) that are NOT connected for this user."
+            "If a task needs a service that's not connected — tell the user once what to connect and why."
         )
     else:
         _dyn_parts.append(
             "НАПОМИНАНИЕ О ФОРМАТЕ: только сплошной текст. ЗАПРЕЩЕНЫ списки, буллеты (-, *, •, 1. 2. 3.), "
             "жирный (** / __), заголовки (## / #), блоки кода, двойные пробелы. "
             "Перечисляй через запятую в предложениях, НЕ маркерами. Абзацы через одиночный \\n. Максимум 2 эмодзи. "
-            "НЕ упоминай сервисы (LinkedIn, Calendly и др.) если они НЕ подключены у пользователя."
+            "Если задача требует сервис, который не подключён — скажи один раз что подключить."
         )
 
     dynamic_context = '\n'.join(_dyn_parts)
