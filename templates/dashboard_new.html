@@ -2760,6 +2760,11 @@
             if (arenaLinkC) arenaLinkC.style.opacity = '0.5';
             // Sync new messages when switching to chat (agents may have posted while on another tab)
             updateChat();
+            // Scroll to latest messages — messages rendered while chat was hidden have scrollTop=0
+            requestAnimationFrame(() => {
+                const _cm = document.getElementById('chat-messages');
+                if (_cm) _cm.scrollTop = _cm.scrollHeight;
+            });
         }
 
         function switchToFeed() {
@@ -12136,6 +12141,7 @@ except Exception as e:
                         const _normMsg = s => (s || '').trim().replace(/\s+/g, ' ');
                         sortedInteractions.forEach((interaction) => {
                             const msgId = interaction.id;
+                            if (msgId > _chatMaxSeenId) _chatMaxSeenId = msgId;
                             if (!displayedMessageIds.has(msgId)) {
                                 // Не дублируем сообщение пользователя, пока post-send синк не завершился
                                 if (interaction.message_type === 'user' && window._pendingUserMsgText &&
