@@ -1958,6 +1958,22 @@ class HybridAutonomousAgent:
                         logger.warning("[EXEC] %s SKIPPED: %s", tool_name, (_block_err or 'no content')[:100])
                         continue
 
+                    # === БЛОК add_task в автопилоте: агент должен ВЫПОЛНЯТЬ работу сам ===
+                    if tool_name == 'add_task' and '[АВТОПИЛОТ]' in (user_message or ''):
+                        _new_title_ap = (params.get('title') or '')[:80]
+                        logger.warning("[EXEC] add_task BLOCKED in autopilot: '%s' — agent must execute, not delegate to user", _new_title_ap)
+                        results.append({
+                            "tool": tool_name, "success": False,
+                            "result": (
+                                "⛔ В автопилоте НЕЛЬЗЯ создавать задачи пользователю. "
+                                "Ты должен ВЫПОЛНИТЬ эту работу сам прямо сейчас: "
+                                "вызови нужный инструмент (web_search, send_outreach_email, create_post и т.д.) "
+                                "и покажи РЕЗУЛЬТАТ."
+                            ),
+                            "reason": reason
+                        })
+                        continue
+
                     # === Дедупликация add_task: не создаём задачи с очень похожим названием ===
                     if tool_name == 'add_task':
                         _new_title = (params.get('title') or '').strip().lower()
@@ -6592,8 +6608,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # Адаптивный автопилот: core tools + smart filter по специализации/интеграциям агента
             logger.info('[DIRECTOR] Autopilot task → adaptive toolset for %s', agent.get('name'))
             # Core: минимальный набор для любого автопилота (включая поиск — нужен всегда)
+            # add_task УБРАН: автопилот должен ВЫПОЛНЯТЬ работу, а не создавать задачи пользователю
             _autopilot_tools = {
-                'complete_task', 'edit_task', 'list_tasks', 'add_task',
+                'complete_task', 'edit_task', 'list_tasks',
                 'update_goal_progress', 'update_goal', 'complete_goal', 'list_goals',
                 'delegate_task', 'run_agent_action',
                 # Поиск/исследование — базово доступны всем, даже если есть спец.интеграция.

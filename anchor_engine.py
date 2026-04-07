@@ -5431,7 +5431,8 @@ class AnchorEngine:
                             f"ДЕЙСТВИЯ (выполни прямо сейчас, не планируй — делай):\n{_actions_text}\n\n"
                             "⚠️ ОБЯЗАТЕЛЬНО вызови инструмент и напиши результат по ФАКТУ.\n"
                             "❌ НЕ пиши 'планирую', 'собираюсь', 'буду' — только факты что уже сделано.\n"
-                            "❌ НЕ создавай задачи пользователю без явной необходимости.\n"
+                            "❌ НЕ вызывай add_task — ты должен ВЫПОЛНИТЬ работу САМ, а не создавать задачи пользователю.\n"
+                            "   Вместо 'создать задачу найти контакты' → вызови web_search/search_users и НАЙДИ контакты.\n"
                             "Отчёт пользователю — только ФАКТЫ: что нашёл, кто написал, что узнал.\n"
                         )
                     # Иначе оставляем task_text как был
@@ -5585,7 +5586,7 @@ class AnchorEngine:
                             _first_tool = _hint_c.split(',')[0].strip() if _hint_c else ''
                             if _first_tool:
                                 _can_tools_by_cat.append(f'{_cname} → {_first_tool}')
-                    _can_tools_by_cat.append('Всегда → web_search, research_topic, save_note, add_task')
+                    _can_tools_by_cat.append('Всегда → web_search, research_topic, save_note, send_message_to_user')
 
                     # Что НЕ подключено (для контекста рассуждений координатора)
                     _CAP_CANNOT_EXAMPLES: dict[str, str] = {
