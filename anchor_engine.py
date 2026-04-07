@@ -469,7 +469,8 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
     result = '\nИНТЕГРАЦИИ АГЕНТА (используй ТОЛЬКО из этого списка):\n'
     result += '\n'.join(lines) + '\n'
     result += (
-        '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Используй web_search/research_topic как альтернативу.\n'
+        '→ Нет в списке = сначала используй web_search/research_topic. '
+        'Если без конкретной интеграции задача невыполнима — подскажи пользователю что подключить в дашборде.\n'
     )
     return result
 
@@ -1657,7 +1658,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _intg_connected:
             _intg_block += '\n'.join(f'  {x}' for x in _intg_connected) + '\n'
         _intg_block += '  ✅ web_search, research_topic — всегда доступны\n'
-        _intg_block += '→ Нет в списке = используй web_search/research_topic как альтернативу.\n'
+        _intg_block += '→ Нет в списке = сначала попробуй web_search/research_topic. Если без интеграции задача невыполнима — скажи пользователю что подключить, один раз.\n'
+        if _intg_missing:
+            _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
+            _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
         # Goal-type-aware первый шаг
         if _goal_type == 'research' and _has_alpha:
             _goals_text_lower = ' '.join(
@@ -1692,10 +1696,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         else:
             _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
         _intg_block += (
-            '→ Если инструмент вернул ошибку авторизации/токена — '
-            'попробуй альтернативный инструмент (web_search, research_topic). '
-            'НЕ сообщай пользователю о проблемах с интеграциями — '
-            'просто используй другой способ решения задачи.\n'
+            '→ Если инструмент вернул ошибку — попробуй альтернативу (web_search, research_topic). '
+            'Если задачу НЕВОЗМОЖНО решить без этой интеграции — сообщи пользователю один раз: '
+            'что именно не получилось и какую интеграцию подключить в https://asibiont.com/dashboard.\n'
         )
 
     # ── История инструментов → что запрещено/предупреждение ──
@@ -5021,21 +5024,48 @@ class AnchorEngine:
                     )
                 )
 
-            # ══ Блок отсутствующих интеграций: внутренняя информация для корректировки действий ══
+            # ══ Контекст интеграций для агента ══
             import os as _os_intg
             _missing_intg_notes = []
             _real_agents_intg = [a for a in agents if getattr(a, 'id', 0) != 0]
-            # 1. Email-анкер но email-отправка не настроена на платформе
+            # 1. run_agent_action в tools_allowed но API-ключи не добавлены
+            for _ag_chk in _real_agents_intg:
+                if 'run_agent_action' in (_ag_chk.tools_allowed or '') and not (_ag_chk.user_api_keys or '').strip():
+                    _missing_intg_notes.append(
+                        f"⚠️ {_ag_chk.name}: run_agent_action доступен, но API-ключи не добавлены. "
+                        f"Используй web_search/research_topic. Если задача без интеграции невыполнима — "
+                        f"скажи пользователю ОДИН раз: подключить в https://asibiont.com/dashboard"
+                    )
+            # 2. Email-анкер но email-отправка не настроена на платформе
             _email_anchor_types = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
             if anchor.anchor_type in _email_anchor_types and not _os_intg.getenv('RESEND_API_KEY'):
                 _missing_intg_notes.append(
-                    "Email-отправка через платформу не настроена. "
+                    "❌ Email-отправка через платформу не настроена. "
                     "Используй email-агента с Gmail/Яндекс ключами."
+                )
+            # 3. Поиск разработчиков без GitHub-интеграции
+            _tech_kw_anchor = [
+                'github', 'developer', 'разработчик', 'программист',
+                'python', 'javascript', 'typescript', 'backend', 'frontend', 'fullstack',
+                'ai ', 'ml ', 'data science', 'machine learning', 'open source',
+            ]
+            _has_github_agent = any(
+                any(k in (getattr(_ag_i, 'user_api_keys', '') or '').upper()
+                    for k in ('GITHUB_TOKEN', 'GITHUB_ACCESS_TOKEN'))
+                for _ag_i in _real_agents_intg
+            )
+            if (any(w in task_text.lower() for w in _tech_kw_anchor)
+                    and not _has_github_agent and not _os_intg.getenv('GITHUB_TOKEN')):
+                _missing_intg_notes.append(
+                    "⚠️ GitHub-интеграция не настроена — используй web_search/find_relevant_contacts_for_task. "
+                    "Если без GitHub задача невыполнима — скажи пользователю ОДИН раз."
                 )
             if _missing_intg_notes:
                 task_text += (
-                    "\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ — НЕ пересказывай пользователю, используй для выбора инструментов]:\n"
+                    "\n\nИНТЕГРАЦИИ — ЧТО УЧЕСТЬ:\n"
                     + "\n".join(_missing_intg_notes)
+                    + "\n→ ПРИНЦИП: сначала попробуй решить задачу доступными инструментами. "
+                    "Если без конкретной интеграции задача НЕВЫПОЛНИМА — сообщи пользователю один раз, конкретно."
                 )
 
             # ── Предупреждения о достижимости целей ──
