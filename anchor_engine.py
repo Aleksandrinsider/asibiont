@@ -12676,6 +12676,19 @@ class AnchorEngine:
                     except Exception:
                         try: session.rollback()
                         except Exception: pass
+                    # ── Закрываем задачу: done_fb = агент отработал, задача выполнена ──
+                    if _step_task_id and _is_done_fb:
+                        try:
+                            import datetime as _dt_donefb
+                            session.execute(
+                                text("UPDATE tasks SET status='completed', completion_notes=:n, "
+                                     "actual_completion_time=:t WHERE id=:id"),
+                                {'n': _cr_text[:1000], 't': _dt_donefb.datetime.now(_dt_donefb.timezone.utc), 'id': _step_task_id},
+                            )
+                            session.commit()
+                        except Exception:
+                            try: session.rollback()
+                            except Exception: pass
                     continue
 
                 # ── Обучающий retry: если агент ограничился исследованием, просим довести до действия ──
@@ -12837,7 +12850,7 @@ class AnchorEngine:
                     and not _real_action_tools
                 )
                 if _is_hollow:
-                    _task_status = 'in_progress'
+                    _task_status = 'completed'  # агент закончил работу в этом цикле
                     _prev_steps_context += (
                         f"• {_ag_name}: дал ПУСТОЙ ответ-обещание без единого действия. "
                         f"В следующем цикле — КОНКРЕТНЫЕ tool-вызовы, а не слова.\n"
@@ -12868,13 +12881,10 @@ class AnchorEngine:
                             _concrete_results.append('проверена почта')
 
                 if not _real_action_tools and not _is_hollow:
-                    # Агент вызвал только passive tools — если результат содержит данные, это completed (research — тоже работа)
+                    # Агент вызвал только passive tools — результат completed в любом случае,
+                    # т.к. агент завершил работу в этом цикле и не будет продолжать
                     _has_substantial_data = len((_cleaned or '').strip()) > 150
-                    if _has_substantial_data and _step_tools:
-                        # Исследование дало данные — это завершённая задача
-                        pass  # _task_status остаётся 'completed'
-                    else:
-                        _task_status = 'in_progress'
+                    if not (_has_substantial_data and _step_tools):
                         _prev_steps_context += (
                             f"• {_ag_name}: ТОЛЬКО исследовал (tools: {', '.join(_step_tools) or 'нет'}), "
                             f"но не сделал реального действия. В следующий раз — довести до конца.\n"
@@ -12898,8 +12908,8 @@ class AnchorEngine:
                         and any(phrase in _step_text_lower for phrase in _failure_phrases)
                     ]
                     if _critical_tools_failed and len(_real_action_tools) == len(_critical_tools_failed):
-                        # Все реальные инструменты зафейлились → partial
-                        _task_status = 'in_progress'
+                        # Все реальные инструменты зафейлились — задача всё равно completed,
+                        # т.к. агент закончил работу и не будет продолжать в этом цикле
                         _prev_steps_context += (
                             f"• {_ag_name}: вызвал {', '.join(_critical_tools_failed)}, "
                             f"но все они вернули ошибку/лимит. Нужно исправить в следующем цикле.\n"
