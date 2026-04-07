@@ -6567,6 +6567,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _e3:
             logger.debug("[DIRECTOR-EXEC] script exec error for %s: %s", agent.get('name'), _e3)
 
+    # ── Определяем тип цели (нужно ДО фильтрации инструментов) ──────────────
+    _OUTREACH_KW = ('outreach', 'email', 'рассылк', 'привлеч', 'клиент', 'продаж', 'лид', 'lead', 'предприниматель', 'партнёр', 'b2b', 'маркетинг')
+    _is_outreach_goal = any(w in (task or '').lower() for w in _OUTREACH_KW)
+
     # ── Шаг 2: Определяем разрешённые инструменты ─────────────────────────────
     _allowed_tools: set[str] = set()
     try:
@@ -7263,9 +7267,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         w in _decrypt_keys(agent.get('user_api_keys', '') or '').lower()
         for w in ('github', 'gitlab', 'resend', 'sendgrid', 'mailgun', 'gmail_pass', 'gmail_app')
     )
-    # Определяем тип цели для адаптивных подсказок
-    _OUTREACH_KW = ('outreach', 'email', 'рассылк', 'привлеч', 'клиент', 'продаж', 'лид', 'lead', 'предприниматель', 'партнёр', 'b2b', 'маркетинг')
-    _is_outreach_goal = any(w in (task or '').lower() for w in _OUTREACH_KW)
+    # _OUTREACH_KW / _is_outreach_goal уже определены выше (перед Шагом 2)
     for _iter in range(_max_iters):
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
         _max_tool_calls = min(15 + _intg_count * 3, 30) if _is_autopilot_task else 5
