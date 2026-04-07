@@ -12708,6 +12708,22 @@ class AnchorEngine:
                     _cleaned = _re_h.sub(r'\s{2,}', ' ', _cleaned).strip()
                     if _cleaned and _cleaned[-1] not in '.!?…':
                         _cleaned += '.'
+                    # Капитализация первой буквы ответа агента
+                    if _cleaned and _cleaned[0].islower():
+                        _cleaned = _cleaned[0].upper() + _cleaned[1:]
+                    # Вырезаем галлюцинации о сохранении заметки если save_note не вызывался
+                    if 'save_note' not in _step_tools:
+                        import re as _re_hallu
+                        _cleaned = _re_hallu.sub(
+                            r'[.!]?\s*[Яя]\s+сохранил[аи]?\s+заметку[^.]*\.?',
+                            '.', _cleaned
+                        ).strip()
+                        _cleaned = _re_hallu.sub(
+                            r'[.!]?\s*[Зз]аметка\s+(?:сохранена|записана|создана)[^.]*\.?',
+                            '.', _cleaned
+                        ).strip()
+                        # Нормализуем двойные точки после вырезки
+                        _cleaned = _re_hallu.sub(r'\.{2,}', '.', _cleaned).strip()
                 except Exception:
                     pass
 
@@ -12779,6 +12795,10 @@ class AnchorEngine:
                     'наткнулась на пару', 'наткнулся на пару',
                     'продолжу работу', 'продолжу искать',
                     'работаю над целями', 'анализирую возможные',
+                    'принял.', 'принял!', 'принял задач', 'принято.',
+                    'сейчас разберу', 'сейчас разберусь', 'сейчас проанализирую',
+                    'отправлю через', 'дам ответ через', 'вернусь через',
+                    'сформирую план', 'подготовлю отчёт',
                 )
                 _cleaned_lower = (_cleaned or '').lower()
                 _is_hollow = (

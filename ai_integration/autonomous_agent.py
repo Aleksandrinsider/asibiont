@@ -7386,7 +7386,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "[DIRECTOR-EXEC] autopilot text-without-tools retry for %s → suggest %s",
                         agent.get('name'), _first_tool,
                     )
-                    _messages.append({"role": "assistant", "content": _content or ""})
+                    _messages.append({"role": "assistant", "content": ""})
                     _messages.append({"role": "user", "content": (
                         f"СТОП. Ты написал текст без вызова инструмента — это ошибка. "
                         f"Вызови инструмент прямо сейчас. Оптимальный вариант для этой задачи: {_first_tool}. "
