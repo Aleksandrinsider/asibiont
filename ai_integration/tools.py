@@ -1903,4 +1903,46 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "http_api_request",
+            "description": "🌐 Универсальный HTTP-запрос к любому внешнему API. Используй для работы с CRM (AmoCRM, HubSpot, Bitrix24), мессенджерами (Slack, Discord), сервисами (Notion, Trello, Jira), платёжками (Stripe, ЮKassa) и любыми REST API. API-ключи пользователя подставляются автоматически из настроек агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "URL API-эндпоинта. Пример: https://api.github.com/repos/owner/repo/issues"
+                    },
+                    "method": {
+                        "type": "string",
+                        "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"],
+                        "description": "HTTP метод (по умолчанию GET)"
+                    },
+                    "headers": {
+                        "type": "object",
+                        "description": "Дополнительные заголовки. Для авторизации используй auth_key. Пример: {\"Content-Type\": \"application/json\"}"
+                    },
+                    "body": {
+                        "type": "object",
+                        "description": "Тело запроса (JSON). Для POST/PUT/PATCH."
+                    },
+                    "auth_key": {
+                        "type": "string",
+                        "description": "Имя API-ключа из настроек агента для Authorization header. Пример: AMOCRM_TOKEN, GITHUB_TOKEN, NOTION_TOKEN, HUBSPOT_TOKEN"
+                    },
+                    "auth_scheme": {
+                        "type": "string",
+                        "description": "Схема авторизации: Bearer (по умолчанию), Basic, Token, или пустая строка для подстановки ключа как есть"
+                    },
+                    "agent_name": {
+                        "type": "string",
+                        "description": "Имя агента, чьи API-ключи использовать (если несколько агентов)"
+                    }
+                },
+                "required": ["url"]
+            }
+        }
+    },
 ]

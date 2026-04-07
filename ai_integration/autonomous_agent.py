@@ -846,6 +846,8 @@ class HybridAutonomousAgent:
         'send_email', 'check_emails',
         # Delegation & agents
         'delegate_task', 'run_agent_action',
+        # Universal HTTP API — any external service
+        'http_api_request',
         # Agent switching — always available so ASI can proactively route to user's custom agents
         'switch_agent', 'list_marketplace',
         # Campaigns — conversation can span multiple turns
@@ -6302,14 +6304,20 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "для конкретного внешнего сервиса, к которому у тебя нет доступа. "
         "Если можешь выполнить задачу доступными тебе инструментами — делай сам, не делегируй.\n\n"
 
-        "САМОАНАЛИЗ ИНТЕГРАЦИЙ:\n"
-        "Смотри в раздел «ТВОИ ИНТЕГРАЦИИ» — там перечислено что у тебя РЕАЛЬНО подключено. "
-        "Если что-то перечислено — ты УМЕЕШЬ это делать, используй run_agent_action. "
-        "Если инструмент не сработал — СНАЧАЛА попробуй альтернативу (web_search, research_topic). "
-        "Если без этой интеграции задача НЕВЫПОЛНИМА — скажи пользователю конкретно: "
-        "какую интеграцию подключить и зачем. Одно упоминание = достаточно, не повторяй.\n"
-        "Не обещай действий через сервисы, которых нет в «Твои интеграции» — но если сервис нужен для задачи, "
-        "скажи пользователю один раз: что подключить, где (дашборд), зачем.\n\n"
+        "РАБОТА С ИНТЕГРАЦИЯМИ:\n"
+        "У тебя есть ДВА способа работать с внешними сервисами:\n"
+        "1) run_agent_action — если у агента есть скрипт (python_code) для конкретного действия\n"
+        "2) http_api_request — УНИВЕРСАЛЬНЫЙ: вызывай ЛЮБОЙ REST API напрямую (CRM, мессенджеры, "
+        "Notion, Jira, Trello, Stripe, AmoCRM, HubSpot, Bitrix24 и др.). "
+        "API-ключи из настроек агента подставляются через auth_key автоматически.\n"
+        "Примеры:\n"
+        "  AmoCRM: http_api_request(url='https://DOMAIN.amocrm.ru/api/v4/leads', auth_key='AMOCRM_TOKEN')\n"
+        "  HubSpot: http_api_request(url='https://api.hubapi.com/crm/v3/objects/contacts', auth_key='HUBSPOT_TOKEN')\n"
+        "  Notion: http_api_request(url='https://api.notion.com/v1/pages', method='POST', headers={'Notion-Version':'2022-06-28'}, auth_key='NOTION_TOKEN', body={...})\n"
+        "  Slack: http_api_request(url='https://slack.com/api/chat.postMessage', method='POST', auth_key='SLACK_BOT_TOKEN', body={'channel':'#general','text':'...'})\n"
+        "Ты знаешь API популярных сервисов — используй свои знания для формирования правильных запросов.\n"
+        "Смотри в раздел «ТВОИ ИНТЕГРАЦИИ» — если API-ключ есть, ты МОЖЕШЬ работать с этим сервисом.\n"
+        "Если API-ключа нет — скажи пользователю один раз: что добавить в дашборде и зачем.\n\n"
 
         "EMAIL-АДРЕСА:\n"
         "Копируй email ПОСИМВОЛЬНО из входных данных (IMAP, From, To, заголовки писем). "

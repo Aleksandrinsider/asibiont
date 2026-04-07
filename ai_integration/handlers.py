@@ -18377,3 +18377,140 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
             err = result.get('error', 'неизвестная ошибка')
             return f" Ошибка при выполнении «{action}»: {err}"
     return str(result)
+
+
+# ─── Universal HTTP API Request ───────────────────────────────────
+
+async def http_api_request(user_id: int, url: str, method: str = 'GET',
+                           headers: dict = None, body: dict = None,
+                           auth_key: str = None, auth_scheme: str = 'Bearer',
+                           agent_name: str = None,
+                           session=None, close_session: bool = True) -> str:
+    """Универсальный HTTP-запрос к любому внешнему API с автоподстановкой API-ключей агента."""
+    import aiohttp
+    import ipaddress
+    from urllib.parse import urlparse
+
+    if not url or not isinstance(url, str):
+        return "Ошибка: URL не указан"
+    url = url.strip()
+    if not url.startswith('https://') and not url.startswith('http://'):
+        return "Ошибка: URL должен начинаться с https:// или http://"
+
+    # Block internal/private IPs
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ''
+        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1', ''):
+            return "Ошибка: запросы к локальным адресам запрещены"
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return "Ошибка: запросы к приватным адресам запрещены"
+        except ValueError:
+            pass  # hostname, not IP
+    except Exception:
+        return "Ошибка: некорректный URL"
+
+    method = (method or 'GET').upper()
+    if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
+        return "Ошибка: метод должен быть GET, POST, PUT, PATCH или DELETE"
+
+    # Resolve API key from agent config
+    req_headers = dict(headers or {})
+    if auth_key:
+        _key_value = _resolve_agent_api_key(user_id, auth_key.strip(), agent_name)
+        if _key_value:
+            scheme = (auth_scheme or 'Bearer').strip()
+            if scheme:
+                req_headers['Authorization'] = f'{scheme} {_key_value}'
+            else:
+                req_headers['Authorization'] = _key_value
+        else:
+            return f"Ошибка: API-ключ '{auth_key}' не найден в настройках агента. Добавь его в дашборде: https://asibiont.com/dashboard → Агенты → API-ключи"
+
+    if 'Content-Type' not in req_headers and method in ('POST', 'PUT', 'PATCH'):
+        req_headers['Content-Type'] = 'application/json'
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as http_session:
+            kwargs = {'headers': req_headers}
+            if body and method in ('POST', 'PUT', 'PATCH'):
+                kwargs['json'] = body
+
+            async with http_session.request(method, url, **kwargs) as resp:
+                status = resp.status
+                try:
+                    resp_text = await resp.text(encoding='utf-8')
+                except Exception:
+                    resp_text = await resp.read()
+                    resp_text = resp_text.decode('utf-8', errors='replace')
+
+                if len(resp_text) > 3000:
+                    resp_text = resp_text[:3000] + '\n... (обрезано, всего ' + str(len(resp_text)) + ' символов)'
+
+                if 200 <= status < 300:
+                    return f"✅ HTTP {status}\n{resp_text}"
+                else:
+                    return f"❌ HTTP {status}\n{resp_text}"
+    except aiohttp.ClientError as e:
+        return f"Ошибка HTTP-запроса: {e}"
+    except Exception as e:
+        return f"Ошибка: {e}"
+
+
+def _resolve_agent_api_key(user_id: int, key_name: str, agent_name: str = None) -> str | None:
+    """Находит значение API-ключа из настроек агента пользователя."""
+    from .autonomous_agent import get_autonomous_agent, _decrypt_keys
+
+    agent = get_autonomous_agent()
+    agent_data = None
+
+    if agent_name:
+        try:
+            from models import Session as _S, UserAgent as _UA
+            _s = _S()
+            try:
+                _tg_user = _s.execute(
+                    __import__('sqlalchemy').text("SELECT id FROM users WHERE telegram_id = :tid"),
+                    {"tid": user_id}
+                ).fetchone()
+                if _tg_user:
+                    _req_lower = agent_name.lower().strip()
+                    for _ca in _s.query(_UA).filter(
+                        _UA.author_id == _tg_user[0],
+                        _UA.status.in_(('active', 'draft', 'paused')),
+                    ).all():
+                        if (_ca.name or '').lower() == _req_lower:
+                            agent_data = {'user_api_keys': _ca.user_api_keys or ''}
+                            break
+            finally:
+                _s.close()
+        except Exception:
+            pass
+
+    if not agent_data:
+        agent_data = agent._active_agent_data.get(user_id)
+
+    if not agent_data:
+        try:
+            from .user_agents import get_user_active_agent, load_agent_personality
+            aid = get_user_active_agent(user_id)
+            if aid:
+                agent_data = load_agent_personality(aid)
+        except Exception:
+            pass
+
+    if not agent_data:
+        return None
+
+    api_keys_raw = _decrypt_keys(agent_data.get('user_api_keys', '') or '')
+    key_name_upper = key_name.upper()
+    for line in api_keys_raw.splitlines():
+        line = line.strip()
+        if '=' in line and not line.startswith('#'):
+            k, _, v = line.partition('=')
+            if k.strip().upper() == key_name_upper:
+                return v.strip()
+    return None
