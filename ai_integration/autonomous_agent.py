@@ -7169,17 +7169,27 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
         except Exception as _ai_err:
             _err_msg = str(_ai_err) or type(_ai_err).__name__
-            logger.warning("[DIRECTOR-EXEC] agent %s call_ai error: %s", agent.get('name'), _err_msg)
+            logger.warning("[DIRECTOR-EXEC-DIAG] agent %s call_ai EXCEPTION iter=%d tc_mode=%s: %s",
+                           agent.get('name'), _iter, _tc_mode, _err_msg)
             break
         if _resp:
             _u_ap = _resp.get('usage') or {}
             _total_ap_tokens += _u_ap.get('prompt_tokens', 0) + _u_ap.get('completion_tokens', 0)
         if not _resp or not _resp.get('choices'):
+            logger.warning("[DIRECTOR-EXEC-DIAG] agent %s EMPTY resp iter=%d tc_mode=%s resp_keys=%s",
+                           agent.get('name'), _iter, _tc_mode,
+                           list(_resp.keys()) if _resp else 'None')
             break
         _msg = _resp['choices'][0]['message']
         _content = _msg.get('content') or ''
         _tool_calls = _msg.get('tool_calls') or []
         _finish_reason = _resp['choices'][0].get('finish_reason', '')
+
+        # ── DIAGNOSTIC LOG: API response details ──
+        logger.warning(
+            "[DIRECTOR-EXEC-DIAG] agent %s iter=%d OK: content_len=%d tool_calls=%d finish=%s tc_mode=%s",
+            agent.get('name'), _iter, len(_content), len(_tool_calls), _finish_reason, _tc_mode,
+        )
 
         if not _tool_calls:
             # Агент ответил текстом — парсим паттерн DELEGATE[Имя]: задача
@@ -8251,6 +8261,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 logger.debug("[DIRECTOR-EXEC] hollow rework failed: %s", _rw_err)
 
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
+    # ── DIAGNOSTIC: final return state ──
+    logger.warning(
+        "[DIRECTOR-EXEC-DIAG] RETURN agent=%s final_text_len=%d tools_used=%s tokens=%d early_text=%s",
+        agent.get('name', '?'), len(_final_text or ''), _tools_used[:5], _total_ap_tokens,
+        'set' if _early_text is not None else 'None',
+    )
     return _final_text, _tools_used, _total_ap_tokens
 
 

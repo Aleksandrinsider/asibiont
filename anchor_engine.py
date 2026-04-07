@@ -6837,6 +6837,13 @@ class AnchorEngine:
                 _tools_used = list(_raw[1]) if isinstance(_raw, (tuple, list)) and len(_raw) > 1 else []
                 _cycle_tokens = int(_raw[2]) if isinstance(_raw, (tuple, list)) and len(_raw) > 2 else 0
 
+                # ── DIAGNOSTIC LOG: что агент вернул (до noise filter) ──
+                logger.warning(
+                    "[ANCHOR-AUTOPILOT-DIAG] user=%d agent=%s result_len=%d tools=%s tokens=%d result_preview='%s'",
+                    user.id, agent_name, len(result or ''), _tools_used[:5], _cycle_tokens,
+                    (result or '')[:200].replace('\n', '\\n'),
+                )
+
                 # Динамический биллинг: списываем по фактическому расходу API
                 # 1 платформенный токен ≈ 500 DeepSeek-токенов (50x множитель), мин=2, макс=25
                 if not _FAM_ap and (_cycle_tokens > 0 or (result or '').strip()):
