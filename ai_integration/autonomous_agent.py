@@ -8261,6 +8261,33 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 logger.debug("[DIRECTOR-EXEC] hollow rework failed: %s", _rw_err)
 
     logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
+
+    # ── RESCUE: autopilot вернул пустоту (API timeout / no tools / empty response) ──
+    # Делаем лёгкий AI-вызов без инструментов чтобы агент хотя бы написал статус
+    if _is_autopilot_task and not _final_text and not _tools_used:
+        try:
+            _rescue_text = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — {agent.get('name', 'агент')} ({agent.get('specialization', 'помощник')}).\n"
+                    f"Задача: {task[:300]}.\n"
+                    f"Расскажи пользователю в 2-3 предложениях ЧТО КОНКРЕТНО ты собираешься сделать:\n"
+                    f"— Какие данные найдёшь\n— Где будешь искать\n— Какой первый результат ожидаешь\n"
+                    f"Пиши от первого лица, уверенно, без слов 'начинаю', 'приступаю', 'планирую'.\n"
+                    f"Пример: 'Проверю базу контактов и отправлю 2-3 письма потенциальным партнёрам.'"
+                ),
+            }], max_tokens=300, _caller='exec_rescue_fallback')
+            if _rescue_text and len(_rescue_text.strip()) > 30:
+                _final_text = _rescue_text.strip()
+                # Маркируем как rescue чтобы noise filter не отсёк
+                _tools_used.append('__rescue_status')
+                logger.warning(
+                    "[DIRECTOR-EXEC] RESCUE fallback for %s: %d chars (original was empty, no tools used)",
+                    agent.get('name', '?'), len(_final_text),
+                )
+        except Exception as _rescue_err:
+            logger.warning("[DIRECTOR-EXEC] rescue fallback failed for %s: %s", agent.get('name', '?'), _rescue_err)
+
     # ── DIAGNOSTIC: final return state ──
     logger.warning(
         "[DIRECTOR-EXEC-DIAG] RETURN agent=%s final_text_len=%d tools_used=%s tokens=%d early_text=%s",
