@@ -11464,9 +11464,6 @@ class AnchorEngine:
             _minor_updates_summary = []
             _all_tools = []
             _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
-            # Аккумулятор результатов по агентам: {name: [{text, tools, goal_title, id, avatar, is_minor}]}
-            # Один агент может выполнить несколько шагов — но пользователь видит ОДНО консолидированное сообщение
-            _agent_results_accum: dict = {}
             # Масштабируем лимит шагов с размером команды: больше агентов → больше действий за цикл.
             # Формула: max(6, min(agents + goals, 12)) — но не более 12 чтобы цикл не затягивался.
             _MAX_DYNAMIC_STEPS = max(6, min(len(real_agents) + len(_goals), 12))
@@ -12984,31 +12981,56 @@ class AnchorEngine:
                 if _is_minor_update:
                     _minor_updates_summary.append(f"{_ag_name}: {_cleaned[:120]}")
 
-                # ── Аккумулируем результат агента (сохранение в чат — после loop, консолидированно) ──
+                # ── Сохраняем результат каждого шага отдельно — пользователь видит весь прогресс ──
                 try:
                     _skip_step_cap = (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name))
                     if not (_cleaned or '').strip():
                         logger.info("[COORD] skip empty coordinator_result from %s", _ag_name)
-                    elif not _skip_step_cap:
-                        # Накапливаем для консолидации
-                        if _ag_name not in _agent_results_accum:
-                            _agent_results_accum[_ag_name] = {
-                                'texts': [], 'tools': [], 'id': _ag_id,
-                                'avatar': _ag_avatar, 'goal_title': (_ag_goal_title or '')[:200],
-                                'has_major': False,
-                            }
-                        _agent_results_accum[_ag_name]['texts'].append(_cleaned)
-                        _agent_results_accum[_ag_name]['tools'].extend(_step_tools)
-                        if not _is_minor_update:
-                            _agent_results_accum[_ag_name]['has_major'] = True
+                    elif _is_minor_update and not _skip_step_cap:
+                        _cleaned_chat_m = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            _strip_html(_cleaned),
+                            anchor_type='coordinator_result',
+                            speaker_name=_ag_name,
+                        )
+                        _msg_type_m = 'agent_msg' if _ag_id != 0 else 'proactive'
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type=_msg_type_m,
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
+                                'text': _cleaned_chat_m,
+                                '__tools_used': _step_tools,
+                                '__anchor_type': 'coordinator_result',
+                                '__to_agent': _ag_name,
+                                '__minor': True,
+                                '__goal_title': (_ag_goal_title or '')[:200],
+                            }, ensure_ascii=False),
+                        ))
+                    elif not _is_minor_update and not _skip_step_cap:
+                        _cleaned_chat = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            _strip_html(_cleaned),
+                            anchor_type='coordinator_result',
+                            speaker_name=_ag_name,
+                        )
+                        _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type=_msg_type_c2,
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id, 'avatar_url': _ag_avatar},
+                                'text': _cleaned_chat,
+                                '__tools_used': _step_tools,
+                                '__anchor_type': 'coordinator_result',
+                                '__to_agent': _ag_name,
+                                '__goal_title': (_ag_goal_title or '')[:200],
+                            }, ensure_ascii=False),
+                        ))
                     else:
                         logger.info(
                             "[COORD] user %d: skip coordinator_result from %s (daily cap=%d)",
-                            user.id,
-                            _ag_name,
-                            MAX_AGENT_PERSONA_MSG_PER_DAY,
+                            user.id, _ag_name, MAX_AGENT_PERSONA_MSG_PER_DAY,
                         )
-                    # AAL — аудит, сохраняем СРАЗУ (не user-facing, нужен для context_builder)
+                    # AAL — аудит (не user-facing, нужен для context_builder)
                     from ai_integration.utils import normalize_task_title as _ntt_aal
                     _aal_task_title, _ = _ntt_aal(_step.get('task') or 'задача', agent_name=_ag_name)
                     _aal_result = (_cleaned or '')[:600] or f'Задача выполнена агентом {_ag_name}'
@@ -13029,7 +13051,15 @@ class AnchorEngine:
                     except Exception:
                         pass
 
-                # Telegram-отправку отложим — после loop, одно сообщение на агента
+                # Отправляем результат шага в Telegram — пользователь видит каждый шаг
+                if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not _is_minor_update and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
+                    try:
+                        _cleaned_tg = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
+                            _cleaned, anchor_type='coordinator_result', speaker_name=_ag_name,
+                        )
+                        await _safe_send(self.bot, user.telegram_id, f"{_ag_name} — отчёт:\n{_cleaned_tg}")
+                    except Exception:
+                        pass
 
                 if _is_minor_update:
                     _results_summary.append(f"{_ag_name}: {_cleaned[:150]}")
@@ -13207,56 +13237,6 @@ class AnchorEngine:
                             pass
                 except Exception as _upd_outer:
                     logger.warning("[COORD] AAL update session setup: %s", _upd_outer)
-
-            # ── Консолидация: одно сообщение на агента (Interaction + Telegram) ──
-            for _cons_name, _cons_data in _agent_results_accum.items():
-                try:
-                    _cons_texts = _cons_data['texts']
-                    _cons_tools = list(dict.fromkeys(_cons_data['tools']))  # unique, preserve order
-                    _cons_id = _cons_data['id']
-                    _cons_avatar = _cons_data['avatar']
-                    _cons_goal = _cons_data['goal_title']
-                    _cons_has_major = _cons_data['has_major']
-                    # Склеиваем тексты нескольких шагов одного агента
-                    if len(_cons_texts) == 1:
-                        _cons_merged = _cons_texts[0]
-                    else:
-                        _cons_merged = '\n\n'.join(t.strip() for t in _cons_texts if t and t.strip())
-                    _cons_clean = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
-                        _strip_html(_cons_merged),
-                        anchor_type='coordinator_result',
-                        speaker_name=_cons_name,
-                    )
-                    if not _cons_clean or len(_cons_clean.strip()) < 5:
-                        continue
-                    _cons_msg_type = 'agent_msg' if _cons_id != 0 else 'proactive'
-                    session.add(Interaction(
-                        user_id=user.id,
-                        message_type=_cons_msg_type,
-                        content=json.dumps({
-                            '__agent': {'name': _cons_name, 'id': _cons_id, 'avatar_url': _cons_avatar},
-                            'text': _cons_clean,
-                            '__tools_used': _cons_tools,
-                            '__anchor_type': 'coordinator_result',
-                            '__to_agent': _cons_name,
-                            '__goal_title': _cons_goal,
-                        }, ensure_ascii=False),
-                    ))
-                    session.commit()
-                    logger.info("[COORD] consolidated result saved for %s (%d steps merged)", _cons_name, len(_cons_texts))
-                    # Telegram: отправляем если есть major-контент
-                    if self.bot and _cons_has_major and len(_cons_clean.strip()) > 20:
-                        try:
-                            _tg_text = f"{_cons_name} — отчёт:\n{_cons_clean}"
-                            await _safe_send(self.bot, user.telegram_id, _tg_text)
-                        except Exception:
-                            pass
-                except Exception as _cons_err:
-                    logger.warning("[COORD] consolidated save failed for %s: %s", _cons_name, _cons_err)
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
 
             # ── Финальный отчёт пользователю: что РЕАЛЬНО сделано за этот цикл ──
             # Фильтруем placeholder/pending записи — они бесполезны в отчёте
