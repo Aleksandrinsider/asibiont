@@ -26,145 +26,145 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════
 
 ACTION_COSTS = {
-    # Ценообразование: 100x от реальной стоимости DeepSeek V3
+    # Ценообразование: 50x от реальной стоимости DeepSeek V3
     # DeepSeek V3 ≈ $0.00043/1k токенов (с учётом кэша 63%).
-    # При $1=90₽: ~0.039₽/1k DS-токенов → 100× = ~4 токена/1k DS-токенов.
+    # При $1=90₽: ~0.039₽/1k DS-токенов → 50× = ~2 токена/1k DS-токенов.
     # 1 платформенный токен = 1 рубль.
 
     # ── Базовые ──
-    'message':           30,   # ~8k DS-токенов → 32₽ × 100x → 30
-    'voice_message':     35,   # ~9k DS-токенов → 35₽ × 100x → 35
+    'message':           15,   # ~8k DS-токенов → 50x → 15
+    'voice_message':     18,   # ~9k DS-токенов → 50x → 18
 
     # ── Задачи ──
-    'add_task':           5,   # Минимальное AI — внутри message-цикла
-    'edit_task':          3,   # DB-операция, без отдельного AI-вызова
-    'complete_task':      2,   # Завершение задачи
-    'delete_task':        2,   # Удаление задачи
-    'reschedule_task':    3,   # Перенос задачи
-    'restore_task':       2,   # Восстановление задачи
-    'list_tasks':         2,   # Просмотр списка задач
-    'get_task_details':   2,   # Детали задачи
+    'add_task':           3,   # Минимальное AI — внутри message-цикла
+    'edit_task':          2,   # DB-операция, без отдельного AI-вызова
+    'complete_task':      1,   # Завершение задачи
+    'delete_task':        1,   # Удаление задачи
+    'reschedule_task':    2,   # Перенос задачи
+    'restore_task':       1,   # Восстановление задачи
+    'list_tasks':         1,   # Просмотр списка задач
+    'get_task_details':   1,   # Детали задачи
 
     # ── Цели ──
-    'create_goal':        5,   # DB-операция внутри message-потока
-    'update_goal':        3,   # Обновление цели
-    'complete_goal':      2,   # Завершение цели
-    'list_goals':         2,   # Список целей
+    'create_goal':        3,   # DB-операция внутри message-потока
+    'update_goal':        2,   # Обновление цели
+    'complete_goal':      1,   # Завершение цели
+    'list_goals':         1,   # Список целей
 
     # ── Делегирование ──
-    'delegate_task':     45,   # ~12k DS-токенов (director-цикл) → 45
-    'get_delegation_progress': 5,  # Проверка статуса
-    'cancel_delegation':  5,   # Отмена делегирования
+    'delegate_task':     22,   # ~12k DS-токенов (director-цикл) → 22
+    'get_delegation_progress': 3,  # Проверка статуса
+    'cancel_delegation':  3,   # Отмена делегирования
 
     # ── Аналитика ──
-    'analyze_situation_and_suggest_tasks': 30,   # ~8k DS-токенов → 30
-    'research_and_plan':  30,   # ~8k DS-токенов → 30
-    'analyze_group_opportunities': 25,  # ~6k DS-токенов → 25
+    'analyze_situation_and_suggest_tasks': 15,   # ~8k DS-токенов → 15
+    'research_and_plan':  15,   # ~8k DS-токенов → 15
+    'analyze_group_opportunities': 12,  # ~6k DS-токенов → 12
 
     # ── Маркетинг ──
-    'generate_marketing_content': 35,  # ~9k DS-токенов → 35
-    'set_content_strategy':       15,  # ~4k DS-токенов → 15
-    'publish_to_telegram':        20,  # ~5k DS-токенов → 20
-    'publish_to_discord':          20,  # ~5k DS-токенов → 20
-    'generate_image':              25,  # Внешний API (Replicate Flux) + промпт AI
+    'generate_marketing_content': 18,  # ~9k DS-токенов → 18
+    'set_content_strategy':        8,  # ~4k DS-токенов → 8
+    'publish_to_telegram':        10,  # ~5k DS-токенов → 10
+    'publish_to_discord':          10,  # ~5k DS-токенов → 10
+    'generate_image':              12,  # Внешний API (Replicate Flux) + промпт AI
 
     # ── Автономные функции ──
-    'toggle_autonomous_feature':   5,  # Вкл/выкл автономной функции
+    'toggle_autonomous_feature':   3,  # Вкл/выкл автономной функции
 
     # ── Контакты / профиль ──
-    'find_partners':      8,   # ~2k DS-токенов → 8
-    'update_profile':     3,   # DB-операция
-    'smart_update_profile': 3,
+    'find_partners':      4,   # ~2k DS-токенов → 4
+    'update_profile':     2,   # DB-операция
+    'smart_update_profile': 2,
 
     # ── Напоминания ──
-    'set_reminder':       3,   # DB-операция
+    'set_reminder':       2,   # DB-операция
 
     # ── Утилиты ──
-    'get_weather_info':   2,   # Внешний API
-    'get_news_trends':    5,   # Внешний API
-    'quick_topic_search': 8,   # ~2k DS-токенов → 8
-    'research_topic':    15,   # ~4k DS-токенов → 15
+    'get_weather_info':   1,   # Внешний API
+    'get_news_trends':    3,   # Внешний API
+    'quick_topic_search': 4,   # ~2k DS-токенов → 4
+    'research_topic':     8,   # ~4k DS-токенов → 8
     'get_system_status':  0,   # Диагностика сервисов — бесплатно
 
     # ── Email-аутрич ──
-    'start_email_campaign':     25,  # ~6k DS-токенов → 25
-    'update_email_campaign':     5,  # Обновление параметров
-    'send_outreach_email':      15,  # ~4k DS-токенов → 15
-    'email_send':               15,  # Alias для send_outreach_email
-    'send_email':               15,  # ~4k DS-токенов → 15
-    'reply_to_outreach_email':  12,  # ~3k DS-токенов → 12
-    'email_reply':              12,  # Alias для reply
-    'send_follow_up_email':     15,  # ~4k DS-токенов → 15
-    'email_follow_up':          15,  # Alias для follow-up
-    'add_email_leads':           5,  # Добавление лидов в кампанию
-    'get_email_campaign_status': 2,  # Просмотр статуса кампании
-    'pause_email_campaign':      2,  # Пауза/возобновление кампании
-    'save_email_contact':        2,  # Сохранение email-контакта
-    'list_email_contacts':       2,  # Просмотр контактов
-    'negotiate_by_email':       25,  # ~6k DS-токенов (первое письмо + цепочка) → 25
+    'start_email_campaign':     12,  # ~6k DS-токенов → 12
+    'update_email_campaign':     3,  # Обновление параметров
+    'send_outreach_email':       8,  # ~4k DS-токенов → 8
+    'email_send':                8,  # Alias для send_outreach_email
+    'send_email':                8,  # ~4k DS-токенов → 8
+    'reply_to_outreach_email':   6,  # ~3k DS-токенов → 6
+    'email_reply':               6,  # Alias для reply
+    'send_follow_up_email':      8,  # ~4k DS-токенов → 8
+    'email_follow_up':           8,  # Alias для follow-up
+    'add_email_leads':           3,  # Добавление лидов в кампанию
+    'get_email_campaign_status': 1,  # Просмотр статуса кампании
+    'pause_email_campaign':      1,  # Пауза/возобновление кампании
+    'save_email_contact':        1,  # Сохранение email-контакта
+    'list_email_contacts':       1,  # Просмотр контактов
+    'negotiate_by_email':       12,  # ~6k DS-токенов (первое письмо + цепочка) → 12
 
     # ── Контент-кампании ──
-    'start_content_campaign':   20,  # ~5k DS-токенов → 20
-    'manage_content_campaign':   5,  # Управление контент-кампанией
+    'start_content_campaign':   10,  # ~5k DS-токенов → 10
+    'manage_content_campaign':   3,  # Управление контент-кампанией
 
     # ── Кампании делегирования ──
-    'start_delegation_campaign': 20,  # ~5k DS-токенов → 20
-    'manage_delegation_campaign': 5,  # Управление кампанией делегирования
+    'start_delegation_campaign': 10,  # ~5k DS-токенов → 10
+    'manage_delegation_campaign': 3,  # Управление кампанией делегирования
 
     # ── Задачи (дополнительно) ──
-    'accept_delegated_task':     3,  # Принятие делегированной задачи
-    'reject_delegated_task':     3,  # Отклонение делегированной задачи
-    'check_time_conflicts':      2,  # Проверка конфликтов времени
-    'find_relevant_contacts_for_task': 12,  # ~3k DS-токенов → 12
+    'accept_delegated_task':     2,  # Принятие делегированной задачи
+    'reject_delegated_task':     2,  # Отклонение делегированной задачи
+    'check_time_conflicts':      1,  # Проверка конфликтов времени
+    'find_relevant_contacts_for_task': 6,  # ~3k DS-токенов → 6
 
     # ── Цели (дополнительно) ──
-    'delete_goal':               2,  # Удаление цели
-    'update_goal_progress':      3,  # DB-операция
+    'delete_goal':               1,  # Удаление цели
+    'update_goal_progress':      2,  # DB-операция
 
     # ── Посты ──
-    'create_post':               3,  # Создание поста
-    'edit_post':                 3,  # Редактирование поста
+    'create_post':               2,  # Создание поста
+    'edit_post':                 2,  # Редактирование поста
 
     # ── Арена агентов ──
-    'arena_agent_post':          30,  # Полный AI-вызов (= message)
-    'agent_task':                55,  # ~15k DS-токенов (director-цикл) → 55
-    'agent_chime':               12,  # ~3k DS-токенов → 12
-    'get_posts':                  2,  # Просмотр постов
-    'delete_post':                2,  # Удаление поста
+    'arena_agent_post':          15,  # Полный AI-вызов (= message)
+    'agent_task':                28,  # ~15k DS-токенов (director-цикл) → 28
+    'agent_chime':                6,  # ~3k DS-токенов → 6
+    'get_posts':                  1,  # Просмотр постов
+    'delete_post':                1,  # Удаление поста
 
     # ── Маркетплейс / скрипты ──
-    'list_marketplace':          2,   # Просмотр маркетплейса (только листинг)
-    'switch_agent':              2,   # Переключение на агента / возврат к ASI Biont
-    'run_agent_action':         10,   # Запуск действия через внешнюю интеграцию агента
-    'run_user_script':          10,   # Запуск пользовательского скрипта из маркетплейса
-    'install_script':            5,   # Установка скрипта из маркетплейса
-    'save_user_rule':            2,   # Сохранение правила поведения AI
-    'schedule_background_task':  5,   # Планирование фоновой задачи
+    'list_marketplace':          1,   # Просмотр маркетплейса (только листинг)
+    'switch_agent':              1,   # Переключение на агента / возврат к ASI Biont
+    'run_agent_action':          5,   # Запуск действия через внешнюю интеграцию агента
+    'run_user_script':           5,   # Запуск пользовательского скрипта из маркетплейса
+    'install_script':            3,   # Установка скрипта из маркетплейса
+    'save_user_rule':            1,   # Сохранение правила поведения AI
+    'schedule_background_task':  3,   # Планирование фоновой задачи
 
     # ── Уведомления / контакты ──
-    'set_contact_alert':         3,  # DB-операция
-    'find_and_message_relevant_users': 20,  # ~5k DS-токенов → 20
+    'set_contact_alert':         2,  # DB-операция
+    'find_and_message_relevant_users': 10,  # ~5k DS-токенов → 10
 
     # ── Сообщения (автономный агент) ──
-    'send_message_to_user':      5,  # Отправка сообщения пользователю
-    'reply_to_user_message':     5,  # Ответ на сообщение пользователя
-    'get_incoming_messages':     2,  # Просмотр входящих
-    'get_message_status':        2,  # Статус сообщения
+    'send_message_to_user':      3,  # Отправка сообщения пользователю
+    'reply_to_user_message':     3,  # Ответ на сообщение пользователя
+    'get_incoming_messages':     1,  # Просмотр входящих
+    'get_message_status':        1,  # Статус сообщения
 
     # ── Поиск / веб ──
-    'web_search':                8,  # ~2k DS-токенов → 8
+    'web_search':                4,  # ~2k DS-токенов → 4
 
     # ── Автопосты (фоновый сервис) ──
-    'auto_post':         30,   # ~8k DS-токенов → 30
+    'auto_post':         15,   # ~8k DS-токенов → 15
 
     # ── Проактивные (от агента) ──
-    'proactive_message': 15,   # Fallback-стоимость; реальный расход покрывается динамическим биллингом
-    'proactive_post':    30,   # ~8k DS-токенов → 30
-    'proactive_channel': 30,   # ~8k DS-токенов → 30
+    'proactive_message':  8,   # Fallback-стоимость; реальный расход покрывается динамическим биллингом
+    'proactive_post':    15,   # ~8k DS-токенов → 15
+    'proactive_channel': 15,   # ~8k DS-токенов → 15
 }
 
 # Стоимость по умолчанию для неизвестных инструментов
-DEFAULT_TOOL_COST = 8
+DEFAULT_TOOL_COST = 4
 
 # Токены при регистрации — хватит на ~3 дня активного использования
 FREE_TOKENS_ON_SIGNUP = 1500
