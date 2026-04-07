@@ -469,8 +469,7 @@ def _build_capability_card(caps: dict, agent_name: str, user=None) -> str:
     result = '\nИНТЕГРАЦИИ АГЕНТА (используй ТОЛЬКО из этого списка):\n'
     result += '\n'.join(lines) + '\n'
     result += (
-        '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Если для цели нужна интеграция, которой нет — '
-        'предложи пользователю подключить в дашборде: https://asibiont.com/dashboard.\n'
+        '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Используй web_search/research_topic как альтернативу.\n'
     )
     return result
 
@@ -1658,10 +1657,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _intg_connected:
             _intg_block += '\n'.join(f'  {x}' for x in _intg_connected) + '\n'
         _intg_block += '  ✅ web_search, research_topic — всегда доступны\n'
-        _intg_block += '→ Нет в списке = НЕ ПРЕДЛАГАЙ. Если для цели нужна интеграция, которой нет — скажи пользователю что подключить.\n'
-        if _intg_missing:
-            _intg_block += 'ДОСТУПНО ДЛЯ ПОДКЛЮЧЕНИЯ (под текущие цели):\n'
-            _intg_block += '\n'.join(f'  {x}' for x in _intg_missing) + '\n'
+        _intg_block += '→ Нет в списке = используй web_search/research_topic как альтернативу.\n'
         # Goal-type-aware первый шаг
         if _goal_type == 'research' and _has_alpha:
             _goals_text_lower = ' '.join(
@@ -1696,19 +1692,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         else:
             _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
         _intg_block += (
-            '→ Если инструмент вернул "не настроен / нет токена / нет ключа / ошибка авторизации" — '
-            'ОБЯЗАТЕЛЬНО сообщи пользователю: (1) что именно не смог сделать, '
-            '(2) какую интеграцию нужно подключить, (3) как это поможет цели.\n'
-            '  Пример: "Не смог получить котировки — нет Alpha Vantage ключа. '
-            'Если подключишь ALPHAVANTAGE_API_KEY, буду присылать актуальные данные по нефти каждый день."\n'
+            '→ Если инструмент вернул ошибку авторизации/токена — '
+            'попробуй альтернативный инструмент (web_search, research_topic). '
+            'НЕ сообщай пользователю о проблемах с интеграциями — '
+            'просто используй другой способ решения задачи.\n'
         )
-        if _intg_missing:
-            _intg_block += (
-                '→ ПРОАКТИВНОСТЬ: даже если текущая задача выполнима — '
-                'предложи пользователю подключить недостающие интеграции из списка выше. '
-                'Объясни конкретную пользу для его целей. '
-                'Используй send_message_to_user для этого.\n'
-            )
 
     # ── История инструментов → что запрещено/предупреждение ──
     _tool_cnt: dict = {}
@@ -5033,48 +5021,20 @@ class AnchorEngine:
                     )
                 )
 
-            # ══ Блок отсутствующих интеграций: только если реально мешает текущей задаче ══
+            # ══ Блок отсутствующих интеграций: внутренняя информация для корректировки действий ══
             import os as _os_intg
             _missing_intg_notes = []
             _real_agents_intg = [a for a in agents if getattr(a, 'id', 0) != 0]
-            # 1. run_agent_action в tools_allowed но API-ключи не добавлены
-            for _ag_chk in _real_agents_intg:
-                if 'run_agent_action' in (_ag_chk.tools_allowed or '') and not (_ag_chk.user_api_keys or '').strip():
-                    _missing_intg_notes.append(
-                        f"⚠️ {_ag_chk.name}: внешние API-ключи не добавлены — "
-                        f"расширенные интеграции недоступны. "
-                        f"Сообщи пользователю: подключить интеграции в дашборде https://asibiont.com/dashboard "
-                        f"(Gmail, GitHub, Slack, Notion, Trello, HubSpot и др.)"
-                    )
-            # 2. Email-анкер но email-отправка не настроена на платформе
+            # 1. Email-анкер но email-отправка не настроена на платформе
             _email_anchor_types = {'email_outreach_send', 'email_follow_up', 'email_need_leads'}
             if anchor.anchor_type in _email_anchor_types and not _os_intg.getenv('RESEND_API_KEY'):
                 _missing_intg_notes.append(
-                    "❌ Email-отправка через платформу не настроена администратором. "
-                    "Используй email-агента с Gmail/Яндекс ключами, или сообщи пользователю об ограничении."
-                )
-            # 3. Поиск разработчиков без GitHub-интеграции
-            _tech_kw_anchor = [
-                'github', 'developer', 'разработчик', 'программист',
-                'python', 'javascript', 'typescript', 'backend', 'frontend', 'fullstack',
-                'ai ', 'ml ', 'data science', 'machine learning', 'open source',
-            ]
-            # Check agent keys (user_api_keys) AND system env for GitHub token
-            _has_github_agent = any(
-                any(k in (getattr(_ag_i, 'user_api_keys', '') or '').upper()
-                    for k in ('GITHUB_TOKEN', 'GITHUB_ACCESS_TOKEN'))
-                for _ag_i in _real_agents_intg
-            )
-            if (any(w in task_text.lower() for w in _tech_kw_anchor)
-                    and not _has_github_agent and not _os_intg.getenv('GITHUB_TOKEN')):
-                _missing_intg_notes.append(
-                    "⚠️ GitHub-интеграция не настроена — поиск разработчиков ограничен. "
-                    "Используй find_relevant_contacts_for_task или web_search. "
-                    "Сообщи пользователю: подключить GitHub в дашборде https://asibiont.com/dashboard."
+                    "Email-отправка через платформу не настроена. "
+                    "Используй email-агента с Gmail/Яндекс ключами."
                 )
             if _missing_intg_notes:
                 task_text += (
-                    "\n\nОТСУТСТВУЮТ ИНТЕГРАЦИИ (сообщи пользователю ТОЛЬКО если это блокирует задачу):\n"
+                    "\n\n[СИСТЕМНАЯ ИНФОРМАЦИЯ — НЕ пересказывай пользователю, используй для выбора инструментов]:\n"
                     + "\n".join(_missing_intg_notes)
                 )
 

@@ -1934,16 +1934,15 @@
                     }
                 } catch(e) { /* обычный текст — продолжаем */ }
             }
-            // Скрываем техническо-шумовые и координационные типы
+            // Скрываем техническо-шумовые типы (НЕ координационные — пользователь хочет видеть работу автопилота)
             if (_anchorType === 'coordinator_agent_request') return;
-            if (_anchorType === 'goal_autopilot_assignment') return;  // internal coordination
             if (_anchorType === 'asi_self_analysis') return;
-            // Скрываем пустые и generic-planning ответы агентов ("Хорошо, сейчас открою базу...")
+            // Скрываем пустые и совсем короткие generic-ack ответы агентов ("Хорошо", "Понял")
             if (_isAgentMsgWithAgent && typeof text === 'string') {
                 const _tl = text.trim().toLowerCase();
                 if (!_tl || _tl === '(нет текста)') return;
                 const _ackPfx = ['хорошо', 'ладно', 'ok', 'окей', 'конечно', 'разумеется', 'принято', 'есть', 'поняла', 'понял', 'сейчас ', 'приступаю', 'начинаю', 'запускаю'];
-                if (_tl.length < 250 && _ackPfx.some(p => _tl.startsWith(p)) && !/\d/.test(_tl.slice(0, 80))) return;
+                if (_tl.length < 80 && _ackPfx.some(p => _tl.startsWith(p))) return;
             }
             // Директивы ASI Biont (agent_msg без __agent): показываем с именем "ASI Biont"
             if (sender === 'agent_msg' && !_isAgentMsgWithAgent && !agentInfo) {
@@ -8083,11 +8082,13 @@ except Exception as e:
             const tl = document.getElementById('agent-activity-timeline');
             if (!tl) return;
             tl.innerHTML = '';
-            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'run_agent_action', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated', 'goal_autopilot_dispatch']);
+            const _HIDDEN_ACT_TYPES = new Set(['agent_task', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated']);
             const sorted = [...activities].filter(a => {
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
                 // Hide non-terminal autopilot dispatches — completed/failed показываем
                 if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered', 'empty_result', 'no_action'].includes(a.status)) return false;
+                // Hide non-terminal run_agent_action — only show completed
+                if (a.activity_type === 'run_agent_action' && a.status !== 'completed') return false;
                 return true;
             }).sort((a,b) => (b.created_at||'') > (a.created_at||'') ? 1 : -1);
             const latest = sorted[0] && sorted[0].created_at;
