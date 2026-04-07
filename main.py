@@ -7400,10 +7400,18 @@ async def api_interactions_handler(request):
         except Exception:
             _before_id = None
 
+        try:
+            _after_id_raw = request.query.get('after_id')
+            _after_id = int(_after_id_raw) if _after_id_raw is not None else None
+        except Exception:
+            _after_id = None
+
         # Load interactions for the chat (with optional pagination window)
         _iq = session_db.query(Interaction).filter_by(user_id=user.id)
         if _before_id is not None:
             _iq = _iq.filter(Interaction.id < _before_id)
+        if _after_id is not None:
+            _iq = _iq.filter(Interaction.id > _after_id)
         interactions = _iq.order_by(Interaction.created_at.desc()).limit(_limit).all()
         interactions.reverse()  # Back to chronological order
         

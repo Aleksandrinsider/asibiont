@@ -2758,6 +2758,8 @@
             if (mpLinkC) mpLinkC.style.opacity = '0.5';
             const arenaLinkC = document.getElementById('arena-link');
             if (arenaLinkC) arenaLinkC.style.opacity = '0.5';
+            // Sync new messages when switching to chat (agents may have posted while on another tab)
+            updateChat();
         }
 
         function switchToFeed() {
@@ -12095,11 +12097,12 @@ except Exception as e:
                             .sort((a, b) => a.id - b.id);
                         
                         sortedInteractions.forEach((interaction) => {
-                            const msgId = interaction.id; // Используем database ID для уникальности
+                            const msgId = interaction.id;
                             if (!displayedMessageIds.has(msgId)) {
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
                                 displayedMessageIds.add(msgId);
                             }
+                            if (msgId > _chatMaxSeenId) _chatMaxSeenId = msgId;
                         });
                         lastMessageCount = data.interactions.length;
                         chatHistoryHasMore = !!data.has_more;
@@ -16000,20 +16003,23 @@ except Exception as e:
             }
         }
 
+        let _chatMaxSeenId = 0; // Track highest interaction ID seen
+
         async function updateChat() {
             try {
-                // Обновляем только когда активен чат
-                if (currentView !== 'chat') {
-                    return;
-                }
-                
                 // Не обновляем чат в течение 15 секунд после отправки сообщения
                 const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
                 if (timeSinceLastSend < 15000) {
                     return;
                 }
-                
-                const response = await fetch(`/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}`, {
+
+                // Use after_id for incremental polling (much lighter than full reload)
+                const useIncremental = _chatMaxSeenId > 0;
+                const url = useIncremental
+                    ? '/api/interactions?after_id=' + _chatMaxSeenId + '&limit=50'
+                    : `/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}`;
+
+                const response = await fetch(url, {
                     credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
@@ -16025,16 +16031,14 @@ except Exception as e:
                 if (response.ok) {
                     const data = await response.json();
                     if (data.interactions) {
-                        const currentMessageCount = data.interactions.length;
-                        
-                        if (lastMessageCount === 0) {
-                            // Первая загрузка - показываем все сообщения (displayedMessageIds НЕ очищаем!)
+                        const sorted = data.interactions.sort((a, b) => a.id - b.id);
+
+                        if (!useIncremental && lastMessageCount === 0) {
+                            // Первая загрузка - показываем все сообщения
                             const chatMessages = document.getElementById('chat-messages');
                             chatMessages.innerHTML = '';
-                            // displayedMessageIds.clear(); - НЕ ОЧИЩАЕМ! Предотвращает дубли
-                            
-                            // Если нет сообщений, показываем заглушку
-                            if (data.interactions.length === 0) {
+
+                            if (sorted.length === 0) {
                                 chatMessages.innerHTML = `
                                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center;">
                                         <p style="margin: 0; font-size: 13px; color: #9CA3AF; max-width: 340px;">${t('start-dialog-desc')}</p>
@@ -16043,40 +16047,27 @@ except Exception as e:
                                 lastMessageCount = 0;
                                 return;
                             }
-                            
-                            // Sort by database ID (guarantees insertion order)
-                            const sortedInteractions = data.interactions
-                                .sort((a, b) => a.id - b.id);
-                            
-                            sortedInteractions.forEach((interaction) => {
-                                const msgId = interaction.id; // Используем database ID для уникальности
-                                if (!displayedMessageIds.has(msgId)) {
-                                    addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
-                                    displayedMessageIds.add(msgId);
+
+                            sorted.forEach(i => {
+                                if (!displayedMessageIds.has(i.id)) {
+                                    addMessage(i.content, i.message_type, i.created_at, i.id);
+                                    displayedMessageIds.add(i.id);
                                 }
+                                if (i.id > _chatMaxSeenId) _chatMaxSeenId = i.id;
                             });
-                            lastMessageCount = currentMessageCount;
+                            lastMessageCount = sorted.length;
                             chatHistoryHasMore = !!data.has_more;
                             chatHistoryNextBeforeId = data.next_before_id || null;
-                            updateChatHistoryControls();
-                        } else if (currentMessageCount > 0) {
-                            // Проверяем по ID, а не по количеству (API лимитирует 100 записей)
-                            const sortedInteractions = data.interactions
-                                .sort((a, b) => a.id - b.id);
-                            
-                            sortedInteractions.forEach((interaction) => {
-                                const msgId = interaction.id;
-                                if (!displayedMessageIds.has(msgId)) {
-                                    addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
-                                    displayedMessageIds.add(msgId);
+                        } else {
+                            // Incremental: add only new messages
+                            sorted.forEach(i => {
+                                if (!displayedMessageIds.has(i.id)) {
+                                    addMessage(i.content, i.message_type, i.created_at, i.id);
+                                    displayedMessageIds.add(i.id);
                                 }
+                                if (i.id > _chatMaxSeenId) _chatMaxSeenId = i.id;
                             });
-                            lastMessageCount = currentMessageCount;
-                            if (!chatHistoryNextBeforeId) {
-                                chatHistoryHasMore = !!data.has_more;
-                                chatHistoryNextBeforeId = data.next_before_id || null;
-                                updateChatHistoryControls();
-                            }
+                            lastMessageCount += sorted.length;
                         }
                     }
                 }
