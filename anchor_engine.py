@@ -3422,6 +3422,12 @@ class AnchorEngine:
             return False
 
         _today_start = self._user_day_start_utc(user)
+        # After history clear, reset cap — count only messages created AFTER the clear
+        _hca = getattr(user, 'history_cleared_at', None)
+        if _hca and _hca.tzinfo is None:
+            _hca = _hca.replace(tzinfo=timezone.utc)
+        if _hca and _hca > _today_start:
+            _today_start = _hca
         _recent_msgs = session.query(Interaction.content).filter(
             Interaction.user_id == user.id,
             Interaction.message_type.in_(['proactive', 'agent_msg']),
