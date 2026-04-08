@@ -7551,6 +7551,9 @@ class AnchorEngine:
                                 # (пользователь сказал: format chain_transfer лучше)
                                 # Не дублируем → пропускаем main Telegram send, но сохраняем в БД
                                 _has_delegate = bool(re.search(r'DELEGATE\[', result or ''))
+                                # Capitalize first letter
+                                if _cleaned_result and _cleaned_result[0].islower():
+                                    _cleaned_result = _cleaned_result[0].upper() + _cleaned_result[1:]
                                 if not _has_delegate:
                                     await _safe_send(
                                         self.bot, user.telegram_id,
@@ -13176,6 +13179,8 @@ class AnchorEngine:
                         _cleaned_tg = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
                             _cleaned, anchor_type='coordinator_result', speaker_name=_ag_name,
                         )
+                        if _cleaned_tg and _cleaned_tg[0].islower():
+                            _cleaned_tg = _cleaned_tg[0].upper() + _cleaned_tg[1:]
                         await _safe_send(self.bot, user.telegram_id, f"{_ag_name} — отчёт:\n{_cleaned_tg}")
                     except Exception:
                         pass

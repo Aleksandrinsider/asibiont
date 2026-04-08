@@ -8927,6 +8927,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         except Exception as _e:
             logger.debug("suppressed: %s", _e)
         # Capitalize first letter if starts with lowercase (cosmetic quality)
+        resp = resp.strip()
         if resp and resp[0].islower():
             resp = resp[0].upper() + resp[1:]
         _ag_id = ag.get('id')
@@ -9201,6 +9202,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     _md_clean = _md_clean + ' [⚠ ошибки могут быть временными — повтори инструмент]'
                 _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_clean}")
                 # Capitalize first letter (same as single-delegate path)
+                _md_resp_text = _md_resp_text.strip()
                 if _md_resp_text and _md_resp_text[0].islower():
                     _md_resp_text = _md_resp_text[0].upper() + _md_resp_text[1:]
                 await _send_visible(_md_resp_text)
@@ -9413,6 +9415,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             ),
         }], max_tokens=250)
         if _final_report and len(_final_report.strip()) > 10:
+            _final_report = _final_report.strip()
             if _final_report[0].islower():
                 _final_report = _final_report[0].upper() + _final_report[1:]
             await _send_visible(_final_report)
