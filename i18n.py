@@ -546,18 +546,18 @@ DEEP_THINKING_PHRASES = {
 
 ERROR_RESPONSES = {
     'ru': [
-        "Сбой на моей стороне — напиши ещё раз.",
-        "Что-то упало у меня, не у тебя. Повтори?",
-        "Потерял ответ. Напиши снова — разберёмся.",
-        "Технический сбой, сейчас разберусь. Попробуй ещё раз.",
-        "У меня что-то пошло не так. Повтори запрос?",
+        "Сбой при обработке запроса — AI-сервер вернул ошибку. Попробуй переформулировать или написать короче.",
+        "Техническая ошибка на стороне AI-движка. Твой запрос сохранён — напиши ещё раз, попробую обработать другим способом.",
+        "Потерял ответ из-за таймаута сервера. Если запрос был длинный — разбей на части. Напиши снова.",
+        "Внутренний сбой при генерации ответа. Это не проблема с твоим запросом — повтори, попробую ещё раз.",
+        "AI-сервер не отвечает, возможно перегрузка. Подожди 10-15 секунд и повтори запрос.",
     ],
     'en': [
-        "Glitch on my end — please write again.",
-        "Something crashed on my side. Try once more?",
-        "Lost the response. Write again — we'll sort it.",
-        "Technical hiccup, let me recover. Try again?",
-        "Something went wrong on my end. Repeat your request?",
+        "AI server returned an error while processing your request. Try rephrasing or making it shorter.",
+        "Technical error in the AI engine. Your request was saved — write again and I'll try a different approach.",
+        "Lost the response due to server timeout. If your request was long, try splitting it up. Write again.",
+        "Internal error during response generation. It's not your request — please repeat it.",
+        "AI server is not responding, possibly overloaded. Wait 10-15 seconds and try again.",
     ],
 }
 
