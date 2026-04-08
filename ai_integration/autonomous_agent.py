@@ -9420,10 +9420,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _all_results = ' | '.join(r['result'][:200] for r in _round_history)
     _save_delegation_to_history(user_id, _agent_name_d, user_message, _all_results[:600])
 
-    # Для прямых обращений/вопросов: если агент ничего не отправил (ошибка call_ai),
+    # Если агент ничего не отправил (hollow guard, ошибка call_ai, timeout),
     # возвращаем None → chat_with_ai откатится на process_request
-    if (_is_direct or _is_q) and not _round_history:
-        logger.warning("[DIRECTOR] direct/question agent call produced no rounds — fallback to process_request")
+    if not _round_history:
+        logger.warning("[DIRECTOR] agent call produced no rounds — fallback to process_request")
         return None
 
     return "__agent_handled__"
