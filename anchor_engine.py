@@ -8408,30 +8408,52 @@ class AnchorEngine:
                     prev_agent.name, len(_found_emails), _email_agent_relay.name,
                 )
             else:
-                _analysis = await _quick_ai_call_raw([{
-                    "role": "user",
-                    "content": (
-                        f"Задача: {task_text[:300]}\n"
-                        f"Агент {prev_agent.name} выполнил: {result[:1500]}\n\n"
-                        f"Команда (имена и роли): {_agents_desc}\n\n"
-                        "Оцени: задача завершена или нужен следующий агент?\n"
-                        "Цепочки: поиск людей → отправка письма; анализ → создание задач; данные → публикация.\n"
-                        "Признаки завершения: update_goal_progress выполнен, цель достигнута, БЛОКЕР без решения.\n"
-                        "Признаки продолжения: найдены email/контакты но не написали; данные получены но не опубликованы.\n"
-                        "Если завершено — {\"continue\": false}\n"
-                        "Если нужен следующий агент — {\"continue\": true, \"agent_name\": \"точное имя из команды\", "
-                        "\"task\": \"конкретное задание с данными из результата (email, имена, числа)\"}\n"
-                        "JSON:"
-                    ),
-                }], max_tokens=300)
+                # ── Explicit DELEGATE[Name] extraction ──
+                # Если агент явно написал DELEGATE[Марк]: задача — уважаем это решение
+                _delegate_match = _re2.search(
+                    r'DELEGATE\[([^\]]+)\]\s*[:\-—]?\s*(.+)',
+                    result or '',
+                    _re2.IGNORECASE,
+                )
+                if _delegate_match:
+                    _del_name = _delegate_match.group(1).strip()
+                    _del_task = _delegate_match.group(2).strip()
+                    if _del_task:
+                        _decision = {
+                            'continue': True,
+                            'agent_name': _del_name,
+                            'task': _del_task,
+                        }
+                        logger.info(
+                            "[ANCHOR-CHAIN] explicit DELEGATE: %s → %s: %s",
+                            prev_agent.name, _del_name, _del_task[:120],
+                        )
 
-                if not _analysis:
-                    return
+                if not _decision:
+                    _analysis = await _quick_ai_call_raw([{
+                        "role": "user",
+                        "content": (
+                            f"Задача: {task_text[:300]}\n"
+                            f"Агент {prev_agent.name} выполнил: {result[:1500]}\n\n"
+                            f"Команда (имена и роли): {_agents_desc}\n\n"
+                            "Оцени: задача завершена или нужен следующий агент?\n"
+                            "Цепочки: поиск людей → отправка письма; анализ → создание задач; данные → публикация.\n"
+                            "Признаки завершения: update_goal_progress выполнен, цель достигнута, БЛОКЕР без решения.\n"
+                            "Признаки продолжения: найдены email/контакты но не написали; данные получены но не опубликованы.\n"
+                            "Если завершено — {\"continue\": false}\n"
+                            "Если нужен следующий агент — {\"continue\": true, \"agent_name\": \"точное имя из команды\", "
+                            "\"task\": \"конкретное задание с данными из результата (email, имена, числа)\"}\n"
+                            "JSON:"
+                        ),
+                    }], max_tokens=300)
 
-                _m = _re2.search(r'\{[\s\S]*?\}', _analysis)
-                if not _m:
-                    return
-                _decision = json.loads(_m.group())
+                    if not _analysis:
+                        return
+
+                    _m = _re2.search(r'\{[\s\S]*?\}', _analysis)
+                    if not _m:
+                        return
+                    _decision = json.loads(_m.group())
 
             if not _decision.get('continue'):
                 return
@@ -13797,6 +13819,7 @@ class AnchorEngine:
                         + f"- НЕ ЗАДАВАЙ вопросов пользователю ('какой приоритет?', 'что выбрать?', 'давай обсудим?'). "
                         f"Автопилот должен ДЕЙСТВОВАТЬ и ИНФОРМИРОВАТЬ. Если данных не хватает — сам прими решение и сообщи что сделал.\n"
                         f"- Если агент не привёл конкретного результата — не упоминай его.\n"
+                        f"- НЕ ВЫДУМЫВАЙ: если в данных нет передачи задачи другому агенту — НЕ ПИШИ 'передала Марку' или 'поручила коллеге'. Только реальные факты из отчёта.\n"
                         + _note_hint
                         + f"- АНТИПОВТОР: меняй структуру и порядок — не начинай каждый раз одинаково.\n"
                         f"- ЗАВЕРШЁННОСТЬ: каждое предложение ОБЯЗАНО быть закончено — подлежащее, сказуемое, точка. "
