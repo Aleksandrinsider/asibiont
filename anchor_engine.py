@@ -8362,16 +8362,18 @@ class AnchorEngine:
                 try:
                     from models import AgentActivityLog as _AAL_ibox, Session as _Db_ibox
                     _si_ibox = _Db_ibox()
-                    _si_ibox.add(_AAL_ibox(
-                        user_id=_user_id,
-                        activity_type='inbox_reply',
-                        status='new',
-                        target=f'agent:{prev_agent.name}',
-                        title=f'{prev_agent.name}: {_inbox_count} новых письма [h:{_inbox_hash}]',
-                        content=result[:2000],
-                    ))
-                    _si_ibox.commit()
-                    _si_ibox.close()
+                    try:
+                        _si_ibox.add(_AAL_ibox(
+                            user_id=_user_id,
+                            activity_type='inbox_reply',
+                            status='new',
+                            target=f'agent:{prev_agent.name}',
+                            title=f'{prev_agent.name}: {_inbox_count} новых письма [h:{_inbox_hash}]',
+                            content=result[:2000],
+                        ))
+                        _si_ibox.commit()
+                    finally:
+                        _si_ibox.close()
                     logger.info('[ANCHOR-CHAIN] inbox-relay: logged inbox_reply for %s (%d msgs)',
                                 prev_agent.name, _inbox_count)
                 except Exception as _e_ibox:
@@ -12891,7 +12893,7 @@ class AnchorEngine:
                         timeout=300,
                     )
                 except asyncio.TimeoutError:
-                    _ae_msg = f'Таймаут 300с — агент не успел выполнить задачу'
+                    _ae_msg = f'Таймаут 300с — агент не завершил цикл, но выполненные действия сохранены'
                     logger.warning("[COORD] agent %s timeout after 300s", _ag_name)
                     self._cancel_agent_task(
                         session,
@@ -12900,14 +12902,8 @@ class AnchorEngine:
                         _ae_msg,
                         ['Сократить задачу до 1 конкретного действия', 'Сменить инструмент или канал'],
                     )
-                    # Уведомляем пользователя о причине провала агента
-                    _fail_explain = (
-                        f"{_ag_name} не смог завершить задачу за отведённое время. "
-                        f"Задание: «{_ag_task[:100]}». Возможно, запрос к API занял слишком долго — "
-                        f"попробую другой подход в следующем цикле."
-                    )
-                    _results_summary.append(f"{_ag_name}: [таймаут] {_ag_task[:80]}")
-                    _prev_steps_context += f"• {_ag_name}: ТАЙМАУТ — не успел: {_ag_task[:120]}\n"
+                    _results_summary.append(f"{_ag_name}: [частичный результат — таймаут] {_ag_task[:80]}")
+                    _prev_steps_context += f"• {_ag_name}: таймаут, но часть работы выполнена: {_ag_task[:120]}\n"
                     continue
                 except Exception as _ae:
                     logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
@@ -21165,11 +21161,13 @@ class AnchorEngine:
                         ]
                         if _stale_ids:
                             _sup_sess = Session()
-                            _sup_sess.query(Anchor).filter(Anchor.id.in_(_stale_ids)).update(
-                                {'delivered_at': _now_sup}, synchronize_session=False
-                            )
-                            _sup_sess.commit()
-                            _sup_sess.close()
+                            try:
+                                _sup_sess.query(Anchor).filter(Anchor.id.in_(_stale_ids)).update(
+                                    {'delivered_at': _now_sup}, synchronize_session=False
+                                )
+                                _sup_sess.commit()
+                            finally:
+                                _sup_sess.close()
                             logger.warning(f"[ANCHOR] ⚠️ Suppressed {len(_stale_ids)} anchors after send_message failure to {user.telegram_id} — они будут пересозданы при следующем scan если условие актуально")
                     except Exception as _sup_err:
                         logger.error(f"[ANCHOR] Failed to suppress anchors after send failure: {_sup_err}")

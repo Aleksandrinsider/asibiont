@@ -7626,7 +7626,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _is_progress_increase = _ugp_progress is not None and float(_ugp_progress) > 0
                     except Exception:
                         _is_progress_increase = bool(_ugp_progress)
-                    if _only_research and not _had_outgoing and _is_progress_increase:
+                    # Allow research progress if save_note was used (concrete deliverable)
+                    # or if note text contains actual findings
+                    _has_note_action = 'save_note' in _prior_tools_set or 'delegate_task' in _prior_tools_set
+                    if _only_research and not _had_outgoing and not _has_note_action and _is_progress_increase:
                         _tc_result = json.dumps({
                             "error": (
                                 "⛔ Обновление прогресса заблокировано. "
