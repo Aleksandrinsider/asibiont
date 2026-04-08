@@ -4521,8 +4521,16 @@ def get_autonomous_agent():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _has_explicit_mention(message: str) -> bool:
-    """True если сообщение начинается с @Агент или 'ИмяАгента,'."""
-    return bool(re.match(r'@\w+\b', (message or '').strip()))
+    """True если сообщение начинается с @Агент или 'ИмяАгента, ...'."""
+    m = (message or '').strip()
+    if not m:
+        return False
+    if re.match(r'@\w+\b', m):
+        return True
+    # "Кристина, ..." — обращение по имени через запятую (типичный русский паттерн)
+    if re.match(r'[А-ЯЁа-яё]{3,}\s*,', m):
+        return True
+    return False
 
 
 def _is_question_message(msg: str) -> bool:
@@ -8597,6 +8605,21 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     if not _agents:
         return None
 
+    # ── Прямое обращение к агенту по имени → пропускаем директора целиком ──────
+    # process_request уже умеет роутить по имени, загружать personality и tools.
+    # Это FAST PATH: не строим контекст, не кэшируем capabilities, не вызываем LLM.
+    _msg_lower_fast = user_message.lower().strip()
+    for _a_fast in _agents:
+        _aname_fast = (_a_fast.get('name') or '').lower()
+        if _aname_fast and len(_aname_fast) >= 2 and (
+            _msg_lower_fast.startswith(_aname_fast + ',') or
+            _msg_lower_fast.startswith(_aname_fast + ' ') or
+            _msg_lower_fast.startswith('@' + _aname_fast) or
+            _msg_lower_fast == _aname_fast):
+            logger.info("[DIRECTOR] direct agent mention '%s' → skip director, fast path",
+                         _a_fast.get('name', '?'))
+            return None
+
     # ── Ранний фильтр: вопрос без прямого обращения к агенту → ASI ответит сам ──
     # Исключение: вопрос упоминает слова из лейблов интеграций любого агента → нужен агент.
     # Работаем с нормализованными лейблами _parse_agent_integrations — универсально для любых интеграций.
@@ -8958,307 +8981,263 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 )
         return str(resp)[:2000]
 
-    # ── Прямое обращение к агенту по имени (без LLM-решения) ────────────────────
-    # Если сообщение начинается с имени агента — сразу ему делегируем
-    _direct_agent = None
-    _msg_lower = user_message.lower().strip()
-    for _a in _agents:
-        _aname = _a['name'].lower()
-        # "Кристина, ..." / "Кристина ..." / "@Кристина" / просто имя
-        if (_msg_lower.startswith(_aname + ',') or
-                _msg_lower.startswith(_aname + ' ') or
-                _msg_lower.startswith('@' + _aname) or
-                _msg_lower == _aname):
-            _direct_agent = _a
-            break
+    # ── Прямое обращение уже обработано выше (fast path → return None) ──────────
+    # Вопросы без обращения к агенту → тоже обработаны выше (early filter)
+    _ag = None  # will be set by ASI decision below
 
-    if _direct_agent:
-        # Перенаправляем в основной цикл делегирования — полная цепочка по способностям
-        _direct_ctx_parts = []
-        if _user_full_ctx:
-            _direct_ctx_parts.append(_user_full_ctx)
-        if _history_block.strip():
-            _direct_ctx_parts.append(_history_block.strip())
-        _del_ctx = '\n\n'.join(_direct_ctx_parts)
-        _ag = _direct_agent
-        _dm = ''
-        _task = user_message
-        # Убираем имя агента из начала задачи для чистого title
-        _da_name = _ag.get('name', '').lower()
-        if _da_name and _task.lower().startswith(_da_name):
-            import re as _re_da
-            _task = _re_da.sub(
-                r'^' + _re_da.escape(_ag['name']) + r'[\s,:.!]*',
-                '', _task, flags=_re_da.IGNORECASE,
-            ).strip() or _task
-        # Если вопрос — подсказываем агенту: ответь, не действуй
-        if _is_question_message(user_message):
-            _task = f"ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): {_task}"
-        _agent_name_d = _ag.get('name', 'Агент')
-    else:
-        _ag = None  # will be set by ASI decision below
+    # ── Начальное решение ASI ──────────────────────────────────────────────────
+    # Урезаем до 400 символов — для решения о делегировании достаточно имени, должности, целей
+    _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:700]}" if _user_full_ctx else ''
 
-    if _direct_agent:
-        # direct_agent: skip ASI decision, go straight to multi-round loop
-        pass
-    else:
-        # Вопросы без прямого обращения к агенту → ASI отвечает сам через process_request
-        if _is_question_message(user_message):
-            return None
+    # Строим компактный список агентов: имя | должность | специализация | умеет
+    _agent_caps_lines = []
+    for _ac_a in _agents:
+        _ac_intg = _agent_caps_cache.get(_ac_a['name'], [])
+        _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
+        _ac_desc = (_ac_a.get('description') or '')[:60]
+        # Строим читаемый список инструментов — с маппингом из интеграций
+        _ac_tools_str = _agent_tools_from_intg(_ac_a, _ac_intg)
+        _tools_raw = (_ac_a.get('tools_allowed') or '').strip()
+        _tools_is_explicit = bool(_tools_raw and _tools_raw != '[]')
+        _tools_label = 'Инструменты (явные)' if _tools_is_explicit else 'Инструменты (из роли/интеграций)'
+        _line = (
+            f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
+            f" | {_ac_a.get('specialization','')}"
+            f"\n  Умеет: {_ac_caps}"
+            f"\n  {_tools_label}: {_ac_tools_str}"
+        )
+        if _ac_desc:
+            _line += f"\n  О себе: {_ac_desc}"
+        _agent_caps_lines.append(_line)
+    _caps_block = "\n".join(_agent_caps_lines)
 
-        # ── Начальное решение ASI ──────────────────────────────────────────────────
-        # Урезаем до 400 символов — для решения о делегировании достаточно имени, должности, целей
-        _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:700]}" if _user_full_ctx else ''
+    _decision_prompt = (
+        f"Запрос: «{user_message}»\n\n"
+        f"Агенты пользователя:\n{_caps_block}\n"
+        f"{_ctx_hint}{_history_block}\n\n"
+        "Решение: self или поручить агенту?\n\n"
+        "self — ASI выполняет НАПРЯМУЮ своими инструментами:\n"
+        "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder)\n"
+        "  • цели (create_goal, update_goal, complete_goal, list_goals)\n"
+        "  • generate_image — генерация картинок/изображений\n"
+        "  • контент (create_post, publish_to_telegram, publish_to_discord)\n"
+        "  • email (send_email, send_outreach_email, negotiate_by_email)\n"
+        "  • research_topic, get_news_trends — исследования/аналитика\n"
+        "  • делегирование задач другим пользователям (delegate_task)\n"
+        "  • коммуникации (send_message_to_user, find_and_message_relevant_users)\n"
+        "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"
+        "  • update_profile, schedule_background_task, get_system_status\n"
+        "  • привет/пока, вопрос-ответ, советы, любые разговоры\n\n"
+        "поручить агенту — ТОЛЬКО если:\n"
+        "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
+        "  2) у агента есть нужный инструмент (см. 'Инструменты' в профиле агента выше)\n"
+        "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
+        "СОВЕТ: 'Инструменты (явные)' — агент настроен на эти инструменты явно.\n"
+        "       'Инструменты (из роли/интеграций)' — рекомендации на основе роли/API-ключей.\n"
+        "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
+        "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
+        "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
+        "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
+        "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
+        "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
+        "director_message: живое личное обращение к агенту — разговорный стиль, как в рабочем чате. Имя + глагол + контекст. До 25 слов.\n"
+        "director_message — пример: 'Марк, найди 5 площадок где сидят AI-энтузиасты и напиши им'. НЕ: 'Марк, Найти и привлечь тестировщиков'.\n"
+        "ПРАВИЛО: после запятой — глагол в повелительном наклонении строчными: найди, подготовь, напиши, исследуй.\n\n"
+        "JSON без ```:\n"
+        '{"action":"self"}\n'
+        "или\n"
+        '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи без имени",'
+        '"director_message":"Имя, сделай..."}'
+    )
 
-        # Строим компактный список агентов: имя | должность | специализация | умеет
-        _agent_caps_lines = []
-        for _ac_a in _agents:
-            _ac_intg = _agent_caps_cache.get(_ac_a['name'], [])
-            _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
-            _ac_desc = (_ac_a.get('description') or '')[:60]
-            # Строим читаемый список инструментов — с маппингом из интеграций
-            _ac_tools_str = _agent_tools_from_intg(_ac_a, _ac_intg)
-            _tools_raw = (_ac_a.get('tools_allowed') or '').strip()
-            _tools_is_explicit = bool(_tools_raw and _tools_raw != '[]')
-            _tools_label = 'Инструменты (явные)' if _tools_is_explicit else 'Инструменты (из роли/интеграций)'
-            _line = (
-                f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
-                f" | {_ac_a.get('specialization','')}"
-                f"\n  Умеет: {_ac_caps}"
-                f"\n  {_tools_label}: {_ac_tools_str}"
+    # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
+    # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
+    _ml = user_message.strip()
+    _ml_lower = _ml.lower()
+    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
+                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
+    _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
+
+    # Пре-фильтр: "займитесь сами/без меня/действуйте" без имени агента → всегда self
+    _self_phrases = ('займитесь', 'занимайтесь', 'работайте без меня', 'действуйте сами',
+                     'работайте сами', 'без меня', 'действуйте')
+    _is_autopilot_confirm = any(p in _ml_lower for p in _self_phrases) and not any(
+        a.get('name', '').lower() in _ml_lower for a in _agents
+    )
+    if _is_autopilot_confirm:
+        return None  # process_request ответит коротким подтверждением автопилота
+
+    # Пре-фильтр: личные достижения → только ASI умеет complete_task
+    _achievement_words = ('я заказал', 'я купил', 'я оплатил', 'я позвонил', 'я написал',
+                          'я отправил', 'я настроил', 'я прошёл', 'я починил', 'я записался',
+                          'я сделал', 'я выполнил', 'я завершил', 'я приготовил', 'я убрал')
+    _is_achievement = any(_ml_lower.startswith(p) or f' {p} ' in _ml_lower for p in _achievement_words)
+    if _is_achievement:
+        return None  # process_request вызовет complete_task
+
+    if _is_trivial:
+        _has_active_mission = False
+        _mission_context = ''
+        try:
+            _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
+            for _ma in _mission_anchors:
+                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
+                    _has_active_mission = True
+                    _md = _ma.get('data', {})
+                    _mission_context = _md.get('result_summary') or _md.get('task', '')
+                    break
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+
+        if not _has_active_mission:
+            return None  # Нет активной миссии — ASI ответит сам через process_request
+
+        # Есть активная миссия — "да"/"давай" = продолжить
+        # Подменяем запрос чтобы LLM понял контекст
+        _affirmative = _ml_lower.rstrip('!., ') in ('да', 'ок', 'окей', 'ладно', 'хорошо', 'давай')
+        if _affirmative and _mission_context:
+            # Переформулируем для директора: "Пользователь подтвердил — продолжай миссию"
+            _decision_prompt = (
+                f"Ты — ASI Biont, директор офиса. Пользователь подтвердил продолжение миссии.\n\n"
+                f"АКТИВНАЯ МИССИЯ: {_mission_context[:300]}\n\n"
+                f"Пользователь ответил: «{user_message}»\n\n"
+                f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
+                f"{_ctx_hint}{_history_block}\n\n"
+                "Пользователь хочет ПРОДОЛЖИТЬ. Выбери следующее действие — delegate, adaptive или multi_delegate.\n"
+                "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
+                "Ответь ТОЛЬКО JSON без ```:\n"
+                '{"action": "delegate", "agent_name": "точное имя агента", '
+                '"agent_task": "задача", '
+                '"director_message": "живое: имя + глагол (Кристина, подготовь... / Марк, исследуй...)"}\n'
+                "или\n"
+                '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
+                '"first_agent_name": "имя", "first_agent_task": "задача", '
+                '"director_message": "живое: имя + глагол"}'
             )
-            if _ac_desc:
-                _line += f"\n  О себе: {_ac_desc}"
-            _agent_caps_lines.append(_line)
-        _caps_block = "\n".join(_agent_caps_lines)
+        elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
+            return None  # Отмена — сброс миссии
 
-        _decision_prompt = (
-            f"Запрос: «{user_message}»\n\n"
-            f"Агенты пользователя:\n{_caps_block}\n"
-            f"{_ctx_hint}{_history_block}\n\n"
-            "Решение: self или поручить агенту?\n\n"
-            "self — ASI выполняет НАПРЯМУЮ своими инструментами:\n"
-            "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder)\n"
-            "  • цели (create_goal, update_goal, complete_goal, list_goals)\n"
-            "  • generate_image — генерация картинок/изображений\n"
-            "  • контент (create_post, publish_to_telegram, publish_to_discord)\n"
-            "  • email (send_email, send_outreach_email, negotiate_by_email)\n"
-            "  • research_topic, get_news_trends — исследования/аналитика\n"
-            "  • делегирование задач другим пользователям (delegate_task)\n"
-            "  • коммуникации (send_message_to_user, find_and_message_relevant_users)\n"
-            "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"
-            "  • update_profile, schedule_background_task, get_system_status\n"
-            "  • привет/пока, вопрос-ответ, советы, любые разговоры\n\n"
-            "поручить агенту — ТОЛЬКО если:\n"
-            "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
-            "  2) у агента есть нужный инструмент (см. 'Инструменты' в профиле агента выше)\n"
-            "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
-            "СОВЕТ: 'Инструменты (явные)' — агент настроен на эти инструменты явно.\n"
-            "       'Инструменты (из роли/интеграций)' — рекомендации на основе роли/API-ключей.\n"
-            "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
-            "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
-            "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
-            "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
-            "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
-            "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
-            "director_message: живое личное обращение к агенту — разговорный стиль, как в рабочем чате. Имя + глагол + контекст. До 25 слов.\n"
-            "director_message — пример: 'Марк, найди 5 площадок где сидят AI-энтузиасты и напиши им'. НЕ: 'Марк, Найти и привлечь тестировщиков'.\n"
-            "ПРАВИЛО: после запятой — глагол в повелительном наклонении строчными: найди, подготовь, напиши, исследуй.\n\n"
-            "JSON без ```:\n"
-            '{"action":"self"}\n'
-            "или\n"
-            '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи без имени",'
-            '"director_message":"Имя, сделай..."}'
-        )
+    decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250, _caller='director_decision')
+    if not decision_raw:
+        return None
 
-        # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
-        # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
-        _ml = user_message.strip()
-        _ml_lower = _ml.lower()
-        _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
-                            'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
-        _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
+    decision = None
+    _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw or '')
+    _json_str = _jm.group(1) if _jm else None
+    if not _json_str:
+        # Ищем JSON объект в сыром ответе
+        _jm2 = re.search(r'(\{[\s\S]*\})', decision_raw or '')
+        _json_str = _jm2.group(1) if _jm2 else None
+    if _json_str:
+        try:
+            decision = _json.loads(_json_str)
+        except Exception:
+            logger.info("[DIRECTOR] JSON parse failed, raw=%s", (decision_raw or '')[:120])
+    if not decision:
+        return None
 
-        # Пре-фильтр: "займитесь сами/без меня/действуйте" без имени агента → всегда self
-        _self_phrases = ('займитесь', 'занимайтесь', 'работайте без меня', 'действуйте сами',
-                         'работайте сами', 'без меня', 'действуйте')
-        _is_autopilot_confirm = any(p in _ml_lower for p in _self_phrases) and not any(
-            a.get('name', '').lower() in _ml_lower for a in _agents
-        )
-        if _is_autopilot_confirm:
-            return None  # process_request ответит коротким подтверждением автопилота
+    action = decision.get('action', 'self')
 
-        # Пре-фильтр: личные достижения → только ASI умеет complete_task
-        _achievement_words = ('я заказал', 'я купил', 'я оплатил', 'я позвонил', 'я написал',
-                              'я отправил', 'я настроил', 'я прошёл', 'я починил', 'я записался',
-                              'я сделал', 'я выполнил', 'я завершил', 'я приготовил', 'я убрал')
-        _is_achievement = any(_ml_lower.startswith(p) or f' {p} ' in _ml_lower for p in _achievement_words)
-        if _is_achievement:
-            return None  # process_request вызовет complete_task
-
-        if _is_trivial:
-            _has_active_mission = False
-            _mission_context = ''
-            try:
-                _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
-                for _ma in _mission_anchors:
-                    if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
-                        _has_active_mission = True
-                        _md = _ma.get('data', {})
-                        _mission_context = _md.get('result_summary') or _md.get('task', '')
-                        break
-            except Exception as _e:
-                logger.debug("suppressed: %s", _e)
-
-            if not _has_active_mission:
-                return None  # Нет активной миссии — ASI ответит сам через process_request
-
-            # Есть активная миссия — "да"/"давай" = продолжить
-            # Подменяем запрос чтобы LLM понял контекст
-            _affirmative = _ml_lower.rstrip('!., ') in ('да', 'ок', 'окей', 'ладно', 'хорошо', 'давай')
-            if _affirmative and _mission_context:
-                # Переформулируем для директора: "Пользователь подтвердил — продолжай миссию"
-                _decision_prompt = (
-                    f"Ты — ASI Biont, директор офиса. Пользователь подтвердил продолжение миссии.\n\n"
-                    f"АКТИВНАЯ МИССИЯ: {_mission_context[:300]}\n\n"
-                    f"Пользователь ответил: «{user_message}»\n\n"
-                    f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
-                    f"{_ctx_hint}{_history_block}\n\n"
-                    "Пользователь хочет ПРОДОЛЖИТЬ. Выбери следующее действие — delegate, adaptive или multi_delegate.\n"
-                    "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
-                    "Ответь ТОЛЬКО JSON без ```:\n"
-                    '{"action": "delegate", "agent_name": "точное имя агента", '
-                    '"agent_task": "задача", '
-                    '"director_message": "живое: имя + глагол (Кристина, подготовь... / Марк, исследуй...)"}\n'
-                    "или\n"
-                    '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
-                    '"first_agent_name": "имя", "first_agent_task": "задача", '
-                    '"director_message": "живое: имя + глагол"}'
-                )
-            elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
-                return None  # Отмена — сброс миссии
-
-        decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250, _caller='director_decision')
-        if not decision_raw:
+    # Нормализуем: adaptive/multi_delegate → delegate (один агент на запрос)
+    if action == 'adaptive':
+        # Конвертируем adaptive → delegate
+        decision['agent_name'] = decision.get('first_agent_name', '')
+        decision['agent_task'] = decision.get('first_agent_task', '')
+        if not decision.get('director_message'):
+            decision['director_message'] = ''
+        action = 'delegate'
+    elif action == 'multi_delegate':
+        # Запускаем всех агентов последовательно, передавая результаты как контекст
+        _tasks_list = decision.get('tasks') or []
+        if not _tasks_list:
             return None
-
-        decision = None
-        _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw or '')
-        _json_str = _jm.group(1) if _jm else None
-        if not _json_str:
-            # Ищем JSON объект в сыром ответе
-            _jm2 = re.search(r'(\{[\s\S]*\})', decision_raw or '')
-            _json_str = _jm2.group(1) if _jm2 else None
-        if _json_str:
-            try:
-                decision = _json.loads(_json_str)
-            except Exception:
-                logger.info("[DIRECTOR] JSON parse failed, raw=%s", (decision_raw or '')[:120])
-        if not decision:
-            return None
-
-        action = decision.get('action', 'self')
-
-        # Нормализуем: adaptive/multi_delegate → delegate (один агент на запрос)
-        if action == 'adaptive':
-            # Конвертируем adaptive → delegate
-            decision['agent_name'] = decision.get('first_agent_name', '')
-            decision['agent_task'] = decision.get('first_agent_task', '')
-            if not decision.get('director_message'):
-                decision['director_message'] = ''
-            action = 'delegate'
-        elif action == 'multi_delegate':
-            # Запускаем всех агентов последовательно, передавая результаты как контекст
-            _tasks_list = decision.get('tasks') or []
-            if not _tasks_list:
-                return None
-            _md_ctx_parts = []
-            if _user_full_ctx:
-                _md_ctx_parts.append(_user_full_ctx)
-            if _history_block.strip():
-                _md_ctx_parts.append(_history_block.strip())
-            _md_prev_results: list[str] = []
-            for _md_idx, _md_t in enumerate(_tasks_list):
-                _md_agent_name = _md_t.get('agent_name', '')
-                _md_agent_task = _md_t.get('agent_task', '')
-                _md_dm = _md_t.get('director_message', '')
-                _md_ag = _find_agent(_md_agent_name)
-                if not _md_ag or not _md_agent_task:
-                    continue
-                # Добавляем результаты предыдущих агентов как контекст
-                if _md_prev_results:
-                    _prev_block = '\n\n--- Результаты предыдущих агентов ---\n' + '\n\n'.join(_md_prev_results)
-                    _md_full_ctx = '\n\n'.join(_md_ctx_parts) + _prev_block
-                else:
-                    _md_full_ctx = '\n\n'.join(_md_ctx_parts)
-                # Уведомление пользователя о начале работы агента
-                if _md_dm:
-                    _ag_n = _md_ag.get('name', 'Агент')
-                    _md_dm_display = _md_dm if _ag_n.lower() in _md_dm.lower()[:len(_ag_n)+3] else f"{_ag_n}, {_md_dm}"
-                    _save_interaction_for_director(user_id, _md_dm_display, message_type='agent_msg')
-                _md_resp = await _exec_agent_for_director(_md_ag, _md_agent_task, user_id, dialog_context=_md_full_ctx)
-                _md_resp_text = _md_resp[0] if isinstance(_md_resp, tuple) else str(_md_resp or '')
-                if _md_resp_text:
-                    # Sanitize error descriptions to prevent cross-agent contamination
-                    _md_clean = _md_resp_text[:400]
-                    _ERR_KW_MD = ('ошибк', 'сбой', 'не смог', 'не удал', 'не работ', 'не отправ')
-                    if any(ew in _md_clean.lower() for ew in _ERR_KW_MD):
-                        _md_clean = _md_clean + ' [⚠ ошибки могут быть временными — повтори инструмент]'
-                    _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_clean}")
-                    await _send_visible(_md_resp_text)
-                    _save_interaction_for_director(user_id, _md_resp_text, message_type='ai')
-            return '__agent_handled__'
-
-        # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
-        if action != 'delegate':
-            return None
-
-        # ── Валидация: если задача требует коммуникации/поиска людей,
-        # а у агента нет нужного инструмента — ASI делает сам ──────────────
-        _ag_check = _find_agent(decision.get('agent_name', ''))
-        if _ag_check:
-            _task_lower = (decision.get('agent_task') or user_message).lower()
-            _comm_keywords = ('найди', 'пригласи', 'напиши', 'отправь', 'сообщ', 'пользовател',
-                              'приглаш', 'invite', 'message', 'find.*user', 'тестировщик',
-                              'тестер', 'аудитори', 'контакт')
-            _needs_comm = any(kw in _task_lower for kw in _comm_keywords)
-            if _needs_comm:
-                _ag_tools_str = (_ag_check.get('tools_allowed') or '').lower()
-                _has_comm_tool = any(t in _ag_tools_str for t in
-                                     ('find_and_message', 'send_message', 'find_relevant_contacts'))
-                if not _has_comm_tool:
-                    logger.info("[DIRECTOR] Agent %s lacks comm tools for task, ASI handles self",
-                                _ag_check.get('name'))
-                    return None  # ASI сделает сам через process_request
-
-        # ── delegate: один агент на запрос ──────────────────────────────────
-        _agent_ctx_parts = []
+        _md_ctx_parts = []
         if _user_full_ctx:
-            _agent_ctx_parts.append(_user_full_ctx)
+            _md_ctx_parts.append(_user_full_ctx)
         if _history_block.strip():
-            _agent_ctx_parts.append(_history_block.strip())
-        _del_ctx = '\n\n'.join(_agent_ctx_parts)
+            _md_ctx_parts.append(_history_block.strip())
+        _md_prev_results: list[str] = []
+        for _md_idx, _md_t in enumerate(_tasks_list):
+            _md_agent_name = _md_t.get('agent_name', '')
+            _md_agent_task = _md_t.get('agent_task', '')
+            _md_dm = _md_t.get('director_message', '')
+            _md_ag = _find_agent(_md_agent_name)
+            if not _md_ag or not _md_agent_task:
+                continue
+            # Добавляем результаты предыдущих агентов как контекст
+            if _md_prev_results:
+                _prev_block = '\n\n--- Результаты предыдущих агентов ---\n' + '\n\n'.join(_md_prev_results)
+                _md_full_ctx = '\n\n'.join(_md_ctx_parts) + _prev_block
+            else:
+                _md_full_ctx = '\n\n'.join(_md_ctx_parts)
+            # Уведомление пользователя о начале работы агента
+            if _md_dm:
+                _ag_n = _md_ag.get('name', 'Агент')
+                _md_dm_display = _md_dm if _ag_n.lower() in _md_dm.lower()[:len(_ag_n)+3] else f"{_ag_n}, {_md_dm}"
+                _save_interaction_for_director(user_id, _md_dm_display, message_type='agent_msg')
+            _md_resp = await _exec_agent_for_director(_md_ag, _md_agent_task, user_id, dialog_context=_md_full_ctx)
+            _md_resp_text = _md_resp[0] if isinstance(_md_resp, tuple) else str(_md_resp or '')
+            if _md_resp_text:
+                # Sanitize error descriptions to prevent cross-agent contamination
+                _md_clean = _md_resp_text[:400]
+                _ERR_KW_MD = ('ошибк', 'сбой', 'не смог', 'не удал', 'не работ', 'не отправ')
+                if any(ew in _md_clean.lower() for ew in _ERR_KW_MD):
+                    _md_clean = _md_clean + ' [⚠ ошибки могут быть временными — повтори инструмент]'
+                _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_clean}")
+                await _send_visible(_md_resp_text)
+                _save_interaction_for_director(user_id, _md_resp_text, message_type='ai')
+        return '__agent_handled__'
 
-        _ag = _find_agent(decision.get('agent_name', ''))
-        if not _ag:
-            return None
-        _dm = decision.get('director_message', '')
-        _task = decision.get('agent_task') or user_message
-        # Убираем имя агента из задачи если AI случайно его добавил
-        _ag_name_clean = _ag.get('name', '')
-        if _ag_name_clean and _task.lower().startswith(_ag_name_clean.lower()):
-            import re as _re_task_clean
-            _task = _re_task_clean.sub(
-                r'^' + _re_task_clean.escape(_ag_name_clean) + r'[\s,:.!]*',
-                '', _task, flags=_re_task_clean.IGNORECASE,
-            ).strip() or _task
+    # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
+    if action != 'delegate':
+        return None
+
+    # ── Валидация: если задача требует коммуникации/поиска людей,
+    # а у агента нет нужного инструмента — ASI делает сам ──────────────
+    _ag_check = _find_agent(decision.get('agent_name', ''))
+    if _ag_check:
+        _task_lower = (decision.get('agent_task') or user_message).lower()
+        _comm_keywords = ('найди', 'пригласи', 'напиши', 'отправь', 'сообщ', 'пользовател',
+                          'приглаш', 'invite', 'message', 'find.*user', 'тестировщик',
+                          'тестер', 'аудитори', 'контакт')
+        _needs_comm = any(kw in _task_lower for kw in _comm_keywords)
+        if _needs_comm:
+            _ag_tools_str = (_ag_check.get('tools_allowed') or '').lower()
+            _has_comm_tool = any(t in _ag_tools_str for t in
+                                 ('find_and_message', 'send_message', 'find_relevant_contacts'))
+            if not _has_comm_tool:
+                logger.info("[DIRECTOR] Agent %s lacks comm tools for task, ASI handles self",
+                            _ag_check.get('name'))
+                return None  # ASI сделает сам через process_request
+
+    # ── delegate: один агент на запрос ──────────────────────────────────
+    _agent_ctx_parts = []
+    if _user_full_ctx:
+        _agent_ctx_parts.append(_user_full_ctx)
+    if _history_block.strip():
+        _agent_ctx_parts.append(_history_block.strip())
+    _del_ctx = '\n\n'.join(_agent_ctx_parts)
+
+    _ag = _find_agent(decision.get('agent_name', ''))
+    if not _ag:
+        return None
+    _dm = decision.get('director_message', '')
+    _task = decision.get('agent_task') or user_message
+    # Убираем имя агента из задачи если AI случайно его добавил
+    _ag_name_clean = _ag.get('name', '')
+    if _ag_name_clean and _task.lower().startswith(_ag_name_clean.lower()):
+        import re as _re_task_clean
+        _task = _re_task_clean.sub(
+            r'^' + _re_task_clean.escape(_ag_name_clean) + r'[\s,:.!]*',
+            '', _task, flags=_re_task_clean.IGNORECASE,
+        ).strip() or _task
 
     # ── Многораундовый цикл: АСИ ↔ агент ─────────────────────────────────────
     # АСИ даёт поручение → агент отчитывается → АСИ решает: ещё поручение или принять
     _is_q = _is_question_message(user_message)
-    # Прямое обращение к агенту → 1 раунд без review (отвечает САМ агент, без АСИ-надстройки)
-    _is_direct = _direct_agent is not None
-    _MAX_AGENT_ROUNDS = 1 if (_is_q or _is_direct) else 3
+    # Прямое обращение обработано выше (fast path return None) → здесь всегда False
+    _is_direct = False
+    _MAX_AGENT_ROUNDS = 1 if _is_q else 3
     _agent_name_d = _ag.get('name', 'Агент')
     _round_history: list[dict] = []  # история раундов для контекста
 
