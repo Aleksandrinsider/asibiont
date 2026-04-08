@@ -192,17 +192,17 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'telegram': 'publish_to_telegram, create_post',
     'discord': 'publish_to_discord',
     'crm': 'run_agent_action(action="create_lead"|"update_lead"|"get_pipelines"|"search_contacts"|"link_contact"|"get_contacts") — создание, ВЕДЕНИЕ и закрытие сделок, связывание контактов, движение по воронке',
-    'marketplace': 'run_agent_action или http_api_request — читает каталог/товары/заказы через REST API маркетплейса',
-    'pm': 'run_agent_action(action="create_issue"|"create_card"|"create_task") или http_api_request — работает с Jira, Trello, Asana и др. по REST API',
-    'notion': 'run_agent_action(action="add_page"|"query_db") или http_api_request(url="https://api.notion.com/v1/pages", method="POST", auth_key="NOTION_TOKEN")',
-    'sheets': 'run_agent_action(action="append_row"|"update_cell") или http_api_request(url="https://sheets.googleapis.com/v4/spreadsheets/...", auth_key="GSHEETS_API_KEY")',
+    'marketplace': 'run_agent_action(action="get_products"|"get_orders"|"update_stock"|"update_price"|"get_reviews") — мониторинг товаров, заказов, остатков, цен, отзывов и ВЕДЕНИЕ ассортимента',
+    'pm': 'run_agent_action(action="create_issue"|"update_issue"|"get_issues"|"create_card"|"move_card"|"get_board") — создание, ТРЕКИНГ и обновление задач/карточек по статусам',
+    'notion': 'run_agent_action(action="add_page"|"update_page"|"query_db"|"get_page") — создание, ОБНОВЛЕНИЕ и поиск страниц/баз',
+    'sheets': 'run_agent_action(action="append_row"|"update_cell"|"get_range"|"find_row") — чтение, запись, обновление и поиск данных в таблицах',
     'crypto': 'run_agent_action или http_api_request(url="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")',
     'finance': 'run_agent_action(action="get_price") или http_api_request — любой финансовый API, get_stock_price',
     'news': 'run_agent_action(action="get_news", query="..."), get_news_trends',
     'slack': 'run_agent_action(action="send_message") или http_api_request(url="https://slack.com/api/chat.postMessage", method="POST", auth_key="SLACK_TOKEN")',
     'social': 'run_agent_action(action="post_wall") или http_api_request — VK, Twitter и др. по REST API',
     'payments': 'run_agent_action(action="create_payment_link") или http_api_request — Stripe, YooKassa и др. по REST API',
-    'calendar': 'run_agent_action(action="create_event") или http_api_request(url="https://www.googleapis.com/calendar/v3/calendars/primary/events", auth_key="GOOGLE_CALENDAR_KEY")',
+    'calendar': 'run_agent_action(action="create_event"|"get_events"|"update_event"|"delete_event") — создание, просмотр, обновление и отмена событий/встреч',
     # WhatsApp: run_agent_action(action="send_message"), Twilio SMS: action="send_sms", телефония: action="send"
     'calls': 'run_agent_action(action="send_message"|"send_sms"|"send") или http_api_request — WhatsApp/Twilio/телефония по REST API',
     'script': 'run_agent_action(action="ДЕЙСТВИЕ") — конкретные action-имена см. в профиле агента',
@@ -212,8 +212,8 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'ms_teams': 'run_agent_action(action="send_message") или http_api_request(url="https://graph.microsoft.com/v1.0/...", auth_key="MS_GRAPH_TOKEN")',
     'automation': 'run_agent_action(action="trigger") или http_api_request — Zapier/Make/n8n webhooks',
     'database': 'run_agent_action(action="query"|"insert") или http_api_request — REST API баз данных (Supabase, Airtable и др.)',
-    'hr': 'run_agent_action или http_api_request — hh.ru/SuperJob/LinkedIn API',
-    'advertising': 'run_agent_action или http_api_request — Яндекс.Директ, Google Ads, VK Ads API',
+    'hr': 'run_agent_action(action="search_vacancies"|"get_resumes"|"update_status"|"get_candidates") — поиск, трекинг кандидатов по стадиям, обновление статусов',
+    'advertising': 'run_agent_action(action="get_campaigns"|"update_campaign"|"get_stats"|"create_campaign") — создание, мониторинг и оптимизация рекламных кампаний',
     'scraping': 'run_agent_action — скрейпит URL по CSS-селектору',
     'ai_api': 'run_agent_action(action="ask"|"analyze") или http_api_request — любой AI API (OpenAI, Anthropic и др.)',
 }
@@ -268,6 +268,7 @@ _CAT_ACTIONS: dict[str, list[str]] = {
     'github': [
         '{name}, проверь репозитории и issues по «{goal}» — найди решения или best practices.',
         '{name}, найди активных разработчиков по «{goal}» на GitHub и зафиксируй контакты.',
+        '{name}, проверь открытые issues/PR — есть ли зависшие? Обнови статус или закрой решённые.',
     ],
     'rss': [
         '{name}, проверь СВОЮ RSS-ленту — найди 3 свежих материала по «{goal}» и зафиксируй.',
@@ -288,16 +289,21 @@ _CAT_ACTIONS: dict[str, list[str]] = {
         '{name}, создай отчёт по текущему прогрессу «{goal}».',
     ],
     'marketplace': [
-        '{name}, проверь позиции и отзывы по «{goal}» на маркетплейсах.',
-        '{name}, проанализируй конкурентов по «{goal}» на площадках.',
+        '{name}, проверь позиции, отзывы и остатки по «{goal}» на маркетплейсах.',
+        '{name}, проанализируй конкурентов по «{goal}» — цены, рейтинги, ассортимент.',
+        '{name}, проверь новые заказы и отзывы — если есть негатив, зафиксируй и предложи ответ.',
+        '{name}, обнови цены/остатки по товарам из «{goal}» если данные устарели.',
     ],
     'project': [
         '{name}, зафиксируй текущий статус по «{goal}»: что сделано, что блокирует, следующий шаг.',
         '{name}, создай задачу с конкретным шагом по «{goal}» и дедлайном.',
+        '{name}, проверь зависшие задачи — если задача без движения >2 дней, обнови статус или переназначь.',
+        '{name}, обнови прогресс по существующим задачам «{goal}» — закрой завершённые, раздели крупные.',
     ],
     'hr': [
         '{name}, проверь новые вакансии и кандидатов по «{goal}».',
         '{name}, подготовь обзор рынка кандидатов по «{goal}».',
+        '{name}, проверь статусы кандидатов в воронке — кто ждёт ответа >2 дней? Обнови статус или запланируй следующий шаг.',
     ],
     'search': [
         '{name}, исследуй тему «{goal}» — найди 3 конкретных инсайта и сохрани.',
@@ -5866,12 +5872,18 @@ class AnchorEngine:
                         + "  • Бот не может писать первым в мессенджерах без userbot-интеграции.\n"
                         + "  • Вакансии содержат email HR-отдела, а не личные адреса специалистов.\n"
                         + "  → Учитывай эти факты при выборе стратегии, а не следуй им как правилам.\n"
-                        + "\n🔒 РЕСУРС-ОСВЕДОМЛЁННОСТЬ (КРИТИЧЕСКИ ВАЖНО):\n"
-                        + "  • RSS: агент читает ТОЛЬКО свою настроенную ленту (URL указан в карточке). НЕ упоминай ресурсы,\n"
-                        + "    которых нет в его RSS — dev.to, Hacker News, Medium и т.д., если они не в его ленте.\n"
-                        + "  • CRM: агент работает со своей CRM. Не только СОЗДАВАЙ сделки — ВЕДИ их по воронке:\n"
-                        + "    follow-up зависших, обновление статусов, связывание контактов, отслеживание конверсии.\n"
-                        + "  • Любая интеграция: поручай ТОЛЬКО то, что агент физически может сделать своими подключёнными инструментами.\n"
+                        + "\n🔒 ПРИНЦИП ПОЛНОГО LIFECYCLE ДЛЯ ВСЕХ ИНТЕГРАЦИЙ (КРИТИЧЕСКИ ВАЖНО):\n"
+                        + "  Каждая интеграция — это не 'создай и забудь', а ПОЛНЫЙ ЦИКЛ:\n"
+                        + "  • CRM: создание → ведение воронки → follow-up зависших → обновление статусов → закрытие сделок\n"
+                        + "  • Маркетплейс: мониторинг товаров → отзывы → обновление цен/остатков → анализ конкурентов\n"
+                        + "  • PM (Jira/Trello): создание задач → трекинг прогресса → обновление статусов → закрытие завершённых\n"
+                        + "  • GitHub: создание issues/PR → отслеживание → обновление → закрытие решённых\n"
+                        + "  • HR: поиск кандидатов → трекинг по стадиям → обновление статусов → закрытие вакансий\n"
+                        + "  • Email: отправка → отслеживание ответов → follow-up → ведение переписки\n"
+                        + "  • RSS: чтение ТОЛЬКО СВОЕЙ ленты (URL в карточке) — НЕ упоминай ресурсы которых нет у агента\n"
+                        + "  • Реклама: создание кампаний → мониторинг метрик → оптимизация бюджета/ставок\n"
+                        + "  → ВСЕГДА сначала проверь СУЩЕСТВУЮЩИЕ объекты (сделки, задачи, лиды, заказы) прежде чем создавать новые.\n"
+                        + "  → Поручай ТОЛЬКО то, что агент может сделать своими подключёнными инструментами.\n"
                     )
                     # Контекст пользователя для живого поручения
                     _user_prof_c = data.get('user_profile', {})
