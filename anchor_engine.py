@@ -19789,7 +19789,7 @@ class AnchorEngine:
 
             async with aiohttp.ClientSession() as aio_session:
                 async with aio_session.post(url, headers=headers, json=data, 
-                                           timeout=aiohttp.ClientTimeout(total=30)) as response:
+                                           timeout=aiohttp.ClientTimeout(total=60)) as response:
                     if response.status != 200:
                         error = await response.text()
                         logger.error(f"[ANCHOR] Post AI API error: {response.status} {error[:200]}")
