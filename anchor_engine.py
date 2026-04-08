@@ -6699,6 +6699,7 @@ class AnchorEngine:
                             _fb_choice += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
                         _coord_text = _fb_choice
                         logger.info("[ANCHOR-AUTOPILOT] using context-aware fallback for %s", _chosen_name)
+                    _coord_text_clean_save = ''  # pre-init to avoid NameError when _skip_coord=True
                     try:
                         _cs = Session()
                         try:
