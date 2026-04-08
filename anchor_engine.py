@@ -1053,25 +1053,7 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
 
 
 
-def _build_personalized_strategy(
-    goals_summary: list,
-    caps_cats: set = None,
-    goal_type: str = 'general',
-    goal_cap_rank: list = None,
-    used_tools: set = None,
-    has_imap: bool = False,
-    has_github: bool = False,
-    has_rss: bool = False,
-    has_content: bool = False,
-    has_crm: bool = False,
-    has_market: bool = False,
-    has_slack: bool = False,
-    has_news: bool = False,
-    has_alpha: bool = False,
-    py_actions: list | None = None,
-) -> str:
-    """Removed: AI determines strategy dynamically from capabilities and goals."""
-    return ''
+# _build_personalized_strategy removed: AI determines strategy dynamically
 
 
 
@@ -2346,24 +2328,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         python_code=python_code,
     )
 
-    # ── Персонализированная стратегия: цель × интеграции → конкретная цепочка ──
-    _personalized_strategy_block = _build_personalized_strategy(
-        goals_summary=goals_summary,
-        caps_cats=_caps_cats,
-        goal_type=_goal_type,
-        goal_cap_rank=_goal_cap_rank,
-        used_tools=_used_tools,
-        has_imap=_has_imap,
-        has_github=_has_github,
-        has_rss=_has_rss,
-        has_content=_has_content,
-        has_crm=_has_crm,
-        has_market=_has_market,
-        has_slack=_has_slack,
-        has_news=_has_news,
-        has_alpha=_has_alpha,
-        py_actions=_py_actions,
-    )
+    _personalized_strategy_block = ''
 
     # ── Outreach effectiveness stats ──
     _outreach_stats = ''
@@ -10871,6 +10836,9 @@ class AnchorEngine:
                 "5. ЗАДАЧИ — ТОЛЬКО КОНКРЕТНЫЕ ДЕЙСТВИЯ С ИЗМЕРИМЫМ РЕЗУЛЬТАТОМ:\n"
                 "   ⚠️ САМОПРОВЕРКА перед каждым task: 👤 КОМУ/ЧТО? 📊 СКОЛЬКО? 🎯 КРИТЕРИИ?\n"
                 "   Если task не отвечает на все 3 — он АБСТРАКТНЫЙ и будет потерянный цикл.\n"
+                "   ⛔ ЗАПРЕЩЕНЫ МЕТА-ЗАДАЧИ: «получить метрики кампании», «проверить статистику рассылки»,\n"
+                "      «собрать аналитику», «проверить статус писем». Это диагностика, а не работа!\n"
+                "      Вместо → дай задачу СЛЕДУЮЩЕГО ШАГА: отправь ЕЩЁ 5 писем / напиши follow-up / найди НОВЫЕ контакты.\n"
                 "   ПРИМЕРЫ по типам целей:\n"
                 "   [outreach] ✗ «Поиск email контактов через GitHub API» (кому? сколько? зачем?)\n"
                 "              ✓ «Найди 5 email CTO/DevOps из open-source проектов на Python через web_search, сохрани через save_email_contact»\n"
@@ -12094,6 +12062,34 @@ class AnchorEngine:
                 # Гард: пустой/слишком короткий текст — не сохраняем
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
+                    continue
+                # ── DEDUP: не дублировать поручение тому же агенту по той же цели за 2 часа ──
+                if _ag_goal_title:
+                    try:
+                        _dedup_since = datetime.now(timezone.utc) - timedelta(hours=2)
+                        _dedup_exists = session.query(Interaction.id).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'agent_msg',
+                            Interaction.created_at >= _dedup_since,
+                            Interaction.content.ilike(f'%"__to_agent": "{_ag_name}"%'),
+                            Interaction.content.ilike(f'%"__goal_title": "{_ag_goal_title[:80]}%'),
+                        ).first()
+                        if _dedup_exists:
+                            logger.info("[COORD] ⛔ dedup: agent %s already got assignment for goal '%s' within 2h", _ag_name, _ag_goal_title[:40])
+                            continue
+                    except Exception:
+                        pass
+                # ── META-TASK GUARD: блокируем диагностические/метрические задачи ──
+                _assign_lower = _asi_assign_text.lower()
+                _is_meta_task = (
+                    ('метрик' in _assign_lower and ('кампани' in _assign_lower or 'рассылк' in _assign_lower or 'писем' in _assign_lower))
+                    or ('статистик' in _assign_lower and ('кампани' in _assign_lower or 'рассылк' in _assign_lower))
+                    or ('аналитик' in _assign_lower and 'кампани' in _assign_lower and 'получ' in _assign_lower)
+                    or ('реальн' in _assign_lower and 'метрик' in _assign_lower)
+                    or ('провер' in _assign_lower and 'статус' in _assign_lower and ('писем' in _assign_lower or 'кампани' in _assign_lower))
+                )
+                if _is_meta_task:
+                    logger.info("[COORD] ⛔ meta-task blocked for %s: %r", _ag_name, _asi_assign_text[:80])
                     continue
                 # sanitize_live_team_chat_text уже обрабатывает обрывы — дублирование удалено
                 try:
