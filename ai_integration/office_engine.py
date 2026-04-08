@@ -628,22 +628,36 @@ async def _autonomous_analyze_result(
     try:
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
         import aiohttp as _aio
-        async with _aio.ClientSession() as sess:
-            async with sess.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
-                json={
-                    'model': DEEPSEEK_MODEL,
-                    'messages': [{'role': 'user', 'content': prompt}],
-                    'max_tokens': 150,
-                    'temperature': 0.3,
-                },
-                timeout=_aio.ClientTimeout(total=30),
-            ) as resp:
-                if resp.status != 200:
-                    return {'action': 'done'}
-                data = await resp.json()
-                answer = (data.get('choices', [{}])[0].get('message', {}).get('content', '') or '').strip()
+        _answer = None
+        for _att in range(2):
+            try:
+                async with _aio.ClientSession() as sess:
+                    async with sess.post(
+                        'https://api.deepseek.com/chat/completions',
+                        headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                        json={
+                            'model': DEEPSEEK_MODEL,
+                            'messages': [{'role': 'user', 'content': prompt}],
+                            'max_tokens': 150,
+                            'temperature': 0.3,
+                        },
+                        timeout=_aio.ClientTimeout(total=30),
+                    ) as resp:
+                        if resp.status != 200:
+                            return {'action': 'done'}
+                        data = await resp.json()
+                        _answer = (data.get('choices', [{}])[0].get('message', {}).get('content', '') or '').strip()
+                        break
+            except (asyncio.TimeoutError, TimeoutError):
+                if _att == 0:
+                    logger.debug('[AUTONOMY] AI timeout attempt %d, retrying...', _att + 1)
+                    await asyncio.sleep(2)
+                    continue
+                return {'action': 'done'}
+            except Exception as _e:
+                logger.debug('[AUTONOMY] AI call error: %s', _e)
+                return {'action': 'done'}
+        answer = _answer
     except Exception as _e:
         logger.debug('[AUTONOMY] AI call error: %s', _e)
         return {'action': 'done'}
@@ -1222,24 +1236,32 @@ class OfficeEngine:
             f"Только суть. Если данных нет или ничего интересного — напиши одно предложение об этом.{_ctx_block}"
         )
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.deepseek.com/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": DEEPSEEK_MODEL,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 150,
-                        "temperature": 0.7,
-                    },
-                    timeout=aiohttp.ClientTimeout(total=25),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data["choices"][0]["message"]["content"].strip()
+            for _att_r in range(2):
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        async with session.post(
+                            "https://api.deepseek.com/chat/completions",
+                            headers={
+                                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "model": DEEPSEEK_MODEL,
+                                "messages": [{"role": "user", "content": prompt}],
+                                "max_tokens": 150,
+                                "temperature": 0.7,
+                            },
+                            timeout=aiohttp.ClientTimeout(total=30),
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                return data["choices"][0]["message"]["content"].strip()
+                            break
+                except (asyncio.TimeoutError, TimeoutError):
+                    if _att_r == 0:
+                        await asyncio.sleep(2)
+                        continue
+                    break
         except Exception as e:
             logger.debug("[OFFICE-L1] format_report AI error: %s", e)
         # Fallback: берём первые 2 значимые строки из clean
@@ -1738,22 +1760,34 @@ class OfficeEngine:
             "ТОЛЬКО JSON, без пояснений."
         )
 
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    "https://api.deepseek.com/chat/completions",
-                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                    json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                          "max_tokens": 800, "temperature": 0.4},
-                    timeout=aiohttp.ClientTimeout(total=120),
-                ) as resp:
-                    if resp.status != 200:
-                        logger.warning("[OFFICE-L2] API error: %d", resp.status)
-                        return
-                    data = await resp.json()
-                    answer = data["choices"][0]["message"]["content"].strip()
-        except Exception as e:
-            logger.warning("[OFFICE-L2] AI call error: %s", str(e) or type(e).__name__)
+        answer = None
+        for _attempt in range(2):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        "https://api.deepseek.com/chat/completions",
+                        headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                        json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
+                              "max_tokens": 800, "temperature": 0.4},
+                        timeout=aiohttp.ClientTimeout(total=90),
+                    ) as resp:
+                        if resp.status != 200:
+                            logger.warning("[OFFICE-L2] API error: %d", resp.status)
+                            return
+                        data = await resp.json()
+                        answer = data["choices"][0]["message"]["content"].strip()
+                        break
+            except (asyncio.TimeoutError, TimeoutError):
+                if _attempt == 0:
+                    logger.info("[OFFICE-L2] Timeout attempt %d, retrying...", _attempt + 1)
+                    await asyncio.sleep(3)
+                    continue
+                logger.warning("[OFFICE-L2] AI call timeout after 2 attempts")
+                return
+            except Exception as e:
+                logger.warning("[OFFICE-L2] AI call error: %s", str(e) or type(e).__name__)
+                return
+        if not answer:
             return
 
         import json as _json

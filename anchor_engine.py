@@ -4408,8 +4408,15 @@ class AnchorEngine:
                         self._ai_decide_and_compose(user, anchors_batch, session),
                         timeout=120,
                     )
-            except (asyncio.TimeoutError, Exception) as _db_err:
-                logger.warning(f"[ANCHOR] User {user_id}: _deliver_batch({label}) AI call failed/timeout: {_db_err}")
+            except asyncio.TimeoutError:
+                logger.warning(f"[ANCHOR] User {user_id}: _deliver_batch({label}) AI timeout after 120s")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                msg = None
+            except Exception as _db_err:
+                logger.warning(f"[ANCHOR] User {user_id}: _deliver_batch({label}) AI call failed: {_db_err}")
                 try:
                     session.rollback()
                 except Exception:
@@ -4426,7 +4433,14 @@ class AnchorEngine:
                                 self._ai_decide_and_compose(user, always, session, force_deliver=True),
                                 timeout=120,
                             )
-                    except (asyncio.TimeoutError, Exception):
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[ANCHOR] User {user_id}: ALWAYS_DELIVER retry also timed out")
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
+                        msg = None
+                    except Exception:
                         try:
                             session.rollback()
                         except Exception:
