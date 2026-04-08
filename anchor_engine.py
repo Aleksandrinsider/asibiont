@@ -7675,7 +7675,7 @@ class AnchorEngine:
                         )
                         if _dir_resp and len(_dir_resp.strip()) > 20:
                             _dir_txt = _dir_resp.strip()
-                            await _safe_send(self.bot, user.telegram_id, _dir_txt)
+                            await _safe_send(self.bot, user.telegram_id, f"ASI:\n{_dir_txt}")
                             session.add(Interaction(
                                 user_id=user.id,
                                 message_type='proactive',
@@ -12092,7 +12092,7 @@ class AnchorEngine:
                 # Поручение сохранено в БД для веб-чата — отправляем и в Telegram (отдельным сообщением)
                 if self.bot and _asi_assign_text and len(_asi_assign_text.strip()) > 15:
                     try:
-                        await _safe_send(self.bot, user.telegram_id, f"→ {_asi_assign_text}")
+                        await _safe_send(self.bot, user.telegram_id, f"[ASI] {_asi_assign_text}")
                     except Exception:
                         pass
 
@@ -13201,7 +13201,7 @@ class AnchorEngine:
                         pass
 
                 # Отправляем результат шага в Telegram — пользователь видит каждый шаг
-                if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not _is_minor_update and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
+                if self.bot and _cleaned and len(_cleaned.strip()) > 20 and not (_ag_id != 0 and self._agent_persona_daily_cap_reached(session, user, _ag_name)):
                     try:
                         _cleaned_tg = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
                             _cleaned, anchor_type='coordinator_result', speaker_name=_ag_name,
