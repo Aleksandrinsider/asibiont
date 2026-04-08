@@ -4671,6 +4671,24 @@ class AnchorEngine:
             except Exception as _guard_err:
                 logger.debug("[DISPATCH-GUARD] guard check failed (non-critical): %s", _guard_err)
 
+            # ── Throttle: не более 1 dispatch на ту же цель за 30 минут ──
+            try:
+                _throttle_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                _recent_completed = session.query(_AAL_guard.id).filter(
+                    _AAL_guard.user_id == user.id,
+                    _AAL_guard.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch']),
+                    _AAL_guard.target == anchor.source,
+                    _AAL_guard.created_at > _throttle_cutoff,
+                ).first()
+                if _recent_completed:
+                    logger.info(
+                        "[DISPATCH-THROTTLE] Skip dispatch for %s — same goal dispatched within 30 min (AAL id=%s)",
+                        anchor.source, _recent_completed[0]
+                    )
+                    return
+            except Exception as _throttle_err:
+                logger.debug("[DISPATCH-THROTTLE] throttle check failed: %s", _throttle_err)
+
             # ── Помечаем якорь доставленным СРАЗУ — защита от бесконечных retry при crash/restart ──
             try:
                 from sqlalchemy import text as _del_text
@@ -5757,7 +5775,7 @@ class AnchorEngine:
                                                 _atxt = (_rmc_d.get('text', '') or '').strip()[:180]
                                                 if _atxt and _atxt not in _my_assign_texts:
                                                     _my_assign_texts.append(_atxt)
-                                                    if len(_my_assign_texts) >= 3:
+                                                    if len(_my_assign_texts) >= 5:
                                                         break
                                         except Exception:
                                             pass
@@ -6099,6 +6117,10 @@ class AnchorEngine:
                             f"Ты — ASI, координатор команды"
                             + (f" проекта «{_project_c}»" if _project_c else '')
                             + f". Обращаешься к коллеге {_chosen_name} ({_agent_role}) в рабочем чате.\n\n"
+                            f"📌 ФАКТЫ О ПЛАТФОРМЕ (используй ТОЛЬКО эти числа, НЕ придумывай другие):\n"
+                            f"  • При регистрации — 1500 токенов (НЕ 1000, НЕ 1000+500)\n"
+                            f"  • Реферальная программа: 20% от каждого пополнения приглашённого (НЕ 500 токенов за реферала)\n"
+                            f"  • Пакеты: 1500₽→1500, 5000₽→5500 (+10%), 50000₽→60000 (+20%)\n\n"
                             f"{_channels_info_c}\n"
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
@@ -18865,6 +18887,10 @@ class AnchorEngine:
 
                     compose_prompt = (
                         f"Write a cold outreach email for this specific person.\n\n"
+                        f"⚠️ VERIFIED PLATFORM FACTS (use ONLY these numbers, do NOT invent others):\n"
+                        f"  • 1500 free tokens on signup (NOT 1000, NOT 1000+500)\n"
+                        f"  • Referral program: 20% commission from each friend's top-up (NOT fixed 500 tokens)\n"
+                        f"  • Token packages: 1500₽→1500 tokens, 5000₽→5500 tokens (+10%), 50000₽→60000 tokens (+20%)\n\n"
                         f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n"
                         f"Offer: {offer}\nTone: {tone}\nSender: {sender_name}\n"
                         f"{_gender_hint}\n"
@@ -20033,6 +20059,9 @@ class AnchorEngine:
                     "— email_outreach_send: отправь drafts через send_outreach_email. Персонализируй каждое письмо. Верни SKIP. ANTI-SPAM: пропускай контакты которым уже писали за 30 дней.",
                     "  📌 ПРИОРИТЕТ АДРЕСАТОВ: стартапы, инди-разработчики, малый и средний бизнес, академия. CEO/CTO корпораций из Fortune 500 — низкий приоритет (скорее всего не ответят).",
                     "  📌 ФАКТЫ О ПЛАТФОРМЕ: пиши ТОЛЬКО то, что реально есть в ASI Biont:",
+                    "    • При регистрации даётся 1500 токенов (НЕ 1000, НЕ 1000+500, именно 1500)",
+                    "    • Реферальная программа: 20% от каждого пополнения приглашённого друга (НЕ фиксированные 500 токенов)",
+                    "    • Пакеты токенов: 1500₽ → 1500 токенов, 5000₽ → 5500 токенов (+10%), 50000₽ → 60000 токенов (+20%)",
                     "    • Не придумывай количество пользователей",
                     "    • Не обещай функции которых нет (ML-эксперименты, управление инфраструктурой, интеграция с uAgents/Fetch.ai)",
                     "    • Не обещай живые консультации/демо/звонки — вместо этого: 'напишите, расскажу подробнее'",
