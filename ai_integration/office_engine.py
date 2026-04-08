@@ -224,8 +224,23 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
         from datetime import datetime as _dt, timezone as _tz, timedelta as _td
         _s = _Db()
         try:
-            # Дедупликация: не логируем дубль завершения за 45 мин
             _cutoff = _dt.now(_tz.utc) - _td(minutes=45)
+            _task_key = task_title[:40].lower().strip()
+
+            # 1) Обновляем все «accepted» записи для этого агента+задачи → «completed»
+            _pending = _s.query(_AAL).filter(
+                _AAL.user_id == user_id,
+                _AAL.target == f'agent:{agent_name}',
+                _AAL.activity_type == 'agent_task',
+                _AAL.status == 'accepted',
+                _AAL.created_at >= _cutoff,
+            ).all()
+            for _p in _pending:
+                _p_text = ((_p.title or '') + ' ' + (_p.content or '')).lower()
+                if _task_key in _p_text:
+                    _p.status = 'completed'
+
+            # 2) Дедупликация: не создаём повторную «completed» запись
             _recent = _s.query(_AAL).filter(
                 _AAL.user_id == user_id,
                 _AAL.target == f'agent:{agent_name}',
@@ -233,10 +248,10 @@ def _auto_complete_agent_task_sync(user_id: int, agent_id: int, agent_name: str,
                 _AAL.status == 'completed',
                 _AAL.created_at >= _cutoff,
             ).order_by(_AAL.created_at.desc()).limit(3).all()
-            _task_key = task_title[:40].lower().strip()
             for _ex in _recent:
                 _ex_text = ((_ex.title or '') + ' ' + (_ex.content or '')).lower()
                 if _task_key in _ex_text:
+                    _s.commit()  # commit the accepted→completed updates
                     return  # уже залогировано
             _s.add(_AAL(
                 user_id=user_id,

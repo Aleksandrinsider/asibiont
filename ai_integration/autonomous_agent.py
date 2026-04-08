@@ -8542,9 +8542,15 @@ def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, re
     """Сохраняет результат делегирования в conversation_history для контекста будущих сообщений."""
     try:
         from .conversation_history import save_message_to_history
+        # NOTE: результат пишем от лица ASI ("я поручил"), не от лица агента.
+        # Это предотвращает утечку persona (женский род, другое имя) в контекст ASI.
+        import re as _re_dlg
+        _clean = result[:400]
+        # Убираем первое лицо агента: "я нашла" → "нашлось", "я проверила" → "проверено"
+        _clean = _re_dlg.sub(r'\bя\s+', '', _clean, flags=_re_dlg.IGNORECASE)
         _summary = (
-            f"[Поручил агенту {agent_name}: {task[:150]}]\n"
-            f"Результат: {result[:400]}"
+            f"[Я (ASI) поручил агенту {agent_name}: {task[:150]}. Задача ВЫПОЛНЕНА.]\n"
+            f"Результат агента: {_clean}"
         )
         save_message_to_history(telegram_id, "assistant", _summary)
     except Exception as e:
