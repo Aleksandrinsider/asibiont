@@ -571,6 +571,10 @@ def _sanitize_proactive_text(text: str) -> str:
     t = _re_san.sub(r'\b(?:через\s+)?(?:действие агента|сохранение контакта|поиск контактов|отправка письма)\b', '', t, flags=_re_san.IGNORECASE)
     # "исследование темы через исследование темы" → "исследование темы"
     t = _re_san.sub(r'(исследование темы)(?:\s+через\s+исследование темы)+', r'\1', t, flags=_re_san.IGNORECASE)
+    # Clean up dangling prepositions/words left after tool name removal
+    t = _re_san.sub(r'\b(?:через|с помощью|используя|действие)\s*[.,;!?]', '.', t, flags=_re_san.IGNORECASE)
+    t = _re_san.sub(r'\bРезультат\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
+    t = _re_san.sub(r'\bЗафикси\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
     # Clean up leftover artifacts: double spaces, dangling dashes/commas
     t = _re_san.sub(r'\s+—\s+—', ' —', t)
     t = _re_san.sub(r'\s{2,}', ' ', t)
@@ -5764,51 +5768,51 @@ class AnchorEngine:
                     import random as _rnd_fb
                     if _goal_is_outreach and _has_email_fb:
                         _fb_strategies = [
-                            f'{_chosen_name}, проверь входящие через check_emails — если есть ответы, сразу reply_to_outreach_email. Если нет ответов — send_follow_up_email тем кто молчит 2+ дня.',
-                            f'{_chosen_name}, отправь через send_outreach_email персональное письмо 1-2 контактам из базы — с конкретным предложением по «{_g_label}». Если контактов нет — найди 3 через web_search на dev.to/ProductHunt и сохрани через save_email_contact.',
-                            f'{_chosen_name}, найди через web_search 3 email-адреса авторов/разработчиков по теме «{_g_label}» на dev.to, Hacker News, ProductHunt. Сохрани каждый через save_email_contact. Затем отправь первому через send_outreach_email.',
+                            f'{_chosen_name}, проверь входящие — если есть ответы, сразу ответь на них. Если молчат 2+ дня — отправь follow-up.',
+                            f'{_chosen_name}, отправь персональное письмо 1-2 контактам из базы с конкретным предложением по «{_g_label}». Если контактов нет — найди 3 на dev.to или ProductHunt и сохрани.',
+                            f'{_chosen_name}, найди 3 email-адреса авторов или разработчиков по теме «{_g_label}» на dev.to, Hacker News, ProductHunt. Сохрани каждый, затем отправь первому письмо.',
                         ]
                     elif _goal_is_content:
                         _content_tools = []
                         if 'telegram' in _cats_c: _content_tools.append('publish_to_telegram')
                         if 'rss' in _cats_c: _content_tools.append('create_post из RSS-трендов')
                         if 'social' in _cats_c: _content_tools.append('create_post в соцсети')
-                        _ct = _content_tools[0] if _content_tools else 'create_post и save_note'
+                        _ct = _content_tools[0] if _content_tools else 'публикацию и заметку'
                         _fb_strategies = [
-                            f'{_chosen_name}, создай пост по теме «{_g_label}» через {_ct} — конкретный факт или инсайт, без воды.',
-                            f'{_chosen_name}, найди через research_topic 3 свежих тренда по «{_g_label}» и подготовь контент-план на неделю через save_note.',
+                            f'{_chosen_name}, создай пост по теме «{_g_label}» — конкретный факт или инсайт, без воды.',
+                            f'{_chosen_name}, найди 3 свежих тренда по «{_g_label}» и подготовь контент-план на неделю.',
                             f'{_chosen_name}, проверь какие посты по теме «{_g_label}» набрали больше охвата — используй это для следующей публикации.',
                         ]
                     elif _goal_is_research:
                         _fb_strategies = [
-                            f'{_chosen_name}, сделай research_topic по «{_g_label}» — найди 3 конкретных инсайта которых у нас ещё нет. Сохрани через save_note с выводами.',
-                            f'{_chosen_name}, через web_search найди лидеров мнений по теме «{_g_label}» — кто пишет, где выступает. Зафикси через save_note.',
-                            f'{_chosen_name}, проанализируй что уже собрано по «{_g_label}» и создай структурированный обзор через save_note.',
+                            f'{_chosen_name}, исследуй тему «{_g_label}» — найди 3 конкретных инсайта которых у нас ещё нет и сохрани с выводами.',
+                            f'{_chosen_name}, найди лидеров мнений по теме «{_g_label}» — кто пишет, где выступает. Зафиксируй в заметке.',
+                            f'{_chosen_name}, проанализируй что уже собрано по «{_g_label}» и создай структурированный обзор.',
                         ]
                     elif _goal_is_product:
                         _fb_strategies = [
-                            f'{_chosen_name}, зафиксируй через save_note текущий статус по «{_g_label}»: что сделано, что блокирует, какой следующий шаг.',
-                            f'{_chosen_name}, через research_topic найди технические решения для «{_g_label}» — библиотеки, примеры, best practices. Сохрани через save_note.',
-                            f'{_chosen_name}, создай задачу через add_task с конкретным техническим шагом по «{_g_label}» и дедлайном.',
+                            f'{_chosen_name}, зафиксируй текущий статус по «{_g_label}»: что сделано, что блокирует, какой следующий шаг.',
+                            f'{_chosen_name}, найди технические решения для «{_g_label}» — библиотеки, примеры, best practices. Сохрани в заметку.',
+                            f'{_chosen_name}, создай задачу с конкретным техническим шагом по «{_g_label}» и дедлайном.',
                         ]
                     elif _non_email_cats and _goal_titles_fb:
                         # У агента есть не-email интеграции — используем их
                         _fb_cat = _rnd_fb.choice(_non_email_cats)
                         _fb_cat_name = _CAP_CATEGORY_NAMES.get(_fb_cat, _fb_cat)
                         _fb_strategies = [
-                            f'{_chosen_name}, через {_fb_cat_name} найди полезные данные по теме «{_g_label}» и сохрани через save_note.',
-                            f'{_chosen_name}, сделай research_topic по «{_g_label}» — найди свежий подход которого ещё не пробовали. Результат через save_note.',
-                            f'{_chosen_name}, проанализируй прогресс по «{_g_label}»: что сработало, что нет. Создай план следующих 3 шагов через save_note.',
+                            f'{_chosen_name}, через {_fb_cat_name} найди полезные данные по теме «{_g_label}» и сохрани в заметку.',
+                            f'{_chosen_name}, исследуй тему «{_g_label}» — найди свежий подход которого ещё не пробовали и зафиксируй результаты.',
+                            f'{_chosen_name}, проанализируй прогресс по «{_g_label}»: что сработало, что нет. Создай план следующих 3 шагов.',
                         ]
                     elif _has_email_fb and _goal_titles_fb:
                         _fb_strategies = [
-                            f'{_chosen_name}, проверь входящие через check_emails по теме «{_g_label}».',
-                            f'{_chosen_name}, через web_search найди 3 ресурса или контакта по «{_g_label}» и сохрани через save_note.',
+                            f'{_chosen_name}, проверь входящие по теме «{_g_label}».',
+                            f'{_chosen_name}, найди 3 ресурса или контакта по «{_g_label}» и сохрани в заметку.',
                         ]
                     else:
                         _fb_strategies = [
-                            f'{_chosen_name}, запусти research_topic по своей специализации — найди свежий инсайт и сохрани через save_note.',
-                            f'{_chosen_name}, через web_search найди что нового происходит в области наших целей. Зафикси через save_note.',
+                            f'{_chosen_name}, исследуй свою область специализации — найди свежий инсайт и сохрани в заметку.',
+                            f'{_chosen_name}, найди что нового происходит в области наших целей и зафиксируй находки.',
                         ]
                     _coord_text = None  # Will be set by AI or context-aware fallback below
                     _fb_strategies_ref = _fb_strategies  # Save ref for fallback
@@ -6119,7 +6123,7 @@ class AnchorEngine:
                                         else:
                                             _fb_strategies_ref = [(
                                                 f'{_chosen_name}, мы уже много искали по «{_goal_titles_fb[0]}». '
-                                                f'Возьми лучшие находки из своих заметок и создай аналитический пост через create_post — '
+                                                f'Возьми лучшие находки из своих заметок и создай аналитический пост — '
                                                 f'что нашли, кто перспективен, какой следующий шаг.'
                                             )]
                                 except Exception as _bn_err:
