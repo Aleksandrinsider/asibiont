@@ -1741,7 +1741,8 @@ class HybridAutonomousAgent:
                         'search_users': 'github', 'find_contributors': 'github',
                         'check_news': 'rss', 'read_rss': 'rss', 'check_news_and_markets': 'rss',
                         'check_markets': 'rss', 'fetch_rss': 'rss',
-                        'yandex_metrika_report': 'metrika',
+                        'yandex_metrika_report': 'metrika', 'get_metrika': 'metrika',
+                        'get_analytics': 'metrika', 'analytics_report': 'metrika',
                     }
                     _SEC_KEYWORDS = {
                         'amo': ('amocrm', 'amo'),
@@ -1782,6 +1783,16 @@ class HybridAutonomousAgent:
                                 f"которая НЕ настроена у этого агента. "
                                 f"Используй ДРУГОЙ инструмент или стратегию."
                             )
+                    elif '# ===' in out:
+                        # Общий action (get_report и т.п.) — показываем ВСЕ секции компактно,
+                        # чтобы Gmail не забивал буфер и другие интеграции были видны
+                        _sections = _parse_integration_sections(out, 'agent')
+                        if _sections:
+                            _compact_parts = []
+                            for _sname, _scontent in _sections:
+                                _budget = max(300, 1800 // len(_sections))
+                                _compact_parts.append(f"[{_sname}]\n{_scontent[:_budget]}")
+                            out = '\n\n'.join(_compact_parts)
                 out = out[:2000]
             except _aio_ea.TimeoutError:
                 proc.kill()
