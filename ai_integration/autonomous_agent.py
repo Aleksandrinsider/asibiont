@@ -2291,6 +2291,19 @@ class HybridAutonomousAgent:
             elif 'query' not in params:
                 params['query'] = user_message[:200] if user_message else 'исследование'
 
+        elif tool_name == 'web_search':
+            if not params.get('query'):
+                # AI вызвал web_search без query — извлекаем из альтернативных полей или сообщения
+                fallback_q = (params.pop('search_query', None) or params.pop('topic', None)
+                              or params.pop('text', None) or params.pop('q', None))
+                if fallback_q:
+                    params['query'] = fallback_q
+                elif user_message:
+                    params['query'] = user_message[:200]
+                else:
+                    params['query'] = 'поиск информации'
+                logger.info(f"[FIX_PARAMS] web_search: set query='{params['query'][:60]}'")
+
         elif tool_name == 'add_task' and user_message:
             if 'title' not in params or not params.get('title'):
                 # DeepSeek вызвал add_task без title — извлекаем из сообщения
