@@ -7060,6 +7060,8 @@ class AnchorEngine:
                         'попробуй завтра', 'продолжим завтра',
                         'дневной лимит', '[internal]',
                     ))
+                    # Raw data dump: агент просто пересылает список контактов (5+ email)
+                    or (len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _result_clean)) >= 5)
                 )
                 if _is_noise_result:
                     _filter_reason = 'noise'

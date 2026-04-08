@@ -16472,12 +16472,13 @@ async def list_email_contacts(
         query = session.query(EmailContact).filter_by(user_id=user.id)
         if status_filter and status_filter != 'all':
             query = query.filter_by(status=status_filter)
-        contacts = query.order_by(EmailContact.created_at.desc()).limit(100).all()
+        total_count = query.count()
+        contacts = query.order_by(EmailContact.created_at.desc()).limit(15).all()
 
         if not contacts:
             return " Справочник контактов пуст. Добавь через save_email_contact или на дашборде → Контакты."
 
-        lines = [f" Email-контакты ({len(contacts)}):"]
+        lines = [f" Email-контакты (показано {len(contacts)} из {total_count}):"]
         for c in contacts:
             parts = [c.email]
             if c.name:
@@ -16489,6 +16490,9 @@ async def list_email_contacts(
             if c.notes:
                 line += f" ({c.notes[:50]})"
             lines.append(line)
+        if total_count > 15:
+            lines.append(f"\n... и ещё {total_count - 15} контактов. Используй send_email / start_email_campaign для работы с ними.")
+        lines.append("\n⚠️ Не пересылай этот список пользователю. Используй контакты для отправки писем.")
         return "\n".join(lines)
     except Exception as e:
         logger.error(f"[LIST_EMAIL_CONTACTS] Error: {e}", exc_info=True)
