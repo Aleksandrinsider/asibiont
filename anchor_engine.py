@@ -7970,7 +7970,10 @@ class AnchorEngine:
                         if not _het_ev(user.telegram_id, 'proactive_message', session=_s):
                             logger.info("[ANCHOR-DISPATCH] user %d: skip %s — not enough tokens", user.id, _a_type)
                             continue
-                        _sp_ev(user.telegram_id, 'proactive_message', description=f'event_dispatch_{_a_type}', session=_s, auto_commit=False)
+                        _sp_res_ev = _sp_ev(user.telegram_id, 'proactive_message', description=f'event_dispatch_{_a_type}', session=_s, auto_commit=False)
+                        if not _sp_res_ev.get('success'):
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — spend race: %s", user.id, _a_type, _sp_res_ev.get('error', ''))
+                            continue
 
                     # Логируем dispatch (cooldown guard)
                     _s.add(_AAL(
@@ -8506,7 +8509,10 @@ class AnchorEngine:
                 if not _het_ch(_user_tg_id, 'proactive_message', session=session):
                     logger.info("[ANCHOR-CHAIN] user %d: skip chain — not enough tokens", _user_id)
                     return
-                _sp_ch(_user_tg_id, 'proactive_message', description='agent_chain_continue', session=session, auto_commit=False)
+                _sp_res_ch = _sp_ch(_user_tg_id, 'proactive_message', description='agent_chain_continue', session=session, auto_commit=False)
+                if not _sp_res_ch.get('success'):
+                    logger.info("[ANCHOR-CHAIN] user %d: skip chain — spend race: %s", _user_id, _sp_res_ch.get('error', ''))
+                    return
 
             # Запускаем следующего агента
             from ai_integration.autonomous_agent import _exec_agent_for_director
@@ -11605,8 +11611,14 @@ class AnchorEngine:
                     anchor.delivered_at = datetime.now(timezone.utc)
                     session.commit()
                     return True
-                _sp_c(user.telegram_id, 'proactive_message',
+                _sp_res_c = _sp_c(user.telegram_id, 'proactive_message',
                       description='coordinator_autopilot', session=session, auto_commit=False)
+                if not _sp_res_c.get('success'):
+                    logger.info("[COORD] user %d: spend race: %s", user.id, _sp_res_c.get('error', ''))
+                    anchor.delivered_at = datetime.now(timezone.utc)
+                    try: session.commit()
+                    except Exception: pass
+                    return True
             anchor.delivered_at = datetime.now(timezone.utc)
             try:
                 session.commit()
@@ -12985,8 +12997,7 @@ class AnchorEngine:
                         # done_fb — агент выполнил задачу, просто ответил кратко → засчитываем как результат
                         _results_summary.append(f"{_ag_name}: {_result_stripped[:150]}")
                         _prev_steps_context += f"💬 {_ag_name}: {_result_stripped[:200]}\n"
-                    # ── Сохраняем coordinator_result чтобы health-check считал ответ агента ──
-                    # Без этого assignment растёт, result не растёт → ложный stall → порочный круг блокировки
+                    # ── Сохраняем coordinator_result + закрываем задачу ОДНОЙ транзакцией ──
                     try:
                         _cr_text = _result_stripped if _is_done_fb else f"Пустой результат: {_ag_task[:100]}"
                         session.add(Interaction(
@@ -12998,23 +13009,17 @@ class AnchorEngine:
                                 '__anchor_type': 'coordinator_result',
                             }, ensure_ascii=False),
                         ))
-                        session.commit()
-                    except Exception:
-                        try: session.rollback()
-                        except Exception: pass
-                    # ── Закрываем задачу: done_fb = агент отработал, задача выполнена ──
-                    if _step_task_id and _is_done_fb:
-                        try:
+                        if _step_task_id and _is_done_fb:
                             import datetime as _dt_donefb
                             session.execute(
                                 text("UPDATE tasks SET status='completed', completion_notes=:n, "
                                      "actual_completion_time=:t WHERE id=:id"),
                                 {'n': _cr_text[:1000], 't': _dt_donefb.datetime.now(_dt_donefb.timezone.utc), 'id': _step_task_id},
                             )
-                            session.commit()
-                        except Exception:
-                            try: session.rollback()
-                            except Exception: pass
+                        session.commit()
+                    except Exception:
+                        try: session.rollback()
+                        except Exception: pass
                     continue
 
                 # ── Обучающий retry: если агент ограничился исследованием, просим довести до действия ──
@@ -18089,7 +18094,10 @@ class AnchorEngine:
                 if not has_enough_tokens(user.telegram_id, action, session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск поста — нет токенов")
                     return
-                spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}', session=session, auto_commit=False)
+                _sp_res_post = spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}', session=session, auto_commit=False)
+                if not _sp_res_post.get('success'):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: spend race — {_sp_res_post.get('error', '')}")
+                    return
 
             anchor_data = json.loads(anchor.data) if anchor.data else {}
 
@@ -18358,7 +18366,10 @@ class AnchorEngine:
                 if not has_enough_tokens(user.telegram_id, 'proactive_post', session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск контент-кампании — нет токенов")
                     return
-                spend_tokens(user.telegram_id, 'proactive_post', description='content_campaign_publish', session=session, auto_commit=False)
+                _sp_res_camp = spend_tokens(user.telegram_id, 'proactive_post', description='content_campaign_publish', session=session, auto_commit=False)
+                if not _sp_res_camp.get('success'):
+                    logger.info(f"[ANCHOR] User {user.telegram_id}: spend race campaign — {_sp_res_camp.get('error', '')}")
+                    return
 
             anchor_data = json.loads(anchor.data) if anchor.data else {}
             campaign_id = anchor_data.get('campaign_id')
@@ -19433,7 +19444,10 @@ class AnchorEngine:
                 if not FREE_ACCESS_MODE and sent_count > 0:
                     from token_service import spend_tokens as _sp_bulk
                     for _i_sent in range(sent_count):
-                        _sp_bulk(user.telegram_id, action, description=f'anchor_email_outreach_send {_i_sent+1}/{sent_count}', session=session, auto_commit=False)
+                        _sp_res_bulk = _sp_bulk(user.telegram_id, action, description=f'anchor_email_outreach_send {_i_sent+1}/{sent_count}', session=session, auto_commit=False)
+                        if not _sp_res_bulk.get('success'):
+                            logger.info("[ANCHOR] User %d: email billing stopped at %d/%d — %s", user.telegram_id, _i_sent+1, sent_count, _sp_res_bulk.get('error', ''))
+                            break
 
                 # Помечаем якорь как доставленный
                 anchor.delivered_at = datetime.now(timezone.utc)
@@ -20942,7 +20956,12 @@ class AnchorEngine:
                         return
                     logger.info(f"[ANCHOR] User {user.telegram_id}: ALWAYS_DELIVER — доставка без токенов")
                 else:
-                    spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor', session=session, auto_commit=False)
+                    _sp_res_proa = spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor', session=session, auto_commit=False)
+                    if not _sp_res_proa.get('success'):
+                        if not _has_always_deliver:
+                            logger.info(f"[ANCHOR] User {user.telegram_id}: spend race proactive — {_sp_res_proa.get('error', '')}")
+                            return
+                        logger.info(f"[ANCHOR] User {user.telegram_id}: spend race but ALWAYS_DELIVER")
 
             # Помечаем якоря как доставленные
             anchor_ids = []
