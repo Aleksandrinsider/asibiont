@@ -1056,6 +1056,81 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
 # _build_personalized_strategy removed: AI determines strategy dynamically
 
 
+def _build_tool_outcome_block(session, user_id: int, per_agent_history: dict) -> str:
+    """Measure per-tool/approach OUTCOME effectiveness from actual Task results.
+
+    Returns a compact block showing completion rates per approach category,
+    with mandatory tactic-change recommendations for low-effectiveness tools.
+    """
+    try:
+        from models import Task as _T_eff
+        _cut = datetime.now(timezone.utc) - timedelta(hours=48)
+        _tasks = session.query(_T_eff.title, _T_eff.status, _T_eff.delegated_to_username).filter(
+            _T_eff.user_id == user_id,
+            _T_eff.source == 'agent',
+            _T_eff.created_at >= _cut,
+        ).all()
+        if not _tasks or len(_tasks) < 3:
+            return ''
+
+        _strat_kw = {
+            'Поиск контактов': ('web_search', 'найди контакт', 'найди email', 'find_relevant',
+                                'search', 'найди через', 'поиск', 'github', 'linkedin',
+                                'save_email_contact', 'найди автор'),
+            'Email рассылка': ('send_outreach', 'email', 'письм', 'outreach', 'рассыл',
+                               'start_email_campaign', 'send_follow_up'),
+            'Проверка ответов': ('check_emails', 'проверь входящ', 'проверь почт',
+                                 'reply_to', 'ответь на'),
+            'Контент': ('create_post', 'publish', 'опубликуй', 'пост', 'статью', 'контент'),
+            'Аналитика': ('проанализируй', 'анализ', 'research_topic', 'метрик', 'отчёт'),
+            'Сообщества': ('discord', 'telegram', 'канал', 'группа', 'форум', 'сообщество'),
+        }
+
+        _outcomes: dict = {}  # cat -> {completed, skipped, cancelled, total}
+        for _title, _status, _agent in _tasks:
+            _tl = (_title or '').lower()
+            for _cat, _kws in _strat_kw.items():
+                if any(kw in _tl for kw in _kws):
+                    _o = _outcomes.setdefault(_cat, {'completed': 0, 'skipped': 0, 'cancelled': 0, 'total': 0})
+                    _o['total'] += 1
+                    if _status == 'completed':
+                        _o['completed'] += 1
+                    elif _status == 'skipped':
+                        _o['skipped'] += 1
+                    elif _status in ('cancelled', 'deleted'):
+                        _o['cancelled'] += 1
+                    break
+
+        if not _outcomes:
+            return ''
+
+        _lines = ['🎯 КПД ТАКТИК (факты за 48ч — completion rate по реальным задачам):']
+        _low_eff_cats = []
+        for _cat, _o in sorted(_outcomes.items(), key=lambda x: -x[1]['total']):
+            if _o['total'] < 2:
+                continue
+            _rate = round(_o['completed'] / _o['total'] * 100)
+            _label = 'ВЫСОКИЙ' if _rate >= 60 else ('СРЕДНИЙ' if _rate >= 30 else 'НИЗКИЙ')
+            _emoji = '✅' if _rate >= 60 else ('⚠️' if _rate >= 30 else '🔴')
+            _lines.append(
+                f'  {_emoji} {_cat}: {_o["total"]} задач → {_o["completed"]} завершены '
+                f'({_rate}%) → {_label}'
+            )
+            if _o['cancelled'] > 0:
+                _lines.append(f'      отменено/провалено: {_o["cancelled"]}')
+            if _rate < 20 and _o['total'] >= 3:
+                _low_eff_cats.append(_cat)
+
+        if _low_eff_cats:
+            _lines.append(f'\n  ⛔ ОБЯЗАТЕЛЬНАЯ СМЕНА ПОДХОДА для: {", ".join(_low_eff_cats)}')
+            _lines.append('     КПД < 20% за 3+ задач = подход НЕ РАБОТАЕТ.')
+            _lines.append('     → Используй ДРУГОЙ инструмент, ДРУГУЮ аудиторию или ДРУГОЙ формат.')
+            _lines.append('     → Не повторяй ту же тактику — дай кардинально другую задачу.')
+
+        return '\n' + '\n'.join(_lines) + '\n\n'
+    except Exception:
+        return ''
+
 
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
                                has_imap: bool, has_github: bool, has_rss: bool,
@@ -10154,6 +10229,9 @@ class AnchorEngine:
                     f" Каждый агент может работать над разными целями.\n"
                 )
 
+            # ── Per-tool outcome effectiveness (completion rates from real tasks) ──
+            _tool_outcome_str = _build_tool_outcome_block(session, user.id, _per_agent_history)
+
             # ── АНАЛИЗ ЭФФЕКТИВНОСТИ: связываем действия агентов с реальным прогрессом целей ──
             _effectiveness_str = ''
             try:
@@ -10752,6 +10830,7 @@ class AnchorEngine:
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + _effectiveness_str
                 + _strategy_scorecard_str
+                + _tool_outcome_str
                 + _email_analytics_str
                 + _situation_analysis_str
                 + _empirical_guidance_str
@@ -10818,6 +10897,7 @@ class AnchorEngine:
                 "   Ссылайся ТОЛЬКО на данные из context-блоков, а не на предположения из чата.\n"
                 "1. ОЦЕНИ РЕЗУЛЬТАТЫ: что РЕАЛЬНО сделано? Конкретные действия: отправлено, опубликовано, создано, сохранено?\n"
                 "   Если за 2+ цикла нет КОНКРЕТНЫХ результатов (только 'исследовал', 'нашёл информацию') — это провал.\n"
+                "   Прочитай блок 🎯 КПД ТАКТИК — если completion rate тактики < 20% → НЕ ПОВТОРЯЙ её, дай ДРУГОЙ подход.\n"
                 "2. РЕШИ СТРАТЕГИЮ:\n"
                 "   • Работает (есть результаты) → удвой усилия\n"
                 "   • Не работает 2+ цикла → КАРДИНАЛЬНО смени подход: другой инструмент, другой канал, другой формат\n"
@@ -12063,19 +12143,21 @@ class AnchorEngine:
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
                     continue
-                # ── DEDUP: не дублировать поручение тому же агенту по той же цели за 2 часа ──
+                # ── SMART DEDUP: block exact same task text to same agent within 40min ──
+                # (Soft: same goal is OK — different tasks per goal are normal)
                 if _ag_goal_title:
                     try:
-                        _dedup_since = datetime.now(timezone.utc) - timedelta(hours=2)
+                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=40)
                         _dedup_exists = session.query(Interaction.id).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'agent_msg',
                             Interaction.created_at >= _dedup_since,
                             Interaction.content.ilike(f'%"__to_agent": "{_ag_name}"%'),
+                            Interaction.content.ilike(f'%"__tool_hint": "{(_tool_hint or "")[:40]}%'),
                             Interaction.content.ilike(f'%"__goal_title": "{_ag_goal_title[:80]}%'),
                         ).first()
                         if _dedup_exists:
-                            logger.info("[COORD] ⛔ dedup: agent %s already got assignment for goal '%s' within 2h", _ag_name, _ag_goal_title[:40])
+                            logger.info("[COORD] ⛔ dedup: agent %s same tool+goal within 40min, skipping", _ag_name)
                             continue
                     except Exception:
                         pass
