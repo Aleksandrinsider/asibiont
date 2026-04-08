@@ -655,8 +655,8 @@ async def generate_reminder(user_id, task_title, task_id=None, escalation_level=
             user_id=user_id,
             mode='reminder',
             instruction=instruction,
-            max_tokens=800,
-            max_iterations=2
+            max_tokens=1000,
+            max_iterations=3
         )
         
         logger.info(f"[REMINDER] Generated via agent brain: {result[:100]}...")
@@ -698,8 +698,8 @@ async def generate_result_check(user_id, task_title):
             user_id=user_id,
             mode='result_check',
             instruction=instruction,
-            max_tokens=300,
-            max_iterations=1
+            max_tokens=500,
+            max_iterations=2
         )
 
         logger.info(f"[RESULT_CHECK] Generated via agent brain: {result[:100]}...")
@@ -1446,14 +1446,14 @@ async def generate_proactive_message(user_id, context="general", task_count=0, o
             instruction = _t('pro_task_help', lang)
         elif selected_type in _RESEARCH_TYPES:
             mode = 'proactive'
-            max_tokens = 800
-            max_iterations = 3  # research: tool call + analysis + summary
+            max_tokens = 1000
+            max_iterations = 4  # research: tool call + analysis + action + summary
             # Сначала — обязательный поиск данных, потом — правила формата
             instruction = _t('pro_research_first', lang) + _t('pro_instruction', lang)
         else:
             mode = 'proactive'
-            max_tokens = 700
-            max_iterations = 2
+            max_tokens = 800
+            max_iterations = 3
             instruction = _t('pro_instruction', lang)
 
         # ── Блок активных агентов: передаём в extra_context ──

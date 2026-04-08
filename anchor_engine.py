@@ -7112,8 +7112,8 @@ class AnchorEngine:
                     and any(_result_lower.startswith(p) for p in _PLANNING_WITHOUT_FACTS)
                 ) or _is_ack_planning
                 _is_noise_result = (
-                    # Абсолютный фильтр: hollow acks ВСЕГДА noise, даже если tools вызваны
-                    _result_lower.rstrip('.!') in _EMPTY_RESPONSES
+                    # Hollow acks — noise только БЕЗ реальных инструментов
+                    (_result_lower.rstrip('.!') in _EMPTY_RESPONSES and not _has_real_actions)
                     # Шум: нет инструментов + пустой/шаблонный ответ
                     or (not _has_real_actions and len(_result_clean) < 15)
                     # Шум: ответ содержит ТОЛЬКО техническую ошибку без полезной информации
@@ -7121,15 +7121,15 @@ class AnchorEngine:
                         and any(w in _result_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно', 'ошибка подключения')))
                     # Шум: инструменты вызваны, но текст ОЧЕНЬ короткий и шаблонный (нет фактов)
                     # НЕ фильтруем run_agent_action — CRM/GitHub/интеграции часто дают короткие ответы
-                    or (_has_real_actions and len(_result_clean) < 60
+                    or (_has_real_actions and len(_result_clean) < 40
                         and 'run_agent_action' not in (_tools_used or [])
                         and any(p in _result_lower for p in _GENERIC_TOOL_PATTERNS))
                     # Утечки делегаций: агент обращается к другому агенту
                     or _is_delegation_leak
                     # Планы без действий: агент описывает намерения без фактов
                     or _is_planning_noise
-                    # «Поиск не дал результатов» — бесполезно для пользователя
-                    or (len(_result_clean) < 200
+                    # «Поиск не дал результатов» — бесполезно только без tool calls
+                    or (not _has_real_actions and len(_result_clean) < 200
                         and any(w in _result_lower for w in (
                             'не дал контакт', 'не дал email', 'не дал результат',
                             'не нашёл конкретн', 'не нашла конкретн',
@@ -7141,8 +7141,8 @@ class AnchorEngine:
                         'попробуй завтра', 'продолжим завтра',
                         'дневной лимит', '[internal]',
                     ))
-                    # Raw data dump: агент просто пересылает список контактов (5+ email)
-                    or (len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _result_clean)) >= 5)
+                    # Raw data dump: агент просто пересылает список контактов (8+ email)
+                    or (len(re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _result_clean)) >= 8)
                 )
                 if _is_noise_result:
                     _filter_reason = 'noise'
@@ -7167,7 +7167,7 @@ class AnchorEngine:
                             _old_words = set(_rp_text.lower().split())
                             _common = len(_new_words & _old_words)
                             _total = max(len(_new_words | _old_words), 1)
-                            if _common / _total > 0.55:
+                            if _common / _total > 0.65:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup'
                                 logger.info("[ANCHOR-AUTOPILOT] dedup: %.0f%% overlap with recent msg from %s",
@@ -7236,7 +7236,7 @@ class AnchorEngine:
                             _old_words_sa = set(_sa_text.lower().split())
                             _common_sa = len(_new_words_sa & _old_words_sa)
                             _total_sa = max(len(_new_words_sa | _old_words_sa), 1)
-                            if _common_sa / _total_sa > 0.40:
+                            if _common_sa / _total_sa > 0.55:
                                 _is_noise_result = True
                                 _filter_reason = 'dedup_same_agent_5min'
                                 logger.info("[ANCHOR-AUTOPILOT] same-agent 5min dedup: %.0f%% overlap from %s",
@@ -13793,11 +13793,11 @@ class AnchorEngine:
                         + f"- АНТИПОВТОР: меняй структуру и порядок — не начинай каждый раз одинаково.\n"
                         f"- ЗАВЕРШЁННОСТЬ: каждое предложение ОБЯЗАНО быть закончено — подлежащее, сказуемое, точка. "
                         f"Перечитай свой ответ: если последнее предложение обрывается без точки — допиши или удали.\n"
-                        f"- 3-5 предложений. Без markdown. Начни сразу с конкретики.\n"
+                        f"- 2-4 предложения. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
                     _report_gen = await asyncio.wait_for(
-                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=300),
+                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=250),
                         timeout=12,
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:
