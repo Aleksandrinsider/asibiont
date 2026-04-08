@@ -6697,8 +6697,14 @@ class AnchorEngine:
                                     logger.info("[ANCHOR-AUTOPILOT] coord-assign SKIPPED (empty after sanitize) for %s", _chosen_name)
                         finally:
                             _cs.close()
-                        # Поручение сохранено в БД — НЕ отправляем в Telegram (внутренняя координация)
-                        logger.info("[ANCHOR-AUTOPILOT] coord-assign saved for %s (not sent to TG)", _chosen_name)
+                        # Отправляем поручение координатора в Telegram — пользователь видит делегирование
+                        if self.bot and _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
+                            try:
+                                _tg_assign = f"[ASI → {_chosen_name}]\n{_coord_text_clean_save[:800]}"
+                                await _safe_send(self.bot, user.telegram_id, _tg_assign)
+                                logger.info("[ANCHOR-AUTOPILOT] coord-assign sent to TG for %s", _chosen_name)
+                            except Exception as _tg_assign_err:
+                                logger.debug("[ANCHOR-AUTOPILOT] coord-assign TG send failed: %s", _tg_assign_err)
                     except Exception as _cas_err:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
@@ -6867,6 +6873,13 @@ class AnchorEngine:
                                                     }, ensure_ascii=False),
                                                 ))
                                                 _ack_sv.commit()
+                                                # Отправляем ACK агента в Telegram — пользователь видит живой отклик
+                                                if self.bot:
+                                                    try:
+                                                        _tg_ack = f"{_chosen_name}:\n{_ack_text[:800]}"
+                                                        await _safe_send(self.bot, user.telegram_id, _tg_ack)
+                                                    except Exception as _tg_ack_err:
+                                                        logger.debug("[ANCHOR-AUTOPILOT] ack TG send: %s", _tg_ack_err)
                                             else:
                                                 logger.info(
                                                     "[ANCHOR-AUTOPILOT] user %d: skip ack from %s (daily cap=%d)",
