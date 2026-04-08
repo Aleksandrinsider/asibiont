@@ -2038,6 +2038,22 @@ class HybridAutonomousAgent:
                             for _uk in _unknown:
                                 del params[_uk]
 
+                    # === Universal required-param guard ===
+                    # If AI omitted a required param, auto-fill from user_message
+                    _auto_filled = set()  # injected params: {'session', 'user_id', 'close_session'}
+                    for _pname, _p in sig.parameters.items():
+                        if _pname in ('user_id', 'session', 'close_session', 'self'):
+                            continue
+                        _has_default = _p.default is not inspect.Parameter.empty
+                        _is_var = _p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+                        if not _has_default and not _is_var and _pname not in params:
+                            # Required param missing — try to fill from user_message
+                            if user_message and _pname in ('query', 'topic', 'title', 'text', 'prompt', 'task_description', 'description', 'content', 'message'):
+                                params[_pname] = user_message[:300]
+                                logger.warning(f"[EXEC] {tool_name}: auto-filled required '{_pname}' from user_message")
+                            else:
+                                logger.warning(f"[EXEC] {tool_name}: missing required param '{_pname}', no auto-fill available")
+
                     # Списываем токены за инструмент (если стоимость > 0)
                     from token_service import spend_tokens, ACTION_COSTS, DEFAULT_TOOL_COST
                     from config import FREE_ACCESS_MODE
@@ -4534,36 +4550,40 @@ def get_autonomous_agent():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _has_explicit_mention(message: str) -> bool:
-    """True если сообщение начинается с @Агент или 'ИмяАгента, ...'."""
+    """True если сообщение начинается с @Agent или 'Name, ...' (RU/EN)."""
     m = (message or '').strip()
     if not m:
         return False
     if re.match(r'@\w+\b', m):
         return True
-    # "Кристина, ..." — обращение по имени через запятую (типичный русский паттерн)
-    if re.match(r'[А-ЯЁа-яё]{3,}\s*,', m):
+    # "Кристина, ..." / "Alice, ..." — обращение по имени через запятую
+    if re.match(r'[A-Za-zА-ЯЁа-яё]{2,}\s*,', m):
         return True
     return False
 
 
 def _is_question_message(msg: str) -> bool:
-    """True если сообщение — вопрос, а не запрос на действие."""
+    """True если сообщение — вопрос, а не запрос на действие. Bilingual (RU/EN)."""
     m = (msg or '').strip().lower()
     if not m:
         return False
     if '?' in m:
         return True
     _q_starts = (
+        # Russian
         'есть ', 'есть ли ', 'что ', 'как ', 'какой ', 'какая ', 'какие ', 'какое ',
         'сколько ', 'когда ', 'где ', 'зачем ', 'почему ', 'кто ', 'чем ', 'куда ',
         'расскажи ', 'покажи ', 'скажи ', 'подскажи ',
+        # English
         'what ', 'how ', 'when ', 'where ', 'who ', 'why ', 'which ', 'is there ',
+        'do you ', 'does ', 'did ', 'can you ', 'could you ', 'would you ',
+        'is it ', 'are there ', 'tell me ', 'show me ', 'explain ',
+        'have you ', 'has ', 'should ', 'will ', 'shall ',
     )
-    # Проверяем оригинальное сообщение
     if any(m.startswith(s) for s in _q_starts):
         return True
-    # Убираем обращение к агенту: "Кристина, ..." → "..."
-    m2 = re.sub(r'^@?[а-яёa-z]+[\s,]+', '', m).strip()
+    # Strip agent name prefix: "Кристина, ..." / "Alice, ..." → "..."
+    m2 = re.sub(r'^@?[\w]+[\s,]+', '', m).strip()
     if m2 and any(m2.startswith(s) for s in _q_starts):
         return True
     return False
@@ -9067,13 +9087,25 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
     _ml = user_message.strip()
     _ml_lower = _ml.lower()
-    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
-                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
+    _trivial_replies = (
+        # Russian
+        'да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
+        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена',
+        # English
+        'yes', 'no', 'ok', 'okay', 'sure', 'fine', 'thanks', 'thank you',
+        'hi', 'hello', 'hey', 'bye', 'stop', 'cancel', 'got it', 'understood',
+    )
     _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
 
-    # Пре-фильтр: "займитесь сами/без меня/действуйте" без имени агента → всегда self
-    _self_phrases = ('займитесь', 'занимайтесь', 'работайте без меня', 'действуйте сами',
-                     'работайте сами', 'без меня', 'действуйте')
+    # Пре-фильтр: "займитесь сами/без меня/действуйте" / "work without me" → always self
+    _self_phrases = (
+        # Russian
+        'займитесь', 'занимайтесь', 'работайте без меня', 'действуйте сами',
+        'работайте сами', 'без меня', 'действуйте',
+        # English
+        'work without me', 'handle it yourself', 'do it yourself',
+        'work on your own', 'carry on', 'keep going', 'continue without me',
+    )
     _is_autopilot_confirm = any(p in _ml_lower for p in _self_phrases) and not any(
         a.get('name', '').lower() in _ml_lower for a in _agents
     )
@@ -9081,9 +9113,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         return None  # process_request ответит коротким подтверждением автопилота
 
     # Пре-фильтр: личные достижения → только ASI умеет complete_task
-    _achievement_words = ('я заказал', 'я купил', 'я оплатил', 'я позвонил', 'я написал',
-                          'я отправил', 'я настроил', 'я прошёл', 'я починил', 'я записался',
-                          'я сделал', 'я выполнил', 'я завершил', 'я приготовил', 'я убрал')
+    _achievement_words = (
+        # Russian
+        'я заказал', 'я купил', 'я оплатил', 'я позвонил', 'я написал',
+        'я отправил', 'я настроил', 'я прошёл', 'я починил', 'я записался',
+        'я сделал', 'я выполнил', 'я завершил', 'я приготовил', 'я убрал',
+        # English
+        'i ordered', 'i bought', 'i paid', 'i called', 'i wrote',
+        'i sent', 'i configured', 'i completed', 'i fixed', 'i signed up',
+        'i did', 'i finished', 'i made', 'i prepared', 'i cleaned',
+        'i installed', 'i set up', 'i submitted', 'i delivered',
+    )
     _is_achievement = any(_ml_lower.startswith(p) or f' {p} ' in _ml_lower for p in _achievement_words)
     if _is_achievement:
         return None  # process_request вызовет complete_task
