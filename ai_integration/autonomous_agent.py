@@ -9496,17 +9496,10 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                     'agent_info': None,
                 }
 
-        # При fallback из директора — исключаем тяжёлые тулы чтобы не дублировать работу агентов
-        _fallback_exclude = exclude_tools or set()
-        _fallback_exclude = _fallback_exclude | {
-            'research_topic', 'delegate_task', 'start_delegation_campaign',
-            'start_content_campaign', 'run_agent_action',
-            'web_search', 'quick_topic_search',
-        }
         response_text = await agent.process_request(
             message, user_id, context, db_session,
             subscription_tier, progress_callback=progress_callback,
-            web_context=web_context, exclude_tools=_fallback_exclude)
+            web_context=web_context, exclude_tools=exclude_tools)
 
         # Очищаем HTML и технические детали из ответа
         if response_text and isinstance(response_text, str):
