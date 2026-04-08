@@ -660,7 +660,7 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
-MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '5'))
+MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '15'))
 # Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
@@ -3562,7 +3562,7 @@ class AnchorEngine:
             'assignments': _assignments,
             'results': _results,
             'gap': _gap,
-            'stalled': _assignments >= 3 and _gap >= 2,
+            'stalled': _assignments >= 5 and _gap >= 3,
         }
 
     def _recent_task_kpi_health(self, session, user_id: int, task_title: str, lookback_hours: int = 72) -> dict:
@@ -5387,7 +5387,7 @@ class AnchorEngine:
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 50
-                            cap_bonus = _capability_score(a) * 10  # capability даёт бонус
+                            cap_bonus = _capability_score(a) * 3  # capability — бонус-подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
                             # ASI участвует в ротации наравне, но специализированные агенты
                             # получают приоритет через cap_bonus, а не через tie_break.
@@ -7674,6 +7674,26 @@ class AnchorEngine:
                                     logger.debug("suppressed: %s", _e)
                     except Exception as _e_res:
                         logger.warning("[ANCHOR-AUTOPILOT] result send failed: %s", _e_res)
+                elif result and result.strip() and _is_noise_result:
+                    # ── Noise-filtered results: NOT shown to user, but saved for health-check ──
+                    # Without this, assignment grows but results stay 0 → false stall → agent blocked forever
+                    try:
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
+                                'text': (result.strip())[:300],
+                                '__anchor_type': 'goal_autopilot_result',
+                                '__noise_filtered': True,
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception:
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
 
                 # ── Цепочка: агент может делегировать через DELEGATE[X]: → запускаем следующего ──
                 # Максимум одно продолжение за цикл чтобы не перегружать Railway.
