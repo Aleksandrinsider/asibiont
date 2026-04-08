@@ -5684,7 +5684,8 @@ class AnchorEngine:
                             f'{_chosen_name}, запусти research_topic по своей специализации — найди свежий инсайт и сохрани через save_note.',
                             f'{_chosen_name}, через web_search найди что нового происходит в области наших целей. Зафикси через save_note.',
                         ]
-                    _coord_text = _rnd_fb.choice(_fb_strategies)
+                    _coord_text = None  # Will be set by AI or context-aware fallback below
+                    _fb_strategies_ref = _fb_strategies  # Save ref for fallback
                     try:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_coord
                         # Суть задания — передаём реальный текст из координатора, 
@@ -5984,17 +5985,17 @@ class AnchorEngine:
                                     # Если AI сгенерирует пустышку — резервный текст тоже должен быть про конверсию
                                     if _bn_search >= 8 and _bn_actions <= 3 and _goal_titles_fb:
                                         if _has_email_fb:
-                                            _coord_text = (
+                                            _fb_strategies_ref = [(
                                                 f'{_chosen_name}, загляни в почту — '
                                                 f'после стольких поисков по «{_goal_titles_fb[0]}» должны быть ответы. '
                                                 f'Если кто-то откликнулся — сразу отвечай и назначай встречу.'
-                                            )
+                                            )]
                                         else:
-                                            _coord_text = (
+                                            _fb_strategies_ref = [(
                                                 f'{_chosen_name}, мы уже много искали по «{_goal_titles_fb[0]}». '
                                                 f'Возьми лучшие находки из своих заметок и создай аналитический пост через create_post — '
                                                 f'что нашли, кто перспективен, какой следующий шаг.'
-                                            )
+                                            )]
                                 except Exception as _bn_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] bottleneck detection: %s', _bn_err)
                         except Exception as _cc_err:
@@ -6239,10 +6240,13 @@ class AnchorEngine:
                                 'save_note', 'delegate_task', 'find_relevant', 'run_agent_action',
                                 'add_task', 'set_reminder', 'generate_image', 'save_email_contact',
                                 'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
+                                # Russian equivalents so AI-generated Russian text isn't rejected
+                                'проверь входящие', 'проверь почту', 'отправь письмо', 'найди через',
+                                'сохрани через', 'создай пост', 'создай задачу', 'исследуй тему',
                             )
                             _COORD_PLATFORM_HINTS = (
                                 'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
-                                'dev.to', 'github',
+                                'dev.to', 'github', 'почт', 'метрик', 'crm', 'amocrm',
                             )
                             _has_tool_name = any(t in _gen_lower for t in _COORD_TOOL_NAMES)
                             _has_platform_hint = any(t in _gen_lower for t in _COORD_PLATFORM_HINTS)
@@ -6261,8 +6265,9 @@ class AnchorEngine:
                                 or ('telegram' in _gen_lower and ('контакт' in _gen_lower or 'адрес' in _gen_lower)
                                     and ('email' in _gen_lower or 'почт' in _gen_lower or 'найти' in _gen_lower or 'найди' in _gen_lower))
                                 # Сухие контентные задания: "создай пост о X" без деталей содержания
-                                or (len(_gen_s) < 120 and any(w in _gen_lower for w in ('пост ', 'пост.', 'письмо', 'статью', 'обзор'))
-                                    and _has_tool_name)
+                                # (только если совсем короткое И без конкретики)
+                                or (len(_gen_s) < 60 and any(w in _gen_lower for w in ('пост ', 'пост.', 'статью'))
+                                    and not _has_platform_hint)
                             )
                             if _is_vague_gen:
                                 logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
@@ -6406,6 +6411,14 @@ class AnchorEngine:
                                     )
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
+                    # ── Context-aware fallback: если AI не сгенерировал → шаблон + контекст ──
+                    if _coord_text is None:
+                        _fb_choice = _rnd_fb.choice(_fb_strategies_ref)
+                        # Добавляем контекст последнего действия агента, чтобы fallback не был слепым
+                        if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
+                            _fb_choice += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
+                        _coord_text = _fb_choice
+                        logger.info("[ANCHOR-AUTOPILOT] using context-aware fallback for %s", _chosen_name)
                     try:
                         _cs = Session()
                         try:
