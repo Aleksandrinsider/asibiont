@@ -1576,8 +1576,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _IMPORTANT_CATS = [
         ('email', 'Email/IMAP/SMTP'), ('git', 'GitHub/GitLab'), ('crm', 'CRM (AmoCRM, HubSpot и др.)'),
         ('rss', 'RSS-ленты'), ('analytics', 'Яндекс.Метрика / GA'), ('finance', 'Биржевые данные'),
-        ('notion', 'Notion'), ('sheets', 'Google Sheets'), ('slack', 'Slack'), ('calendar', 'Календарь'),
-        ('payments', 'Платежи'), ('social', 'Соцсети'), ('crypto', 'Крипто-биржа'),
+        ('notion', 'Notion'), ('sheets', 'Google Sheets'), ('slack', 'Slack'), ('discord', 'Discord'),
+        ('calendar', 'Календарь'), ('payments', 'Платежи'), ('social', 'Соцсети'), ('crypto', 'Крипто-биржа'),
     ]
     _missing_integrations = []
     for _cat_key, _cat_label in _IMPORTANT_CATS:
@@ -1624,7 +1624,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + "\nКОНТЕКСТ ОГРАНИЧЕНИЙ (учитывай при планировании):\n"
         + "\n".join(f"  — {l}" for l in _aic_cannot)
         + "\n→ Перед каждым шагом спроси себя: через какой КОНКРЕТНЫЙ инструмент из ДОСТУПНО я это сделаю?\n"
-        "→ Если задача требует недоступный канал — подумай: какой доступный инструмент даёт похожий результат?\n"
+        "→ Если задача требует недоступный канал — переключись на доступный канал с похожим результатом.\n"
+        "→ НЕ ИЩИ сообщества/серверы/группы на платформах из «НЕ подключены» (Discord, Slack, Telegram-группы и т.д.) — "
+        "ты не можешь туда вступить, написать или опубликовать. Не трать шаг на поиск того, "
+        "чем не сможешь воспользоваться. Вместо этого используй ДОСТУПНЫЕ каналы: email, свой TG-канал, "
+        "web_search для поиска контактов, GitHub issues/PR и т.д.\n"
     )
 
     # ── Тип цели: research / outreach / content / dev / learning / health / personal / general ──
@@ -2406,7 +2410,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _team_block = (
                 "\nКОМАНДА (делегируй если нужна их специализация):\n"
                 + '\n'.join(_delegate_lines)
-                + "\nФормат: DELEGATE[Имя]: конкретная задача с данными\n"
+                + "\nФормат: DELEGATE[Имя]: подробное поручение с данными (email, имена, ссылки, цифры). Не 'поищи контакты' а 'отправь письма wleepang и 4ds-dev с предложением эксклюзивного доступа'.\n"
             )
 
     # ── Блок командного контекста: что сделали коллеги ──
@@ -3252,8 +3256,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "4️⃣ Нет интеграции / ключа → web_search или research_topic как fallback.\n"
         "   Сообщи пользователю что нужно подключить для полного функционала.\n\n"
 
-        "5️⃣ Застрял на задаче → DELEGATE[коллега]: конкретная задача + данные.\n"
-        "   Формат: DELEGATE[ИМЯ]: задача с контекстом (email/текст/query/ссылки).\n\n"
+        "5️⃣ Застрял на задаче → DELEGATE[коллега]: подробное поручение + данные.\n"
+        "   Формат: DELEGATE[ИМЯ]: 2-3 предложения с контекстом — какой инструмент, какие данные (email/имена/ссылки), какой результат ожидаешь.\n"
+        "   Плохо: DELEGATE[Марк]: поищи контакты.\n"
+        "   Хорошо: DELEGATE[Марк]: отправь письма через send_outreach_email трём авторам dev.to: wleepang, 4ds-dev, amananandrai. Предложи эксклюзивный доступ к ASI Biont, упомяни их статьи.\n\n"
 
         "6️⃣ Цель на 85%+ → финальный рывок, не новые кампании.\n"
         "   Закрой точечно: проверь ответы, follow-up тёплым контактам.\n"
@@ -8682,13 +8688,21 @@ class AnchorEngine:
                             "Оцени: задача завершена или нужен следующий агент?\n"
                             "Цепочки: поиск людей → отправка письма; анализ → создание задач; данные → публикация.\n"
                             "Признаки завершения: update_goal_progress выполнен, цель достигнута, БЛОКЕР без решения.\n"
-                            "Признаки продолжения: найдены email/контакты но не написали; данные получены но не опубликованы.\n"
+                            "Признаки продолжения: найдены email/контакты но не написали; данные получены но не опубликованы.\n\n"
                             "Если завершено — {\"continue\": false}\n"
-                            "Если нужен следующий агент — {\"continue\": true, \"agent_name\": \"точное имя из команды\", "
-                            "\"task\": \"конкретное задание с данными из результата (email, имена, числа)\"}\n"
+                            "Если нужен следующий агент — JSON с полями:\n"
+                            "  agent_name: точное имя из команды\n"
+                            "  task: ПОДРОБНОЕ поручение (минимум 2-3 предложения). Пиши как старший коллега в мессенджере:\n"
+                            "    1) Какой ИНСТРУМЕНТ использовать (web_search, send_outreach_email, create_post и т.д.)\n"
+                            "    2) ЧТО именно делать — с конкретными данными из результата выше (email-адреса, имена людей, ссылки, названия)\n"
+                            "    3) Какой РЕЗУЛЬТАТ ожидается (сколько контактов, что написать, куда сохранить)\n"
+                            "  Пример хорошего task: \"Отправь через send_outreach_email персональные письма трём авторам, "
+                            "которых нашла Кристина: wleepang (AWS genomics), 4ds-dev (выбор языка), amananandrai (ML optimizers). "
+                            "Предложи им эксклюзивный доступ к ASI Biont с 1500 бонусных токенов, упомяни их конкретные статьи.\"\n"
+                            "  Пример ПЛОХОГО task: \"поищи email контактов\" — это пустышка без деталей.\n\n"
                             "JSON:"
                         ),
-                    }], max_tokens=300)
+                    }], max_tokens=500)
 
                     if not _analysis:
                         return
@@ -8781,86 +8795,10 @@ class AnchorEngine:
                 + "Сообщай пользователю только КОНКРЕТНЫЕ факты: что сделал, что нашёл, кому написал."
             )
 
-            # ── Уведомление о передаче между агентами ──
-            # Передача от имени предыдущего агента — естественная коммуникация
-            _transfer_text = f"Передаю задачу {_next_ag.name}: {_next_task[:180]}"
-            try:
-                from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_tr
-                _tr_p = (
-                    f"Ты — {prev_agent.name}. Одним предложением РАССКАЖИ ПОЛЬЗОВАТЕЛЮ что нашёл и что передал коллеге.\n"
-                    f"Результат: {result[:200]}. Передано {_next_ag.name}: {_next_task[:150]}.\n"
-                    f"Пиши от своего имени пользователю. Живо, конкретно. Без [АВТОПИЛОТ], без markdown."
-                )
-                _tr_gen = await asyncio.wait_for(
-                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=200),
-                    timeout=10,
-                )
-                if _tr_gen and len(_tr_gen.strip()) > 15:
-                    _transfer_text = _tr_gen.strip()
-            except Exception as _e:
-                logger.debug("suppressed: %s", _e)
-            _transfer_text = re.sub(r'\n{2,}', '\n', _transfer_text).strip()
-            _transfer_text = re.sub(r'через\s+—', 'через другой канал —', _transfer_text, flags=re.IGNORECASE)
-            _transfer_text = re.sub(r'через\s{2,}', 'через ', _transfer_text, flags=re.IGNORECASE)
-            _transfer_text = re.sub(
-                r'\bчерез\s+(?=(?:найди|проверь|проанализируй|сделай|отправь|подготовь|создай|напиши|ищи|возьми|открой|сфокусируйся)\b)',
-                '',
-                _transfer_text,
-                flags=re.IGNORECASE,
-            )
-            _transfer_text = re.sub(
-                r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
-                '[email скрыт]',
-                _transfer_text,
-                flags=re.IGNORECASE,
-            )
-            _transfer_text = _finish_sentence(_transfer_text)
-            # Dedup: пропускаем уведомление если совсем недавно было проактивное сообщение (≤5 мин)
-            _chain_transfer_gap_ok = True
-            try:
-                _last_proactive_ts = session.query(Interaction.created_at).filter(
-                    Interaction.user_id == _user_id,
-                    Interaction.message_type == 'proactive',
-                ).order_by(Interaction.created_at.desc()).limit(1).scalar()
-                if _last_proactive_ts:
-                    _lp_utc = _last_proactive_ts.replace(tzinfo=timezone.utc) if _last_proactive_ts.tzinfo is None else _last_proactive_ts
-                    if (datetime.now(timezone.utc) - _lp_utc).total_seconds() < 300:  # 5 min
-                        _chain_transfer_gap_ok = False
-                        logger.info("[ANCHOR-CHAIN] user %d: transfer notify suppressed (proactive gap < 5min)", _user_id)
-            except Exception:
-                pass
-            if _chain_transfer_gap_ok:
-                if self.bot:
-                    try:
-                        await self.bot.send_message(
-                            chat_id=_user_tg_id,
-                            text=f"{prev_agent.name}:\n\n{_transfer_text}",
-                        )
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
-                # Сохраняем в interaction для web-чата (от имени передающего агента)
-                _transfer_content = json.dumps({
-                    '__agent': {
-                        'name': prev_agent.name,
-                        'id': getattr(prev_agent, 'id', 0),
-                        'avatar_url': _safe_avatar(getattr(prev_agent, 'avatar_url', ''), getattr(prev_agent, 'id', 0)),
-                    },
-                    'text': _strip_md(_transfer_text),
-                    '__anchor_type': 'agent_chain_transfer',
-                }, ensure_ascii=False)
-                session.add(Interaction(
-                    user_id=_user_id,
-                    message_type='proactive',
-                    content=_transfer_content,
-                ))
-                try:
-                    session.commit()
-                except Exception:
-                    try:
-                        session.rollback()
-                    except Exception:
-                        pass
-
+            # ── Передача цепочки: без уведомления пользователю ──
+            # Предыдущий агент уже отчитался (goal_autopilot_result).
+            # Следующий агент сам отчитается когда закончит.
+            # Промежуточное "передаю задачу X" — лишний спам.
             logger.info(
                 "[ANCHOR-CHAIN] user %d: %s → %s (task: %s)",
                 user.id, prev_agent.name, _next_ag.name, _next_task[:80],
