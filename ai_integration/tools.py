@@ -612,8 +612,7 @@ TOOLS = [
                     },
                     "category": {
                         "type": "string",
-                        "description": "Категория цели",
-                        "enum": ["work", "personal", "health", "learning", "finance", "social", "travel", "creativity", "hobby"]
+                        "description": "Категория цели — любая подходящая, например: work, personal, health, learning, finance, social, travel, creativity, hobby, marketing, sales, sport, career, family и т.д."
                     },
                     "priority": {
                         "type": "string",
