@@ -63,14 +63,21 @@ _TG_MAX_LEN = 4096
 # поэтому _parse_agent_integrations() их не видит.
 
 def _enrich_caps_with_user_channels(caps: list, user=None) -> list:
-    """Дополняет список интеграций агента user-level каналами (Discord, Telegram)."""
+    """Дополняет список интеграций агента user-level каналами.
+    
+    Для добавления нового канала: добавить поле в models.User + строку ниже.
+    """
     if not user:
         return caps
     enriched = set(caps)
-    if getattr(user, 'discord_webhook', None):
-        enriched.add('Discord (канал пользователя)')
-    if getattr(user, 'telegram_channel', None):
-        enriched.add('Telegram-канал (канал пользователя)')
+    # (атрибут модели User, label для интеграции)
+    _USER_CHANNELS = [
+        ('discord_webhook', 'Discord (канал пользователя)'),
+        ('telegram_channel', 'Telegram-канал (канал пользователя)'),
+    ]
+    for attr, label in _USER_CHANNELS:
+        if getattr(user, attr, None):
+            enriched.add(label)
     return sorted(enriched)
 
 
@@ -5344,19 +5351,28 @@ class AnchorEngine:
                         if not _needs:
                             _needs.add('search')
 
-                        # Маппинг: слово в label интеграции → категория
-                        _LABEL_CAT = {
-                            'email': ('почта', 'gmail', 'imap', 'smtp', 'mail', 'email', 'resend', 'sendgrid', 'outlook'),
-                            'github': ('github', 'gitlab'),
-                            'rss': ('rss', 'тасс', 'newsapi', 'новост', 'feed'),
-                            'content': ('telegram', 'discord', 'slack', 'вконтакте', 'twitter', 'instagram', 'youtube'),
-                            'finance': ('биржев', 'alpha vantage', 'binance', 'bybit', 'coinbase', 'крипт'),
-                            'crm': ('amocrm', 'битрикс', 'hubspot', 'salesforce'),
-                            'marketplace': ('ozon', 'wildberries', 'shopify', 'авито', 'маркет'),
-                            'project': ('notion', 'trello', 'asana', 'todoist', 'jira', 'clickup', 'linear'),
-                            'analytics': ('google sheets', 'airtable', 'метрик', 'analytics', 'pandas'),
-                            'hr': ('superjob', 'hh.ru', 'linkedin'),
+                        # Маппинг: интеграция агента → категория scoring (derives from CAP_CATEGORY_MAP)
+                        _CAP_TO_SCORE = {
+                            'email': 'email', 'git': 'github', 'rss': 'rss',
+                            'telegram': 'content', 'discord': 'content', 'slack': 'content',
+                            'social': 'content', 'ms_teams': 'content',
+                            'crm': 'crm', 'marketplace': 'marketplace',
+                            'pm': 'project', 'notion': 'project',
+                            'sheets': 'analytics', 'analytics': 'analytics',
+                            'crypto': 'finance', 'finance': 'finance',
+                            'news': 'rss', 'payments': 'finance',
+                            'calendar': 'project', 'calls': 'content',
+                            'script': 'search', 'image_gen': 'content',
+                            'storage': 'analytics', 'automation': 'project',
+                            'database': 'analytics', 'hr': 'hr',
+                            'advertising': 'content', 'scraping': 'search',
+                            'ai_api': 'search',
                         }
+                        # Build _LABEL_CAT dynamically from CAP_CATEGORY_MAP keywords
+                        _LABEL_CAT: dict[str, list[str]] = {}
+                        for _ccm_kws, _ccm_cat in _CAP_CATEGORY_MAP:
+                            _score_cat = _CAP_TO_SCORE.get(_ccm_cat, _ccm_cat)
+                            _LABEL_CAT.setdefault(_score_cat, []).extend(_ccm_kws)
 
                         def _capability_score(a):
                             aid = getattr(a, 'id', 0)
@@ -5766,11 +5782,18 @@ class AnchorEngine:
 
                     # Строим стратегии по типу цели — ДЕЙСТВИЕ важнее исследования
                     import random as _rnd_fb
+                    # Динамические площадки для поиска контактов (не hardcoded)
+                    _search_platforms = []
+                    if 'git' in _cats_c: _search_platforms.append('GitHub')
+                    if 'rss' in _cats_c: _search_platforms.append('профильные блоги')
+                    if not _search_platforms:
+                        _search_platforms = ['профильные площадки', 'тематические блоги']
+                    _sp_str = ', '.join(_search_platforms[:3])
                     if _goal_is_outreach and _has_email_fb:
                         _fb_strategies = [
                             f'{_chosen_name}, проверь входящие — если есть ответы, сразу ответь на них. Если молчат 2+ дня — отправь follow-up.',
-                            f'{_chosen_name}, отправь персональное письмо 1-2 контактам из базы с конкретным предложением по «{_g_label}». Если контактов нет — найди 3 на dev.to или ProductHunt и сохрани.',
-                            f'{_chosen_name}, найди 3 email-адреса авторов или разработчиков по теме «{_g_label}» на dev.to, Hacker News, ProductHunt. Сохрани каждый, затем отправь первому письмо.',
+                            f'{_chosen_name}, отправь персональное письмо 1-2 контактам из базы с конкретным предложением по «{_g_label}». Если контактов нет — найди на {_sp_str} и сохрани.',
+                            f'{_chosen_name}, найди 3 email-адреса авторов или специалистов по теме «{_g_label}» на {_sp_str}. Сохрани каждый, затем отправь первому письмо.',
                         ]
                     elif _goal_is_content:
                         _content_tools = []
@@ -5810,9 +5833,12 @@ class AnchorEngine:
                             f'{_chosen_name}, найди 3 ресурса или контакта по «{_g_label}» и сохрани в заметку.',
                         ]
                     else:
+                        # Универсальный fallback: используем интеграции агента для конкретики
+                        _agent_intg_str = ', '.join(_connected_names[:3]) if '_connected_names' in dir() and _connected_names else 'доступные инструменты'
                         _fb_strategies = [
-                            f'{_chosen_name}, исследуй свою область специализации — найди свежий инсайт и сохрани в заметку.',
-                            f'{_chosen_name}, найди что нового происходит в области наших целей и зафиксируй находки.',
+                            f'{_chosen_name}, используй {_agent_intg_str} чтобы продвинуть цель «{_g_label}» — найди конкретный факт или контакт и зафиксируй.',
+                            f'{_chosen_name}, проанализируй текущий статус по «{_g_label}» и предложи один конкретный следующий шаг.',
+                            f'{_chosen_name}, найди что нового в области «{_g_label}» и зафиксируй находки в заметке.',
                         ]
                     _coord_text = None  # Will be set by AI or context-aware fallback below
                     _fb_strategies_ref = _fb_strategies  # Save ref for fallback
