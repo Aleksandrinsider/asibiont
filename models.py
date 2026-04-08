@@ -1161,12 +1161,20 @@ if db_url and db_url.startswith('postgresql'):
     @event.listens_for(engine, "checkin")
     def _release_advisory_locks_on_checkin(dbapi_conn, connection_record):
         try:
+            # Rollback сначала — соединение может быть в failed transaction state
+            try:
+                dbapi_conn.rollback()
+            except Exception:
+                pass
             cursor = dbapi_conn.cursor()
             cursor.execute("SELECT pg_advisory_unlock_all()")
             cursor.close()
             dbapi_conn.commit()
         except Exception:
-            pass
+            try:
+                dbapi_conn.rollback()
+            except Exception:
+                pass
 
 def init_db():
     """Initialize database tables. Call this after ensuring DB is accessible."""

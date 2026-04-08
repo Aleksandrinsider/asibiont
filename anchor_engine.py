@@ -3836,6 +3836,12 @@ class AnchorEngine:
                 # вызовет pg_advisory_unlock_all() при возврате соединения в пул.
                 if use_advisory_lock:
                     try:
+                        # ВСЕГДА rollback перед unlock — транзакция может быть в failed state
+                        # после ошибки в _process_user_inner (InFailedSqlTransaction prevention)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                         session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
                         session.commit()
                     except Exception as _unlock_err:
@@ -3852,8 +3858,11 @@ class AnchorEngine:
             except Exception:
                 pass
         finally:
-            # pool checkin event (models.py) вызовет pg_advisory_unlock_all()
-            # при возврате соединения в пул после session.close()
+            # Гарантируем чистое состояние соединения перед возвратом в пул
+            try:
+                session.rollback()
+            except Exception:
+                pass
             session.close()
 
     async def _process_user_inner(self, user_id: int, session):

@@ -2177,13 +2177,22 @@ class HybridAutonomousAgent:
                 params['task_description'] = 'помощь с задачей'
 
         elif tool_name == 'send_email':
-            # Автоподстановка sender_name из активного агента
-            # Если AI не передал sender_name, берём имя активного агента
+            # Автоподстановка sender_name — используем имя ПОЛЬЗОВАТЕЛЯ (владельца),
+            # а не имя AI-агента. Агент действует от лица пользователя.
             if not params.get('sender_name'):
-                _agent = self._active_agent_data.get(params.get('user_id'))
-                if _agent and _agent.get('name'):
-                    params['sender_name'] = _agent['name']
-                    logger.info(f"[FIX_PARAMS] send_email: set sender_name='{_agent['name']}' from active agent")
+                try:
+                    _uid_sn = params.get('user_id')
+                    if _uid_sn:
+                        _s_sn = Session()
+                        try:
+                            _u_sn = _s_sn.query(User).filter_by(telegram_id=_uid_sn).first()
+                            if _u_sn:
+                                params['sender_name'] = _u_sn.first_name or _u_sn.username or 'Team'
+                                logger.info(f"[FIX_PARAMS] send_email: set sender_name='{params['sender_name']}' from user profile")
+                        finally:
+                            _s_sn.close()
+                except Exception:
+                    params['sender_name'] = 'Team'
 
         elif tool_name in ('send_outreach_email', 'negotiate_by_email', 'send_follow_up_email', 'reply_to_outreach_email'):
             # AI путает send_email (с sender_name) с send_outreach_email (без него)
