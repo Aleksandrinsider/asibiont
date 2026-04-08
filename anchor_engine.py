@@ -3562,7 +3562,7 @@ class AnchorEngine:
             'assignments': _assignments,
             'results': _results,
             'gap': _gap,
-            'stalled': _assignments >= 5 and _gap >= 3,
+            'stalled': _assignments >= 8 and _gap >= 5,
         }
 
     def _recent_task_kpi_health(self, session, user_id: int, task_title: str, lookback_hours: int = 72) -> dict:
@@ -5376,8 +5376,8 @@ class AnchorEngine:
                                         _agent_cats.add(_c)
                             if getattr(a, 'python_code', ''):
                                 _agent_cats.add('search')
-                            # Скор = совпадения категорий агента × потребности цели × 3
-                            return len(_agent_cats & _needs) * 3
+                            # Скор = 1 (базовый для всех агентов) + совпадения категорий × 2
+                            return 1 + len(_agent_cats & _needs) * 2
 
                         # Вычисляем медианный id реальных агентов для ASI-tie_break
                         _real_ids = sorted(getattr(a2, 'id', 1) for a2 in _rotation_pool if getattr(a2, 'id', 0) != 0)
@@ -5387,7 +5387,7 @@ class AnchorEngine:
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 50
-                            cap_bonus = _capability_score(a) * 3  # capability — бонус-подсказка, НЕ перевешивает ротацию
+                            cap_bonus = _capability_score(a)  # capability — мягкая подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
                             # ASI участвует в ротации наравне, но специализированные агенты
                             # получают приоритет через cap_bonus, а не через tie_break.
@@ -8130,6 +8130,8 @@ class AnchorEngine:
         if len(agents) == 1:
             return agents[0]
 
+        import random as _rnd_pba
+
         # Keyword sets by domain
         EMAIL_KW = {'email', 'почт', 'письм', 'рассыл', 'outreach', 'контакт', 'лид'}
         CONTENT_KW = {'контент', 'пост', 'публик', 'блог', 'smm', 'копирайт'}
@@ -8158,17 +8160,23 @@ class AnchorEngine:
             else:
                 _task_kw_set = TASK_KW
 
-        # 3) Match agent spec to task keywords
+        # 3) Match agent spec to task keywords — collect ALL matches, pick randomly
+        _matched = []
         for ag in agents:
             spec = ((ag.specialization or '') + ' ' + (ag.description or '') + ' ' + (ag.job_title or '')).lower()
             if any(k in spec for k in _task_kw_set):
-                return ag
+                _matched.append(ag)
+        if _matched:
+            return _rnd_pba.choice(_matched)
         # 4) Fallback: match task words to agent description
+        _matched2 = []
         for ag in agents:
             spec = ((ag.specialization or '') + ' ' + (ag.description or '')).lower()
             if any(word in spec for word in _task_low.split()[:5] if len(word) > 3):
-                return ag
-        return agents[0]
+                _matched2.append(ag)
+        if _matched2:
+            return _rnd_pba.choice(_matched2)
+        return _rnd_pba.choice(agents)
 
     async def _maybe_continue_chain(self, user, prev_agent, anchor, task_text, result, agents, session, max_cont=3):
         """ASI анализирует результат агента и решает — нужен ли следующий шаг.
@@ -8516,7 +8524,7 @@ class AnchorEngine:
                     f"Пиши от своего имени пользователю. Живо, конкретно. Без [АВТОПИЛОТ], без markdown."
                 )
                 _tr_gen = await asyncio.wait_for(
-                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=250),
+                    _qar_tr([{"role": "user", "content": _tr_p}], max_tokens=200),
                     timeout=10,
                 )
                 if _tr_gen and len(_tr_gen.strip()) > 15:
@@ -13793,11 +13801,11 @@ class AnchorEngine:
                         + f"- АНТИПОВТОР: меняй структуру и порядок — не начинай каждый раз одинаково.\n"
                         f"- ЗАВЕРШЁННОСТЬ: каждое предложение ОБЯЗАНО быть закончено — подлежащее, сказуемое, точка. "
                         f"Перечитай свой ответ: если последнее предложение обрывается без точки — допиши или удали.\n"
-                        f"- 2-4 предложения. Без markdown. Начни сразу с конкретики.\n"
+                        f"- 1-3 предложения. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
                     _report_gen = await asyncio.wait_for(
-                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=250),
+                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=200),
                         timeout=12,
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:

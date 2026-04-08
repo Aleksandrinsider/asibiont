@@ -683,12 +683,17 @@ def sanitize_live_team_chat_text(
         return ''
 
     cleaned = cleaned.replace('\r\n', '\n').replace('\r', '\n')
-    # Срезаем текст начиная со структурных секций ТЗ
-    cleaned = re.split(
-        r'(?i)\b(?:данные для работы|ключевые данные|детали|описание|задача|шаги|план|ожидание в отч[её]те|каналы)\s*:',
+    # Срезаем текст начиная со структурных секций ТЗ (но НЕ "задача:" — это часто начало самого поручения)
+    _struct_parts = re.split(
+        r'(?i)\b(?:данные для работы|ключевые данные|детали задания|описание задания|шаги выполнения|план работы|ожидание в отч[её]те|каналы для работы)\s*:',
         cleaned,
         maxsplit=1,
-    )[0]
+    )
+    # Берём [0] только если он не пустой; иначе берём [1] (секция "Задача: ..." была вначале)
+    if _struct_parts[0].strip():
+        cleaned = _struct_parts[0]
+    elif len(_struct_parts) > 1:
+        cleaned = _struct_parts[1]
 
     # Убираем markdown-оформление и списки
     cleaned = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', cleaned)
@@ -697,12 +702,16 @@ def sanitize_live_team_chat_text(
     cleaned = re.sub(r'^\s*\d+[.)\]]\s+', '', cleaned, flags=re.MULTILINE)
     cleaned = re.sub(r'\n{2,}', '\n', cleaned)
 
-    # Удаляем предложения с упоминанием неподключённых сервисов
-    for _svc in ('linkedin', r'calendly', r'apollo\.io', 'sales navigator', 'hubspot'):
-        cleaned = re.sub(
-            rf'[^.!?\n]*\b{_svc}\b[^.!?\n]*[.!?]?\s*',
-            '', cleaned, flags=re.IGNORECASE
-        )
+    # Удаляем предложения-рекомендации подключить неподключённый сервис
+    # НЕ удаляем просто упоминания (LinkedIn-профиль, LinkedIn URL — это нормально)
+    _SVC_SUGGEST_PATTERNS = [
+        r'[^.!?\n]*\bподключ\w*\s+(?:linkedin|calendly|apollo\.io|sales\s+navigator|hubspot)\b[^.!?\n]*[.!?]?\s*',
+        r'[^.!?\n]*\b(?:linkedin|calendly|apollo\.io|sales\s+navigator|hubspot)\b[^.!?\n]*\bподключ\w*[^.!?\n]*[.!?]?\s*',
+        r'[^.!?\n]*\b(?:linkedin|calendly|apollo\.io|sales\s+navigator|hubspot)\b[^.!?\n]*\bинтеграц\w*[^.!?\n]*[.!?]?\s*',
+        r'[^.!?\n]*\bнастро\w*\s+(?:linkedin|calendly|apollo\.io|sales\s+navigator|hubspot)\b[^.!?\n]*[.!?]?\s*',
+    ]
+    for _svc_pat in _SVC_SUGGEST_PATTERNS:
+        cleaned = re.sub(_svc_pat, '', cleaned, flags=re.IGNORECASE)
 
     # Убираем строки-заголовки вида "Раздел:"
     lines = []
