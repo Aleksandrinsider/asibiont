@@ -649,6 +649,8 @@ def _get_ai_semaphore() -> asyncio.Semaphore:
 # Переиспользование TCP/TLS-соединений экономит ~200-500мс на каждом вызове
 _SHARED_AI_SESSION: aiohttp.ClientSession | None = None
 _SHARED_AI_SESSION_LOCK: asyncio.Lock | None = None
+_SHARED_AI_SESSION_CREATED: float = 0.0
+_SESSION_TTL_SECONDS: int = 1800  # 30 minutes
 
 def _get_session_lock() -> asyncio.Lock:
     global _SHARED_AI_SESSION_LOCK
@@ -657,14 +659,28 @@ def _get_session_lock() -> asyncio.Lock:
     return _SHARED_AI_SESSION_LOCK
 
 async def _get_shared_ai_session() -> aiohttp.ClientSession:
-    global _SHARED_AI_SESSION
-    if _SHARED_AI_SESSION is not None and not _SHARED_AI_SESSION.closed:
+    global _SHARED_AI_SESSION, _SHARED_AI_SESSION_CREATED
+    import time as _time_mod
+    _now = _time_mod.monotonic()
+    # Check if session is alive and not too old
+    if (_SHARED_AI_SESSION is not None and not _SHARED_AI_SESSION.closed
+            and (_now - _SHARED_AI_SESSION_CREATED) < _SESSION_TTL_SECONDS):
         return _SHARED_AI_SESSION
     async with _get_session_lock():
-        if _SHARED_AI_SESSION is None or _SHARED_AI_SESSION.closed:
+        _now = _time_mod.monotonic()
+        if (_SHARED_AI_SESSION is None or _SHARED_AI_SESSION.closed
+                or (_now - _SHARED_AI_SESSION_CREATED) >= _SESSION_TTL_SECONDS):
+            # Close old session if exists
+            if _SHARED_AI_SESSION is not None and not _SHARED_AI_SESSION.closed:
+                try:
+                    await _SHARED_AI_SESSION.close()
+                except Exception:
+                    pass
             _SHARED_AI_SESSION = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=120, connect=10)
             )
+            _SHARED_AI_SESSION_CREATED = _now
+            logger.debug("[AI] Created new shared AI session")
     return _SHARED_AI_SESSION
 
 
@@ -758,7 +774,7 @@ class HybridAutonomousAgent:
         logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
 
         async with _get_ai_semaphore():
-         _max_retries = 1 if (api_timeout and api_timeout < 40) else 2
+         _max_retries = 2 if (api_timeout and api_timeout < 40) else 3
          for _attempt in range(_max_retries):
           try:
             # В тестах используем временную сессию, чтобы не оставлять shared session
@@ -786,8 +802,8 @@ class HybridAutonomousAgent:
                         error = await resp.text()
                         if resp.status < 500 or _attempt >= _max_retries - 1:
                             raise Exception(f"AI call failed: {resp.status} {error[:200]}")
-                        logger.warning(f"[AI] Server error {resp.status}, retrying...")
-                        await asyncio.sleep(2)
+                        logger.warning(f"[AI] Server error {resp.status}, retrying ({_attempt+1}/{_max_retries})...")
+                        await asyncio.sleep(2 * (_attempt + 1))
             else:
                 session = await _get_shared_ai_session()
                 async with session.post(url, headers=headers, json=data,
@@ -811,13 +827,26 @@ class HybridAutonomousAgent:
                     error = await resp.text()
                     if resp.status < 500 or _attempt >= _max_retries - 1:
                         raise Exception(f"AI call failed: {resp.status} {error[:200]}")
-                    logger.warning(f"[AI] Server error {resp.status}, retrying...")
-                    await asyncio.sleep(2)
+                    logger.warning(f"[AI] Server error {resp.status}, retrying ({_attempt+1}/{_max_retries})...")
+                    await asyncio.sleep(2 * (_attempt + 1))
           except asyncio.TimeoutError:
             if _attempt >= _max_retries - 1:
                 raise
-            logger.warning("[AI] Timeout, retrying...")
-            await asyncio.sleep(2)
+            logger.warning(f"[AI] Timeout on attempt {_attempt+1}/{_max_retries}, retrying...")
+            await asyncio.sleep(3 * (_attempt + 1))
+          except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as _conn_err:
+            # Connection-level errors: reset shared session and retry
+            logger.warning(f"[AI] Connection error on attempt {_attempt+1}/{_max_retries}: {_conn_err}")
+            global _SHARED_AI_SESSION
+            if _SHARED_AI_SESSION and not os.getenv('PYTEST_CURRENT_TEST'):
+                try:
+                    await _SHARED_AI_SESSION.close()
+                except Exception:
+                    pass
+                _SHARED_AI_SESSION = None
+            if _attempt >= _max_retries - 1:
+                raise
+            await asyncio.sleep(2 * (_attempt + 1))
          raise Exception("AI call failed: all retries exhausted")
 
     # ===== SMART TOOL FILTERING (reduces API tokens) =====
@@ -4571,28 +4600,58 @@ def _is_question_message(msg: str) -> bool:
 
 async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '') -> str:
     """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
-    try:
-        _sess = await _get_shared_ai_session()
-        async with _sess.post(
-                "https://api.deepseek.com/chat/completions",
-                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": 0.7,
-                },
-                timeout=aiohttp.ClientTimeout(total=25),
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    _usage = data.get('usage', {})
-                    _prompt_t = _usage.get('prompt_tokens', 0)
-                    _compl_t = _usage.get('completion_tokens', 0)
-                    logger.info(f"[DEEPSEEK] {_caller or 'quick_ai'}: prompt={_prompt_t} compl={_compl_t}")
-                    return data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        logger.debug("[DIRECTOR] AI call error: %s", e)
+    global _SHARED_AI_SESSION
+    _max_attempts = 2
+    _timeouts = [30, 45]
+    for _att in range(_max_attempts):
+      try:
+        if os.getenv('PYTEST_CURRENT_TEST'):
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60, connect=10)) as _tmp:
+                async with _tmp.post(
+                        "https://api.deepseek.com/chat/completions",
+                        headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                        json={"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.7},
+                        timeout=aiohttp.ClientTimeout(total=_timeouts[min(_att, len(_timeouts)-1)]),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            _usage = data.get('usage', {})
+                            logger.info(f"[DEEPSEEK] {_caller or 'quick_ai'}: prompt={_usage.get('prompt_tokens',0)} compl={_usage.get('completion_tokens',0)}")
+                            return data["choices"][0]["message"]["content"].strip()
+                        if resp.status >= 500 and _att < _max_attempts - 1:
+                            logger.warning(f"[quick_ai] Server {resp.status}, retry {_att+1}")
+                            await asyncio.sleep(2)
+                            continue
+        else:
+            _sess = await _get_shared_ai_session()
+            async with _sess.post(
+                    "https://api.deepseek.com/chat/completions",
+                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                    json={"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.7},
+                    timeout=aiohttp.ClientTimeout(total=_timeouts[min(_att, len(_timeouts)-1)]),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        _usage = data.get('usage', {})
+                        logger.info(f"[DEEPSEEK] {_caller or 'quick_ai'}: prompt={_usage.get('prompt_tokens',0)} compl={_usage.get('completion_tokens',0)}")
+                        return data["choices"][0]["message"]["content"].strip()
+                    if resp.status >= 500 and _att < _max_attempts - 1:
+                        logger.warning(f"[quick_ai] Server {resp.status}, retry {_att+1}")
+                        await asyncio.sleep(2)
+                        continue
+        break  # non-5xx error, don't retry
+      except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
+        logger.warning(f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}")
+        if _SHARED_AI_SESSION and not os.getenv('PYTEST_CURRENT_TEST'):
+            try: await _SHARED_AI_SESSION.close()
+            except Exception: pass
+            _SHARED_AI_SESSION = None
+        if _att < _max_attempts - 1:
+            await asyncio.sleep(2)
+            continue
+      except Exception as e:
+        logger.warning(f"[quick_ai] Unexpected error: {type(e).__name__}: {e}")
+        break
     return ""
 
 
