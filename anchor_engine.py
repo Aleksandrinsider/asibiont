@@ -4112,18 +4112,21 @@ class AnchorEngine:
                 session.add_all(new_anchors)
                 session.commit()
                 logger.info(f"[ANCHOR] User {user_id}: created {len(new_anchors)} new anchors")
-            except _IntegrityError:
+            except Exception as _add_err:
                 session.rollback()
-                _saved = 0
-                for _one_anchor in new_anchors:
-                    try:
-                        session.add(_one_anchor)
-                        session.commit()
-                        _saved += 1
-                    except _IntegrityError:
-                        session.rollback()  # дубль уже есть в БД
-                if _saved:
-                    logger.info(f"[ANCHOR] User {user_id}: created {_saved}/{len(new_anchors)} anchors (race-condition dedup, {len(new_anchors)-_saved} skipped)")
+                if isinstance(_add_err, _IntegrityError):
+                    _saved = 0
+                    for _one_anchor in new_anchors:
+                        try:
+                            session.add(_one_anchor)
+                            session.commit()
+                            _saved += 1
+                        except Exception:
+                            session.rollback()  # дубль или другая ошибка
+                    if _saved:
+                        logger.info(f"[ANCHOR] User {user_id}: created {_saved}/{len(new_anchors)} anchors (race-condition dedup, {len(new_anchors)-_saved} skipped)")
+                else:
+                    logger.warning(f"[ANCHOR] User {user_id}: anchor batch insert failed: {_add_err}")
             # 1b. EVENT DISPATCH — новые goal-якоря запускают нужных агентов в фоне
             # Сериализуем данные ДО закрытия сессии чтобы избежать DetachedInstanceError
             if not is_night:
@@ -4170,7 +4173,14 @@ class AnchorEngine:
                     _sa.delivered_at = _sa.created_at or datetime.now(timezone.utc)
                     _stuck_cleared += 1
         if _stuck_cleared:
-            session.commit()
+            try:
+                session.commit()
+            except Exception as _stuck_err:
+                logger.warning("[ANCHOR] User %d: stuck anchor commit failed: %s", user_id, _stuck_err)
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
             deliverable = [a for a in deliverable if a.delivered_at is None]
             logger.warning("[ANCHOR] User %d: cleared %d stuck autopilot anchors (>60min)", user_id, _stuck_cleared)
 
@@ -4290,7 +4300,14 @@ class AnchorEngine:
                         except Exception:
                             pass
         if stale_ids:
-            session.commit()
+            try:
+                session.commit()
+            except Exception as _stale_err:
+                logger.warning(f"[ANCHOR] User {user_id}: stale anchor commit failed: {_stale_err}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
             ready = [a for a in ready if a.id not in stale_ids]
             logger.info(f"[ANCHOR] User {user_id}: ♻️ auto-expired {len(stale_ids)} stale task anchors")
             if not ready:
@@ -4481,7 +4498,14 @@ class AnchorEngine:
                             logger.info(f"[ANCHOR] User {user_id}: ⛔ goal autopilot anchors skipped — goal_autopilot_enabled=False")
                             for _ap in _goal_review_anchors:
                                 _ap.delivered_at = datetime.now(timezone.utc)
-                            session.commit()
+                            try:
+                                session.commit()
+                            except Exception as _ap_err:
+                                logger.warning(f"[ANCHOR] User {user_id}: autopilot disable commit failed: {_ap_err}")
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
                         else:
                             logger.info(f"[ANCHOR] User {user_id}: 🎯 Processing goal autopilot review (night={is_night}, today={_ap_today_count}/{MAX_AUTOPILOT_MSG_PER_DAY})...")
                             async with self._ai_semaphore:
@@ -4511,6 +4535,7 @@ class AnchorEngine:
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
         if not is_night and has_proactive_tokens:
+          try:
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
             if feed_posts and post_count < MAX_FEED_PER_DAY:
                 for pa in feed_posts[:1]:
@@ -4530,6 +4555,12 @@ class AnchorEngine:
                 for pa in discord_posts[:1]:
                     async with self._ai_semaphore:
                         await self._process_post_anchor(user, pa, session)
+          except Exception as _post_err:
+            logger.error(f"[ANCHOR] User {user_id}: post processing error: {_post_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
         elif post_anchors:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ posts blocked (night hours)")
 
@@ -4539,24 +4570,45 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ {len(email_silent_anchors)} email anchors BLOCKED by user rule (запрет email)")
             for _ea_blocked in email_silent_anchors:
                 _ea_blocked.delivered_at = datetime.now(timezone.utc)
-            session.commit()
+            try:
+                session.commit()
+            except Exception as _eb_err:
+                logger.warning(f"[ANCHOR] User {user_id}: email block commit failed: {_eb_err}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
             email_silent_anchors = []
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             for _ea_idx, ea in enumerate(email_silent_anchors[:12]):  # макс 12 за цикл
-                if _ea_idx > 0:
-                    await asyncio.sleep(5)  # Краткая задержка между email-якорями
-                async with self._ai_semaphore:
-                    await self._process_email_silent_anchor(user, ea, session)
+                try:
+                    if _ea_idx > 0:
+                        await asyncio.sleep(5)  # Краткая задержка между email-якорями
+                    async with self._ai_semaphore:
+                        await self._process_email_silent_anchor(user, ea, session)
+                except Exception as _ea_err:
+                    logger.error(f"[ANCHOR] User {user_id}: email anchor #{_ea_idx} error: {_ea_err}")
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
 
         # ── 3f. CONTENT CAMPAIGNS — автономная публикация по расписанию (не ночью) ──
         if content_silent_anchors and not is_night:
             logger.info(f"[ANCHOR] User {user_id}: 📝 Processing {len(content_silent_anchors)} content campaign anchors...")
             for _cc_idx, cc in enumerate(content_silent_anchors[:2]):  # макс 2 за цикл
-                if _cc_idx > 0:
-                    await asyncio.sleep(3)
-                async with self._ai_semaphore:
-                    await self._process_content_campaign_anchor(user, cc, session)
+                try:
+                    if _cc_idx > 0:
+                        await asyncio.sleep(3)
+                    async with self._ai_semaphore:
+                        await self._process_content_campaign_anchor(user, cc, session)
+                except Exception as _cc_err:
+                    logger.error(f"[ANCHOR] User {user_id}: content anchor #{_cc_idx} error: {_cc_err}")
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
         elif content_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ content campaigns blocked (night hours)")
 
@@ -4564,10 +4616,17 @@ class AnchorEngine:
         if delegation_silent_anchors and not is_night:
             logger.info(f"[ANCHOR] User {user_id}: 🤝 Processing {len(delegation_silent_anchors)} delegation campaign anchors...")
             for _dc_idx, dc in enumerate(delegation_silent_anchors[:3]):  # макс 3 за цикл
-                if _dc_idx > 0:
-                    await asyncio.sleep(5)
-                async with self._ai_semaphore:
-                    await self._process_delegation_campaign_anchor(user, dc, session)
+                try:
+                    if _dc_idx > 0:
+                        await asyncio.sleep(5)
+                    async with self._ai_semaphore:
+                        await self._process_delegation_campaign_anchor(user, dc, session)
+                except Exception as _dc_err:
+                    logger.error(f"[ANCHOR] User {user_id}: delegation anchor #{_dc_idx} error: {_dc_err}")
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
         elif delegation_silent_anchors and is_night:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ delegation campaigns blocked (night hours)")
 
