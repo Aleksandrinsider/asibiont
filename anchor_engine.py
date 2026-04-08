@@ -10632,6 +10632,7 @@ class AnchorEngine:
                 ).order_by(_Task_rd.created_at.desc()).limit(15).all()
                 if _rd_tasks:
                     _rd_by_agent: dict = {}
+                    _delegation_chains: list = []  # track A→B handoffs
                     for _rdt in _rd_tasks:
                         _ag_name_rd = None
                         for _p_rd in _profiles:
@@ -10641,9 +10642,12 @@ class AnchorEngine:
                                 break
                         if not _ag_name_rd:
                             _ag_name_rd = f'agent#{_rdt.created_by_agent_id}'
-                        _rd_by_agent.setdefault(_ag_name_rd, []).append(
-                            (_rdt.title or '')[:80]
-                        )
+                        _deleg_to = _rdt.delegated_to_username or ''
+                        _title_txt = (_rdt.title or '')[:80]
+                        if _deleg_to:
+                            _delegation_chains.append((_ag_name_rd, _deleg_to, _title_txt, _rdt.status))
+                            _title_txt = f'{_title_txt} [→{_deleg_to}]'
+                        _rd_by_agent.setdefault(_ag_name_rd, []).append(_title_txt)
                     _rd_lines = ['\n📋 НЕДАВНО ВЫПОЛНЕННЫЕ ЗАДАЧИ (за 12ч):']
                     for _ag_rd_n, _titles_rd in _rd_by_agent.items():
                         _rd_lines.append(f'  {_ag_rd_n}:')
@@ -10652,6 +10656,14 @@ class AnchorEngine:
                     _rd_lines.append('  → Если задача уже выполнена — дай СЛЕДУЮЩИЙ ШАГ, а не повтор.')
                     _rd_lines.append('  → Пример: «привлечь предпринимателей» уже было → дай «напиши письмо Иванову ivan@co.ru»')
                     _rd_lines.append('  → Если задача ПРОВАЛИЛАСЬ — можно дать её снова с ДРУГИМ подходом или адресатом.')
+                    # Show delegation chains so coordinator knows who handed off to whom
+                    if _delegation_chains:
+                        _rd_lines.append('\n  🔗 ДЕЛЕГИРОВАНИЯ (A передал B — A свою часть ВЫПОЛНИЛ):')
+                        for _dc_from, _dc_to, _dc_title, _dc_status in _delegation_chains[:8]:
+                            _dc_st = '✅' if _dc_status == 'completed' else ('⏳' if _dc_status == 'in_progress' else '❌')
+                            _rd_lines.append(f'    {_dc_st} {_dc_from} → {_dc_to}: {_dc_title}')
+                        _rd_lines.append('  → Если A передал задачу B — НЕ назначай A ту же задачу снова.')
+                        _rd_lines.append('  → A уже выполнил свою часть (нашёл, подготовил). Дай A СЛЕДУЮЩУЮ задачу.')
                     _recent_done_str = '\n'.join(_rd_lines) + '\n'
             except Exception as _rd_err:
                 logger.debug("[COORD] recent done tasks: %s", _rd_err)
@@ -10902,6 +10914,9 @@ class AnchorEngine:
                 "   • Работает (есть результаты) → удвой усилия\n"
                 "   • Не работает 2+ цикла → КАРДИНАЛЬНО смени подход: другой инструмент, другой канал, другой формат\n"
                 "   • Только исследования без действий → ЗАПРЕТИ research, НАЗНАЧЬ action-tool из подключённых\n"
+                "   🔗 ДЕЛЕГИРОВАНИЯ: если агент A передал задачу агенту B — A свою часть ВЫПОЛНИЛ.\n"
+                "   НЕ назначай A ту же задачу снова. Дай A НОВУЮ задачу следующего шага.\n"
+                "   Если B ещё работает над переданной задачей → жди результата, не дублируй.\n"
                 "3. СООТВЕТСТВИЕ АГЕНТА: спроси себя — эта задача в зоне СПЕЦИАЛИЗАЦИИ агента?\n"
                 "   Агент с RSS/аналитикой → мониторинг, обзоры, тренды. НЕ email-outreach.\n"
                 "   Агент с email/CRM → рассылки, follow-up, переговоры. НЕ RSS-анализ.\n"
@@ -15654,6 +15669,34 @@ class AnchorEngine:
                     _per_agent_history[_ag_nm_aal].append(_entry_aal)
         except Exception as _aal_pah_err:
             logger.debug("[AUTOPILOT] per_agent_history from AAL: %s", _aal_pah_err)
+
+        # ── Enrich per_agent_history with delegation chains from Task table ──
+        try:
+            from models import Task as _Task_deleg
+            _deleg_tasks = session.query(_Task_deleg).filter(
+                _Task_deleg.user_id == user.id,
+                _Task_deleg.source == 'agent',
+                _Task_deleg.delegated_to_username.isnot(None),
+                _Task_deleg.created_at >= now_utc - timedelta(hours=24),
+            ).order_by(_Task_deleg.created_at.desc()).limit(20).all()
+            for _dt in _deleg_tasks:
+                _from_name = None
+                for _p_dt in agents:
+                    if _p_dt.id == _dt.created_by_agent_id:
+                        _from_name = _p_dt.name
+                        break
+                if not _from_name:
+                    continue
+                _to_name = _dt.delegated_to_username or ''
+                _dt_title = (_dt.title or '')[:80]
+                _dt_status = _dt.status or 'pending'
+                _dt_ts = _dt.created_at.strftime('%d.%m %H:%M') if _dt.created_at else ''
+                _deleg_entry = f"{_dt_ts} [ДЕЛЕГИРОВАЛ→{_to_name}] {_dt_title} ({_dt_status})"
+                _per_agent_history.setdefault(_from_name, [])
+                if len(_per_agent_history[_from_name]) < 12:
+                    _per_agent_history[_from_name].append(_deleg_entry)
+        except Exception as _deleg_err:
+            logger.debug("[AUTOPILOT] delegation history: %s", _deleg_err)
 
         # Уже отправленные письма — не писать повторно одним и тем же адресатам
         # ВАЖНО: НЕ включаем 'replied' — это активные переговоры, им нужен ОТВЕТ, а не запрет!
