@@ -12122,7 +12122,7 @@ except Exception as e:
                     const chatEl = document.getElementById('chat-messages');
                     if (displayedMessageIds.size === 0 && chatEl) {
                         if (!chatEl.querySelector('.chat-empty-state')) {
-                            chatEl.innerHTML = '<div class="chat-empty-state" style="text-align:center;padding:60px 20px;color:#9CA3AF;font-size:15px;"><div style="font-size:40px;margin-bottom:12px;">💬</div>Чат пуст. Автопилот скоро отправит новые сообщения.</div>';
+                            chatEl.innerHTML = `<div class="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;"><p style="margin:0;font-size:13px;color:#9CA3AF;max-width:340px;">${t('start-dialog-desc')}</p></div>`;
                         }
                     }
                 }
