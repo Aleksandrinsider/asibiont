@@ -7707,6 +7707,50 @@ class AnchorEngine:
                         _cleaned_result = _finish_sentence(_cleaned_result)
                         # Sanitize tool names from user-facing text
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result)
+
+                        # ── HALLUCINATION GUARD: агент ЗАЯВЛЯЕТ действие, но инструмент НЕ вызван ──
+                        # Если текст содержит "опубликовал/отправил/создал" для конкретных каналов,
+                        # но соответствующий tool отсутствует в _tools_used → помечаем как неподтверждённое
+                        _tu_lower = {t.lower() for t in _tools_used}
+                        _CLAIM_TO_TOOL: list[tuple[tuple[str, ...], tuple[str, ...], str]] = [
+                            # (claim_keywords, required_tools, channel_label)
+                            (('опубликовал в telegram', 'опубликовал в тг', 'опубликовал в телеграм',
+                              'отправил в telegram', 'отправил в тг', 'отправил в телеграм',
+                              'опубликовала в telegram', 'опубликовала в тг', 'опубликовала в телеграм',
+                              'разместил в telegram', 'разместила в telegram', 'запостил в telegram',
+                              'в telegram-канал', 'в тг-канал', 'в телеграм-канал'),
+                             ('publish_to_telegram', 'create_post'), 'Telegram'),
+                            (('опубликовал в discord', 'отправил в discord', 'опубликовала в discord',
+                              'разместил в discord', 'разместила в discord'),
+                             ('publish_to_discord',), 'Discord'),
+                            (('отправил письмо', 'отправила письмо', 'отправил email', 'написал письмо',
+                              'написала письмо', 'отправила email'),
+                             ('send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email', 'check_emails'), 'Email'),
+                            (('создал сделку', 'создала сделку', 'создал лид', 'создала лид',
+                              'обновил сделку', 'обновила сделку', 'обновил воронку', 'обновила воронку',
+                              'зафиксировал в crm', 'зафиксировала в crm', 'добавил в crm', 'добавила в crm'),
+                             ('run_agent_action',), 'CRM'),
+                            (('создал задачу', 'создала задачу'),
+                             ('add_task', 'run_agent_action'), 'PM'),
+                        ]
+                        _cr_lower = _cleaned_result.lower()
+                        _halluc_warns: list[str] = []
+                        for _claim_kws, _req_tools, _ch_label in _CLAIM_TO_TOOL:
+                            if any(ck in _cr_lower for ck in _claim_kws):
+                                if not any(rt in _tu_lower for rt in _req_tools):
+                                    _halluc_warns.append(_ch_label)
+                        if _halluc_warns:
+                            # Добавляем пометку что действие не подтверждено инструментом
+                            _halluc_note = (
+                                '\n⚠️ Примечание: публикация в '
+                                + ', '.join(_halluc_warns)
+                                + ' не подтверждена — возможно, произошла ошибка при отправке.'
+                            )
+                            _cleaned_result = _cleaned_result.rstrip('.!?… ') + '.' + _halluc_note
+                            logger.warning(
+                                "[ANCHOR-AUTOPILOT] HALLUCINATION detected user=%d agent=%s claims=%s tools=%s",
+                                user.id, _chosen_name, _halluc_warns, _tools_used,
+                            )
                         # Пауза + typing перед отправкой — не вываливаем сразу после объявления координатора
                         await asyncio.sleep(2)
                         try:
