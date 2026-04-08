@@ -218,6 +218,150 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'ai_api': 'run_agent_action(action="ask"|"analyze") или http_api_request — любой AI API (OpenAI, Anthropic и др.)',
 }
 
+# ── Универсальная модель: единый источник правды для целей × интеграций ──
+
+# Ключевые слова цели → категории интеграций (scoring categories)
+_GOAL_KW: dict[str, tuple[str, ...]] = {
+    'email': ('email', 'письм', 'outreach', 'рассылк'),
+    'github': ('github', 'код', 'разработ', 'developer', 'репозитор', 'программист'),
+    'rss': ('rss', 'новост', 'хабр', 'feed', 'мониторинг'),
+    'content': ('пост', 'контент', 'публик', 'telegram', 'discord', 'smm', 'канал', 'подписчик'),
+    'finance': ('нефт', 'газ', 'биржа', 'акци', 'финанс', 'трейдинг', 'инвест', 'рынок', 'котировк', 'крипт'),
+    'crm': ('crm', 'клиент', 'воронк', 'лид', 'сделк', 'продаж'),
+    'marketplace': ('маркетплейс', 'ozon', 'wildberries', 'товар', 'магазин'),
+    'project': ('проект', 'kanban', 'спринт'),
+    'analytics': ('аналитик', 'отчёт', 'таблиц', 'данные', 'метрик', 'дашборд'),
+    'hr': ('найм', 'вакансия', 'резюме', 'рекрутинг', 'кандидат', 'собеседов'),
+}
+
+# Маппинг: интеграция агента (CAP category) → scoring category
+_CAP_TO_SCORE: dict[str, str] = {
+    'email': 'email', 'git': 'github', 'rss': 'rss',
+    'telegram': 'content', 'discord': 'content', 'slack': 'content',
+    'social': 'content', 'ms_teams': 'content',
+    'crm': 'crm', 'marketplace': 'marketplace',
+    'pm': 'project', 'notion': 'project',
+    'sheets': 'analytics', 'analytics': 'analytics',
+    'crypto': 'finance', 'finance': 'finance',
+    'news': 'rss', 'payments': 'finance',
+    'calendar': 'project', 'calls': 'content',
+    'script': 'search', 'image_gen': 'content',
+    'storage': 'analytics', 'automation': 'project',
+    'database': 'analytics', 'hr': 'hr',
+    'advertising': 'content', 'scraping': 'search',
+    'ai_api': 'search',
+}
+
+# Шаблоны действий по категории интеграции (scoring category).
+# {name} = имя агента, {goal} = название цели
+_CAT_ACTIONS: dict[str, list[str]] = {
+    'email': [
+        '{name}, проверь входящие — если есть ответы, сразу ответь. Если молчат 2+ дня — отправь follow-up.',
+        '{name}, отправь персональное письмо 1-2 контактам с конкретным предложением по «{goal}».',
+        '{name}, найди email специалистов по теме «{goal}» и сохрани контакты.',
+    ],
+    'content': [
+        '{name}, создай пост по теме «{goal}» — конкретный факт или инсайт, без воды.',
+        '{name}, найди 3 свежих тренда по «{goal}» и подготовь контент-план.',
+        '{name}, проверь какие посты по «{goal}» набрали больше охвата — адаптируй стратегию.',
+    ],
+    'github': [
+        '{name}, проверь репозитории и issues по «{goal}» — найди решения или best practices.',
+        '{name}, найди активных разработчиков по «{goal}» на GitHub и зафиксируй контакты.',
+    ],
+    'rss': [
+        '{name}, проверь ленту новостей по «{goal}» — найди 3 свежих тренда и зафиксируй.',
+        '{name}, собери дайджест по теме «{goal}» из новостных источников.',
+    ],
+    'crm': [
+        '{name}, проверь воронку по «{goal}» — есть ли лиды для follow-up.',
+        '{name}, обнови статусы сделок по «{goal}» и зафиксируй следующие шаги.',
+    ],
+    'finance': [
+        '{name}, проверь актуальные данные рынка по «{goal}» и зафиксируй изменения.',
+        '{name}, проанализируй финансовые показатели по «{goal}» и сохрани выводы.',
+    ],
+    'analytics': [
+        '{name}, проанализируй данные по «{goal}» и зафиксируй выводы.',
+        '{name}, создай отчёт по текущему прогрессу «{goal}».',
+    ],
+    'marketplace': [
+        '{name}, проверь позиции и отзывы по «{goal}» на маркетплейсах.',
+        '{name}, проанализируй конкурентов по «{goal}» на площадках.',
+    ],
+    'project': [
+        '{name}, зафиксируй текущий статус по «{goal}»: что сделано, что блокирует, следующий шаг.',
+        '{name}, создай задачу с конкретным шагом по «{goal}» и дедлайном.',
+    ],
+    'hr': [
+        '{name}, проверь новые вакансии и кандидатов по «{goal}».',
+        '{name}, подготовь обзор рынка кандидатов по «{goal}».',
+    ],
+    'search': [
+        '{name}, исследуй тему «{goal}» — найди 3 конкретных инсайта и сохрани.',
+        '{name}, найди лидеров мнений по «{goal}» — кто пишет, где выступает. Зафиксируй.',
+    ],
+}
+
+_UNIVERSAL_ACTIONS: list[str] = [
+    '{name}, проанализируй текущий статус по «{goal}» и предложи один конкретный следующий шаг.',
+    '{name}, найди что нового в области «{goal}» и зафиксируй находки в заметке.',
+    '{name}, исследуй тему «{goal}» — найди свежий подход которого ещё не пробовали.',
+]
+
+
+def _agent_score_cats(agent_raw_cats: set) -> set:
+    """Переводит CAP-категории агента в scoring-категории."""
+    return {_CAP_TO_SCORE.get(c, c) for c in agent_raw_cats}
+
+
+def _goal_needs(goal_text: str) -> set:
+    """Определяет какие scoring-категории нужны для цели."""
+    gt = goal_text.lower()
+    needs = set()
+    for cat, kws in _GOAL_KW.items():
+        if any(w in gt for w in kws):
+            needs.add(cat)
+    if any(w in gt for w in ('тестировщик', 'пользовател', 'участник', 'контакт', 'людей', 'человек')):
+        needs.update(('github', 'email', 'hr'))
+    if any(w in gt for w in ('поиск', 'исследов', 'найти', 'search', 'analyz')):
+        needs.add('search')
+    if not needs:
+        needs.add('search')
+    return needs
+
+
+def _build_fb_strategies(agent_name: str, goal_label: str,
+                         agent_cats: set, goal_text: str) -> list[str]:
+    """Универсальный построитель fallback-стратегий.
+
+    Не знает о «типах целей». Строит стратегии по пересечению
+    scoring-категорий цели × интеграций агента.
+    """
+    import random as _rnd
+    _sc = _agent_score_cats(agent_cats)
+    _needs = _goal_needs(goal_text)
+
+    # Приоритет: категории, которые И цель требует, И агент имеет
+    _matched = _needs & _sc
+    _other = _sc - _needs
+
+    strategies: list[str] = []
+    # 1) Действия по совпавшим категориям
+    for cat in sorted(_matched):
+        for tpl in _CAT_ACTIONS.get(cat, []):
+            strategies.append(tpl.format(name=agent_name, goal=goal_label))
+    # 2) Добивка из других категорий агента (по 1 действию)
+    if len(strategies) < 3:
+        for cat in sorted(_other):
+            for tpl in _CAT_ACTIONS.get(cat, [])[:1]:
+                strategies.append(tpl.format(name=agent_name, goal=goal_label))
+    # 3) Универсальный fallback
+    if not strategies:
+        strategies = [t.format(name=agent_name, goal=goal_label) for t in _UNIVERSAL_ACTIONS]
+    _rnd.shuffle(strategies)
+    return strategies[:3]
+
 
 def _classify_agent_caps(detected_labels: list[str]) -> dict:
     """Классифицирует output _parse_agent_integrations() в структурированный словарь.
@@ -5326,48 +5470,9 @@ class AnchorEngine:
                         _task_lower = task_text.lower()
                         _exhausted_strats = data.get('exhausted_strategies', [])
 
-                        # Ключевые слова цели → категории интеграций
-                        _GOAL_KW = {
-                            'email': ('email', 'письм', 'outreach', 'рассылк'),
-                            'github': ('github', 'код', 'разработ', 'developer', 'репозитор', 'программист'),
-                            'rss': ('rss', 'новост', 'хабр', 'feed', 'мониторинг'),
-                            'content': ('пост', 'контент', 'публик', 'telegram', 'discord', 'smm', 'канал', 'подписчик'),
-                            'finance': ('нефт', 'газ', 'биржа', 'акци', 'финанс', 'трейдинг', 'инвест', 'рынок', 'котировк', 'крипт'),
-                            'crm': ('crm', 'клиент', 'воронк', 'лид', 'сделк', 'продаж'),
-                            'marketplace': ('маркетплейс', 'ozon', 'wildberries', 'товар', 'магазин'),
-                            'project': ('проект', 'kanban', 'спринт'),
-                            'analytics': ('аналитик', 'отчёт', 'таблиц', 'данные', 'метрик', 'дашборд'),
-                            'hr': ('найм', 'вакансия', 'резюме', 'рекрутинг', 'кандидат', 'собеседов'),
-                        }
-                        _needs = set()
-                        for _cat, _kws in _GOAL_KW.items():
-                            if any(w in _task_lower for w in _kws):
-                                _needs.add(_cat)
-                        # Поиск людей → релевантны github, email, hr (что есть у агентов)
-                        if any(w in _task_lower for w in ('тестировщик', 'пользовател', 'участник', 'контакт', 'людей', 'человек')):
-                            _needs.update(('github', 'email', 'hr'))
-                        if any(w in _task_lower for w in ('поиск', 'исследов', 'найти', 'search', 'analyz')):
-                            _needs.add('search')
-                        if not _needs:
-                            _needs.add('search')
+                        # Используем модульные _GOAL_KW / _CAP_TO_SCORE / _goal_needs
+                        _needs = _goal_needs(_task_lower)
 
-                        # Маппинг: интеграция агента → категория scoring (derives from CAP_CATEGORY_MAP)
-                        _CAP_TO_SCORE = {
-                            'email': 'email', 'git': 'github', 'rss': 'rss',
-                            'telegram': 'content', 'discord': 'content', 'slack': 'content',
-                            'social': 'content', 'ms_teams': 'content',
-                            'crm': 'crm', 'marketplace': 'marketplace',
-                            'pm': 'project', 'notion': 'project',
-                            'sheets': 'analytics', 'analytics': 'analytics',
-                            'crypto': 'finance', 'finance': 'finance',
-                            'news': 'rss', 'payments': 'finance',
-                            'calendar': 'project', 'calls': 'content',
-                            'script': 'search', 'image_gen': 'content',
-                            'storage': 'analytics', 'automation': 'project',
-                            'database': 'analytics', 'hr': 'hr',
-                            'advertising': 'content', 'scraping': 'search',
-                            'ai_api': 'search',
-                        }
                         # Build _LABEL_CAT dynamically from CAP_CATEGORY_MAP keywords
                         _LABEL_CAT: dict[str, list[str]] = {}
                         for _ccm_kws, _ccm_cat in _CAP_CATEGORY_MAP:
@@ -5768,78 +5873,14 @@ class AnchorEngine:
                         for g in data.get('goals', [])[:2]
                     ) if data.get('goals') else ''
                     # Fallback: конкретное поручение на основе целей и интеграций агента
-                    # Ротируем по непочтовым интеграциям прежде чем давать email
                     _goal_titles_fb = [g.get('title', '')[:120] for g in data.get('goals', [])[:5] if g.get('title')]
-                    _non_email_cats = sorted(_cats_c - {'email'})
-                    _has_email_fb = 'email' in _cats_c
-                    # Объединяем ВСЕ цели для корректного определения типа (не только первую)
                     _g0 = ' '.join(t.lower() for t in _goal_titles_fb)
-                    _goal_is_outreach = any(w in _g0 for w in ['привлеч', 'клиент', 'продаж', 'тестировщик', 'пользовател', 'контакт', 'аудитор', 'подписчик'])
-                    _goal_is_content  = any(w in _g0 for w in ['контент', 'пост', 'статья', 'блог', 'публикац', 'медиа', 'текст', 'копирайт', 'техничес'])
-                    _goal_is_research = any(w in _g0 for w in ['исследова', 'аналитик', 'аудит', 'мониторинг', 'разведк'])
-                    _goal_is_product  = any(w in _g0 for w in ['продукт', 'разработ', 'фича', 'релиз', 'mvp', 'деплой'])
                     _g_label = _goal_titles_fb[0] if _goal_titles_fb else 'активные цели'
+                    _has_email_fb = 'email' in _cats_c
 
-                    # Строим стратегии по типу цели — ДЕЙСТВИЕ важнее исследования
-                    import random as _rnd_fb
-                    # Динамические площадки для поиска контактов (не hardcoded)
-                    _search_platforms = []
-                    if 'git' in _cats_c: _search_platforms.append('GitHub')
-                    if 'rss' in _cats_c: _search_platforms.append('профильные блоги')
-                    if not _search_platforms:
-                        _search_platforms = ['профильные площадки', 'тематические блоги']
-                    _sp_str = ', '.join(_search_platforms[:3])
-                    if _goal_is_outreach and _has_email_fb:
-                        _fb_strategies = [
-                            f'{_chosen_name}, проверь входящие — если есть ответы, сразу ответь на них. Если молчат 2+ дня — отправь follow-up.',
-                            f'{_chosen_name}, отправь персональное письмо 1-2 контактам из базы с конкретным предложением по «{_g_label}». Если контактов нет — найди на {_sp_str} и сохрани.',
-                            f'{_chosen_name}, найди 3 email-адреса авторов или специалистов по теме «{_g_label}» на {_sp_str}. Сохрани каждый, затем отправь первому письмо.',
-                        ]
-                    elif _goal_is_content:
-                        _content_tools = []
-                        if 'telegram' in _cats_c: _content_tools.append('publish_to_telegram')
-                        if 'rss' in _cats_c: _content_tools.append('create_post из RSS-трендов')
-                        if 'social' in _cats_c: _content_tools.append('create_post в соцсети')
-                        _ct = _content_tools[0] if _content_tools else 'публикацию и заметку'
-                        _fb_strategies = [
-                            f'{_chosen_name}, создай пост по теме «{_g_label}» — конкретный факт или инсайт, без воды.',
-                            f'{_chosen_name}, найди 3 свежих тренда по «{_g_label}» и подготовь контент-план на неделю.',
-                            f'{_chosen_name}, проверь какие посты по теме «{_g_label}» набрали больше охвата — используй это для следующей публикации.',
-                        ]
-                    elif _goal_is_research:
-                        _fb_strategies = [
-                            f'{_chosen_name}, исследуй тему «{_g_label}» — найди 3 конкретных инсайта которых у нас ещё нет и сохрани с выводами.',
-                            f'{_chosen_name}, найди лидеров мнений по теме «{_g_label}» — кто пишет, где выступает. Зафиксируй в заметке.',
-                            f'{_chosen_name}, проанализируй что уже собрано по «{_g_label}» и создай структурированный обзор.',
-                        ]
-                    elif _goal_is_product:
-                        _fb_strategies = [
-                            f'{_chosen_name}, зафиксируй текущий статус по «{_g_label}»: что сделано, что блокирует, какой следующий шаг.',
-                            f'{_chosen_name}, найди технические решения для «{_g_label}» — библиотеки, примеры, best practices. Сохрани в заметку.',
-                            f'{_chosen_name}, создай задачу с конкретным техническим шагом по «{_g_label}» и дедлайном.',
-                        ]
-                    elif _non_email_cats and _goal_titles_fb:
-                        # У агента есть не-email интеграции — используем их
-                        _fb_cat = _rnd_fb.choice(_non_email_cats)
-                        _fb_cat_name = _CAP_CATEGORY_NAMES.get(_fb_cat, _fb_cat)
-                        _fb_strategies = [
-                            f'{_chosen_name}, через {_fb_cat_name} найди полезные данные по теме «{_g_label}» и сохрани в заметку.',
-                            f'{_chosen_name}, исследуй тему «{_g_label}» — найди свежий подход которого ещё не пробовали и зафиксируй результаты.',
-                            f'{_chosen_name}, проанализируй прогресс по «{_g_label}»: что сработало, что нет. Создай план следующих 3 шагов.',
-                        ]
-                    elif _has_email_fb and _goal_titles_fb:
-                        _fb_strategies = [
-                            f'{_chosen_name}, проверь входящие по теме «{_g_label}».',
-                            f'{_chosen_name}, найди 3 ресурса или контакта по «{_g_label}» и сохрани в заметку.',
-                        ]
-                    else:
-                        # Универсальный fallback: используем интеграции агента для конкретики
-                        _agent_intg_str = ', '.join(_connected_names[:3]) if '_connected_names' in dir() and _connected_names else 'доступные инструменты'
-                        _fb_strategies = [
-                            f'{_chosen_name}, используй {_agent_intg_str} чтобы продвинуть цель «{_g_label}» — найди конкретный факт или контакт и зафиксируй.',
-                            f'{_chosen_name}, проанализируй текущий статус по «{_g_label}» и предложи один конкретный следующий шаг.',
-                            f'{_chosen_name}, найди что нового в области «{_g_label}» и зафиксируй находки в заметке.',
-                        ]
+                    # Универсальная модель: стратегии строятся по пересечению
+                    # scoring-категорий цели × интеграций агента, без хардкод-типов
+                    _fb_strategies = _build_fb_strategies(_chosen_name, _g_label, _cats_c, _g0)
                     _coord_text = None  # Will be set by AI or context-aware fallback below
                     _fb_strategies_ref = _fb_strategies  # Save ref for fallback
                     try:
@@ -6137,21 +6178,18 @@ class AnchorEngine:
                                             f'Назначь задачу с КОНКРЕТНЫМ результатом: заметка, задача, пост, письмо, анализ. '
                                             f'Поиск полезен когда результаты превращаются в действия.'
                                         )
-                                    # ── Bottleneck → fallback _coord_text меняем на конверсионный ──
-                                    # Если AI сгенерирует пустышку — резервный текст тоже должен быть про конверсию
+                                    # ── Bottleneck → fallback на конверсионные действия ──
                                     if _bn_search >= 8 and _bn_actions <= 3 and _goal_titles_fb:
-                                        if _has_email_fb:
-                                            _fb_strategies_ref = [(
-                                                f'{_chosen_name}, загляни в почту — '
-                                                f'после стольких поисков по «{_goal_titles_fb[0]}» должны быть ответы. '
-                                                f'Если кто-то откликнулся — сразу отвечай и назначай встречу.'
-                                            )]
-                                        else:
-                                            _fb_strategies_ref = [(
-                                                f'{_chosen_name}, мы уже много искали по «{_goal_titles_fb[0]}». '
-                                                f'Возьми лучшие находки из своих заметок и создай аналитический пост — '
-                                                f'что нашли, кто перспективен, какой следующий шаг.'
-                                            )]
+                                        # Слишком много поисков — форсируем действие
+                                        _bn_label = _goal_titles_fb[0]
+                                        _bn_hint = f' (Учти: было уже {_bn_search} поисков — пора конвертировать находки в результат.)'
+                                        _fb_strategies_ref = [
+                                            s + _bn_hint for s in _build_fb_strategies(
+                                                _chosen_name, _bn_label,
+                                                _cats_c - {'script', 'scraping'},  # убираем «поиск» из опций
+                                                _g0,
+                                            )
+                                        ] or _fb_strategies_ref
                                 except Exception as _bn_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] bottleneck detection: %s', _bn_err)
                         except Exception as _cc_err:
@@ -8158,40 +8196,38 @@ class AnchorEngine:
     async def _pick_best_agent(self, agents, task_text: str, anchor_type: str):
         """Keyword matching для выбора агента (без AI-вызова — экономия токенов).
 
-        Приоритет: содержание задачи > тип якоря.
+        Использует _GOAL_KW (единый источник правды) для классификации задачи,
+        затем матчит ключевые слова по описанию/специализации агента.
         """
         if len(agents) == 1:
             return agents[0]
 
         import random as _rnd_pba
 
-        # Keyword sets by domain
-        EMAIL_KW = {'email', 'почт', 'письм', 'рассыл', 'outreach', 'контакт', 'лид'}
-        CONTENT_KW = {'контент', 'пост', 'публик', 'блог', 'smm', 'копирайт'}
-        RSS_KW = {'rss', 'новост', 'монитор', 'лент', 'обзор', 'feed', 'дайджест'}
-        ANALYTIC_KW = {'аналит', 'страте', 'исследо', 'план', 'маркет', 'консульт'}
-        TASK_KW = {'задач', 'план', 'менедж', 'координ', 'ассист', 'помощн'}
-
-        # 1) Определяем потребность задачи по СОДЕРЖАНИЮ (приоритет над anchor_type)
         _task_low = task_text.lower()
-        _task_kw_set = None
-        if any(k in _task_low for k in EMAIL_KW):
-            _task_kw_set = EMAIL_KW
-        elif any(k in _task_low for k in CONTENT_KW):
-            _task_kw_set = CONTENT_KW
-        elif any(k in _task_low for k in RSS_KW):
-            _task_kw_set = RSS_KW
 
-        # 2) Fallback: anchor_type определяет домен
+        # 1) Определяем потребности задачи через _GOAL_KW (единый источник правды)
+        _task_kw_set: set[str] = set()
+        for _cat, _kws in _GOAL_KW.items():
+            if any(k in _task_low for k in _kws):
+                _task_kw_set.update(_kws)
+
+        # 2) Fallback: anchor_type → категория → ключевые слова
         if not _task_kw_set:
-            if anchor_type in ('email_outreach_send', 'email_follow_up', 'email_reply_received', 'email_campaign_report'):
-                _task_kw_set = EMAIL_KW
-            elif anchor_type in ('post_opportunity', 'channel_post', 'discord_post'):
-                _task_kw_set = CONTENT_KW
-            elif anchor_type in ('goal_stagnation', 'goal_decomposition', 'goal_deadline'):
-                _task_kw_set = ANALYTIC_KW
+            _ANCHOR_CAT: dict[str, str] = {
+                'email_outreach_send': 'email', 'email_follow_up': 'email',
+                'email_reply_received': 'email', 'email_campaign_report': 'email',
+                'post_opportunity': 'content', 'channel_post': 'content',
+                'discord_post': 'content',
+                'goal_stagnation': 'analytics', 'goal_decomposition': 'analytics',
+                'goal_deadline': 'project',
+            }
+            _cat = _ANCHOR_CAT.get(anchor_type, '')
+            if _cat and _cat in _GOAL_KW:
+                _task_kw_set = set(_GOAL_KW[_cat])
             else:
-                _task_kw_set = TASK_KW
+                # Универсальный fallback: общие управленческие слова
+                _task_kw_set = {'задач', 'план', 'менедж', 'координ', 'ассист', 'помощн'}
 
         # 3) Match agent spec to task keywords — collect ALL matches, pick randomly
         _matched = []
