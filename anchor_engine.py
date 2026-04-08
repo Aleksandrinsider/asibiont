@@ -1073,18 +1073,22 @@ def _build_tool_outcome_block(session, user_id: int, per_agent_history: dict) ->
         if not _tasks or len(_tasks) < 3:
             return ''
 
-        _strat_kw = {
+        # Base categories + dynamic from _CAP_CATEGORY_MAP
+        _strat_kw: dict = {
             'Поиск контактов': ('web_search', 'найди контакт', 'найди email', 'find_relevant',
-                                'search', 'найди через', 'поиск', 'github', 'linkedin',
-                                'save_email_contact', 'найди автор'),
+                                'search', 'поиск', 'save_email_contact'),
             'Email рассылка': ('send_outreach', 'email', 'письм', 'outreach', 'рассыл',
                                'start_email_campaign', 'send_follow_up'),
             'Проверка ответов': ('check_emails', 'проверь входящ', 'проверь почт',
                                  'reply_to', 'ответь на'),
             'Контент': ('create_post', 'publish', 'опубликуй', 'пост', 'статью', 'контент'),
             'Аналитика': ('проанализируй', 'анализ', 'research_topic', 'метрик', 'отчёт'),
-            'Сообщества': ('discord', 'telegram', 'канал', 'группа', 'форум', 'сообщество'),
         }
+        # Dynamically add integration categories so any tool's effectiveness is tracked
+        for _cap_kws_o, _cap_cat_o in _CAP_CATEGORY_MAP:
+            _cap_name_o = _CAP_CATEGORY_NAMES.get(_cap_cat_o, _cap_cat_o)
+            if _cap_name_o not in _strat_kw:
+                _strat_kw[_cap_name_o] = tuple(_cap_kws_o[:4])
 
         _outcomes: dict = {}  # cat -> {completed, skipped, cancelled, total}
         for _title, _status, _agent in _tasks:
@@ -10340,14 +10344,7 @@ class AnchorEngine:
             # ── STRATEGY OUTCOME SCORECARD: quantity-based view of what works ──
             _strategy_scorecard_str = ''
             # Init outside try so stagnation blocker can always access it
-            _strat_counts = {
-                'outbound_search': 0,
-                'email_outreach': 0,
-                'content_creation': 0,
-                'check_replies': 0,
-                'data_analysis': 0,
-                'community': 0,
-            }
+            _strat_counts: dict = {}
             try:
                 # 1) Email campaign metrics (actual numbers)
                 _sc_lines = []
@@ -10357,35 +10354,42 @@ class AnchorEngine:
                 _n_interested = (_status_counts_data or {}).get('interested', 0)
                 _email_reply_rate = round((_n_replied + _n_interested) / max(_total_email_sent, 1) * 100, 1)
 
-                # 2) Classify recent tasks into strategy categories (bilingual keywords)
-                _strat_keywords = {
+                # 2) Classify recent tasks into strategy categories
+                # Base categories + dynamic from agent capabilities
+                _strat_keywords: dict = {
                     'outbound_search': ['web_search', 'research', 'найди контакт', 'найди email',
-                                       'найди автор', 'поиск', 'search', 'найди через',
-                                       'нашёл контакт', 'сохрани контакт', 'save_email_contact',
-                                       'find_relevant', 'find_and_message',
-                                       'find contact', 'find email', 'find author',
-                                       'found contact', 'save contact'],
+                                       'поиск', 'search', 'save_email_contact',
+                                       'find_relevant', 'find contact'],
                     'email_outreach': ['send_outreach', 'email', 'письмо', 'outreach',
-                                      'start_email_campaign', 'follow_up', 'follow-up',
-                                      'send email', 'send letter', 'mail campaign'],
+                                      'start_email_campaign', 'follow_up', 'follow-up'],
                     'content_creation': ['create_post', 'publish', 'опубликуй', 'пост',
-                                        'статью', 'контент', 'blog', 'article',
-                                        'write post', 'create content', 'write article'],
+                                        'контент', 'blog', 'article'],
                     'check_replies': ['check_emails', 'проверь входящ', 'проверь почт',
-                                     'reply_to', 'ответь на',
-                                     'check inbox', 'check mail', 'reply to'],
-                    'data_analysis': ['проанализируй', 'анализ', 'метрик', 'отчёт',
-                                     'report', 'analytics', 'research_topic',
-                                     'analyze', 'analysis', 'metrics', 'dashboard'],
-                    'community': ['discord', 'telegram', 'канал', 'группа', 'форум',
-                                 'сообщество', 'community', 'channel', 'group', 'forum'],
+                                     'reply_to', 'ответь на'],
+                    'data_analysis': ['проанализируй', 'анализ', 'research_topic',
+                                     'report', 'analytics'],
                 }
+                # Dynamically add all user's integration categories as trackable strategies
+                _all_user_caps = set()
+                for _acs_caps in _agent_caps_categories.values():
+                    _all_user_caps.update(_acs_caps)
+                for _uc in _all_user_caps:
+                    _uc_name = _CAP_CATEGORY_NAMES.get(_uc, _uc)
+                    if _uc_name not in _strat_keywords:
+                        # Get keywords from _CAP_CATEGORY_MAP for this category
+                        _uc_kws = []
+                        for _ckws, _ccat in _CAP_CATEGORY_MAP:
+                            if _ccat == _uc:
+                                _uc_kws.extend(_ckws[:4])
+                                break
+                        if _uc_kws:
+                            _strat_keywords[_uc_name] = _uc_kws
                 for _pn_sc, _hist_sc in _per_agent_history.items():
                     for _h_sc in _hist_sc[:8]:
                         _h_sc_l = _h_sc.lower()
                         for _cat_sc, _kws_sc in _strat_keywords.items():
                             if any(kw in _h_sc_l for kw in _kws_sc):
-                                _strat_counts[_cat_sc] += 1
+                                _strat_counts[_cat_sc] = _strat_counts.get(_cat_sc, 0) + 1
                                 break  # one category per action
 
                 # 3) Build scorecard
@@ -10679,26 +10683,21 @@ class AnchorEngine:
                     _Inter_loop.created_at >= _loop_cutoff,
                 ).order_by(_Inter_loop.created_at.asc()).all()
 
-                # Ключевые паттерны подходов которые координатор мог повторять
-                # Generic platform-level keywords (work for any user/language)
-                _approach_keywords = {
-                    'LinkedIn': ['linkedin'],
-                    'Discord': ['discord'],
-                    'GitHub': ['github'],
-                    'RSS': ['rss', 'хабр', 'habr', 'vc.ru', 'dev.to', 'medium'],
+                # Ключевые паттерны подходов — динамически из _CAP_CATEGORY_MAP + базовые
+                _approach_keywords: dict = {
                     'web_search': ['web_search', 'найди контакт', 'найди email',
                                    'find contact', 'find email', 'поиск в интернете'],
-                    'email_campaign': ['start_email_campaign', 'email_campaign',
-                                       'массовую email', 'mass email', 'bulk email'],
                     'email_limit': ['лимит писем', 'лимит на email', 'исчерпан',
                                     'rate limit', 'email limit', 'exhausted'],
                     'timeout': ['таймаут', 'timeout', 'прервал', 'interrupted'],
                     'tactic_change': ['сменим тактику', 'смени тактику', 'change tactic',
                                      'switch approach', 'сменим площадку'],
-                    'Telegram': ['telegram', 'телеграм'],
-                    'Reddit': ['reddit.com', 'subreddit', '/r/'],
-                    'ProductHunt': ['producthunt', 'product hunt'],
                 }
+                # Dynamically add all integration categories from _CAP_CATEGORY_MAP
+                for _cap_kws, _cap_cat in _CAP_CATEGORY_MAP:
+                    _cap_name = _CAP_CATEGORY_NAMES.get(_cap_cat, _cap_cat)
+                    if _cap_name not in _approach_keywords:
+                        _approach_keywords[_cap_name] = list(_cap_kws[:5])  # top 5 keywords per category
                 _approach_counts: dict = {}
                 for _lm in _loop_msgs:
                     try:
@@ -10734,11 +10733,13 @@ class AnchorEngine:
                     logger.info("[COORD] Loop detected for user %s: %s", user.telegram_id, _looped)
 
                 # ── STRATEGY-LEVEL loop: group channels into meta-strategies ──
-                # Even if no single channel hits 3+, the meta-strategy might
+                # Dynamically group: all platform categories → outbound_search
+                _outbound_cats = [_CAP_CATEGORY_NAMES.get(c, c) for _kws, c in _CAP_CATEGORY_MAP
+                                  if c in ('git', 'rss', 'social', 'hr', 'scraping')]
+                _outbound_cats.append('web_search')
                 _meta_strategies = {
-                    'outbound_search': ['web_search', 'GitHub', 'LinkedIn',
-                                       'RSS', 'Reddit', 'ProductHunt', 'Telegram'],
-                    'email_blast': ['email_campaign', 'email_limit'],
+                    'outbound_search': _outbound_cats,
+                    'email_blast': ['Email', 'email_limit'],
                 }
                 _meta_counts = {}
                 for _ms_name, _ms_channels in _meta_strategies.items():
@@ -11021,9 +11022,23 @@ class AnchorEngine:
             _plan = _plan_deduped if _plan_deduped else _plan
 
             # ── Capability-mismatch guard: переназначает задачу если агент не имеет нужной интеграции ──
-            _EMAIL_TASK_KW = ('email', 'письм', 'outreach', 'follow-up', 'follow_up', 'рассыл',
-                              'send_outreach', 'check_emails', 'reply_to', 'negotiate_by_email',
-                              'send_follow_up', 'входящ', 'imap', 'smtp', 'почт')
+            # ── Universal capability-mismatch guard: reroute tasks to agents with matching integration ──
+            # Build keyword→category mapping dynamically from _CAP_CATEGORY_MAP
+            _CAP_KW_TO_CAT: dict[str, str] = {}
+            for _cmg_kws, _cmg_cat in _CAP_CATEGORY_MAP:
+                for _cmg_kw in _cmg_kws:
+                    _CAP_KW_TO_CAT[_cmg_kw] = _cmg_cat
+            # Add tool-name keywords for common patterns
+            _TOOL_CAT_EXTRA = {
+                'send_outreach': 'email', 'check_emails': 'email', 'reply_to': 'email',
+                'send_follow_up': 'email', 'negotiate_by_email': 'email',
+                'письм': 'email', 'outreach': 'email', 'рассыл': 'email',
+                'входящ': 'email', 'почт': 'email',
+                'publish_to_telegram': 'telegram', 'publish_to_discord': 'discord',
+                'create_issue': 'git', 'run_agent_action': 'script',
+            }
+            _CAP_KW_TO_CAT.update(_TOOL_CAT_EXTRA)
+
             _plan_cap_fixed = []
             for _pcf in _plan:
                 _pcf_agent = (_pcf.get('agent') or '').strip()
@@ -11031,23 +11046,28 @@ class AnchorEngine:
                 _pcf_tool_l = (_pcf.get('tool') or '').lower()
                 _pcf_combined = _pcf_task_l + ' ' + _pcf_tool_l
                 _pcf_caps = _agent_caps_categories.get(_pcf_agent, set())
-                _needs_email = any(kw in _pcf_combined for kw in _EMAIL_TASK_KW)
-                if _needs_email and 'email' not in _pcf_caps:
-                    # Найти агента с email-интеграцией
-                    _email_agent = next(
-                        (p['name'] for p in _profiles if 'email' in _agent_caps_categories.get(p['name'], set())),
+                # Detect which integration category the task needs
+                _needed_cat = None
+                for _ck_kw, _ck_cat in _CAP_KW_TO_CAT.items():
+                    if _ck_kw in _pcf_combined:
+                        if _ck_cat not in _pcf_caps and _ck_cat != 'script':
+                            _needed_cat = _ck_cat
+                            break
+                if _needed_cat:
+                    # Find an agent that HAS this capability
+                    _reroute_agent = next(
+                        (p['name'] for p in _profiles if _needed_cat in _agent_caps_categories.get(p['name'], set())),
                         None,
                     )
-                    if _email_agent and _email_agent != _pcf_agent:
+                    if _reroute_agent and _reroute_agent != _pcf_agent:
                         logger.info(
-                            "[COORD] cap-mismatch: reroute email task from %s → %s: %s",
-                            _pcf_agent, _email_agent, _pcf_task_l[:80],
+                            "[COORD] cap-mismatch: reroute %s task from %s → %s: %s",
+                            _needed_cat, _pcf_agent, _reroute_agent, _pcf_task_l[:80],
                         )
-                        _pcf['agent'] = _email_agent
+                        _pcf['agent'] = _reroute_agent
                     else:
-                        # Нет email-агента → дропаем шаг, он невыполним
-                        logger.info("[COORD] cap-mismatch: drop email task for %s (no email agent): %s",
-                                    _pcf_agent, _pcf_task_l[:60])
+                        logger.info("[COORD] cap-mismatch: drop %s task for %s (no capable agent): %s",
+                                    _needed_cat, _pcf_agent, _pcf_task_l[:60])
                         continue
                 _plan_cap_fixed.append(_pcf)
             _plan = _plan_cap_fixed if _plan_cap_fixed else _plan
