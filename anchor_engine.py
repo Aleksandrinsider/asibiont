@@ -4859,7 +4859,7 @@ class AnchorEngine:
                 specialization='goal_management',
                 description='Координатор: исследует стратегию, создаёт задачи, делегирует по способностям.',
                 personality=(
-                    'Ты — координатор команды ASI Biont. '
+                    'Ты — координатор команды ASI Biont (МУЖСКОЙ род: я нашёл, я проверил, я сделал). '
                     'Ты используешь web_search, research_topic, find_relevant_contacts_for_task, '
                     'save_email_contact, send_outreach_email, send_email, '
                     'delegate_task, update_goal_progress. '
@@ -6241,7 +6241,7 @@ class AnchorEngine:
                                 pass
 
                         _coord_prompt = (
-                            f"Ты — ASI, координатор команды"
+                            f"Ты — ASI, координатор команды (МУЖСКОЙ род: я нашёл, я проверил, я сделал)"
                             + (f" проекта «{_project_c}»" if _project_c else '')
                             + f". Обращаешься к коллеге {_chosen_name} ({_agent_role}) в рабочем чате.\n\n"
                             f"📌 ФАКТЫ О ПЛАТФОРМЕ (используй ТОЛЬКО эти числа, НЕ придумывай другие):\n"
@@ -7731,7 +7731,7 @@ class AnchorEngine:
                             for g in data.get('goals', [])[:2]
                         )
                         _dir_p = (
-                            f"Ты — ASI, координатор проекта. Пишешь ПОЛЬЗОВАТЕЛЮ краткий статус-апдейт.\n"
+                            f"Ты — ASI, координатор проекта (МУЖСКОЙ род: я нашёл, я проверил, я сделал). Пишешь ПОЛЬЗОВАТЕЛЮ краткий статус-апдейт.\n"
                             f"Агент {_chosen_name} только что отчитался:\n"
                             f"«{result.strip()[:400]}»\n\n"
                             f"Цели пользователя: {_dir_goals}\n"
@@ -11785,7 +11785,7 @@ class AnchorEngine:
                             + '\n'.join(_used_run_lines) + "\n\n"
                         ) if _used_run_lines else ''
                         _next_prompt = (
-                            f"Ты — координатор ASI. Команда только что сделала:\n{_done_str}\n\n"
+                            f"Ты — координатор ASI (МУЖСКОЙ род: я нашёл, я проверил, я сделал). Команда только что сделала:\n{_done_str}\n\n"
                             f"{_used_run_note}"
                             f"{_email_limit_note}"
                             f"{_uncovered_note}"
@@ -13093,7 +13093,7 @@ class AnchorEngine:
                         _relay_p = (
                             f"Агент {_ag_name} написал:"
                             f"\n\"{_cleaned[:600]}\""
-                            f"\n\nТы — ASI, координатор. Агент сообщил о технической проблеме."
+                            f"\n\nТы — ASI, координатор (МУЖСКОЙ род: я нашёл, я проверил). Агент сообщил о технической проблеме."
                             f" ПРИМИ РЕШЕНИЕ сам: если интеграция не настроена — подскажи "
                             f"пользователю КАК настроить (ссылка /dashboard → Агенты)."
                             f" НЕ задавай вопросов типа 'Нужно ли ему продолжать?' — ДЕЙСТВУЙ."
