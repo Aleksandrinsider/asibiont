@@ -738,6 +738,12 @@ def _sanitize_proactive_text(text: str) -> str:
     t = _re_san.sub(r'\s+—\s+—', ' —', t)
     t = _re_san.sub(r'\s{2,}', ' ', t)
     t = _re_san.sub(r'\s+([.,;!?])', r'\1', t)
+    # Sanitize hallucinated token amounts ("1000+500", "бесплатных токенов" etc.)
+    try:
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        t = sanitize_token_hallucinations(t)
+    except Exception:
+        pass
     return t.strip()
 
 
@@ -6699,7 +6705,7 @@ class AnchorEngine:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     # ── Context-aware fallback: если AI не сгенерировал → шаблон + контекст ──
                     if _coord_text is None:
-                        _fb_choice = _rnd_fb.choice(_fb_strategies_ref)
+                        _fb_choice = _rnd.choice(_fb_strategies_ref)
                         # Добавляем контекст последнего действия агента, чтобы fallback не был слепым
                         if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
                             _fb_choice += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
@@ -11198,6 +11204,13 @@ class AnchorEngine:
                 "• Данные собраны → ДЕЙСТВУЙ через подключённые инструменты агента.\n"
                 "• Каждый агент в каждом цикле делает МИНИМУМ 1 action-tool.\n"
                 "• Застой 2+ цикла → ПОЛНАЯ смена стратегии: другой инструмент, другая аудитория, другой формат.\n"
+                "• ИСЧЕРПАНИЕ ИСТОЧНИКА: если search_users/search_contacts/search_repos за 2+ цикла дал 0 новых результатов — источник ИСЧЕРПАН.\n"
+                "  Переключись: web_search с другими запросами, create_post вместо поиска, другой канал.\n"
+                "• search_contacts / get_contact = ТОЛЬКО CRM (AmoCRM). Это НЕ поиск новых людей!\n"
+                "  get_contact ОБЯЗАН иметь параметр id=<числовой_ID_из_CRM>.\n"
+                "  Для поиска НОВЫХ контактов: web_search site:linkedin.com / search_users (GitHub) / save_email_contact.\n"
+                "• search_repos = анализ РЕПОЗИТОРИЕВ (код, issues). НЕ используй search_repos для поиска людей.\n"
+                "  Для поиска людей: search_users (GitHub) или web_search (LinkedIn/Habr).\n"
                 "• task = конкретное действие, повелительное наклонение (найди/отправь/проверь/опубликуй/создай).\n"
                 "• task ОБЯЗАН содержать: ЧТО делать + С КЕМ/ЧЕМ (критерии) + СКОЛЬКО. «Поиск контактов» = мусор. «Найди 5 DevOps-инженеров с GitHub Python-проектов» = задача.\n"
                 "• КОНТЕКСТ ЧАТА → В ЗАДАНИЕ: если пользователь попросил что-то конкретное (см. «Последний диалог»), "

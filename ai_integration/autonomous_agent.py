@@ -1768,6 +1768,7 @@ class HybridAutonomousAgent:
                         'send_email': 'gmail', 'check_inbox': 'gmail', 'check_emails': 'gmail',
                         'create_issue': 'github', 'list_issues': 'github',
                         'search_users': 'github', 'find_contributors': 'github',
+                        'search_repos': 'github', 'star_repo': 'github', 'comment_on_issue': 'github',
                         'check_news': 'rss', 'read_rss': 'rss', 'check_news_and_markets': 'rss',
                         'check_markets': 'rss', 'fetch_rss': 'rss',
                         'yandex_metrika_report': 'metrika', 'get_metrika': 'metrika',
