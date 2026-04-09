@@ -1703,7 +1703,9 @@ class HybridAutonomousAgent:
                 if _word_count <= 3 and not any(c.isdigit() for c in _raw_query):
                     _is_bad_query = True
             if _is_bad_query:
-                _safe_default = 'autonomous agent language:python repos:>10 followers:>5'
+                # Build a meaningful fallback from the raw query words instead of hardcoded search
+                _q_words = [w for w in _raw_query.split() if len(w) > 2 and '@' not in w][:3]
+                _safe_default = ' '.join(_q_words) + ' repos:>5 followers:>3' if _q_words else 'bioinformatics repos:>5 followers:>3'
                 logger.warning(
                     "[ACTION] search_users bad query=%r → replacing with safe default=%r",
                     _raw_query, _safe_default,
@@ -1712,9 +1714,7 @@ class HybridAutonomousAgent:
                 action_params['query'] = _safe_default
                 # Оповещаем через output что заменили запрос
                 _fix_note = (
-                    f"⚠️ Запрос '{_raw_query}' некорректен для GitHub Users Search "
-                    f"(email-адреса и случайные слова не поддерживаются). "
-                    f"Автоматически использован: '{_safe_default}'\n"
+                    f"⚠️ Запрос '{_raw_query}' дополнен квалификаторами GitHub: '{_safe_default}'\n"
                     f"Допустимые квалификаторы: language:, repos:, followers:, location:\n"
                 )
             else:
