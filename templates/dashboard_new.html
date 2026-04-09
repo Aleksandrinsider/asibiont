@@ -8840,6 +8840,7 @@ except Exception as e:
                             const oWasExpanded = _reportsExpandedSet.has(oKey);
 
                             const oRow = document.createElement('div');
+                            oRow.setAttribute('data-outreach-id', o.id);
                             oRow.style.cssText = 'padding: 8px 0; border-bottom: 1px solid #F0F3F5;';
 
                             const oHeader = document.createElement('div');
@@ -9451,6 +9452,7 @@ except Exception as e:
                 contacts.forEach(c => {
                     const card = document.createElement('div');
                     card.className = 'contact-card';
+                    card.setAttribute('data-contact-id', c.id);
                     card.style.cssText = 'display: flex; gap: 8px; padding: 0 0 8px 0; margin-bottom: 8px; font-size: 12px; align-items: center; border-bottom: 1px solid #F0F0F0;';
                     const dateStr = c.last_contacted_at ? new Date(c.last_contacted_at).toLocaleDateString(_dl(), {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
                     card.innerHTML = '<div style="flex: 1; min-width: 0;">' +
@@ -9537,6 +9539,8 @@ except Exception as e:
 
         async function deleteOutreach(id) {
             if (!id) return;
+            const el = document.querySelector('[data-outreach-id="' + id + '"]');
+            if (el) el.remove();
             try {
                 const resp = await fetch('/api/outreach/' + id, {
                     method: 'DELETE',
@@ -9544,12 +9548,13 @@ except Exception as e:
                 });
                 if (resp.ok) {
                     showNotification(t('n-record-deleted'), 'success');
-                    loadReports();
                 } else {
                     showNotification(t('n-delete-error'), 'error');
+                    loadReports();
                 }
             } catch (err) {
                 console.error('Failed to delete outreach:', err);
+                loadReports();
             }
         }
 
@@ -9771,6 +9776,8 @@ except Exception as e:
         }
 
         async function deleteEmailContact(id) {
+            const el = document.querySelector('.contact-card[data-contact-id="' + id + '"]');
+            if (el) el.remove();
             try {
                 const resp = await fetch('/api/email-contacts/' + id, {
                     method: 'DELETE',
@@ -9778,10 +9785,12 @@ except Exception as e:
                 });
                 if (resp.ok) {
                     showNotification(t('contact-deleted'), 'success');
+                } else {
                     loadContacts();
                 }
             } catch (err) {
                 console.error('Failed to delete contact:', err);
+                loadContacts();
             }
         }
 
