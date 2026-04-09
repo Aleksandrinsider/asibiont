@@ -1419,6 +1419,21 @@ class ContextBuilder:
             except Exception as _pe:
                 logger.debug(f"[PERSONALIZATION] {_pe}")
 
+            # ═══ ЗАМЕТКИ: последние результаты работы агентов ═══
+            try:
+                from models import Note
+                _recent_notes = session.query(Note).filter(
+                    Note.user_id == user.id,
+                ).order_by(Note.created_at.desc()).limit(5).all()
+                if _recent_notes:
+                    _note_lines = []
+                    for _n in _recent_notes:
+                        _nc = (_n.content or '')[:150].replace('\n', ' ')
+                        _note_lines.append(f"  [{_n.created_at.strftime('%d.%m %H:%M')}] {_n.title}: {_nc}")
+                    hints.append("ЗАМЕТКИ (последние результаты команды — НЕ дублируй, используй как базу):\n" + "\n".join(_note_lines))
+            except Exception as _ne:
+                logger.debug(f"[NOTES_CTX] {_ne}")
+
             # ═══ ПОХОЖИЕ ПОЛЬЗОВАТЕЛИ И ВОЗМОЖНЫЕ КОЛЛАБОРАЦИИ ═══
             similar_hints = self._find_similar_users(user, profile, session, user_tz)
             if similar_hints:
