@@ -289,6 +289,9 @@ class ExternalAPIClient:
                 data = await resp.json()
             
             users = data.get('items', [])[:effective_max]
+            # Фильтруем собственный аккаунт платформы из результатов
+            _OWN_GITHUB_LOGINS = {'aleksandrinsider', 'asibiont'}
+            users = [u for u in users if u.get('login', '').lower() not in _OWN_GITHUB_LOGINS]
             logger.info(f"[GITHUB] Search '{query[:50]}' → {len(users)} users "
                        f"(total: {data.get('total_count', 0)}, token: {'yes' if github_token else 'no'})")
             

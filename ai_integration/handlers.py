@@ -10559,6 +10559,15 @@ _GENERIC_PREFIXES = {
     # AI/ML/Data generic
     'ai', 'ml', 'data', 'research', 'engineering', 'science',
     'decision-makers', 'inquiries', 'apply', 'demo', 'trial',
+    # Academic / department / lab generics
+    'bioinformatics', 'genomics', 'proteomics', 'neuroscience',
+    'microbiology', 'immunology', 'biochemistry', 'computational',
+    'informatics', 'biotech', 'laboratory', 'lab', 'dept', 'department',
+    'faculty', 'admissions', 'registrar', 'library', 'provost',
+    'chancellor', 'dean', 'graduate', 'undergraduate', 'postdoc',
+    'grants', 'fellowship', 'scholarship', 'alumni', 'bursar',
+    'clinic', 'pharmacy', 'radiology', 'pathology', 'oncology',
+    'cardiology', 'pediatrics', 'surgery', 'nursing', 'emergency',
 }
 
 # Паттерны в email-prefix которые указывают на корпоративный/generic email
@@ -10657,6 +10666,10 @@ def _is_generic_email(email: str) -> bool:
     # Невалидные псевдо-домены мессенджеров (агент пишет @telegram вместо реального email)
     if domain in ('telegram', 'vk', 'vk.com', 't.me', 'instagram', 'twitter', 'facebook',
                   'linkedin', 'discord', 'slack', 'whatsapp'):
+        return True
+    # Государственные / образовательные домены — не спамим
+    _GOV_EDU_SUFFIXES = ('.gov', '.gov.ru', '.edu', '.edu.ru', '.mil', '.ac.uk', '.edu.au', '.edu.cn')
+    if any(domain.endswith(s) for s in _GOV_EDU_SUFFIXES):
         return True
 
     return False
@@ -12197,6 +12210,12 @@ async def send_outreach_email(
                                        'mailer-daemon', 'postmaster', 'abuse', 'bounce')
             if any(_rcpt_local_val.startswith(p) for p in _BLOCKED_LOCAL_PREFIXES):
                 return (f"⛔ {_rcpt} — системный/noreply адрес. Найди реальный email человека.")
+
+        # ── GUARD: .gov / .edu / .mil — не спамим гос/учебные организации ──
+        if _rcpt:
+            _rcpt_dom_gov = _rcpt.rsplit('@', 1)[-1].lower() if '@' in _rcpt else ''
+            if any(_rcpt_dom_gov.endswith(s) for s in ('.gov', '.gov.ru', '.edu', '.edu.ru', '.mil', '.ac.uk', '.edu.au', '.edu.cn')):
+                return f"⛔ {_rcpt} — адрес государственной/образовательной организации ({_rcpt_dom_gov}). Outreach на .gov/.edu запрещён. Найди личный или коммерческий email."
 
         # ── GUARD: фейковый / generic email ──
         if _rcpt and _is_generic_email(_rcpt):

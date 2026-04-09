@@ -1705,7 +1705,7 @@ class HybridAutonomousAgent:
             if _is_bad_query:
                 # Build a meaningful fallback from the raw query words instead of hardcoded search
                 _q_words = [w for w in _raw_query.split() if len(w) > 2 and '@' not in w][:3]
-                _safe_default = ' '.join(_q_words) + ' repos:>5 followers:>3' if _q_words else 'bioinformatics repos:>5 followers:>3'
+                _safe_default = ' '.join(_q_words) + ' repos:>5 followers:>3' if _q_words else 'developer repos:>5 followers:>3'
                 logger.warning(
                     "[ACTION] search_users bad query=%r → replacing with safe default=%r",
                     _raw_query, _safe_default,
