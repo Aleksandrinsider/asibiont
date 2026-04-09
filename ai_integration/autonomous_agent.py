@@ -6991,7 +6991,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Адаптивные таймауты: тяжёлые инструменты получают больше времени, лёгкие — меньше
     _TOOL_TIMEOUTS: dict[str, int] = {
         'research_topic': 60, 'web_search': 30, 'get_news_trends': 30,
-        'negotiate_by_email': 50, 'run_agent_action': 50, 'generate_image': 50,
+        'negotiate_by_email': 50, 'run_agent_action': 95, 'generate_image': 50,
         'schedule_background_task': 45,
         'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
         'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
@@ -7706,12 +7706,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     if _only_research and not _had_outgoing and not _has_note_action and _is_progress_increase:
                         _tc_result = json.dumps({
                             "error": (
-                                "⛔ Обновление прогресса заблокировано. "
-                                "В этом цикле были только исследовательские действия "
-                                f"({', '.join(sorted(_prior_tools_set)[:3])}), "
-                                "но числовой прогресс/метрика обновляются ТОЛЬКО после реального действия: "
-                                "отправка письма, публикация, сохранение контакта. "
-                                "Если хочешь зафиксировать итог без прогресса — передай progress=None и только note."
+                                "Прогресс не обновлён. Сначала выполни действие: "
+                                "отправь письмо, опубликуй пост или сохрани контакт. "
+                                "Если хочешь добавить только заметку — передай progress=None."
                             )
                         }, ensure_ascii=False)
                         _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
@@ -7721,9 +7718,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     if _is_numeric_update and not _had_outgoing and not _action_evidence:
                         _tc_result = json.dumps({
                             "error": (
-                                "⛔ Нет доказательств для update_goal_progress. "
-                                "Сначала выполни реальное действие инструментом и получи результат "
-                                "(email/outreach/reply/contact/post), затем обновляй метрику."
+                                "Прогресс не обновлён — сначала выполни действие "
+                                "(письмо, пост, контакт), потом обновляй метрику."
                             )
                         }, ensure_ascii=False)
                         _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})

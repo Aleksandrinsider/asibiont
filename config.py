@@ -67,7 +67,7 @@ AI_TEMPERATURE_HIGH = float(os.getenv("AI_TEMPERATURE_HIGH", "0.7"))  # For crea
 API_TIMEOUT_QUICK = int(os.getenv("API_TIMEOUT_QUICK", "15"))     # Tool execution, quick calls
 API_TIMEOUT_NORMAL = int(os.getenv("API_TIMEOUT_NORMAL", "45"))   # Standard AI calls
 API_TIMEOUT_LONG = int(os.getenv("API_TIMEOUT_LONG", "60"))       # Research, delegation, complex tasks
-API_TIMEOUT_SCRIPT = int(os.getenv("API_TIMEOUT_SCRIPT", "45"))   # Agent python_code subprocess
+API_TIMEOUT_SCRIPT = int(os.getenv("API_TIMEOUT_SCRIPT", "90"))   # Agent python_code subprocess
 
 # Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
