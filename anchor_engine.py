@@ -753,8 +753,11 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
     t = _re_san.sub(r'\b(?:через\s+)?(?:действие агента|сохранение контакта|поиск контактов|отправка письма)\b', '', t, flags=_re_san.IGNORECASE)
     # "исследование темы через исследование темы" → "исследование темы"
     t = _re_san.sub(r'(исследование темы)(?:\s+через\s+исследование темы)+', r'\1', t, flags=_re_san.IGNORECASE)
+    # Clean up empty backtick pairs left after tool name removal (`` → nothing)
+    t = _re_san.sub(r'`\s*`', '', t)
     # Clean up dangling prepositions/words left after tool name removal
     t = _re_san.sub(r'\b(?:через|с помощью|используя|действие)\s*[.,;!?]', '.', t, flags=_re_san.IGNORECASE)
+    t = _re_san.sub(r'\b(?:через|с помощью|используя|действие)\s*$', '', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\bРезультат\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\bЗафикси\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
     # Clean up leftover artifacts: double spaces, dangling dashes/commas
