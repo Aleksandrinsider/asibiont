@@ -71,7 +71,7 @@ EXCLUDED_TOOLS = {
     'get_message_status',                # редко используется, покрывается get_incoming_messages
     'check_time_conflicts',              # внутренняя, вызывается автоматически в add_task
     'restore_task',                      # редкий кейс, покрывается add_task
-    'get_stock_price',                   # дубль research_topic для финансовых данных
+    # 'get_stock_price' — РАЗБЛОКИРОВАН: использует Alpha Vantage API (не дубль research_topic)
     'quick_topic_search',                # дубль research_topic(depth='basic')
     'research_and_plan',                 # дубль research_topic(depth='deep')
     'analyze_situation_and_suggest_tasks', # AI анализирует сам
@@ -1608,18 +1608,18 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_stock_price",
-            "description": "📈 Получить котировку акции, цену нефти, курс валюты или криптовалюты через Alpha Vantage. Работает только если у агента настроен ALPHAVANTAGE_API_KEY. Нефть: symbol=BRENT или WTI, data_type=oil. Акции: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Крипто: BTC, ETH.",
+            "description": "📈 Получить котировку акции, цену нефти, курс валюты или криптовалюты через Alpha Vantage. Работает только если у пользователя настроен ALPHAVANTAGE_API_KEY. Нефть: symbol=BRENT или WTI, data_type=oil. Акции: AAPL, MSFT, TSLA. Форекс: EUR/USD, USD/RUB. Крипто: BTC, ETH.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "symbol": {
                         "type": "string",
-                        "description": "Тикер или пара. Примеры: 'AAPL', 'MSFT', 'EUR/USD', 'USD/RUB', 'XAU/USD', 'BTC'"
+                        "description": "Тикер или пара. Примеры: 'AAPL', 'MSFT', 'EUR/USD', 'USD/RUB', 'XAU/USD', 'BTC', 'BRENT', 'WTI'"
                     },
                     "data_type": {
                         "type": "string",
-                        "description": "Тип данных: 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта)",
-                        "enum": ["quote", "forex", "crypto"]
+                        "description": "Тип данных: 'quote' (акции/ETF), 'forex' (валюты/металлы), 'crypto' (криптовалюта), 'oil' (нефть Brent/WTI)",
+                        "enum": ["quote", "forex", "crypto", "oil"]
                     }
                 },
                 "required": ["symbol"]
