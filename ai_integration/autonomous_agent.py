@@ -692,19 +692,6 @@ async def _get_shared_ai_session() -> aiohttp.ClientSession:
 
 
 class HybridAutonomousAgent:
-    SHORT_TASK_DONE_PATTERNS = [
-        'задачу выполнил', 'задача выполнена', 'task completed', 'completed the task',
-        'готово', 'done', 'готово!', 'готово.', 'готово :)', 'готово :', 'готово :3',
-        'готово :D', 'готово : )', 'готово :]', 'готово : )', 'готово :]',
-        'готово :3', 'готово :d', 'готово : )', 'готово :]', 'готово : )',
-        'готово :]', 'готово :3', 'готово :d', 'готово : )', 'готово :]',
-        'готово : )', 'готово :]', 'готово :3', 'готово :d', 'готово : )',
-        'готово :]', 'готово :3', 'готово :d', 'готово : )', 'готово :]',
-        'готово :3', 'готово :d', 'готово : )', 'готово :]', 'готово :3',
-        'готово :d', 'готово : )', 'готово :]', 'готово :3', 'готово :d',
-        'готово!'
-    ]
-
     """
     Адаптивный агент: standard tool calling loop + обучение + force_tool_choice.
     Без мульти-агентного pipeline, без дублированного контекста.
@@ -3782,9 +3769,10 @@ class HybridAutonomousAgent:
                         final = _rc['content'].strip()
                 except Exception as _retry_err:
                     logger.warning(f"[STRATEGY_RETRY] failed: {_retry_err}")
-                if not final:
-                    final = "Принял! Запускаю поиск — результаты покажу через минуту." if _lang != 'en' else "Got it! Starting search — I'll show results shortly."
-            else:
+                # Если strategy retry не помог — AI сам сформулирует
+                pass
+            # AI не вернул текст — пусть сам сформулирует при следующем обращении
+            if not final:
                 final = "Done!" if _lang == 'en' else "Готово!"
 
         # Биллинг кастомного агента
@@ -3868,17 +3856,6 @@ class HybridAutonomousAgent:
                         logger.warning("[QUALITY] Synthesis returned empty, keeping original")
                 except Exception as _synth_err:
                     logger.warning(f"[QUALITY] Synthesis call failed: {_synth_err}")
-
-        # Автоматическое расширение коротких ответов типа 'Задачу выполнил.'
-        _final_lc = (final or '').strip().lower()
-        for _pat in self.SHORT_TASK_DONE_PATTERNS:
-            if _final_lc == _pat or _final_lc.strip('.!') == _pat.strip('.!'):
-                # Добавляем пояснение и предложение следующего шага
-                next_step = 'Если есть ещё задачи — напомни, и я помогу с ними!'
-                explanation = 'Задача успешно завершена. '
-                final = f'{explanation}{final}\n\n{next_step}'
-                logger.info('[QUALITY] Auto-expanded terse task-done response')
-                break
 
         self._save_and_learn(user_message, user_id, execution_results, final)
         return final
