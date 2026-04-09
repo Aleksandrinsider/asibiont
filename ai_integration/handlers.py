@@ -8158,6 +8158,10 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         if not content or not content.strip():
             return "Текст поста не может быть пустым."
 
+        # Sanitize token hallucinations (AI иногда пишет "1000+500" вместо "1500")
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        content = sanitize_token_hallucinations(content)
+
         # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
         import datetime as dt
         import pytz as _pytz_cp
@@ -8516,6 +8520,16 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
             content_data = json.loads(content)
         except (json.JSONDecodeError, TypeError, ValueError):
             content_data = content
+
+        # Sanitize token hallucinations (AI иногда пишет "1000+500" вместо "1500")
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        if isinstance(content_data, str):
+            content_data = sanitize_token_hallucinations(content_data)
+            content = sanitize_token_hallucinations(content)
+        elif isinstance(content_data, dict):
+            for _k in ('text', 'title', 'body'):
+                if _k in content_data and isinstance(content_data[_k], str):
+                    content_data[_k] = sanitize_token_hallucinations(content_data[_k])
 
         # ── GUARD: не публиковать внутренние отчёты в публичный канал ──
         _tg_lower = (content if isinstance(content, str) else str(content)).lower()
@@ -12297,6 +12311,13 @@ async def send_outreach_email(
             except Exception as _e_rpl_chk:
                 logger.debug("suppressed replied check: %s", _e_rpl_chk)
 
+        # Sanitize token hallucinations in email body/subject
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        if body:
+            body = sanitize_token_hallucinations(body)
+        if subject:
+            subject = sanitize_token_hallucinations(subject)
+
         # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
         RESEND_API_KEY = _platform_resend_key
         _personal_resend_from = ''
@@ -15680,6 +15701,11 @@ async def send_email(
         if not body:
             return " Нужен текст письма (body)."
 
+        # Sanitize token hallucinations
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        body = sanitize_token_hallucinations(body)
+        subject = sanitize_token_hallucinations(subject)
+
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return " Пользователь не найден."
@@ -16577,6 +16603,11 @@ async def publish_to_discord(
                 logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
 
         import aiohttp as _aiohttp
+
+        # Sanitize token hallucinations
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        content = sanitize_token_hallucinations(content)
+
         # Если есть картинка — публикуем через embed
         if image_url:
             payload = {

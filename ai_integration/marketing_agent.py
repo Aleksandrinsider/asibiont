@@ -405,6 +405,10 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
     else:
         # Если передана простая строка
         post_text = content
+
+    # Sanitize token hallucinations (AI иногда пишет "1000+500" вместо "1500")
+    from ai_integration.conversation_history import sanitize_token_hallucinations
+    post_text = sanitize_token_hallucinations(post_text)
     
     # Отправляем через Telegram Bot API
     try:

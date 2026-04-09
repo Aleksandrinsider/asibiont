@@ -35,6 +35,15 @@ _TOKEN_HALLUCINATION_REPLACEMENTS = [
 ]
 
 
+def sanitize_token_hallucinations(text: str) -> str:
+    """Исправляет галлюцинированные суммы токенов в любом тексте (посты, email, TG)."""
+    if not text:
+        return text
+    for pattern, replacement in _TOKEN_HALLUCINATION_REPLACEMENTS:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    return text
+
+
 # Feminine verb endings that leak agent persona into ASI context
 _FEMININE_TO_NEUTRAL = [
     (r'\b([Яя])\s+(нашла|проверила|отправила|сделала|написала|создала|удалила|обновила|загрузила|подготовила|исследовала|проанализировала|собрала|завершила|добавила|получила|увидела|поняла|решила|опубликовала)\b',
