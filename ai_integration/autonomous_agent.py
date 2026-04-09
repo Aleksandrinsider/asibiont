@@ -3840,26 +3840,34 @@ class HybridAutonomousAgent:
         CognitiveEngine.reflect_on_response(user_message, final, tools_used)
 
         # Защита от слишком коротких ответов после tool calls
-        # Если AI ответил "Готово!" после делегирования — формируем развёрнутый ответ из результатов
+        # Если AI ответил "Готово!" после делегирования — просим AI синтезировать результаты
         # НО: если delegate_task использован и агент уже ответил в чате — не дублируем
         _had_agent_delegate = any(r.get('tool') == 'delegate_task' and 'уже ответил' in str(r.get('result', '')) for r in execution_results)
         if tools_used and len((final or '').strip()) < 40 and not _had_agent_delegate:
-            _tool_results_summary = []
+            # Собираем краткие результаты инструментов для синтеза AI
+            _synth_parts = []
             for _r in execution_results:
                 if _r.get('success') and _r.get('result'):
-                    _rtext = str(_r['result'])[:300]
-                    _tname = _r.get('tool', '')
-                    if _tname == 'delegate_task':
-                        _tool_results_summary.append(f"Поручено: {_rtext}")
-                    elif _tname == 'research_topic':
-                        _tool_results_summary.append(f"Исследование: {_rtext}")
-                    elif _tname == 'get_delegation_progress':
-                        _tool_results_summary.append(f"Статус: {_rtext}")
-                    elif _tname:
-                        _tool_results_summary.append(f"{_tname}: {_rtext}")
-            if _tool_results_summary:
-                final = ". ".join(_tool_results_summary[:3])
-                logger.info(f"[QUALITY] Replaced terse response with tool summaries: {len(final)} chars")
+                    _rtext = str(_r['result'])[:400]
+                    _synth_parts.append(_rtext)
+            if _synth_parts:
+                _synth_data = "\n---\n".join(_synth_parts[:4])
+                try:
+                    _synth_msgs = [
+                        {'role': 'system', 'content': 'Ты ассистент. Перескажи результаты действий для пользователя в 2-4 предложения. Пиши на русском, естественным языком. Не используй JSON, не повторяй названия инструментов. Предложи следующий шаг.'},
+                        {'role': 'user', 'content': f'Запрос: {user_message}\n\nРезультаты:\n{_synth_data[:2000]}'},
+                    ]
+                    _synth_resp = await self.call_ai(
+                        _synth_msgs, use_tools=False, max_tokens=400,
+                        api_timeout=API_TIMEOUT_NORMAL)
+                    _synth_text = (_synth_resp['choices'][0]['message'].get('content', '') or '').strip()
+                    if _synth_text and len(_synth_text) > 20:
+                        final = _synth_text
+                        logger.info(f"[QUALITY] AI-synthesized terse response: {len(final)} chars")
+                    else:
+                        logger.warning("[QUALITY] Synthesis returned empty, keeping original")
+                except Exception as _synth_err:
+                    logger.warning(f"[QUALITY] Synthesis call failed: {_synth_err}")
 
         # Автоматическое расширение коротких ответов типа 'Задачу выполнил.'
         _final_lc = (final or '').strip().lower()
