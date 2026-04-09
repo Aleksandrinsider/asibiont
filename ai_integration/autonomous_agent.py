@@ -6294,9 +6294,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         None, _build_user_context_sync, _u_uc.id
                     )
                     if _ucontext:
+                        _ctx_limit = 3000 if _is_autopilot_task else 600
                         system_prompt += (
                             "\n\n[КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ — цели, бизнес, история диалога. "
-                            f"Используй чтобы работа агента была релевантна его задачам]:\n{_ucontext[:600]}"
+                            f"Используй чтобы работа агента была релевантна его задачам]:\n{_ucontext[:_ctx_limit]}"
                         )
             finally:
                 _s_uc.close()
@@ -6304,6 +6305,34 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             pass
     elif dialog_context:
         logger.debug("[DIRECTOR-EXEC] context already passed (%d chars), skipping DB reload", len(dialog_context))
+
+    # ── Загрузка правил пользователя ОТДЕЛЬНО — правила ВСЕГДА видны агенту ──
+    # Правила не должны зависеть от truncation контекста
+    try:
+        from models import Session as _Sess_ur, User as _U_ur
+        _s_ur = _Sess_ur()
+        try:
+            _u_ur = _s_ur.query(_U_ur).filter_by(telegram_id=user_id).first()
+            if _u_ur and _u_ur.memory:
+                import json as _json_ur
+                _mem_ur = (_u_ur.memory or '').strip()
+                if _mem_ur.startswith('{'):
+                    _mj_ur = _json_ur.loads(_mem_ur)
+                    _rules_ur = _mj_ur.get('rules', [])
+                    if _rules_ur:
+                        # Проверяем что правила ещё не в промпте (могли попасть через контекст)
+                        _rules_marker = 'ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ'
+                        if _rules_marker not in system_prompt:
+                            _rules_lines_ur = '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_rules_ur))
+                            system_prompt += (
+                                f"\n\n🔴 {_rules_marker} (соблюдай ВСЕГДА, в каждом действии и ответе):\n"
+                                + _rules_lines_ur
+                                + '\nЭти правила отменяют любое поведение по умолчанию. Нарушение = провал.'
+                            )
+        finally:
+            _s_ur.close()
+    except Exception as _ur_err:
+        logger.debug("[DIRECTOR-EXEC] user rules load: %s", _ur_err)
 
     # ── Шаг 0.5: Агент узнаёт о команде коллег ─────────────────────────────────
     if True:  # team info needed for delegation in autopilot too
