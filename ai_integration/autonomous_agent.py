@@ -3479,6 +3479,29 @@ class HybridAutonomousAgent:
                     _counted += 1
                     _ready_calls.append((tc_item, name, args, f"AI iter {iteration+1}: {name}"))
 
+                # ── Pass 1.5: Force create_goal для wish-messages ──────────────
+                # Если пользователь хочет/планирует/мечтает, а AI не вызвал create_goal
+                # → инжектируем create_goal с названием из сообщения
+                if iteration == 0:
+                    _has_create_goal = any(n == 'create_goal' for (_, n, _, _) in _ready_calls)
+                    if not _has_create_goal:
+                        import re as _re_cg
+                        _cg_wish_rx = _re_cg.search(
+                            r'(?:хочу|хотел\s*бы|хотела\s*бы|планирую|собираюсь|мечтаю|стремлюсь|намерен[а]?|моя\s+цель)\s+(.+)',
+                            user_message, _re_cg.IGNORECASE
+                        )
+                        _cg_garbage = ('узнать', 'спросить', 'понять', 'обсудить', 'поговорить',
+                                       'чтобы ты', 'чтоб ты', 'попросить', 'посмотреть',
+                                       'подумать', 'разобраться', 'попробовать')
+                        if _cg_wish_rx:
+                            _cg_title = _cg_wish_rx.group(1).strip().rstrip('.,!?')
+                            if _cg_title and len(_cg_title) > 3 and not any(_cg_title.lower().startswith(g) for g in _cg_garbage):
+                                # Capitalize first letter
+                                _cg_title = _cg_title[0].upper() + _cg_title[1:]
+                                _fake_tc = {'id': f'forced_create_goal_{iteration}', 'function': {'name': 'create_goal'}}
+                                _ready_calls.insert(0, (_fake_tc, 'create_goal', {'title': _cg_title}, 'forced: wish-message'))
+                                logger.info(f"[FORCE_GOAL] Injected create_goal(title={_cg_title!r})")
+
                 # ── Pass 2: выполняем все валидные tools ПАРАЛЛЕЛЬНО ────────────
                 # Каждый вызов получает отдельную DB-сессию (session=None → auto)
                 async def _exec_one(_tc, _name, _args, _reason):
