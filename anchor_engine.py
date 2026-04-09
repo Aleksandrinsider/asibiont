@@ -125,7 +125,7 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     # Календарь / Встречи
     (('calendar', 'календар', 'zoom', 'google calendar'), 'calendar'),
     # Телефония / Звонки / WhatsApp
-    (('twilio', 'sms', 'звонк', 'call', 'sipuni', 'voip', 'phone', 'whatsapp', 'waba'), 'calls'),
+    (('twilio', 'sms', 'звонк', 'call', 'sipuni', 'voip', 'voximplant', 'phone', 'whatsapp', 'waba'), 'calls'),
     # Python / HTTP / Custom
     (('python', 'http', 'скрипт', 'run_agent', 'все инструменты', 'custom api'), 'script'),
     # Генерация изображений
@@ -145,7 +145,7 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     # Реклама
     (('яндекс.директ', 'yandex_direct', 'direct_token', 'yandex direct'), 'advertising'),
     # Web Scraping
-    (('playwright', 'selenium', 'scrape_url', 'scraping'), 'scraping'),
+    (('playwright', 'selenium', 'scrape_url', 'scraping', 'браузерн'), 'scraping'),
     # AI/LLM API (внешние)
     (('openai_api', 'openai_key', 'openai', 'gemini', 'anthropic', 'claude', 'gpt', 'deepseek'), 'ai_api'),
     # Airtable (расширение категории sheets)
@@ -169,6 +169,10 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('сдэк', 'cdek', 'sdek'), 'marketplace'),
     (('aviasales',), 'script'),
     (('tutu',), 'script'),
+    # Анализ данных (pandas и т.п.)
+    (('pandas', 'анализ данных'), 'analytics'),
+    # Google API (общий, без конкретного сервиса)
+    (('google api',), 'script'),
 ]
 
 # Русские названия для категорий (для вывода в промптах)
