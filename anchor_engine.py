@@ -731,7 +731,7 @@ def _strip_md(text: str) -> str:
 # ── Tool-name / tech-noise sanitizer for user-facing messages ──
 _TOOL_NAMES_RE = None
 
-def _sanitize_proactive_text(text: str) -> str:
+def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
     """Remove tool names, tech noise from user-facing proactive messages."""
     if not text:
         return text or ''
@@ -768,18 +768,20 @@ def _sanitize_proactive_text(text: str) -> str:
     except Exception:
         pass
     # Neutralize feminine verb forms (agent persona leak: "я проверила" → "я проверил")
-    _fem_verbs = (
-        r'нашла|проверила|отправила|сделала|написала|создала|удалила|обновила|'
-        r'загрузила|подготовила|исследовала|проанализировала|собрала|завершила|'
-        r'добавила|получила|увидела|поняла|решила|опубликовала|выполнила|'
-        r'запустила|выявила|провела|выяснила|изучила|составила|обнаружила|'
-        r'сохранила|определила|подключила|настроила|протестировала|разработала'
-    )
-    t = _re_san.sub(
-        r'\b(' + _fem_verbs + r')\b',
-        lambda m: _re_san.sub(r'ла$', 'л', m.group(1)),
-        t
-    )
+    # Пропускаем для женских агентов — у них женский род правильный
+    if not is_fem:
+        _fem_verbs = (
+            r'нашла|проверила|отправила|сделала|написала|создала|удалила|обновила|'
+            r'загрузила|подготовила|исследовала|проанализировала|собрала|завершила|'
+            r'добавила|получила|увидела|поняла|решила|опубликовала|выполнила|'
+            r'запустила|выявила|провела|выяснила|изучила|составила|обнаружила|'
+            r'сохранила|определила|подключила|настроила|протестировала|разработала'
+        )
+        t = _re_san.sub(
+            r'\b(' + _fem_verbs + r')\b',
+            lambda m: _re_san.sub(r'ла$', 'л', m.group(1)),
+            t
+        )
     return t.strip()
 
 
@@ -7177,7 +7179,8 @@ class AnchorEngine:
                                         try:
                                             _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
                                             if not _skip_ack_cap:
-                                                _ack_text = _sanitize_proactive_text(_ack_text)
+                                                _is_fem_ack = _chosen_name and _chosen_name[-1] in 'аяАЯ' and _chosen_name[-2:].lower() not in ('ша', 'жа')
+                                                _ack_text = _sanitize_proactive_text(_ack_text, is_fem=_is_fem_ack)
                                                 _ack_sv.add(Interaction(
                                                     user_id=user.id,
                                                     message_type='agent_msg',
@@ -7863,10 +7866,16 @@ class AnchorEngine:
                         )
                         # Truncate overly long agent messages (keep it concise for chat)
                         if len(_cleaned_result) > 900:
-                            _cleaned_result = _cleaned_result[:900].rsplit(' ', 1)[0] + '…'
+                            _cut_r = _cleaned_result[:900]
+                            _last_end = max(_cut_r.rfind('.'), _cut_r.rfind('!'), _cut_r.rfind('?'))
+                            if _last_end > 300:
+                                _cleaned_result = _cut_r[:_last_end + 1]
+                            else:
+                                _cleaned_result = _cut_r.rsplit(' ', 1)[0] + '…'
                         _cleaned_result = _finish_sentence(_cleaned_result)
                         # Sanitize tool names from user-facing text
-                        _cleaned_result = _sanitize_proactive_text(_cleaned_result)
+                        _is_fem_agent = _chosen_name and _chosen_name[-1] in 'аяАЯ' and _chosen_name[-2:].lower() not in ('ша', 'жа')
+                        _cleaned_result = _sanitize_proactive_text(_cleaned_result, is_fem=_is_fem_agent)
 
                         # ── HALLUCINATION GUARD: агент ЗАЯВЛЯЕТ действие, но инструмент НЕ вызван ──
                         # Если текст содержит "опубликовал/отправил/создал" для конкретных каналов,
@@ -8982,7 +8991,8 @@ class AnchorEngine:
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
                 _chain_clean = _finish_sentence(_chain_clean)
-                _chain_sanitized = _sanitize_proactive_text(_chain_clean)
+                _is_fem_chain = _next_ag.name and _next_ag.name[-1] in 'аяАЯ' and _next_ag.name[-2:].lower() not in ('ша', 'жа')
+                _chain_sanitized = _sanitize_proactive_text(_chain_clean, is_fem=_is_fem_chain)
                 try:
                     await self.bot.send_message(
                         chat_id=_user_tg_id,
@@ -8994,7 +9004,7 @@ class AnchorEngine:
                             'id': _next_ag.id,
                             'avatar_url': _safe_avatar(_next_ag.avatar_url, _next_ag.id),
                         },
-                        'text': _sanitize_proactive_text(_strip_html(_next_result.strip())),
+                        'text': _sanitize_proactive_text(_strip_html(_next_result.strip()), is_fem=_is_fem_chain),
                         '__tools_used': _chain_tools_used,
                         '__anchor_type': 'agent_chain_continue',
                     }, ensure_ascii=False)
