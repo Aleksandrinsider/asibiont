@@ -340,11 +340,13 @@ def _goal_needs(goal_text: str) -> set:
 
 
 def _build_fb_strategies(agent_name: str, goal_label: str,
-                         agent_cats: set, goal_text: str) -> list[str]:
+                         agent_cats: set, goal_text: str,
+                         recent_texts: list[str] | None = None) -> list[str]:
     """Универсальный построитель fallback-стратегий.
 
     Не знает о «типах целей». Строит стратегии по пересечению
     scoring-категорий цели × интеграций агента.
+    recent_texts — тексты недавних назначений; стратегии, похожие на них, отфильтровываются.
     """
     import random as _rnd
     _sc = _agent_score_cats(agent_cats)
@@ -367,6 +369,27 @@ def _build_fb_strategies(agent_name: str, goal_label: str,
     # 3) Универсальный fallback
     if not strategies:
         strategies = [t.format(name=agent_name, goal=goal_label) for t in _UNIVERSAL_ACTIONS]
+
+    # ── Фильтр: убираем стратегии, похожие на недавние назначения ──
+    if recent_texts:
+        _recent_lower = [t.lower() for t in recent_texts if t]
+        _filtered = []
+        for s in strategies:
+            s_lower = s.lower()
+            s_words = {w for w in s_lower.split() if len(w) > 3}
+            _is_dup = False
+            for rt in _recent_lower:
+                rt_words = {w for w in rt.split() if len(w) > 3}
+                if s_words and rt_words:
+                    _ovlp = len(s_words & rt_words) / max(min(len(s_words), len(rt_words)), 1)
+                    if _ovlp > 0.45:
+                        _is_dup = True
+                        break
+            if not _is_dup:
+                _filtered.append(s)
+        if _filtered:
+            strategies = _filtered
+
     _rnd.shuffle(strategies)
     return strategies[:3]
 
@@ -5953,9 +5976,39 @@ class AnchorEngine:
                     _g_label = _goal_titles_fb[0] if _goal_titles_fb else 'активные цели'
                     _has_email_fb = 'email' in _cats_c
 
+                    # ── Собираем недавние назначения ПЕРЕД построением стратегий ──
+                    _recent_assign_texts_early: list[str] = []
+                    try:
+                        import datetime as _dt_early
+                        _early_cutoff = _dt_early.datetime.now(_dt_early.timezone.utc) - _dt_early.timedelta(hours=8)
+                        _early_coords = session.query(Interaction).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'agent_msg',
+                            Interaction.created_at >= _early_cutoff,
+                        ).order_by(Interaction.created_at.desc()).limit(30).all()
+                        for _ec in _early_coords:
+                            try:
+                                _ec_d = json.loads(_ec.content or '{}')
+                                if (
+                                    _ec_d.get('__anchor_type') in ('goal_autopilot_assignment', 'coordinator_assignment')
+                                    and _ec_d.get('__to_agent') == _chosen_name
+                                ):
+                                    _ec_txt = (_ec_d.get('text', '') or '').strip()[:200]
+                                    if _ec_txt:
+                                        _recent_assign_texts_early.append(_ec_txt)
+                                        if len(_recent_assign_texts_early) >= 5:
+                                            break
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
                     # Универсальная модель: стратегии строятся по пересечению
                     # scoring-категорий цели × интеграций агента, без хардкод-типов
-                    _fb_strategies = _build_fb_strategies(_chosen_name, _g_label, _cats_c, _g0)
+                    _fb_strategies = _build_fb_strategies(
+                        _chosen_name, _g_label, _cats_c, _g0,
+                        recent_texts=_recent_assign_texts_early,
+                    )
                     _coord_text = None  # Will be set by AI or context-aware fallback below
                     _fb_strategies_ref = _fb_strategies  # Save ref for fallback
                     try:
@@ -6263,6 +6316,7 @@ class AnchorEngine:
                                                 _chosen_name, _bn_label,
                                                 _cats_c - {'script', 'scraping'},  # убираем «поиск» из опций
                                                 _g0,
+                                                recent_texts=_recent_assign_texts_early,
                                             )
                                         ] or _fb_strategies_ref
                                 except Exception as _bn_err:
@@ -6860,6 +6914,37 @@ class AnchorEngine:
                                             )
                             except Exception as _dc_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
+
+                            # ── Recovery: если dedup поймал повтор — пробуем другую стратегию вместо полного пропуска ──
+                            if _skip_coord and _fb_strategies_ref:
+                                try:
+                                    # Собираем тексты недавних назначений для сравнения
+                                    _dedup_recent = []
+                                    for _rc_dd in _recent_coords:
+                                        try:
+                                            _rc_dd_d = json.loads(_rc_dd.content or '{}')
+                                            if _rc_dd_d.get('__to_agent') == _chosen_name:
+                                                _ddt = (_rc_dd_d.get('text', '') or '').strip()[:200]
+                                                if _ddt:
+                                                    _dedup_recent.append(_ddt)
+                                        except Exception:
+                                            pass
+                                    # Пробуем найти стратегию из пула, которая НЕ похожа на недавние
+                                    _alt_strategies = _build_fb_strategies(
+                                        _chosen_name, _g_label, _cats_c, _g0,
+                                        recent_texts=_dedup_recent + (_recent_assign_texts_early or []),
+                                    )
+                                    if _alt_strategies:
+                                        _coord_text = _alt_strategies[0]
+                                        if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
+                                            _coord_text += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
+                                        _skip_coord = False
+                                        logger.info(
+                                            "[ANCHOR-AUTOPILOT] dedup-recovery: found alternative strategy for %s",
+                                            _chosen_name,
+                                        )
+                                except Exception as _rec_err:
+                                    logger.debug('[ANCHOR-AUTOPILOT] dedup-recovery failed: %s', _rec_err)
 
                             # ── Intent-level conversion: если bottleneck + чистый поиск → дописываем конверсию ──
                             if not _skip_coord and _bottleneck_hint_c:
