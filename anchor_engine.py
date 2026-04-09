@@ -782,6 +782,22 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
             lambda m: _re_san.sub(r'ла$', 'л', m.group(1)),
             t
         )
+    # ── Strip sentences mentioning unconnected services as actions/approaches ──
+    _UNCONNECTED_SVCS = (
+        'linkedin', 'calendly', 'apollo\\.io', 'sales.navigator',
+        'hubspot', 'zoho', 'pipedrive',
+    )
+    for _usvc in _UNCONNECTED_SVCS:
+        t = _re_san.sub(
+            rf'[^.!?\n]*\b{_usvc}\b[^.!?\n]*[.!?]?\s*',
+            '', t, flags=_re_san.IGNORECASE,
+        )
+    # ── Strip trailing questions to user (autopilot should act, not ask) ──
+    # Remove last sentence if it ends with "?" and contains question patterns
+    _sentences = [s.strip() for s in _re_san.split(r'(?<=[.!?])\s+', t.strip()) if s.strip()]
+    if len(_sentences) > 1 and _sentences[-1].rstrip().endswith('?'):
+        _sentences = _sentences[:-1]
+        t = ' '.join(_sentences)
     return t.strip()
 
 
