@@ -4963,6 +4963,15 @@ _INTEGRATION_LABELS: dict = {
     'PLAYWRIGHT': 'Playwright (scraping)',
     'DEEPSEEK_API': 'DeepSeek AI API',
     'DEEPSEEK_KEY': 'DeepSeek AI API',
+    # Биржевые данные (расширенные)
+    'FINNHUB': 'Finnhub (биржевые данные)',
+    'POLYGON': 'Polygon.io (биржевые данные)',
+    'POLYGON_IO': 'Polygon.io (биржевые данные)',
+    'TWELVE_DATA': 'Twelve Data (биржевые данные)',
+    'TWELVEDATA': 'Twelve Data (биржевые данные)',
+    'YAHOO_FINANCE': 'Yahoo Finance',
+    'RAPIDAPI': 'RapidAPI',
+    'FMP': 'Financial Modeling Prep',
 }
 
 

@@ -113,7 +113,7 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     # Крипто-биржи
     (('binance', 'bybit', 'coinbase', 'крипт'), 'crypto'),
     # Финансовые данные
-    (('alpha vantage', 'alphavantage', 'биржевые', 'котировк'), 'finance'),
+    (('alpha vantage', 'alphavantage', 'биржевые', 'котировк', 'finnhub', 'polygon.io', 'polygon (биржев', 'twelve data', 'twelvedata', 'yahoo finance', 'financial modeling'), 'finance'),
     # Новостные API
     (('newsapi', 'тасс'), 'news'),
     # Slack
@@ -201,7 +201,7 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'notion': 'run_agent_action(action="add_page"|"update_page"|"query_db"|"get_page") — создание, ОБНОВЛЕНИЕ и поиск страниц/баз',
     'sheets': 'run_agent_action(action="append_row"|"update_cell"|"get_range"|"find_row") — чтение, запись, обновление и поиск данных в таблицах',
     'crypto': 'run_agent_action или http_api_request(url="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")',
-    'finance': 'run_agent_action(action="get_price") или http_api_request — любой финансовый API, get_stock_price',
+    'finance': 'get_stock_price(symbol, data_type) — Alpha Vantage; run_agent_action(action="get_price"|"get_quote"|"get_volume") — Finnhub/Polygon.io/Twelve Data; http_api_request — любой финансовый API',
     'news': 'run_agent_action(action="get_news", query="..."), get_news_trends',
     'slack': 'run_agent_action(action="send_message") или http_api_request(url="https://slack.com/api/chat.postMessage", method="POST", auth_key="SLACK_TOKEN")',
     'social': 'run_agent_action(action="post_wall") или http_api_request — VK, Twitter и др. по REST API',
