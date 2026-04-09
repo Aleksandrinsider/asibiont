@@ -7026,6 +7026,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _tool_call_count = 0
     _tools_used: list[str] = []  # трекинг вызванных инструментов
     _action_evidence: list[str] = []  # короткие доказательства из результатов инструментов
+    _goal_progress_blocked = False  # True если update_goal_progress был отклонён guard'ом
     _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
@@ -7700,8 +7701,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             else:
                 # ── GUARD: block update_goal_progress if only research tools were used ──
                 # Прогресс можно обновлять только после реального исходящего действия
+                # run_agent_action НЕ research — он выполняет реальный код (create_issue, post, etc.)
                 _RESEARCH_ONLY_TOOLS = {
-                    'web_search', 'research_topic', 'run_agent_action',
+                    'web_search', 'research_topic',
                     'get_news_trends', 'quick_topic_search',
                     'find_relevant_contacts_for_task', 'list_tasks', 'list_goals',
                     'list_email_contacts',
@@ -7729,6 +7731,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     # or if note text contains actual findings
                     _has_note_action = 'save_note' in _prior_tools_set or 'delegate_task' in _prior_tools_set
                     if _only_research and not _had_outgoing and not _has_note_action and _is_progress_increase:
+                        _goal_progress_blocked = True
                         _tc_result = json.dumps({
                             "error": (
                                 "Прогресс не обновлён. Сначала выполни действие: "
@@ -7741,6 +7744,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         continue
 
                     if _is_numeric_update and not _had_outgoing and not _action_evidence:
+                        _goal_progress_blocked = True
                         _tc_result = json.dumps({
                             "error": (
                                 "Прогресс не обновлён — сначала выполни действие "
@@ -7777,6 +7781,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             _tc_result = _raw_r0b['_human_summary'][:1500]
                         else:
                             _tc_result = json.dumps(_raw_r0b, ensure_ascii=False, default=str)[:1500]
+                        # Detect goal progress rejection from handlers.py (returns success=True with error text)
+                        if _tname == 'update_goal_progress' and _tc_result:
+                            _ugp_lower = _tc_result.lower() if isinstance(_tc_result, str) else ''
+                            if 'не обновлён' in _ugp_lower or '⛔' in _tc_result or 'нельзя увеличить' in _ugp_lower or 'обновляй через metric_current' in _ugp_lower:
+                                _goal_progress_blocked = True
                         if _tname in _ACTION_EVIDENCE_TOOLS:
                             import re as _re_ev
                             _email_ev = ''
@@ -8071,6 +8080,21 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
         if _last_dot > 200:
             _final_text = _cut[:_last_dot + 1]
+
+    # ── Пост-гард: прогресс был отклонён, но агент мог соврать в тексте ──
+    if _goal_progress_blocked and _final_text and _final_text != _done_fb:
+        import re as _re_gpb
+        # Strip false progress claims like "Прогресс теперь на 7%" / "Обновила прогресс до 10%"
+        _final_text = _re_gpb.sub(
+            r'(?:прогресс\s+(?:теперь\s+)?(?:на|до|составляет|обновлён?а?\s+до)\s+\d+\s*%[.!]?\s*)',
+            '', _final_text, flags=_re_gpb.IGNORECASE,
+        ).strip()
+        _final_text = _re_gpb.sub(
+            r'(?:обновил[аи]?\s+прогресс\s+(?:до\s+)?\d+\s*%[.!]?\s*)',
+            '', _final_text, flags=_re_gpb.IGNORECASE,
+        ).strip()
+        if _final_text:
+            _final_text += "\n\n⚠️ Примечание: прогресс цели НЕ был обновлён (отклонён системой проверки)."
 
     # ── Интеграционные подсказки: если инструмент реально не сработал ──
     # Добавляем макс. 1 подсказку, только если агент сам не написал об этом.
