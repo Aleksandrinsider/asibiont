@@ -5755,6 +5755,204 @@ try:
 except Exception as e:
     print('Ошибка Finnhub: ' + str(e))`
             },
+            twelvedata: {
+                name: 'Twelve Data',
+                fields: [
+                    {k:'TWELVEDATA_API_KEY', label:'API Key Twelve Data', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'TD_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,EUR/USD,BTC/USD', t:'text', opt:true}
+                ],
+                hint: 'Бесплатный ключ: twelvedata.com → Sign Up. 800 запросов/день. Акции, форекс, крипто, ETF, индексы. Технические индикаторы (SMA, EMA, RSI, MACD).',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('TWELVEDATA_API_KEY', '')
+SYMBOLS = os.environ.get('TD_SYMBOLS', 'AAPL,EUR/USD')
+ACTION = os.environ.get('AGENT_PARAM_ACTION', 'price')
+
+def td_get(path):
+    url = 'https://api.twelvedata.com/' + path + ('&' if '?' in path else '?') + 'apikey=' + API_KEY
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    if not API_KEY:
+        print('Ошибка: TWELVEDATA_API_KEY не задан.')
+    else:
+        symbols = [s.strip() for s in SYMBOLS.split(',') if s.strip()]
+        if ACTION == 'time_series':
+            sym = symbols[0] if symbols else 'AAPL'
+            d = td_get('time_series?symbol=' + sym + '&interval=1day&outputsize=5')
+            for v in (d.get('values') or []):
+                print(v.get('datetime','') + '  O:' + v.get('open','?') + '  H:' + v.get('high','?') + '  L:' + v.get('low','?') + '  C:' + v.get('close','?'))
+        elif ACTION == 'rsi':
+            sym = symbols[0] if symbols else 'AAPL'
+            d = td_get('rsi?symbol=' + sym + '&interval=1day&outputsize=5&time_period=14')
+            for v in (d.get('values') or []):
+                print(v.get('datetime','') + '  RSI: ' + v.get('rsi','?'))
+        elif ACTION == 'sma':
+            sym = symbols[0] if symbols else 'AAPL'
+            d = td_get('sma?symbol=' + sym + '&interval=1day&outputsize=5&time_period=20')
+            for v in (d.get('values') or []):
+                print(v.get('datetime','') + '  SMA: ' + v.get('sma','?'))
+        else:
+            d = td_get('price?symbol=' + ','.join(symbols[:8]))
+            if isinstance(d, dict) and 'price' in d:
+                print(symbols[0] + ': $' + str(d['price']))
+            elif isinstance(d, dict):
+                for sym, info in d.items():
+                    if isinstance(info, dict):
+                        print(sym + ': $' + str(info.get('price', '?')))
+except Exception as e:
+    print('Ошибка Twelve Data: ' + str(e))`
+            },
+            yahoo_finance: {
+                name: 'Yahoo Finance',
+                fields: [
+                    {k:'RAPIDAPI_KEY', label:'RapidAPI Key (для Yahoo Finance)', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'YF_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,MSFT,^GSPC', t:'text', opt:true}
+                ],
+                hint: 'Через RapidAPI: rapidapi.com → Yahoo Finance API → Subscribe (free tier 500 req/мес). Акции, ETF, индексы, крипто, отчётность.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('RAPIDAPI_KEY', '')
+SYMBOLS = os.environ.get('YF_SYMBOLS', 'AAPL,MSFT')
+ACTION = os.environ.get('AGENT_PARAM_ACTION', 'quote')
+
+def yf_get(path):
+    url = 'https://yahoo-finance15.p.rapidapi.com/api/v1/' + path
+    req = urllib.request.Request(url, headers={
+        'X-RapidAPI-Key': API_KEY,
+        'X-RapidAPI-Host': 'yahoo-finance15.p.rapidapi.com',
+        'User-Agent': 'Mozilla/5.0'
+    })
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    if not API_KEY:
+        print('Ошибка: RAPIDAPI_KEY не задан.')
+    else:
+        symbols = [s.strip().upper() for s in SYMBOLS.split(',') if s.strip()]
+        if ACTION == 'trending':
+            d = yf_get('markets/options/trending?type=STOCKS')
+            for item in (d.get('body') or [])[:10]:
+                print(item.get('symbol','') + '  ' + item.get('longName','') + '  $' + str(item.get('regularMarketPrice','?')))
+        else:
+            syms = ','.join(symbols[:8])
+            d = yf_get('markets/stock/quotes?ticker=' + syms)
+            for item in (d.get('body') or []):
+                sym = item.get('symbol', '?')
+                price = item.get('regularMarketPrice', '?')
+                chg = item.get('regularMarketChange', 0)
+                chg_pct = item.get('regularMarketChangePercent', 0)
+                sign = '+' if float(chg or 0) >= 0 else ''
+                print(sym + ': $' + str(price) + '  ' + sign + str(round(float(chg or 0), 2)) + ' (' + sign + str(round(float(chg_pct or 0), 2)) + '%)')
+except Exception as e:
+    print('Ошибка Yahoo Finance: ' + str(e))`
+            },
+            fmp: {
+                name: 'Financial Modeling Prep',
+                fields: [
+                    {k:'FMP_API_KEY', label:'API Key FMP', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'FMP_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,MSFT,TSLA', t:'text', opt:true}
+                ],
+                hint: 'Бесплатный ключ: financialmodelingprep.com → Get API Key. 250 запросов/день. Отчётность (income, balance, cash flow), котировки, профили компаний.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('FMP_API_KEY', '')
+SYMBOLS = os.environ.get('FMP_SYMBOLS', 'AAPL')
+ACTION = os.environ.get('AGENT_PARAM_ACTION', 'quote')
+
+def fmp_get(path):
+    sep = '&' if '?' in path else '?'
+    url = 'https://financialmodelingprep.com/api/v3/' + path + sep + 'apikey=' + API_KEY
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    if not API_KEY:
+        print('Ошибка: FMP_API_KEY не задан.')
+    else:
+        symbols = [s.strip().upper() for s in SYMBOLS.split(',') if s.strip()]
+        sym = symbols[0] if symbols else 'AAPL'
+        if ACTION == 'income':
+            d = fmp_get('income-statement/' + sym + '?limit=4')
+            for item in (d or [])[:4]:
+                rev = item.get('revenue', 0)
+                ni = item.get('netIncome', 0)
+                print(item.get('date','') + '  Revenue: $' + str(round(rev/1e9, 2)) + 'B  Net Income: $' + str(round(ni/1e9, 2)) + 'B')
+        elif ACTION == 'balance':
+            d = fmp_get('balance-sheet-statement/' + sym + '?limit=4')
+            for item in (d or [])[:4]:
+                ta = item.get('totalAssets', 0)
+                tl = item.get('totalLiabilities', 0)
+                print(item.get('date','') + '  Assets: $' + str(round(ta/1e9, 2)) + 'B  Liabilities: $' + str(round(tl/1e9, 2)) + 'B')
+        elif ACTION == 'profile':
+            d = fmp_get('profile/' + sym)
+            if d:
+                p = d[0]
+                print(p.get('companyName','') + ' (' + sym + ')')
+                print('Сектор: ' + str(p.get('sector','')) + '  Капитализация: $' + str(round(p.get('mktCap',0)/1e9, 2)) + 'B')
+                print('Цена: $' + str(p.get('price','?')) + '  Beta: ' + str(p.get('beta','?')))
+        else:
+            d = fmp_get('quote/' + ','.join(symbols[:5]))
+            for item in (d or []):
+                s = item.get('symbol', '?')
+                price = item.get('price', '?')
+                chg = item.get('change', 0)
+                chg_pct = item.get('changesPercentage', 0)
+                sign = '+' if float(chg or 0) >= 0 else ''
+                print(s + ': $' + str(price) + '  ' + sign + str(round(float(chg or 0), 2)) + ' (' + sign + str(round(float(chg_pct or 0), 2)) + '%)')
+except Exception as e:
+    print('Ошибка FMP: ' + str(e))`
+            },
+            polygon: {
+                name: 'Polygon.io',
+                fields: [
+                    {k:'POLYGON_API_KEY', label:'API Key Polygon.io', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'POLYGON_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,MSFT,TSLA', t:'text', opt:true}
+                ],
+                hint: 'Бесплатный ключ: polygon.io → Sign Up. 5 запросов/мин (free). Тики, агрегаты, снэпшоты, новости, опционы. ⚙️ Free tier ограничен — для активного использования нужен платный план ($29+/мо).',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('POLYGON_API_KEY', '')
+SYMBOLS = os.environ.get('POLYGON_SYMBOLS', 'AAPL')
+ACTION = os.environ.get('AGENT_PARAM_ACTION', 'snapshot')
+
+def pg_get(path):
+    sep = '&' if '?' in path else '?'
+    url = 'https://api.polygon.io/' + path + sep + 'apiKey=' + API_KEY
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    if not API_KEY:
+        print('Ошибка: POLYGON_API_KEY не задан.')
+    else:
+        symbols = [s.strip().upper() for s in SYMBOLS.split(',') if s.strip()]
+        sym = symbols[0] if symbols else 'AAPL'
+        if ACTION == 'news':
+            d = pg_get('v2/reference/news?limit=5&ticker=' + sym)
+            for item in (d.get('results') or [])[:5]:
+                print(item.get('title','') + '  (' + item.get('publisher',{}).get('name','') + ')')
+        elif ACTION == 'aggregates':
+            from datetime import date, timedelta
+            to_d = date.today().isoformat()
+            fr_d = (date.today() - timedelta(days=7)).isoformat()
+            d = pg_get('v2/aggs/ticker/' + sym + '/range/1/day/' + fr_d + '/' + to_d)
+            for bar in (d.get('results') or []):
+                from datetime import datetime
+                dt = datetime.fromtimestamp(bar['t']/1000).strftime('%Y-%m-%d')
+                print(dt + '  O:' + str(bar.get('o','?')) + '  H:' + str(bar.get('h','?')) + '  L:' + str(bar.get('l','?')) + '  C:' + str(bar.get('c','?')) + '  Vol:' + str(bar.get('v','?')))
+        else:
+            for s in symbols[:5]:
+                d = pg_get('v2/aggs/ticker/' + s + '/prev')
+                res = (d.get('results') or [{}])[0]
+                c = res.get('c', '?'); o = res.get('o', 0)
+                chg = round(float(c or 0) - float(o or 0), 2) if c != '?' else 0
+                sign = '+' if chg >= 0 else ''
+                print(s + ': $' + str(c) + '  ' + sign + str(chg) + '  Vol: ' + str(res.get('v','?')))
+except Exception as e:
+    print('Ошибка Polygon.io: ' + str(e))`
+            },
             cdek: {
                 name: 'СДЭК (доставка)',
                 fields: [
@@ -7024,6 +7222,10 @@ except Exception as e:
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
                             <option value="finnhub">Finnhub (новости / котировки / календарь)</option>
+                            <option value="twelvedata">Twelve Data (акции / форекс / крипто)</option>
+                            <option value="yahoo_finance">Yahoo Finance (акции / индексы / ETF)</option>
+                            <option value="fmp">Financial Modeling Prep (финансовая отчётность)</option>
+                            <option value="polygon">Polygon.io (тики / агрегаты / опционы)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Мессенджеры / ERP</option>
                             <option value="whatsapp">WhatsApp Business</option>
                             <option value="onec">1С (REST API)</option>
