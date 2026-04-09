@@ -3771,9 +3771,20 @@ class HybridAutonomousAgent:
                     logger.warning(f"[STRATEGY_RETRY] failed: {_retry_err}")
                 # Если strategy retry не помог — AI сам сформулирует
                 pass
-            # AI не вернул текст — пусть сам сформулирует при следующем обращении
+            # AI не вернул текст — делаем честный AI-вызов с контекстом
             if not final:
-                final = "Done!" if _lang == 'en' else "Готово!"
+                try:
+                    _fb_msgs = [
+                        {'role': 'system', 'content': 'Пользователь написал тебе сообщение, но ты не смог понять контекст. Ответь честно и по делу. Если не знаешь — скажи что не понял и попроси уточнить. НЕ пиши "Готово" если ничего не сделал.'},
+                        {'role': 'user', 'content': user_message or 'Привет'},
+                    ]
+                    _fallback_resp = await self.call_ai(
+                        _fb_msgs, use_tools=False, max_tokens=300,
+                        api_timeout=API_TIMEOUT_NORMAL)
+                    final = (_fallback_resp['choices'][0]['message'].get('content', '') or '').strip()
+                except Exception as _fb_err:
+                    logger.warning(f"[FALLBACK] AI call failed: {_fb_err}")
+                    final = 'Не удалось обработать запрос. Попробуй переформулировать.' if _lang != 'en' else 'Could not process your request. Please try rephrasing.'
 
         # Биллинг кастомного агента
         try:

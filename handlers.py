@@ -1150,9 +1150,17 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
             
-            # Защита от пустого ответа
+            # Защита от пустого ответа — AI должен ответить по существу
             if not _agent_handled and (not response_text or not response_text.strip()):
-                response_text = "Done! What's next?" if lang == 'en' else "Готово! Что дальше?"
+                try:
+                    _fb_result = await chat_with_ai(
+                        f'Пользователь спросил: "{text}". Ответь по существу.',
+                        context=context, user_id=user_id, db_session=db_session)
+                    response_text = _fb_result.get('response', '') if isinstance(_fb_result, dict) else str(_fb_result)
+                except Exception:
+                    pass
+                if not response_text or not response_text.strip():
+                    response_text = 'Не удалось обработать запрос. Попробуй переформулировать.' if lang != 'en' else 'Could not process your request. Please try rephrasing.'
             
             # Если агент уже ответил (через директора) — не отправляем и не сохраняем
             if _agent_handled:
