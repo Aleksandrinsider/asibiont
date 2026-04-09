@@ -5702,6 +5702,59 @@ try:
 except Exception as e:
     print('Ошибка Alpha Vantage: ' + str(e))`
             },
+            finnhub: {
+                name: 'Finnhub',
+                fields: [
+                    {k:'FINNHUB_API_KEY', label:'API Key Finnhub', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
+                    {k:'FINNHUB_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,MSFT,TSLA', t:'text', opt:true}
+                ],
+                hint: 'Бесплатный ключ: finnhub.io → Get Free API Key. 60 запросов/мин. Котировки, новости компаний с sentiment-анализом, календарь earnings, IPO, insider transactions.',
+                code: `import urllib.request, json, os
+API_KEY = os.environ.get('FINNHUB_API_KEY', '')
+SYMBOLS = os.environ.get('FINNHUB_SYMBOLS', 'AAPL,MSFT')
+ACTION = os.environ.get('AGENT_PARAM_ACTION', 'quote')
+
+def fh_get(path):
+    url = 'https://finnhub.io/api/v1/' + path + ('&' if '?' in path else '?') + 'token=' + API_KEY
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read().decode())
+
+try:
+    if not API_KEY:
+        print('Ошибка: FINNHUB_API_KEY не задан.')
+    else:
+        symbols = [s.strip().upper() for s in SYMBOLS.split(',') if s.strip()]
+        if ACTION == 'news':
+            d = fh_get('news?category=general')
+            for item in d[:5]:
+                print(item.get('headline','') + '  (' + item.get('source','') + ')')
+        elif ACTION == 'company_news':
+            sym = symbols[0] if symbols else 'AAPL'
+            from datetime import date, timedelta
+            to_d = date.today().isoformat()
+            fr_d = (date.today() - timedelta(days=7)).isoformat()
+            d = fh_get('company-news?symbol=' + sym + '&from=' + fr_d + '&to=' + to_d)
+            for item in d[:5]:
+                s = item.get('headline','')
+                if item.get('summary'): s += ' — ' + item['summary'][:120]
+                print(s)
+        elif ACTION == 'earnings':
+            from datetime import date, timedelta
+            to_d = (date.today() + timedelta(days=14)).isoformat()
+            fr_d = date.today().isoformat()
+            d = fh_get('calendar/earnings?from=' + fr_d + '&to=' + to_d)
+            for item in (d.get('earningsCalendar') or [])[:10]:
+                print(item.get('symbol','') + '  ' + item.get('date','') + '  EPS est: ' + str(item.get('epsEstimate','?')))
+        else:
+            for sym in symbols[:8]:
+                d = fh_get('quote?symbol=' + sym)
+                c = d.get('c', '?'); pc = d.get('pc', 0); dp = d.get('dp', 0)
+                sign = '+' if float(dp or 0) >= 0 else ''
+                print(sym + ': $' + str(c) + '  ' + sign + str(dp) + '%  prev $' + str(pc))
+except Exception as e:
+    print('Ошибка Finnhub: ' + str(e))`
+            },
             cdek: {
                 name: 'СДЭК (доставка)',
                 fields: [
@@ -6970,6 +7023,7 @@ except Exception as e:
                             <option value="tinkoff">Тинькофф Инвестиции</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
+                            <option value="finnhub">Finnhub (новости / котировки / календарь)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Мессенджеры / ERP</option>
                             <option value="whatsapp">WhatsApp Business</option>
                             <option value="onec">1С (REST API)</option>
