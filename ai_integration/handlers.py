@@ -12293,7 +12293,7 @@ async def send_outreach_email(
         # ── GUARD: имя получателя должно быть в теле письма (персонализация) ──
         if _rname_send and body:
             _first_name_oe = _rname_send.split()[0]
-            if len(_first_name_oe) >= 2 and _first_name_oe not in body:
+            if len(_first_name_oe) >= 2 and _first_name_oe.lower() not in body.lower():
                 return (f"⛔ Имя получателя «{_first_name_oe}» не упоминается в теле письма. "
                         f"Добавь персональное обращение — холодное письмо без имени выглядит как спам.")
 
