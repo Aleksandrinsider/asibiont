@@ -3546,12 +3546,11 @@ class HybridAutonomousAgent:
                             try: get_learner().record_tool_result(user_id, _name, True)
                             except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
 
-                            # ── Авто-заметка: только research_topic с глубоким уникальным контентом ──
-                            # Порог повышен до 1500 + дедуп по теме за 24ч — не спамить заметками.
-                            # web_search не сохраняем авто — избыточно, всё логируется в результатах.
+                            # ── Авто-заметка: только research_topic с действительно глубоким контентом ──
+                            # Порог 3000 символов + дедуп по теме за 24ч — минимум спама.
                             _RESEARCH_AUTO_SAVE = {'research_topic'}
                             _raw_result_str = _r['result'] if isinstance(_r['result'], str) else _rc
-                            if _name in _RESEARCH_AUTO_SAVE and len(_raw_result_str) > 1500:
+                            if _name in _RESEARCH_AUTO_SAVE and len(_raw_result_str) > 3000:
                                 try:
                                     from .handlers import save_note as _auto_save_note
                                     _note_q = (
