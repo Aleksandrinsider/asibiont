@@ -6716,7 +6716,8 @@ class AnchorEngine:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
                     # ── Context-aware fallback: если AI не сгенерировал → шаблон + контекст ──
                     if _coord_text is None:
-                        _fb_choice = _rnd.choice(_fb_strategies_ref)
+                        import random as _rnd_fb
+                        _fb_choice = _rnd_fb.choice(_fb_strategies_ref)
                         # Добавляем контекст последнего действия агента, чтобы fallback не был слепым
                         if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
                             _fb_choice += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
