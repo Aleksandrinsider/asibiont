@@ -2695,24 +2695,14 @@ class HybridAutonomousAgent:
                     dynamic_context += f"\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ]: {', '.join(_active[:15])}"
                     # Добавляем подсказки по инструментам для каждой категории интеграции
                     try:
-                        from anchor_engine import _CAP_TOOL_HINTS, _parse_agent_integrations, _INTEGRATION_PREFIX_LABELS
-                        _seen_cats: set = set()
-                        for _lbl in _active:
-                            for _cat, _cat_label in (('email', 'Email'), ('git', 'GitHub'), ('crm', 'CRM'),
-                                                     ('telegram', 'Telegram'), ('discord', 'Discord'),
-                                                     ('sheets', 'Google Sheets'), ('notion', 'Notion'),
-                                                     ('slack', 'Slack'), ('calendar', 'Календарь'),
-                                                     ('hr', 'HH.ru'), ('marketplace', 'Маркетплейс'),
-                                                     ('pm', 'Трекер')):
-                                if _cat_label.lower() in _lbl.lower() or _cat in _lbl.lower():
-                                    _seen_cats.add(_cat)
+                        from anchor_engine import _classify_agent_caps
+                        _caps_info = _classify_agent_caps(_active)
                         _tool_hints_parts = []
-                        for _cat in _seen_cats:
-                            _hint = _CAP_TOOL_HINTS.get(_cat)
+                        for _cat, _hint in (_caps_info.get('tool_hints') or {}).items():
                             if _hint and _cat != 'email':  # email tools already documented in prompt
                                 _tool_hints_parts.append(f"  {_cat}: {_hint}")
                         if _tool_hints_parts:
-                            dynamic_context += "\n[КАК ИСПОЛЬЗОВАТЬ ИНТЕГРАЦИИ]:\n" + '\n'.join(_tool_hints_parts[:8])
+                            dynamic_context += "\n[КАК ИСПОЛЬЗОВАТЬ ИНТЕГРАЦИИ]:\n" + '\n'.join(_tool_hints_parts[:12])
                     except Exception:
                         pass
                 else:
