@@ -305,6 +305,7 @@ def _build_missing_integration_hint(user_id: int, user_message: str, final_text:
 # даже если AST-валидация на upload-этапе пропустила подозрительный код.
 _AGENT_CODE_PREAMBLE = '''\
 import urllib.request as _ssrf_ur, socket as _ssrf_sk, ipaddress as _ssrf_ia
+_ssrf_sk.setdefaulttimeout(25)
 def _ssrf_check_host(host):
     try:
         _ip = _ssrf_ia.ip_address(_ssrf_sk.gethostbyname(host))
@@ -320,6 +321,8 @@ def _ssrf_safe_open(url, *_a, **_kw):
     _m = _ssrf_re.search(r'https?://([^/:?#\\s]+)', _u)
     if _m:
         _ssrf_check_host(_m.group(1))
+    if len(_a) < 2 and 'timeout' not in _kw:
+        _kw['timeout'] = 25
     return _ssrf_orig_open(url, *_a, **_kw)
 _ssrf_ur.urlopen = _ssrf_safe_open
 # Patch requests library (if available)
@@ -331,6 +334,8 @@ try:
         _m2 = _ssrf_re2.search(r'https?://([^/:?#\\s]+)', str(url))
         if _m2:
             _ssrf_check_host(_m2.group(1))
+        if 'timeout' not in _kw2:
+            _kw2['timeout'] = 25
         return _ssrf_orig_request(self, method, url, *_a2, **_kw2)
     _ssrf_req.Session.request = _ssrf_safe_request
 except ImportError:
@@ -6991,7 +6996,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Адаптивные таймауты: тяжёлые инструменты получают больше времени, лёгкие — меньше
     _TOOL_TIMEOUTS: dict[str, int] = {
         'research_topic': 60, 'web_search': 30, 'get_news_trends': 30,
-        'negotiate_by_email': 50, 'run_agent_action': 95, 'generate_image': 50,
+        'negotiate_by_email': 50, 'run_agent_action': 130, 'generate_image': 50,
         'schedule_background_task': 45,
         'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
         'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
