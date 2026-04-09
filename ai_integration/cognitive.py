@@ -548,46 +548,16 @@ class CognitiveEngine:
                     issues.append(f'profile_leak:{pattern[:20]}')
                 break
 
-        # 4. Убираем нумерованные списки (конвертируем в текст)
-        # "1. Сделай X\n2. Потом Y" → "Сначала сделай X. Потом Y."
-        numbered_pattern = re.findall(r'^\d+[\.\)]\s+(.+)$', text, re.MULTILINE)
-        if len(numbered_pattern) >= 2:
-            # Нумерованный список — конвертируем в связный текст
-            items = numbered_pattern[:4]
-            text_without_list = re.sub(r'^\d+[\.\)]\s+.+$', '', text, flags=re.MULTILINE)
-            # Собираем оставшийся текст + items как предложения
-            prefix = text_without_list.strip()
-            joined = '. '.join(items)
-            text = f"{prefix}\n\n{joined}." if prefix else f"{joined}."
-            text = re.sub(r'\.\s*\.', '.', text)
-            issues.append('list_converted')
+        # 4. Убираем нумерацию списков, но сохраняем порядок текста
+        # "1. Сделай X\n2. Потом Y" → "Сделай X\nПотом Y"
+        if re.search(r'^\d+[\.)\]]\s+', text, re.MULTILINE):
+            text = re.sub(r'^\d+[\.)\]]\s+', '', text, flags=re.MULTILINE)
+            issues.append('list_numbers_stripped')
 
-        # 4b. Убираем bullet-списки (•, —, –, - в начале строки)
-        # НО сохраняем строки с URL-ссылками
-        bullet_lines = re.findall(r'^[•—–\-]\s+(.+)$', text, re.MULTILINE)
-        bullet_lines_no_url = [l for l in bullet_lines if not re.search(r'https?://', l)]
-        if len(bullet_lines_no_url) >= 2:
-            # Убираем только bullet-строки БЕЗ ссылок
-            def replace_bullet_no_url(m):
-                content = m.group(0).lstrip('•—–- ')
-                if re.search(r'https?://', content):
-                    return m.group(0)  # Сохраняем строки с URL
-                return content
-            text_new = re.sub(r'^[•—–\-]\s+.+$', replace_bullet_no_url, text, flags=re.MULTILINE)
-            if text_new != text:
-                # Собираем не-URL items в текст
-                non_url_items = [l for l in bullet_lines if not re.search(r'https?://', l)][:6]
-                url_items = [l for l in bullet_lines if re.search(r'https?://', l)]
-                text_without_bullets = re.sub(r'^[•—–\-]\s+.+$', '', text, flags=re.MULTILINE)
-                prefix = text_without_bullets.strip()
-                joined = ', '.join(non_url_items)
-                url_section = '\n'.join(url_items) if url_items else ''
-                text = f"{prefix} {joined}." if prefix else f"{joined}."
-                if url_section:
-                    text = f"{text}\n\n{url_section}"
-                text = re.sub(r'\.\s*\.', '.', text)
-                text = re.sub(r'\s{2,}', ' ', text)
-                issues.append('bullets_converted')
+        # 4b. Убираем bullet-маркеры (•, —, –, - в начале строки), сохраняя текст на месте
+        if re.search(r'^[•—–\-]\s+', text, re.MULTILINE):
+            text = re.sub(r'^[•—–\-]\s+', '', text, flags=re.MULTILINE)
+            issues.append('bullet_markers_stripped')
 
         # 4c. Убираем emoji-заголовки (🔍 Анализ:, 💡 Выводы:, etc.)
         text = re.sub(r'^[🔍💡🎯✅📎📊📰🚀⚡️🔥💰📋]\s*[А-Яа-яA-Za-z\s]+:\s*\n?', '', text, flags=re.MULTILINE)
