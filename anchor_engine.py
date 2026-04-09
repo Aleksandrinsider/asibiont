@@ -6781,9 +6781,14 @@ class AnchorEngine:
                     if _coord_text is None:
                         import random as _rnd_fb
                         _fb_choice = _rnd_fb.choice(_fb_strategies_ref)
-                        # Добавляем контекст последнего действия агента, чтобы fallback не был слепым
+                        # Prepend WHY-контекст перед шаблоном (как в живом диалоге)
+                        _fb_why_parts = []
+                        if _goals_progress_c:
+                            _fb_why_parts.append(_goals_progress_c[:150].strip().rstrip('.'))
                         if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
-                            _fb_choice += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
+                            _fb_why_parts.append(f'последний результат: {_last_agent_reply_c[:150].strip().rstrip(".")}')
+                        if _fb_why_parts:
+                            _fb_choice = ', '.join(_fb_why_parts) + '. ' + _fb_choice
                         _coord_text = _fb_choice
                         logger.info("[ANCHOR-AUTOPILOT] using context-aware fallback for %s", _chosen_name)
                     _coord_text_clean_save = ''  # pre-init to avoid NameError when _skip_coord=True
@@ -6945,8 +6950,14 @@ class AnchorEngine:
                                     )
                                     if _alt_strategies:
                                         _coord_text = _alt_strategies[0]
+                                        # Prepend WHY-контекст (как в живом диалоге)
+                                        _dr_why = []
+                                        if _goals_progress_c:
+                                            _dr_why.append(_goals_progress_c[:150].strip().rstrip('.'))
                                         if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
-                                            _coord_text += f' (Учти последний результат: {_last_agent_reply_c[:200]})'
+                                            _dr_why.append(f'последний результат: {_last_agent_reply_c[:150].strip().rstrip(".")}')
+                                        if _dr_why:
+                                            _coord_text = ', '.join(_dr_why) + '. ' + _coord_text
                                         _skip_coord = False
                                         logger.info(
                                             "[ANCHOR-AUTOPILOT] dedup-recovery: found alternative strategy for %s",
@@ -6993,6 +7004,22 @@ class AnchorEngine:
                                     target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
                                 _coord_text_clean_save = _sanitize_proactive_text(_coord_text_clean_save)
+                                # ── WHY-context guard: если поручение — голый приказ без пояснения, добавляем контекст ──
+                                if _coord_text_clean_save and _goals_progress_c:
+                                    _ct_s = _coord_text_clean_save.strip()
+                                    _BARE_VERBS = (
+                                        'найди', 'проверь', 'создай', 'отправь', 'напиши',
+                                        'запусти', 'используй', 'подготовь', 'собери',
+                                        'изучи', 'добавь', 'сохрани', 'поищи', 'обнови',
+                                        'проанализируй', 'исследуй', 'разберись',
+                                    )
+                                    _is_bare_order = re.match(
+                                        rf'^{re.escape(_chosen_name)}\s*,\s*(?:{"|".join(_BARE_VERBS)})\b',
+                                        _ct_s, re.IGNORECASE,
+                                    )
+                                    if _is_bare_order:
+                                        _why_preamble = _goals_progress_c[:150].strip().rstrip('.')
+                                        _coord_text_clean_save = f'{_why_preamble}. {_coord_text_clean_save}'
                                 # ── Ensure delegation mentions goal context ("why") ──
                                 if _coord_text_clean_save and _g_label and _g_label != 'активные цели':
                                     _ct_lc_gc = _coord_text_clean_save.lower()
