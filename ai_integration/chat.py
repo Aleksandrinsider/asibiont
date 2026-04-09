@@ -992,6 +992,9 @@ async def _build_proactive_context(user_id, lang='ru'):
             goal_lines = []
             for g in active_goals:
                 line = f"{g.title} ({g.progress_percentage}%)"
+                if g.metric_target and g.metric_unit:
+                    mc = g.metric_current or 0
+                    line += f" [{mc}/{g.metric_target} {g.metric_unit}]"
                 if g.target_date:
                     days = g.days_until_target()
                     if days is not None and days < 0:
