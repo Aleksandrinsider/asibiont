@@ -150,10 +150,11 @@ def _get_active_agent_integration_snapshot(user_id: int) -> dict:
 
         _aids = get_user_active_agents(user_id)
         if not _aids:
-            return {'labels': [], 'caps_text': '', 'keys_text': ''}
+            return {'labels': [], 'caps_text': '', 'keys_text': '', 'agent_map': []}
         _all_labels: list[str] = []
         _all_caps: list[str] = []
         _all_keys: list[str] = []
+        _agent_map: list[dict] = []  # [{name, integrations: [labels]}]
         for _aid in _aids:
             _adata = load_agent_personality(_aid) or {}
             _keys = _adata.get('user_api_keys') or ''
@@ -165,10 +166,14 @@ def _get_active_agent_integration_snapshot(user_id: int) -> dict:
             _all_labels.extend(c for c in _caps if c not in _all_labels)
             _all_caps.extend(str(c).lower() for c in _caps)
             _all_keys.append(str(_keys).lower())
+            if _caps:
+                _aname = _adata.get('name') or _adata.get('agent_name') or f'agent_{_aid}'
+                _agent_map.append({'name': _aname, 'integrations': _caps})
         return {
             'labels': _all_labels,
             'caps_text': ' '.join(_all_caps),
             'keys_text': ' '.join(_all_keys),
+            'agent_map': _agent_map,
         }
     except Exception as _ih_err:
         logger.debug("[INTG HINT] integration check failed: %s", _ih_err)
@@ -2688,11 +2693,21 @@ class HybridAutonomousAgent:
                 dynamic_context += cognitive_hints
 
             # ═══ ИНТЕГРАЦИИ (факты: что подключено + как использовать) ═══
+            _agent_map = []
             try:
                 _intg_snap = _get_active_agent_integration_snapshot(user_id)
                 _active = _intg_snap.get('labels', [])
+                _agent_map = _intg_snap.get('agent_map', [])
                 if _active:
                     dynamic_context += f"\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ]: {', '.join(_active[:15])}"
+                    # Карта "агент → интеграции" — AI знает через какого агента работать
+                    if _agent_map:
+                        _map_lines = []
+                        for _am in _agent_map[:10]:
+                            _am_intgs = ', '.join(_am['integrations'][:6])
+                            _map_lines.append(f"  @{_am['name']}: {_am_intgs}")
+                        dynamic_context += "\n[АГЕНТЫ И ИХ ИНТЕГРАЦИИ]:\n" + '\n'.join(_map_lines)
+                        dynamic_context += "\n  → Для работы с интеграцией используй run_agent_action(agent_name=\"ИМЯ\", action=...) или напиши @ИМЯ в сообщении."
                     # Добавляем подсказки по инструментам для каждой категории интеграции
                     try:
                         from anchor_engine import _classify_agent_caps
@@ -3265,13 +3280,18 @@ class HybridAutonomousAgent:
             # Дополнительные запрещённые инструменты от вызывающего кода (напр. при обзоре отчита агента)
             if exclude_tools:
                 tools_to_exclude = tools_to_exclude | set(exclude_tools)
-            # run_agent_action доступен только когда активен агент со скриптом
+            # run_agent_action доступен когда есть агент со скриптом
+            # (активный через @упоминание ИЛИ любой агент пользователя с python_code)
             _cur_agent = self._active_agent_data.get(user_id)
-            if not _cur_agent or not _cur_agent.get('python_code', '').strip():
-                tools_to_exclude.add('run_agent_action')
-            else:
+            if _cur_agent and _cur_agent.get('python_code', '').strip():
                 # Агент со скриптом: скрываем run_user_script чтобы не конкурировал
                 tools_to_exclude.add('run_user_script')
+            elif _agent_map:
+                # Нет активного агента, но есть агенты с интеграциями → run_agent_action доступен
+                # AI передаст agent_name из [АГЕНТЫ И ИХ ИНТЕГРАЦИИ] блока
+                tools_to_exclude.add('run_user_script')
+            else:
+                tools_to_exclude.add('run_agent_action')
 
             # Enforce agent tools_allowed: если агент задал whitelist — прячем остальные
             if _agent_tools_allowed:
