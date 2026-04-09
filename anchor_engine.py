@@ -6920,11 +6920,10 @@ class AnchorEngine:
                         logger.warning("[ANCHOR-AUTOPILOT] coord-assign failed: %s", _cas_err)
 
                 elif anchor.anchor_type == 'goal_autopilot_review' and _chosen_id == 0 and self.bot:
-                    # ASI сама выполняет анализ — объявляет что начинает работу
+                    # ASI сама выполняет анализ — логируем, но НЕ отправляем в чат (шум)
                     try:
                         _asi_gl = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
-                        _asi_ann = f"Анализирую цели: {', '.join(_asi_gl)}. Подбираю следующий шаг."
-                        await self.bot.send_message(chat_id=user.telegram_id, text=_asi_ann)
+                        logger.info("[ANCHOR-AUTOPILOT] ASI self-analysis for goals: %s", ', '.join(_asi_gl))
                     except Exception as _asi_ann_err:
                         logger.debug("[ANCHOR-AUTOPILOT] ASI self-announce failed: %s", _asi_ann_err)
                         try:
