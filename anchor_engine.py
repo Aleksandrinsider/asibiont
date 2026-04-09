@@ -9513,6 +9513,14 @@ class AnchorEngine:
                     return f', {_age}д' if _age > 0 else ''
                 except Exception:
                     return ''
+            # ── Сортируем цели: сначала наименее продвинутые (нуждаются в внимании), потом близкие к завершению ──
+            _goals.sort(key=lambda g: (
+                1 if (g.get('progress', 0) or 0) >= 90 else 0,  # завершённые — в конец
+                g.get('progress', 0) or 0,  # сначала с наименьшим прогрессом
+            ))
+            # Динамический лимит: больше целей видно если средний прогресс низкий
+            _avg_progress = sum(g.get('progress', 0) or 0 for g in _goals) / max(len(_goals), 1)
+            _GOALS_LIMIT = min(len(_goals), 8 if _avg_progress < 30 else 5)
             _goals_str = '; '.join(
                 "[{}] {} ({}%, {}/{}{})".format(
                     _crd_goal_type(g),
@@ -9522,7 +9530,7 @@ class AnchorEngine:
                     g.get('metric_target', '?'),
                     _goal_age_str(g),
                 )
-                for g in _goals[:5]
+                for g in _goals[:_GOALS_LIMIT]
             )
             _recent = data.get('recent_actions', [])
             _recent_txt = '\n'.join(_recent[-5:]) if _recent else 'нет'
@@ -9686,7 +9694,7 @@ class AnchorEngine:
             for p in _profiles:
                 _hist = _per_agent_history.get(p['name'], [])
                 _hist_str = (
-                    ' | '.join(h[:100] for h in _hist[:3])
+                    ' | '.join(h[:200] for h in _hist[:5])
                     if _hist else 'нет истории'
                 )
                 # Добавляем темы уже исследованных запросов для видимости координатором
@@ -12175,8 +12183,8 @@ class AnchorEngine:
                             f'Точные названия целей: {"; ".join(repr(g["title"]) for g in _goals[:5])}'
                         )
                         _next_raw = await asyncio.wait_for(
-                            _quick_ai_call_raw([{"role": "user", "content": _next_prompt}], max_tokens=200),
-                            timeout=12,
+                            _quick_ai_call_raw([{"role": "user", "content": _next_prompt}], max_tokens=400),
+                            timeout=15,
                         )
                         _next_raw = _next_raw or ''
                         if '"done"' in _next_raw.lower() and 'true' in _next_raw.lower():
@@ -12266,7 +12274,24 @@ class AnchorEngine:
                 # ── Уточнение задания: подставляем контекст без лишнего LLM-вызова ──
                 # Контекст предыдущих шагов уже передаётся в _agent_prompt через _prev_steps_context
                 if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
-                    _ag_task = f'{_ag_task}\nКонтекст — уже сделано командой:\n{_prev_steps_context[:400]}'
+                    _ag_task = f'{_ag_task}\nКонтекст — уже сделано командой:\n{_prev_steps_context[:1200]}'
+
+                # ── Кросс-агентный доступ к заметкам: если предыдущие агенты сохранили notes — передаём текущему ──
+                if _executed > 0:
+                    try:
+                        from models import Note as _Note_cross
+                        _recent_notes = session.query(_Note_cross).filter(
+                            _Note_cross.user_id == user.id,
+                            _Note_cross.created_at >= datetime.now(timezone.utc) - timedelta(minutes=30),
+                        ).order_by(_Note_cross.created_at.desc()).limit(3).all()
+                        if _recent_notes:
+                            _notes_ctx = '\n'.join(
+                                f"  📝 {n.title}: {(n.content or '')[:300]}"
+                                for n in _recent_notes
+                            )
+                            _ag_task = f'{_ag_task}\nЗаметки команды (свежие):\n{_notes_ctx}'
+                    except Exception:
+                        pass
 
                 # ── Email-контакты: если задача на отправку, а в тексте нет '@' — вставляем адреса напрямую ──
                 # Это решает случай когда координатор написал "напиши Артёму" без email-адреса,
@@ -13315,7 +13340,7 @@ class AnchorEngine:
                     else:
                         # done_fb — агент выполнил задачу, просто ответил кратко → засчитываем как результат
                         _results_summary.append(f"{_ag_name}: {_result_stripped[:150]}")
-                        _prev_steps_context += f"💬 {_ag_name}: {_result_stripped[:200]}\n"
+                        _prev_steps_context += f"💬 {_ag_name}: {_result_stripped[:400]}\n"
                     # ── Сохраняем coordinator_result + закрываем задачу ОДНОЙ транзакцией ──
                     try:
                         _cr_text = _result_stripped if _is_done_fb else f"Пустой результат: {_ag_task[:100]}"
@@ -13697,7 +13722,7 @@ class AnchorEngine:
                     # AAL — аудит (не user-facing, нужен для context_builder)
                     from ai_integration.utils import normalize_task_title as _ntt_aal
                     _aal_task_title, _ = _ntt_aal(_step.get('task') or 'задача', agent_name=_ag_name)
-                    _aal_result = (_cleaned or '')[:600] or f'Задача выполнена агентом {_ag_name}'
+                    _aal_result = (_cleaned or '')[:1000] or f'Задача выполнена агентом {_ag_name}'
                     session.add(AgentActivityLog(
                         user_id=user.id,
                         activity_type='agent_task',
@@ -13735,7 +13760,7 @@ class AnchorEngine:
                     )
                 # Накапливаем контекст для следующих агентов в цепочке — как сообщение от коллеги
                 _tools_label = f" [инструменты: {', '.join(_step_tools[:5])}]" if _step_tools else ''
-                _prev_steps_context += f"💬 {_ag_name}{_tools_label}:\n  {_cleaned[:400]}\n\n"
+                _prev_steps_context += f"💬 {_ag_name}{_tools_label}:\n  {_cleaned[:800]}\n\n"
 
                 # ── Same-cycle pipeline: если агент сохранил новые контакты → email-агент должен писать им СЕЙЧАС ──
                 # Не ждём следующего цикла — вводим шаг прямо сейчас
@@ -16020,8 +16045,8 @@ class AnchorEngine:
                 _AAL_pah.user_id == user.id,
                 _AAL_pah.activity_type == 'agent_task',
                 _AAL_pah.status == 'completed',
-                _AAL_pah.created_at >= now_utc - timedelta(hours=48),
-            ).order_by(_AAL_pah.created_at.desc()).limit(50).all()
+                _AAL_pah.created_at >= now_utc - timedelta(hours=72),
+            ).order_by(_AAL_pah.created_at.desc()).limit(80).all()
             for _api in _aal_pah_items:
                 _ag_nm_aal = (_api.target or '').replace('agent:', '').strip()
                 if not _ag_nm_aal:
@@ -16056,7 +16081,7 @@ class AnchorEngine:
                     _aal_res_short = _aal_result[:120].rsplit(' ', 1)[0] if len(_aal_result) > 120 else _aal_result
                     _entry_aal += f" → {_aal_res_short}"
                 _per_agent_history.setdefault(_ag_nm_aal, [])
-                if len(_per_agent_history[_ag_nm_aal]) < 12:
+                if len(_per_agent_history[_ag_nm_aal]) < 20:
                     _per_agent_history[_ag_nm_aal].append(_entry_aal)
         except Exception as _aal_pah_err:
             logger.debug("[AUTOPILOT] per_agent_history from AAL: %s", _aal_pah_err)
