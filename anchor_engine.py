@@ -868,7 +868,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 10  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # ── Cache for integration hypothesis (avoid extra AI call every coordinator cycle) ──
@@ -14409,7 +14409,7 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 0.17,  # ~10 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
+            'goal_autopilot_review': 0.25,  # 15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
             'email_need_leads': 0.5,  # was 1.5 — too slow (7 searches/day vs ~30 with 0.5h)
             'chat_ai_review': 3.0,  # min 3ч между одинаковыми review (было 1.5h)
         }
@@ -16760,7 +16760,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.17,  # ~10 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
+            cooldown_hours=0.25,  # 15 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
             batch_group='goals',
         )]
 
