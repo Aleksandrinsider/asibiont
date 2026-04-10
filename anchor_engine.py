@@ -11471,14 +11471,20 @@ class AnchorEngine:
 
                 f"Цели: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 на активную цель).\n"
-                "Формат: agent=имя, tool=snake_case, goal=точное_название, reason=почему именно этот подход (2-3 предложения с контекстом), "
-                "task=конкретное задание (повелительное наклонение, ≥30 слов: ЧТО + КАК + ЗАЧЕМ, без → и tool-названий).\n"
-                '[{"agent": "имя", "task": "...", "tool": "инструмент", "goal": "точное_название", "reason": "..."}]'
+                "Формат каждого шага: agent=имя, tool=snake_case, goal=точное_название, "
+                "reason=почему именно этот подход (1-2 предложения), "
+                "task=ПОЛНОЕ конкретное задание (повелительное наклонение, ≥50 слов: ЧТО сделать + КАК именно + ГДЕ искать / какие критерии + СКОЛЬКО + ожидаемый результат).\n"
+                "⚠️ КРИТИЧНО: task НЕ должен быть одной строкой вроде 'Найди email разработчиков'. "
+                "task ДОЛЖЕН содержать ВСЕ детали: конкретный запрос, критерии отбора, платформа/инструмент, количество, следующий шаг.\n"
+                "Пример ПЛОХОГО task: 'Найди контакты разработчиков AI на GitHub'\n"
+                "Пример ХОРОШЕЙ task: 'Найди 5 активных Python/AI разработчиков на GitHub: используй search_users с запросом language:python followers:>50 location:russia, отбирай только тех у кого email виден в профиле, сохрани каждого через save_email_contact(name=..., email=..., source=github), затем отправь каждому персональное письмо через send_outreach_email с темой «Предложение: тест ASI Biont» и описанием пользы платформы для их проектов'\n"
+                '[{"agent": "имя", "task": "Найди 5 активных Python-разработчиков на GitHub через search_users (language:python followers:>50), у кого email виден в профиле. Сохрани каждого через save_email_contact. Отправь письмо с темой ASI Biont через send_outreach_email.", "tool": "search_users", "goal": "точное_название", "reason": "GitHub даёт публичные email активных разработчиков — прямой путь к аудитории"}]'
             )
 
             try:
-                # Больше токенов когда шагов больше (220 на шаг, минимум 600, максимум 3200)
-                _plan_max_tokens = min(max(600, _n_plan_steps * 220), 3200)
+                # Больше токенов когда шагов больше (350 на шаг, минимум 900, максимум 3200)
+                # Увеличен минимум: task должен быть ≥50 слов с деталями — нужно место
+                _plan_max_tokens = min(max(900, _n_plan_steps * 350), 3200)
                 _plan_json = await asyncio.wait_for(
                     _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=_plan_max_tokens),
                     timeout=30,
@@ -11937,6 +11943,54 @@ class AnchorEngine:
                 if _VAGUE_TASK_RE.search(_qf_task) and len(_qf_task) < 60:
                     # Только добавляем хинт — НЕ стираем оригинальную задачу координатора
                     _qf_step['task'] = _qf_task + ' (используй инструменты для конкретного результата — данные, контакты, действия)'
+            # ── Обогащение коротких task: если task <80 символов — подставляем детали из reason+goal ──
+            # Это решает случай когда DeepSeek генерирует one-liner вместо полного задания.
+            _TOOL_EXPANSION_HINTS = {
+                'search_users': lambda g, r: (
+                    f'Найди 5 активных разработчиков через search_users (язык/тема из цели «{g[:40]}»), '
+                    f'только с email в профиле. Сохрани каждого через save_email_contact. '
+                    f'Затем отправь каждому письмо через send_outreach_email.'
+                ),
+                'web_search': lambda g, r: (
+                    f'Найди через web_search 5 человек/ресурсов по теме из цели «{g[:40]}», '
+                    f'с публичными контактами. Сохрани результаты через save_note. '
+                    f'Если email найдены — добавь через save_email_contact.'
+                ),
+                'send_outreach_email': lambda g, r: (
+                    f'Отправь персональное письмо каждому сохранённому контакту через send_outreach_email. '
+                    f'Тема — суть предложения из цели «{g[:40]}». '
+                    f'Текст: кратко кто мы, что предлагаем, почему им это полезно, призыв к действию.'
+                ),
+                'check_emails': lambda g, r: (
+                    f'Проверь входящие через check_emails. '
+                    f'Если есть ответы — reply_to_outreach_email с персональным ответом по контексту. '
+                    f'Если молчат >2 дней — send_follow_up_email с новым углом подачи.'
+                ),
+                'create_post': lambda g, r: (
+                    f'Создай пост через create_post на тему из цели «{g[:40]}». '
+                    f'Включи: конкретный факт/тренд, пользу для целевой аудитории, призыв к действию. '
+                    f'Опубликуй или сохрани через save_note.'
+                ),
+                'save_email_contact': lambda g, r: (
+                    f'Сохрани найденные контакты через save_email_contact (name, email, source, notes). '
+                    f'После сохранения — отправь каждому письмо через send_outreach_email с предложением.'
+                ),
+            }
+            for _qf2_step in _plan:
+                _qf2_task = (_qf2_step.get('task') or '').strip()
+                _qf2_tool = (_qf2_step.get('tool') or '').lower().strip()
+                _qf2_goal = (_qf2_step.get('goal') or '').strip()
+                _qf2_reason = (_qf2_step.get('reason') or '').strip()
+                # Обогащаем если task слишком короткий (одна строка без деталей)
+                if len(_qf2_task) < 80 and _qf2_tool in _TOOL_EXPANSION_HINTS:
+                    _expanded = _TOOL_EXPANSION_HINTS[_qf2_tool](_qf2_goal, _qf2_reason)
+                    # Сохраняем оригинальный текст как контекст, добавляем детали
+                    if _qf2_task and _qf2_task.lower() not in _expanded.lower():
+                        _qf2_step['task'] = _qf2_task + '. ' + _expanded
+                    else:
+                        _qf2_step['task'] = _expanded
+                    logger.info('[COORD] task-enrichment: expanded short task for %s/%s: %s',
+                                _qf2_step.get('agent'), _qf2_tool, _qf2_step['task'][:80])
                     logger.info("[COORD] quality-hint: appended hint for %s: %s",
                                 _qf_step.get('agent'), _qf_step['task'][:80])
 
