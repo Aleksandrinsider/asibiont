@@ -6578,7 +6578,7 @@ class AnchorEngine:
                             "  BAD: «...поддерживать диалог с.» ← оборванное предложение.\n"
                             "✅ Если твоё поручение не проходит все 6 шагов — перепиши его."
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=500)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=900)
                         _VAGUE_COORD_PATTERNS = (
                             'посмотри что можно', 'поработай над', 'займись',
                             'сделай что-нибудь', 'подумай что можно', 'проверь что можно',

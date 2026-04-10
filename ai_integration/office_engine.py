@@ -1950,13 +1950,41 @@ class OfficeEngine:
             # Приоритет под urgency
             _anchor_priority = AnchorPriority.HIGH if _urgency == 'high' else AnchorPriority.LOW
 
+            # ── Quality guard: отфильтровываем пустышки до передачи агенту ──
+            _OFFICE_TOOL_NAMES = (
+                'web_search', 'research_topic', 'check_emails', 'send_outreach_email',
+                'create_post', 'save_note', 'add_task', 'set_reminder', 'run_agent_action',
+                'save_email_contact', 'find_relevant', 'publish_to_telegram', 'publish_to_discord',
+                'reply_to_outreach_email', 'send_follow_up_email', 'generate_image',
+                'negotiate_by_email', 'start_email_campaign', 'delegate_task',
+                # Russian equivalents
+                'найди', 'проверь', 'создай', 'отправь', 'напиши', 'сохрани',
+                'исследуй', 'опубликуй', 'запусти', 'подготовь', 'составь',
+            )
+            _atask_lower = _atask.lower()
+            _task_has_tool = any(t in _atask_lower for t in _OFFICE_TOOL_NAMES)
+            _task_is_vague = (
+                len(_atask) < 60
+                or (len(_atask) < 150 and not _task_has_tool)
+                or not any(v in _atask_lower for v in ('найди', 'проверь', 'создай', 'отправь',
+                                                        'напиши', 'сохрани', 'исследуй', 'опубликуй',
+                                                        'запусти', 'подготовь', 'используй', 'составь',
+                                                        'разберись', 'проанализируй', 'оцени', 'выдели'))
+            )
+            if _task_is_vague:
+                logger.info(
+                    "[OFFICE-L2] VAGUE-SKIP: task for %s is too short/vague (%d chars, tool=%s): %s",
+                    _aname, len(_atask), _task_has_tool, _atask[:80],
+                )
+                continue
+
             # Создаём задачу-делегирование + лог (без лишних якорей/сообщений)
             # NB: _auto_delegate_to_agent_sync создаёт agent_task(status='accepted').
             # Раньше здесь был _log_agent_activity_sync, который создавал второй agent_task
             # с status='completed' и без result — ложное завершение.
             _auto_delegate_to_agent_sync(
                 user_db_id, _agent_id, _agent_name_db,
-                f'Цель: {_agoal[:80]}. {_atask[:200]}',
+                f'Цель: {_agoal[:120]}. {_atask[:600]}',
             )
 
             logger.info("[OFFICE-L2] user=%d: delegated to %s [%s]: %s",
