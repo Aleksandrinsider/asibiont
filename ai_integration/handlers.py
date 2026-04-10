@@ -5890,8 +5890,40 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         if close_session:
             session.close()
         return " User not found" if lang == 'en' else " Пользователь не найден"
-    
-    # Извлечь ключевые слова из описания задачи
+
+    # ── Специальный случай: "тёплые / открывали / активные" → replied/interested из EmailContact ──
+    import re as _re_frct
+    _td_low = task_description.lower()
+    _WARM_KW = ('открывал', 'проявил активность', 'проявили интерес', 'тёплые', 'теплые',
+                'горячие', 'warm contact', 'interested', 'replied', 'ответили', 'ответил')
+    if any(kw in _td_low for kw in _WARM_KW):
+        try:
+            from models import EmailContact as _ECW
+            _warm = session.query(_ECW).filter(
+                _ECW.user_id == user.id,
+                _ECW.status.in_(['replied', 'interested']),
+            ).order_by(_ECW.created_at.desc()).limit(limit).all()
+            if _warm:
+                _lines = [f"{c.name or '?'} <{c.email}> [статус: {c.status}]" for c in _warm]
+                result = (
+                    f"Тёплые контакты (ответили/заинтересованы), {len(_warm)} чел.:\n"
+                    + '\n'.join(_lines)
+                    + "\n\nℹ️ Email open-tracking отсутствует — это единственные «активные» контакты в системе. "
+                    "Используй send_outreach_email чтобы написать каждому персональное письмо."
+                )
+                if close_session:
+                    session.close()
+                return result
+            else:
+                if close_session:
+                    session.close()
+                return ("Тёплых контактов (replied/interested) пока нет. "
+                        "Email open-tracking отсутствует — отслеживаем только ответившие контакты. "
+                        "Используй send_outreach_email для отправки новым контактам.")
+        except Exception as _e_w:
+            logger.debug("[FIND_RELEVANT] warm contacts lookup failed: %s", _e_w)
+
+
     task_keywords = set()
     stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'пойду', 'сделать', 'в', 'на', 'с', 'для', 'от', 'к', 'по', 'из'}
     
