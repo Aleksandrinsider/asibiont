@@ -6636,16 +6636,18 @@ class AnchorEngine:
                                 # Слишком короткое без инструмента и площадки
                                 or (len(_gen_s) < 100 and not _has_tool_name and not _has_platform_hint)
                                 or (len(_gen_s) < 120 and not _has_tool_name)
-                                # Абсолютный минимум — задание должно объяснять ЧТО, КАК и ЗАЧЕМ
-                                or len(_gen_s) < 80
                                 # Бессмысленные задания про "альтернативные методы" / "для Telegram пользователей"
                                 or ('альтернативн' in _gen_lower and ('метод' in _gen_lower or 'способ' in _gen_lower or 'канал' in _gen_lower))
                                 # Задания про пользователей платформ без конкретики
                                 or ('для telegram пользователей' in _gen_lower or 'с telegram пользовател' in _gen_lower
                                     or 'telegram-аудитори' in _gen_lower)
-                                # "email контакты для/из Telegram" — невыполнимо без TG-интеграции
-                                or ('telegram' in _gen_lower and ('контакт' in _gen_lower or 'адрес' in _gen_lower)
-                                    and ('email' in _gen_lower or 'почт' in _gen_lower or 'найти' in _gen_lower or 'найди' in _gen_lower))
+                                # Только прямая запись/DM В Telegram без userbot — невыполнимо
+                                # (НЕ блокируем: поиск контактов ИЗ TG-каналов через web_search → это ок)
+                                or ('telegram' in _gen_lower
+                                    and any(w in _gen_lower for w in ('напиши в telegram', 'отправь в telegram',
+                                                                      'dm telegram', 'сообщение в telegram',
+                                                                      'пиши в тг', 'написать в тг'))
+                                    and not any(t in _gen_lower for t in ('web_search', 'через поиск', 'search')))
                                 # Сухие контентные задания: "создай пост о X" без деталей содержания
                                 # (только если совсем короткое И без конкретики)
                                 or (len(_gen_s) < 60 and any(w in _gen_lower for w in ('пост ', 'пост.', 'статью'))
@@ -6787,13 +6789,9 @@ class AnchorEngine:
                                                 )
                                     except Exception as _retry_err:
                                         logger.debug('[ANCHOR-AUTOPILOT] loop retry: %s', _retry_err)
-                            # LinkedIn/неподключённые сервисы — до dedup-проверки
-                            for _banned_svc in ('linkedin', r'sales\s*navigator', r'apollo\.io', r'calendly', r'hubspot'):
-                                _coord_text = re.sub(
-                                    rf'[^.!?\n]*\b{_banned_svc}\b[^.!?\n]*[.!?]?\s*',
-                                    '', _coord_text, flags=re.IGNORECASE
-                                )
-                            _coord_text = _coord_text.strip()
+                            # LinkedIn/неподключённые сервисы — капточка возможностей агента уже
+                            # объясняет ему что доступно. Не удаляем целые предложения из поручения —
+                            # это разрывает смысл. Агент сам разберётся из capability card.
                             # Email тестовых доменов — маскируем (security)
                             _coord_text = re.sub(
                                 r'\b[\w.+-]+@(?:example\.(?:com|org|net)|test\.(?:com|org|net)|mailinator\.com)\b',
