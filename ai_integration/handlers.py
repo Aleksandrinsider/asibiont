@@ -10672,6 +10672,13 @@ def _is_generic_email(email: str) -> bool:
     if any(domain.endswith(s) for s in _GOV_EDU_SUFFIXES):
         return True
 
+    # GUARD: local-part выглядит как домен (gmail.com@ymail.com, company.ru@hotmail.com)
+    # Это артефакты CRM/парсинга — не реальные получатели
+    _DOMAIN_TLD_GE = ('.com', '.ru', '.org', '.net', '.io', '.co', '.ai', '.de',
+                      '.uk', '.fr', '.me', '.edu', '.gov', '.info', '.biz', '.eu', '.cn')
+    if '.' in prefix and any(prefix.endswith(_t) for _t in _DOMAIN_TLD_GE):
+        return True
+
     return False
 
 
@@ -13828,6 +13835,18 @@ async def send_follow_up_email(
         # Если контакт ответил (replied) — follow-up без ограничений (продолжаем диалог)
         if outreach.status != 'replied' and outreach.follow_up_count >= max_follow_ups:
             return f" Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}. Контакт не отвечает."
+
+        # ── GUARD: слишком рано для follow-up ──
+        if outreach.status != 'replied' and outreach.next_follow_up_at:
+            from datetime import datetime as _dt_fu_g, timezone as _tz_fu_g
+            _nfu_g = outreach.next_follow_up_at
+            if _nfu_g.tzinfo is None:
+                _nfu_g = _nfu_g.replace(tzinfo=_tz_fu_g.utc)
+            if _dt_fu_g.now(_tz_fu_g.utc) < _nfu_g:
+                _days_left = max(1, int((_nfu_g - _dt_fu_g.now(_tz_fu_g.utc)).total_seconds() // 86400) + 1)
+                return (f"⏰ Ещё рано для follow-up {outreach.recipient_email} — "
+                        f"следующий запланирован на {_nfu_g.strftime('%d.%m')} (через ~{_days_left} дн.). "
+                        f"Переключись на другую задачу — не беспокой контакт раньше времени.")
 
         # Follow-up — к уже существующему получателю, глобальный лимит не применяется
 
