@@ -4950,11 +4950,15 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 pct = int(progress)
                 pct = max(0, min(100, pct))
                 # GUARD: если у цели есть metric_target — прогресс считается ТОЛЬКО через metric_current
-                # Запрещаем AI-агенту произвольно ставить progress на цели с метриками
+                # Полный запрет: агент НЕ должен вручную ставить progress на цели с метриками
                 if matched.metric_target and matched.metric_target > 0:
                     actual_pct = int((matched.metric_current or 0) / matched.metric_target * 100)
-                    if abs(pct - actual_pct) >= 5:
-                        return f"У цели '{matched.title}' есть числовая метрика ({int(matched.metric_current or 0)}/{int(matched.metric_target)}). Обновляй через metric_current, а не progress."
+                    return (
+                        f"У цели '{matched.title}' есть числовая метрика "
+                        f"({int(matched.metric_current or 0)}/{int(matched.metric_target)} {matched.metric_unit or ''}, {actual_pct}%). "
+                        f"Прогресс рассчитывается автоматически из metric_current. "
+                        f"Используй update_goal_progress(metric_current=N) вместо progress=N."
+                    )
                 # GUARD: если нет metric_target — прогресс нельзя ставить без notes (подтверждения)
                 # И прирост не более +5% за один вызов
                 if not matched.metric_target or matched.metric_target <= 0:
