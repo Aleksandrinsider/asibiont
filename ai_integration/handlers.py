@@ -905,10 +905,20 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         import re as _re_sn
         _content_strip = content.strip()
         _content_lc = _content_strip.lower()
-        # 1. Дампы email-адресов (3+ адресов — это CRM-данные, не заметка)
+        # 1. Дампы email-адресов — сохраняем как список контактов, не блокируем
         _emails_sn = _re_sn.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _content_strip)
         if len(_emails_sn) >= 3:
-            return "[INTERNAL] Заметка отклонена: дамп email-адресов сохраняй через create_contact, а не save_note."
+            # Это реальные контакты — сохраняем с пометкой типа
+            _note_title_contacts = (title or f'Контакты ({len(_emails_sn)} email)').strip()
+            note = Note(
+                user_id=user.id,
+                title=_note_title_contacts,
+                content=content.strip(),
+                source='chat',
+            )
+            session.add(note)
+            session.commit()
+            return f"Список контактов сохранён ({len(_emails_sn)} email-адресов): «{_note_title_contacts}»"
         # 2. Намерения агента без результата («выполняю», «запускаю» и т.п.)
         _JUNK_INTENTS_SN = (
             'запускаю ', 'выполняю ', 'начинаю ', 'приступаю ', 'погружусь',
