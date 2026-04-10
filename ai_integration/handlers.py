@@ -5925,10 +5925,17 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
 
     # ── Спецкейс: задача про outreach/email/лиды → из EmailContact (внешние контакты) ──
     import re as _re_frct2
-    _OUTREACH_KW = ('email', 'outreach', 'лид', 'lead', 'контакт', 'contact', 'рассылк',
-                    'привлечь', 'найти пользовател', 'найти клиент', 'база',
-                    'cold email', 'холодн', 'потенциальн', 'новых пользовател',
-                    'github', 'хабр', 'dev.to', 'разработчик', 'developer')
+    _OUTREACH_KW = (
+        'email', 'outreach', 'лид', 'lead', 'контакт', 'contact', 'рассылк',
+        'привлечь', 'найти пользовател', 'найти клиент', 'база',
+        'cold email', 'холодн', 'потенциальн', 'новых пользовател',
+        'github', 'хабр', 'dev.to', 'разработчик', 'developer',
+        # тематические ключевые слова аудиторий (трейдеры, финансы, биотех и т.'д.)
+        'трейдер', 'trader', 'финанс', 'financ', 'инвестор', 'investor',
+        'предприниматель', 'entrepreneur', 'стартап', 'startup',
+        'аудитория', 'целевая', 'потенциальны', 'новых людей',
+        'привлеч', 'поиск людей', 'список',
+    )
     if any(kw in _td_low for kw in _OUTREACH_KW):
         try:
             from models import EmailContact as _ECO
@@ -5949,6 +5956,18 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
                     + "\n\nℹ️ Это email-контакты из EmailContact (НЕ пользователи платформы). "
                     "Если нужны НОВЫЕ контакты — используй web_search, затем save_email_contact. "
                     "Если нужно написать — send_outreach_email."
+                )
+            else:
+                # 0 контактов — не падаем дальше на поиск пользователей платформы — сразу отвечаем четко
+                if close_session:
+                    session.close()
+                return (
+                    f"База внешних outreach-контактов пуста. "
+                    f"Чтобы найти новых людей для '{task_description[:60]}': "
+                    f"используй web_search (например, поиск на LinkedIn/GitHub/dev.to/Хабр), "
+                    f"затем save_email_contact для каждого найденного человека, "
+                    f"затем send_outreach_email. "
+                    f"НЕ выдумывай адреса email — используй только реальные адреса из поиска."
                 )
         except Exception as _e_o:
             logger.debug("[FIND_RELEVANT] outreach contacts lookup failed: %s", _e_o)
@@ -10766,6 +10785,24 @@ def _is_generic_email(email: str) -> bool:
                       '.uk', '.fr', '.me', '.edu', '.gov', '.info', '.biz', '.eu', '.cn')
     if '.' in prefix and any(prefix.endswith(_t) for _t in _DOMAIN_TLD_GE):
         return True
+
+    # Role-based emails on consumer providers — AI hallucination pattern:
+    # quant.analyst@yahoo.com, fintech.dev@icloud.com, crypto.analyst@yandex.ru
+    _CONSUMER_PROVIDERS_GE = {
+        'icloud.com', 'yahoo.com', 'protonmail.com', 'proton.me',
+        'outlook.com', 'hotmail.com', 'live.com',
+    }
+    _ROLE_WORDS_GE = {
+        'quant', 'algo', 'algorithm', 'analyst', 'analysis', 'trader', 'trading',
+        'fintech', 'hft', 'research', 'researcher', 'fund', 'crypto', 'market',
+        'investment', 'invest', 'venture', 'capital', 'finance', 'financial',
+        'banking', 'hedge', 'portfolio', 'strategy', 'lab', 'labs',
+        'devteam', 'techteam', 'blockchain', 'defi', 'startup',
+    }
+    if domain in _CONSUMER_PROVIDERS_GE:
+        _pparts = set(_re_ge.split(r'[._+-]', prefix))
+        if _pparts & _ROLE_WORDS_GE:
+            return True
 
     return False
 
