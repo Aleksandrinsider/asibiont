@@ -1739,14 +1739,14 @@ class OfficeEngine:
             "Если интеграции нет в списке — для тебя она НЕ СУЩЕСТВУЕТ. Не упоминай её в задачах.\n\n"
 
             "ПРАВИЛА НАЗНАЧЕНИЯ:\n"
-            "1. Задача = ОДНО конкретное действие с измеримым результатом (30-60 слов).\n"
-            "   МИНИМАЛЬНЫЙ СТАНДАРТ: в задаче ОБЯЗАН быть конкретный инструмент + конкретное действие + ожидаемый результат.\n"
-            "   Задача без инструмента = пустышка. «Посмотри что можно сделать» — БЕСПОЛЕЗНО.\n"
-            "   ХОРОШО: «Проверь входящие через check_emails. Если есть ответы — ответь через reply_to_outreach_email.»\n"
-            "   ХОРОШО: «Исследуй тему X через research_topic, подготовь конспект через save_note.»\n"
-            "   ХОРОШО: «Найди через web_search актуальную программу тренировок для цели Y, создай план через add_task.»\n"
-            "   ХОРОШО: «Подготовь экспертный пост (research_topic → create_post) и опубликуй через publish_to_telegram.»\n"
-            "   ПЛОХО: «Проведи анализ» без конкретного инструмента и результата.\n"
+            "1. Задача = ПОЛНАЯ ЦЕПОЧКА действий от первого шага до конкретного результата (60-150 слов).\n"
+            "   МИНИМАЛЬНЫЙ СТАНДАРТ: инструмент → параметры → следующий шаг → итоговый результат.\n"
+            "   Задача без цепочки = пустышка. «Поищи email разработчиков» — ПЛОХО. Всегда указывай что делать с результатом.\n"
+            "   ХОРОШО (GitHub): «run_agent_action(action='search_users', query='language:python bioinformatics followers:>2') → для каждого найденного профиля save_email_contact → send_outreach_email с персональным питчем: упомяни их проект, предложи интеграцию с ASI Biont. Цель: 5-10 отправленных писем.»\n"
+            "   ХОРОШО (email): «check_emails → если есть ответы: reply_to_outreach_email с конкретным следующим шагом (ссылка на платформу, предложение созвона). Если нет ответов за 3+ дня → send_follow_up_email всем кто не ответил.»\n"
+            "   ХОРОШО (контент): «research_topic('MCP-серверы для биоинформатики 2026') → найди 3 конкретные цифры/факта → create_post формат=кейс с данными → publish_to_telegram.»\n"
+            "   ХОРОШО (обучение): «web_search('лучшие курсы по X 2026 отзывы стоимость') → сравни 3-5 вариантов → save_note с выводами → add_task 'Начать курс [название]'.»\n"
+            "   ПЛОХО: «Проведи анализ», «Найди email», «Поищи контакты» — без инструментов и без того, что делать дальше.\n"
             "2. Называй КОНКРЕТНЫЙ инструмент: web_search, research_topic, create_post, add_task, save_note, set_reminder, check_emails, send_outreach_email, publish_to_telegram,\n"
             "   find_and_message_relevant_users (поиск и рассылка пользователям платформы — БЕСПЛАТНО, без лимитов!),\n"
             "   start_email_campaign (ЛУЧШИЙ инструмент для массового outreach — создаёт кампанию, автоматически ищет контакты и рассылает до 50 писем/день),\n"
@@ -1783,7 +1783,7 @@ class OfficeEngine:
                         "https://api.deepseek.com/chat/completions",
                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
                         json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                              "max_tokens": 800, "temperature": 0.4},
+                              "max_tokens": 2000, "temperature": 0.4},
                         timeout=aiohttp.ClientTimeout(total=90),
                     ) as resp:
                         if resp.status != 200:
