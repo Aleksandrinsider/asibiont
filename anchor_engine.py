@@ -7912,10 +7912,10 @@ class AnchorEngine:
                             flags=re.IGNORECASE,
                         )
                         # Truncate overly long agent messages (keep it concise for chat)
-                        if len(_cleaned_result) > 900:
-                            _cut_r = _cleaned_result[:900]
+                        if len(_cleaned_result) > 600:
+                            _cut_r = _cleaned_result[:600]
                             _last_end = max(_cut_r.rfind('.'), _cut_r.rfind('!'), _cut_r.rfind('?'))
-                            if _last_end > 300:
+                            if _last_end > 200:
                                 _cleaned_result = _cut_r[:_last_end + 1]
                             else:
                                 _cleaned_result = _cut_r.rsplit(' ', 1)[0] + '…'

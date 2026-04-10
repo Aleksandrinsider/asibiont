@@ -1857,10 +1857,10 @@ async def delegate_task(
                 _txt = _ren.sub(r'\n\s*[•\-\*]\s*', '\n', _txt)
                 _txt = _ren.sub(r'\n\s*\d+[.)\]]\s*', '\n', _txt)
                 _txt = _ren.sub(r'\n{2,}', '\n', _txt)
-                _txt = _strip_structured_text(_txt, _max_len=700)
+                _txt = _strip_structured_text(_txt, _max_len=400)
                 _sent = [s.strip() for s in _ren.split(r'(?<=[.!?])\s+', _txt) if s.strip()]
-                _txt = ' '.join(_sent[:4]).strip() if _sent else _txt
-                _txt = _truncate_by_word(_txt, 520)
+                _txt = ' '.join(_sent[:2]).strip() if _sent else _txt
+                _txt = _truncate_by_word(_txt, 280)
                 _txt_l = _txt.lower()
                 _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
                 _prefix = 'Вот что я нашла: ' if _is_fem else 'Вот что я нашел: '
