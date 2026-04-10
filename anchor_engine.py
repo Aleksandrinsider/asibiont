@@ -12577,7 +12577,25 @@ class AnchorEngine:
                     if _step_reason_show and len(_step_reason_show) > 10:
                         _reason_suffix = f' {_step_reason_show[0].upper()}{_step_reason_show[1:].rstrip(".")}.'
                     if _task_short and len(_task_short) > 15:
-                        _asi_assign_text = f'{_ag_name}, {_t_imp if _is_verb_start else _t}.{_reason_suffix}'
+                        _task_str = _t_imp if _is_verb_start else _t
+                        # Инферируем РЕЗУЛЬТАТ из tool_hint если reason не задан (часто reason — внутренний код)
+                        _result_hint = _reason_suffix
+                        if not _result_hint:
+                            if _tool_hint in ('web_search', 'find_relevant_contacts_for_task',
+                                              'quick_topic_search', 'research_topic', 'save_email_contact'):
+                                _result_hint = ' Сохрани найдённые данные через save_note.'
+                            elif _tool_hint in ('send_outreach_email', 'send_follow_up_email'):
+                                _result_hint = ' Зафиксируй отправку через save_note.'
+                            elif _tool_hint in ('check_emails', 'reply_to_outreach_email'):
+                                _result_hint = ' Зафиксируй ответы через save_note.'
+                            elif _tool_hint in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
+                                _result_hint = ' Опубликуй или передай пользователю через send_message_to_user.'
+                        # ЗАЧЕМ: добавляем контекст цели чтобы поручение было 2 предложения, а не 1
+                        if _ag_goal_title and len(_ag_goal_title.strip()) > 5:
+                            _gt = _ag_goal_title.strip()[:55].rstrip('.,;')
+                            _asi_assign_text = f'{_ag_name}, следующий шаг по цели «{_gt}» — {_task_str}.{_result_hint}'
+                        else:
+                            _asi_assign_text = f'{_ag_name}, {_task_str}.{_result_hint}'
                     elif _step_reason:
                         _r = _step_reason[:90].rsplit(' ', 1)[0] if len(_step_reason) > 90 else _step_reason
                         _r_l = _r.lower() if _r[0].isupper() else _r
