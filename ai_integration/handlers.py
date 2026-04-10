@@ -18548,6 +18548,50 @@ async def run_agent_action(user_id: int, action: str, params: dict = None,
     raw_params = {'action': action, 'params': params or {}}
     result = await agent._run_external_action(raw_params, user_id)
 
+    # ── POST-PROCESS: search_contacts — аннотируем статус outreach по email ──
+    # Чтобы агент видел, кому уже писали / кто уже ответил, и не зацикливался
+    if (action or '').lower() in ('search_contacts', 'get_contacts') and isinstance(result, dict) and result.get('status') == 'success':
+        _sc_output = result.get('output', '')
+        try:
+            import re as _re_sc
+            _emails_in_out = _re_sc.findall(r'EMAIL:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})', _sc_output)
+            if _emails_in_out:
+                from models import EmailContact as _EC_sc, User as _U_sc
+                _sc_sess = Session()
+                try:
+                    _sc_user = _sc_sess.query(_U_sc.id).filter_by(telegram_id=user_id).first()
+                    _sc_uid = _sc_user[0] if _sc_user else None
+                    if _sc_uid:
+                        _STATUS_LABEL = {
+                            'replied': '✉️ уже ОТВЕТИЛ — не слать outreach',
+                            'interested': '✉️ заинтересован — используй reply/negotiate',
+                            'unsubscribed': '🚫 отписался',
+                            'bounced': '🚫 bounced',
+                            'sent': '📩 письмо уже отправлено',
+                        }
+                        _annot_map = {}
+                        for _em in set(_emails_in_out):
+                            _ec = _sc_sess.query(_EC_sc).filter(
+                                _EC_sc.user_id == _sc_uid,
+                                func.lower(_EC_sc.email) == _em.strip().lower(),
+                            ).first()
+                            if _ec and _ec.status in _STATUS_LABEL:
+                                _annot_map[_em.strip().lower()] = _STATUS_LABEL[_ec.status]
+                        if _annot_map:
+                            def _sc_sub(m):
+                                _m_email = m.group(1).strip()
+                                _lbl = _annot_map.get(_m_email.lower())
+                                return f'EMAIL: {_m_email} [{_lbl}]' if _lbl else m.group(0)
+                            _sc_output = _re_sc.sub(
+                                r'EMAIL:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
+                                _sc_sub, _sc_output,
+                            )
+                            result = dict(result, output=_sc_output)
+                finally:
+                    _sc_sess.close()
+        except Exception as _sc_err:
+            logger.debug("suppressed search_contacts annotation: %s", _sc_err)
+
     if isinstance(result, dict):
         if result.get('status') == 'success':
             output = result.get('output', '')

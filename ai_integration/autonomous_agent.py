@@ -1812,7 +1812,11 @@ class HybridAutonomousAgent:
                             for _rn, _rc in _rest_parts:
                                 if len(out) > 1600:
                                     break
-                                _rc_short = _rc[:100].split('\n')[0]
+                                _rc_lines = [l.strip() for l in _rc[:200].split('\n') if l.strip()]
+                                _rc_short = _rc_lines[0] if _rc_lines else ''
+                                # Если первая строка — заголовок (заканчивается на ':'), дописываем следующую
+                                if _rc_short.endswith(':') and len(_rc_lines) > 1:
+                                    _rc_short = _rc_short + ' ' + _rc_lines[1]
                                 if _rc_short and _rc_short != '—':
                                     out += f'\n[{_rn}: {_rc_short}]'
                         elif _sections:

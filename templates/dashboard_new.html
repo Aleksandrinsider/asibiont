@@ -5351,10 +5351,7 @@ try:
         d = json.loads(r.read().decode())
     totals = d.get('totals', [])
     if len(totals) >= 3:
-        print('Яндекс.Метрика за 30 дней:')
-        print('  Визиты: ' + str(int(totals[0])))
-        print('  Пользователи: ' + str(int(totals[1])))
-        print('  Отказы: ' + str(round(totals[2],1)) + '%')
+        print(f'Яндекс.Метрика 30д: {int(totals[0])} визитов, {int(totals[1])} пользователей, отказы {round(totals[2],1)}%')
 except Exception as e:
     print('Ошибка Яндекс.Метрика: ' + str(e))`
             },
