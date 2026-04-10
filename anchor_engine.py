@@ -6807,19 +6807,18 @@ class AnchorEngine:
                                     )
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
-                    # ── Context-aware fallback: если AI не сгенерировал → шаблон + контекст ──
+                    # ── Context-aware fallback: если AI не сгенерировал → шаблон + ЗАЧЕМ контекст ──
                     if _coord_text is None:
                         import random as _rnd_fb
                         _fb_choice = _rnd_fb.choice(_fb_strategies_ref)
-                        # Prepend WHY-контекст перед шаблоном (как в живом диалоге)
-                        _fb_why_parts = []
-                        if _goals_progress_c:
-                            _fb_why_parts.append(_goals_progress_c[:150].strip().rstrip('.'))
-                        if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
-                            _fb_why_parts.append(f'последний результат: {_last_agent_reply_c[:150].strip().rstrip(".")}')
-                        if _fb_why_parts:
-                            _fb_choice = ', '.join(_fb_why_parts) + '. ' + _fb_choice
-                        _coord_text = _fb_choice
+                        # Структурируем как живое поручение: передвигаем название и вставляем ЗАЧЕМ
+                        # Шаблон: "{name}, {действие}" → "{name}, следующий шаг по цели «{goal}» — {действие}"
+                        _fb_name_prefix = f'{_chosen_name},'
+                        if _g_label and _fb_choice.startswith(_fb_name_prefix):
+                            _fb_body = _fb_choice[len(_fb_name_prefix):].strip()
+                            _coord_text = f'{_chosen_name}, следующий шаг по цели «{_g_label[:55].rstrip(".")}» — {_fb_body}'
+                        else:
+                            _coord_text = _fb_choice
                         logger.info("[ANCHOR-AUTOPILOT] using context-aware fallback for %s", _chosen_name)
                     _coord_text_clean_save = ''  # pre-init to avoid NameError when _skip_coord=True
                     try:
@@ -7771,14 +7770,15 @@ class AnchorEngine:
                                         if not any(_cap_key in c for c in _esc_caps_all):
                                             _miss_intg_esc.append(_label)
 
-                                # --- Собираем сообщение ---
-                                # Прогрессивная эскалация: stage 0 — подробный отчёт, stage 1 — краткий апдейт, stage 2 — финальный
+                                # --- Собираем сообщение — коротко и по-человечески ---
+                                # stage 0: первый алерт — коротко + узкое место
+                                # stage 1-2: ещё короче, только прогресс + действие
                                 if _esc_stage == 0:
-                                    _stag_header = f"⚠️ Автопилот застрял на цели {_stag_goal_str}\n\nПрогресс: {_stag_prog}."
+                                    _stag_header = f"По цели {_stag_goal_str}: прогресс {_stag_prog}."
                                 elif _esc_stage == 1:
-                                    _stag_header = f"📊 Обновление по {_stag_goal_str}: прогресс {_stag_prog}."
+                                    _stag_header = f"{_stag_goal_str} — прогресс {_stag_prog}."
                                 else:
-                                    _stag_header = f"🔄 {_stag_goal_str} — прогресс {_stag_prog}, продолжаю работу."
+                                    _stag_header = f"{_stag_goal_str}: прогресс {_stag_prog}, продолжаю работу."
                                 _stag_body_parts = []
 
                                 # --- Диагностика узких мест (конкретные причины стагнации) ---
@@ -7838,47 +7838,28 @@ class AnchorEngine:
                                 if _ex_strats:
                                     _bottlenecks.append(f"🔄 Исчерпаны стратегии: {', '.join(_ex_strats[:3])}")
 
-                                if _bottlenecks:
-                                    _stag_body_parts.append("Узкие места:\n" + '\n'.join(_bottlenecks))
+                                # Добавляем только ОДНО узкое место — ключевое
+                                if _bottlenecks and _esc_stage == 0:
+                                    _stag_body_parts.append(_bottlenecks[0])
 
-                                if _tried_str and not _bottlenecks:
-                                    _stag_body_parts.append(f"Что пробовали: {_tried_str}")
-                                if _failed_str:
-                                    _stag_body_parts.append(f"Не сработало: {_failed_str}")
-                                _stag_body_parts.append(f"Подключено: {_connected_str}")
-                                if _miss_intg_esc:
-                                    _miss_str_esc = '\n'.join(f"  • {m}" for m in _miss_intg_esc[:3])
-                                    _stag_body_parts.append(f"Рекомендую подключить:\n{_miss_str_esc}")
-                                elif not _bottlenecks and not _failed_t and not _ex_strats:
-                                    _stag_body_parts.append("Попробуй уточнить цель или сменить стратегию.")
-                                _esc_lines.append(_stag_header + '\n' + '\n'.join(_stag_body_parts))
+                                # Для stage 1+: только если есть реальный прогресс или новый факт
+                                if not _bottlenecks and not _failed_t and not _ex_strats and _esc_stage == 0:
+                                    _stag_body_parts.append("Продолжаю пробовать другие каналы.")
+                                _esc_lines.append(_stag_header + ('\n' + '\n'.join(_stag_body_parts) if _stag_body_parts else ''))
 
-                            if _cap_warns:
-                                _esc_lines.extend(_cap_warns[:2])
                             if _esc_lines:
-                                # Автопилот сам координирует — не просит пользователя
-                                _has_missing = bool(_miss_intg_esc) if _stag_warn else bool(_cap_warns)
-                                if _has_missing:
-                                    _esc_lines.append("Подключить интеграции: https://asibiont.com/dashboard")
-                                # Автокоординация: autopilot сам меняет стратегию а не ждёт пользователя
+                                # Автокоординация: autopilot сам меняет стратегию — коротко
                                 _auto_actions = []
                                 if _stag_warn:
                                     if _esc_stage == 0:
-                                        # Первый алерт — полная информация о действиях
-                                        if _ex_strats:
-                                            _auto_actions.append("🔄 Переключаю агентов на альтернативные стратегии.")
                                         if _total_sent >= 20 and _total_replied == 0:
-                                            _auto_actions.append("✏️ Корректирую тему и текст писем для повышения конверсии.")
-                                        elif _total_replied > 0 and not _pending:
-                                            _auto_actions.append("📨 Все ответы обработаны. Продолжаю рассылку новым контактам.")
-                                        if not _auto_actions:
-                                            _auto_actions.append("🔄 Корректирую стратегию и перенастраиваю агентов.")
-                                    elif _esc_stage == 1:
-                                        # Второй алерт — новые подходы
-                                        _auto_actions.append("🔄 Тестирую другой формат писем и новые каналы поиска контактов.")
-                                    else:
-                                        # Третий+ — краткий статус, больше не повторять детали
-                                        _auto_actions.append("Агенты продолжают работу. Следующий отчёт — при изменении прогресса.")
+                                            _auto_actions.append("Пересматриваю тему и текст писем.")
+                                        elif _ex_strats:
+                                            _auto_actions.append("Переключаюсь на другие стратегии.")
+                                        else:
+                                            _auto_actions.append("Корректирую подход.")
+                                    elif _esc_stage >= 2:
+                                        _auto_actions.append("Следующий отчёт — при изменении прогресса.")
                                 if _auto_actions:
                                     _esc_lines.append('\n'.join(_auto_actions))
                             _esc_text = '\n'.join(_esc_lines)
