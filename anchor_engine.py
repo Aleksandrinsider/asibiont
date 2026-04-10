@@ -6464,6 +6464,45 @@ class AnchorEngine:
                             except Exception:
                                 pass
 
+                        # ── Детектор цели «привлечь новых» ──
+                        # Если цель про рост/новых людей — координатор должен явно видеть это
+                        # и НЕ зацикливаться на существующих контактах
+                        _goal_is_acquisition = False
+                        _existing_contacts_count = 0
+                        _acquisition_hint_c = ''
+                        _ACQUISITION_KEYWORDS = (
+                            'привлеч', 'новых', 'найти клиент', 'найти польз', 'рост',
+                            'growth', 'recruit', 'acquire', 'лид', 'lead', 'охват',
+                            'аудитор', 'подписчик', 'новые клиент', 'новые польз',
+                            'новых клиент', 'новых польз', 'новых пользовател',
+                        )
+                        _g_lower_acq = _g0.lower()
+                        _goal_is_acquisition = any(kw in _g_lower_acq for kw in _ACQUISITION_KEYWORDS)
+                        if _goal_is_acquisition:
+                            try:
+                                from models import EmailContact as _EC_acq
+                                _existing_contacts_count = session.query(_EC_acq).filter_by(
+                                    user_id=user.id
+                                ).count()
+                            except Exception:
+                                pass
+                            if _existing_contacts_count > 0:
+                                _acquisition_hint_c = (
+                                    f'\n🎯 ЦЕЛЬ ТРЕБУЕТ ПОИСКА НОВЫХ ЛЮДЕЙ — прочитай внимательно:\n'
+                                    f'  В базе уже {_existing_contacts_count} контактов. Это НЕ твоя целевая аудитория для поиска.\n'
+                                    f'  Задача: НАЙТИ и ДОБАВИТЬ новых людей, которых в базе ещё НЕТ.\n'
+                                    f'  → ПРАВИЛЬНО: web_search по профессиональным площадкам (GitHub, dev.to, Хабр, LinkedIn, ProductHunt)\n'
+                                    f'     + сохранить через save_email_contact тех, кого нашли впервые\n'
+                                    f'  → НЕПРАВИЛЬНО: работать с теми кто уже в базе, отправлять им письма снова как «новым»\n'
+                                    f'  → Если агент в прошлом цикле нашёл тех же людей — источник исчерпан, смени площадку.\n'
+                                )
+                            else:
+                                _acquisition_hint_c = (
+                                    f'\n🎯 ЦЕЛЬ ТРЕБУЕТ НАХОЖДЕНИЯ ПЕРВЫХ КОНТАКТОВ:\n'
+                                    f'  База пуста — первый приоритет: найти реальных людей через web_search\n'
+                                    f'  и сохранить через save_email_contact. Поиск → сохранение → письмо.\n'
+                                )
+
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды (МУЖСКОЙ род: я нашёл, я проверил, я сделал)"
                             + (f" проекта «{_project_c}»" if _project_c else '')
@@ -6478,6 +6517,7 @@ class AnchorEngine:
                             f"{_channels_info_c}\n"
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
+                            + (_acquisition_hint_c if _acquisition_hint_c else '')
                             + (f"Результаты команды за последний цикл:\n{_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + _coord_effectiveness_c
                             + (f"\n💬 ПОСЛЕДНИЙ ОТВЕТ {_chosen_name.upper()} (прочитай внимательно — это реальный результат):\n{_last_agent_reply_c}\n"
