@@ -6093,6 +6093,7 @@ class AnchorEngine:
                                 # ── История собственных поручений координатора: что уже назначалось этому агенту ──
                                 # Без этого ASI не знает что сам говорил и повторяет те же задания
                                 _my_recent_assigns_ctx = ''
+                                _other_assigns_ctx = ''
                                 try:
                                     _coord_hist_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=8)
                                     _recent_my_coords = session.query(Interaction).filter(
@@ -6101,23 +6102,41 @@ class AnchorEngine:
                                         Interaction.created_at >= _coord_hist_cutoff,
                                     ).order_by(Interaction.created_at.desc()).limit(40).all()
                                     _my_assign_texts = []
+                                    _other_assigns: list[tuple[str, str]] = []  # (agent_name, text)
                                     for _rmc in _recent_my_coords:
                                         try:
                                             _rmc_d = json.loads(_rmc.content or '{}')
-                                            if (
-                                                _rmc_d.get('__anchor_type') == 'goal_autopilot_assignment'
-                                                and _rmc_d.get('__to_agent') == _chosen_name
-                                            ):
-                                                _atxt = (_rmc_d.get('text', '') or '').strip()[:180]
-                                                if _atxt and _atxt not in _my_assign_texts:
+                                            if _rmc_d.get('__anchor_type') != 'goal_autopilot_assignment':
+                                                continue
+                                            _rmc_to = _rmc_d.get('__to_agent', '')
+                                            _atxt = (_rmc_d.get('text', '') or '').strip()[:180]
+                                            if not _atxt:
+                                                continue
+                                            if _rmc_to == _chosen_name:
+                                                if _atxt not in _my_assign_texts:
                                                     _my_assign_texts.append(_atxt)
-                                                    if len(_my_assign_texts) >= 5:
-                                                        break
+                                            elif _rmc_to and len(_other_assigns) < 6:
+                                                _other_assigns.append((_rmc_to, _atxt))
                                         except Exception:
                                             pass
+                                        if len(_my_assign_texts) >= 5 and len(_other_assigns) >= 6:
+                                            break
                                     if _my_assign_texts:
                                         _my_recent_assigns_ctx = '\n'.join(
                                             f'  [{i+1}] {t}' for i, t in enumerate(_my_assign_texts)
+                                        )
+                                    # Cross-agent context: чтобы координатор не давал двойные задания
+                                    _other_assigns_ctx = ''
+                                    if _other_assigns:
+                                        _oa_lines = [
+                                            f'  {nm}: {txt[:120]}'
+                                            for nm, txt in _other_assigns
+                                        ]
+                                        _other_assigns_ctx = (
+                                            '\n⚠️ ДРУГИЕ АГЕНТЫ уже получили эти поручения (последние 8ч) — '
+                                            'НЕ повторяй тот же тип задачи:\n'
+                                            + '\n'.join(_oa_lines)
+                                            + '\n'
                                         )
                                 except Exception as _mh_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] my assign history: %s', _mh_err)
@@ -6552,6 +6571,7 @@ class AnchorEngine:
                                 f"  Если ты снова напишешь то же самое — это зацикливание, и оно бесполезно.\n"
                                 if _my_recent_assigns_ctx else ''
                             )
+                            + (_other_assigns_ctx if _other_assigns_ctx else '')
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
                             + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
                             + (_dnc_str_c if _dnc_str_c else '')
