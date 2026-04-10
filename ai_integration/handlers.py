@@ -10568,6 +10568,12 @@ _GENERIC_PREFIXES = {
     'grants', 'fellowship', 'scholarship', 'alumni', 'bursar',
     'clinic', 'pharmacy', 'radiology', 'pathology', 'oncology',
     'cardiology', 'pediatrics', 'surgery', 'nursing', 'emergency',
+    # Корп/инфраструктурные (часто пропускались)
+    'corporate', 'corp', 'contactinfo', 'contact-info',
+    # Русские институциональные (приёмка, абитуриенты, отдел)
+    'priem', 'priemnaya', 'abit', 'abiturient', 'otdel', 'otdeleniye',
+    'dekanat', 'rektorat', 'sekretariat', 'kanselyariya',
+    'ucheba', 'nauka', 'biblioteka', 'buhgalteriya',
 }
 
 # Паттерны в email-prefix которые указывают на корпоративный/generic email
@@ -10608,9 +10614,10 @@ def _is_generic_email(email: str) -> bool:
 
     if prefix in _GENERIC_PREFIXES:
         return True
-    # Проверяем паттерны внутри prefix (например 46contact@...)
+    # Проверяем паттерны внутри prefix (например 46contact@..., contactinfo@...)
     for pat in _GENERIC_PATTERNS:
-        if pat in prefix and len(prefix) <= len(pat) + 3:
+        # Точное вхождение с небольшим хвостом ИЛИ prefix начинается с паттерна (contactinfo, supportchat...)
+        if pat in prefix and (len(prefix) <= len(pat) + 3 or prefix.startswith(pat)):
             return True
     # Фейковые/placeholder email
     if prefix in ('example', 'test', 'user', 'demo', 'sample', 'your',
@@ -10666,6 +10673,14 @@ def _is_generic_email(email: str) -> bool:
     # Невалидные псевдо-домены мессенджеров (агент пишет @telegram вместо реального email)
     if domain in ('telegram', 'vk', 'vk.com', 't.me', 'instagram', 'twitter', 'facebook',
                   'linkedin', 'discord', 'slack', 'whatsapp'):
+        return True
+    # Корпоративные субдомены крупных платформ (eda.yandex.ru, business.mail.ru, etc.)
+    # Это не личные email — это ящики подразделений
+    _CORP_PLATFORM_PARENTS = (
+        '.yandex.ru', '.yandex.com', '.mail.ru', '.google.com',
+        '.microsoft.com', '.amazon.com', '.vk.com', '.sber.ru',
+    )
+    if any(domain.endswith(p) for p in _CORP_PLATFORM_PARENTS):
         return True
     # Государственные / образовательные домены — не спамим
     _GOV_EDU_SUFFIXES = ('.gov', '.gov.ru', '.edu', '.edu.ru', '.mil', '.ac.uk', '.edu.au', '.edu.cn')
