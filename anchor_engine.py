@@ -3089,7 +3089,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                                  if _dec_mem.strip().startswith('{') else {})
                         _rules = _m_ur.get('rules', [])
                         if _rules:
-                            _rules_text = '\n'.join(f"  • {r}" for r in _rules[:15])
+                            _rules_text = '\n'.join(f"  • {r}" for r in _rules)
                             _user_rules_block = (
                                 "\n\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ к выполнению при КАЖДОМ действии):\n"
                                 + _rules_text + '\n'
@@ -6477,7 +6477,7 @@ class AnchorEngine:
                             )
                             _user_rules_acq = _mem_acq.get('rules', [])
                             if _user_rules_acq:
-                                _rules_str = '\n'.join(f'  • {r}' for r in _user_rules_acq[:10])
+                                _rules_str = '\n'.join(f'  • {r}' for r in _user_rules_acq)
                                 _acquisition_hint_c = (
                                     f'\n📌 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (соблюдать обязательно при каждом поручении):\n'
                                     f'{_rules_str}\n'
@@ -11322,7 +11322,7 @@ class AnchorEngine:
                 + f"{_do_not_contact_str}"
                 + _missing_intg_str_c
                 + _intg_advisor_str
-                + (f"📋 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательны для ВСЕХ агентов):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_coord[:10])) + '\n' if _user_rules_coord else '')
+                + (f"📋 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательны для ВСЕХ агентов):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_coord)) + '\n' if _user_rules_coord else '')
                 # Структурный enforce ключевых правил (дополняет текстовое чтение)
                 + (
                     f"⛔ ЖЁСТКИЙ ЗАПРЕТ (из правил пользователя): НЕ назначай задачи на работу с текущей базой контактов / тёплыми.\n"
@@ -13354,7 +13354,7 @@ class AnchorEngine:
                     + _dedup_hint
                     + _intg_live_block
                     + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
-                    + (f"\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag[:10])) + "\n" if _user_rules_ag else '')
+                    + (f"\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag)) + "\n" if _user_rules_ag else '')
                           + _runtime_quality_hints
                     + f"\nАктивные цели:\n{_agent_goals_block}"
                     + (f"\n\n📋 Люди, которых ты уже нашла и добавила в систему (это твоя прошлая работа, не новые находки):\n{_agent_contacts_block}\n"
@@ -17010,7 +17010,7 @@ class AnchorEngine:
             'email_campaigns': email_summary,
             'known_contacts': contacts_summary[:15],
             'n_total_email_contacts': _n_total_email_contacts,
-            'user_rules': user_rules[:10],
+            'user_rules': user_rules,
             'agent_tasks_history': agent_tasks_history,
             'total_emails_sent': _total_emails_sent,
             'total_emails_replied': _total_emails_replied,
