@@ -5941,6 +5941,8 @@ class AnchorEngine:
                         + "  • GitHub профили редко содержат публичный email. Альтернативы: dev.to, личный сайт, ProductHunt.\n"
                         + "  • Бот не может писать первым в мессенджерах без userbot-интеграции.\n"
                         + "  • Вакансии содержат email HR-отдела, а не личные адреса специалистов.\n"
+                        + "  • VC.ru, Habr, ProductHunt, TechCrunch — публичные платформы БЕЗ API. 'Установить контакт с авторами VC.ru' невыполнимо напрямую.\n"
+                        + "    Выполнимый вариант: web_search имя/контакт автора → save_email_contact → send_outreach_email персональное письмо.\n"
                         + "  → Учитывай эти факты при выборе стратегии, а не следуй им как правилам.\n"
                         + "\n🔒 ПРИНЦИП ПОЛНОГО LIFECYCLE ДЛЯ ВСЕХ ИНТЕГРАЦИЙ (КРИТИЧЕСКИ ВАЖНО):\n"
                         + "  Каждая интеграция — это не 'создай и забудь', а ПОЛНЫЙ ЦИКЛ:\n"
@@ -6693,7 +6695,39 @@ class AnchorEngine:
                                     and not _has_platform_hint)
                             )
                             if _is_vague_gen:
-                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → using fallback", _gen_s[:80])
+                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS vague coord: %s → retrying with correction", _gen_s[:80])
+                                # ── Vague-retry: даём AI конкретную критику вместо перехода к шаблонам ──
+                                try:
+                                    _vague_fix_msg = (
+                                        f"Твоё поручение не подходит: '{_gen_s[:200]}'.\n"
+                                        "ПРОБЛЕМА: нет конкретного инструмента (web_search/send_outreach_email/check_emails/create_post/save_note/...) "
+                                        "и/или инфинитив вместо повелительного наклонения, и/или нет измеримого результата.\n"
+                                        f"Перепиши поручение для {_chosen_name}: 2-3 законченных предложения.\n"
+                                        "ОБЯЗАТЕЛЬНО: повелительное наклонение (найди/отправь/проверь/создай/...) + "
+                                        "конкретный tool + что именно + ожидаемый результат (N контактов / письмо / заметка).\n"
+                                        "Если цель упоминает платформу без API (VC.ru, Habr, ProductHunt) → "
+                                        "переведи в выполнимое: web_search по имени автора → save_email_contact → send_outreach_email.\n"
+                                        "Формат: сплошной текст, без markdown."
+                                    )
+                                    _retry_vague_gen = await asyncio.wait_for(
+                                        _qar_coord([
+                                            {'role': 'user', 'content': _coord_prompt},
+                                            {'role': 'assistant', 'content': _gen_s},
+                                            {'role': 'user', 'content': _vague_fix_msg},
+                                        ], max_tokens=400),
+                                        timeout=20,
+                                    )
+                                    if _retry_vague_gen and len(_retry_vague_gen.strip()) > 80:
+                                        _rvg_lower = _retry_vague_gen.strip().lower()
+                                        _rvg_ok = (
+                                            any(v in _rvg_lower for v in _IMPERATIVE_VERBS)
+                                            or any(t in _rvg_lower for t in _COORD_TOOL_NAMES)
+                                        ) and not any(v in _rvg_lower for v in _VAGUE_COORD_PATTERNS)
+                                        if _rvg_ok:
+                                            _coord_text = _retry_vague_gen.strip()
+                                            logger.info("[ANCHOR-AUTOPILOT] vague-retry: success for %s", _chosen_name)
+                                except Exception as _vague_retry_err:
+                                    logger.debug('[ANCHOR-AUTOPILOT] vague-retry: %s', _vague_retry_err)
                             else:
                                 _coord_text = _gen_s
                                 # ── Truncation guard: если LLM обрезал на середине предложения ──
@@ -6715,6 +6749,12 @@ class AnchorEngine:
                                     'добавить': 'добавь', 'сохранить': 'сохрани', 'составить': 'составь',
                                     'поискать': 'поищи', 'выбрать': 'выбери', 'связаться': 'свяжись',
                                     'открыть': 'открой', 'обновить': 'обнови',
+                                    # Добавлено: фреквентные инфинитивы от AI
+                                    'установить': 'установи', 'наладить': 'наладь', 'получить': 'получи',
+                                    'помочь': 'помоги', 'перейти': 'перейди', 'взять': 'возьми',
+                                    'выйти': 'выйди', 'рассмотреть': 'рассмотри', 'запросить': 'запроси',
+                                    'заполнить': 'заполни', 'удалить': 'удали', 'скачать': 'скачай',
+                                    'включить': 'включи', 'выключить': 'выключи',
                                 }
                                 for _inf, _imp in _INF_TO_IMP.items():
                                     _coord_text = re.sub(
