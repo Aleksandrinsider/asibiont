@@ -6464,44 +6464,27 @@ class AnchorEngine:
                             except Exception:
                                 pass
 
-                        # ── Детектор цели «привлечь новых» ──
-                        # Если цель про рост/новых людей — координатор должен явно видеть это
-                        # и НЕ зацикливаться на существующих контактах
-                        _goal_is_acquisition = False
-                        _existing_contacts_count = 0
+                        # ── Правила пользователя → подсказка координатору ──
+                        # Читаем user.memory['rules'] и если есть правила — передаём как контекст.
+                        # Никаких хардкодных ключевых слов: пользователь сам формулирует что важно.
                         _acquisition_hint_c = ''
-                        _ACQUISITION_KEYWORDS = (
-                            'привлеч', 'новых', 'найти клиент', 'найти польз', 'рост',
-                            'growth', 'recruit', 'acquire', 'лид', 'lead', 'охват',
-                            'аудитор', 'подписчик', 'новые клиент', 'новые польз',
-                            'новых клиент', 'новых польз', 'новых пользовател',
-                        )
-                        _g_lower_acq = _g0.lower()
-                        _goal_is_acquisition = any(kw in _g_lower_acq for kw in _ACQUISITION_KEYWORDS)
-                        if _goal_is_acquisition:
-                            try:
-                                from models import EmailContact as _EC_acq
-                                _existing_contacts_count = session.query(_EC_acq).filter_by(
-                                    user_id=user.id
-                                ).count()
-                            except Exception:
-                                pass
-                            if _existing_contacts_count > 0:
+                        try:
+                            import json as _json_acq
+                            from ai_integration.memory import decrypt_data as _dec_acq
+                            _mem_acq = (
+                                _json_acq.loads(_dec_acq(user.memory))
+                                if user.memory else {}
+                            )
+                            _user_rules_acq = _mem_acq.get('rules', [])
+                            if _user_rules_acq:
+                                _rules_str = '\n'.join(f'  • {r}' for r in _user_rules_acq[:10])
                                 _acquisition_hint_c = (
-                                    f'\n🎯 ЦЕЛЬ ТРЕБУЕТ ПОИСКА НОВЫХ ЛЮДЕЙ — прочитай внимательно:\n'
-                                    f'  В базе уже {_existing_contacts_count} контактов. Это НЕ твоя целевая аудитория для поиска.\n'
-                                    f'  Задача: НАЙТИ и ДОБАВИТЬ новых людей, которых в базе ещё НЕТ.\n'
-                                    f'  → ПРАВИЛЬНО: web_search по профессиональным площадкам (GitHub, dev.to, Хабр, LinkedIn, ProductHunt)\n'
-                                    f'     + сохранить через save_email_contact тех, кого нашли впервые\n'
-                                    f'  → НЕПРАВИЛЬНО: работать с теми кто уже в базе, отправлять им письма снова как «новым»\n'
-                                    f'  → Если агент в прошлом цикле нашёл тех же людей — источник исчерпан, смени площадку.\n'
+                                    f'\n📌 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (соблюдать обязательно при каждом поручении):\n'
+                                    f'{_rules_str}\n'
                                 )
-                            else:
-                                _acquisition_hint_c = (
-                                    f'\n🎯 ЦЕЛЬ ТРЕБУЕТ НАХОЖДЕНИЯ ПЕРВЫХ КОНТАКТОВ:\n'
-                                    f'  База пуста — первый приоритет: найти реальных людей через web_search\n'
-                                    f'  и сохранить через save_email_contact. Поиск → сохранение → письмо.\n'
-                                )
+                        except Exception:
+                            pass
+
 
                         _coord_prompt = (
                             f"Ты — ASI, координатор команды (МУЖСКОЙ род: я нашёл, я проверил, я сделал)"
