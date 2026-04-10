@@ -7832,6 +7832,46 @@ async def api_goals_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def api_goal_delete_handler(request):
+    """DELETE /api/goals/{goal_id} — mark goal as deleted"""
+    try:
+        session = await get_session(request)
+        user_id = session.get('user_id') if session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        goal_id = int(request.match_info.get('goal_id', 0))
+        if not goal_id:
+            return web.json_response({'error': 'Invalid goal_id'}, status=400)
+        session_db = Session()
+        try:
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            goal = session_db.query(Goal).filter_by(id=goal_id, user_id=user.id).first()
+            if not goal:
+                return web.json_response({'error': 'Goal not found'}, status=404)
+            goal.status = 'deleted'
+            # Sync profile.goals text — remove this goal's title
+            try:
+                from models import UserProfile
+                prof = session_db.query(UserProfile).filter_by(user_id=user.id).first()
+                if prof and prof.goals:
+                    import re as _re
+                    parts = [p.strip() for p in _re.split(r'[;,]', prof.goals) if p.strip()]
+                    parts = [p for p in parts if p.lower() != goal.title.lower()]
+                    prof.goals = ', '.join(parts) if parts else None
+            except Exception:
+                pass
+            session_db.commit()
+            logger.info(f"[API] Goal {goal_id} deleted by user {user.id}")
+            return web.json_response({'ok': True})
+        finally:
+            session_db.close()
+    except Exception as e:
+        logger.error(f"Error in api_goal_delete: {e}", exc_info=True)
+        return web.json_response({'error': 'Internal server error'}, status=500)
+
+
 async def api_notes_handler(request):
     """API for getting and creating notes"""
     try:
@@ -13164,6 +13204,7 @@ app.router.add_get('/api/interactions', api_interactions_handler)
 app.router.add_get('/api/search_contacts', api_search_contacts_handler)
 app.router.add_get('/api/balance', api_balance_handler)
 app.router.add_get('/api/goals', api_goals_handler)
+app.router.add_delete('/api/goals/{goal_id}', api_goal_delete_handler)
 app.router.add_get('/api/notes', api_notes_handler)
 app.router.add_post('/api/notes', api_notes_handler)
 app.router.add_delete('/api/notes/{note_id}', api_note_delete_handler)

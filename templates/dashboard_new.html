@@ -13583,8 +13583,11 @@ except Exception as e:
                     
                     html += `<div style="margin-bottom: 10px;">`;
                     html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">`;
-                    html += `<span style="font-size: 13px; color: #374151; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%;">${g.title}</span>`;
-                    html += `<span style="font-size: 13px; color: #374151; white-space: nowrap;">${progress}%</span>`;
+                    html += `<span style="font-size: 13px; color: #374151; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%;">${g.title}</span>`;
+                    html += `<div style="display: flex; align-items: center; gap: 6px; white-space: nowrap;">`;
+                    html += `<span style="font-size: 13px; color: #374151;">${progress}%</span>`;
+                    html += `<button onclick="deleteGoal(${g.id})" title="Удалить цель" style="background: none; border: none; cursor: pointer; padding: 2px; color: #9CA3AF; line-height: 1; display: flex; align-items: center;" onmouseover="this.style.color='#d73a49'" onmouseout="this.style.color='#9CA3AF'"><svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"/></svg></button>`;
+                    html += `</div>`;
                     html += `</div>`;
                     html += `<div class="progress-bar">`;
                     html += `<div style="width: ${progress}%; height: 100%; background: ${barColor}; border-radius: 2px; transition: width 0.3s ease;"></div>`;
@@ -13598,6 +13601,26 @@ except Exception as e:
             }
         }
         
+        async function deleteGoal(goalId) {
+            if (!confirm('Удалить цель?')) return;
+            try {
+                const response = await fetch(`/api/goals/${goalId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                if (response.ok) {
+                    await loadGoalsProgress();
+                } else {
+                    const err = await response.json();
+                    showNotification(err.error || 'Ошибка удаления цели', 'error');
+                }
+            } catch (e) {
+                console.error('Error deleting goal:', e);
+                showNotification('Ошибка удаления цели', 'error');
+            }
+        }
+
         async function completeTask(taskId) {
             try {
                 const response = await fetch('/complete_task', {
