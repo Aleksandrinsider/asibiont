@@ -7207,9 +7207,17 @@ class AnchorEngine:
                         if _ack_ok:
                             _is_ack_fem = (_chosen_name or '')[-1:] in 'аяАЯ'
                             _ack_role = (agent_data.get('job_title') or agent_data.get('specialization') or 'специалист')[:60]
+                            # Вырезаем имя агента из начала coord_text — иначе AI пишет "Кристина, привет!" себе
+                            import re as _re_ack_strip
+                            _coord_text_for_ack = _re_ack_strip.sub(
+                                rf'^{_re_ack_strip.escape(_chosen_name)}\s*,\s*',
+                                '',
+                                (_coord_text or '').strip(),
+                                flags=_re_ack_strip.IGNORECASE,
+                            ).strip()
                             _ack_prompt = (
                                 f"Ты — {_chosen_name}, {_ack_role}. "
-                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_smart_trunc(_coord_text, 400)}».\n"
+                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_smart_trunc(_coord_text_for_ack, 400)}».\n"
                                 f"Напиши 3-5 предложений — ОТВЕТ в чате, как живой коллега.\n"
                                 f"ОБЯЗАТЕЛЬНО объясни:\n"
                                 f"  1) ЧТО конкретно сделаешь (какой инструмент, какой источник, какой канал)\n"
@@ -7227,6 +7235,16 @@ class AnchorEngine:
                             _ack_gen = await _qar_ack([{'role': 'user', 'content': _ack_prompt}], max_tokens=500)
                             if _ack_gen and len(_ack_gen.strip()) > 4:
                                 _ack_text = _ack_gen.strip()
+                                # Safety: убираем самообращение "Кристина, привет!" / "Кристина, ..."
+                                import re as _re_self_addr
+                                _ack_text = _re_self_addr.sub(
+                                    rf'^{_re_self_addr.escape(_chosen_name)}\s*[,!.]?\s*(?:привет[!.]?\s*)?',
+                                    '',
+                                    _ack_text,
+                                    flags=_re_self_addr.IGNORECASE,
+                                ).strip()
+                                if _ack_text and _ack_text[0].islower():
+                                    _ack_text = _ack_text[0].upper() + _ack_text[1:]
                                 # Safety net: если промпт не помог и ack всё равно пустой
                                 _ack_lower = _ack_text.lower()
                                 _HOLLOW_ACK = (
@@ -7918,6 +7936,15 @@ class AnchorEngine:
                         if not _cleaned_result or len(_cleaned_result.strip()) < 10:
                             _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
                         _cleaned_result = re.sub(r'\n{2,}', '\n', _cleaned_result).strip()
+                        # Убираем самообращение агента к себе "Кристина, ..." / "Кристина, привет!"
+                        _cleaned_result = re.sub(
+                            rf'^{re.escape(_chosen_name)}\s*[,!.]?\s*(?:привет[!.]?\s*)?',
+                            '',
+                            _cleaned_result,
+                            flags=re.IGNORECASE,
+                        ).strip()
+                        if _cleaned_result and _cleaned_result[0].islower():
+                            _cleaned_result = _cleaned_result[0].upper() + _cleaned_result[1:]
                         _cleaned_result = re.sub(r'через\s+—', 'через другой канал —', _cleaned_result, flags=re.IGNORECASE)
                         _cleaned_result = re.sub(r'через\s{2,}', 'через ', _cleaned_result, flags=re.IGNORECASE)
                         _cleaned_result = re.sub(
