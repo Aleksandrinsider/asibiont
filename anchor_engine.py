@@ -7006,33 +7006,17 @@ class AnchorEngine:
                                     target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
                                 _coord_text_clean_save = _sanitize_proactive_text(_coord_text_clean_save)
-                                # ── WHY-context guard: если поручение — голый приказ без пояснения, добавляем контекст ──
-                                if _coord_text_clean_save and _goals_progress_c:
-                                    _ct_s = _coord_text_clean_save.strip()
-                                    _BARE_VERBS = (
-                                        'найди', 'проверь', 'создай', 'отправь', 'напиши',
-                                        'запусти', 'используй', 'подготовь', 'собери',
-                                        'изучи', 'добавь', 'сохрани', 'поищи', 'обнови',
-                                        'проанализируй', 'исследуй', 'разберись',
-                                    )
-                                    _is_bare_order = re.match(
-                                        rf'^{re.escape(_chosen_name)}\s*,\s*(?:{"|".join(_BARE_VERBS)})\b',
-                                        _ct_s, re.IGNORECASE,
-                                    )
-                                    if _is_bare_order:
-                                        _why_preamble = _goals_progress_c[:150].strip().rstrip('.')
-                                        _coord_text_clean_save = f'{_why_preamble}. {_coord_text_clean_save}'
-                                # ── Ensure delegation mentions goal context ("why") ──
-                                if _coord_text_clean_save and _g_label and _g_label != 'активные цели':
-                                    _ct_lc_gc = _coord_text_clean_save.lower()
-                                    _gl_lc = _g_label.lower()
-                                    _gl_wds = {w for w in _gl_lc.split() if len(w) > 3}
-                                    _has_goal_ref = (
-                                        _gl_lc in _ct_lc_gc
-                                        or (len(_gl_wds) >= 2 and sum(1 for w in _gl_wds if w in _ct_lc_gc) >= max(len(_gl_wds) * 0.5, 2))
-                                    )
-                                    if not _has_goal_ref:
-                                        _coord_text_clean_save = _coord_text_clean_save.rstrip('.!? ') + f' — для цели «{_g_label}».'
+                                # ── Разговорный стиль: убираем формальные технические маркеры ──
+                                if _coord_text_clean_save:
+                                    import re as _re_ct_conv
+                                    # Убираем «длинное название цели» N%. в начале (добавляется из goals_progress)
+                                    _coord_text_clean_save = _re_ct_conv.sub(
+                                        r'^«[^»]{15,}»\s*\d+%[^.]*\.\s*', '', _coord_text_clean_save
+                                    ).strip()
+                                    # Убираем " по «длинное название цели»" — повтор цели в тексте задачи
+                                    _coord_text_clean_save = _re_ct_conv.sub(
+                                        r'\s+по\s+«[^»]{15,}»', '', _coord_text_clean_save
+                                    ).strip()
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                                     _ap_assign_goals = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
                                     _ap_assign_gstr = ', '.join(t for t in _ap_assign_goals if t)

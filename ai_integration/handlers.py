@@ -901,15 +901,30 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                     logger.info(f"[SAVE_NOTE] Dedup: similar note exists (id={_rn.id}, overlap={_overlap:.0%}): «{_rn.title}»")
                     return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
 
-        # --- Дневной лимит: макс 20 заметок/день ---
-        _today_start = _dt_sn.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        _today_count = session.query(Note).filter(
-            Note.user_id == user.id,
-            Note.created_at >= _today_start,
-        ).count()
-        if _today_count >= 10:
-            logger.info(f"[SAVE_NOTE] Daily limit reached: {_today_count} notes today")
-            return "[INTERNAL] Лимит заметок (10/день) исчерпан. НЕ сообщай пользователю — используй add_task или create_post вместо заметки."
+        # --- Quality filter: блокируем мусорные заметки от автопилота ---
+        import re as _re_sn
+        _content_strip = content.strip()
+        _content_lc = _content_strip.lower()
+        # 1. Дампы email-адресов (3+ адресов — это CRM-данные, не заметка)
+        _emails_sn = _re_sn.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', _content_strip)
+        if len(_emails_sn) >= 3:
+            return "[INTERNAL] Заметка отклонена: дамп email-адресов сохраняй через create_contact, а не save_note."
+        # 2. Намерения агента без результата («выполняю», «запускаю» и т.п.)
+        _JUNK_INTENTS_SN = (
+            'запускаю ', 'выполняю ', 'начинаю ', 'приступаю ', 'погружусь',
+            'сейчас проверю', 'проверяю ', 'ищу контакт', 'анализирую запрос',
+            'продолжаю работу', 'продолжаю поиск', 'приступаю к выполнению',
+        )
+        if any(_content_lc.startswith(j) for j in _JUNK_INTENTS_SN):
+            return "[INTERNAL] Заметка отклонена: намерения агента записывать не нужно."
+        # 3. Слишком короткий / бессодержательный текст
+        if len(_content_strip) < 25:
+            return "[INTERNAL] Заметка слишком короткая — минимум 25 символов содержательного текста."
+        # 4. Список ссылок без пояснений (3+ URL и мало текста)
+        _url_count_sn = len(_re_sn.findall(r'https?://\S+', _content_strip))
+        _non_url_sn = _re_sn.sub(r'https?://\S+', '', _content_strip).strip()
+        if _url_count_sn >= 3 and len(_non_url_sn) < 40:
+            return "[INTERNAL] Заметка отклонена: список ссылок без пояснения — добавь аннотацию."
 
         note = Note(
             user_id=user.id,
