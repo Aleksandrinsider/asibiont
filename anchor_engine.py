@@ -6611,7 +6611,8 @@ class AnchorEngine:
                             "✅ каждое предложение закончено с точкой? "
                             "✅ глаголы в императиве (найди/создай/отправь, не найти/создать/отправить)? "
                             "✅ нет мета-комментариев о поведении агента? "
-                            "✅ каждый шаг через реальный tool из карточки (не «HTTP-запрос», не «запусти скрипт»)?"
+                            "✅ каждый шаг через реальный tool из карточки (не «HTTP-запрос», не «запусти скрипт»)?   "
+                            "ФОРМУЛА ПОРУЧЕНИЯ: [Имя], [ЗАЧЕМ — 1 фраза]. [Глагол] через [TOOL из карточки] [ЧТО/ГДЕ]. [Ожидаемый результат]."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=900)
                         _VAGUE_COORD_PATTERNS = (
@@ -6631,6 +6632,10 @@ class AnchorEngine:
                                 # Russian equivalents so AI-generated Russian text isn't rejected
                                 'проверь входящие', 'проверь почту', 'отправь письмо', 'найди через',
                                 'сохрани через', 'создай пост', 'создай задачу', 'исследуй тему',
+                                # Ещё русские формулировки с указанием инструмента
+                                'поищи через', 'запусти поиск', 'запусти web', 'отправь через',
+                                'используй web_search', 'используй send_', 'используй check_',
+                                'через web_search', 'через save_', 'через send_', 'через check_',
                             )
                             _COORD_PLATFORM_HINTS = (
                                 'rss', 'хабр', 'discord', 'telegram', 'email', 'поиск',
@@ -6699,9 +6704,11 @@ class AnchorEngine:
                                     if _retry_vague_gen and len(_retry_vague_gen.strip()) > 80:
                                         _rvg_lower = _retry_vague_gen.strip().lower()
                                         _rvg_ok = (
-                                            any(v in _rvg_lower for v in _IMPERATIVE_VERBS)
-                                            or any(t in _rvg_lower for t in _COORD_TOOL_NAMES)
-                                        ) and not any(v in _rvg_lower for v in _VAGUE_COORD_PATTERNS)
+                                            any(t in _rvg_lower for t in _COORD_TOOL_NAMES)  # tool name REQUIRED
+                                            and any(v in _rvg_lower for v in _IMPERATIVE_VERBS)
+                                            and not any(v in _rvg_lower for v in _VAGUE_COORD_PATTERNS)
+                                            and len(_retry_vague_gen.strip()) > 80
+                                        )
                                         if _rvg_ok:
                                             _coord_text = _retry_vague_gen.strip()
                                             logger.info("[ANCHOR-AUTOPILOT] vague-retry: success for %s", _chosen_name)
