@@ -5923,11 +5923,37 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         except Exception as _e_w:
             logger.debug("[FIND_RELEVANT] warm contacts lookup failed: %s", _e_w)
 
+    # ── Спецкейс: задача про outreach/email/лиды → из EmailContact (внешние контакты) ──
+    import re as _re_frct2
+    _OUTREACH_KW = ('email', 'outreach', 'лид', 'lead', 'контакт', 'contact', 'рассылк',
+                    'привлечь', 'найти пользовател', 'найти клиент', 'база',
+                    'cold email', 'холодн', 'потенциальн', 'новых пользовател',
+                    'github', 'хабр', 'dev.to', 'разработчик', 'developer')
+    if any(kw in _td_low for kw in _OUTREACH_KW):
+        try:
+            from models import EmailContact as _ECO
+            _ext_contacts = session.query(_ECO).filter(
+                _ECO.user_id == user.id,
+                _ECO.status.notin_(['bounced', 'unsubscribed']),
+            ).order_by(_ECO.created_at.desc()).limit(limit).all()
+            if _ext_contacts:
+                _lines = [
+                    f"{c.name or '?'} <{c.email}> [статус: {c.status or 'new'}] (src={c.source or '?'})"
+                    for c in _ext_contacts
+                ]
+                if close_session:
+                    session.close()
+                return (
+                    f"Внешние контакты для outreach ({len(_ext_contacts)} из базы):\n"
+                    + '\n'.join(_lines)
+                    + "\n\nℹ️ Это email-контакты из EmailContact (НЕ пользователи платформы). "
+                    "Если нужны НОВЫЕ контакты — используй web_search, затем save_email_contact. "
+                    "Если нужно написать — send_outreach_email."
+                )
+        except Exception as _e_o:
+            logger.debug("[FIND_RELEVANT] outreach contacts lookup failed: %s", _e_o)
 
-    task_keywords = set()
-    stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'пойду', 'сделать', 'в', 'на', 'с', 'для', 'от', 'к', 'по', 'из'}
-    
-    # Синонимы для расширения поиска
+
     synonyms = {
         'пробежка': ['бег', 'бегать', 'running', 'jogging'],
         'бег': ['пробежка', 'бегать', 'running', 'jogging'],

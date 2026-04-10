@@ -11402,8 +11402,8 @@ class AnchorEngine:
             )
 
             try:
-                # Больше токенов когда шагов больше (180 на шаг, минимум 500, максимум 1200)
-                _plan_max_tokens = min(max(500, _n_plan_steps * 180), 2000)
+                # Больше токенов когда шагов больше (220 на шаг, минимум 600, максимум 3200)
+                _plan_max_tokens = min(max(600, _n_plan_steps * 220), 3200)
                 _plan_json = await asyncio.wait_for(
                     _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=_plan_max_tokens),
                     timeout=30,
@@ -11948,6 +11948,43 @@ class AnchorEngine:
                 logger.debug("[COORD] fairness backfill skipped: %s", _fa_err)
 
             logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan])
+
+            # ── Критический застой: принудительное уведомление пользователя ──
+            # Если цель не движется 5+ дней — AI-подсказки не работают. Форсируем реальную отправку.
+            # Этот шаг добавляется ПОСЛЕ дедупликации чтобы его нельзя было выкинуть фильтрами.
+            try:
+                _crit_stuck = [(t, d, p) for t, d, p in _stuck_notify_goals if d >= 5]
+                if _crit_stuck:
+                    # Ищем любого агента (ASI всегда есть)
+                    _notif_agent = (_profiles[0]['name'] if _profiles else 'ASI')
+                    _gt_s, _days_s, _prog_s = _crit_stuck[0]
+                    # Избегаем дубля: проверяем, не назначен ли уже send_message_to_user для этой цели
+                    _already_notif = any(
+                        'send_message_to_user' in (_ps.get('tool') or '')
+                        and (_gt_s[:30].lower() in (_ps.get('goal') or '').lower()
+                             or _gt_s[:30].lower() in (_ps.get('task') or '').lower())
+                        for _ps in _plan
+                    )
+                    if not _already_notif:
+                        _stuck_msg = (
+                            f'Сообщи пользователю: цель «{_gt_s}» не движется {_days_s} дней, '
+                            f'прогресс {_prog_s}%. Кратко опиши что уже пробовали и предложи '
+                            f'2-3 реальных варианта что изменить или попробовать. '
+                            f'Спроси: хочет ли он скорректировать стратегию?'
+                        )
+                        _plan.append({
+                            'agent': _notif_agent,
+                            'tool': 'send_message_to_user',
+                            'task': _stuck_msg,
+                            'goal': _gt_s,
+                            'reason': f'critical_stuck_{_days_s}d',
+                        })
+                        logger.info(
+                            "[COORD] critical-stuck: forced send_message_to_user for goal '%s' (%dd, %d%%)",
+                            _gt_s[:40], _days_s, _prog_s,
+                        )
+            except Exception as _cs_err:
+                logger.debug("[COORD] critical-stuck inject: %s", _cs_err)
 
             # ── ASI fallback: цели без исполнителя в плане ──
             # Если цель есть, а в плане никто её не покрывает → ASI берёт её сам
@@ -13377,9 +13414,28 @@ class AnchorEngine:
 
                 if not _result_stripped or len(_result_stripped) < 5 or _is_done_fb:
                     if _is_done_fb:
-                        # Вместо «немого» ответа даём короткий, понятный статус по шагу.
-                        _task_short_h = (_ag_task.split('\n')[0] or _ag_task)[:140].strip()
-                        _result = f"Сделал шаг по задаче: {_task_short_h}. Перехожу к следующему действию."
+                        # Агент отвечает "готово/выполнил" — формируем контекстный статус с деталями.
+                        # Если инструменты были вызваны — включаем их в результат,
+                        # чтобы координатор знал ЧТО было сделано, а не только что задание звучало.
+                        _task_short_h = (_ag_task.split('\n')[0] or _ag_task)[:120].strip()
+                        _goal_short_h = (_ag_goal_title or '')[:60]
+                        _PASSIVE_DONE = {'web_search', 'research_topic', 'get_news_trends', 'update_goal_progress', 'save_note'}
+                        _real_done_tools = [t for t in _step_tools if t not in _PASSIVE_DONE]
+                        if _real_done_tools:
+                            _tools_str = ', '.join(_real_done_tools[:4])
+                            _result = (
+                                f"Выполнил [{_tools_str}] по задаче «{_task_short_h}»"
+                                + (f" (цель: {_goal_short_h})" if _goal_short_h else '')
+                                + "."
+                            )
+                        else:
+                            # Hollow done_fb — нет реальных действий, только слова "готово"
+                            _result = (
+                                f"[Без действий] Агент отчитался о выполнении, инструменты не использовал. "
+                                f"Задача: «{_task_short_h}»"
+                                + (f" (цель: {_goal_short_h})" if _goal_short_h else '')
+                                + "."
+                            )
                         _result_stripped = _result
                     if not _is_done_fb:
                         # Пустой результат после retry: отменяем задачу + объясняем пользователю
@@ -13693,7 +13749,11 @@ class AnchorEngine:
                         }
                         # Only count tools that actually succeeded (no failure phrases in output)
                         _step_text_chk = (_cleaned or '').lower()
-                        _fail_kw = ('ошибк', 'не удалось', 'error', 'не отправлен', 'не получилось', 'лимит')
+                        _fail_kw = ('ошибк', 'не удалось', 'error', 'не отправлен', 'не получилось', 'лимит',
+                                    'заблокирован', 'blocked', '⛔', '⚠️ email написан', '⚠ email написан',
+                                    'не найден реальный', 'уже зарегистрирован', 'нельзя отправлять',
+                                    'адрес платформы', 'фейковый или generic', 'нет инструмента',
+                                    'не могу опубликовать', 'not possible', 'невозможно')
                         _has_failures = any(kw in _step_text_chk for kw in _fail_kw)
                         _real_count = sum(1 for t in _real_action_tools if t in _REAL_RESULT_TOOLS)
                         _minor_count = sum(1 for t in _real_action_tools if t in _MINOR_RESULT_TOOLS)
