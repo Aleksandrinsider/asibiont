@@ -1744,7 +1744,7 @@ class HybridAutonomousAgent:
                 _k, _, _v = _kline.partition('=')
                 env[_k.strip()] = _v.strip()
         for _k, _v in action_params.items():
-            env[f'AGENT_PARAM_{str(_k).upper()}'] = str(_v)
+            env[f'AGENT_PARAM_{str(_k).upper()}'] = '' if _v is None else str(_v)
         _is_linux = _sys_ea.platform != 'win32'
         def _resource_limits():
             try:
@@ -2243,6 +2243,19 @@ class HybridAutonomousAgent:
             params.pop('sender_name', None)
             params.pop('from_name', None)
             params.pop('from_email', None)   # не часть send_outreach_email
+            # GUARD: блокируем отправку письма без темы или тела
+            _missing_fields = []
+            if not params.get('subject'):
+                _missing_fields.append('subject (тема письма)')
+            if not params.get('body'):
+                _missing_fields.append('body (текст письма)')
+            if _missing_fields:
+                params['__skip__'] = True
+                params['__block_error__'] = (
+                    f"⛔ Нельзя отправить письмо без: {', '.join(_missing_fields)}. "
+                    "Сначала составь тему и текст письма, затем вызови инструмент снова с subject= и body=."
+                )
+                return params
             # Автозапись кто отправил: берём имя активного агента
             if not params.get('sent_by_agent'):
                 _ag_sba = self._active_agent_data.get(params.get('user_id'))
@@ -2265,6 +2278,16 @@ class HybridAutonomousAgent:
                 params['__block_error__'] = (f"⛔ Email {_rcpt} — placeholder/фейковый адрес. "
                                              "Найди реальный email через web_search или используй другой метод контакта.")
                 return params
+            # GUARD: блокируем email вида "domain.tld@provider" (local-part является доменным именем)
+            # Пример: gmail.com@ymail.com, company.ru@hotmail.com — это артефакты CRM, не реальные адреса
+            _COMMON_TLDS = ('.com', '.ru', '.org', '.net', '.io', '.co', '.ai', '.de', '.uk', '.fr', '.me')
+            if _rcpt and '@' in _rcpt:
+                _local = _rcpt.split('@')[0]
+                if any(_local.endswith(_tld) for _tld in _COMMON_TLDS):
+                    params['__skip__'] = True
+                    params['__block_error__'] = (f"⛔ {_rcpt} — local-part выглядит как домен ('{_local}'). "
+                                                 "Это не персональный адрес. Найди реальный контакт.")
+                    return params
             # GUARD: блокируем role-based / generic email (не персональные)
             _ROLE_PREFIXES = (
                 'info@', 'support@', 'marketing@', 'sales@', 'sale@', 'admin@', 'noreply@',
