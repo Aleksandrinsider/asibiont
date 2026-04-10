@@ -6851,7 +6851,8 @@ class AnchorEngine:
                     try:
                         _cs = Session()
                         try:
-                            # ── DEDUP + ANTILOOP: не отправляем если похоже на недавние назначения ──
+                            # ── DEDUP removed: AI видит историю назначений в _my_recent_assigns_ctx и сам разнообразит поручения ──
+                            # Мы только логируем повторы для диагностики, не блокируем
                             _skip_coord = False
                             try:
                                 _recent_coords = _cs.query(Interaction).filter(
@@ -6859,168 +6860,9 @@ class AnchorEngine:
                                     Interaction.message_type == 'agent_msg',
                                     Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=6),
                                 ).order_by(Interaction.created_at.desc()).limit(20).all()
-                                _new_kw = {w for w in (_coord_text or '').lower().split() if len(w) > 3}
-                                # Bigram overlap: ловит перефразировки лучше чем слова
-                                _new_words_list = [w for w in (_coord_text or '').lower().split() if len(w) > 3]
-                                _new_bigrams = {(_new_words_list[i], _new_words_list[i+1]) for i in range(len(_new_words_list)-1)} if len(_new_words_list) > 1 else set()
-                                _similar_count = 0
-                                _cross_agent_similar = 0  # дедуп МЕЖДУ агентами (ловит "найди 5-7" отправленное всем)
-                                for _rc in _recent_coords:
-                                    try:
-                                        _rc_d = json.loads(_rc.content or '{}')
-                                        if _rc_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
-                                            continue
-                                        _rc_text = (_rc_d.get('text', '') or '').lower()
-                                        _rc_kw = {w for w in _rc_text.split() if len(w) > 3}
-                                        if not _rc_kw or not _new_kw:
-                                            continue
-                                        _overlap = len(_rc_kw & _new_kw) / max(min(len(_rc_kw), len(_new_kw)), 1)
-                                        _rc_wl = [w for w in _rc_text.split() if len(w) > 3]
-                                        _rc_bigrams = {(_rc_wl[i], _rc_wl[i+1]) for i in range(len(_rc_wl)-1)} if len(_rc_wl) > 1 else set()
-                                        _bi_overlap = (len(_new_bigrams & _rc_bigrams) / max(min(len(_new_bigrams), len(_rc_bigrams)), 1)) if _new_bigrams and _rc_bigrams else 0
-                                        _is_same_agent = (_rc_d.get('__to_agent') == _chosen_name)
-                                        # ── Per-agent dedup: только высокий overlap считается дублем ──
-                                        if _is_same_agent:
-                                            if _overlap > 0.45 or _bi_overlap > 0.40:
-                                                _similar_count += 1
-                                                if _similar_count >= 2:
-                                                    _skip_coord = True
-                                                    logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS antiloop: %d similar assigns to %s in 6h (word=%.0f%% bi=%.0f%%), skip", _similar_count, _chosen_name, _overlap*100, _bi_overlap*100)
-                                                    break
-                                            if _overlap > 0.65 or _bi_overlap > 0.55:
-                                                _skip_coord = True
-                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS dedup: word=%.0f%% bi=%.0f%% overlap with recent assign to %s, skip", _overlap * 100, _bi_overlap * 100, _chosen_name)
-                                                break
-                                        # ── Cross-agent dedup: одинаковая фраза разным агентам (высокий порог) ──
-                                        if _overlap > 0.60 or _bi_overlap > 0.55:
-                                            _cross_agent_similar += 1
-                                            if _cross_agent_similar >= 4:
-                                                _skip_coord = True
-                                                logger.info("[ANCHOR-AUTOPILOT] TEACH-MISS cross-agent loop: phrase repeated %d× across agents (word=%.0f%% bi=%.0f%%), skip", _cross_agent_similar, _overlap*100, _bi_overlap*100)
-                                                break
-                                    except Exception as _e:
-                                        logger.debug("suppressed: %s", _e)
-
-                                # ── Prefix dedup: начало фразы одинаковое → зацикливание даже при разных деталях ──
-                                if not _skip_coord and _coord_text and len(_coord_text) > 30:
-                                    _new_prefix = (_coord_text or '').lower().strip()[:80]
-                                    _prefix_matches = 0
-                                    for _rc_pf in _recent_coords:
-                                        try:
-                                            _rc_pf_d = json.loads(_rc_pf.content or '{}')
-                                            if _rc_pf_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
-                                                continue
-                                            if _rc_pf_d.get('__to_agent') != _chosen_name:
-                                                continue
-                                            _rc_pf_text = (_rc_pf_d.get('text', '') or '').lower().strip()[:80]
-                                            if not _rc_pf_text:
-                                                continue
-                                            # Считаем пересечение символов первых 80 — если >70%, начало одинаковое
-                                            from difflib import SequenceMatcher as _SM
-                                            _pf_ratio = _SM(None, _new_prefix, _rc_pf_text).ratio()
-                                            if _pf_ratio > 0.65:
-                                                _prefix_matches += 1
-                                        except Exception:
-                                            pass
-                                    if _prefix_matches >= 3:
-                                        _skip_coord = True
-                                        logger.info(
-                                            "[ANCHOR-AUTOPILOT] PREFIX-DEDUP: first 80 chars match %d recent assigns to %s — skip",
-                                            _prefix_matches, _chosen_name,
-                                        )
-
-                                # ── Tool-keyword dedup: динамическое обнаружение инструментов + outcome-порог ──
-                                if not _skip_coord and _coord_text:
-                                    import re as _re_ctd
-                                    try:
-                                        from ai_integration.dynamic_tools import tool_discovery as _td_c
-                                        _known_tools_c = set(_td_c.discovered_tools.keys()) if _td_c.discovered_tools else set()
-                                    except Exception:
-                                        _known_tools_c = set()
-                                    _ct_low = _coord_text.lower()
-                                    _known_tools_c.update(_re_ctd.findall(r'\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b', _ct_low))
-                                    _known_tools_c -= {'user_id', 'task_id', 'goal_id', 'agent_id'}
-                                    _new_tools_c = {t for t in _known_tools_c if t in _ct_low and len(t) >= 5}
-                                    if _new_tools_c:
-                                        _tool_rep_c = 0
-                                        for _rc2 in _recent_coords:
-                                            try:
-                                                _rc2_d = json.loads(_rc2.content or '{}')
-                                                if _rc2_d.get('__to_agent') != _chosen_name:
-                                                    continue
-                                                if _rc2_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
-                                                    continue
-                                                _rc2_t = (_rc2_d.get('text', '') or '').lower()
-                                                if any(t in _rc2_t for t in _new_tools_c):
-                                                    _tool_rep_c += 1
-                                            except Exception:
-                                                pass
-                                        # Динамический порог по outcome_memory
-                                        _thresh_c = 3
-                                        if _tool_rep_c >= 2:
-                                            try:
-                                                from models import AgentActivityLog as _AAL_c
-                                                _oc_rows = _cs.query(_AAL_c).filter(
-                                                    _AAL_c.user_id == user.id,
-                                                    _AAL_c.activity_type == 'outcome_memory',
-                                                    _AAL_c.target == f'agent:{_chosen_name}',
-                                                    _AAL_c.created_at >= datetime.now(timezone.utc) - timedelta(hours=24),
-                                                ).order_by(_AAL_c.created_at.desc()).limit(6).all()
-                                                _ok_c = sum(1 for o in _oc_rows if o.status == 'completed'
-                                                            and any(t in ((o.title or '') + ' ' + (o.content or '')).lower() for t in _new_tools_c))
-                                                _fl_c = sum(1 for o in _oc_rows if o.status == 'failed'
-                                                            and any(t in ((o.title or '') + ' ' + (o.content or '')).lower() for t in _new_tools_c))
-                                                if _ok_c >= 2 and _ok_c > _fl_c:
-                                                    _thresh_c = 6
-                                                elif _fl_c >= 2 and _fl_c >= _ok_c:
-                                                    _thresh_c = 2
-                                            except Exception:
-                                                pass
-                                        if _tool_rep_c >= _thresh_c:
-                                            _skip_coord = True
-                                            logger.info(
-                                                "[ANCHOR-AUTOPILOT] TOOL-DEDUP: tool=%s repeated %dx to %s in 6h (threshold=%d) — skip",
-                                                _new_tools_c, _tool_rep_c, _chosen_name, _thresh_c,
-                                            )
                             except Exception as _dc_err:
+                                _recent_coords = []
                                 logger.debug("[ANCHOR-AUTOPILOT] coord dedup check failed: %s", _dc_err)
-
-                            # ── Recovery: если dedup поймал повтор — пробуем другую стратегию вместо полного пропуска ──
-                            if _skip_coord and _fb_strategies_ref:
-                                try:
-                                    # Собираем тексты недавних назначений для сравнения
-                                    _dedup_recent = []
-                                    for _rc_dd in _recent_coords:
-                                        try:
-                                            _rc_dd_d = json.loads(_rc_dd.content or '{}')
-                                            if _rc_dd_d.get('__to_agent') == _chosen_name:
-                                                _ddt = (_rc_dd_d.get('text', '') or '').strip()[:200]
-                                                if _ddt:
-                                                    _dedup_recent.append(_ddt)
-                                        except Exception:
-                                            pass
-                                    # Пробуем найти стратегию из пула, которая НЕ похожа на недавние
-                                    _alt_strategies = _build_fb_strategies(
-                                        _chosen_name, _g_label, _cats_c, _g0,
-                                        recent_texts=_dedup_recent + (_recent_assign_texts_early or []),
-                                    )
-                                    if _alt_strategies:
-                                        _coord_text = _alt_strategies[0]
-                                        # Prepend WHY-контекст (как в живом диалоге)
-                                        _dr_why = []
-                                        if _goals_progress_c:
-                                            _dr_why.append(_goals_progress_c[:150].strip().rstrip('.'))
-                                        if _last_agent_reply_c and len(_last_agent_reply_c) > 30:
-                                            _dr_why.append(f'последний результат: {_last_agent_reply_c[:150].strip().rstrip(".")}')
-                                        if _dr_why:
-                                            _coord_text = ', '.join(_dr_why) + '. ' + _coord_text
-                                        _skip_coord = False
-                                        logger.info(
-                                            "[ANCHOR-AUTOPILOT] dedup-recovery: found alternative strategy for %s",
-                                            _chosen_name,
-                                        )
-                                except Exception as _rec_err:
-                                    logger.debug('[ANCHOR-AUTOPILOT] dedup-recovery failed: %s', _rec_err)
 
                             # ── Intent-level conversion: если bottleneck + чистый поиск → дописываем конверсию ──
                             if not _skip_coord and _bottleneck_hint_c:
