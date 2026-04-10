@@ -3409,20 +3409,33 @@ class HybridAutonomousAgent:
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
-                            "Summarize results (3-5 sentences, up to 800 chars). "
+                            "Summarize results in full (up to 2000 chars for analysis, up to 800 for others). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses."
                             + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
-                            "Подытожь результаты (3-5 предложений, до 800 символов). "
+                            "Подытожь результаты полностью (для анализа/стратегии — до 2000 символов, для остального — до 800). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task."
                             + _note_hint_ru
                         )})
 
                 # Text-only call (no tools) uses shorter timeout + fewer tokens
                 _timeout = API_TIMEOUT_NORMAL if not _allow_tools else None
-                _max_tok = 600 if _is_last_iter and all_execution_results else 500
+                # Адаптивный лимит: аналитические/стратегические вопросы требуют больше токенов
+                _ANALYSIS_KWORDS = (
+                    'инвестор', 'investor', 'стратег', 'strategy', 'анализ', 'analys',
+                    'план', 'plan', 'риск', 'risk', 'рынок', 'market', 'бизнес', 'business',
+                    'привлеч', 'attract', 'масштаб', 'scale', 'думаешь', 'think',
+                    'мнение', 'opinion', 'плюсы', 'минусы', 'pros', 'cons', 'оцени',
+                    'что думаешь', 'совет', 'recommend', 'как лучше', 'сравни',
+                )
+                _ml_lower = (user_message or '').lower()
+                _is_analysis_q = any(kw in _ml_lower for kw in _ANALYSIS_KWORDS)
+                if _is_last_iter and all_execution_results:
+                    _max_tok = 1200 if _is_analysis_q else 800
+                else:
+                    _max_tok = 1500 if _is_analysis_q else 800
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,
