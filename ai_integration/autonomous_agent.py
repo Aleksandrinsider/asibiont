@@ -5325,6 +5325,35 @@ def _build_user_context_sync(user_db_id: int) -> str:
         logger.warning('[CONTEXT] _build_user_context_sync failed: %s', _ctx_err)
         return ''
 
+    # ── Дополнительные запросы: история писем + активность команды ──
+    outreach_recent: list = []
+    team_activity_recent: list = []
+    try:
+        from models import Session as _Db2, EmailOutreach as _EO_uc, AgentActivityLog as _AAL_uc
+        import datetime as _dt_uc_act
+        _s2 = _Db2()
+        try:
+            outreach_recent = (
+                _s2.query(_EO_uc)
+                .filter_by(user_id=user_db_id)
+                .order_by(_EO_uc.created_at.desc())
+                .limit(5).all()
+            )
+            team_activity_recent = (
+                _s2.query(_AAL_uc)
+                .filter(
+                    _AAL_uc.user_id == user_db_id,
+                    _AAL_uc.created_at >= _dt_uc_act.datetime.now(_dt_uc_act.timezone.utc) - _dt_uc_act.timedelta(hours=6),
+                    _AAL_uc.activity_type.in_(['agent_task', 'coordinator_summary', 'email', 'delegation']),
+                )
+                .order_by(_AAL_uc.created_at.desc())
+                .limit(10).all()
+            )
+        finally:
+            _s2.close()
+    except Exception as _ctx2_err:
+        logger.debug('[CONTEXT] extra queries failed: %s', _ctx2_err)
+
     parts: list[str] = []
 
     # --- Кто пользователь (ВЛАДЕЛЕЦ — НЕ контакт!) ---
@@ -5418,6 +5447,25 @@ def _build_user_context_sync(user_db_id: int) -> str:
             + '\n⚠️ Эти люди УЖЕ сохранены. Ищи НОВЫХ контактов, не дублируй этих.'
         )
 
+    # --- История outreach писем (последние 5) ---
+    if outreach_recent:
+        _o_lines = []
+        _st_map = {
+            'sent': 'отпр.', 'replied': '✉️ ОТВЕТИЛ',
+            'bounced': '❌ bounce', 'opened': 'открыл', 'failed': '❌ ошибка',
+        }
+        for _o in outreach_recent:
+            _ts = _o.created_at.strftime('%d.%m %H:%M') if _o.created_at else ''
+            _st = _st_map.get(_o.status or '', _o.status or '')
+            _line = f"• [{_ts}] → {_o.recipient_name or ''} <{_o.recipient_email}> — {(_o.subject or '(нет темы)')[:60]} [{_st}]"
+            if _o.reply_text:
+                _line += f"\n  Ответ: {_o.reply_text[:120].replace(chr(10), ' ')}"
+            _o_lines.append(_line)
+        parts.append(
+            'ИСТОРИЯ OUTREACH (последние письма):\n' + '\n'.join(_o_lines)
+            + '\n⚠️ sent/replied = УЖЕ писали этому человеку. replied = ждёт ответа.'
+        )
+
     # --- Активные задачи пользователя ---
     if tasks:
         task_lines = []
@@ -5440,6 +5488,23 @@ def _build_user_context_sync(user_db_id: int) -> str:
                     line += f' → цель: {linked_goal.title[:50]}'
             task_lines.append(line)
         parts.append('АКТИВНЫЕ ЗАДАЧИ:\n' + '\n'.join(task_lines))
+
+    # --- Недавняя активность команды (6ч) ---
+    if team_activity_recent:
+        _ta_lines = []
+        _seen_agents_ta: set = set()
+        for _ta in team_activity_recent:
+            _ts = _ta.created_at.strftime('%H:%M') if _ta.created_at else ''
+            _ag = (_ta.title or '').replace(' — обзор целей', '').strip()[:25]
+            _res = (_ta.result or '').strip()[:100]
+            if _ag and _res and _ag not in _seen_agents_ta:
+                _ta_lines.append(f'• [{_ts}] {_ag}: {_res}')
+                _seen_agents_ta.add(_ag)
+        if _ta_lines:
+            parts.append(
+                'АКТИВНОСТЬ КОМАНДЫ (6ч):\n' + '\n'.join(_ta_lines[:5])
+                + '\n→ Не дублируй действия коллег. Координируй со всеми.'
+            )
 
     # --- Правила пользователя (из user.memory) ---
     try:

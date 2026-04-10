@@ -6619,9 +6619,10 @@ class AnchorEngine:
                                 # Нет ни одного глагола-поручения → пустышка (напр. "Кристина, о рынке AI-агентов...")
                                 or not _has_imperative
                                 # Слишком короткое без инструмента и площадки
-                                or (len(_gen_s) < 100 and not _has_tool_name and not _has_platform_hint)
+                                or (len(_gen_s) < 150 and not _has_tool_name and not _has_platform_hint)
                                 # Короткое: площадка есть, но инструмент не указан → пустышка
-                                or (len(_gen_s) < 120 and not _has_tool_name)
+                                # 250 chars = минимум для нормального 2-предложного поручения
+                                or (len(_gen_s) < 250 and not _has_tool_name)
                                 # Абсолютный минимум — задание должно объяснять ЧТО, КАК и ЗАЧЕМ
                                 or len(_gen_s) < 80
                                 # Бессмысленные задания про "альтернативные методы" / "для Telegram пользователей"
@@ -6673,6 +6674,39 @@ class AnchorEngine:
                                         rf'\g<1>{_imp}',
                                         _coord_text,
                                     )
+                                # ── Short-text retry: поручение слишком короткое — просим расширить ──
+                                # Запускаем ПЕРЕД всеми guard-ами чтобы расширенный текст тоже прошёл очистку
+                                if _coord_text and len(_coord_text) < 220:
+                                    try:
+                                        _exp_req = (
+                                            "Поручение слишком короткое. Расширь до 2-3 законченных предложений:\n"
+                                            "  1. ЗАЧЕМ — что это даст для цели прямо сейчас\n"
+                                            "  2. КАК — конкретный инструмент: web_search / save_email_contact / "
+                                            "send_outreach_email / check_emails / create_post / run_agent_action\n"
+                                            "  3. РЕЗУЛЬТАТ — что ждёшь (N контактов, письмо, пост)\n"
+                                            "Сплошной текст, без списков и markdown. Обращение к агенту по имени."
+                                        )
+                                        _exp_gen = await _qar_coord([
+                                            {'role': 'user', 'content': _coord_prompt},
+                                            {'role': 'assistant', 'content': _coord_text},
+                                            {'role': 'user', 'content': _exp_req},
+                                        ], max_tokens=400)
+                                        if _exp_gen:
+                                            _eg = _exp_gen.strip()
+                                            _eg_lower = _eg.lower()
+                                            if (
+                                                len(_eg) > len(_coord_text)
+                                                and len(_eg) >= 130
+                                                and not any(v in _eg_lower for v in _VAGUE_COORD_PATTERNS)
+                                                and any(v in _eg_lower for v in _IMPERATIVE_VERBS)
+                                            ):
+                                                _coord_text = _eg
+                                                logger.info(
+                                                    '[ANCHOR-AUTOPILOT] coord expanded: %d→%d chars for %s',
+                                                    len(_gen_s), len(_coord_text), _chosen_name,
+                                                )
+                                    except Exception as _exp_err:
+                                        logger.debug('[ANCHOR-AUTOPILOT] coord expand retry: %s', _exp_err)
                                 # ── Guard: координатор назначил start_email_campaign при активной кампании ──
                                 if _active_campaigns_ctx and 'start_email_campaign' in _gen_lower:
                                     import re as _re_secamp
@@ -7013,9 +7047,10 @@ class AnchorEngine:
                                     _coord_text_clean_save = _re_ct_conv.sub(
                                         r'^«[^»]{15,}»\s*\d+%[^.]*\.\s*', '', _coord_text_clean_save
                                     ).strip()
-                                    # Убираем " по «длинное название цели»" — повтор цели в тексте задачи
+                                    # Убираем " по [теме] «длинное название цели»" — повтор цели в тексте задачи
+                                    # (?:\w+\s+)? — опционально слово перед «» (напр. "теме", "задаче", "цели")
                                     _coord_text_clean_save = _re_ct_conv.sub(
-                                        r'\s+по\s+«[^»]{15,}»', '', _coord_text_clean_save
+                                        r'\s+по\s+(?:\w+\s+)?«[^»]{15,}»', '', _coord_text_clean_save
                                     ).strip()
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                                     _ap_assign_goals = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
