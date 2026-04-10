@@ -5943,23 +5943,48 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
     if any(kw in _td_low for kw in _OUTREACH_KW):
         try:
             from models import EmailContact as _ECO
-            _ext_contacts = session.query(_ECO).filter(
+            _all_ext = session.query(_ECO).filter(
                 _ECO.user_id == user.id,
                 _ECO.status.notin_(['bounced', 'unsubscribed']),
             ).order_by(_ECO.created_at.desc()).limit(limit).all()
-            if _ext_contacts:
-                _lines = [
-                    f"{c.name or '?'} <{c.email}> [статус: {c.status or 'new'}] (src={c.source or '?'})"
-                    for c in _ext_contacts
-                ]
+            _new_contacts = [c for c in _all_ext if (c.status or 'new') == 'new']
+            _contacted_cs = [c for c in _all_ext if c.status == 'contacted']
+            _replied_cs   = [c for c in _all_ext if c.status in ('replied', 'interested')]
+            if _all_ext:
+                _parts = []
+                if _new_contacts:
+                    _lines_n = [
+                        f"{c.name or '?'} <{c.email}> (src={c.source or '?'})"
+                        for c in _new_contacts
+                    ]
+                    _parts.append(
+                        f"✅ Новые контакты (ещё НЕ писали, {len(_new_contacts)} чел.):\n"
+                        + '\n'.join(_lines_n)
+                    )
+                if _replied_cs:
+                    _lines_r = [
+                        f"{c.name or '?'} <{c.email}> [{c.status}]"
+                        for c in _replied_cs
+                    ]
+                    _parts.append(
+                        f"🔥 Ответившие (тёплые, {len(_replied_cs)} чел.):\n"
+                        + '\n'.join(_lines_r)
+                    )
+                if _contacted_cs:
+                    _names_c = ', '.join(
+                        (c.name or c.email) for c in _contacted_cs[:10]
+                    ) + (f" и ещё {len(_contacted_cs)-10}" if len(_contacted_cs) > 10 else '')
+                    _parts.append(
+                        f"⚠️ Уже получили письмо ({len(_contacted_cs)} чел.) — "
+                        f"только follow-up, НЕ новое холодное письмо: {_names_c}"
+                    )
                 if close_session:
                     session.close()
                 return (
-                    f"Внешние контакты для outreach ({len(_ext_contacts)} из базы):\n"
-                    + '\n'.join(_lines)
+                    '\n\n'.join(_parts)
                     + "\n\nℹ️ Это email-контакты из EmailContact (НЕ пользователи платформы). "
-                    "Если нужны НОВЫЕ контакты — используй web_search, затем save_email_contact. "
-                    "Если нужно написать — send_outreach_email."
+                    "Пиши ТОЛЬКО новым контактам (статус new). "
+                    "⚠️ contacted = им уже написано, send_outreach_email заблокирует повтор — используй follow-up."
                 )
             else:
                 # 0 контактов — не падаем дальше на поиск пользователей платформы — сразу отвечаем четко
@@ -12614,7 +12639,7 @@ async def send_outreach_email(
                 recipient_email=recipient_email,
             ).first()
         if existing and existing.status != 'draft':
-            return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}."
+            return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}. Для повторного контакта используй send_follow_up_email — не пытайся слать новое."
 
         # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
         # 1. Не слать тому, кому уже отправляли из другой кампании последние 14 дней
@@ -12629,7 +12654,7 @@ async def send_outreach_email(
         if cross_existing:
             other_camp = session.query(EmailCampaign).filter_by(id=cross_existing.campaign_id).first()
             other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
-            return f" {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}). Повторная отправка заблокирована (cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней)."
+            return f" {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}), cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней. Используй send_follow_up_email если контакт ответил, иначе жди окончания cooldown."
 
         # 2. Не слать тому, кто ранее пожаловался (complained) или bounced
         bad_status = session.query(EmailOutreach).filter(
