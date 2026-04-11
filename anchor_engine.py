@@ -7100,13 +7100,19 @@ class AnchorEngine:
                             if _ack_gen and len(_ack_gen.strip()) > 4:
                                 _ack_text = _ack_gen.strip()
                                 # Safety: убираем самообращение "Кристина, привет!" / "Кристина, ..."
+                                # Применяем для полного имени И первого слова (на случай расхождения)
                                 import re as _re_self_addr
-                                _ack_text = _re_self_addr.sub(
-                                    rf'^{_re_self_addr.escape(_chosen_name)}\s*[,!.]?\s*(?:привет[!.]?\s*)?',
-                                    '',
-                                    _ack_text,
-                                    flags=_re_self_addr.IGNORECASE,
-                                ).strip()
+                                _ack_san_full = _re_self_addr.escape(_chosen_name or '')
+                                _ack_san_first = _re_self_addr.escape((_chosen_name or '').split()[0])
+                                for _ack_san in ([_ack_san_full, _ack_san_first] if _ack_san_first != _ack_san_full else [_ack_san_full]):
+                                    if not _ack_san:
+                                        continue
+                                    _ack_text = _re_self_addr.sub(
+                                        rf'^{_ack_san}\s*[,!.:]?\s*(?:привет[!.:]?\s*)?',
+                                        '',
+                                        _ack_text,
+                                        flags=_re_self_addr.IGNORECASE,
+                                    ).strip()
                                 if _ack_text and _ack_text[0].islower():
                                     _ack_text = _ack_text[0].upper() + _ack_text[1:]
                                 # Safety net: если промпт не помог и ack всё равно пустой
@@ -7801,12 +7807,17 @@ class AnchorEngine:
                             _cleaned_result = result.strip()  # fallback если слишком агрессивная чистка
                         _cleaned_result = re.sub(r'\n{2,}', '\n', _cleaned_result).strip()
                         # Убираем самообращение агента к себе "Кристина, ..." / "Кристина, привет!"
-                        _cleaned_result = re.sub(
-                            rf'^{re.escape(_chosen_name)}\s*[,!.]?\s*(?:привет[!.]?\s*)?',
-                            '',
-                            _cleaned_result,
-                            flags=re.IGNORECASE,
-                        ).strip()
+                        # Используем первое слово имени на случай полного имени vs первого
+                        _self_addr_name = (_chosen_name or '').split()[0] if _chosen_name else (_chosen_name or '')
+                        for _san in ([re.escape(_chosen_name), re.escape(_self_addr_name)] if _self_addr_name != _chosen_name else [re.escape(_chosen_name)]):
+                            if not _san:
+                                continue
+                            _cleaned_result = re.sub(
+                                rf'^{_san}\s*[,!.:]?\s*(?:привет[!.:]?\s*)?',
+                                '',
+                                _cleaned_result,
+                                flags=re.IGNORECASE,
+                            ).strip()
                         if _cleaned_result and _cleaned_result[0].islower():
                             _cleaned_result = _cleaned_result[0].upper() + _cleaned_result[1:]
                         _cleaned_result = re.sub(r'через\s+—', 'через другой канал —', _cleaned_result, flags=re.IGNORECASE)
@@ -7994,12 +8005,19 @@ class AnchorEngine:
                     # ── Noise-filtered results: NOT shown to user, but saved for health-check ──
                     # Without this, assignment grows but results stay 0 → false stall → agent blocked forever
                     try:
+                        _nf_text = result.strip()
+                        _nf_san = (_chosen_name or '').split()[0] if _chosen_name else ''
+                        if _nf_san:
+                            _nf_text = re.sub(
+                                rf'^{re.escape(_nf_san)}\s*[,!.:]?\s*(?:привет[!.:]?\s*)?',
+                                '', _nf_text, flags=re.IGNORECASE,
+                            ).strip()
                         session.add(Interaction(
                             user_id=user.id,
                             message_type='agent_msg',
                             content=json.dumps({
                                 '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
-                                'text': (result.strip())[:300],
+                                'text': _nf_text[:300],
                                 '__anchor_type': 'goal_autopilot_result',
                                 '__noise_filtered': True,
                             }, ensure_ascii=False),
@@ -20833,14 +20851,27 @@ class AnchorEngine:
             }
 
             async with aiohttp.ClientSession() as aio_session:
-                async with aio_session.post(url, headers=headers, json=data, 
-                                           timeout=aiohttp.ClientTimeout(total=60)) as response:
-                    if response.status != 200:
-                        error = await response.text()
-                        logger.error(f"[ANCHOR] Post AI API error: {response.status} {error[:200]}")
-                        return None
-                    result_json = await response.json()
-                    text = result_json['choices'][0]['message']['content'].strip()
+                _compose_result = None
+                for _compose_attempt in range(2):
+                    try:
+                        async with aio_session.post(url, headers=headers, json=data,
+                                                    timeout=aiohttp.ClientTimeout(total=90)) as response:
+                            if response.status != 200:
+                                error = await response.text()
+                                logger.error(f"[ANCHOR] Post AI API error: {response.status} {error[:200]}")
+                                break
+                            result_json = await response.json()
+                            _compose_result = result_json['choices'][0]['message']['content'].strip()
+                            break
+                    except (asyncio.TimeoutError, Exception) as _ce:
+                        if _compose_attempt == 0:
+                            logger.warning(f"[ANCHOR] _ai_compose_post attempt 1 failed ({type(_ce).__name__}), retrying...")
+                            await asyncio.sleep(3)
+                        else:
+                            raise
+                if _compose_result is None:
+                    return None
+                text = _compose_result
 
             _text_upper = text.upper().strip()
             if not text or _text_upper == 'SKIP' or _text_upper.startswith('SKIP') or _text_upper.endswith('SKIP') or '\nSKIP' in _text_upper:

@@ -1160,12 +1160,23 @@ if db_url and db_url.startswith('postgresql'):
 
     @event.listens_for(engine, "checkin")
     def _release_advisory_locks_on_checkin(dbapi_conn, connection_record):
+        # Rollback first — connection may be in failed transaction state
+        rollback_ok = False
         try:
-            # Rollback сначала — соединение может быть в failed transaction state
+            dbapi_conn.rollback()
+            rollback_ok = True
+        except Exception:
+            pass
+        if not rollback_ok:
+            # Connection is broken — invalidate it so the pool creates a fresh one
+            # instead of returning a connection in an aborted transaction state.
+            # This prevents InFailedSqlTransaction on the next checkout.
             try:
-                dbapi_conn.rollback()
+                connection_record.invalidate()
             except Exception:
                 pass
+            return
+        try:
             cursor = dbapi_conn.cursor()
             cursor.execute("SELECT pg_advisory_unlock_all()")
             cursor.close()
