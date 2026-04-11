@@ -3778,12 +3778,16 @@ class HybridAutonomousAgent:
         # ── Пост-обработка: удаляем упоминания неподключённых сервисов ──
         if final:
             import re as _re_svc_fin
-            _BANNED_SVCS_FIN = ('linkedin', 'calendly', 'apollo\\.io', 'sales.navigator', 'hubspot', 'crm', 'zoho', 'pipedrive')
+            # 'crm' исключён — общий термин, не конкретный сервис
+            _BANNED_SVCS_FIN = ('linkedin', 'calendly', 'apollo\.io', 'sales\.navigator', 'hubspot', 'zoho', 'pipedrive')
             for _bs_f in _BANNED_SVCS_FIN:
                 final = _re_svc_fin.sub(
                     rf'[^.!?\n]*\b{_bs_f}\b[^.!?\n]*[.!?]?\s*',
                     '', final, flags=_re_svc_fin.IGNORECASE
                 )
+            # Зачищаем осиротевшие фрагменты: строки/предложения с висящим ':' в конце
+            final = _re_svc_fin.sub(r'[^\n.!?]*:\s*(?=\n|$)', '', final)
+            final = _re_svc_fin.sub(r'\n{3,}', '\n\n', final)
             final = final.strip()
 
         if not final:
@@ -3932,11 +3936,14 @@ class HybridAutonomousAgent:
         tools_used = [r['tool'] for r in execution_results if r.get('success')]
         CognitiveEngine.reflect_on_response(user_message, final, tools_used)
 
-        # Защита от слишком коротких ответов после tool calls
+        # Защита от слишком коротких / холостых ответов после tool calls
         # Если AI ответил "Готово!" после делегирования — просим AI синтезировать результаты
         # НО: если delegate_task использован и агент уже ответил в чате — не дублируем
         _had_agent_delegate = any(r.get('tool') == 'delegate_task' and 'уже ответил' in str(r.get('result', '')) for r in execution_results)
-        if tools_used and len((final or '').strip()) < 40 and not _had_agent_delegate:
+        _HOLLOW_ACKS = ('готово', 'выполнено', 'сделано', 'принял', 'понял', 'ок', 'ok', 'done', 'хорошо', 'записал')
+        _final_lc = (final or '').strip().lower().rstrip('!. ')
+        _is_hollow_ack = _final_lc in _HOLLOW_ACKS or any(_final_lc == h or _final_lc.startswith(h + ' ') or _final_lc.startswith(h + ',') for h in _HOLLOW_ACKS)
+        if tools_used and (len((final or '').strip()) < 40 or _is_hollow_ack) and not _had_agent_delegate:
             # Собираем краткие результаты инструментов для синтеза AI
             _synth_parts = []
             for _r in execution_results:
