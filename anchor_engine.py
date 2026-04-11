@@ -2632,6 +2632,28 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     _personalized_strategy_block = ''
 
+    # ── Early extract: user rule "focus on new users" → suppress follow-up hints ──
+    _agent_new_users_focus = False
+    if user:
+        try:
+            _raw_nuf = getattr(user, 'memory', None) or ''
+            if _raw_nuf:
+                try:
+                    from ai_integration.memory import decrypt_data as _decrypt_nuf
+                    _raw_nuf = _decrypt_nuf(_raw_nuf)
+                except Exception:
+                    pass
+                try:
+                    import json as _json_nuf
+                    _nuf_m = (_json_nuf.loads(_raw_nuf.strip()) if _raw_nuf.strip().startswith('{') else {})
+                    _nuf_rules = _nuf_m.get('rules', [])
+                    _NUF_KW = ('новых пользовател', 'новых людей', 'не на действующ', 'не с текущей', 'приоритет — привлечение новых')
+                    _agent_new_users_focus = any(any(kw in r.lower() for kw in _NUF_KW) for r in _nuf_rules)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     # ── Outreach effectiveness stats ──
     _outreach_stats = ''
     if user and (_has_imap or _has_github):
@@ -2652,13 +2674,20 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         f"(конверсия {_rate}%). "
                     )
                     if _rate < 5:
-                        _outreach_stats += (
-                            "Конверсия низкая → ПОШАГОВЫЙ ПЛАН:\n"
-                            "  1. СНАЧАЛА send_follow_up_email (80% ответов приходят после 2-5 касаний!). "
-                            "Пиши тем кто не ответил >3 дней назад → конкретная польза/вопрос, не 'напоминаю'.\n"
-                            "  2. ПОТОМ проверь subject line: упомяни конкретный проект/задачу получателя, НЕ общее.\n"
-                            "  3. Смени аудиторию если 10+ контактов не ответили: другой сегмент или канал.\n"
-                        )
+                        if _agent_new_users_focus:
+                            _outreach_stats += (
+                                "Конверсия низкая — но по правилам пользователя фокус на НОВЫХ людях:\n"
+                                "  → НЕ отправляй follow-up текущей базе — это противоречит правилу.\n"
+                                "  → Ищи новые источники: другой сегмент, другое ключевое слово, другая площадка.\n"
+                            )
+                        else:
+                            _outreach_stats += (
+                                "Конверсия низкая → ПОШАГОВЫЙ ПЛАН:\n"
+                                "  1. СНАЧАЛА send_follow_up_email (80% ответов приходят после 2-5 касаний!). "
+                                "Пиши тем кто не ответил >3 дней назад → конкретная польза/вопрос, не 'напоминаю'.\n"
+                                "  2. ПОТОМ проверь subject line: упомяни конкретный проект/задачу получателя, НЕ общее.\n"
+                                "  3. Смени аудиторию если 10+ контактов не ответили: другой сегмент или канал.\n"
+                            )
                     elif _rate > 20:
                         _outreach_stats += "Конверсия отличная → продолжай этот подход!\n"
                     else:
@@ -2846,10 +2875,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _has_tg_ch:
             _ch_growth_tip = (
                 f"\n📢 СТРАТЕГИЯ РОСТА КАНАЛА ({_ch}):\n"
-                "  1. Пост опубликован → сразу list_email_contacts (replied/interested) → send_follow_up_email с P.S. ссылкой на пост\n"
-                f"  2. В каждое outreach-письмо добавляй P.S.: 'Кстати, веду канал по теме: {_ch} — там свежий контент по [тема цели]'\n"
-                "  3. Ищи администраторов тематических каналов → пиши им через web_search + send_outreach_email (коллаборация/упоминание)\n"
-                "  ⚡ Без постоянного продвижения канала контент не приносит подписчиков!\n"
+                + (
+                    "  1. Пост опубликован → сразу web_search новых людей по теме поста → send_outreach_email с P.S. ссылкой\n"
+                    if _agent_new_users_focus else
+                    "  1. Пост опубликован → сразу list_email_contacts (replied/interested) → send_follow_up_email с P.S. ссылкой на пост\n"
+                )
+                + f"  2. В каждое outreach-письмо добавляй P.S.: 'Кстати, веду канал по теме: {_ch} — там свежий контент по [тема цели]'\n"
+                + "  3. Ищи администраторов тематических каналов → пиши им через web_search + send_outreach_email (коллаборация/упоминание)\n"
+                + "  ⚡ Без постоянного продвижения канала контент не приносит подписчиков!\n"
             )
         _publish_hint = (
             f"\nℹ️ publish_to_telegram — только личный канал ({_ch}). "
@@ -11610,7 +11643,8 @@ class AnchorEngine:
                     f"если reply_to_outreach_email возвращает ошибку 'не найдено' → значит никто ещё не ответил, переходи к follow-up).\n"
                     if _email_sent > 0 and _has_outreach_goals and
                     any('email' in _agent_caps_categories.get(a.name, set()) for a in real_agents) and
-                    not _check_emails_on_cooldown
+                    not _check_emails_on_cooldown and
+                    not any(any(kw in r.lower() for kw in ('новых пользовател', 'новых людей', 'не на действующ', 'не с текущей', 'приоритет — привлечение новых')) for r in _user_rules_coord)
                     else ''
                 )
                 + _goal_phase_str
