@@ -1024,29 +1024,29 @@
             <!-- Как начать за 4 шага -->
             <div class="steps-section">
                 <div class="steps-section-header">
-                    <p class="steps-section-label">Старт</p>
-                    <h2 class="steps-section-title">Как начать за 4 шага</h2>
+                    <p class="steps-section-label">{% if lang == 'en' %}Get started{% else %}Старт{% endif %}</p>
+                    <h2 class="steps-section-title">{% if lang == 'en' %}Get started in 4 steps{% else %}Как начать за 4 шага{% endif %}</h2>
                 </div>
                 <div class="steps-grid">
                     <div class="bonus-card">
                         <div class="bonus-num">01</div>
-                        <h2>Добавьте агента</h2>
-                        <div class="feature-description">Создайте AI-агента с именем, ролью и специализацией. Дайте ему характер: аналитик, маркетолог, менеджер. Один агент или целая команда — вы решаете.</div>
+                        <h2>{% if lang == 'en' %}Add an agent{% else %}Добавьте агента{% endif %}</h2>
+                        <div class="feature-description">{% if lang == 'en' %}Create an AI agent with a name, role, and specialization. Give it a persona: analyst, marketer, manager. One agent or a whole team — you decide.{% else %}Создайте AI-агента с именем, ролью и специализацией. Дайте ему характер: аналитик, маркетолог, менеджер. Один агент или целая команда — вы решаете.{% endif %}</div>
                     </div>
                     <div class="bonus-card">
                         <div class="bonus-num">02</div>
-                        <h2>Подключите интеграции</h2>
-                        <div class="feature-description">Привяжите нужные сервисы: Gmail, GitHub, AmoCRM, RSS, Telegram-канал. Агент увидит ваши данные и начнёт с ними работать сразу.</div>
+                        <h2>{% if lang == 'en' %}Connect integrations{% else %}Подключите интеграции{% endif %}</h2>
+                        <div class="feature-description">{% if lang == 'en' %}Link the services you need: Gmail, GitHub, AmoCRM, RSS, Telegram channel. The agent will see your data and start working with it right away.{% else %}Привяжите нужные сервисы: Gmail, GitHub, AmoCRM, RSS, Telegram-канал. Агент увидит ваши данные и начнёт с ними работать сразу.{% endif %}</div>
                     </div>
                     <div class="bonus-card">
                         <div class="bonus-num">03</div>
-                        <h2>Задайте правила</h2>
-                        <div class="feature-description">Напишите что важно: тон общения, фокус на новых контактах, что не делать. Правила соблюдаются при каждом поручении автоматически.</div>
+                        <h2>{% if lang == 'en' %}Set your rules{% else %}Задайте правила{% endif %}</h2>
+                        <div class="feature-description">{% if lang == 'en' %}Write what matters: tone of communication, focus on new contacts, what not to do. Rules are followed on every task automatically.{% else %}Напишите что важно: тон общения, фокус на новых контактах, что не делать. Правила соблюдаются при каждом поручении автоматически.{% endif %}</div>
                     </div>
                     <div class="bonus-card">
                         <div class="bonus-num">04</div>
-                        <h2>Включите автопилот</h2>
-                        <div class="feature-description">Агенты работают 24/7 сами: ищут контакты, пишут письма, публикуют посты, следят за ответами и продвигают ваши цели без команд.</div>
+                        <h2>{% if lang == 'en' %}Enable autopilot{% else %}Включите автопилот{% endif %}</h2>
+                        <div class="feature-description">{% if lang == 'en' %}Agents work 24/7 on their own: find contacts, write emails, publish posts, track replies, and push your goals forward — no commands needed.{% else %}Агенты работают 24/7 сами: ищут контакты, пишут письма, публикуют посты, следят за ответами и продвигают ваши цели без команд.{% endif %}</div>
                     </div>
                 </div>
             </div>
