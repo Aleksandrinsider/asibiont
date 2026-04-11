@@ -11674,6 +11674,46 @@ class AnchorEngine:
                     logger.info("[COORD] dedup (%s): skip %s/%s (goal=%s)", _dedup_reason, _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
 
+            # ── Cross-agent task-text dedup: ловим семантически одинаковые задания даже при разных tool/goal ──
+            # Пример: Марк→web_search "найди авторов dev.to" и Кристина→research_topic "найди авторов dev.to"
+            # — dedup по (tool,goal) пропускает, этот блок — ловит.
+            _RU_STOP_WORDS = {
+                'на', 'в', 'и', 'с', 'по', 'для', 'из', 'к', 'о', 'не', 'а', 'но',
+                'что', 'как', 'это', 'от', 'до', 'за', 'или', 'же', 'ни', 'то', 'об',
+                'при', 'со', 'его', 'её', 'их', 'нас', 'вас', 'все', 'всё', 'если',
+                'then', 'that', 'with', 'from', 'this', 'have', 'been', 'will',
+            }
+            _agent_task_kwsets: list[tuple[str, set]] = []  # (agent_lower, keyword_set)
+            _plan_text_deduped = []
+            for _ptd in _plan:
+                _ptd_agent = (_ptd.get('agent') or '').strip().lower()
+                _ptd_task = (_ptd.get('task') or '').lower()
+                _ptd_words = {
+                    w for w in re.findall(r'\b[а-яёa-z]{4,}\b', _ptd_task)
+                    if w not in _RU_STOP_WORDS
+                }
+                _ptd_is_dup = False
+                if len(_ptd_words) >= 5:
+                    for _prev_ag, _prev_kw in _agent_task_kwsets:
+                        if _prev_ag == _ptd_agent:
+                            continue  # тот же агент — не дедуплируем
+                        if len(_prev_kw) >= 5:
+                            _overlap = len(_ptd_words & _prev_kw)
+                            _union = len(_ptd_words | _prev_kw)
+                            if _union > 0 and _overlap / _union >= 0.45:
+                                _ptd_is_dup = True
+                                logger.info(
+                                    "[COORD] text-dedup: drop %s (%.0f%% task overlap with %s) — %s",
+                                    _ptd.get('agent'), 100 * _overlap / _union, _prev_ag,
+                                    _ptd_task[:60],
+                                )
+                                break
+                if not _ptd_is_dup:
+                    _agent_task_kwsets.append((_ptd_agent, _ptd_words))
+                    _plan_text_deduped.append(_ptd)
+            if _plan_text_deduped:
+                _plan = _plan_text_deduped
+
             # ── Phase enforcement filter: отбрасываем шаги нарушающие фазу цели ──
             # После LLM-генерации — жёсткая проверка непригодных инструментов.
             # Осторожно: не отбрасывать если это единственный шаг для агента.
