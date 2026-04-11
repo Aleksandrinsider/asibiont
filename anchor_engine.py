@@ -873,7 +873,7 @@ def _strip_html(text: str) -> str:
 # ── Лимиты доставок (единые, контроль расхода через токены) ──
 # Токены — основной ограничитель. Лимиты — только anti-spam предохранитель.
 MAX_DIALOG_PER_DAY = 12
-MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '15'))
+MAX_AGENT_PERSONA_MSG_PER_DAY = int(os.getenv('MAX_AGENT_PERSONA_MSG_PER_DAY', '50'))
 # Технические служебные сообщения не должны съедать лимит «живых» отчётов агента.
 _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     'goal_autopilot_ack',
@@ -5652,14 +5652,13 @@ class AnchorEngine:
                             }
                             agent_name = chosen.name
                         else:
-                            anchor.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=15)
-                            session.commit()
+                            # Нет здорового агента — продолжаем с текущим (не блокируем цикл).
+                            # Snooze уберт бы все циклы навсегда если все агенты «стали».
                             logger.info(
-                                "[ANCHOR-AUTOPILOT] no healthy agent for user %d; snooze 15m (stalled=%s)",
+                                "[ANCHOR-AUTOPILOT] all agents stalled for user %d; proceeding with %s anyway",
                                 user.id,
                                 chosen.name,
                             )
-                            return
 
                 # ── Адаптация задачи под роль агента: универсальный подход ──
                 # Используем _parse_agent_integrations — она определяет реальные интеграции
@@ -10255,9 +10254,10 @@ class AnchorEngine:
             _sm_directives = self._compute_state_directives(_goals, data, _profiles)
             # _situation_str и _strategy_map_str строятся НИЖЕ — после multi-cycle analysis
 
-            # Количество шагов которые просим у LLM-планировщика: min(2 per agent, 12 max).
-            # Больше шагов = больше шансов что email/контакты/разные каналы получат задачи.
-            _n_plan_steps = max(len(_goals[:5]), min(_n_agents * 2, 12))
+            # Количество шагов которые просим у LLM-планировщика.
+            # Гарантируем минимум 1 шаг на каждого реального агента + 1 на каждую цель.
+            _n_real_agents = len([a for a in real_agents if getattr(a, 'id', 0) != 0])
+            _n_plan_steps = max(len(_goals[:5]), _n_real_agents, min(_n_agents * 2, 12))
 
             # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
@@ -11384,7 +11384,7 @@ class AnchorEngine:
             # Используется в _plan_prompt чтобы второй агент в цикле НЕ дублировал первого
             _cycle_assigns_ctx = ''
             try:
-                _ca_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                _ca_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
                 _ca_rows = session.query(Interaction).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'agent_msg',
