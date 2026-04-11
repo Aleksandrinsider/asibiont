@@ -6049,13 +6049,13 @@ class AnchorEngine:
                                 try:
                                     _lar_d = json.loads(_lar.content or '{}')
                                     if _lar_d.get('__agent', {}).get('name', '') == _chosen_name:
-                                        _lar_txt = (_lar_d.get('text', '') or '').strip()[:500]
+                                        _lar_txt = (_lar_d.get('text', '') or '').strip()[:800]
                                         if _lar_txt and len(_lar_txt) > 20:
                                             _lar_tools = _lar_d.get('__tools_used', [])
                                             _lar_ts = _lar.created_at.strftime('%H:%M') if _lar.created_at else ''
                                             _last_agent_reply_c = (
-                                                f"[{_lar_ts}] {_chosen_name}: {_lar_txt}"
-                                                + (f" [инструменты: {', '.join(_lar_tools[:4])}]" if _lar_tools else '')
+                                                f"[{_lar_ts}] {_chosen_name}: {_lar_txt[:800]}"
+                                                + (f" [инструменты: {', '.join(_lar_tools[:6])}]" if _lar_tools else '')
                                             )
                                             break
                                 except Exception:
@@ -6085,17 +6085,17 @@ class AnchorEngine:
                                     _aal_res_c = (_aal_ci.result or '').strip()
                                     if _aal_res_c and _aal_agent_c not in _seen_agents_c:
                                         _seen_agents_c.add(_aal_agent_c)
-                                        _cycle_parts_c.append(f'{_aal_agent_c}: {_aal_res_c[:350]}')
-                                    if len(_cycle_parts_c) >= 3:
+                                        _cycle_parts_c.append(f'{_aal_agent_c}: {_aal_res_c[:500]}')
+                                    if len(_cycle_parts_c) >= 4:
                                         break
-                                _last_cycle_ctx_c = '\n'.join(_cycle_parts_c)[:700].strip()
+                                _last_cycle_ctx_c = '\n'.join(_cycle_parts_c)[:1800].strip()
                                 # ── История конкретного агента: чтобы координатор видел паттерн ──
                                 _chosen_hist_parts = []
                                 for _aal_ci2 in _last_aals_c:
                                     _aal_ag2 = (_aal_ci2.title or '').replace(' — обзор целей', '').strip()[:25]
                                     _aal_res2 = (_aal_ci2.result or '').strip()
                                     if _aal_res2 and _chosen_name.lower() in _aal_ag2.lower():
-                                        _chosen_hist_parts.append(_aal_res2[:150])
+                                        _chosen_hist_parts.append(_aal_res2[:300])
                                 if len(_chosen_hist_parts) >= 2:
                                     _last_cycle_ctx_c += (
                                         f"\n\nПоследние действия {_chosen_name} (видишь паттерн?):\n"
@@ -6120,7 +6120,7 @@ class AnchorEngine:
                                             if _rmc_d.get('__anchor_type') != 'goal_autopilot_assignment':
                                                 continue
                                             _rmc_to = _rmc_d.get('__to_agent', '')
-                                            _atxt = (_rmc_d.get('text', '') or '').strip()[:180]
+                                            _atxt = (_rmc_d.get('text', '') or '').strip()[:350]
                                             if not _atxt:
                                                 continue
                                             if _rmc_to == _chosen_name:
