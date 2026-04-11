@@ -11400,9 +11400,10 @@ class AnchorEngine:
                     _cs_nice_alts = [_nice_names.get(a, a) for a in (_cs_alt_avail or _cs_alts)[:2]]
                     _cs_ban_txt = ', '.join(sorted(_cs_ban_tools))
                     _fr_lines.append(
-                        f'  ⛔ ВСЕ АГЕНТЫ: «{_cs_ban_txt}» — стратегия «{_cs_strat}» использована '
-                        f'{_cs_count}x, результата недостаточно → ЗАПРЕТ этого цикла. '
-                        f'Конкретно: {", ".join(_cs_nice_alts)}'
+                        f'  ⚠️ САМОПРОВЕРКА: стратегия «{_cs_strat}» — {_cs_count} раз. '
+                        f'Умный руководитель здесь остановился бы: что дало результат, что нет? '
+                        f'Ещё не пробовали: {", ".join(_cs_nice_alts)}. '
+                        f'Если снова та же стратегия — обоснуй почему. Если нет — выбери конкретную альтернативу.'
                     )
                 if _fr_lines:
                     _forced_rotation_str = (
@@ -11496,13 +11497,17 @@ class AnchorEngine:
                         + '\n'.join(_ca_lines[:20])
                         + '\n  → Каждый агент ОБЯЗАН делать ДРУГОЙ следующий шаг. Прочитай историю!\n'
                     )
-                # Добавляем предупреждение о зацикленных «смени подход»
+                # Если совет «сменить подход» повторялся — добавляем контекст для размышления
                 for _ca_ag, _ca_sw_cnt in _ca_switch_count.items():
                     if _ca_sw_cnt >= 2:
+                        _ca_nt = [_nice_names.get(s, s) for s in (_strategy_never_tried or [])[:3]]
+                        _ca_nt_str = ', '.join(_ca_nt) if _ca_nt else 'контент, сообщества, партнёрства'
                         _cycle_assigns_ctx += (
-                            f'\n⛔ СТОП-ПЕТЛЯ для {_ca_ag}: совет «смени подход» уже давался {_ca_sw_cnt} раз за 90 мин без результата!\n'
-                            f'  → НЕ ПОВТОРЯЙ этот совет. Дай КОНКРЕТНУЮ задачу с конкретным инструментом.\n'
-                            f'  → Если email не работает — назначь create_post + web_search или research_topic.\n\n'
+                            f'\n💭 КОНТЕКСТ ДЛЯ РАЗМЫШЛЕНИЯ по {_ca_ag}: за 90 мин {_ca_sw_cnt} раза звучал совет «сменить подход» — без конкретного следующего шага.\n'
+                            f'   Хороший менеджер в этот момент не повторяет общий совет, а задаёт себе вопросы:\n'
+                            f'   • Что именно не сработало — инструмент, аудитория, формулировка или канал?\n'
+                            f'   • Какой КОНКРЕТНЫЙ шаг был бы другим (не «смени», а что именно сделать)?\n'
+                            f'   • Ещё не пробовали: {_ca_nt_str} — это реальные варианты для следующего шага.\n\n'
                         )
                 _cycle_assigns_ctx = _cycle_assigns_ctx.strip() + '\n\n' if _cycle_assigns_ctx.strip() else ''
             except Exception as _ca_err:
@@ -13405,56 +13410,6 @@ class AnchorEngine:
                 if _is_meta_task:
                     logger.info("[COORD] ⛔ meta-task blocked for %s: %r", _ag_name, _asi_assign_text[:80])
                     continue
-                # ── APPROACH-SWITCH DEDUP: «смени подход» не повторяем чаще 2ч ──
-                # Если координатор уже говорил «смени подход» этому агенту и результата нет:
-                # блокируем повтор пустого совета, заменяем на конкретный инструмент
-                _APSWITCH_PHRASES = (
-                    'смени подход', 'сменить подход', 'другой подход',
-                    'другой тактик', 'сменить тактик', 'публичные площадки',
-                    'вовлечённой аудитор', 'конверсия email низкая',
-                )
-                _is_approach_switch = any(ph in _assign_lower for ph in _APSWITCH_PHRASES)
-                if _is_approach_switch:
-                    try:
-                        _apswitch_since = datetime.now(timezone.utc) - timedelta(hours=2)
-                        _apswitch_rows = session.query(Interaction).filter(
-                            Interaction.user_id == user.id,
-                            Interaction.message_type == 'agent_msg',
-                            Interaction.created_at >= _apswitch_since,
-                            Interaction.content.ilike(f'%"__to_agent": "{_ag_name}"%'),
-                        ).order_by(Interaction.created_at.desc()).limit(15).all()
-                        _apswitch_prev_count = 0
-                        for _apr in _apswitch_rows:
-                            try:
-                                _apr_d = json.loads(_apr.content or '{}')
-                                _apr_txt = (_apr_d.get('text') or '').lower()
-                                if any(ph in _apr_txt for ph in _APSWITCH_PHRASES):
-                                    _apswitch_prev_count += 1
-                            except Exception:
-                                pass
-                        if _apswitch_prev_count >= 2:
-                            # Совет уже давался 2+ раз — заменяем на конкретный инструмент
-                            _tgt_caps_ap = _agent_caps_categories.get(_ag_name, set())
-                            _ap_alts = []
-                            if 'email' not in _tgt_caps_ap or True:  # всегда предлагаем альтернативу
-                                if 'rss' in _tgt_caps_ap:
-                                    _ap_alts.append('get_news_trends (найди горячие темы в нише, составь краткий отчёт)')
-                                if _strategy_never_tried:
-                                    _ap_nice = _nice_names.get(_strategy_never_tried[0], _strategy_never_tried[0])
-                                    _ap_alts.append(f'стратегия «{_ap_nice}» — ещё не пробовали')
-                                if not _ap_alts:
-                                    _ap_alts.append('research_topic о нишевых сообществах и форумах аудитории')
-                                    _ap_alts.append('create_post — напиши материал для привлечения через контент')
-                            _ap_alt_str = '; или '.join(_ap_alts[:2])
-                            _asi_assign_text = (
-                                f'Предыдущие советы «смени подход» не дали результата. '
-                                f'КОНКРЕТНОЕ задание: {_ap_alt_str}. '
-                                f'Выдай конкретный результат — не анализ, а действие.'
-                            )
-                            _assign_lower = _asi_assign_text.lower()
-                            logger.info('[COORD] approach-switch replaced with concrete task for %s (prev=%d)', _ag_name, _apswitch_prev_count)
-                    except Exception as _aps_err:
-                        logger.debug('[COORD] approach-switch dedup error: %s', _aps_err)
                 # sanitize_live_team_chat_text уже обрабатывает обрывы — дублирование удалено
                 try:
                     session.add(Interaction(
