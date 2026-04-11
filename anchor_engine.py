@@ -11274,6 +11274,22 @@ class AnchorEngine:
                             _any_constraint = True
                 if _any_constraint:
                     _goal_phase_str = '\n'.join(_gp_lines) + '\n'
+
+                # ── Дополнительно: для outreach-целей RSS-only агенты должны делать content, не поиск ──
+                _rss_agents_no_email = [
+                    p['name'] for p in _profiles
+                    if 'rss' in _agent_caps_categories.get(p['name'], set())
+                    and 'email' not in _agent_caps_categories.get(p['name'], set())
+                ]
+                if _rss_agents_no_email and any(_crd_goal_type(g) == 'outreach' for g in _goals[:5]):
+                    _rss_names = ', '.join(_rss_agents_no_email)
+                    _goal_phase_str += (
+                        f'\n⛔ RSS-АГЕНТЫ НА OUTREACH-ЦЕЛИ ({_rss_names}):\n'
+                        f'  Эти агенты не имеют email → они НЕ МОГУТ закрыть цепочку outreach.\n'
+                        f'  ЗАПРЕЩЕНО: назначать им "найди контакты", "ищи лидов", "анализируй потенциальных клиентов".\n'
+                        f'  РАЗРЕШЕНО: create_post (inbound-контент), get_news_trends (тренды рынка), save_note (аналитика).\n'
+                        f'  Если нужен поиск контактов — назначь email-агенту; RSS-агенту дай задачу по контенту.\n'
+                    )
             except Exception as _gp_err:
                 logger.debug('[COORD] goal_phase_constraints: %s', _gp_err)
 
@@ -11308,6 +11324,55 @@ class AnchorEngine:
             except Exception as _fr_err:
                 logger.debug('[COORD] forced_rotation: %s', _fr_err)
 
+            # ── Per-agent задачи за последние 8ч — координатор видит что реально назначалось ──
+            _agent_task_history_str = ''
+            try:
+                from models import AgentActivityLog as _AAL_ath
+                _ath_cutoff = datetime.now(timezone.utc) - timedelta(hours=8)
+                _ath_rows = session.query(_AAL_ath).filter(
+                    _AAL_ath.user_id == user.id,
+                    _AAL_ath.activity_type == 'agent_task',
+                    _AAL_ath.created_at >= _ath_cutoff,
+                ).order_by(_AAL_ath.created_at.desc()).all()
+                if _ath_rows:
+                    _ath_by_agent: dict = {}
+                    for _ar in _ath_rows:
+                        _ar_title = (_ar.title or '').strip()
+                        # Извлекаем агента из "Агент: задача"
+                        _ar_agent = None
+                        for _ag_ath in real_agents:
+                            _ag_name_ath = (_ag_ath.name or '').strip()
+                            if _ar_title.startswith(_ag_name_ath + ':'):
+                                _ar_agent = _ag_name_ath
+                                _ar_title = _ar_title[len(_ag_name_ath) + 1:].strip()
+                                break
+                        if not _ar_agent:
+                            # Старый формат "Поручено Имя"
+                            import re as _re_ath
+                            _m_ath = _re_ath.match(r'^(?:поручено\s+)?(\S+)(?:\s|$)', _ar_title, _re_ath.IGNORECASE)
+                            if _m_ath:
+                                _cand = _m_ath.group(1)
+                                for _ag_ath in real_agents:
+                                    if (_ag_ath.name or '').lower() == _cand.lower():
+                                        _ar_agent = _ag_ath.name
+                                        break
+                        if not _ar_agent:
+                            continue
+                        _ath_by_agent.setdefault(_ar_agent, []).append(_ar_title[:100])
+                    if _ath_by_agent:
+                        _ath_lines = ['\n📋 ИСТОРИЯ ЗАДАЧ ЗА 8Ч (что РЕАЛЬНО назначалось каждому агенту):']
+                        _ath_lines.append('   → НЕ ПОВТОРЯЙ ту же суть — дай СЛЕДУЮЩИЙ шаг по цепочке!\n')
+                        for _ag_ath_n, _titles_ath in _ath_by_agent.items():
+                            _ath_lines.append(f'  {_ag_ath_n}:')
+                            _seen_ath: set = set()
+                            for _t_ath in _titles_ath[:8]:
+                                if _t_ath not in _seen_ath:
+                                    _ath_lines.append(f'    • {_t_ath}')
+                                    _seen_ath.add(_t_ath)
+                        _agent_task_history_str = '\n'.join(_ath_lines) + '\n'
+            except Exception as _ath_err:
+                logger.debug('[COORD] agent_task_history: %s', _ath_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -11329,6 +11394,7 @@ class AnchorEngine:
                 + f"{_situation_str}\n"
                 + (f"Цели и доступные каналы:\n{_goal_domain_str}\n\n" if _goal_domain_str else '')
                 + f"{_goal_rotation_str}"
+                + f"{_agent_task_history_str}"
                 + f"{_anti_repeat_str}"
                 + f"{_monotony_str}"
                 + f"{_recent_done_str}"
@@ -11695,6 +11761,45 @@ class AnchorEngine:
                 if _plan_active_goals:
                     _plan = _plan_active_goals
 
+            # ── RSS-без-email guard: на outreach-целях RSS-only агент не может вести поиск контактов ──
+            # Поиск без email = бесполезный цикл (нет кому отправить). Блокируем lead-finding у таких агентов.
+            _has_outreach_goal_grd = any(_crd_goal_type(g) == 'outreach' for g in _goals[:5])
+            if _has_outreach_goal_grd:
+                _OUTREACH_SEARCH_KWS = frozenset({
+                    'найди', 'поиск', 'search', 'контакт', 'лид', 'клиент', 'привлечен',
+                    'партнёр', 'партнер', 'инвестор', 'аудитори',
+                })
+                _plan_rss_fixed = []
+                for _prss in _plan:
+                    _prss_agent = (_prss.get('agent') or '').strip()
+                    _prss_task_l = (_prss.get('task') or '').lower()
+                    _prss_tool_l = (_prss.get('tool') or '').lower()
+                    _prss_agent_caps = _agent_caps_categories.get(_prss_agent, set())
+                    _is_rss_no_email = ('rss' in _prss_agent_caps and 'email' not in _prss_agent_caps)
+                    if _is_rss_no_email:
+                        _is_lead_search = (
+                            any(kw in _prss_task_l for kw in _OUTREACH_SEARCH_KWS)
+                            or _prss_tool_l in ('find_relevant_contacts_for_task', 'web_search', 'research_topic')
+                            and any(kw in _prss_task_l for kw in ('контакт', 'лид', 'клиент', 'партнер', 'инвест'))
+                        )
+                        if _is_lead_search:
+                            # Есть ли email-агент который может взять эту задачу?
+                            _email_backup_rss = next(
+                                (p['name'] for p in _profiles
+                                 if p['name'] != _prss_agent and 'email' in _agent_caps_categories.get(p['name'], set())),
+                                None
+                            )
+                            if _email_backup_rss:
+                                logger.info(
+                                    "[COORD] rss-no-email guard: redirect lead-search from %s → %s: %s",
+                                    _prss_agent, _email_backup_rss, _prss_task_l[:80]
+                                )
+                                _prss['agent'] = _email_backup_rss
+                            # else: нет email-агента → оставляем (пусть попробует)
+                    _plan_rss_fixed.append(_prss)
+                if _plan_rss_fixed:
+                    _plan = _plan_rss_fixed
+
             # ── Контент-дедупликация: пропускаем задачи, дублирующие недавно выполненные ──
             if _plan and _recent_done_str:
                 _recent_done_lower = _recent_done_str.lower()
@@ -11859,6 +11964,74 @@ class AnchorEngine:
                         logger.warning("[COORD] cross-cycle-dedup: ALL steps blocked — keeping original plan")
             except Exception as _xc_err:
                 logger.debug("[COORD] cross-cycle dedup: %s", _xc_err)
+
+            # ── Semantic intent dedup: если агент получал ≥4 задачи с одинаковыми ключевыми словами
+            #    за последние 12h → блокируем повтор независимо от названия инструмента ──
+            try:
+                from models import AgentActivityLog as _AAL_sid
+                _sid_cutoff = datetime.now(timezone.utc) - timedelta(hours=12)
+                _sid_records = session.query(_AAL_sid).filter(
+                    _AAL_sid.user_id == user.id,
+                    _AAL_sid.activity_type == 'agent_task',
+                    _AAL_sid.created_at >= _sid_cutoff,
+                ).order_by(_AAL_sid.created_at.desc()).all()
+                # Строим per-agent keyword fingerprints из title
+                _SID_STOP_WORDS = frozenset({
+                    'через', 'найди', 'отправь', 'сделай', 'создай', 'проверь', 'используй',
+                    'email', 'search', 'task', 'задачу', 'задача', 'агент', 'следующий',
+                    'шаг', 'цель', 'нужно', 'должен', 'можно', 'нашёл', 'что', 'кто', 'для',
+                    'где', 'как', 'или', 'также', 'чтобы', 'после', 'перед', 'свои', 'свою',
+                })
+                import re as _re_sid
+                _agent_kw_counts: dict = {}  # agent_lower → {keyword → count}
+                for _sr in _sid_records:
+                    _sr_title = (_sr.title or '').lower()
+                    # Извлекаем имя агента из "Агент: задача" или "Поручено Агент: задача"
+                    _sr_agent = None
+                    for _ra_sid in real_agents:
+                        _ra_n_sid = (_ra_sid.name or '').lower().strip()
+                        if _ra_n_sid and (_sr_title.startswith(_ra_n_sid + ':') or _sr_title.startswith(_ra_n_sid + ' ')):
+                            _sr_agent = _ra_n_sid
+                            break
+                    if not _sr_agent:
+                        continue
+                    # Извлекаем слова 5+ символов, не стоп-слова
+                    _sr_words = {
+                        w for w in _re_sid.findall(r'[а-яёa-z]{5,}', _sr_title)
+                        if w not in _SID_STOP_WORDS
+                    }
+                    for _sw in _sr_words:
+                        _agent_kw_counts.setdefault(_sr_agent, {})
+                        _agent_kw_counts[_sr_agent][_sw] = _agent_kw_counts[_sr_agent].get(_sw, 0) + 1
+                # Агент→{очень частые слова → количество} (порог: 4+ вхождений за 12h)
+                _agent_banned_concepts: dict = {
+                    _ag_sid: {kw for kw, cnt in kw_map.items() if cnt >= 4}
+                    for _ag_sid, kw_map in _agent_kw_counts.items()
+                }
+                if any(_agent_banned_concepts.values()):
+                    _plan_sid_filtered = []
+                    for _psid in _plan:
+                        _psid_agent = (_psid.get('agent') or '').lower().strip()
+                        _psid_task = (_psid.get('task') or '').lower()
+                        _banned_kws = _agent_banned_concepts.get(_psid_agent, set())
+                        if _banned_kws:
+                            _psid_words = set(_re_sid.findall(r'[а-яёa-z]{5,}', _psid_task)) - _SID_STOP_WORDS
+                            _overlap_kws = _psid_words & _banned_kws
+                            _overlap_ratio_sid = len(_overlap_kws) / max(len(_psid_words), 1)
+                            # ≥50% ключевых слов совпадают с перегруженным паттерном — это повтор
+                            if _overlap_ratio_sid >= 0.5 and len(_psid_words) >= 3:
+                                logger.info(
+                                    "[COORD] semantic-intent-dedup: block %s (%.0f%% repeat, kws=%s): %s",
+                                    _psid_agent, _overlap_ratio_sid * 100,
+                                    list(_overlap_kws)[:5], _psid_task[:80],
+                                )
+                                continue
+                        _plan_sid_filtered.append(_psid)
+                    if _plan_sid_filtered:
+                        _plan = _plan_sid_filtered
+                    # если все шаги заблокированы — оставляем оригинал (петля лучше пустого плана)
+            except Exception as _sid_err:
+                logger.debug("[COORD] semantic-intent-dedup: %s", _sid_err)
 
             # ── Adaptive plan normalization: мягкая коррекция на основе опыта и валидности ──
             # 1) Предупреждаем о рисках по агенту, но не выкидываем шаги без крайней причины

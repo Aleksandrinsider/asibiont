@@ -739,6 +739,19 @@ class ExternalAPIClient:
             logger.warning(f"[GOOGLE] Search error: {e}")
             return None
 
+    @staticmethod
+    def _simplify_search_query(query: str) -> str:
+        """Упрощаем сложный запрос: убираем site:, filetype:, кавычки, урезаем до 6 слов."""
+        import re as _re
+        q = _re.sub(r'\b(?:site|filetype|intitle|inurl|before|after):[^\s]+', '', query)
+        q = q.replace('"', '').replace("'", '')
+        q = _re.sub(r'\s+', ' ', q).strip()
+        # Обрезаем до первых 6 значимых слов
+        words = q.split()
+        if len(words) > 6:
+            q = ' '.join(words[:6])
+        return q
+
     async def web_search(
         self,
         query: str,
@@ -747,7 +760,10 @@ class ExternalAPIClient:
         hl: str = "ru",
         cache_ttl: int = 1800
     ) -> Optional[List[dict]]:
-        """Универсальный поиск: DDG API → DDG Lite → Bing → Google fallback."""
+        """Универсальный поиск: DDG API → DDG Lite → Bing → Google fallback.
+        Если все движки вернули пусто, а запрос сложный (site: / длинный) — повтор с упрощённым запросом.
+        """
+        import re as _re_ws
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
         results = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
         if not results:
@@ -756,6 +772,19 @@ class ExternalAPIClient:
             results = await self.bing_search(query, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
         if not results:
             results = await self.google_html_search(query, num=num, region=hl, cache_ttl=cache_ttl)
+        # ── Fallback: упростить запрос и повторить, если сложный/специфичный ──
+        if not results:
+            _has_site_op = bool(_re_ws.search(r'\bsite:', query))
+            _is_long = len(query.split()) > 6
+            if _has_site_op or _is_long:
+                simplified = self._simplify_search_query(query)
+                if simplified and simplified.lower() != query.lower():
+                    logger.info(f"[WEB_SEARCH] Empty → retry simplified: '{simplified[:60]}'")
+                    results = await self.duckduckgo_search(simplified, num=num, region=region, cache_ttl=cache_ttl)
+                    if not results:
+                        results = await self.duckduckgo_lite_search(simplified, num=num, cache_ttl=cache_ttl)
+                    if not results:
+                        results = await self.bing_search(simplified, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
         return results
 
     async def web_multi_search(

@@ -201,10 +201,11 @@ def _auto_delegate_to_agent_sync(user_id: int, agent_id: int, agent_name: str, t
                 _ex_text = ((_ex.title or '') + ' ' + (_ex.content or '')).lower()
                 if _task_key in _ex_text:
                     return  # похожее поручение уже есть
+            _task_preview = task_title.strip()[:120].rstrip('.,;:')
             _s.add(_AAL(
                 user_id=user_id,
                 activity_type='agent_task',
-                title=f'Поручено {agent_name}',
+                title=f'{agent_name}: {_task_preview}' if _task_preview else f'Поручено {agent_name}',
                 content=task_title[:500],
                 target=f'agent:{agent_name}',
                 status='accepted',
