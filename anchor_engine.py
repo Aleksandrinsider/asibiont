@@ -9830,7 +9830,7 @@ class AnchorEngine:
             # ── check_emails cooldown: предотвращаем петлю делегирования «проверь почту» ──
             # Запрашиваем ПЕРЕД cap_rules — чтобы использовать при генерации инструкций агентам.
             # ВАЖНО: agent_task записи в AAL имеют ref_id=NULL → ищем по имени агента в title.
-            _CE_COOLDOWN_MIN = 30  # минут между последовательными check_emails одному агенту
+            _CE_COOLDOWN_MIN = 8  # минут между последовательными check_emails одному агенту
             _check_emails_on_cooldown: set = set()  # имена агентов, которым НЕ нужен check_emails
             _check_emails_cooldown_note = ''
             try:
@@ -11083,12 +11083,12 @@ class AnchorEngine:
             _agent_results_str = ''
             try:
                 from models import AgentActivityLog as _AAL_res
-                _aal_res_cutoff = datetime.now(timezone.utc) - timedelta(hours=6)
+                _aal_res_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
                 _aal_res_rows = session.query(_AAL_res).filter(
                     _AAL_res.user_id == user.id,
                     _AAL_res.created_at >= _aal_res_cutoff,
                     _AAL_res.result.isnot(None),
-                ).order_by(_AAL_res.created_at.desc()).limit(15).all()
+                ).order_by(_AAL_res.created_at.desc()).limit(60).all()
 
                 if _aal_res_rows:
                     # Группируем по агенту, берём последние результаты
@@ -11121,8 +11121,8 @@ class AnchorEngine:
 
                     _res_lines = []
                     for _ag_res_name, _entries in _res_by_agent.items():
-                        # Берём самые свежие 2 записи на агента
-                        _entries_sorted = sorted(_entries, key=lambda x: x['ts'], reverse=True)[:2]
+                        # Берём самые свежие 5 записей на агента
+                        _entries_sorted = sorted(_entries, key=lambda x: x['ts'], reverse=True)[:5]
                         for _e in _entries_sorted:
                             _ago_min = int((datetime.now(timezone.utc) - (
                                 _e['ts'].replace(tzinfo=timezone.utc) if _e['ts'].tzinfo is None else _e['ts']
@@ -11379,8 +11379,8 @@ class AnchorEngine:
                         elif _email_sent == 0 and _known_contacts > 0:
                             _gp_lines.append(
                                 f'  📤 «{_gt_pc}» [ФАЗА 1 – ОТПРАВКА]: контактов={_known_contacts}, писем=0\n'
-                                f'    → ОБЯЗАТЕЛЬНО: send_outreach_email всем контактам (до 5 за цикл)\n'
-                                f'    → ЗАПРЕЩЕНО: research_topic/web_search без отправки (контакты УЖЕ ЕСТЬ)'
+                                f'    → ПРИОРИТЕТ: send_outreach_email всем контактам (до 5 за цикл)\n'
+                                f'    → Параллельно: ПОЗВОЛЕНО research_topic/web_search если агент занят (но сначала отправляй)'
                             )
                             _any_constraint = True
                         elif _email_sent > 0 and len(_pending_replies) > 0:
@@ -11916,7 +11916,7 @@ class AnchorEngine:
                         if len(_prev_kw) >= 5:
                             _overlap = len(_ptd_words & _prev_kw)
                             _union = len(_ptd_words | _prev_kw)
-                            if _union > 0 and _overlap / _union >= 0.45:
+                            if _union > 0 and _overlap / _union >= 0.70:
                                 _ptd_is_dup = True
                                 logger.info(
                                     "[COORD] text-dedup: drop %s (%.0f%% task overlap with %s) — %s",
@@ -11969,9 +11969,9 @@ class AnchorEngine:
             })
             _agent_cycle_bans: dict = {}
             for _ag_rb, _cycles_rb in _all_cycles_tools.items():
-                if len(_cycles_rb) < 3:
+                if len(_cycles_rb) < 4:
                     continue
-                _last3_rb = _cycles_rb[-3:]
+                _last3_rb = _cycles_rb[-4:]
                 _common_rb = set(_last3_rb[0])
                 for _c_rb in _last3_rb[1:]:
                     _common_rb &= set(_c_rb)
@@ -16974,8 +16974,8 @@ class AnchorEngine:
             _agent_interactions = session.query(Interaction).filter(
                 Interaction.user_id == user.id,
                 Interaction.message_type.in_(['proactive', 'agent_msg']),
-                Interaction.created_at >= now_utc - timedelta(hours=48),
-            ).order_by(Interaction.created_at.desc()).limit(80).all()
+                Interaction.created_at >= now_utc - timedelta(hours=168),
+            ).order_by(Interaction.created_at.desc()).limit(200).all()
             for _ai_item in _agent_interactions:
                 try:
                     _j = json.loads(_ai_item.content or '{}')
@@ -16996,7 +16996,7 @@ class AnchorEngine:
                     _outcome_s = f" {_outcome_tag}" if _outcome_tag else ''
                     _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:300]}{_outcome_s}"
                     _per_agent_history.setdefault(_ag_nm, [])
-                    if len(_per_agent_history[_ag_nm]) < 12:
+                    if len(_per_agent_history[_ag_nm]) < 60:
                         _per_agent_history[_ag_nm].append(_entry)
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
@@ -17010,8 +17010,8 @@ class AnchorEngine:
                 _AAL_pah.user_id == user.id,
                 _AAL_pah.activity_type == 'agent_task',
                 _AAL_pah.status == 'completed',
-                _AAL_pah.created_at >= now_utc - timedelta(hours=72),
-            ).order_by(_AAL_pah.created_at.desc()).limit(80).all()
+                _AAL_pah.created_at >= now_utc - timedelta(hours=168),
+            ).order_by(_AAL_pah.created_at.desc()).limit(200).all()
             for _api in _aal_pah_items:
                 _ag_nm_aal = (_api.target or '').replace('agent:', '').strip()
                 if not _ag_nm_aal:
@@ -17046,7 +17046,7 @@ class AnchorEngine:
                     _aal_res_short = _aal_result[:120].rsplit(' ', 1)[0] if len(_aal_result) > 120 else _aal_result
                     _entry_aal += f" → {_aal_res_short}"
                 _per_agent_history.setdefault(_ag_nm_aal, [])
-                if len(_per_agent_history[_ag_nm_aal]) < 20:
+                if len(_per_agent_history[_ag_nm_aal]) < 60:
                     _per_agent_history[_ag_nm_aal].append(_entry_aal)
         except Exception as _aal_pah_err:
             logger.debug("[AUTOPILOT] per_agent_history from AAL: %s", _aal_pah_err)
