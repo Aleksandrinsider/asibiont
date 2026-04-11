@@ -2078,8 +2078,9 @@
                 }
             }
             
-            // "Save to Notes" button for AI messages
-            const saveBtn = normalizedSender === 'ai' ? `<a href="#" onclick="saveMessageToNotes(this); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">${t('save-to-notes')}</a>` : '';
+            // "Save to Notes" button — only for regular AI responses, not for proactive/reminder/agent reports
+            const _isProactiveType = (sender === 'proactive' || sender === 'reminder');
+            const saveBtn = (normalizedSender === 'ai' && !_isProactiveType) ? `<a href="#" onclick="saveMessageToNotes(this); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">${t('save-to-notes')}</a>` : '';
             
             messageDiv.innerHTML = `
                 <div style="display: flex; align-items: flex-start; gap: 0;">
