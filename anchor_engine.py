@@ -9439,6 +9439,7 @@ class AnchorEngine:
                             'progress': g.progress_percentage or 0,
                             'metric_current': g.metric_current or 0,
                             'metric_target': g.metric_target,
+                            'created_at': g.created_at,
                         }
                         for g in _db_goals
                     ]
@@ -12057,6 +12058,66 @@ class AnchorEngine:
                         f'📱 Ни у кого нет Telegram-интеграции. '
                         'Если хочешь задачу на Telegram-контент — используй web_search + create_post вместо прямого Telegram.'
                     )
+
+                # F) Goal velocity critical stall — mandatory strategic pivot
+                try:
+                    _assumed_target_days_gv = 90  # Default goal horizon
+                    for _g_vel in _goals[:3]:
+                        _g_prog_v = _g_vel.get('progress', 0) or 0
+                        _g_title_v = _g_vel.get('title', '')[:60]
+                        _g_created_v = _g_vel.get('created_at')
+                        if not _g_created_v:
+                            continue
+                        try:
+                            if isinstance(_g_created_v, str):
+                                _g_created_v = datetime.fromisoformat(_g_created_v.replace('Z', '+00:00'))
+                            _g_tz_v = _g_created_v.tzinfo or timezone.utc
+                            _days_v = max(1, (datetime.now(timezone.utc) - _g_created_v.replace(tzinfo=_g_tz_v)).days)
+                        except Exception:
+                            continue
+                        if _days_v < 7:
+                            continue  # Too early to judge
+                        _expected_vel_gv = 100.0 / _assumed_target_days_gv  # ~1.11 %/day
+                        _actual_vel_gv = _g_prog_v / _days_v  # %/day actual
+                        _velocity_ratio_gv = _actual_vel_gv / max(_expected_vel_gv, 0.01)
+                        if _velocity_ratio_gv >= 0.25:
+                            continue  # Progressing at >=25% of expected pace — OK
+                        # CRITICAL STALL: build specific alternative tactics
+                        _pivot_alts_gv = []
+                        _g_type_v = _crd_goal_type(_g_vel)
+                        if 'content' in _strategy_never_tried:
+                            _pivot_alts_gv.append('создай пост с конкретным кейсом/результатом → опубликуй через create_post + Telegram/discord')
+                        if 'community_leverage' in _strategy_never_tried:
+                            _pivot_alts_gv.append('публикация в тематических сообществах: find_and_message_relevant_users + publish_to_telegram/discord')
+                        if 'partnership_motion' in _strategy_never_tried:
+                            _pivot_alts_gv.append('найди 3 смежных продукта → предложи cross-promotion через send_outreach_email')
+                        if 'email_campaign' in _strategy_never_tried and any(
+                            'email' in _agent_caps_categories.get(_ra.name, set()) for _ra in real_agents
+                        ):
+                            _pivot_alts_gv.append('email-кампания по НОВОЙ аудитории с другим оффером (не те кому уже писали)')
+                        if 'followup_retention' in _strategy_never_tried:
+                            _pivot_alts_gv.append('follow-up всем кто не ответил >3 дня через send_follow_up_email')
+                        if 'rss_analysis' in _strategy_never_tried:
+                            _pivot_alts_gv.append('анализ RSS/get_news_trends → создай актуальный контент под свежий тренд')
+                        if not _pivot_alts_gv:
+                            # Fallback by goal type
+                            if _g_type_v == 'outreach':
+                                _pivot_alts_gv = ['смени аудиторию (другой сегмент)', 'измени оффер/тон письма', 'попробуй контент-канал вместо прямого outreach']
+                            elif _g_type_v == 'content':
+                                _pivot_alts_gv = ['опубликуй через другую платформу', 'новый формат: кейс/сравнение/опрос']
+                            else:
+                                _pivot_alts_gv = ['попробуй принципиально другой инструмент из набора агента', 'смени канал']
+                        _days_to_tgt_gv = round((100 - _g_prog_v) / max(_actual_vel_gv, 0.01))
+                        _situation_analysis_parts.append(
+                            f'🔴 КРИТИЧЕСКИЙ ЗАСТОЙ — «{_g_title_v}»: {_g_prog_v}% за {_days_v} дн '
+                            f'(в {round(1.0 / max(_velocity_ratio_gv, 0.01))}x медленнее нормы; '
+                            f'при текущем темпе — {_days_to_tgt_gv} дней до цели). '
+                            f'Текущая тактика не даёт результата.\n'
+                            f'    ОБЯЗАТЕЛЬНО в этом цикле попробуй ОДИН иной путь:\n'
+                            + '\n'.join(f'    • {t}' for t in _pivot_alts_gv[:3])
+                        )
+                except Exception as _gv_err:
+                    logger.debug('[COORD] goal velocity stall check: %s', _gv_err)
 
             except Exception as _sit_err:
                 logger.debug('[COORD] situation analysis: %s', _sit_err)

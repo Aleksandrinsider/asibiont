@@ -1500,8 +1500,8 @@ def test_d49_escalation_progressive_headers():
     src = open(os.path.join(os.path.dirname(__file__), '..', 'anchor_engine.py'), encoding='utf-8').read()
     # Stage 0: предупреждение
     assert '⚠️ Автопилот застрял' in src, "Stage 0 should have ⚠️ header"
-    # Stage 1: обновление (не тревога)
-    assert '📊 Обновление по' in src, "Stage 1 should have 📊 update header"
+    # Stage 1: прогресс без эмодзи тревоги (формат: "_stag_goal_str — прогресс _stag_prog")
+    assert '— прогресс ' in src, "Stage 1 should have progress update header"
     # Stage 2: краткий статус
     assert 'продолжаю работу' in src, "Stage 2 should have brief status"
 
