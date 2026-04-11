@@ -11374,6 +11374,36 @@ class AnchorEngine:
                         _fr_lines.append(
                             f'  ⛔ {_ag_fr}: «{_ban_txt}» — 3 цикла подряд → ОБЯЗАТЕЛЬНО другой инструмент!'
                         )
+                # Кумулятивный бан: стратегия 4+x без прогресса → блокируем её инструменты
+                _STRAT_CUMBAN_MAP = {
+                    'email_outreach': (frozenset({'send_outreach_email', 'negotiate_by_email'}),
+                                      ['community_leverage', 'content', 'offer_experiment']),
+                    'email_campaign': (frozenset({'start_email_campaign', 'add_email_leads'}),
+                                      ['community_leverage', 'content']),
+                    'direct_search':  (frozenset({'find_relevant_contacts_for_task'}),
+                                      ['content', 'rss_analysis', 'research']),
+                    'research':       (frozenset({'research_topic', 'web_search', 'get_news_trends'}),
+                                      ['content', 'email_outreach', 'community_leverage']),
+                }
+                for _cs_strat, (_cs_ban_tools, _cs_alts) in _STRAT_CUMBAN_MAP.items():
+                    _cs_count = _strategy_usage.get(_cs_strat, 0)
+                    if _cs_count < 4:
+                        continue
+                    # Только если есть альтернативные стратегии в команде
+                    _cs_alt_avail = [
+                        a for a in _cs_alts
+                        if _STRATEGY_MAP.get(a, set()) & _all_used_tools_ever
+                        or a in _strategy_never_tried
+                    ]
+                    if not _cs_alt_avail and not _strategy_never_tried:
+                        continue
+                    _cs_nice_alts = [_nice_names.get(a, a) for a in (_cs_alt_avail or _cs_alts)[:2]]
+                    _cs_ban_txt = ', '.join(sorted(_cs_ban_tools))
+                    _fr_lines.append(
+                        f'  ⛔ ВСЕ АГЕНТЫ: «{_cs_ban_txt}» — стратегия «{_cs_strat}» использована '
+                        f'{_cs_count}x, результата недостаточно → ЗАПРЕТ этого цикла. '
+                        f'Конкретно: {", ".join(_cs_nice_alts)}'
+                    )
                 if _fr_lines:
                     _forced_rotation_str = (
                         '\n🔁 ПРИНУДИТЕЛЬНАЯ РОТАЦИЯ (3 одинаковых цикла = петля):\n'
@@ -11436,31 +11466,45 @@ class AnchorEngine:
             # Используется в _plan_prompt чтобы второй агент в цикле НЕ дублировал первого
             _cycle_assigns_ctx = ''
             try:
-                _ca_cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+                _ca_cutoff = datetime.now(timezone.utc) - timedelta(minutes=90)
                 _ca_rows = session.query(Interaction).filter(
                     Interaction.user_id == user.id,
                     Interaction.message_type == 'agent_msg',
                     Interaction.created_at >= _ca_cutoff,
-                ).order_by(Interaction.created_at.desc()).limit(20).all()
+                ).order_by(Interaction.created_at.desc()).limit(40).all()
                 _ca_lines = []
+                _ca_switch_count: dict = {}  # {agent_name: count of 'switch approach' assignments}
                 for _ca_r in _ca_rows:
                     try:
                         _ca_d = json.loads(_ca_r.content or '{}')
                         if _ca_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
                             continue
                         _ca_to = _ca_d.get('__to_agent', '')
-                        _ca_txt = (_ca_d.get('text') or '')[:150].strip()
+                        _ca_txt = (_ca_d.get('text') or '')[:180].strip()
                         if _ca_to and _ca_txt:
-                            _ca_lines.append(f'  {_ca_to}: {_ca_txt}')
+                            _ca_lines.append(f'  {_ca_to}: {_ca_txt[:150]}')
+                            _ca_switch_phrases = ('смени подход', 'сменить подход', 'другой подход',
+                                                  'другой тактик', 'сменить тактик', 'публичные площадки',
+                                                  'вовлечённой аудитор', 'конверсия email')
+                            if any(ph in _ca_txt.lower() for ph in _ca_switch_phrases):
+                                _ca_switch_count[_ca_to] = _ca_switch_count.get(_ca_to, 0) + 1
                     except Exception:
                         pass
                 if _ca_lines:
                     _cycle_assigns_ctx = (
-                        '\n🔄 ПОРУЧЕНИЯ ЭТОГО ЦИКЛА (последние 30 мин — НЕ давать то же самое другому агенту):\n'
-                        + '\n'.join(_ca_lines[:10])
-                        + '\n  → Каждый агент ОБЯЗАН делать ДРУГОЙ шаг: один ищет — другой пишет,'
-                        ' один делает GitHub — другой LinkedIn/Habr/trading-форумы.\n\n'
+                        '\n🔄 ПОРУЧЕНИЯ ПОСЛЕДНИХ 90 МИН (НЕ давать то же самое — это уже было):\n'
+                        + '\n'.join(_ca_lines[:20])
+                        + '\n  → Каждый агент ОБЯЗАН делать ДРУГОЙ следующий шаг. Прочитай историю!\n'
                     )
+                # Добавляем предупреждение о зацикленных «смени подход»
+                for _ca_ag, _ca_sw_cnt in _ca_switch_count.items():
+                    if _ca_sw_cnt >= 2:
+                        _cycle_assigns_ctx += (
+                            f'\n⛔ СТОП-ПЕТЛЯ для {_ca_ag}: совет «смени подход» уже давался {_ca_sw_cnt} раз за 90 мин без результата!\n'
+                            f'  → НЕ ПОВТОРЯЙ этот совет. Дай КОНКРЕТНУЮ задачу с конкретным инструментом.\n'
+                            f'  → Если email не работает — назначь create_post + web_search или research_topic.\n\n'
+                        )
+                _cycle_assigns_ctx = _cycle_assigns_ctx.strip() + '\n\n' if _cycle_assigns_ctx.strip() else ''
             except Exception as _ca_err:
                 logger.debug('[COORD] cycle_assigns_ctx: %s', _ca_err)
 
@@ -13361,6 +13405,56 @@ class AnchorEngine:
                 if _is_meta_task:
                     logger.info("[COORD] ⛔ meta-task blocked for %s: %r", _ag_name, _asi_assign_text[:80])
                     continue
+                # ── APPROACH-SWITCH DEDUP: «смени подход» не повторяем чаще 2ч ──
+                # Если координатор уже говорил «смени подход» этому агенту и результата нет:
+                # блокируем повтор пустого совета, заменяем на конкретный инструмент
+                _APSWITCH_PHRASES = (
+                    'смени подход', 'сменить подход', 'другой подход',
+                    'другой тактик', 'сменить тактик', 'публичные площадки',
+                    'вовлечённой аудитор', 'конверсия email низкая',
+                )
+                _is_approach_switch = any(ph in _assign_lower for ph in _APSWITCH_PHRASES)
+                if _is_approach_switch:
+                    try:
+                        _apswitch_since = datetime.now(timezone.utc) - timedelta(hours=2)
+                        _apswitch_rows = session.query(Interaction).filter(
+                            Interaction.user_id == user.id,
+                            Interaction.message_type == 'agent_msg',
+                            Interaction.created_at >= _apswitch_since,
+                            Interaction.content.ilike(f'%"__to_agent": "{_ag_name}"%'),
+                        ).order_by(Interaction.created_at.desc()).limit(15).all()
+                        _apswitch_prev_count = 0
+                        for _apr in _apswitch_rows:
+                            try:
+                                _apr_d = json.loads(_apr.content or '{}')
+                                _apr_txt = (_apr_d.get('text') or '').lower()
+                                if any(ph in _apr_txt for ph in _APSWITCH_PHRASES):
+                                    _apswitch_prev_count += 1
+                            except Exception:
+                                pass
+                        if _apswitch_prev_count >= 2:
+                            # Совет уже давался 2+ раз — заменяем на конкретный инструмент
+                            _tgt_caps_ap = _agent_caps_categories.get(_ag_name, set())
+                            _ap_alts = []
+                            if 'email' not in _tgt_caps_ap or True:  # всегда предлагаем альтернативу
+                                if 'rss' in _tgt_caps_ap:
+                                    _ap_alts.append('get_news_trends (найди горячие темы в нише, составь краткий отчёт)')
+                                if _strategy_never_tried:
+                                    _ap_nice = _nice_names.get(_strategy_never_tried[0], _strategy_never_tried[0])
+                                    _ap_alts.append(f'стратегия «{_ap_nice}» — ещё не пробовали')
+                                if not _ap_alts:
+                                    _ap_alts.append('research_topic о нишевых сообществах и форумах аудитории')
+                                    _ap_alts.append('create_post — напиши материал для привлечения через контент')
+                            _ap_alt_str = '; или '.join(_ap_alts[:2])
+                            _asi_assign_text = (
+                                f'Предыдущие советы «смени подход» не дали результата. '
+                                f'КОНКРЕТНОЕ задание: {_ap_alt_str}. '
+                                f'Выдай конкретный результат — не анализ, а действие.'
+                            )
+                            _assign_lower = _asi_assign_text.lower()
+                            logger.info('[COORD] approach-switch replaced with concrete task for %s (prev=%d)', _ag_name, _apswitch_prev_count)
+                    except Exception as _aps_err:
+                        logger.debug('[COORD] approach-switch dedup error: %s', _aps_err)
                 # sanitize_live_team_chat_text уже обрабатывает обрывы — дублирование удалено
                 try:
                     session.add(Interaction(
