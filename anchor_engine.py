@@ -2003,7 +2003,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # (GitHub: разные query/pages; RSS: данные меняются каждый час)
     if _has_github or _has_rss:
         _MULTI_USE_OK.add('run_agent_action')
-    _banned = {t for t, n in _tool_cnt.items() if n >= 2 and t not in _MULTI_USE_OK}
+    # Не баним инструменты — даём ИИ контекст сколько раз уже использовал.
+    # Бан блокировал web_search/research_topic/create_post после 2 вызовов,
+    # хотя каждый вызов может быть с новым запросом/контентом.
+    _banned: set = set()  # оставляем пустым — ИИ сам решает что использовать
+    _tool_use_counts = {t: n for t, n in _tool_cnt.items() if n >= 2 and t not in _MULTI_USE_OK}
     _warn   = {t for t, n in _tool_cnt.items() if n == 1}
 
     # check_emails: мягкая подсказка при частом использовании
@@ -2234,8 +2238,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             )
 
     def _ti(name: str) -> str:
-        """Помечает заблокированный инструмент."""
-        return f"[БАН:{name}]" if name in _banned else name
+        """Показывает инструмент с количеством использований если уже применялся."""
+        _cnt = _tool_use_counts.get(name)
+        return f"{name} (×{_cnt})" if _cnt else name
 
     # ── Динамический каталог инструментов ──
     # Пытаемся получить описания из платформы; при ошибке — компактный встроенный список
@@ -2538,7 +2543,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         if _force_analyse:
             # Предлагаем конкретные альтернативы с учётом типа агента и типа цели
             _ALTS_RSS_ONLY = [
-                # Для RSS-only агента: меняй action, формат вывода, делегируй
                 "run_agent_action(action='[ДРУГОЕ_ТОЧНОЕ_RSS_ACTION_ИЗ_СПИСКА_ВЫШЕ]')",
                 'create_post', 'web_search', 'research_topic',
                 'schedule_background_task',
@@ -2563,17 +2567,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _alts = [t for t in _alts_pool if t not in _used_tools][:5]
             _alts_str = ', '.join(_alts) if _alts else 'research_topic, web_search, delegate_task'
             _memory_block += (
-                "🔴 ПЕТЛЯ ОБНАРУЖЕНА: ты повторяешь одни и те же инструменты без прогресса!\n"
-                f"→ Попробуй один из инструментов которые ты ещё не использовал: {_alts_str}\n"
-                "Или: используй DELEGATE[коллега] чтобы передать работу тому, у кого есть нужные инструменты.\n"
-                "Обоснуй свой выбор — почему именно этот инструмент лучше для цели?\n"
+                "⚠️ ПАТТЕРН ПОВТОРЕНИЯ: несколько циклов подряд похожий набор инструментов.\n"
+                "Проанализируй: эти повторения дают новые данные или результат одинаковый?\n"
+                f"→ Если результат одинаковый — попробуй что-то другое: {_alts_str}\n"
+                "→ Если каждый раз новые данные — продолжай, но объясни что изменилось.\n"
             )
             if _loop_context:
                 _memory_block += _loop_context
-        elif _banned:
+        elif _tool_use_counts:
             _memory_block += (
-                f"🚫 ЗАБЛОКИРОВАНО (2+ раз без прогресса): {', '.join(sorted(_banned))}\n"
-                "→ Выбери ЛЮБОЙ другой инструмент из каталога выше.\n"
+                f"♻️ Часто применяемые инструменты: "
+                + ', '.join(f"{t} (×{n})" for t, n in sorted(_tool_use_counts.items(), key=lambda x: -x[1]))
+                + "\n→ Продолжай если запрос/контент ОТЛИЧАЕТСЯ от предыдущего. Если результат тот же — смени подход.\n"
             )
         if _warn and not _force_analyse:
             _memory_block += f"⚠️ Использовано по 1 разу — лучше попробовать новое: {', '.join(sorted(_warn))}\n"
@@ -7841,10 +7846,10 @@ class AnchorEngine:
                             flags=re.IGNORECASE,
                         )
                         # Truncate overly long agent messages (keep it concise for chat)
-                        if len(_cleaned_result) > 600:
-                            _cut_r = _cleaned_result[:600]
+                        if len(_cleaned_result) > 1500:
+                            _cut_r = _cleaned_result[:1500]
                             _last_end = max(_cut_r.rfind('.'), _cut_r.rfind('!'), _cut_r.rfind('?'))
-                            if _last_end > 200:
+                            if _last_end > 400:
                                 _cleaned_result = _cut_r[:_last_end + 1]
                             else:
                                 _cleaned_result = _cut_r.rsplit(' ', 1)[0] + '…'
