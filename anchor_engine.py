@@ -11170,6 +11170,126 @@ class AnchorEngine:
                     "  → Пользователь должен знать и принять решение о смене стратегии.\n"
                 )
 
+            # ── GOAL PHASE CONSTRAINTS: механически вычисляем что РАЗРЕШЕНО/ЗАПРЕЩЕНО ──
+            # Computed from real DB facts — placed at end of prompt so LLM reads last and applies first.
+            _goal_phase_str = ''
+            try:
+                _n_replied_pc = (_status_counts_data or {}).get('replied', 0)
+                _n_interested_pc = (_status_counts_data or {}).get('interested', 0)
+                _has_replies_pc = (_n_replied_pc + _n_interested_pc) > 0
+                _gp_lines = ['\n⚙️ ФАЗА ЦЕЛЕЙ (вычислено из БД — ОБЯЗАТЕЛЬНО следуй):']
+                _any_constraint = False
+                for _g_pc in _goals[:5]:
+                    _gt_pc = _g_pc.get('title', '')[:55]
+                    _prog_pc = _g_pc.get('progress', 0) or 0
+                    _g_type_pc = _crd_goal_type(_g_pc)
+                    if _g_type_pc == 'outreach':
+                        if _email_sent == 0 and _known_contacts == 0:
+                            _gp_lines.append(
+                                f'  🔍 «{_gt_pc}» [ФАЗА 0 – ПОИСК]:\n'
+                                f'    → ОБЯЗАТЕЛЬНО: web_search/search_users → save_email_contact\n'
+                                f'    → ЗАПРЕЩЕНО: send_outreach_email (некому), check_emails (нет писем)'
+                            )
+                            _any_constraint = True
+                        elif _email_sent == 0 and _known_contacts > 0:
+                            _gp_lines.append(
+                                f'  📤 «{_gt_pc}» [ФАЗА 1 – ОТПРАВКА]: контактов={_known_contacts}, писем=0\n'
+                                f'    → ОБЯЗАТЕЛЬНО: send_outreach_email всем контактам (до 5 за цикл)\n'
+                                f'    → ЗАПРЕЩЕНО: research_topic/web_search без отправки (контакты УЖЕ ЕСТЬ)'
+                            )
+                            _any_constraint = True
+                        elif _email_sent > 0 and len(_pending_replies) > 0:
+                            _gp_lines.append(
+                                f'  💬 «{_gt_pc}» [ФАЗА 2 – ОТВЕТЫ ПРИОРИТЕТ]: {len(_pending_replies)} входящих\n'
+                                f'    → ОБЯЗАТЕЛЬНО: reply_to_outreach_email для каждого входящего (они ждут!)\n'
+                                f'    → НЕ шли новые outreach пока не ответил на входящие'
+                            )
+                            _any_constraint = True
+                        elif _email_sent > 0 and not _has_replies_pc and _email_sent < 15:
+                            _gp_lines.append(
+                                f'  ⏰ «{_gt_pc}» [ФАЗА 2B – FOLLOW-UP]: отправлено={_email_sent}, ответов=0\n'
+                                f'    → ОБЯЗАТЕЛЬНО: check_emails → send_follow_up_email тем кто молчит >2дн\n'
+                                f'    → ИЛИ: найди 5 НОВЫХ людей (другая платформа) → send_outreach_email'
+                            )
+                            _any_constraint = True
+                        elif _email_sent >= 15 and not _has_replies_pc:
+                            _gp_lines.append(
+                                f'  🔄 «{_gt_pc}» [ФАЗА 3 – ПИВОТ]: {_email_sent} писем без ответов\n'
+                                f'    → СТРАТЕГИЯ НЕ РАБОТАЕТ. ЗАПРЕЩЕНО: send_outreach_email той же аудитории\n'
+                                f'    → ОБЯЗАТЕЛЬНО: create_post (inbound) ИЛИ web_search ДРУГОЙ аудитории\n'
+                                f'    ИЛИ: send_message_to_user — спроси пользователя о смене стратегии'
+                            )
+                            _any_constraint = True
+                        elif _has_replies_pc and _prog_pc < 80:
+                            _gp_lines.append(
+                                f'  🤝 «{_gt_pc}» [ФАЗА 4 – КОНВЕРТАЦИЯ]: откликов={_n_replied_pc + _n_interested_pc}\n'
+                                f'    → ОБЯЗАТЕЛЬНО: reply_to_outreach_email каждому заинтересованному\n'
+                                f'    → Параллельно: ищи НОВЫХ людей пока цель не закрыта (target={_g_pc.get("metric_target", "?")})'
+                            )
+                            _any_constraint = True
+                    elif _g_type_pc == 'content':
+                        _research_cnt_pc = _strat_counts.get('data_analysis', 0) + _strat_counts.get('outbound_search', 0)
+                        _content_cnt_pc = _strat_counts.get('content_creation', 0)
+                        if _research_cnt_pc >= 2 and _content_cnt_pc == 0:
+                            _gp_lines.append(
+                                f'  📝 «{_gt_pc}» [КОНТЕНТ – ПУБЛИКАЦИЯ]: исследований={_research_cnt_pc}, публикаций=0\n'
+                                f'    → ЗАПРЕЩЕНО: ещё одно research_topic (данные уже есть)\n'
+                                f'    → ОБЯЗАТЕЛЬНО: create_post → publish_to_telegram | publish_to_discord'
+                            )
+                            _any_constraint = True
+                    else:
+                        # General goal: if all agents only research 3+ cycles without action → force action
+                        _no_action_cnt = sum(
+                            1 for _ag_n_pc, _cycles_pc in _all_cycles_tools.items()
+                            if len(_cycles_pc) >= 2 and all(
+                                any(t in ('web_search', 'research_topic', 'save_note', 'get_news_trends')
+                                    for t in cy)
+                                for cy in _cycles_pc[-2:]
+                            )
+                        )
+                        if _no_action_cnt >= 1 and _prog_pc < 20:
+                            _gp_lines.append(
+                                f'  🎯 «{_gt_pc}» [ЗАСТОЙ]: {_no_action_cnt} агент(а) только исследует\n'
+                                f'    → ЗАПРЕЩЕНО: research_topic без конкретного output-действия\n'
+                                f'    → ОБЯЗАТЕЛЬНО: run_agent_action(исполнение) | create_post | delegate_task'
+                            )
+                            _any_constraint = True
+                if _any_constraint:
+                    _goal_phase_str = '\n'.join(_gp_lines) + '\n'
+            except Exception as _gp_err:
+                logger.debug('[COORD] goal_phase_constraints: %s', _gp_err)
+
+            # ── Per-agent forced tool rotation: 3 одинаковых цикла → механический бан ──
+            _forced_rotation_str = ''
+            try:
+                _fr_lines = []
+                _ROTATION_ALWAYS_OK = frozenset({
+                    'update_goal_progress', 'save_note', 'check_emails',
+                    'run_agent_action', 'reply_to_outreach_email',
+                })
+                for _ag_fr, _cycles_fr in _all_cycles_tools.items():
+                    if len(_cycles_fr) < 3:
+                        continue
+                    _last3_fr = _cycles_fr[-3:]
+                    # Tool must appear in ALL 3 last cycles to be banned
+                    _common_fr = set(_last3_fr[0])
+                    for _c_fr in _last3_fr[1:]:
+                        _common_fr &= set(_c_fr)
+                    _to_ban_fr = _common_fr - _ROTATION_ALWAYS_OK
+                    if _to_ban_fr:
+                        _ban_txt = ', '.join(sorted(_to_ban_fr))
+                        _fr_lines.append(
+                            f'  ⛔ {_ag_fr}: «{_ban_txt}» — 3 цикла подряд → ОБЯЗАТЕЛЬНО другой инструмент!'
+                        )
+                if _fr_lines:
+                    _forced_rotation_str = (
+                        '\n🔁 ПРИНУДИТЕЛЬНАЯ РОТАЦИЯ (3 одинаковых цикла = петля):\n'
+                        + '\n'.join(_fr_lines) + '\n'
+                        '  → Назначь ДРУГОЙ инструмент из профиля агента. Петля = потеря циклов.\n'
+                    )
+            except Exception as _fr_err:
+                logger.debug('[COORD] forced_rotation: %s', _fr_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -11234,6 +11354,8 @@ class AnchorEngine:
                     not _check_emails_on_cooldown
                     else ''
                 )
+                + _goal_phase_str
+                + _forced_rotation_str
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
                 "Ты — живой директор офиса. Думай исходя из ситуации. РЕЗУЛЬТАТ ВАЖНЕЕ ПРОЦЕССА.\n"
                 "⚠️ АНТИ-ШАБЛОН: не генерируй однотипные задачи вроде 'найди 3 контакта на dev.to/ProductHunt'. "
@@ -11400,6 +11522,71 @@ class AnchorEngine:
                     _dedup_reason = 'cross-agent dup search' if _is_cross_dup else 'dup agent+tool+goal'
                     logger.info("[COORD] dedup (%s): skip %s/%s (goal=%s)", _dedup_reason, _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
+
+            # ── Phase enforcement filter: отбрасываем шаги нарушающие фазу цели ──
+            # После LLM-генерации — жёсткая проверка непригодных инструментов.
+            # Осторожно: не отбрасывать если это единственный шаг для агента.
+            _n_replied_pf = (_status_counts_data or {}).get('replied', 0)
+            _n_interested_pf = (_status_counts_data or {}).get('interested', 0)
+            _has_replies_pf = (_n_replied_pf + _n_interested_pf) > 0
+            _phase_filtered = []
+            _agent_kept: set = set()
+            for _pf_step in _plan:
+                _pf_agent = (_pf_step.get('agent') or '').strip()
+                _pf_tool = (_pf_step.get('tool') or '').strip().lower()
+                _pf_goal_type = _crd_goal_type({'title': (_pf_step.get('goal') or '')})
+                _pf_drop = False
+                # Only enforce for outreach goals where phase is clearly determined
+                if _pf_goal_type == 'outreach' and _has_outreach_goals:
+                    # Phase 3: 15+ emails sent with 0 replies → block new outreach to same pool
+                    if _email_sent >= 15 and not _has_replies_pf:
+                        if _pf_tool in ('send_outreach_email', 'negotiate_by_email') and _pf_agent in _agent_kept:
+                            _pf_drop = True
+                            logger.info("[COORD] phase3-filter: drop %s/%s (pivot phase, same audience)", _pf_agent, _pf_tool)
+                    # Phase 1: contacts exist but no emails → block pure research (no-send)
+                    elif _email_sent == 0 and _known_contacts > 0:
+                        if _pf_tool in ('research_topic',) and _known_contacts >= 5 and _pf_agent in _agent_kept:
+                            _pf_drop = True
+                            logger.info("[COORD] phase1-filter: drop %s/%s (send phase, contacts ready)", _pf_agent, _pf_tool)
+                if not _pf_drop:
+                    _phase_filtered.append(_pf_step)
+                    _agent_kept.add(_pf_agent)
+            _plan = _phase_filtered if _phase_filtered else _plan
+
+            # ── Per-agent tool rotation filter: отбрасываем инструменты из 3+ подряд циклов ──
+            # Только если у агента остаётся хотя бы 1 шаг после фильтрации.
+            _ROTATION_FILTER_ALWAYS_OK = frozenset({
+                'update_goal_progress', 'save_note', 'check_emails',
+                'run_agent_action', 'reply_to_outreach_email', 'send_message_to_user',
+                'send_outreach_email',  # Никогда не банить — письма нужны всегда
+            })
+            _agent_cycle_bans: dict = {}
+            for _ag_rb, _cycles_rb in _all_cycles_tools.items():
+                if len(_cycles_rb) < 3:
+                    continue
+                _last3_rb = _cycles_rb[-3:]
+                _common_rb = set(_last3_rb[0])
+                for _c_rb in _last3_rb[1:]:
+                    _common_rb &= set(_c_rb)
+                _banned_rb = _common_rb - _ROTATION_FILTER_ALWAYS_OK
+                if _banned_rb:
+                    _agent_cycle_bans[_ag_rb.lower()] = _banned_rb
+            if _agent_cycle_bans:
+                _rotation_filtered = []
+                _agent_rotation_count: dict = {}
+                for _prf in _plan:
+                    _prf_agent = (_prf.get('agent') or '').strip()
+                    _prf_tool = (_prf.get('tool') or '').strip().lower()
+                    _bans_for_agent = _agent_cycle_bans.get(_prf_agent.lower(), set())
+                    _prf_agent_cnt = _agent_rotation_count.get(_prf_agent, 0)
+                    # Only drop if agent has another step already kept, and tool is banned
+                    if _prf_tool in _bans_for_agent and _prf_agent_cnt > 0:
+                        logger.info("[COORD] rotation-filter: drop %s/%s (3-cycle repeat)", _prf_agent, _prf_tool)
+                        continue
+                    _rotation_filtered.append(_prf)
+                    _agent_rotation_count[_prf_agent] = _prf_agent_cnt + 1
+                if _rotation_filtered:  # never leave plan empty
+                    _plan = _rotation_filtered
 
             # ── Capability-mismatch guard: переназначает задачу если агент не имеет нужной интеграции ──
             # ── Universal capability-mismatch guard: reroute tasks to agents with matching integration ──
