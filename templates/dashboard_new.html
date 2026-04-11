@@ -10038,11 +10038,19 @@ except Exception as e:
 
         async function activityClearAll() {
             if (!confirm(t('act-clear-all-confirm'))) return;
+            // Count only visible records (same filter as renderTimeline) before clearing
+            const _HIDDEN_CLR = new Set(['agent_task', 'background_research', 'background_research_ready', 'checkpoint', 'goal_updated']);
+            const _visibleCount = (window._allActivities || []).filter(a => {
+                if (_HIDDEN_CLR.has(a.activity_type)) return false;
+                if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered', 'empty_result', 'no_action'].includes(a.status)) return false;
+                if (a.activity_type === 'coordinator_summary' && ['empty_cycle', 'no_new_results'].includes(a.result)) return false;
+                if (a.activity_type === 'run_agent_action' && a.status !== 'completed') return false;
+                return true;
+            }).length;
             try {
                 const resp = await fetch('/api/activities/clear-all', { method: 'DELETE', credentials: 'include' });
                 if (resp.ok) {
-                    const data = await resp.json();
-                    showNotification(t('act-deleted-n').replace('{n}', data.deleted || 0), 'success');
+                    showNotification(t('act-deleted-n').replace('{n}', _visibleCount), 'success');
                     window._allActivities = [];
                     window._activityLastId = 0;
                     window._activityPollSince = null;
