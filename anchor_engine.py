@@ -2322,11 +2322,13 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "                action='create_issue' title='...' body='...' — создать issue\n"
            "                action='list_issues' — список открытых issues\n"
            if _has_github else '')
-        + ("  AmoCRM:        action='search_contacts' query='Иван' — поиск контакта в CRM\n"
-           "                 action='create_lead' name='Сделка' price='1000'\n"
+        + ("  AmoCRM:        action='get_contacts' query='Иван' — поиск контакта в CRM\n"
+           "                 action='get_pipelines' — воронки и status_id этапов (берёт ПЕРЕД create_lead!)\n"
+           "                 action='create_lead' name='Сделка' price='1000' pipeline_id='...' status_id='...'\n"
+           "                 action='update_lead' id='...' status_id='...' — продвинуть сделку по воронке\n"
            "                 action='create_contact' name='Имя' email='...' phone='...'\n"
-           "                 action='get_contact' id='...' — карточка контакта со сделками\n"
-           "                 action='add_note' entity_type='contacts' entity_id='...' text='...'\n"
+           "                 action='link_contact' lead_id='...' contact_id='...'\n"
+           "                 action='add_note' entity_type='contacts' id='...' text='...'\n"
            "                 action='get_leads' — последние 10 сделок\n"
            if _has_crm else '')
         + ("  Notion:        action='create_page' / 'update_page'\n" if _has_notion else '')
@@ -3363,13 +3365,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         # AmoCRM — действия с контактами и сделками (только если CRM подключена)
         + (
             "📋 AmoCRM — доступные действия через run_agent_action:\n"
-            "  → create_contact(name, email, phone) — создать контакт\n"
-            "  → search_contacts(query) — поиск контактов\n"
-            "  → get_contact(id) — получить контакт с привязанными сделками\n"
-            "  → create_lead(name, price) — создать сделку\n"
-            "  → link_contact_to_lead(lead_id, contact_id) — привязать контакт к сделке\n"
-            "  → add_note(entity_type, entity_id, text) — примечание к контакту/сделке\n"
-            "  Когда просят 'занести контакты в AmoCRM' → используй create_contact, НЕ create_lead.\n\n"
+            "  → get_contacts(query) — поиск контактов по имени/email (ОБЯЗАТЕЛЬНО перед create_contact!)\n"
+            "  → create_contact(name, email, phone) — создать контакт (если не найден выше)\n"
+            "  → get_pipelines() — получить воронки и status_id этапов (ОБЯЗАТЕЛЬНО перед create_lead!)\n"
+            "  → create_lead(name, price, pipeline_id, status_id) — создать сделку В НУЖНОМ ЭТАПЕ\n"
+            "  → update_lead(id, status_id) — передвинуть сделку на следующий этап\n"
+            "  → link_contact(lead_id, contact_id) — привязать контакт к сделке\n"
+            "  → add_note(entity_type, id, text) — примечание к контакту/сделке (entity_type=contacts или leads)\n"
+            "  ПРАВИЛА:\n"
+            "  1. Перед create_lead ВСЕГДА вызови get_pipelines() — возьми pipeline_id/status_id нужного этапа.\n"
+            "  2. Создавай сделку В РАБОЧЕЙ воронке, НЕ в 'Неразобранных' (status_id=142 = ошибка).\n"
+            "  3. Когда просят 'занести контакты в CRM' → create_contact, потом create_lead + link_contact.\n"
+            "  4. Ведение клиентов = update_lead(status_id=следующий этап) когда статус меняется.\n\n"
             if 'crm' in _caps_cats else ''
         )
 

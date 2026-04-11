@@ -4436,7 +4436,7 @@ except Exception as e:
                     {k:'AMO_ACCESS_TOKEN', label:'Долгосрочный токен (Long-lived token)', ph:'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...', t:'text'}
                 ],
                 hint: '1. В amoCRM открой раздел «аmoМаркет» (иконка в боковом меню).\n2. Нажми три точки (•••) в правом верхнем углу → «Создать интеграцию».\n3. Укажи любое название; в поле «Ссылка для перенаправления» вставь https://asibiont.com (нужна любая рабочая HTTPS-ссылка — сам токен от неё не зависит). Поле «Ссылка для хука» оставь пустым.\n4. Нажми «Сохранить». Откроется окно созданной интеграции — перейди на вкладку «Ключи».\n5. Нажми «Сгенерировать токен», выбери срок до 5 лет, скопируй токен сразу — он показывается только один раз!\n6. Субдомен: возьми часть адреса до .amocrm.ru. Если URL = mycompany.amocrm.ru, субдомен = mycompany.',
-                code: `import urllib.request, json, os
+                code: `import urllib.request, urllib.parse, json, os
 SUBDOMAIN = os.environ.get('AMO_SUBDOMAIN', '')
 TOKEN = os.environ.get('AMO_ACCESS_TOKEN', '')
 ACTION = os.environ.get('AGENT_ACTION', '')
@@ -4534,8 +4534,8 @@ try:
             else:
                 print('Ошибка: ' + json.dumps(result))
 
-    elif ACTION == 'get_contacts':
-        query = os.environ.get('AGENT_PARAM_QUERY', '')
+    elif ACTION in ('get_contacts', 'search_contacts', 'get_contact'):
+        query = os.environ.get('AGENT_PARAM_QUERY', os.environ.get('AGENT_PARAM_ID', ''))
         url = '/contacts?limit=20&order[created_at]=desc'
         if query:
             url += '&query=' + urllib.parse.quote(query)
@@ -4557,7 +4557,7 @@ try:
     elif ACTION == 'add_note':
         entity_id = os.environ.get('AGENT_PARAM_ID', os.environ.get('AGENT_PARAM_LEAD_ID', os.environ.get('AGENT_PARAM_CONTACT_ID', '')))
         entity_type = os.environ.get('AGENT_PARAM_ENTITY_TYPE', 'leads')
-        text = os.environ.get('AGENT_PARAM_TEXT', '')
+        text = os.environ.get('AGENT_PARAM_TEXT', '')[:10000]  # AmoCRM limit
         if not entity_id or not text:
             print('Ошибка: укажи ID сущности (params.id) и текст (params.text)')
         else:
@@ -4569,7 +4569,7 @@ try:
             else:
                 print('Ошибка: ' + json.dumps(result))
 
-    elif ACTION == 'link_contact':
+    elif ACTION in ('link_contact', 'link_contact_to_lead'):
         lead_id = os.environ.get('AGENT_PARAM_LEAD_ID', '')
         contact_id = os.environ.get('AGENT_PARAM_CONTACT_ID', '')
         if not lead_id or not contact_id:
