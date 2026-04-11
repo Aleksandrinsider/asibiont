@@ -3409,7 +3409,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "  research_topic/web_search → только если тебе РЕАЛЬНО не хватает информации для следующего шага.\n"
         "  Если тема уже исследована (см. 'УЖЕ СДЕЛАНО') — бери результаты из заметок и ДЕЙСТВУЙ.\n"
         "  Исследование без действия = потраченное время. Цепочка: узнал → сохранил в заметки → сделал → проверил.\n"
-        "  📌 ЗАВЕРШАЙ ЦЕПОЧКУ: web_search нашёл email → save_email_contact + save_note (кто, откуда, зачем).\n"
+        "  📌 ЗАВЕРШАЙ ЦЕПОЧКУ: web_search нашёл email → save_email_contact (имя, компания, откуда, зачем — уже в полях контакта).\n"
         "     Исследование дало выводы → save_note (итоги) + create_post / publish.\n"
         "     Нашёл данные для коллеги → save_note + DELEGATE с конкретными данными (email, имена, ссылки).\n\n"
 
@@ -10301,8 +10301,8 @@ class AnchorEngine:
                     'переформулируй тему/текст письма — добавь выгоду для получателя',
                 ],
                 'git': [
-                    'run_agent_action(search_users q=\"ниша followers:>50\"): найди 10 профилей, сохрани через save_note',
-                    'run_agent_action(search_repos q=\"ниша stars:>100\"): найди активные проекты — авторы р44ходящие контакты',
+                    'run_agent_action(search_users q=\"ниша followers:>50\"): найди 10 профилей — если есть email, сохрани save_email_contact',
+                    'run_agent_action(search_repos q=\"ниша stars:>100\"): найди активные проекты — авторы ходящие контакты',
                 ],
                 'rss': [
                     'get_news_trends: найди горячие темы — напиши create_post про актуальное',
@@ -13021,8 +13021,14 @@ class AnchorEngine:
                     if _reason_enrich and len(_reason_enrich) > 15:
                         _enrich_parts.append(_reason_enrich[:200].rstrip('.'))
                     _enrich_parts.append(f'Используй инструмент {_tool_str_enrich}.')
-                    if _ag_goal_enrich:
-                        _enrich_parts.append(f'Результат сохрани через save_note.')
+                    if _ag_goal_enrich and _tool_hint not in {
+                        'save_email_contact', 'send_outreach_email', 'send_follow_up_email',
+                        'reply_to_outreach_email', 'check_emails', 'publish_to_telegram',
+                        'publish_to_discord', 'update_goal_progress', 'save_note',
+                    }:
+                        _enrich_parts.append(
+                            'Результат: нашёл контакт с email → save_email_contact; нашёл уникальный инсайт → save_note.'
+                        )
                     _ag_task = ' '.join(_enrich_parts)
                     logger.info("[COORD] task-enrich: short task expanded for %s (%d chars)", _ag_name, len(_ag_task))
 
