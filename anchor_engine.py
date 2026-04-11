@@ -11327,6 +11327,7 @@ class AnchorEngine:
                 "  ❌ ПЛОХО: 'поищи контактов технических специалистов' (абстракция без деталей)\n"
                 "  ✓ ХОРОШО: 'Найди 5 CTO/Lead биотех-компаний через web_search site:linkedin.com OR site:habr.com, "
                 "сохрани через save_email_contact, отправь каждому персонализированное письмо с предложением тестирования платформы'\n"
+                "• НЕ ДУБЛИРУЙ ЗАДАЧИ МЕЖДУ АГЕНТАМИ: если Марк ищет через search_users/GitHub, Кристина ОБЯЗАНА делать другое (web_search LinkedIn, send_outreach_email, publish_to_telegram). Два агента с одинаковым поиском одной цели = потеря цикла. Разные агенты = разные шаги цепочки.\n"
                 "• НЕ используй слова: амбассадор, ambassador — вместо них: партнёр, эксперт, участник программы.\n"
                 + (f"• GitHub запросы уже использованные: {'; '.join(_used_github_queries[:4])}\n"
                    if _used_github_queries else '')
@@ -11374,19 +11375,30 @@ class AnchorEngine:
             # Но разрешаем одному агенту использовать тот же инструмент для РАЗНЫХ целей
             _seen_agent_tool_goal: set = set()
             _agent_step_count: dict = {}  # агент → кол-во шагов (dedup одинаковых agent+tool+goal)
+            # Cross-agent dedup: поисковые инструменты не должны дублироваться между агентами
+            _seen_search_tool_goal: set = set()  # (tool, goal) уже назначен кому-то — не давать другому агенту
+            _SEARCH_DEDUP_TOOLS = {
+                'search_users', 'web_search', 'find_relevant_contacts_for_task',
+                'research_topic', 'quick_topic_search', 'search_repos',
+            }
             _plan_deduped = []
             for _p in _plan:
                 _ak_agent = _p.get('agent', '').strip().lower()
                 _ak_tool = (_p.get('tool') or '').strip().lower()
                 _ak_goal = (_p.get('goal') or '').strip().lower()[:80]
                 _ak = (_ak_agent, _ak_tool, _ak_goal)
+                _ak_cross = (_ak_tool, _ak_goal)  # ключ для кросс-агентного дедупа
                 _agent_steps = _agent_step_count.get(_ak_agent, 0)
-                if _ak_agent and _ak not in _seen_agent_tool_goal:
+                _is_cross_dup = (_ak_tool in _SEARCH_DEDUP_TOOLS and _ak_cross in _seen_search_tool_goal)
+                if _ak_agent and _ak not in _seen_agent_tool_goal and not _is_cross_dup:
                     _seen_agent_tool_goal.add(_ak)
+                    if _ak_tool in _SEARCH_DEDUP_TOOLS:
+                        _seen_search_tool_goal.add(_ak_cross)
                     _agent_step_count[_ak_agent] = _agent_steps + 1
                     _plan_deduped.append(_p)
                 else:
-                    logger.info("[COORD] dedup: skip dup step %s/%s (goal=%s)", _p.get('agent'), _p.get('tool'), _ak_goal[:30])
+                    _dedup_reason = 'cross-agent dup search' if _is_cross_dup else 'dup agent+tool+goal'
+                    logger.info("[COORD] dedup (%s): skip %s/%s (goal=%s)", _dedup_reason, _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
 
             # ── Capability-mismatch guard: переназначает задачу если агент не имеет нужной интеграции ──
@@ -12283,6 +12295,37 @@ class AnchorEngine:
                 _ag_goal_title = (_step.get('goal') or '').strip()   # привязка к цели из плана координатора
                 if not _ag_name or not _ag_task:
                     continue
+
+                # ── TASK LENGTH GUARD: слишком короткий task → обогащаем из reason + tool ──
+                # Короткий task без конкретики (< 80 символов) — типичная деградация LLM.
+                # Не блокируем — дополняем: добавляем инструмент и критерии если их нет.
+                if len(_ag_task) < 80 and _tool_hint:
+                    _reason_enrich = (_step.get('reason') or '').strip()
+                    _ag_goal_enrich = _ag_goal_title.strip()
+                    _tool_human_map = {
+                        'search_users': 'search_users (language:python OR language:javascript followers:>30)',
+                        'web_search': 'web_search (site:linkedin.com OR site:habr.com)',
+                        'find_relevant_contacts_for_task': 'find_relevant_contacts_for_task',
+                        'send_outreach_email': 'send_outreach_email',
+                        'send_follow_up_email': 'send_follow_up_email',
+                        'reply_to_outreach_email': 'reply_to_outreach_email',
+                        'check_emails': 'check_emails',
+                        'research_topic': 'research_topic',
+                        'save_note': 'save_note',
+                        'save_email_contact': 'save_email_contact',
+                        'create_post': 'create_post',
+                        'publish_to_telegram': 'publish_to_telegram',
+                        'run_agent_action': 'run_agent_action',
+                    }
+                    _tool_str_enrich = _tool_human_map.get(_tool_hint, _tool_hint)
+                    _enrich_parts = [_ag_task.rstrip('.')]
+                    if _reason_enrich and len(_reason_enrich) > 15:
+                        _enrich_parts.append(_reason_enrich[:200].rstrip('.'))
+                    _enrich_parts.append(f'Используй инструмент {_tool_str_enrich}.')
+                    if _ag_goal_enrich:
+                        _enrich_parts.append(f'Результат сохрани через save_note.')
+                    _ag_task = ' '.join(_enrich_parts)
+                    logger.info("[COORD] task-enrich: short task expanded for %s (%d chars)", _ag_name, len(_ag_task))
 
                 # ── INFEASIBILITY GUARD: пропускаем шаги которые заведомо невыполнимы ──
                 _task_lower_feas = _ag_task.lower()

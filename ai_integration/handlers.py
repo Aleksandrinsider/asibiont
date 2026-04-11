@@ -13440,11 +13440,14 @@ async def reply_to_outreach_email(
             logger.debug(f"[EMAIL_REPLY] EmailContact replied update failed: {_ec_err}")
         try:
             from models import AgentActivityLog
+            _reply_from_line = ''
+            if sender_name or sender_addr:
+                _reply_from_line = f"От: {sender_name}{' <' + sender_addr + '>' if sender_addr else ''}\n"
             log_entry = AgentActivityLog(
                 user_id=user.id,
                 activity_type='email',
-                title=f"Reply → {outreach.recipient_email}",
-                content=f"Re: {outreach.subject}\n\n{reply_body}",
+                title=f"{sender_name + ' → ' if sender_name else ''}Reply → {outreach.recipient_email}",
+                content=f"Re: {outreach.subject}\n{_reply_from_line}\n{reply_body}",
                 target=outreach.recipient_email,
                 status='sent',
                 ref_id=outreach.id,
