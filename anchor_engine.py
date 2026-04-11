@@ -1491,6 +1491,28 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     """
     import re as _re_ap
 
+    # ── Правило пользователя: фокус на новых — извлекаем рано чтобы все блоки его видели ──
+    _agent_new_users_focus = False
+    if user:
+        try:
+            _raw_nuf = getattr(user, 'memory', None) or ''
+            if _raw_nuf:
+                try:
+                    from ai_integration.memory import decrypt_data as _decrypt_nuf
+                    _raw_nuf = _decrypt_nuf(_raw_nuf)
+                except Exception:
+                    pass
+                try:
+                    import json as _json_nuf
+                    _nuf_m = (_json_nuf.loads(_raw_nuf.strip()) if _raw_nuf.strip().startswith('{') else {})
+                    _nuf_rules = _nuf_m.get('rules', [])
+                    _NUF_KW = ('новых пользовател', 'новых людей', 'не на действующ', 'не с текущей', 'приоритет — привлечение новых')
+                    _agent_new_users_focus = any(any(kw in r.lower() for kw in _NUF_KW) for r in _nuf_rules)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     # ── Каналы пользователя ──
     channels_hint = ""
     if user:
@@ -2438,8 +2460,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _tm_rows.append(
             "  🔀 ЛУЧШИЕ КОМБО:\n"
             "    • Продвижение: research_topic(ЦА+боли) → email + Telegram-пост параллельно\n"
-            "    • Нет ответов: send_follow_up_email(не открыли >3д) → потом новые контакты\n"
-            "    • Рост канала: publish + email подписчикам со ссылкой\n"
+            + (
+                "    • Нет ответов: web_search новой аудитории, другой сегмент, другой канал\n"
+                if _agent_new_users_focus else
+                "    • Нет ответов: send_follow_up_email(не открыли >3д) → потом новые контакты\n"
+            )
+            + "    • Рост канала: publish + email подписчикам со ссылкой\n"
             "    • Партнёрство: negotiate_by_email(тёплый контакт) лучше cold campaign"
         )
         _tool_matrix = (
@@ -2632,28 +2658,6 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     _personalized_strategy_block = ''
 
-    # ── Early extract: user rule "focus on new users" → suppress follow-up hints ──
-    _agent_new_users_focus = False
-    if user:
-        try:
-            _raw_nuf = getattr(user, 'memory', None) or ''
-            if _raw_nuf:
-                try:
-                    from ai_integration.memory import decrypt_data as _decrypt_nuf
-                    _raw_nuf = _decrypt_nuf(_raw_nuf)
-                except Exception:
-                    pass
-                try:
-                    import json as _json_nuf
-                    _nuf_m = (_json_nuf.loads(_raw_nuf.strip()) if _raw_nuf.strip().startswith('{') else {})
-                    _nuf_rules = _nuf_m.get('rules', [])
-                    _NUF_KW = ('новых пользовател', 'новых людей', 'не на действующ', 'не с текущей', 'приоритет — привлечение новых')
-                    _agent_new_users_focus = any(any(kw in r.lower() for kw in _NUF_KW) for r in _nuf_rules)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
     # ── Outreach effectiveness stats ──
     _outreach_stats = ''
     if user and (_has_imap or _has_github):
@@ -2815,7 +2819,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         )
         _ch_num += 1
 
-        if _has_imap:
+        if _has_imap and not _agent_new_users_focus:
             _ch_lines.append(
                 f"{_ch_num}. 📬 Повторная активация старых контактов:\n"
                 "   list_email_contacts → check_emails (кто ещё не ответил?) → send_follow_up_email\n"
@@ -3351,8 +3355,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "   Хорошо: DELEGATE[Марк]: отправь письма через send_outreach_email трём авторам dev.to: wleepang, 4ds-dev, amananandrai. Предложи эксклюзивный доступ к ASI Biont, упомяни их статьи.\n\n"
 
         "6️⃣ Цель на 85%+ → финальный рывок, не новые кампании.\n"
-        "   Закрой точечно: проверь ответы, follow-up тёплым контактам.\n"
-        "   update_goal_progress только при подтверждённом результате.\n\n"
+        + ("   Закрой точечно: найди новых людей через неиспользованный канал.\n"
+           if _agent_new_users_focus else
+           "   Закрой точечно: проверь ответы, follow-up тёплым контактам.\n")
+        + "   update_goal_progress только при подтверждённом результате.\n\n"
 
         # AmoCRM — действия с контактами и сделками (только если CRM подключена)
         + (
@@ -10946,6 +10952,40 @@ class AnchorEngine:
             except Exception as _sc_err:
                 logger.debug("[COORD] strategy scorecard: %s", _sc_err)
 
+            # ── Channel stagnation detector: email dominant + near-zero results → force switch ──
+            _channel_stagnation_str = ''
+            try:
+                _em_cycles = _strat_counts.get('email_outreach', 0)
+                _em_sent = data.get('total_emails_sent', 0) or 0
+                _em_replied = (_status_counts_data or {}).get('replied', 0)
+                _em_interested = (_status_counts_data or {}).get('interested', 0)
+                _em_rate = round((_em_replied + _em_interested) / max(_em_sent, 1) * 100, 1)
+                # Trigger: 5+ email-dominated cycles AND <3% conversion AND ≥15 sent
+                if _em_cycles >= 5 and _em_rate < 3.0 and _em_sent >= 15:
+                    _stag_alts = []
+                    if 'git' in _all_connected_types:
+                        _stag_alts.append('GitHub: search_users(language:X followers:>50) → save_email_contact → send_outreach_email')
+                    if 'rss' in _all_connected_types:
+                        _stag_alts.append('RSS: get_news_trends → create_post → publish_to_telegram')
+                    _has_content_agents = any('content' in _agent_caps_categories.get(a.name, set()) or
+                                              'telegram' in _agent_caps_categories.get(a.name, set())
+                                              for a in real_agents)
+                    if _has_content_agents and _strat_counts.get('content_creation', 0) < 3:
+                        _stag_alts.append('Контент: create_post(экспертный/кейс) → publish → web_search(ЦА) → send_outreach_email со ссылкой на пост')
+                    if not _stag_alts:
+                        _stag_alts.append('web_search новой аудитории (другой сегмент, другие ключевые слова)')
+                        _stag_alts.append('research_topic — смени формулировку оффера и целевую аудиторию')
+                    _channel_stagnation_str = (
+                        f'\n🚨 СТАГНАЦИЯ EMAIL-КАНАЛА: {_em_cycles} циклов email outreach, '
+                        f'конверсия {_em_rate}% при {_em_sent} письмах — нулевой прирост.\n'
+                        f'   ОБЯЗАТЕЛЬНАЯ СМЕНА: назначь минимум 1 агента на ДРУГОЙ канал:\n'
+                        + ''.join(f'      • {a}\n' for a in _stag_alts[:3])
+                        + '   Продолжать email без смены аудитории/оффера = гарантировано потерянные циклы.\n'
+                        + '   Вернись к email ТОЛЬКО после того как сменишь что-то существенное (аудитория/тема/канал).\n'
+                    )
+            except Exception as _stag_err:
+                logger.debug("[COORD] stagnation detector: %s", _stag_err)
+
             # ── Self-thinking block: LLM сам придумывает разные режимы применения интеграций ──
             # Кешируется на 6 часов чтобы не вызывать AI каждый координаторский цикл
             _integration_hypothesis_str = ''
@@ -11587,6 +11627,7 @@ class AnchorEngine:
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + _effectiveness_str
                 + _strategy_scorecard_str
+                + _channel_stagnation_str
                 + _tool_outcome_str
                 + _email_analytics_str
                 + _situation_analysis_str
