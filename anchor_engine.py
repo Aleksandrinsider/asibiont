@@ -14672,24 +14672,35 @@ class AnchorEngine:
                 return True
             elif not _results_summary:
                 # Полностью пустой результат (агенты не вернули ничего) — тоже фиксируем в хронологии
+                # Dedup: не создаём запись если последняя такая же была < 30 минут назад
                 try:
                     from models import Session as _Empty_Sess_cls, AgentActivityLog as _Empty_AAL
                     _empty_sess = _Empty_Sess_cls()
                     try:
-                        _goals_titles_empty = ', '.join(
-                            (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
-                            for g in _goals[:2]
-                        )
-                        _empty_sess.add(_Empty_AAL(
-                            user_id=user.id,
-                            activity_type='coordinator_summary',
-                            title=f'Цикл завершён: {_goals_titles_empty}'[:120],
-                            content='Координатор запустил цикл, агенты не вернули результатов.',
-                            status='completed',
-                            result='empty_cycle',
-                        ))
-                        _empty_sess.commit()
-                        logger.info("[COORD] empty coordinator_summary saved for user %d", user.id)
+                        _empty_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                        _last_empty_aal = _empty_sess.query(_Empty_AAL).filter(
+                            _Empty_AAL.user_id == user.id,
+                            _Empty_AAL.activity_type == 'coordinator_summary',
+                            _Empty_AAL.result.in_(['empty_cycle', 'no_new_results']),
+                            _Empty_AAL.created_at >= _empty_cutoff,
+                        ).order_by(_Empty_AAL.created_at.desc()).first()
+                        if not _last_empty_aal:
+                            _goals_titles_empty = ', '.join(
+                                (g['title'][:40] + '…' if len(g['title']) > 40 else g['title'])
+                                for g in _goals[:2]
+                            )
+                            _empty_sess.add(_Empty_AAL(
+                                user_id=user.id,
+                                activity_type='coordinator_summary',
+                                title=f'Цикл завершён: {_goals_titles_empty}'[:120],
+                                content='Координатор запустил цикл, агенты не вернули результатов.',
+                                status='completed',
+                                result='empty_cycle',
+                            ))
+                            _empty_sess.commit()
+                            logger.info("[COORD] empty coordinator_summary saved for user %d", user.id)
+                        else:
+                            logger.info("[COORD] empty cycle dedup: skipping AAL write for user %d", user.id)
                     except Exception as _empty_err:
                         logger.debug("[COORD] empty summary save failed: %s", _empty_err)
                         try: _empty_sess.rollback()

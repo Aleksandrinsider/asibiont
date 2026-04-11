@@ -8471,6 +8471,8 @@ except Exception as e:
                 if (_HIDDEN_ACT_TYPES.has(a.activity_type)) return false;
                 // Hide non-terminal autopilot dispatches — completed/failed показываем
                 if (a.activity_type === 'goal_autopilot_dispatch' && ['in_progress', 'noise_filtered', 'dedup_filtered', 'empty_result', 'no_action'].includes(a.status)) return false;
+                // Hide coordinator summaries with no real results (empty cycles, no new results)
+                if (a.activity_type === 'coordinator_summary' && ['empty_cycle', 'no_new_results'].includes(a.result)) return false;
                 // Hide non-terminal run_agent_action — only show completed
                 if (a.activity_type === 'run_agent_action' && a.status !== 'completed') return false;
                 return true;
