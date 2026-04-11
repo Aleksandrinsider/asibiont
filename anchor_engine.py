@@ -6143,12 +6143,36 @@ class AnchorEngine:
                                             f'  {nm}: {txt[:120]}'
                                             for nm, txt in _other_assigns
                                         ]
-                                        _other_assigns_ctx = (
-                                            '\n⚠️ ДРУГИЕ АГЕНТЫ уже получили эти поручения (последние 8ч) — '
-                                            'НЕ повторяй тот же тип задачи:\n'
-                                            + '\n'.join(_oa_lines)
-                                            + '\n'
-                                        )
+                                        # Экстрагируем ЗАПРЕЩЕННЫЕ темы: что уже делают другие агенты
+                                        _blocked_themes: list[str] = []
+                                        for _oa_nm, _oa_txt in _other_assigns:
+                                            _oa_l = _oa_txt.lower()
+                                            if 'github' in _oa_l and any(w in _oa_l for w in ('найди', 'поищи', 'собери', 'search')):
+                                                _blocked_themes.append(f'поиск на GitHub ({_oa_nm})')
+                                            if any(w in _oa_l for w in ('dev.to', 'hacker news', 'product hunt', 'medium', 'хабр')) and any(w in _oa_l for w in ('найди', 'поищи')):
+                                                _blocked_themes.append(f'поиск на {"dev.to/Habr" if "dev.to" in _oa_l or "хабр" in _oa_l else "ProductHunt"} ({_oa_nm})')
+                                            if any(w in _oa_l for w in ('web_search', 'research_topic', 'поиск в интернете')) and any(w in _oa_l for w in ('найди 5', 'найди 3', 'найди 10')):
+                                                _blocked_themes.append(f'веб-поиск контактов ({_oa_nm})')
+                                            if any(w in _oa_l for w in ('send_outreach_email', 'save_email_contact', 'найди email', 'найди e-mail')):
+                                                _blocked_themes.append(f'поиск email-контактов ({_oa_nm})')
+                                            if any(w in _oa_l for w in ('create_post', 'создай пост', 'напиши пост')):
+                                                _blocked_themes.append(f'создание поста ({_oa_nm})')
+                                        if _blocked_themes:
+                                            _other_assigns_ctx = (
+                                                f'\n⛔ ЗАПРЕЩЕНО для {_chosen_name} (другие агенты уже делают это):\n'
+                                                + '\n'.join(f'  • {t}' for t in _blocked_themes)
+                                                + f'\n→ {_chosen_name} должен делать ЧТО-ТО ДРУГОЕ: использовать свои интеграции для другого типа действия.\n'
+                                                + 'Поручения другим агентам (8ч):\n'
+                                                + '\n'.join(_oa_lines)
+                                                + '\n'
+                                            )
+                                        else:
+                                            _other_assigns_ctx = (
+                                                '\n⚠️ ДРУГИЕ АГЕНТЫ уже получили эти поручения (последние 8ч) — '
+                                                'НЕ повторяй тот же тип задачи:\n'
+                                                + '\n'.join(_oa_lines)
+                                                + '\n'
+                                            )
                                 except Exception as _mh_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] my assign history: %s', _mh_err)
 
@@ -6654,6 +6678,11 @@ class AnchorEngine:
                             )
                             _has_tool_name = any(t in _gen_lower for t in _COORD_TOOL_NAMES)
                             _has_platform_hint = any(t in _gen_lower for t in _COORD_PLATFORM_HINTS)
+                            # Есть ли в назначении action-chain верб (не просто "найди" без последующего действия)
+                            _has_action_chain_verb = any(v in _gen_lower for v in (
+                                'сохрани', 'отправь', 'создай', 'опубликуй', 'добавь', 'зафиксируй', 'напиши', 'запусти',
+                                'save_', 'send_', 'create_', 'publish_', 'add_', 'run_agent',
+                            ))
                             # Структурный фильтр: есть ли хотя бы один глагол-поручение?
                             _IMPERATIVE_VERBS = (
                                 'найди', 'проверь', 'создай', 'отправь', 'напиши', 'сделай',
@@ -6669,9 +6698,9 @@ class AnchorEngine:
                                 any(v in _gen_lower for v in _VAGUE_COORD_PATTERNS)
                                 # Нет ни одного глагола-поручения → пустышка (напр. "Кристина, о рынке AI-агентов...")
                                 or not _has_imperative
-                                # Слишком короткое без инструмента и площадки
-                                or (len(_gen_s) < 100 and not _has_tool_name and not _has_platform_hint)
-                                or (len(_gen_s) < 120 and not _has_tool_name and not _has_platform_hint)
+                                # Слишком короткое без инструмента и без цепочки действий (просто "найди" без "сохрани/отправь")
+                                or (len(_gen_s) < 100 and not _has_tool_name and not _has_action_chain_verb)
+                                or (len(_gen_s) < 120 and not _has_tool_name and not _has_action_chain_verb)
                                 # Бессмысленные задания про "альтернативные методы" / "для Telegram пользователей"
                                 or ('альтернативн' in _gen_lower and ('метод' in _gen_lower or 'способ' in _gen_lower or 'канал' in _gen_lower))
                                 # Задания про пользователей платформ без конкретики
@@ -6876,9 +6905,8 @@ class AnchorEngine:
                         _fb_name_prefix = f'{_chosen_name},'
                         if _g_label and _fb_choice.startswith(_fb_name_prefix):
                             _fb_body = _fb_choice[len(_fb_name_prefix):].strip()
-                            # Убираем дублирующее упоминание цели из тела шаблона, если уже вставляем в заголовке
-                            _fb_body_clean = re.sub(r'\s*по\s+«[^»]+»', '', _fb_body).strip(' —')
-                            _coord_text = f'{_chosen_name}, следующий шаг по цели «{_g_label[:55].rstrip(".")}» — {_fb_body_clean}'
+                            # Сохраняем целевой контекст внутри шаблона — делает текст понятнее
+                            _coord_text = f'{_chosen_name}, следующий шаг по цели «{_g_label[:55].rstrip(".")}» — {_fb_body}'
                         else:
                             _coord_text = _fb_choice
                         # Если есть свежий результат агента — дополняем контекстом вместо абстрактного шаблона
