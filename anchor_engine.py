@@ -10291,12 +10291,47 @@ class AnchorEngine:
                 if _used_github_queries else ''
             )
 
+            # Шаблон task для конкретных действий по каждой интеграции — чтобы координатор
+            # не писал советы 'смени подход' в поле task, а давал конкретный инструмент
+            _INTG_TASK_PATTERNS: dict[str, list[str]] = {
+                'email': [
+                    'найди 5 контактов через web_search, сохрани через save_email_contact',
+                    'отправь send_outreach_email каждому контакту без письма',
+                    'отправь send_follow_up_email тем, кто молчит >2 дня',
+                    'переформулируй тему/текст письма — добавь выгоду для получателя',
+                ],
+                'git': [
+                    'run_agent_action(search_users q=\"ниша followers:>50\"): найди 10 профилей, сохрани через save_note',
+                    'run_agent_action(search_repos q=\"ниша stars:>100\"): найди активные проекты — авторы р44ходящие контакты',
+                ],
+                'rss': [
+                    'get_news_trends: найди горячие темы — напиши create_post про актуальное',
+                    'прочитай RSS — выдели инсайт, опубликуй через publish_to_telegram',
+                ],
+                'analytics': [
+                    'run_agent_action(action=\'get_report\' params={period:\'7d\'}): сохрани вывод через save_note',
+                ],
+                'telegram': [
+                    'publish_to_telegram: напиши пост без советов и вопросов',
+                ],
+                'discord': [
+                    'publish_to_discord: опубликуй пост в свой Discord-канал',
+                ],
+            }
+
             for _g_plan in _goals[:5]:
                 _g_title = (_g_plan.get('title') or '')[:50]
                 _g_prog = _g_plan.get('progress', 0)
+                # Для каждой цели показываем конкретные шаблоны task по каждой доступной интеграции
+                _g_task_patterns: list[str] = []
+                for _intg_key in sorted(_all_connected_types):
+                    _pats = _INTG_TASK_PATTERNS.get(_intg_key, [])
+                    if _pats:
+                        _g_task_patterns.append(f'{_intg_key}: {_pats[0]}')
+                _pats_str = ' | '.join(_g_task_patterns[:4]) if _g_task_patterns else 'найди через web_search или research_topic'
                 _goal_blocks.append(
                     f"  Цель «{_g_title}» ({_g_prog}%) → "
-                    f"определи лучший подход из доступных каналов ({', '.join(sorted(_all_connected_types)) or 'встроенные'})"
+                    f"конкретные действия (по стаги цепочки): {_pats_str}"
                 )
             if _github_dedup_note:
                 _goal_blocks.append(_github_dedup_note)
@@ -11690,10 +11725,15 @@ class AnchorEngine:
                 + "\n"
                 f"\nВерни JSON-массив из {_n_plan_steps} шагов (min 1 на активную цель).\n"
                 "Формат каждого шага: agent=имя, tool=snake_case, goal=точное_название, "
-                "reason=почему именно этот подход (1-2 предложения), "
+                "reason=почему именно этот подход (объяснение стратегического выбора, 1-2 предложения), "
                 "task=ПОЛНОЕ конкретное задание (повелительное наклонение, ≥50 слов: ЧТО сделать + КАК именно + ГДЕ искать / какие критерии + СКОЛЬКО + ожидаемый результат).\n"
-                "⚠️ КРИТИЧНО: task НЕ должен быть одной строкой. "
-                "task ДОЛЖЕН содержать ВСЕ детали: конкретный запрос, критерии отбора, платформа/инструмент, количество, следующий шаг.\n"
+                "⚠️ КРИТИЧНО: task и reason — ЭТО РАЗНЫЕ поля!\n"
+                "  reason = ПОЧЕМУ выбран этот путь: 'емайл шел 3 цикла, нужен другой канал' — объяснение стратегии.\n"
+                "  task = ЧТО сделать: 'Создай create_post про [X], опубликуй publish_to_telegram' — только действие.\n"
+                "  ❌ ПЛОХО task: 'конверсия email низкая, поэтому нужно сменить подход' — это reason, не task.\n"
+                "  ❌ ПЛОХО task: 'работать через публичные площадки' — абстракция без инструмента.\n"
+                "  ✅ ХОРОШО task: 'Создай create_post про [X] — без прямых продаж, полезный инсайт. Опубликуй publish_to_telegram.'\n"
+                "  ✅ ХОРОШО task: 'Найди 5 DevOps-инженеров на GitHub через run_agent_action(search_users q=\"devops python followers:>30\"), сохрани save_note.'\n"
                 "⚠️ ЗАДАНИЕ КАЖДОГО АГЕНТА ОБЯЗАНО БЫТЬ УНИКАЛЬНЫМ ШАГОМ КОНВЕЙЕРА:\n"
                 "  Агент 1: ШАГ 1 (поиск/исследование) → Агент 2: ШАГ 2 (действие с найденным) → ...\n"
                 "  Если оба ищут одно и то же — ты теряешь цикл. Один ищет, другой пишет письма, третий анализирует.\n"
