@@ -6934,7 +6934,17 @@ class AnchorEngine:
                                     speaker_name='ASI',
                                     target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
-                                _coord_text_clean_save = _sanitize_proactive_text(_coord_text_clean_save)
+                                # ⚠️ НЕ применяем _sanitize_proactive_text к поручениям координатора!
+                                # Эта функция убирает имена инструментов (web_search, save_email_contact и т.д.)
+                                # из текста — для agentResult-сообщений это правильно, но поручение
+                                # ДОЛЖНО содержать конкретный инструмент — иначе агент не знает что делать.
+                                # Только sanitize_token_hallucinations — безопасно.
+                                if _coord_text_clean_save:
+                                    try:
+                                        from ai_integration.conversation_history import sanitize_token_hallucinations as _sth_coord
+                                        _coord_text_clean_save = _sth_coord(_coord_text_clean_save)
+                                    except Exception:
+                                        pass
                                 # ── Разговорный стиль: убираем формальные технические маркеры ──
                                 if _coord_text_clean_save:
                                     import re as _re_ct_conv
