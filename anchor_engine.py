@@ -12296,6 +12296,19 @@ class AnchorEngine:
                 if not _ag_name or not _ag_task:
                     continue
 
+                # ── PLACEHOLDER GUARD: блокируем task с незаполненными шаблонами ──
+                # LLM иногда генерирует "их_email", "recipient_email=их_email" — нельзя выполнить
+                import re as _re_ph_guard
+                _PH_PATTERNS = _re_ph_guard.compile(
+                    r'recipient_email\s*=\s*их_|recipient_name\s*=\s*их_|'
+                    r'=их_email|=их_имя|=email_\w+|=name_\w+|'
+                    r'используй их имена и email из контекста',
+                    _re_ph_guard.IGNORECASE,
+                )
+                if _PH_PATTERNS.search(_ag_task):
+                    logger.info("[COORD] ⛔ placeholder-skip: %s task has unfilled template: %r", _ag_name, _ag_task[:120])
+                    continue
+
                 # ── TASK LENGTH GUARD: слишком короткий task → обогащаем из reason + tool ──
                 # Короткий task без конкретики (< 80 символов) — типичная деградация LLM.
                 # Не блокируем — дополняем: добавляем инструмент и критерии если их нет.
@@ -12384,6 +12397,8 @@ class AnchorEngine:
 
                 # ── Уточнение задания: подставляем контекст без лишнего LLM-вызова ──
                 # Контекст предыдущих шагов уже передаётся в _agent_prompt через _prev_steps_context
+                # ВАЖНО: _ag_task_display сохраняем ДО добавления контекста — он нужен для видимого поручения
+                _ag_task_display = _ag_task  # только оригинальный текст задачи, без системного контекста
                 if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
                     _ag_task = f'{_ag_task}\nКонтекст — уже сделано командой:\n{_prev_steps_context[:1200]}'
 
@@ -12477,22 +12492,23 @@ class AnchorEngine:
                 _ag_id_c = getattr(_target_ag, 'id', 0) if _target_ag else 0
                 _ag_avatar_c = _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _ag_id_c) if _target_ag else ''
                 # Генерируем поручение от ASI — живое обращение как руководитель к коллеге
+                # Используем _ag_task_display (без системного контекста) — не засоряем видимое сообщение
                 try:
                     # Берём оригинальную задачу из плана координатора — склеиваем строки до структурных заголовков
                     import re as _re_assign
                     _task_joined_lines = []
-                    for _tl in _ag_task.split('\n'):
+                    for _tl in _ag_task_display.split('\n'):
                         _tls = _tl.strip()
                         if not _tls:
                             continue
-                        # Останавливаемся на структурных заголовках ("Данные:", "Результат:" и т.д.)
-                        if _re_assign.match(r'^(?:данные|результат|ключевые|детали|описание|шаги|план|каналы|контекст)\s*:', _tls, _re_assign.IGNORECASE):
+                        # Останавливаемся на структурных заголовках ("Данные:", "Результат:", "Контекст —" и т.д.)
+                        if _re_assign.match(r'^(?:данные|результат|ключевые|детали|описание|шаги|план|каналы|контекст|заметки)[\s\-—]*', _tls, _re_assign.IGNORECASE):
                             break
                         # Пропускаем markdown-списки и заголовки
-                        if _tls.startswith(('#', '-', '*', '•')) or _re_assign.match(r'^\d+[.)\]]\s', _tls):
+                        if _tls.startswith(('#', '-', '*', '•', '📝', '📋', '💬')) or _re_assign.match(r'^\d+[.)\]]\s', _tls):
                             continue
                         _task_joined_lines.append(_tls)
-                    _task_first_line = ' '.join(_task_joined_lines).strip() or _ag_task.split('\n')[0].strip()
+                    _task_first_line = ' '.join(_task_joined_lines).strip() or _ag_task_display.split('\n')[0].strip()
                     # Убираем технические маркеры (→, tool:, outreach_id= и т.д.)
                     _task_clean = _re_assign.sub(r'\(outreach_id=\d+\)', '', _task_first_line)
                     # Удаляем → только если за ним идёт имя инструмента (snake_case), а не обычный текст
@@ -12630,8 +12646,12 @@ class AnchorEngine:
                         'fair_assignment diversification', 'fairness backfill',
                         'backfill', 'diversification', 'fallback',
                     })
+                    _INTERNAL_REASON_PREFIXES = ('critical_stuck', 'stuck_', 'stall_', 'loop_', 'dedup_')
                     _step_reason_show = (
-                        '' if _step_reason.lower().strip() in _INTERNAL_REASON_CODES
+                        '' if (
+                            _step_reason.lower().strip() in _INTERNAL_REASON_CODES
+                            or any(_step_reason.lower().strip().startswith(p) for p in _INTERNAL_REASON_PREFIXES)
+                        )
                         else _step_reason
                     )
                     _reason_suffix = ''
@@ -12644,15 +12664,14 @@ class AnchorEngine:
                         if not _result_hint:
                             if _tool_hint in ('web_search', 'find_relevant_contacts_for_task',
                                               'quick_topic_search', 'research_topic', 'save_email_contact'):
-                                _result_hint = ' Сохрани найдённые данные через save_note.'
-                            elif _tool_hint in ('send_outreach_email', 'send_follow_up_email'):
-                                _result_hint = ' Зафиксируй отправку через save_note.'
-                            elif _tool_hint in ('check_emails', 'reply_to_outreach_email'):
-                                _result_hint = ' Зафиксируй ответы через save_note.'
+                                _result_hint = ' Сохрани ключевые находки через save_note.'
                             elif _tool_hint in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
                                 _result_hint = ' Опубликуй или передай пользователю через send_message_to_user.'
                         # ЗАЧЕМ: добавляем контекст цели чтобы поручение было 2 предложения, а не 1
-                        if _ag_goal_title and len(_ag_goal_title.strip()) > 5:
+                        # Для send_message_to_user — не оборачиваем в "следующий шаг по цели", звучит странно
+                        if _tool_hint == 'send_message_to_user':
+                            _asi_assign_text = f'{_ag_name}, сообщи пользователю о статусе цели и предложи варианты дальнейших действий.'
+                        elif _ag_goal_title and len(_ag_goal_title.strip()) > 5:
                             _gt = _ag_goal_title.strip()[:55].rstrip('.,;')
                             _asi_assign_text = f'{_ag_name}, следующий шаг по цели «{_gt}» — {_task_str}.{_result_hint}'
                         else:
