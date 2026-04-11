@@ -9374,7 +9374,7 @@ class AnchorEngine:
                     _db_goals = session.query(_Goal_coord).filter(
                         _Goal_coord.user_id == user.id,
                         _Goal_coord.status == 'active',
-                    ).order_by(_Goal_coord.created_at.desc()).limit(5).all()
+                    ).order_by(_Goal_coord.created_at.desc()).limit(8).all()
                     _goals = [
                         {
                             'id': g.id, 'title': g.title,
@@ -16817,11 +16817,38 @@ class AnchorEngine:
 
         # Умная выборка целей: сначала заброшенные (already sorted by updated_at ASC),
         # но ВСЕГДА включаем цели с прогрессом >=70% (почти завершены → нужно финализировать)
+        # Также учитываем цели которые давно не были в плане автопилота (не получили работы)
         _near_done = [g for g in active_goals if (g.progress_percentage or 0) >= 70]
         _other = [g for g in active_goals if (g.progress_percentage or 0) < 70]
+        # Ротация заброшенных: если у цели AAL-активность за 24ч == 0 → приоритет выше
+        try:
+            _aal_active_goals_24h: set = set()
+            from models import AgentActivityLog as _AAL_rot_g
+            _rot_cutoff = now_utc - timedelta(hours=24)
+            _rot_rows = session.query(_AAL_rot_g.title).filter(
+                _AAL_rot_g.user_id == user.id,
+                _AAL_rot_g.activity_type == 'agent_task',
+                _AAL_rot_g.created_at >= _rot_cutoff,
+            ).all()
+            for _rt in _rot_rows:
+                _rt_title = (_rt.title or '').lower()
+                for _g_rot in active_goals:
+                    _g_kws = {w for w in (_g_rot.title or '').lower().split() if len(w) > 4}
+                    if _g_kws and sum(1 for w in _g_kws if w in _rt_title) / max(len(_g_kws), 1) >= 0.5:
+                        _aal_active_goals_24h.add(_g_rot.id)
+            # Незадействованные цели — в начало _other
+            _neglected_g = [g for g in _other if g.id not in _aal_active_goals_24h]
+            _worked_g = [g for g in _other if g.id in _aal_active_goals_24h]
+            _other = _neglected_g + _worked_g
+        except Exception as _rot_err:
+            logger.debug("[AUTOPILOT] goal rotation: %s", _rot_err)
         _goals_pool = _near_done + _other  # почти-завершённые всегда первыми
+        _total_active_g = len(active_goals)
+        if _total_active_g > 8:
+            logger.info("[AUTOPILOT] goals: %d active, context limited to 8 (near-done: %d, neglected-first: %d)",
+                        _total_active_g, len(_near_done), len(_neglected_g) if '_neglected_g' in dir() else 0)
         goals_summary = []
-        for g in _goals_pool[:5]:
+        for g in _goals_pool[:8]:  # ← увеличен с 5 до 8 чтобы не терять проекты
             # Задачи этой цели — полный status breakdown
             goal_tasks = _tasks_by_goal.get(g.id, [])
             tasks_detail = []
