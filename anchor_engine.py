@@ -5863,7 +5863,14 @@ class AnchorEngine:
 
                 if anchor.anchor_type == 'goal_autopilot_review' and _chosen_id != 0:
                     _gl_titles = [g.get('title', '')[:120] for g in data.get('goals', [])[:3]]
-                    _brief_task = ', '.join(_gl_titles) if _gl_titles else (anchor.topic or 'цели')[:60]
+                    # Включаем описания целей чтобы координатор понимал АУДИТОРИЮ (трейдеры vs разработчики vs etc.)
+                    _gl_with_desc = []
+                    for _g_bf in data.get('goals', [])[:3]:
+                        _t_bf = (_g_bf.get('title') or '')[:80]
+                        _d_bf = (_g_bf.get('description') or '').strip()[:120]
+                        if _t_bf:
+                            _gl_with_desc.append(f'{_t_bf}' + (f' ({_d_bf})' if _d_bf else ''))
+                    _brief_task = '; '.join(_gl_with_desc) if _gl_with_desc else (anchor.topic or 'цели')[:60]
                     _agent_role = agent_data.get('job_title') or agent_data.get('specialization') or ''
                     # ── Карточка возможностей агента через универсальный _classify_agent_caps ──
                     # _detected уже обогащён user-level каналами через _enrich_caps_with_user_channels
@@ -11373,6 +11380,38 @@ class AnchorEngine:
             except Exception as _ath_err:
                 logger.debug('[COORD] agent_task_history: %s', _ath_err)
 
+            # ── Cross-cycle assignment context: что уже поручено за последние 30 мин ──
+            # Используется в _plan_prompt чтобы второй агент в цикле НЕ дублировал первого
+            _cycle_assigns_ctx = ''
+            try:
+                _ca_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                _ca_rows = session.query(Interaction).filter(
+                    Interaction.user_id == user.id,
+                    Interaction.message_type == 'agent_msg',
+                    Interaction.created_at >= _ca_cutoff,
+                ).order_by(Interaction.created_at.desc()).limit(20).all()
+                _ca_lines = []
+                for _ca_r in _ca_rows:
+                    try:
+                        _ca_d = json.loads(_ca_r.content or '{}')
+                        if _ca_d.get('__anchor_type') not in ('goal_autopilot_assignment', 'coordinator_assignment'):
+                            continue
+                        _ca_to = _ca_d.get('__to_agent', '')
+                        _ca_txt = (_ca_d.get('text') or '')[:150].strip()
+                        if _ca_to and _ca_txt:
+                            _ca_lines.append(f'  {_ca_to}: {_ca_txt}')
+                    except Exception:
+                        pass
+                if _ca_lines:
+                    _cycle_assigns_ctx = (
+                        '\n🔄 ПОРУЧЕНИЯ ЭТОГО ЦИКЛА (последние 30 мин — НЕ давать то же самое другому агенту):\n'
+                        + '\n'.join(_ca_lines[:10])
+                        + '\n  → Каждый агент ОБЯЗАН делать ДРУГОЙ шаг: один ищет — другой пишет,'
+                        ' один делает GitHub — другой LinkedIn/Habr/trading-форумы.\n\n'
+                    )
+            except Exception as _ca_err:
+                logger.debug('[COORD] cycle_assigns_ctx: %s', _ca_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -11440,6 +11479,7 @@ class AnchorEngine:
                 )
                 + _goal_phase_str
                 + _forced_rotation_str
+                + _cycle_assigns_ctx
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
                 "Ты — живой директор офиса. Думай исходя из ситуации. РЕЗУЛЬТАТ ВАЖНЕЕ ПРОЦЕССА.\n"
                 "⚠️ АНТИ-ШАБЛОН: не генерируй однотипные задачи вроде 'найди 3 контакта на dev.to/ProductHunt'. "
@@ -11541,15 +11581,42 @@ class AnchorEngine:
                 "• Многошаговые цепочки: агент A → данные → агент B → действие.\n\n"
 
                 f"Цели: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
-                f"Верни JSON-массив из {_n_plan_steps} шагов (min 1 на активную цель).\n"
+                f"АУДИТОРИЯ ЦЕЛЕЙ (учитывай при подборе платформ и инструментов):\n"
+                + '\n'.join(
+                    f"  • «{g['title']}»: {g.get('description','нет описания')[:200]}"
+                    for g in _goals[:5]
+                )
+                + "\n"
+                f"\nВерни JSON-массив из {_n_plan_steps} шагов (min 1 на активную цель).\n"
                 "Формат каждого шага: agent=имя, tool=snake_case, goal=точное_название, "
                 "reason=почему именно этот подход (1-2 предложения), "
                 "task=ПОЛНОЕ конкретное задание (повелительное наклонение, ≥50 слов: ЧТО сделать + КАК именно + ГДЕ искать / какие критерии + СКОЛЬКО + ожидаемый результат).\n"
-                "⚠️ КРИТИЧНО: task НЕ должен быть одной строкой вроде 'Найди email разработчиков'. "
+                "⚠️ КРИТИЧНО: task НЕ должен быть одной строкой. "
                 "task ДОЛЖЕН содержать ВСЕ детали: конкретный запрос, критерии отбора, платформа/инструмент, количество, следующий шаг.\n"
-                "Пример ПЛОХОГО task: 'Найди контакты разработчиков AI на GitHub'\n"
-                "Пример ХОРОШЕЙ task: 'Найди 5 активных Python/AI разработчиков на GitHub: используй search_users с запросом language:python followers:>50 location:russia, отбирай только тех у кого email виден в профиле, сохрани каждого через save_email_contact(name=..., email=..., source=github), затем отправь каждому персональное письмо через send_outreach_email с темой «Предложение: тест ASI Biont» и описанием пользы платформы для их проектов'\n"
-                '[{"agent": "имя", "task": "Найди 5 активных Python-разработчиков на GitHub через search_users (language:python followers:>50), у кого email виден в профиле. Сохрани каждого через save_email_contact. Отправь письмо с темой ASI Biont через send_outreach_email.", "tool": "search_users", "goal": "точное_название", "reason": "GitHub даёт публичные email активных разработчиков — прямой путь к аудитории"}]'
+                "⚠️ ЗАДАНИЕ КАЖДОГО АГЕНТА ОБЯЗАНО БЫТЬ УНИКАЛЬНЫМ ШАГОМ КОНВЕЙЕРА:\n"
+                "  Агент 1: ШАГ 1 (поиск/исследование) → Агент 2: ШАГ 2 (действие с найденным) → ...\n"
+                "  Если оба ищут одно и то же — ты теряешь цикл. Один ищет, другой пишет письма, третий анализирует.\n"
+                "  Ни в коем случае не давай двум агентам один и тот же tool для одной цели!\n"
+                + (
+                    # Динамический пример на основе первой цели
+                    f"Пример ПЛОХОГО плана: агент1 'найди {(_goals[0].get('title','контакты')[:20])} на GitHub' "
+                    f"И агент2 'найди {(_goals[0].get('title','контакты')[:20])} на GitHub' — это дублирование!\n"
+                    f"Пример ХОРОШЕГО плана: агент1 'найди 5 контактов целевой аудитории через web_search+save_email_contact' "
+                    f"И агент2 'отправь персональные письма через send_outreach_email уже найденным контактам'\n"
+                    if _goals else
+                    "Пример ПЛОХОГО плана: оба агента делают поиск. Пример ХОРОШЕГО: один ищет, второй отправляет.\n"
+                )
+                + (
+                    # JSON пример — динамический, основан на реальной первой цели
+                    f'[{{"agent": "{_profiles[0]["name"] if _profiles else "агент"}", '
+                    f'"task": "Найди 5 контактов целевой аудитории для цели «{_goals[0]["title"][:40] if _goals else "..."}»: '
+                    f'используй web_search с конкретными запросами (имя площадки, тип аудитории, ключевые слова), '
+                    f'сохрани каждого через save_email_contact(name=..., email=..., source=...) с реальным email.", '
+                    f'"tool": "web_search", "goal": "{_goals[0]["title"][:40] if _goals else "..."}", '
+                    f'"reason": "Нужны новые контакты именно этой аудитории — поиск через web_search с конкретными критериями даст email"}}]'
+                    if _goals and _profiles else
+                    '[{"agent": "имя", "task": "Найди 5 контактов целевой аудитории через web_search, сохрани через save_email_contact.", "tool": "web_search", "goal": "точное_название", "reason": "нужны новые контакты"}]'
+                )
             )
 
             try:
