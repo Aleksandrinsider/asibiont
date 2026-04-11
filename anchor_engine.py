@@ -6671,7 +6671,7 @@ class AnchorEngine:
                                 or not _has_imperative
                                 # Слишком короткое без инструмента и площадки
                                 or (len(_gen_s) < 100 and not _has_tool_name and not _has_platform_hint)
-                                or (len(_gen_s) < 120 and not _has_tool_name)
+                                or (len(_gen_s) < 120 and not _has_tool_name and not _has_platform_hint)
                                 # Бессмысленные задания про "альтернативные методы" / "для Telegram пользователей"
                                 or ('альтернативн' in _gen_lower and ('метод' in _gen_lower or 'способ' in _gen_lower or 'канал' in _gen_lower))
                                 # Задания про пользователей платформ без конкретики
@@ -6876,9 +6876,17 @@ class AnchorEngine:
                         _fb_name_prefix = f'{_chosen_name},'
                         if _g_label and _fb_choice.startswith(_fb_name_prefix):
                             _fb_body = _fb_choice[len(_fb_name_prefix):].strip()
-                            _coord_text = f'{_chosen_name}, следующий шаг по цели «{_g_label[:55].rstrip(".")}» — {_fb_body}'
+                            # Убираем дублирующее упоминание цели из тела шаблона, если уже вставляем в заголовке
+                            _fb_body_clean = re.sub(r'\s*по\s+«[^»]+»', '', _fb_body).strip(' —')
+                            _coord_text = f'{_chosen_name}, следующий шаг по цели «{_g_label[:55].rstrip(".")}» — {_fb_body_clean}'
                         else:
                             _coord_text = _fb_choice
+                        # Если есть свежий результат агента — дополняем контекстом вместо абстрактного шаблона
+                        if _last_agent_reply_c and len(_last_agent_reply_c.strip()) > 80:
+                            _arl = _last_agent_reply_c.strip().splitlines()
+                            _arl_snippet = next((l.strip() for l in _arl if len(l.strip()) > 40), '')
+                            if _arl_snippet:
+                                _coord_text += f' Опирайся на последний результат: {_arl_snippet[:160]}'
                         logger.info("[ANCHOR-AUTOPILOT] using context-aware fallback for %s", _chosen_name)
                     _coord_text_clean_save = ''  # pre-init to avoid NameError when _skip_coord=True
                     try:
