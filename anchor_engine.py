@@ -2758,7 +2758,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 f"   Примеры query: {_gh_query_examples}\n"
                 "   → save_email_contact → send_outreach_email\n"
                 "   💡 Варьируй query: меняй язык, страну, кол-во followers/repos для охвата разных сегментов.\n"
-                "   Нет email у найденных → пробуй web_search('[username] site:github.com email') или следующий query."
+                "   Нет email у найденных → пробуй web_search('[username] site:github.com email') или следующий query.\n"
+                "   ⚠️ GitHub search_users возвращает @users.noreply.github.com — это НЕ работает (заблокировано). Ищи реальный email: web_search('[username] github email site:github.com') или из bio профиля."
             )
             _ch_num += 1
 
@@ -2835,6 +2836,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + "\n\n📌 СТРАТЕГИЯ: не застревай на одном канале. "
             "GitHub → Habr → dev.to/SO → Конференции → Платформа → Курсы → bio → Сообщества.\n"
             "Каждый цикл — ДРУГОЙ канал ИЛИ другой query в том же канале.\n"
+            "\n🚫 ЛИЧНЫЕ vs GENERIC email: сохраняй ТОЛЬКО личные (firstname@, f.lastname@, name.surname@).\n"
+            "Заблокированы и не отправятся: info@, contact@, team@, hello@, support@, admin@, office@, partners@,\n"
+            "sales@, hr@, press@, media@, marketing@, feedback@, careers@, newsletter@, events@, editor@.\n"
+            "Нашёл только generic → web_search('[Имя Фамилия] компания email') чтобы найти личный.\n"
         )
 
     # ── GitHub-specific compact rules ──
@@ -2864,7 +2869,11 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     _imap_rules = ''
     if _has_imap:
-        _imap_rules = "\nEmail: если кампания есть и контакты есть → send_outreach_email напрямую, без новой кампании.\n"
+        _imap_rules = (
+            "\nEmail: если кампания есть и контакты есть → send_outreach_email напрямую, без новой кампании.\n"
+            "⚠️ Перед send_outreach_email убедись что email ЛИЧНЫЙ (firstname@, name.surname@).\n"
+            "Заблокированы и вернут ошибку: info@, contact@, team@, hello@, support@, admin@, office@, partners@, sales@, hr@, marketing@.\n"
+        )
 
     _no_imap_block = ''
     if not _has_imap:
@@ -3456,6 +3465,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         "  Если тема уже исследована (см. 'УЖЕ СДЕЛАНО') — бери результаты из заметок и ДЕЙСТВУЙ.\n"
         "  Исследование без действия = потраченное время. Цепочка: узнал → сохранил в заметки → сделал → проверил.\n"
         "  📌 ЗАВЕРШАЙ ЦЕПОЧКУ: web_search нашёл email → save_email_contact (имя, компания, откуда, зачем — уже в полях контакта).\n"
+        "     ⚠️ ТОЛЬКО ЛИЧНЫЙ email: firstname@, f.lastname@, name.surname@. НЕ сохраняй info@/contact@/team@/hello@/support@/admin@/partners@/office@/sales@/careers@ — заблокированы, письма не уйдут!\n"
+        "     Нашёл только generic → web_search('[Имя Фамилия] компания email') → найди ЛИЧНЫЙ.\n"
         "     Исследование дало выводы → save_note (итоги) + create_post / publish.\n"
         "     Нашёл данные для коллеги → save_note + DELEGATE с конкретными данными (email, имена, ссылки).\n\n"
 

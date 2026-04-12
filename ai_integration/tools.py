@@ -1157,7 +1157,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "save_email_contact",
-            "description": "📇 СОХРАНИТЬ email-контакт в справочник пользователя. Вызывай когда нашёл email человека через IMAP/RSS/поиск или после получения ответа. Сохранённые контакты учитываются в прогрессе целей.",
+            "description": "📇 СОХРАНИТЬ email-контакт в справочник пользователя. Вызывай когда нашёл email человека через IMAP/RSS/поиск или после получения ответа. Сохранённые контакты учитываются в прогрессе целей.\n⚠️ ТОЛЬКО ЛИЧНЫЕ email (firstname@domain, f.lastname@domain, name.surname@domain) — они доходят до человека.\nНЕ СОХРАНЯЙ generic email — они ЗАБЛОКИРОВАНЫ системой и письма НЕ будут отправлены: info@, contact@, contacts@, hello@, support@, sales@, admin@, office@, team@, help@, mail@, noreply@, hr@, press@, media@, marketing@, general@, feedback@, service@, partners@, business@, careers@, newsletter@, events@, editor@. Если нашёл только generic — продолжай искать личный email через web_search('[Имя Фамилия] email').",
             "parameters": {
                 "type": "object",
                 "properties": {
