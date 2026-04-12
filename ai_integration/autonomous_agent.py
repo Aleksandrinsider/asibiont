@@ -3943,7 +3943,10 @@ class HybridAutonomousAgent:
         _HOLLOW_ACKS = ('готово', 'выполнено', 'сделано', 'принял', 'понял', 'ок', 'ok', 'done', 'хорошо', 'записал')
         _final_lc = (final or '').strip().lower().rstrip('!. ')
         _is_hollow_ack = _final_lc in _HOLLOW_ACKS or any(_final_lc == h or _final_lc.startswith(h + ' ') or _final_lc.startswith(h + ',') for h in _HOLLOW_ACKS)
-        if tools_used and (len((final or '').strip()) < 40 or _is_hollow_ack) and not _had_agent_delegate:
+        # Синтезируем только если ответ действительно пустой/короткий, даже если начинается с ack-слова.
+        # "Готово, нашёл 5 контактов: ..." (100+ симв.) — полезный ответ, заменять не надо.
+        # "Готово ✓" (8 симв.) или "Готово, начинаю работу" (60 симв. без фактов) — нужен синтез.
+        if tools_used and (len((final or '').strip()) < 40 or (_is_hollow_ack and len((final or '').strip()) < 150)) and not _had_agent_delegate:
             # Собираем краткие результаты инструментов для синтеза AI
             _synth_parts = []
             for _r in execution_results:

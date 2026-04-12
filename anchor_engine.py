@@ -7302,7 +7302,8 @@ class AnchorEngine:
                         )
                         task_text = _coord_inject + task_text
                     # Ограничиваем task_text — оставляем достаточно для контекста
-                    _task_trimmed = task_text[:4000] if len(task_text) > 4000 else task_text
+                    # 8000 вместо 4000: coord inject ~850 симв. + нужен полный autopilot prompt
+                    _task_trimmed = task_text[:8000] if len(task_text) > 8000 else task_text
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(
                             agent_data, _task_trimmed, user.telegram_id,
@@ -8107,6 +8108,8 @@ class AnchorEngine:
                 elif result and result.strip() and _is_noise_result:
                     # ── Noise-filtered results: NOT shown to user, but saved for health-check ──
                     # Without this, assignment grows but results stay 0 → false stall → agent blocked forever
+                    # 800 chars (not 300): coordinator reads _last_agent_reply_c from Interaction[:800],
+                    # truncated context = coordinator repeats same task not knowing what was already done.
                     try:
                         _nf_text = result.strip()
                         _nf_san = (_chosen_name or '').split()[0] if _chosen_name else ''
@@ -8120,7 +8123,7 @@ class AnchorEngine:
                             message_type='agent_msg',
                             content=json.dumps({
                                 '__agent': {'name': _chosen_name, 'id': _chosen_id, 'avatar_url': _chosen_avatar},
-                                'text': _nf_text[:300],
+                                'text': _nf_text[:800],
                                 '__anchor_type': 'goal_autopilot_result',
                                 '__noise_filtered': True,
                             }, ensure_ascii=False),
