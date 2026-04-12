@@ -3826,7 +3826,7 @@ class AnchorEngine:
             'assignments': _assignments,
             'results': _results,
             'gap': _gap,
-            'stalled': _assignments >= 8 and _gap >= 5,
+            'stalled': _assignments >= 4 and _gap >= 3,  # 8/5→4/3: переключение за ~1ч вместо 2ч
         }
 
     def _recent_task_kpi_health(self, session, user_id: int, task_title: str, lookback_hours: int = 72) -> dict:
@@ -5620,7 +5620,7 @@ class AnchorEngine:
                         def _rr_key(a):
                             aid = getattr(a, 'id', 0)
                             cnt = _rr_counts.get(aid, 0)
-                            fail_penalty = _rr_recent_fails.get(aid, 0) * 50
+                            fail_penalty = _rr_recent_fails.get(aid, 0) * 15  # 50→15: таймаут API не выбивает агента из ротации на часы
                             cap_bonus = _capability_score(a)  # capability — мягкая подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
                             # ASI участвует в ротации наравне, но специализированные агенты
@@ -7442,11 +7442,13 @@ class AnchorEngine:
                     'работаю над ', 'анализирую ',
                 )
                 # Ack + intent: "Хорошо, сейчас открою базу...", "Ладно, подготовлю..."
+                # НО: "Принято, обновил CRM (3 контакта)" — полезный ответ, не шум.
                 _ACK_PREFIXES = ('хорошо', 'ладно', 'ok', 'окей', 'конечно', 'разумеется', 'принято', 'есть')
                 _is_ack_planning = (
                     len(_result_clean) < 250
                     and any(_result_lower.startswith(p) for p in _ACK_PREFIXES)
-                    and not any(c.isdigit() for c in _result_clean[:80])  # нет цифр/фактов
+                    and not any(c.isdigit() for c in _result_clean)  # нет цифр вообще (не только в [:80])
+                    and not _has_real_actions  # агент вызвал инструменты → результат ценный
                 )
                 _is_planning_noise = (
                     not _has_real_actions
@@ -7462,9 +7464,9 @@ class AnchorEngine:
                     or (not _has_real_actions and len(_result_clean) < 80
                         and any(w in _result_lower for w in ('duckduckgo не', 'сервис недоступ', 'веб-поиск временно', 'ошибка подключения')))
                     # Шум: инструменты вызваны, но текст ОЧЕНЬ короткий и шаблонный (нет фактов)
-                    # НЕ фильтруем run_agent_action — CRM/GitHub/интеграции часто дают короткие ответы
+                    # НЕ фильтруем run_agent_action и update_goal_progress — они дают короткие, но реальные ответы
                     or (_has_real_actions and len(_result_clean) < 40
-                        and 'run_agent_action' not in (_tools_used or [])
+                        and not any(t in (_tools_used or []) for t in ('run_agent_action', 'update_goal_progress', 'save_email_contact', 'send_outreach_email'))
                         and any(p in _result_lower for p in _GENERIC_TOOL_PATTERNS))
                     # Утечки делегаций: агент обращается к другому агенту
                     or _is_delegation_leak
