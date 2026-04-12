@@ -842,7 +842,7 @@ class AgentActivityLog(Base):
     # Типы: 'delegation' | 'post_newsfeed' | 'post_telegram' | 'user_message' | 'email' | 'post_discord' | 'other'
 
     # Заголовок / краткое описание (для строки в списке)
-    title = Column(String(300), nullable=False)
+    title = Column(String(300), nullable=False, server_default='')
 
     # Детали: текст поста, тело письма, текст сообщения и т.п.
     content = Column(Text)

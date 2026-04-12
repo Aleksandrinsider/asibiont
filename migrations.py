@@ -531,8 +531,9 @@ def _migrate_activity_log_updated_at_index(session, inspector):
     try:
         existing_indexes = {idx['name'] for idx in inspector.get_indexes('agent_activity_log')}
         if 'ix_agent_activity_updated_at' not in existing_indexes:
+            # NOTE: CONCURRENTLY cannot run inside a transaction block (SQLAlchemy uses implicit txn)
             session.execute(text(
-                "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_agent_activity_updated_at "
+                "CREATE INDEX IF NOT EXISTS ix_agent_activity_updated_at "
                 "ON agent_activity_log(user_id, updated_at)"
             ))
             session.commit()
@@ -540,6 +541,21 @@ def _migrate_activity_log_updated_at_index(session, inspector):
     except Exception as e:
         session.rollback()
         logger.debug(f"[MIGRATION] ix_agent_activity_updated_at skipped: {e}")
+
+
+def _migrate_agent_activity_log_title_default(session, inspector):
+    """Добавляет DEFAULT '' к agent_activity_log.title чтобы NOT NULL не падал при вставке без title."""
+    if not inspector.has_table('agent_activity_log'):
+        return
+    try:
+        session.execute(text(
+            "ALTER TABLE agent_activity_log ALTER COLUMN title SET DEFAULT ''"
+        ))
+        session.commit()
+        logger.info("[MIGRATION] Set DEFAULT '' on agent_activity_log.title")
+    except Exception as e:
+        session.rollback()
+        logger.debug(f"[MIGRATION] agent_activity_log.title default skipped: {e}")
 
 
 def _migrate_activity_log(session, inspector):
@@ -747,6 +763,7 @@ def run_migrations():
         _migrate_fix_agent_python_code(session)
         _migrate_payment_id_unique(session, inspector)
         _migrate_activity_log_updated_at_index(session, inspector)
+        _migrate_agent_activity_log_title_default(session, inspector)
         _cleanup_junk_agent_tasks(session)
         _migrate_intelligence_tables(session, inspector)
         logger.info("✅ Database migrations completed")

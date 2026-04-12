@@ -15853,7 +15853,11 @@ class AnchorEngine:
                     Anchor.delivered_at.is_(None)
                 ).with_for_update(nowait=True).all()
             except Exception:
-                # SQLite не поддерживает FOR UPDATE / nowait — fallback без блокировки
+                # SQLite: FOR UPDATE not supported; PostgreSQL: NOWAIT aborts txn — rollback first
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
                 existing = session.query(Anchor).filter(
                     Anchor.user_id == user.id,
                     Anchor.delivered_at.is_(None)
