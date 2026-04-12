@@ -1787,6 +1787,37 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _best_gtype = max(_gtype_scores.items(), key=lambda x: x[1])
     _goal_type = _best_gtype[0] if _best_gtype[1] > 0 else 'general'
 
+    # ── Scale-awareness: для целей с большой аудиторией ──
+    # Если target >= 100 людей — email 1:1 математически не решит задачу.
+    # Нужно учить агента думать о рычажных действиях (1 шаг → много людей).
+    _scale_block = ''
+    if _goal_type in ('outreach', 'general', 'startup', 'hr'):
+        _large_targets = []
+        for _g in goals_summary:
+            _t = _g.get('metric_target') or 0
+            _cur = _g.get('metric_current') or 0
+            _remaining = _t - _cur
+            _g_lower = (_g.get('title', '') + ' ' + (_g.get('description', '') or '')).lower()
+            _is_people = any(w in _g_lower for w in ('пользовател', 'подписчик', 'клиент', 'участник', 'лид', 'регистрац', 'member', 'user', 'subscriber'))
+            if _is_people and _remaining >= 100:
+                _large_targets.append((_g.get('title', ''), _remaining, _t))
+        if _large_targets:
+            _lt_desc = '; '.join(f"«{t}»: осталось ~{r} из {total}" for t, r, total in _large_targets[:2])
+            _scale_block = (
+                f"\n\n📐 МАСШТАБ ЦЕЛИ: {_lt_desc}.\n"
+                "Осмысли математику: если нужно 100+ человек, то:\n"
+                "  • 1 email = 1 потенциальный человек (конверсия холодного email ~2-5%)\n"
+                "  • 1 статья на Habr/dev.to = 1 000–50 000 просмотров\n"
+                "  • 1 пост в тематическое сообщество = сотни целевых людей\n"
+                "  • 1 Product Hunt/релиз = тысячи за день\n"
+                "Для МАСШТАБА приоритет стратегии:\n"
+                "  1️⃣ Создай КОНТЕНТ (create_post → publish_to_telegram) — органический рост\n"
+                "  2️⃣ Выйди в СООБЩЕСТВА через организаторов/администраторов (web_search → email к ЛПР сообщества)\n"
+                "  3️⃣ Email — для КЛЮЧЕВЫХ людей: лидеры мнений, инфлюенсеры, организаторы.\n"
+                "     НЕ для массового 1:1 outreach — это не масштабируется.\n"
+                "Думай: 'Какой 1 шаг сейчас охватит максимум целевых людей?'\n"
+            )
+
     # ── Блок интеграций: универсально из _classify_agent_caps ──
     _intg_connected = []
     for _cat in sorted(_caps_cats):
@@ -2961,24 +2992,49 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         _EO_ap.campaign_id == _c.id,
                         _EO_ap.status == 'draft',
                     ).scalar() or 0
+                    # ROI статистика кампании
+                    _c_sent = _db_ap.query(_fc_ap.count(_EO_ap.id)).filter(
+                        _EO_ap.campaign_id == _c.id,
+                        _EO_ap.status.in_(['sent', 'replied']),
+                    ).scalar() or 0
+                    _c_replied = _db_ap.query(_fc_ap.count(_EO_ap.id)).filter(
+                        _EO_ap.campaign_id == _c.id,
+                        _EO_ap.status == 'replied',
+                    ).scalar() or 0
+                    _c_conv = round(_c_replied / _c_sent * 100, 1) if _c_sent > 0 else None
+                    _roi_str = f"отправлено={_c_sent}, ответов={_c_replied}" + (f" ({_c_conv}%)" if _c_conv is not None else "")
+                    # Оцениваем эффективность кампании
+                    _poor_roi = _c_sent >= 20 and (_c_conv is None or _c_conv < 2.0)
                     if _pdrafts < 5:
-                        _camp_directives.append(
-                            f"  🎯 Кампания id={_c.id} «{_c.name}»: {_pdrafts} черновиков — НУЖНЫ КОНТАКТЫ!\n"
-                            f"     Цель кампании: {(_c.goal or '')[:120]}\n"
-                            f"     Аудитория: {(_c.target_audience or '')[:100]}\n"
-                            f"     → Найди контакты: web_search / find_relevant_contacts_for_task\n"
-                            f"     → Сохрани: save_email_contact → send_outreach_email"
-                        )
+                        if _poor_roi:
+                            # Email работает плохо — не давить "ПЕРВЫМ", предложить альтернативы
+                            _camp_directives.append(
+                                f"  📊 Кампания id={_c.id} «{_c.name}»: {_roi_str} — конверсия низкая.\n"
+                                f"     Цель: {(_c.goal or '')[:120]}\n"
+                                f"     → Email можно продолжать для КАЧЕСТВЕННЫХ контактов (личные адреса, ЛПР).\n"
+                                f"     → Но прежде оцени: не принесёт ли публикация/контент/сообщество больший охват за 1 шаг?"
+                            )
+                        else:
+                            _camp_directives.append(
+                                f"  🎯 Кампания id={_c.id} «{_c.name}»: {_pdrafts} черновиков — НУЖНЫ КОНТАКТЫ! ({_roi_str})\n"
+                                f"     Цель кампании: {(_c.goal or '')[:120]}\n"
+                                f"     Аудитория: {(_c.target_audience or '')[:100]}\n"
+                                f"     → Найди контакты: web_search / find_relevant_contacts_for_task\n"
+                                f"     → Сохрани: save_email_contact → send_outreach_email"
+                            )
                     else:
                         _camp_directives.append(
-                            f"  🟢 Кампания id={_c.id} «{_c.name}»: {_pdrafts} черновиков — "
+                            f"  🟢 Кампания id={_c.id} «{_c.name}»: {_pdrafts} черновиков ({_roi_str}) — "
                             f"отправляются автоматически (твоя помощь не требуется)"
                         )
                 if _camp_directives:
+                    # Проверяем есть ли хоть одна кампания которая реально нуждается в помощи
+                    _needs_help = any('НУЖНЫ КОНТАКТЫ' in d for d in _camp_directives)
+                    _header = "\n\n🚨 АКТИВНЫЕ EMAIL-КАМПАНИИ (ВЫСШИЙ ПРИОРИТЕТ — выполни ПЕРВЫМ!):\n" if _needs_help else "\n\n📧 АКТИВНЫЕ EMAIL-КАМПАНИИ:\n"
                     _campaign_directive = (
-                        "\n\n🚨 АКТИВНЫЕ EMAIL-КАМПАНИИ (ВЫСШИЙ ПРИОРИТЕТ — выполни ПЕРВЫМ!):\n"
+                        _header
                         + '\n'.join(_camp_directives)
-                        + "\n→ Найди контакты через web_search / find_relevant_contacts_for_task → save_email_contact → send_outreach_email.\n"
+                        + ("\n→ Найди контакты через web_search / find_relevant_contacts_for_task → save_email_contact → send_outreach_email.\n" if _needs_help else "\n")
                     )
             finally:
                 _db_ap.close()
@@ -3056,6 +3112,26 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                             f"  Письма с ответами: {', '.join(_tips)}\n"
                             "  → Используй эти параметры при следующей отправке.\n"
                         )
+                # ROI всего email-канала — если плохая конверсия, дать сигнал
+                try:
+                    from sqlalchemy import func as _fc_ei2
+                    _total_sent_ei = _sess_ei.query(_fc_ei2.count(_EO_ei.id)).filter(
+                        _EO_ei.user_id == user.id,
+                        _EO_ei.status.in_(['sent', 'replied']),
+                    ).scalar() or 0
+                    _total_replied_ei = len(_replied_ei)
+                    if _total_sent_ei >= 20:
+                        _conv_ei = round(_total_replied_ei / _total_sent_ei * 100, 1)
+                        if _conv_ei < 2.0:
+                            _email_intelligence_block += (
+                                f"\n\n⚠️ EMAIL КАНАЛ: {_total_sent_ei} отправлено, {_total_replied_ei} ответов ({_conv_ei}%) — конверсия ниже 2%.\n"
+                                "  Это нормально для холодного outreach, но означает: email эффективен только для ТОЧЕЧНЫХ контактов.\n"
+                                "  Рассмотри для этого цикла: create_post → publish_to_telegram (1 публикация = охват без отбросов);\n"
+                                "  find_and_message_relevant_users (пользователи внутри платформы — тёплая аудитория);\n"
+                                "  или email только лидерам мнений/организаторам — не рядовым контактам.\n"
+                            )
+                except Exception:
+                    pass
                 # Предпочтения конкретных контактов
                 _prefs_ei = _sess_ei.query(_ECP_ei).filter(
                     _ECP_ei.user_id == user.id,
@@ -3411,6 +3487,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{channels_hint}"
         f"{_intg_block}"
         f"{_integ_data_block}"
+        f"{_scale_block}"
         f"{_personalized_strategy_block}"
         f"{_personal_guard}"
         f"{_campaign_directive}"
