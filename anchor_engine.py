@@ -2213,6 +2213,70 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 "→ Метрика растёт ТОЛЬКО при реальном ответе/подтверждении интереса от человека снаружи.\n"
             )
 
+        # Per-goal-type "next step" prompts instead of universal email push
+        _next_step_by_type = {
+            'outreach': (
+                "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
+                "Следующий шаг — выход на НОВЫХ ВНЕШНИХ людей: "
+                "web_search(ищи тех кого НЕТ в базе) → save_email_contact → send_outreach_email. "
+                "⚠️ find_and_message_relevant_users — только ВНУТРИ платформы, не для поиска новых.\n"
+            ),
+            'general': (
+                "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
+                "Следующий шаг — выход на НОВЫХ ВНЕШНИХ людей: "
+                "web_search → save_email_contact → send_outreach_email или find_and_message_relevant_users.\n"
+            ),
+            'dev': (
+                "\n🚨 ПРОГРЕСС 0%: исследование готово — пора СТРОИТЬ и ПОКАЗЫВАТЬ. "
+                "Следующий шаг: create_issue/comment_on_issue (GitHub), create_post с кейсом, "
+                "или DELEGATE[разработчик]: конкретная техническая задача с деталями.\n"
+            ),
+            'content': (
+                "\n🚨 ПРОГРЕСС 0%: материал есть — пора ПУБЛИКОВАТЬ. "
+                "Следующий шаг: create_post → publish_to_telegram. "
+                "Контент без публикации не работает. Опубликуй прямо сейчас.\n"
+            ),
+            'startup': (
+                "\n🚨 ПРОГРЕСС 0%: анализ готов — пора к ПЕРВЫМ ПОЛЬЗОВАТЕЛЯМ. "
+                "Следующий шаг: web_search('[ниша] beta tester email') → save_email_contact → send_outreach_email, "
+                "или create_post с описанием проблемы → publish_to_telegram.\n"
+            ),
+            'research': (
+                "\n🚨 ПРОГРЕСС 0%: данные собраны — пора СИНТЕЗИРОВАТЬ и ПУБЛИКОВАТЬ. "
+                "Следующий шаг: create_post с выводами → publish_to_telegram. "
+                "Исследование без вывода = незавершённая задача.\n"
+            ),
+            'learning': (
+                "\n🚨 ПРОГРЕСС 0%: информация найдена — пора ПРИМЕНЯТЬ. "
+                "Следующий шаг: сделай первое упражнение/мини-проект по найденным материалам, "
+                "или create_post с резюме урока → publish_to_telegram (обучение через преподавание).\n"
+            ),
+            'health': (
+                "\n🚨 ПРОГРЕСС 0%: план есть — пора ДЕЛАТЬ. "
+                "Следующий шаг: выполни первую тренировку и update_goal_progress с реальными данными. "
+                "schedule_background_task — напоминание на следующий сеанс.\n"
+            ),
+            'finance': (
+                "\n🚨 ПРОГРЕСС 0%: анализ готов — пора ДЕЙСТВОВАТЬ. "
+                "Следующий шаг: update_goal_progress с реальными числами (баланс/сделка/доход), "
+                "или web_search('[инструмент] как купить/вложить') → конкретный план действий.\n"
+            ),
+            'hr': (
+                "\n🚨 ПРОГРЕСС 0%: поиск сделан — пора КОНТАКТИРОВАТЬ с кандидатами. "
+                "Следующий шаг: web_search('hh.ru [роль] email') → save_email_contact → send_outreach_email, "
+                "или find_relevant_contacts_for_task — кандидаты внутри платформы.\n"
+            ),
+            'travel': (
+                "\n🚨 ПРОГРЕСС 0%: план есть — пора БРОНИРОВАТЬ. "
+                "Следующий шаг: забронируй первый элемент (билет/отель) и update_goal_progress.\n"
+            ),
+            'ecommerce': (
+                "\n🚨 ПРОГРЕСС 0%: анализ готов — пора ПРОДАВАТЬ. "
+                "Следующий шаг: create_post с товаром → publish_to_telegram, "
+                "или web_search('[ниша] поставщик email') → save_email_contact → send_outreach_email.\n"
+            ),
+        }
+
         if _zero_progress and not _has_outreach_done and _has_search_done:
             if _has_rss and not _has_imap and not _has_github:
                 # RSS-only: не отправляет письма сам — делегирует
@@ -2221,11 +2285,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     "DELEGATE[email-агент]: передай ключевые инсайты и идеи для outreach-писем.\n"
                 )
             else:
-                _goal_state_hint += (
-                    "\n🚨 ПРОГРЕСС 0%: поиск сделан, но не было ни одного контакта/письма. "
-                    "Следующий шаг — выход на НОВЫХ ВНЕШНИХ людей: "
-                    "web_search(ищи тех кого НЕТ в базе) → save_email_contact → send_outreach_email. "
-                    "⚠️ find_and_message_relevant_users — только ВНУТРИ платформы, не для поиска новых.\n"
+                _goal_state_hint += _next_step_by_type.get(
+                    _goal_type,
+                    _next_step_by_type['general']
                 )
         elif _stuck_goals and agent_history and len(agent_history) >= 4 and not _has_outreach_done:
             if _has_rss and not _has_imap and not _has_github:
@@ -2277,12 +2339,61 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         "Попробуй другую тему или аудиторию.\n"
                     )
             else:
-                _goal_state_hint += (
-                    "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
-                    "Пора действовать: найди НОВЫХ людей которых нет в системе — "
-                    "web_search/GitHub search → save_email_contact → send_outreach_email. "
-                    "Не предлагай людей уже из базы как новых лидов.\n"
-                )
+                # Non-email goal types: push the right "next action" for this goal type
+                _stuck_next = {
+                    'outreach': (
+                        "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь/исследуешь, но нет ни одного письма/сообщения. "
+                        "Пора действовать: найди НОВЫХ людей которых нет в системе — "
+                        "web_search/GitHub search → save_email_contact → send_outreach_email. "
+                        "Не предлагай людей уже из базы как новых лидов.\n"
+                    ),
+                    'general': (
+                        "\n⚠️ НЕТ КОНТАКТОВ: ты уже ищешь, но нет ни одного контакта/действия. "
+                        "Пора действовать: web_search → save_email_contact → send_outreach_email или "
+                        "create_post → publish_to_telegram.\n"
+                    ),
+                    'dev': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: 4+ цикла исследования без реального шага. "
+                        "Пора: create_issue, comment_on_issue, или create_post с конкретным техническим "
+                        "выводом. DELEGATE[разработчик]: дай конкретную задачу с деталями.\n"
+                    ),
+                    'content': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: материал есть, но нет публикации. "
+                        "Пора: create_post → publish_to_telegram прямо сейчас. Не откладывай.\n"
+                    ),
+                    'startup': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: исследование готово — нет выхода к пользователям. "
+                        "Пора: web_search('[ниша] users email') → send_outreach_email, "
+                        "или create_post с описанием MVP → publish_to_telegram.\n"
+                    ),
+                    'research': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: данные собраны но нет публикации/вывода. "
+                        "Пора: create_post с ключевыми инсайтами → publish_to_telegram.\n"
+                    ),
+                    'learning': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: изучено, но нет практического шага. "
+                        "Пора: сделай упражнение/мини-проект, или создай краткое резюме → "
+                        "create_post → publish_to_telegram.\n"
+                    ),
+                    'health': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: план есть, но нет фактически выполненных тренировок. "
+                        "Обнови: update_goal_progress с реальными данными. "
+                        "schedule_background_task — напоминание на следующий сеанс.\n"
+                    ),
+                    'finance': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: анализ готов, но нет реального действия. "
+                        "Пора: update_goal_progress с числами, или web_search конкретного шага.\n"
+                    ),
+                    'hr': (
+                        "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: поиск готов, но нет контакта с кандидатами. "
+                        "Пора: send_outreach_email кандидатам, или find_and_message_relevant_users "
+                        "для охвата внутри платформы.\n"
+                    ),
+                }
+                _goal_state_hint += _stuck_next.get(_goal_type, _stuck_next.get('general', (
+                    "\n⚠️ ПРОГРЕСС ЗАСТЫЛ: 4+ цикла без нового результата. "
+                    "Сменить подход: другой канал, другая аудитория, или DELEGATE коллеге.\n"
+                )))
         elif _has_find_contacts and _has_outreach_done and not _metric_hints:
             # Агент искал и отправлял, но метрика не отображается — значит прогресс есть
             _goal_state_hint += (
@@ -2689,7 +2800,55 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         python_code=python_code,
     )
 
+    # ── Cross-channel usage stats (all integrations, not just email) ──
+    _channel_counts = {
+        'email':    _tool_cnt.get('send_outreach_email', 0) + _tool_cnt.get('negotiate_by_email', 0),
+        'followup': _tool_cnt.get('send_follow_up_email', 0),
+        'posts':    _tool_cnt.get('create_post', 0) + _tool_cnt.get('publish_to_telegram', 0) + _tool_cnt.get('publish_to_discord', 0),
+        'github':   _tool_cnt.get('run_agent_action', 0) if _has_github else 0,
+        'platform': _tool_cnt.get('find_and_message_relevant_users', 0),
+        'search':   _tool_cnt.get('web_search', 0) + _tool_cnt.get('research_topic', 0),
+        'delegate': _tool_cnt.get('delegate_task', 0),
+    }
+    _total_actions = sum(_channel_counts[k] for k in ('email', 'posts', 'github', 'platform', 'delegate'))
     _personalized_strategy_block = ''
+    if _total_actions >= 2 or _channel_counts['search'] >= 3:
+        _ch_lines_ps = []
+        if _channel_counts['email'] > 0:
+            _ch_lines_ps.append(f"  📧 Email outreach: {_channel_counts['email']} отправлено" + (f", +{_channel_counts['followup']} follow-up" if _channel_counts['followup'] else ''))
+        if _channel_counts['posts'] > 0:
+            _ch_lines_ps.append(f"  📝 Контент/посты: {_channel_counts['posts']} опубликовано")
+        if _channel_counts['github'] > 0:
+            _ch_lines_ps.append(f"  🐙 GitHub API: {_channel_counts['github']} вызовов run_agent_action")
+        if _channel_counts['platform'] > 0:
+            _ch_lines_ps.append(f"  👥 Платформа: {_channel_counts['platform']} сообщений пользователям")
+        if _channel_counts['delegate'] > 0:
+            _ch_lines_ps.append(f"  🤝 Делегирование: {_channel_counts['delegate']} задач коллегам")
+        if _channel_counts['search'] >= 2:
+            _ch_lines_ps.append(f"  🔍 Исследование: {_channel_counts['search']} поисков — пора ДЕЙСТВОВАТЬ, не только искать" if _channel_counts['search'] >= 4 and _total_actions == 0 else f"  🔍 Исследование: {_channel_counts['search']} поисков")
+
+        # Dominant channel detection → recommend diversification
+        _max_ch = max(_channel_counts.items(), key=lambda x: x[1])
+        _diverse_hint = ''
+        if _max_ch[1] >= 4 and _total_actions >= 4:
+            _ch_names = {'email': 'Email', 'posts': 'Контент', 'github': 'GitHub', 'platform': 'Платформа', 'search': 'Поиск'}
+            _dominant = _ch_names.get(_max_ch[0], _max_ch[0])
+            _alternatives = {
+                'email': 'create_post / publish_to_telegram или find_and_message_relevant_users',
+                'posts': 'send_outreach_email или find_and_message_relevant_users',
+                'github': 'create_post или send_outreach_email',
+                'platform': 'Email outreach или GitHub search',
+                'search': 'send_outreach_email → применяй найденное!',
+            }
+            _alt = _alternatives.get(_max_ch[0], 'другой канал')
+            _diverse_hint = f"\n  💡 Доминирует «{_dominant}» ({_max_ch[1]}+ раз) → попробуй: {_alt}\n"
+
+        if _ch_lines_ps:
+            _personalized_strategy_block = (
+                "\n\n📊 ИСПОЛЬЗОВАННЫЕ КАНАЛЫ (этот сеанс):\n"
+                + '\n'.join(_ch_lines_ps)
+                + _diverse_hint
+            )
 
     # ── Outreach effectiveness stats ──
     _outreach_stats = ''
@@ -2931,46 +3090,183 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         )
 
     _escalation_block = ''
-    if _goal_type in ('outreach', 'general'):
-        # Динамическая эскалация: смотрим что уже пробовали → предлагаем непробованное
-        _ESC_OPTIONS = [
-            ('github_query', _has_github, "смени GitHub query (другой язык/страна/followers)"),
-            ('habr_search', True, "web_search('site:habr.com [тема] email contact') — поиск авторов"),
-            ('telegram_post', True, "publish_to_telegram в свой канал (не в чужие!) — органический охват"),
-            ('audience_pivot', True, "другой сегмент аудитории (джуны/сеньоры, другой стек, другая страна)"),
-            ('partners', True, "find_relevant_contacts_for_task — партнёры и коллаборации"),
-            ('content_campaign', True, "create_post → publish_to_telegram — серия контента"),
-            ('platform_users', True, "find_and_message_relevant_users — пользователи внутри платформы"),
-        ]
-        _esc_tried = set()
-        if 'run_agent_action' in _used_tools and _has_github:
-            _esc_tried.add('github_query')
-        if 'publish_to_telegram' in _used_tools or 'create_post' in _used_tools:
-            _esc_tried.add('telegram_post')
-        if 'find_relevant_contacts_for_task' in _used_tools:
-            _esc_tried.add('partners')
-        if 'create_post' in _used_tools and 'publish_to_telegram' in _used_tools:
-            _esc_tried.add('content_campaign')
-        if 'find_and_message_relevant_users' in _used_tools:
-            _esc_tried.add('platform_users')
-        _esc_untried = [
-            desc for key, available, desc in _ESC_OPTIONS
-            if available and key not in _esc_tried
-        ]
-        if _esc_untried:
-            _esc_suggestions = '\n'.join(f"  • {d}" for d in _esc_untried[:4])
-            _escalation_block = (
-                f"\nЕСЛИ НЕТ ОТВЕТОВ (холодный outreach не работает) — варианты которые ты ещё не пробовал:\n"
-                + _esc_suggestions
-                + "\n• ℹ️ Хабр и VC.ru — публичного API для постинга нет. Используй для поиска: web_search('site:habr.com ...') или web_search('site:vc.ru ...').\n"
-                "• Reddit/Medium — публикация возможна если агент настроен с python_code-скриптом и API-ключом. Без этого — поиск контактов.\n"
-                "→ Выбери что лучше подходит для ЭТОЙ цели и ЦА.\n"
-            )
-        else:
-            _escalation_block = (
-                "\nВсе стандартные каналы опробованы. Рекомендация: "
-                "проанализируй результаты (research_topic) и предложи пользователю стратегическую смену подхода.\n"
-            )
+    # Universal escalation: per-goal-type untried approaches
+    _ESC_BY_GOAL: dict = {
+        'outreach': [
+            ('github_query',    _has_github, "смени GitHub query (другой язык/страна/followers)"),
+            ('habr_search',     True,        "web_search('site:habr.com [тема] email contact') — поиск авторов"),
+            ('telegram_post',   True,        "publish_to_telegram в свой канал — органический охват"),
+            ('audience_pivot',  True,        "другой сегмент аудитории (джуны/сеньоры, другой стек, другая страна)"),
+            ('partners',        True,        "find_relevant_contacts_for_task — партнёры и коллаборации"),
+            ('content_campaign',True,        "create_post → publish_to_telegram — серия контента привлекает без рассылки"),
+            ('platform_users',  True,        "find_and_message_relevant_users — пользователи внутри платформы"),
+        ],
+        'general': [
+            ('github_query',    _has_github, "смени GitHub query (другой язык/страна/followers)"),
+            ('habr_search',     True,        "web_search('site:habr.com [тема] email contact') — поиск авторов"),
+            ('telegram_post',   True,        "publish_to_telegram в свой канал — органический охват"),
+            ('audience_pivot',  True,        "другой сегмент аудитории (джуны/сеньоры, другой стек, другая страна)"),
+            ('partners',        True,        "find_relevant_contacts_for_task — партнёры и коллаборации"),
+            ('content_campaign',True,        "create_post → publish_to_telegram — серия контента"),
+            ('platform_users',  True,        "find_and_message_relevant_users — пользователи внутри платформы"),
+        ],
+        'dev': [
+            ('create_issue',    _has_github, "create_issue в профильном репо — предложи идею/коллаборацию"),
+            ('comment_issue',   _has_github, "comment_on_issue в активных проектах — органический нетворкинг"),
+            ('content_code',    True,        "create_post с кодом/кейсом → publish_to_telegram — привлечь разработчиков"),
+            ('research_rival',  True,        "web_search('топ [ниша] GitHub 2025') → анализ конкурентов → report"),
+            ('delegate_test',   True,        "DELEGATE[коллега]: протестируй / проверь реализацию"),
+            ('platform_devs',   True,        "find_and_message_relevant_users — найди разработчиков внутри платформы"),
+        ],
+        'content': [
+            ('vary_format',     True,        "попробуй другой формат: если были посты — попробуй видео-скрипт/список/кейс"),
+            ('cross_publish',   True,        "публикуй в разных каналах поочерёдно: свой → партнёрские → платформа"),
+            ('engage_audience', True,        "задай открытый вопрос аудитории в посте → комментарии = виральность"),
+            ('collab_content',  True,        "web_search('[ниша] блогер/канал admin email') → предложи гест-пост"),
+            ('seo_research',    True,        "research_topic('[ниша] trending topics 2025') → выбери горячую тему"),
+            ('repurpose',       True,        "преврати один лонгрид в 5 коротких постов — разные форматы, одна идея"),
+        ],
+        'startup': [
+            ('find_users',      True,        "web_search('[ниша] ранние пользователи email beta') → save + send_outreach_email"),
+            ('content_attract', True,        "create_post с болями аудитории → publish_to_telegram — органический лидген"),
+            ('github_niche',    _has_github, "search_repos по нише → create_issue с предложением коллаборации"),
+            ('investors',       True,        "web_search('angel investors [ниша] email contact 2025') → save_email_contact"),
+            ('platform_b2b',    True,        "find_relevant_contacts_for_task — потенциальные партнёры внутри платформы"),
+            ('competitor_gap',  True,        "research_topic('[конкурент] слабые стороны отзывы') → позиционирование"),
+        ],
+        'research': [
+            ('publish_findings', True,       "create_post с выводами → publish_to_telegram — исследование должно работать"),
+            ('expert_outreach',  True,       "web_search('[эксперт в нише] email contact') → send_outreach_email за комментарием"),
+            ('data_search',      True,       "research_topic('[тема] статистика отчёт 2025') — поищи данные, не только мнения"),
+            ('delegate_analyze', True,       "DELEGATE[аналитик]: обработай данные + дай структурированный вывод"),
+            ('github_papers',    _has_github,"search_repos по ключевым словам — найди open-source исследования"),
+        ],
+        'learning': [
+            ('apply_now',       True,        "Знания без практики = 0. Создай мини-проект/упражнение прямо сейчас"),
+            ('teach_to_learn',  True,        "create_post с резюме урока → publish_to_telegram — обучение через преподавание"),
+            ('find_mentor',     True,        "web_search('[тема] mentor expert email contact') → send_outreach_email"),
+            ('community_join',  True,        "research_topic('[тема] Telegram Discord сообщество') → find_and_message"),
+            ('schedule_next',   True,        "schedule_background_task — запланируй следующий учебный блок"),
+        ],
+        'health': [
+            ('track_metric',    True,        "update_goal_progress с реальной выполненной тренировкой/метрикой"),
+            ('schedule_habit',  True,        "schedule_background_task — напоминание на следующий сеанс"),
+            ('find_coach',      True,        "web_search('[цель] тренер коуч email contact') → send_outreach_email"),
+            ('content_habit',   True,        "create_post с прогрессом → publish_to_telegram — публичность усиливает мотивацию"),
+            ('research_method', True,        "research_topic('[тема] научный метод best practice 2025') — найди оптимальный подход"),
+        ],
+        'finance': [
+            ('update_numbers',  True,        "update_goal_progress с реальными цифрами (баланс, сделка, доход)"),
+            ('research_market', True,        "research_topic('[инструмент/рынок] анализ 2025 прогноз') → конкретные данные"),
+            ('find_advisor',    True,        "web_search('[ниша] финансовый консультант email') → send_outreach_email"),
+            ('crm_deal',        'crm' in _caps_cats, "run_agent_action(create_lead) — занеси сделку в CRM"),
+            ('content_finance', True,        "create_post с финансовым инсайтом → publish_to_telegram"),
+        ],
+        'hr': [
+            ('job_boards',      True,        "web_search('HeadHunter hh.ru [роль] email контакт HR') → save_email_contact"),
+            ('github_devs',     _has_github, "search_users по техстеку → save_email_contact → send_outreach_email"),
+            ('platform_match',  True,        "find_relevant_contacts_for_task — кандидаты внутри платформы"),
+            ('content_vacancy', True,        "create_post с вакансией → publish_to_telegram — пассивный рекрут"),
+            ('referral',        True,        "web_search('[роль] Telegram сообщество admin email') → outreach к модератору"),
+        ],
+        'travel': [
+            ('book_step',       True,        "update_goal_progress — забронируй реальный элемент (билет/отель/виза) сейчас"),
+            ('research_route',  True,        "research_topic('[направление] маршрут советы 2025') — конкретный план"),
+            ('find_locals',     True,        "web_search('[город] экспаты русскоязычные Telegram group admin email') → outreach"),
+            ('content_trip',    True,        "create_post с планом → publish — вдруг кто едет туда же"),
+        ],
+        'ecommerce': [
+            ('product_content', True,        "create_post с обзором/кейсом товара → publish_to_telegram"),
+            ('find_suppliers',  True,        "web_search('[ниша] поставщик оптом email contact') → save_email_contact"),
+            ('crm_orders',      'crm' in _caps_cats, "run_agent_action(get_contacts/create_lead) — ведение клиентов в CRM"),
+            ('platform_buyers', True,        "find_and_message_relevant_users — потенциальные покупатели внутри платформы"),
+            ('review_strategy', True,        "research_topic('[ниша] маркетплейс стратегия 2025') — узнай что работает"),
+        ],
+    }
+    _esc_options = _ESC_BY_GOAL.get(_goal_type, _ESC_BY_GOAL.get('general', []))
+    _esc_tried = set()
+    if 'run_agent_action' in _used_tools and _has_github:
+        _esc_tried.add('github_query')
+        _esc_tried.add('create_issue')
+        _esc_tried.add('comment_issue')
+        _esc_tried.add('github_niche')
+        _esc_tried.add('github_devs')
+        _esc_tried.add('github_papers')
+        _esc_tried.add('github_b2b')
+    if 'publish_to_telegram' in _used_tools or 'create_post' in _used_tools:
+        _esc_tried.add('telegram_post')
+        _esc_tried.add('content_campaign')
+        _esc_tried.add('content_code')
+        _esc_tried.add('content_attract')
+        _esc_tried.add('content_habit')
+        _esc_tried.add('content_finance')
+        _esc_tried.add('content_vacancy')
+        _esc_tried.add('content_trip')
+        _esc_tried.add('cross_publish')
+        _esc_tried.add('vary_format')
+        _esc_tried.add('repurpose')
+        _esc_tried.add('product_content')
+        _esc_tried.add('content_habit')
+        _esc_tried.add('teach_to_learn')
+        _esc_tried.add('publish_findings')
+    if 'find_relevant_contacts_for_task' in _used_tools:
+        _esc_tried.add('partners')
+        _esc_tried.add('platform_b2b')
+        _esc_tried.add('platform_buyers')
+        _esc_tried.add('platform_devs')
+        _esc_tried.add('platform_match')
+    if 'find_and_message_relevant_users' in _used_tools:
+        _esc_tried.add('platform_users')
+        _esc_tried.add('community_join')
+    if 'update_goal_progress' in _used_tools:
+        _esc_tried.add('update_numbers')
+        _esc_tried.add('track_metric')
+        _esc_tried.add('book_step')
+    if 'send_outreach_email' in _used_tools or 'negotiate_by_email' in _used_tools:
+        _esc_tried.add('expert_outreach')
+        _esc_tried.add('find_users')
+        _esc_tried.add('find_mentor')
+        _esc_tried.add('find_coach')
+        _esc_tried.add('find_advisor')
+        _esc_tried.add('find_locals')
+        _esc_tried.add('job_boards')
+        _esc_tried.add('collab_content')
+        _esc_tried.add('investors')
+        _esc_tried.add('referral')
+    _esc_untried = [
+        desc for key, available, desc in _esc_options
+        if available and key not in _esc_tried
+    ]
+    if _esc_untried:
+        _esc_header = {
+            'outreach': "ЕСЛИ НЕТ ОТВЕТОВ (холодный outreach не работает)",
+            'general':  "СЛЕДУЮЩИЕ ШАГИ (что ещё не пробовал)",
+            'dev':      "СЛЕДУЮЩИЕ ШАГИ ДЛЯ РАЗРАБОТКИ (что ещё не пробовал)",
+            'content':  "СЛЕДУЮЩИЕ ШАГИ ДЛЯ КОНТЕНТА (что ещё не пробовал)",
+            'startup':  "СЛЕДУЮЩИЕ ШАГИ ДЛЯ СТАРТАПА (что ещё не пробовал)",
+            'research': "СЛЕДУЮЩИЕ ШАГИ ДЛЯ ИССЛЕДОВАНИЯ (что ещё не пробовал)",
+            'learning': "СЛЕДУЮЩИЕ ШАГИ ДЛЯ ОБУЧЕНИЯ (что ещё не пробовал)",
+            'health':   "СЛЕДУЮЩИЕ ШАГИ ДЛЯ ЗДОРОВЬЯ (что ещё не пробовал)",
+            'finance':  "СЛЕДУЮЩИЕ ШАГИ ДЛЯ ФИНАНСОВ (что ещё не пробовал)",
+            'hr':       "СЛЕДУЮЩИЕ ШАГИ ДЛЯ НАЙМА (что ещё не пробовал)",
+            'travel':   "СЛЕДУЮЩИЕ ШАГИ ДЛЯ ПУТЕШЕСТВИЯ (что ещё не пробовал)",
+            'ecommerce':"СЛЕДУЮЩИЕ ШАГИ ДЛЯ МАГАЗИНА (что ещё не пробовал)",
+        }.get(_goal_type, "СЛЕДУЮЩИЕ ШАГИ (что ещё не пробовал)")
+        _esc_suggestions = '\n'.join(f"  • {d}" for d in _esc_untried[:4])
+        _escalation_block = (
+            f"\n{_esc_header} — варианты которые ты ещё не пробовал:\n"
+            + _esc_suggestions
+            + ("\n• ℹ️ Хабр и VC.ru — публичного API для постинга нет. Используй для поиска: web_search('site:habr.com ...').\n"
+               "• Reddit/Medium — без API: поиск контактов через web_search.\n"
+               "→ Выбери что лучше подходит для ЭТОЙ цели и ЦА.\n"
+               if _goal_type in ('outreach', 'general') else
+               "→ Выбери что лучше подходит для ЭТОЙ цели прямо сейчас.\n")
+        )
+    else:
+        _escalation_block = (
+            "\nВсе стандартные подходы для этого типа цели опробованы. "
+            "Рекомендация: проанализируй результаты (research_topic) и предложи пользователю стратегическую смену подхода.\n"
+        )
 
     # ── Директива активных email-кампаний ──
     # Если у пользователя есть активная кампания с нехваткой лидов —
