@@ -1775,25 +1775,81 @@ class HybridAutonomousAgent:
                 out = _raw_out
                 if action and _raw_out and '# ===' in _raw_out:
                     _ACTION_SECTION_MAP = {
+                        # AmoCRM
                         'create_lead': 'amo', 'create_contact': 'amo', 'search_contacts': 'amo',
                         'get_contact': 'amo', 'add_note': 'amo', 'link_contact_to_lead': 'amo',
                         'get_leads': 'amo', 'update_lead': 'amo', 'create_deal': 'amo',
                         'get_pipelines': 'amo', 'link_contact': 'amo', 'get_contacts': 'amo',
+                        'get_lead': 'amo', 'delete_lead': 'amo', 'get_tasks': 'amo', 'create_task': 'amo',
+                        # Bitrix24 / HubSpot
+                        'create_deal_bitrix': 'bitrix', 'get_deals': 'bitrix', 'update_deal': 'bitrix',
+                        'bitrix_leads': 'bitrix', 'get_hubspot_contacts': 'hubspot',
+                        'create_hubspot_contact': 'hubspot', 'hubspot_deals': 'hubspot',
+                        # Gmail / IMAP
                         'send_email': 'gmail', 'check_inbox': 'gmail', 'check_emails': 'gmail',
-                        'create_issue': 'github', 'list_issues': 'github',
+                        'reply_email': 'gmail', 'get_email': 'gmail', 'mark_read': 'gmail',
+                        # GitHub
+                        'create_issue': 'github', 'list_issues': 'github', 'update_issue': 'github',
                         'search_users': 'github', 'find_contributors': 'github',
                         'search_repos': 'github', 'star_repo': 'github', 'comment_on_issue': 'github',
+                        'get_user_info': 'github', 'fork_repo': 'github',
+                        # GitLab
+                        'gitlab_issues': 'gitlab', 'create_mr': 'gitlab', 'gitlab_search': 'gitlab',
+                        # RSS
                         'check_news': 'rss', 'read_rss': 'rss', 'check_news_and_markets': 'rss',
-                        'check_markets': 'rss', 'fetch_rss': 'rss',
+                        'check_markets': 'rss', 'fetch_rss': 'rss', 'get_feed': 'rss',
+                        # Metrika
                         'yandex_metrika_report': 'metrika', 'get_metrika': 'metrika',
                         'get_analytics': 'metrika', 'analytics_report': 'metrika',
+                        # Notion
+                        'create_page': 'notion', 'update_page': 'notion', 'search_notion': 'notion',
+                        'get_database': 'notion', 'add_to_database': 'notion', 'notion_search': 'notion',
+                        # Google Sheets
+                        'read_sheet': 'sheets', 'add_row': 'sheets', 'update_sheet': 'sheets',
+                        'append_row': 'sheets', 'get_sheet': 'sheets', 'update_row': 'sheets',
+                        # Slack
+                        'post_message': 'slack', 'send_slack': 'slack', 'list_channels': 'slack',
+                        'get_slack_messages': 'slack', 'slack_message': 'slack',
+                        # Ozon / Wildberries
+                        'get_products': 'marketplace', 'get_orders': 'marketplace',
+                        'get_stocks': 'marketplace', 'get_revenue': 'marketplace',
+                        'ozon_products': 'marketplace', 'wb_products': 'marketplace',
+                        'ozon_orders': 'marketplace', 'wb_orders': 'marketplace',
+                        # Jira
+                        'search_issues_jira': 'jira', 'create_jira_issue': 'jira',
+                        'get_sprint': 'jira', 'jira_issues': 'jira', 'update_jira': 'jira',
+                        # Trello
+                        'create_card': 'trello', 'list_boards': 'trello', 'move_card': 'trello',
+                        'get_board': 'trello', 'trello_card': 'trello', 'add_trello_card': 'trello',
+                        # Stripe / payments
+                        'get_charges': 'stripe', 'get_revenue_stripe': 'stripe',
+                        'create_customer': 'stripe', 'list_subscriptions': 'stripe',
+                        'stripe_report': 'stripe', 'get_payments': 'stripe',
+                        # Binance / Bybit
+                        'get_balance': 'crypto', 'get_price': 'crypto', 'get_ticker': 'crypto',
+                        'binance_balance': 'crypto', 'bybit_balance': 'crypto',
+                        # hh.ru / SuperJob
+                        'search_vacancies': 'hh', 'search_resumes': 'hh',
+                        'get_vacancies': 'hh', 'post_vacancy': 'hh',
                     }
                     _SEC_KEYWORDS = {
                         'amo': ('amocrm', 'amo'),
+                        'bitrix': ('bitrix',),
+                        'hubspot': ('hubspot',),
                         'gmail': ('gmail',),
                         'github': ('github',),
+                        'gitlab': ('gitlab',),
                         'rss': ('rss',),
                         'metrika': ('метрик', 'metrik'),
+                        'notion': ('notion',),
+                        'sheets': ('sheet', 'google sheet', 'табл'),
+                        'slack': ('slack',),
+                        'marketplace': ('ozon', 'wildberries', 'wb', 'shopify', 'маркет'),
+                        'jira': ('jira',),
+                        'trello': ('trello',),
+                        'stripe': ('stripe',),
+                        'crypto': ('binance', 'bybit', 'coinbase', 'crypto'),
+                        'hh': ('hh.ru', 'headhunter', 'superjob', 'hh_'),
                     }
                     _target = _ACTION_SECTION_MAP.get(action.lower(), '')
                     if _target:
@@ -6067,6 +6123,16 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'twitter': 'мониторинг, постинг, поиск аудитории',
             'instagram': 'контент, аудитория, аналитика',
             'linkedin': 'нетворкинг, поиск контактов, B2B',
+            'crm': 'воронка продаж end-to-end: найти контакт → создать сделку → двигать по этапам → писать заметки',
+            'amocrm': 'воронка продаж, сделки и контакты по этапам',
+            'bitrix': 'воронка, контакты, задачи и календарь команды',
+            'hubspot': 'лиды, контакты, сделки, email-последовательности',
+            'airtable': 'база данных + дашборды, записи и отчёты',
+            'asana': 'задачи, проекты, драйвы, портфель задач',
+            'clickup': 'задачи, документы, время, отчёты',
+            'moysklad': 'товары, заказы, склад, контрагенты',
+            'calendly': 'запись на встречу, календарь расписаний',
+            'zoom': 'видеозвонки, конференции, запись',
         }
         # Конкретные action-имена для run_agent_action по типу интеграции
         _INTG_ACTIONS = {
@@ -6120,6 +6186,58 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             'hh': (
                 "run_agent_action(action='search_vacancies', params={'text': '...'})\n"
                 "    run_agent_action(action='search_resumes', params={'text': '...'})"
+            ),
+            'crm': (
+                "run_agent_action(action='get_pipelines') — СНАЧАЛА! узнай pipeline_id и status_id реальных этапов\n"
+                "    run_agent_action(action='create_lead', params={'name':'...','price':N,'pipeline_id':'<id>','status_id':'<id>'}) — сделку В НУЖНОМ ЭТАПЕ\n"
+                "    run_agent_action(action='update_lead', params={'id':N,'status_id':'<id>'}) — двинуть по воронке\n"
+                "    run_agent_action(action='get_contacts', params={'query':'...'}) — поиск\n"
+                "    run_agent_action(action='create_contact', params={'name':'...','email':'...','phone':'...'})\n"
+                "    run_agent_action(action='add_note', params={'id':N,'entity_type':'leads','text':'...'}) — заметка к сделке"
+            ),
+            'amocrm': (
+                "run_agent_action(action='get_pipelines') — СНАЧАЛА, чтобы знать pipeline_id+status_id\n"
+                "    run_agent_action(action='create_lead', params={'name':'...','pipeline_id':'<id>','status_id':'<id>'})\n"
+                "    run_agent_action(action='update_lead', params={'id':N,'status_id':'<id>'})\n"
+                "    run_agent_action(action='get_leads') — 10 последних сделок"
+            ),
+            'notion': (
+                "run_agent_action(action='create_page', params={'database_id':'...','title':'...','props':{...}})\n"
+                "    run_agent_action(action='search_notion', params={'query':'...'})\n"
+                "    Или: http_api_request(url='https://api.notion.com/v1/pages', method='POST', headers={'Notion-Version':'2022-06-28'}, auth_key='NOTION_TOKEN', body={...})"
+            ),
+            'sheets': (
+                "run_agent_action(action='read_sheet', params={'range':'A1:Z100'})\n"
+                "    run_agent_action(action='add_row', params={'values':[...]})\n"
+                "    run_agent_action(action='update_sheet', params={'range':'A2','values':[...]})"
+            ),
+            'airtable': (
+                "http_api_request(url='https://api.airtable.com/v0/{BASE_ID}/{TABLE}', auth_key='AIRTABLE_TOKEN')\n"
+                "    http_api_request(url='https://api.airtable.com/v0/{BASE_ID}/{TABLE}', method='POST', auth_key='AIRTABLE_TOKEN', body={'fields':{...}})"
+            ),
+            'stripe': (
+                "run_agent_action(action='get_charges') — последние платежи\n"
+                "    run_agent_action(action='get_revenue') — выручка за период\n"
+                "    http_api_request(url='https://api.stripe.com/v1/charges', auth_key='STRIPE_KEY', auth_scheme='Bearer')"
+            ),
+            'moysklad': (
+                "http_api_request(url='https://api.moysklad.ru/api/remap/1.2/entity/product', auth_key='MOYSKLAD_TOKEN')\n"
+                "    http_api_request(url='https://api.moysklad.ru/api/remap/1.2/entity/customerorder', auth_key='MOYSKLAD_TOKEN')"
+            ),
+            'asana': (
+                "http_api_request(url='https://app.asana.com/api/1.0/tasks', auth_key='ASANA_TOKEN')\n"
+                "    http_api_request(url='https://app.asana.com/api/1.0/tasks', method='POST', auth_key='ASANA_TOKEN', body={'data':{'name':'...','projects':[...]}})"
+            ),
+            'clickup': (
+                "http_api_request(url='https://api.clickup.com/api/v2/list/{LIST_ID}/task', method='POST', auth_key='CLICKUP_TOKEN', body={'name':'...','description':'...'})\n"
+                "    http_api_request(url='https://api.clickup.com/api/v2/task/{TASK_ID}', method='PUT', auth_key='CLICKUP_TOKEN', body={'status':'...'})"
+            ),
+            'zoom': (
+                "http_api_request(url='https://api.zoom.us/v2/users/me/meetings', method='POST', auth_key='ZOOM_TOKEN', body={'topic':'...','start_time':'...','duration':60})"
+            ),
+            'linkedin': (
+                "http_api_request(url='https://api.linkedin.com/v2/people/', auth_key='LINKEDIN_ACCESS_TOKEN')\n"
+                "    run_agent_action(action='search_profiles', params={'keywords':'...'}) — если скрипт настроен"
             ),
         }
         _connected_caps = []
