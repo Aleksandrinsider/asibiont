@@ -12409,13 +12409,21 @@ async def send_outreach_email(
             import re as _re_fn
             # Слова-признаки команды/компании вместо реального человека
             _FAKE_NAME_WORDS = {
-                'team', 'founders', 'автор', 'author', 'редакция', 'редактор',
+                'автор', 'author', 'редакция', 'редактор',
                 'компания', 'company', 'group', 'corp', 'inc', 'llc', 'ltd',
                 'department', 'отдел', 'команда', 'коллектив', 'staff',
             }
+            # founders@/team@ адреса у стартапов — это реальные основатели/команда:
+            # 'founders' и 'team' допустимы как имя когда email это founders@ или team@
+            _rcpt_pfx = (_rcpt or '').split('@')[0].lower() if '@' in (_rcpt or '') else ''
+            _allow_team_name = _rcpt_pfx in ('founders', 'team', 'co-founders', 'cofounders', 'founding')
             _name_lower = _rname_chk.lower()
             _name_words = set(_re_fn.findall(r'[a-zA-Zа-яА-ЯёЁ]+', _name_lower))
-            if _name_words & _FAKE_NAME_WORDS:
+            _bad_words = _name_words & _FAKE_NAME_WORDS
+            # Добавляем 'team' и 'founders' в плохие слова только если email не founders@/team@
+            if not _allow_team_name:
+                _bad_words |= _name_words & {'team', 'founders'}
+            if _bad_words:
                 return (f"⛔ «{_rname_chk}» — это не имя конкретного человека (команда/компания/автор). "
                         f"Найди ФИО реального получателя.")
             # Имя = один токен И всё в нижнем или начинается с заглавной — фамилия без имени

@@ -378,16 +378,13 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         return {
             "success": False,
             "error": "Telegram channel not configured",
-            "message": f"""Telegram-канал не настроен.
-
-📋 Что сделать:
-1. Открой Dashboard
-2. Нажми на аватар → Профиль
-3. Укажи ID или @username канала
-4. Добавь @{bot_username} как админа канала
-5. Сохрани
-
-После этого скажи «опубликуй в канал»"""
+            "message": (
+                "Telegram-канал не настроен — пост не опубликован.\n"
+                "📋 Чтобы настроить: Дашборд → Профиль → укажи @username канала → "
+                f"добавь @{bot_username} как администратора → Сохрани.\n"
+                "💡 Чтобы не потерять контент: вызови create_post с тем же текстом — "
+                "сохранит пост в системе. После настройки канала пост можно опубликовать вручную."
+            )
         }
     
     # Формируем текст поста

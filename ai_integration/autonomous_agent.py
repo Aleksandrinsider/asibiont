@@ -59,9 +59,9 @@ def _decrypt_keys(raw: str) -> str:
 _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     # Telegram-канал
     ("telegram-канал не настроен",
-     "💡 Telegram-канал не настроен. Дашборд → Профиль → укажи @username канала → добавь бота как администратора"),
+     "💡 Telegram-канал не настроен. Вызови create_post с тем же контентом (сохранит черновик), затем: Дашборд → Профиль → укажи @username канала → добавь бота как администратора"),
     ("telegram channel not configured",
-     "💡 Telegram channel not configured. Dashboard → Profile → set @username → add bot as admin"),
+     "💡 Telegram channel not configured. Call create_post with the same content (saves draft), then: Dashboard → Profile → set @username → add bot as admin"),
     # Discord webhook
     ("discord webhook не настроен",
      "💡 Discord не подключён. Discord → канал → Настройки → Интеграции → Webhooks → скопируй URL → Дашборд → Профиль"),
@@ -2293,15 +2293,16 @@ class HybridAutonomousAgent:
                                                  "Это не персональный адрес. Найди реальный контакт.")
                     return params
             # GUARD: блокируем role-based / generic email (не персональные)
+            # Оставляем только явно нечитаемые: автоответы, техслужбы, spam-ловушки
+            # press@/media@/partners@/ceo@/director@ — допустимы в нужном контексте, AI оценивает сам
             _ROLE_PREFIXES = (
                 'info@', 'support@', 'marketing@', 'sales@', 'sale@', 'admin@', 'noreply@',
                 'no-reply@', 'contact@', 'hello@', 'help@', 'office@', 'hr@',
-                'buhgalter@', 'bukhgalter@', 'accounting@', 'team@', 'press@',
-                'general@', 'mail@', 'webmaster@', 'postmaster@', 'abuse@',
+                'buhgalter@', 'bukhgalter@', 'accounting@', 'team@', 'general@',
+                'mail@', 'webmaster@', 'postmaster@', 'abuse@',
                 'feedback@', 'service@', 'billing@', 'jobs@', 'career@', 'careers@',
                 'opensource@', 'security@', 'privacy@', 'legal@', 'compliance@',
-                'komm@', 'commercial@', 'pr@', 'media@', 'partners@', 'partner@',
-                'reception@', 'director@', 'ceo@', 'cto@', 'cfo@',
+                'komm@', 'commercial@',
                 'ai@', 'ml@', 'data@', 'research@', 'dev@', 'engineering@',
                 'decision-makers', 'enquiries@', 'invest@',
             )
