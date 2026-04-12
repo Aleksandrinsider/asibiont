@@ -6337,6 +6337,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"{'Нашла' if _is_fem else 'Нашёл'} событие → проверь дату ({_now_str}): прошедшее не рекомендуй, но используй контакты спикеров.\n"
             "Публикации (Discord/Telegram/пост) — пиши для аудитории как эксперт, не как ассистент владельцу.\n"
             "[INTERNAL] сообщения о лимитах — молча переключись на другое действие.\n"
+            "save_note = итоговый вывод с конкретными данными (список контактов/email, аналитика, ключевые факты). "
+            "НЕ сохраняй: 'нашла инструмент', 'запустила поиск', 'обновила прогресс' — это не ценность. "
+            "Ценность = что-то чем можно воспользоваться позже: contact@mail.ru + имя + контекст, или 'топ-3 канала с конверсией X%'.\n"
             "Свою работу делай сам. Делегируй через DELEGATE[Имя] только когда нет нужного инструмента.\n"
             f"Не упоминай tool-имена в отчёте. «{'Поискала' if _is_fem else 'Поискал'} на Хабре» вместо «{'Запустила' if _is_fem else 'Запустил'} web_search».\n"
             "Не изобретай данные и email. Используй РЕАЛЬНЫЕ данные из базы знаний.\n"
@@ -7879,10 +7882,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         if _proof_block not in _notes_existing:
                             _targs['notes'] = (_notes_existing + ' ' + _proof_block).strip()
 
-                # GUARD: max 1 save_note per autopilot cycle
-                if _tname == 'save_note' and _is_autopilot_task and _save_note_count >= 1:
+                # TEACH: если уже сохранена заметка в этом цикле — даём контекст, не блокируем
+                if _tname == 'save_note' and _is_autopilot_task and _save_note_count >= 2:
                     _tc_result = json.dumps({
-                        "error": "[INTERNAL] save_note: в этом цикле уже сохранена 1 заметка. Молча переключись — не сообщай об этом пользователю."
+                        "hint": (
+                            "[INTERNAL] save_note: в этом цикле уже сохранено несколько заметок. "
+                            "Спроси себя: эта заметка — итоговый вывод с конкретными данными (контакты, факты, решение), "
+                            "или промежуточный шаг который можно пропустить? "
+                            "Если есть сомнения — лучше вложи информацию в update_goal_progress notes= и продолжи действия."
+                        )
                     }, ensure_ascii=False)
                     _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
                     _tool_call_count += 1

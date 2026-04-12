@@ -892,9 +892,9 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             Note.created_at >= _since_1h,
             Note.source == 'chat',
         ).count()
-        if _recent_notes_1h >= 4:
+        if _recent_notes_1h >= 12:
             logger.info(f"[SAVE_NOTE] Rate limit: {_recent_notes_1h} notes in last hour for user {user.id}")
-            return "[INTERNAL] Лимит заметок: уже создано 4+ за последний час. Сохрани только самое важное позже."
+            return "[INTERNAL] Лимит заметок: уже создано 12+ за последний час. Сохраняй только финальные выводы с конкретными данными — не промежуточные шаги."
 
         # --- Дедуп: проверяем похожий заголовок за последние 24ч ---
         _recent_notes = session.query(Note).filter(
