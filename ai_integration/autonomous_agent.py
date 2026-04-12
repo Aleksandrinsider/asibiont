@@ -1778,6 +1778,7 @@ class HybridAutonomousAgent:
                         'create_lead': 'amo', 'create_contact': 'amo', 'search_contacts': 'amo',
                         'get_contact': 'amo', 'add_note': 'amo', 'link_contact_to_lead': 'amo',
                         'get_leads': 'amo', 'update_lead': 'amo', 'create_deal': 'amo',
+                        'get_pipelines': 'amo', 'link_contact': 'amo', 'get_contacts': 'amo',
                         'send_email': 'gmail', 'check_inbox': 'gmail', 'check_emails': 'gmail',
                         'create_issue': 'github', 'list_issues': 'github',
                         'search_users': 'github', 'find_contributors': 'github',

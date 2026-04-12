@@ -1841,14 +1841,14 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         elif _cat == 'crm':
             _intg_connected.append(
                 '✅ CRM — run_agent_action(action="get_contacts", params={"query":"имя или email"}) — поиск контактов\n'
-                '  run_agent_action(action="create_lead", params={"name":"Название сделки", "price":5000})\n'
+                '  ⛔ ВАЖНО: create_lead БЕЗ pipeline_id+status_id → сделка попадёт в «Неразобранное»! Сначала вызови get_pipelines!\n'
+                '  run_agent_action(action="get_pipelines") — СНАЧАЛА получи реальные pipeline_id и status_id этапов\n'
+                '  run_agent_action(action="create_lead", params={"name":"Название сделки", "price":5000, "pipeline_id":"<ID>", "status_id":"<ID>"}) — создать сделку В НУЖНОМ ЭТАПЕ\n'
                 '  run_agent_action(action="update_lead", params={"id":12345, "status_id":142, "pipeline_id":789}) — передвинуть по воронке\n'
                 '  run_agent_action(action="create_contact", params={"name":"Имя", "email":"...", "phone":"..."})\n'
                 '  run_agent_action(action="link_contact", params={"lead_id":..., "contact_id":...}) — привязать контакт к сделке\n'
                 '  run_agent_action(action="add_note", params={"id":12345, "entity_type":"leads", "text":"..."})\n'
-                '  run_agent_action(action="get_pipelines") — показать воронки и этапы (status_id)\n'
-                '  🔗 Цепочки: create_contact → create_lead → link_contact | get_pipelines → update_lead (двинуть по воронке)\n'
-                '  ⚠️ Для update_lead нужен status_id этапа — сначала вызови get_pipelines чтобы узнать ID.'
+                '  🔗 Цепочки: get_pipelines → create_lead(с pipeline_id+status_id) → link_contact | update_lead (двинуть по воронке)'
             )
         elif _cat == 'marketplace':
             _intg_connected.append(
