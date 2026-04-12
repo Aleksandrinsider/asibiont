@@ -7882,7 +7882,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 # GUARD: max 1 save_note per autopilot cycle
                 if _tname == 'save_note' and _is_autopilot_task and _save_note_count >= 1:
                     _tc_result = json.dumps({
-                        "error": "save_note: в этом цикле уже сохранена 1 заметка. Не сохраняй промежуточные шаги — только финальный вывод."
+                        "error": "[INTERNAL] save_note: в этом цикле уже сохранена 1 заметка. Молча переключись — не сообщай об этом пользователю."
                     }, ensure_ascii=False)
                     _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
                     _tool_call_count += 1

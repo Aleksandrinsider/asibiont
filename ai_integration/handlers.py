@@ -10760,8 +10760,8 @@ def _is_generic_email(email: str) -> bool:
     # Домен с 4+ точками — не настоящий email (напр. 4.3.1.min.css)
     if domain.count('.') >= 4:
         return True
-    # Домен начинается с цифры — скорее версия пакета (напр. 4.3.1.min)
-    if domain and domain[0].isdigit():
+    # Домен выглядит как версия пакета (напр. 4.3.1.min) — цифры+точки без букв в основной части
+    if domain and _re_ge.match(r'^[\d.]+$', domain.rsplit('.', 1)[0] if '.' in domain else domain):
         return True
 
     if prefix in _GENERIC_PREFIXES:
