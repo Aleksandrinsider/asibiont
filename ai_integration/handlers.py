@@ -884,22 +884,43 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
 
         _note_title = (title or content[:60]).strip()
 
-        # --- Дедуп: проверяем похожий заголовок за последние 24ч ---
+        # --- Rate limit: автопилот не должен спамить заметками ---
+        _since_1h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=1)
         _since_24h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=24)
+        _recent_notes_1h = session.query(Note).filter(
+            Note.user_id == user.id,
+            Note.created_at >= _since_1h,
+            Note.source == 'chat',
+        ).count()
+        if _recent_notes_1h >= 4:
+            logger.info(f"[SAVE_NOTE] Rate limit: {_recent_notes_1h} notes in last hour for user {user.id}")
+            return "[INTERNAL] Лимит заметок: уже создано 4+ за последний час. Сохрани только самое важное позже."
+
+        # --- Дедуп: проверяем похожий заголовок за последние 24ч ---
         _recent_notes = session.query(Note).filter(
             Note.user_id == user.id,
             Note.created_at >= _since_24h,
         ).all()
 
-        # Простое сравнение: совпадение >60% слов в заголовке
-        _title_words = set(_note_title.lower().split())
+        # Сравнение по заголовку (>60% слов) + по содержимому (>50% слов в 1-м предложении)
+        _title_words = set(w for w in _note_title.lower().split() if len(w) > 2)
+        _content_first = content.strip().split('.')[0].lower()
+        _content_head_words = set(w for w in _content_first.split() if len(w) > 3)
         for _rn in _recent_notes:
-            _rn_words = set((_rn.title or '').lower().split())
+            _rn_words = set(w for w in (_rn.title or '').lower().split() if len(w) > 2)
             if _title_words and _rn_words:
                 _overlap = len(_title_words & _rn_words) / max(len(_title_words), len(_rn_words))
-                if _overlap > 0.6:
-                    logger.info(f"[SAVE_NOTE] Dedup: similar note exists (id={_rn.id}, overlap={_overlap:.0%}): «{_rn.title}»")
+                if _overlap > 0.55:
+                    logger.info(f"[SAVE_NOTE] Dedup title: similar note exists (id={_rn.id}, overlap={_overlap:.0%}): «{_rn.title}»")
                     return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
+            # Дополнительно: совпадение по началу контента
+            if _content_head_words and len(_content_head_words) >= 4:
+                _rn_content_head = set(w for w in (_rn.content or '').split('.')[0].lower().split() if len(w) > 3)
+                if _rn_content_head:
+                    _c_overlap = len(_content_head_words & _rn_content_head) / max(len(_content_head_words), len(_rn_content_head))
+                    if _c_overlap > 0.55:
+                        logger.info(f"[SAVE_NOTE] Dedup content: similar note exists (id={_rn.id}, c_overlap={_c_overlap:.0%})")
+                        return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
 
         # --- Quality filter: блокируем мусорные заметки от автопилота ---
         import re as _re_sn

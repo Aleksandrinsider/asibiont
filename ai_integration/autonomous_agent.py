@@ -7142,6 +7142,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _tools_used: list[str] = []  # трекинг вызванных инструментов
     _action_evidence: list[str] = []  # короткие доказательства из результатов инструментов
     _goal_progress_blocked = False  # True если update_goal_progress был отклонён guard'ом
+    _save_note_count = 0  # ограничение: не более 1 save_note за цикл автопилота
     _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
@@ -7878,6 +7879,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         if _proof_block not in _notes_existing:
                             _targs['notes'] = (_notes_existing + ' ' + _proof_block).strip()
 
+                # GUARD: max 1 save_note per autopilot cycle
+                if _tname == 'save_note' and _is_autopilot_task and _save_note_count >= 1:
+                    _tc_result = json.dumps({
+                        "error": "save_note: в этом цикле уже сохранена 1 заметка. Не сохраняй промежуточные шаги — только финальный вывод."
+                    }, ensure_ascii=False)
+                    _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                    _tool_call_count += 1
+                    continue
+
                 # Задачи создаваемые агентом помечаются source='agent'
                 if _tname == 'add_task' and agent.get('id'):
                     _targs['created_by_agent_id'] = agent['id']
@@ -7901,6 +7911,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                             _ugp_lower = _tc_result.lower() if isinstance(_tc_result, str) else ''
                             if 'не обновлён' in _ugp_lower or '⛔' in _tc_result or 'нельзя увеличить' in _ugp_lower or 'обновляй через metric_current' in _ugp_lower:
                                 _goal_progress_blocked = True
+                        if _tname == 'save_note':
+                            _save_note_count += 1
                         if _tname in _ACTION_EVIDENCE_TOOLS:
                             import re as _re_ev
                             _email_ev = ''
