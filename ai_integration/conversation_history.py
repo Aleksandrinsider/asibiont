@@ -44,21 +44,11 @@ def sanitize_token_hallucinations(text: str) -> str:
     return text
 
 
-# Feminine verb endings that leak agent persona into ASI context
-_FEMININE_TO_NEUTRAL = [
-    (r'\b([Яя])\s+(нашла|проверила|отправила|сделала|написала|создала|удалила|обновила|загрузила|подготовила|исследовала|проанализировала|собрала|завершила|добавила|получила|увидела|поняла|решила|опубликовала)\b',
-     lambda m: m.group(1) + ' ' + re.sub(r'ла$', 'л', m.group(2))),
-]
-
 
 def _sanitize_assistant_message(content):
-    """Убирает из ответов ассистента ложные утверждения о задачах, неправильные суммы токенов, и женские глагольные формы (утечка persona агента)."""
+    """Убирает из ответов ассистента ложные утверждения о задачах и неправильные суммы токенов."""
     if not content:
         return content
-    
-    # Нейтрализуем женские глагольные формы (агент Кристина → ASI мужской род)
-    for pattern, repl in _FEMININE_TO_NEUTRAL:
-        content = re.sub(pattern, repl, content)
 
     # Исправляем галлюцинированные суммы токенов
     for pattern, replacement in _TOKEN_HALLUCINATION_REPLACEMENTS:

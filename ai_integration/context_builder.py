@@ -235,8 +235,6 @@ class ContextBuilder:
                 if future_tasks and not today_tasks and not overdue:
                     hints.append(f"БУДУЩИЕ ({len(future_tasks)}): {', '.join(future_tasks[:2])}")
 
-                hints.append(f"Всего активных задач: {len(tasks)}")
-
             # ═══ ДЕЛЕГИРОВАНИЕ: детали ═══
             try:
                 from models import User as _UserD
@@ -350,8 +348,8 @@ class ContextBuilder:
                 if not profile.skills: _missing.append('навыки')
                 if not profile.city: _missing.append('город')
                 if not profile.interests: _missing.append('интересы')
-                if _missing:
-                    hints.append(f"ПРОФИЛЬ НЕПОЛНЫЙ (не заполнено: {', '.join(_missing)}) — спроси у пользователя!")
+                if _missing and interaction_cnt < 15:
+                    hints.append(f"ПРОФИЛЬ НЕПОЛНЫЙ (не заполнено: {', '.join(_missing)}) — при случае уточни у пользователя.")
 
             # ═══ ЦЕЛИ (все статусы кроме удалённых) ═══
             from models import Goal
@@ -449,8 +447,6 @@ class ContextBuilder:
 
             if real_contacts:
                 hints.append("ПАРТНЁРЫ НА ПЛАТФОРМЕ (совпадают интересы, НЕ связаны с email-перепиской):\n" + "\n".join(f"  {c}" for c in real_contacts))
-            else:
-                hints.append("Контактов пока нет")
 
             # ═══ ВРЕМЯ СУТОК ═══
             time_labels = {(6,12): "утро", (12,18): "день", (18,23): "вечер"}
