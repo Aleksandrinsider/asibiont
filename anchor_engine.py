@@ -15496,14 +15496,27 @@ class AnchorEngine:
                         "- Прогресс цели изменился — упомяни новую цифру.\n"
                     )
 
-                    # Gender hints for agents
+                    # Gender hints for agents — explicit per-agent forms
                     _gender_hints_parts = []
+                    _gender_block_lines = []
                     for _ag_n in _current_run_agent_tools:
                         _is_fem_ag = _ag_n and _ag_n[-1] in 'аяАЯ' and _ag_n[-2:].lower() not in ('ша', 'жа')
                         if _is_fem_ag:
                             _gender_hints_parts.append(f"{_ag_n} — ж (сделала, нашла, проверила)")
+                            _gender_block_lines.append(
+                                f"  • {_ag_n} (женский): \"{_ag_n} нашла\", \"{_ag_n} отправила\", \"{_ag_n} проверила\""
+                                f" — ЗАПРЕЩЕНО: \"{_ag_n} нашёл\", \"{_ag_n} отправил\", обрезанные слова ('нашл', 'отправил')"
+                            )
                         else:
                             _gender_hints_parts.append(f"{_ag_n} — м (сделал, нашёл, проверил)")
+                            _gender_block_lines.append(
+                                f"  • {_ag_n} (мужской): \"{_ag_n} нашёл\", \"{_ag_n} отправил\", \"{_ag_n} проверил\""
+                            )
+                    _gender_block = (
+                        "РОД АГЕНТОВ — КРИТИЧНО, нарушение недопустимо:\n"
+                        + '\n'.join(_gender_block_lines) + "\n"
+                        if _gender_block_lines else ''
+                    )
                     _gender_line = (
                         f"- Род агентов: {'; '.join(_gender_hints_parts)}. Используй правильные окончания.\n"
                         if _gender_hints_parts else ''
@@ -15511,6 +15524,7 @@ class AnchorEngine:
 
                     _report_prompt = (
                         f"Ты — ASI, координатор (МУЖСКОЙ род: я проверил, я нашёл, я отправил). Пишешь короткий отчёт пользователю в чате.\n\n"
+                        + (_gender_block + "\n" if _gender_block else '')
                         + _prev_summaries_text
                         + f"Что сделала команда:\n{_report_items}\n\n"
                         + (f"Ход работы:\n{_bridge_flow}\n\n" if _bridge_flow else '')
@@ -15520,7 +15534,6 @@ class AnchorEngine:
                         f"- Пиши как друг-менеджер в мессенджере — живо, коротко, по делу.\n"
                         f"- Называй агентов по именам как живых людей: '[Имя] проверила почту...', '[Имя] нашёл 3 контакта...'.\n"
                         + _gender_line
-                        + f"- ВАЖНО: ТЫ (ASI) пишешь в МУЖСКОМ роде. Женский род — ТОЛЬКО когда говоришь ОБ агенте-женщине (Кристина сделала). НЕ путай свой род с родом агента.\n"
                         f"- Конкретика: имена контактов, цифры, что именно найдено/отправлено.\n"
                         f"- НЕ УПОМИНАЙ технические проблемы: таймауты, сбои, нестабильность, переключение каналов. Пиши только о результатах.\n"
                         + _progress_rule
@@ -15531,12 +15544,12 @@ class AnchorEngine:
                         + _note_hint
                         + f"- АНТИПОВТОР: меняй структуру и порядок — не начинай каждый раз одинаково.\n"
                         f"- ЗАВЕРШЁННОСТЬ: каждое предложение ОБЯЗАНО быть закончено — подлежащее, сказуемое, точка. "
-                        f"Перечитай свой ответ: если последнее предложение обрывается без точки — допиши или удали.\n"
+                        f"Никаких обрезанных слов ('нашл', 'сдела', 'отправи'). Слова пишутся целиком.\n"
                         f"- 1-3 предложения. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
                     _report_gen = await asyncio.wait_for(
-                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=200),
+                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=280),
                         timeout=12,
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:
