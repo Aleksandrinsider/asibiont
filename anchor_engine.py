@@ -7386,8 +7386,8 @@ class AnchorEngine:
                                             {'role': 'user', 'content': _coord_prompt},
                                             {'role': 'assistant', 'content': _gen_s},
                                             {'role': 'user', 'content': _vague_fix_msg},
-                                        ], max_tokens=400),
-                                        timeout=20,
+                                        ], max_tokens=600),
+                                        timeout=25,
                                     )
                                     if _retry_vague_gen and len(_retry_vague_gen.strip()) > 80:
                                         _rvg_lower = _retry_vague_gen.strip().lower()

@@ -722,6 +722,10 @@ def sanitize_live_team_chat_text(
         if not s:
             continue
         if s.endswith(':') and len(s) <= 70 and not re.search(r'[.!?]', s[:-1]):
+            if _preserve_tools:
+                # Для поручений координатора: пропускаем заголовок "Инструмент:/Цель:/...",
+                # но продолжаем — контентные строки после него должны остаться.
+                continue
             break
         lines.append(s)
     cleaned = ' '.join(lines).strip()
