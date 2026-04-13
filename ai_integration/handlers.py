@@ -11152,6 +11152,12 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
         'machine learning', 'langchain', 'llm developer', 'llm engineer',
         # SaaS-строители / tech-founders (явный код/продуктовый контекст)
         'saas founder', 'tech founder', 'технический директор', 'tech lead',
+        # Bio/life sciences — GitHub хранит biotech/genomics профили
+        'bioinformatics', 'bioinformatic', 'biotech', 'genomics', 'genomic',
+        'proteomics', 'metagenomics', 'cheminformatics', 'computational biology',
+        'биоинформатик', 'геномик', 'биотех', 'биостатистик', 'biostatistics',
+        'structural biology', 'structural biolog', 'молекулярн биолог',
+        'sequencing', 'ngs ', 'single-cell', 'scrnaseq', 'rna-seq',
     ]
     _is_tech_audience = any(t in _audience_text for t in _tech_markers)
 

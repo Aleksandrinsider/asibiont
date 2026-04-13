@@ -16076,9 +16076,9 @@ class AnchorEngine:
         # IMPORTANT: min cooldown overrides — stored cooldown_hours in DB can be stale
         # from before a code update, so we enforce a floor per anchor_type.
         _MIN_COOLDOWN_OVERRIDE = {
-            'goal_autopilot_review': 0.25,  # 15 мин — реальный гейт = MIN_AUTOPILOT_GAP_MINUTES
-            'email_need_leads': 0.5,  # was 1.5 — too slow (7 searches/day vs ~30 with 0.5h)
-            'chat_ai_review': 3.0,  # min 3ч между одинаковыми review (было 1.5h)
+            'goal_autopilot_review': 0.5,   # было 0.25 (15 мин) → 30 мин: 45/day→24/day
+            'email_need_leads': 2.0,         # было 0.5 (49/day!) → 2ч: 49/day→12/day, экономит токены
+            'chat_ai_review': 3.0,           # min 3ч между одинаковыми review (было 1.5h)
         }
         _cooldown_blocked_types = set()  # types blocked by cooldown regardless of source
         try:
