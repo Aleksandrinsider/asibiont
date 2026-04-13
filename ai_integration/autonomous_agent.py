@@ -4161,6 +4161,19 @@ class HybridAutonomousAgent:
 
                 # ── Pass 2: выполняем все валидные tools ПАРАЛЛЕЛЬНО ────────────
                 # Каждый вызов получает отдельную DB-сессию (session=None → auto)
+                # Per-tool timeouts: тяжёлые агентные цепи — 120с, всё остальное — 60с
+                _TOOL_TIMEOUT_MAP = {
+                    'delegate_task': 120, 'run_agent_action': 120,
+                    'research_topic': 90, 'web_search': 45,
+                    'send_outreach_email': 45, 'send_follow_up_email': 45,
+                    'reply_to_outreach_email': 45, 'negotiate_by_email': 45,
+                    'check_emails': 45,
+                    'generate_image': 90,
+                    'publish_to_telegram': 45, 'publish_to_discord': 45,
+                    'create_post': 60,
+                }
+                _DEFAULT_TOOL_TIMEOUT = 60
+
                 async def _exec_one(_tc, _name, _args, _reason):
                     # ── Пре-анонс для delegate_task (не отправляем — уже сохраняется в _save_ifd) ──
                     if _cb and _name == 'delegate_task':
@@ -4170,11 +4183,15 @@ class HybridAutonomousAgent:
                             await _cb(self._tool_progress_text(_name, iteration + 1, lang=user_lang))
                         except Exception as _e:
                             logger.debug("suppressed: %s", _e)
+                    _tool_timeout = _TOOL_TIMEOUT_MAP.get(_name, _DEFAULT_TOOL_TIMEOUT)
                     try:
-                        _results = await self.execute_actions(
-                            [{"tool": _name, "params": _args, "reason": _reason}],
-                            user_id, session=None,
-                            user_message=user_message, web_context=web_context)
+                        _results = await asyncio.wait_for(
+                            self.execute_actions(
+                                [{"tool": _name, "params": _args, "reason": _reason}],
+                                user_id, session=None,
+                                user_message=user_message, web_context=web_context),
+                            timeout=_tool_timeout,
+                        )
                         _r = _results[0] if _results else {"success": False, "error": "no result"}
                         if _r.get('success'):
                             _raw_res = _r['result']
@@ -4279,6 +4296,12 @@ class HybridAutonomousAgent:
                             _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
                             try: get_learner().record_tool_result(user_id, _name, False)
                             except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[EXEC] {_name} timed out after {_tool_timeout}s — tool hung, skipping")
+                        _r = {"success": False, "error": f"timeout_{_tool_timeout}s"}
+                        _rc = json.dumps({"error": f"Инструмент не ответил за {_tool_timeout}с. Попробуй другой способ."}, ensure_ascii=False)
+                        try: get_learner().record_tool_result(user_id, _name, False)
+                        except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                     except Exception as _err:
                         logger.error(f"[EXEC] {_name} parallel crashed: {_err}\n{traceback.format_exc()}")
                         _r = {"success": False, "error": str(_err)}
