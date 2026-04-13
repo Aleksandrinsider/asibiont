@@ -12526,9 +12526,20 @@ async def send_outreach_email(
         # ── GUARD: имя получателя должно быть в теле письма (персонализация) ──
         if _rname_send and body:
             _first_name_oe = _rname_send.split()[0]
-            if len(_first_name_oe) >= 2 and _first_name_oe.lower() not in body.lower():
-                return (f"⛔ Имя получателя «{_first_name_oe}» не упоминается в теле письма. "
-                        f"Добавь персональное обращение — холодное письмо без имени выглядит как спам.")
+            _body_lower_oe = body.lower()
+            # Проверяем точное вхождение имени (Latin или Cyrillic как дано)
+            _name_found = _first_name_oe.lower() in _body_lower_oe
+            # Если не найдено — проверяем наличие стандартного приветствия (Dear/Hi/Здравствуй/Добрый)
+            # Это защита от ложных срабатываний когда AI правильно обращается иначе
+            if not _name_found:
+                import re as _re_greet
+                _HAS_GREETING = bool(_re_greet.search(
+                    r'\b(?:dear|hi|hello|hey|привет|здравствуй|добрый|уважаем|доброе|ciao|hola|bonjour)\b',
+                    _body_lower_oe, _re_greet.IGNORECASE
+                ))
+                if not _HAS_GREETING:
+                    return (f"⛔ Имя получателя «{_first_name_oe}» не упоминается в теле письма. "
+                            f"Добавь персональное обращение — холодное письмо без имени выглядит как спам.")
 
         # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
         # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"
