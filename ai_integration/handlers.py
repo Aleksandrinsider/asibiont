@@ -8743,7 +8743,15 @@ async def web_search(query: str, user_id: int = None, session=None, close_sessio
 
     results = await api.web_search(query, num=8)
     if not results:
-        return f"По запросу «{query}» ничего не найдено. Попробуй переформулировать запрос."
+        return (
+            f"По запросу «{query}» ничего не найдено.\n"
+            "Как улучшить результат:\n"
+            "• Сократи запрос до 2-3 ключевых слов\n"
+            "• Убери site: ограничение — оно резко сужает выдачу\n"
+            "• Попробуй английские термины (имена, профессии, компании)\n"
+            "• Используй research_topic — он умеет анализировать без поиска\n"
+            "Пример: «site:github.com python ai developer москва» → «python developer ai москва» или «python AI developer Russia»"
+        )
 
     lines = [f"🔎 Результаты поиска: {query}\n"]
     for i, r in enumerate(results, 1):

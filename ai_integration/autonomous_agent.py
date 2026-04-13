@@ -4010,14 +4010,20 @@ class HybridAutonomousAgent:
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
-                            "Summarize results in full (up to 2000 chars for analysis, up to 800 for others). "
-                            "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses."
+                            "Summarize results for the user (up to 2000 chars for analysis, up to 800 for others). "
+                            "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses.\n"
+                            "Explain: WHAT you did → WHAT result you got → WHAT it means for the user's goal. "
+                            "If an action produced no result — say so honestly and suggest a concrete next step. "
+                            "Never write 'Done' without explanation."
                             + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
-                            "Подытожь результаты полностью (для анализа/стратегии — до 2000 символов, для остального — до 800). "
-                            "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task."
+                            "Подытожь результаты для пользователя (для анализа/стратегии — до 2000 символов, для остального — до 800). "
+                            "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task.\n"
+                            "Расскажи: ЧТО именно сделал → КАКОЙ результат получил → ЧТО это означает для цели пользователя. "
+                            "Если действие не принесло результата — скажи честно и предложи конкретный следующий шаг. "
+                            "Не пиши 'Готово' без объяснения — объясни суть."
                             + _note_hint_ru
                         )})
 
@@ -8514,7 +8520,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                         else:
                                             _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
                                     except asyncio.TimeoutError:
-                                        _tc_result = json.dumps({"error": "tool timeout"}, ensure_ascii=False)
+                                        _tc_result = json.dumps({"error": f"tool timeout ({_tname}). Не жди — попробуй web_search или research_topic как замену, или упрости параметры вызова."}, ensure_ascii=False)
                                     except Exception as _te:
                                         _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
                                     _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
@@ -8683,7 +8689,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         try: get_learner().record_tool_result(user_id, _tname, False)
                         except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
                 except asyncio.TimeoutError:
-                    _tc_result = json.dumps({"error": "tool timeout"}, ensure_ascii=False)
+                    _tc_result = json.dumps({"error": f"tool timeout ({_tname}). Не жди — выбери альтернативу: если это поиск → web_search с более коротким запросом; если email → check_emails или list_email_contacts; если интеграция → run_agent_action с другим action."}, ensure_ascii=False)
                     logger.warning("[DIRECTOR-EXEC] tool %s timeout for %s", _tname, agent['name'])
                     try: get_learner().record_tool_result(user_id, _tname, False)
                     except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
@@ -8740,10 +8746,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     )
                     if _script_timeout_count >= 2:
                         _messages.append({"role": "user", "content": (
-                            f"⚠️ run_agent_action вернул тайм-аут уже {_script_timeout_count} раза подряд — "
-                            "скрипт перегружен или источник недоступен прямо сейчас. "
-                            "⛔ НЕ ВЫЗЫВАЙ run_agent_action снова в этой сессии! "
-                            "Переключись на web_search или research_topic, затем конвертируй в действие по цели."
+                            f"run_agent_action вернул тайм-аут {_script_timeout_count} раза — "
+                            "скорее всего источник временно перегружен или параметры слишком сложные. "
+                            "Подумай: что ты пытаешься получить? "
+                            "Если нужны данные — попробуй web_search с 2-3 ключевыми словами. "
+                            "Если нужен поиск людей — find_relevant_contacts_for_task. "
+                            "Если нужна публикация — create_post. Выбери инструмент который точнее отражает задачу."
                         )})
                     else:
                         _sent_blocked_count = sum(
