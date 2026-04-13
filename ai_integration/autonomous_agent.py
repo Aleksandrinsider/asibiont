@@ -259,6 +259,240 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'presence': ('hh.ru', 'hh_', 'headhunter', 'hh_query'),
         'setup': 'HH_QUERY/HH_AREA',
     },
+    {
+        'label': 'VK',
+        'keywords': ('вконтакте', 'вк', 'vkontakte', 'vk'),
+        'presence': ('vk_token', 'vk_access_token', 'vkontakte'),
+        'setup': 'VK_ACCESS_TOKEN',
+    },
+    {
+        'label': 'YouTube',
+        'keywords': ('youtube', 'ютуб', 'youtube channel'),
+        'presence': ('youtube_api_key', 'youtube', 'yt_'),
+        'setup': 'YOUTUBE_API_KEY',
+    },
+    {
+        'label': 'Google Calendar',
+        'keywords': ('google calendar', 'встреча', 'мероприятие', 'расписание', 'создай событие'),
+        'presence': ('google_calendar', 'gcal_', 'gcalendar'),
+        'setup': 'GCAL_CREDENTIALS_JSON',
+    },
+    {
+        'label': 'Google Drive',
+        'keywords': ('google drive', 'гугл диск', 'gdrive', 'загрузи в диск', 'загрузи файл'),
+        'presence': ('google_drive', 'gdrive', 'drive_token'),
+        'setup': 'GDRIVE_CREDENTIALS_JSON',
+    },
+    {
+        'label': 'Google Sheets',
+        'keywords': ('google sheets', 'гугл таблиц', 'sheets', 'spreadsheet'),
+        'presence': ('google_sheets', 'gspread', 'sheets', 'gsheets'),
+        'setup': 'GSHEETS_ID/GSHEETS_SHEET',
+    },
+    {
+        'label': 'Airtable',
+        'keywords': ('airtable',),
+        'presence': ('airtable', 'airtable_token'),
+        'setup': 'AIRTABLE_API_KEY/AIRTABLE_BASE_ID',
+    },
+    {
+        'label': 'Calendly',
+        'keywords': ('calendly', 'calendar', 'запись на встречу', 'scheduling'),
+        'presence': ('calendly', 'calendly_token'),
+        'setup': 'CALENDLY_API_KEY',
+    },
+    {
+        'label': 'Twilio / SMS',
+        'keywords': ('twilio', 'sms', 'смс', 'позвони', 'whatsapp', 'ватсап'),
+        'presence': ('twilio', 'whatsapp_', 'twilio_sid'),
+        'setup': 'TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN',
+    },
+    {
+        'label': 'SMS.ru',
+        'keywords': ('sms.ru', 'смс ру', 'sms_ru'),
+        'presence': ('sms_ru', 'sms.ru'),
+        'setup': 'SMSRU_API_ID',
+    },
+    {
+        'label': 'Stripe',
+        'keywords': ('stripe', 'оплата', 'платёж', 'платежи', 'charges', 'subscriptions'),
+        'presence': ('stripe', 'stripe_key', 'stripe_secret'),
+        'setup': 'STRIPE_SECRET_KEY',
+    },
+    {
+        'label': 'Tinkoff Invest',
+        'keywords': ('тинькофф', 'tinkoff', 'tinkoff invest', 'портфель тинькофф'),
+        'presence': ('tinkoff', 'tinkoff_token', 'tinkoff_invest'),
+        'setup': 'TINKOFF_TOKEN',
+    },
+    {
+        'label': 'Alpha Vantage',
+        'keywords': ('alpha vantage', 'alphavantage', 'финансовые данные', 'биржа', 'акции'),
+        'presence': ('alphavantage', 'alpha_vantage', 'av_api'),
+        'setup': 'ALPHAVANTAGE_API_KEY',
+    },
+    {
+        'label': 'CoinGecko',
+        'keywords': ('coingecko', 'криптовалют', 'bitcoin', 'ethereum', 'coin price'),
+        'presence': ('coingecko', 'coingecko_key'),
+        'setup': 'COINGECKO_API_KEY (или без ключа — публичный API)',
+    },
+    {
+        'label': 'OpenWeather',
+        'keywords': ('погода', 'weather', 'прогноз погоды', 'openweather'),
+        'presence': ('openweather', 'weather_api', 'owm_'),
+        'setup': 'OPENWEATHER_API_KEY',
+    },
+    {
+        'label': 'Yandex Metrika',
+        'keywords': ('яндекс метрика', 'yandex metrika', 'метрика', 'посещаемость сайта'),
+        'presence': ('yandex_metrika', 'metrika_', 'metrika_token'),
+        'setup': 'METRIKA_TOKEN/METRIKA_COUNTER_ID',
+    },
+    {
+        'label': 'GA4 (Google Analytics)',
+        'keywords': ('google analytics', 'ga4', 'аналитика сайта'),
+        'presence': ('ga4', 'google_analytics', 'ga4_property'),
+        'setup': 'GA4_PROPERTY_ID/GA4_CREDENTIALS_JSON',
+    },
+    {
+        'label': 'Yandex Direct',
+        'keywords': ('яндекс директ', 'yandex direct', 'реклама яндекс', 'direct ads'),
+        'presence': ('yandex_direct', 'direct_token', 'ya_direct'),
+        'setup': 'YADIRECT_TOKEN',
+    },
+    {
+        'label': 'Yandex Market',
+        'keywords': ('яндекс маркет', 'yandex market', 'маркетплейс яндекс'),
+        'presence': ('yandex_market', 'ya_market', 'ym_token'),
+        'setup': 'YANDEX_MARKET_TOKEN/YANDEX_MARKET_CAMPAIGN_ID',
+    },
+    {
+        'label': 'Avito',
+        'keywords': ('авито', 'avito'),
+        'presence': ('avito', 'avito_token', 'avito_client'),
+        'setup': 'AVITO_CLIENT_ID/AVITO_CLIENT_SECRET',
+    },
+    {
+        'label': 'ClickUp',
+        'keywords': ('clickup',),
+        'presence': ('clickup', 'clickup_token'),
+        'setup': 'CLICKUP_API_KEY',
+    },
+    {
+        'label': 'Linear',
+        'keywords': ('linear', 'linear app', 'linear issue'),
+        'presence': ('linear', 'linear_token'),
+        'setup': 'LINEAR_API_KEY',
+    },
+    {
+        'label': 'MoySklad',
+        'keywords': ('мойсклад', 'moysklad', 'мой склад', 'накладная', 'товары склад'),
+        'presence': ('moysklad', 'ms_token', 'moysklad_token'),
+        'setup': 'MOYSKLAD_TOKEN',
+    },
+    {
+        'label': 'Firebase',
+        'keywords': ('firebase', 'firestore', 'realtime database firebase'),
+        'presence': ('firebase', 'firebase_key', 'firestore'),
+        'setup': 'FIREBASE_CREDENTIALS_JSON',
+    },
+    {
+        'label': 'AWS S3',
+        'keywords': ('aws', 's3', 'amazon s3', 'aws bucket', 'загрузи в s3'),
+        'presence': ('aws', 's3_bucket', 'aws_access'),
+        'setup': 'AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_BUCKET',
+    },
+    {
+        'label': 'PostgreSQL / MySQL / MongoDB',
+        'keywords': ('postgresql', 'postgres', 'mysql', 'mongodb', 'база данных', 'sql запрос'),
+        'presence': ('postgresql', 'postgres', 'mysql', 'mongodb', 'database_url'),
+        'setup': 'DATABASE_URL или POSTGRES_URL/MYSQL_URL/MONGO_URI',
+    },
+    {
+        'label': 'CDEK',
+        'keywords': ('сдэк', 'cdek', 'доставка', 'отслеживание посылки'),
+        'presence': ('cdek', 'cdek_key'),
+        'setup': 'CDEK_CLIENT_ID/CDEK_CLIENT_SECRET',
+    },
+    {
+        'label': 'WhatsApp (Twilio/360dialog)',
+        'keywords': ('whatsapp', 'ватсап', 'вотсап'),
+        'presence': ('whatsapp_', 'twilio', 'wa_token'),
+        'setup': 'TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN',
+    },
+    {
+        'label': '1С Предприятие',
+        'keywords': ('1с', '1c', 'onec', '1с предприятие', '1c enterprise'),
+        'presence': ('onec', '1c_', '1с_', 'onec_url'),
+        'setup': 'ONEC_URL/ONEC_USER/ONEC_PASSWORD',
+    },
+    {
+        'label': 'MS Teams',
+        'keywords': ('microsoft teams', 'ms teams', 'teams'),
+        'presence': ('ms_teams', 'teams_webhook', 'msteams'),
+        'setup': 'TEAMS_WEBHOOK_URL',
+    },
+    {
+        'label': 'Outlook',
+        'keywords': ('outlook', 'microsoft mail'),
+        'presence': ('outlook', 'outlook_token'),
+        'setup': 'OUTLOOK_CLIENT_ID/OUTLOOK_CLIENT_SECRET/OUTLOOK_TENANT_ID',
+    },
+    {
+        'label': 'Yandex Disk',
+        'keywords': ('яндекс диск', 'yandex disk', 'yadisk', 'диск яндекс'),
+        'presence': ('yandex_disk', 'yadisk', 'yadisk_token'),
+        'setup': 'YADISK_TOKEN',
+    },
+    {
+        'label': 'Playwright (браузер)',
+        'keywords': ('playwright', 'автоматизация браузера', 'парс сайт', 'скрейп'),
+        'presence': ('playwright', 'browser_auto'),
+        'setup': 'Playwright установлен в docker-окружении',
+    },
+    {
+        'label': 'Resend',
+        'keywords': ('resend', 'transactional email', 'resend email'),
+        'presence': ('resend', 'resend_api'),
+        'setup': 'RESEND_API_KEY',
+    },
+    {
+        'label': 'Aviasales / Tutu',
+        'keywords': ('авиасалес', 'aviasales', 'tutu', 'билеты на самолёт', 'поиск рейсов'),
+        'presence': ('aviasales', 'tutu', 'avia_token'),
+        'setup': 'AVIASALES_API_KEY',
+    },
+    {
+        'label': 'Google Maps',
+        'keywords': ('google maps', 'гугл карты', 'геолокация', 'маршрут', 'место'),
+        'presence': ('google_maps', 'gmaps_key'),
+        'setup': 'GMAPS_API_KEY',
+    },
+    {
+        'label': 'Google Forms',
+        'keywords': ('google forms', 'гугл формы', 'опрос', 'форма для сбора данных'),
+        'presence': ('google_forms', 'gforms_'),
+        'setup': 'GFORMS_CREDENTIALS_JSON',
+    },
+    {
+        'label': 'OpenAI API (прямое подключение)',
+        'keywords': ('openai api', 'gpt api', 'openai direct', 'openai_key'),
+        'presence': ('openai_api_key', 'openai_key', 'openai_'),
+        'setup': 'OPENAI_API_KEY',
+    },
+    {
+        'label': 'Webhook / HTTP API',
+        'keywords': ('webhook', 'вебхук', 'http api', 'http запрос', 'rest api'),
+        'presence': ('webhook_url', 'webhook', 'http_api'),
+        'setup': 'WEBHOOK_URL',
+    },
+    {
+        'label': 'Strava',
+        'keywords': ('strava', 'бег', 'тренировки', 'активности'),
+        'presence': ('strava', 'strava_token'),
+        'setup': 'STRAVA_CLIENT_ID/STRAVA_CLIENT_SECRET',
+    },
 ]
 
 
@@ -1684,6 +1918,133 @@ class HybridAutonomousAgent:
                 logger.warning("[ACTION] send_email platform redirect failed: %s", _se_err)
                 return {"status": "error", "error": f"Ошибка отправки email: {_se_err}"}
 
+        # ── Platform-native GitHub search: search_users / search_repos / find_contributors / get_user_info ──
+        # Перехватывает до python_code, чтобы работать независимо от шаблона агента.
+        if action in ('search_users', 'search_repos', 'find_contributors', 'get_contributors',
+                      'get_user_info', 'get_github_user'):
+            _gh_token = ''
+            _gh_repo = ''
+            for _kl_gh in (agent_data.get('user_api_keys') or '').splitlines():
+                _kl_gh = _kl_gh.strip()
+                if '=' in _kl_gh:
+                    _vk, _vv = _kl_gh.split('=', 1)
+                    _vk_u = _vk.strip().upper()
+                    if _vk_u == 'GITHUB_TOKEN':
+                        _gh_token = _vv.strip()
+                    elif _vk_u == 'GITHUB_REPO':
+                        _gh_repo = _vv.strip()
+            if _gh_token:
+                try:
+                    import urllib.request as _ur_gh, urllib.parse as _up_gh, json as _jgh
+                    _ghdrs = {
+                        'Authorization': f'Bearer {_gh_token}',
+                        'Accept': 'application/vnd.github+json',
+                        'User-Agent': 'AgentBot/1.0',
+                    }
+
+                    def _gh_get(path):
+                        _req = _ur_gh.Request('https://api.github.com' + path, headers=_ghdrs)
+                        with _ur_gh.urlopen(_req, timeout=9) as _r:
+                            return _jgh.loads(_r.read().decode())
+
+                    _gh_out = ''
+                    if action == 'search_users':
+                        _q_gh = str(action_params.get('query', action_params.get('q', ''))).strip()
+                        _page_gh = int(action_params.get('page', 1))
+                        if not _q_gh:
+                            _q_gh = 'developer repos:>5 followers:>3'
+                        _d_gh = _gh_get(f'/search/users?q={_up_gh.quote(_q_gh)}&per_page=10&page={_page_gh}')
+                        _items_gh = _d_gh.get('items', [])
+                        if not _items_gh:
+                            _gh_out = f'По запросу «{_q_gh}» пользователей GitHub не найдено.'
+                        else:
+                            _lines_gh = [f'Найдено {_d_gh.get("total_count", 0)} пользователей (стр.{_page_gh}):']
+                            for _u_gh in _items_gh:
+                                _uname = _u_gh.get('login', '')
+                                try:
+                                    _ud = _gh_get(f'/users/{_uname}')
+                                    _em = _ud.get('email') or ''
+                                    _nm = _ud.get('name') or _uname
+                                    _bio = (_ud.get('bio') or '')[:60]
+                                    _ln = f'@{_uname} | {_nm}'
+                                    if _em:
+                                        _ln += f' | email: {_em}'
+                                    if _bio:
+                                        _ln += f' | {_bio}'
+                                    _ln += f' | repos: {_ud.get("public_repos",0)} followers: {_ud.get("followers",0)}'
+                                except Exception:
+                                    _ln = f'@{_uname} | {_u_gh.get("html_url","")}'
+                                _lines_gh.append(_ln)
+                            _gh_out = '\n'.join(_lines_gh)
+
+                    elif action == 'search_repos':
+                        _q_gh = str(action_params.get('query', action_params.get('q', ''))).strip()
+                        if not _q_gh:
+                            _q_gh = 'stars:>50 language:python'
+                        _d_gh = _gh_get(f'/search/repositories?q={_up_gh.quote(_q_gh)}&per_page=10&sort=stars')
+                        _items_gh = _d_gh.get('items', [])
+                        if not _items_gh:
+                            _gh_out = f'По запросу «{_q_gh}» репозиториев не найдено.'
+                        else:
+                            _lines_gh = [f'Найдено {_d_gh.get("total_count",0)} репозиториев:']
+                            for _rp_gh in _items_gh:
+                                _lines_gh.append(
+                                    f'{_rp_gh.get("full_name","")} | ⭐{_rp_gh.get("stargazers_count",0)} | '
+                                    f'{(_rp_gh.get("description") or "")[:80]} | '
+                                    f'{_rp_gh.get("html_url","")}'
+                                )
+                            _gh_out = '\n'.join(_lines_gh)
+
+                    elif action in ('find_contributors', 'get_contributors'):
+                        _repo_gh = str(action_params.get('repo', action_params.get('repository', _gh_repo))).strip()
+                        if not _repo_gh:
+                            _gh_out = '⚠️ Укажи params.repo=owner/repo'
+                        else:
+                            _items_gh = _gh_get(f'/repos/{_repo_gh}/contributors?per_page=20')
+                            if not isinstance(_items_gh, list) or not _items_gh:
+                                _gh_out = f'Контрибьюторов в {_repo_gh} не найдено.'
+                            else:
+                                _lines_gh = [f'Контрибьюторы {_repo_gh} (топ {len(_items_gh)}):']
+                                for _c_gh in _items_gh[:15]:
+                                    _lines_gh.append(f'@{_c_gh.get("login","")} — {_c_gh.get("contributions",0)} коммитов')
+                                _gh_out = '\n'.join(_lines_gh)
+
+                    elif action in ('get_user_info', 'get_github_user'):
+                        _uname = str(action_params.get('username', action_params.get('user', ''))).strip()
+                        if not _uname:
+                            _gh_out = '⚠️ Укажи params.username'
+                        else:
+                            _ud = _gh_get(f'/users/{_uname}')
+                            _gh_out = (
+                                f'@{_ud.get("login","")} | {_ud.get("name","") or _uname} | '
+                                f'email: {_ud.get("email") or "не указан"} | '
+                                f'repos: {_ud.get("public_repos",0)} | followers: {_ud.get("followers",0)} | '
+                                f'bio: {(_ud.get("bio") or "")[:100]}'
+                            )
+
+                    if _gh_out:
+                        try:
+                            from models import AgentActivityLog as _AALGH, Session as _SessGH, User as _UserGH
+                            _s_gh = _SessGH()
+                            try:
+                                _u_gh2 = _s_gh.query(_UserGH).filter_by(telegram_id=user_id).first()
+                                if _u_gh2:
+                                    _s_gh.add(_AALGH(
+                                        user_id=_u_gh2.id, activity_type='run_agent_action',
+                                        title=f'{agent_data.get("name","Агент")} · {action}',
+                                        content=_gh_out[:500], target=agent_data.get('name', 'Агент'),
+                                        status='completed', result=_gh_out[:500],
+                                    ))
+                                    _s_gh.commit()
+                            finally:
+                                _s_gh.close()
+                        except Exception:
+                            pass
+                        return {"status": "success", "output": _gh_out}
+                except Exception as _gh_err:
+                    logger.warning("[ACTION] native GitHub %s failed: %s — falling to python_code", action, _gh_err)
+                    # Fall through to python_code subprocess
+
         # ── Валидация query для GitHub search_users ──
         # AI иногда передаёт email-адреса или названия задач как query → 0 результатов.
         # Перехватываем здесь и заменяем на валидный дефолт.
@@ -1831,6 +2192,118 @@ class HybridAutonomousAgent:
                         # hh.ru / SuperJob
                         'search_vacancies': 'hh', 'search_resumes': 'hh',
                         'get_vacancies': 'hh', 'post_vacancy': 'hh',
+                        # Yandex Mail / Mail.ru
+                        'send_yandex_email': 'yandex_mail', 'check_yandex': 'yandex_mail',
+                        'send_mailru': 'mailru', 'check_mailru': 'mailru',
+                        # Telegram Bot
+                        'send_telegram': 'telegram_bot', 'telegram_notify': 'telegram_bot',
+                        'get_telegram_messages': 'telegram_bot', 'telegram_broadcast': 'telegram_bot',
+                        # VK
+                        'vk_post': 'vk', 'vk_message': 'vk', 'get_vk_stats': 'vk', 'vk_group': 'vk',
+                        # YouTube
+                        'get_videos': 'youtube', 'youtube_stats': 'youtube', 'upload_video': 'youtube',
+                        'get_channel_stats': 'youtube', 'youtube_search': 'youtube',
+                        # CoinGecko
+                        'get_coin_price': 'coingecko', 'coingecko_price': 'coingecko',
+                        'get_market_cap': 'coingecko', 'coin_info': 'coingecko',
+                        # Calendly
+                        'get_events': 'calendly', 'create_invite': 'calendly', 'calendly_slots': 'calendly',
+                        'schedule_meeting': 'calendly', 'get_calendly': 'calendly',
+                        # Resend
+                        'send_transactional': 'resend', 'resend_email': 'resend',
+                        # Databases (PostgreSQL / MySQL / MongoDB / Redis)
+                        'query_db': 'database', 'insert_row': 'database', 'update_db': 'database',
+                        'pg_query': 'database', 'mysql_query': 'database', 'mongo_find': 'database',
+                        'redis_get': 'database', 'redis_set': 'database', 'db_query': 'database',
+                        # AI APIs (OpenAI / Replicate / Gemini)
+                        'generate_text': 'ai_api', 'openai_complete': 'ai_api',
+                        'replicate_run': 'ai_api', 'gemini_generate': 'ai_api',
+                        # Twilio / SMS.ru
+                        'send_sms': 'sms', 'sms_notify': 'sms', 'twilio_sms': 'sms',
+                        'make_call': 'sms', 'send_sms_ru': 'sms',
+                        # Playwright / Scraping
+                        'scrape_page': 'scraping', 'playwright_scrape': 'scraping',
+                        'get_page_content': 'scraping', 'navigate_page': 'scraping',
+                        'fill_form': 'scraping',
+                        # Firebase
+                        'firebase_query': 'firebase', 'get_document': 'firebase',
+                        'set_document': 'firebase', 'firebase_push': 'firebase',
+                        # AWS S3
+                        'upload_file': 'aws', 'download_file': 'aws', 's3_list': 'aws',
+                        'get_presigned_url': 'aws', 's3_upload': 'aws',
+                        # Avito
+                        'avito_ads': 'avito', 'get_avito_messages': 'avito',
+                        'create_avito_ad': 'avito', 'update_avito_ad': 'avito',
+                        # Yandex Direct
+                        'get_campaigns': 'ya_direct', 'get_ad_stats': 'ya_direct',
+                        'update_campaign': 'ya_direct', 'yandex_direct_stats': 'ya_direct',
+                        # Yandex Market
+                        'get_ym_products': 'ya_market', 'ya_market_orders': 'ya_market',
+                        'yandex_market_offers': 'ya_market',
+                        # MoySklad
+                        'get_ms_products': 'moysklad', 'create_ms_order': 'moysklad',
+                        'moysklad_inventory': 'moysklad', 'ms_report': 'moysklad',
+                        # Travel (Aviasales / Tutu / Flightradar)
+                        'search_flights': 'travel', 'get_tickets': 'travel',
+                        'aviasales_search': 'travel', 'tutu_search': 'travel',
+                        'flightradar_status': 'travel',
+                        # Google Calendar
+                        'create_event': 'gcalendar', 'list_events': 'gcalendar',
+                        'update_event': 'gcalendar', 'delete_event': 'gcalendar',
+                        'get_calendar': 'gcalendar',
+                        # Tinkoff Invest
+                        'tinkoff_portfolio': 'tinkoff', 'get_tinkoff_balance': 'tinkoff',
+                        'tinkoff_operations': 'tinkoff',
+                        # Financial data APIs
+                        'alphavantage_query': 'findata', 'finnhub_news': 'findata',
+                        'twelvedata_price': 'findata', 'yahoo_quote': 'findata',
+                        'polygon_tickers': 'findata', 'fmp_query': 'findata',
+                        # CDEK
+                        'cdek_track': 'cdek', 'create_cdek_order': 'cdek', 'cdek_status': 'cdek',
+                        # WhatsApp
+                        'send_whatsapp': 'whatsapp', 'whatsapp_message': 'whatsapp',
+                        'whatsapp_broadcast': 'whatsapp',
+                        # 1C
+                        'onec_query': 'onec', 'get_onec_data': 'onec', 'onec_product': 'onec',
+                        # Google Drive
+                        'upload_gdrive': 'gdrive', 'list_gdrive': 'gdrive',
+                        'get_gdrive_file': 'gdrive', 'share_file': 'gdrive',
+                        # MS Teams
+                        'send_teams': 'msteams', 'teams_message': 'msteams',
+                        # Outlook
+                        'send_outlook': 'outlook', 'check_outlook': 'outlook',
+                        'outlook_calendar': 'outlook',
+                        # ClickUp
+                        'create_task_clickup': 'clickup', 'get_tasks_clickup': 'clickup',
+                        'update_clickup': 'clickup', 'clickup_list': 'clickup',
+                        # Yandex Disk
+                        'ydisk_upload': 'yadisk', 'ydisk_list': 'yadisk', 'yadisk_share': 'yadisk',
+                        # GA4
+                        'ga4_report': 'ga4', 'get_ga4_metrics': 'ga4', 'ga4_query': 'ga4',
+                        # Linear
+                        'create_linear_issue': 'linear', 'get_linear_issues': 'linear',
+                        'linear_update': 'linear',
+                        # Google Maps
+                        'maps_search': 'gmaps', 'get_place_info': 'gmaps', 'gmaps_route': 'gmaps',
+                        # Google Forms
+                        'create_form': 'gforms', 'get_form_responses': 'gforms',
+                        # Strava
+                        'get_strava_activities': 'strava', 'strava_stats': 'strava',
+                        # Webhook / HTTP API
+                        'trigger_webhook': 'webhook', 'send_webhook': 'webhook',
+                        'http_get': 'webhook', 'http_request': 'webhook', 'api_call': 'webhook',
+                        # Twitter
+                        'post_tweet': 'twitter', 'tweet': 'twitter', 'twitter_search': 'twitter',
+                        # LinkedIn
+                        'linkedin_post': 'linkedin', 'get_linkedin_profile': 'linkedin',
+                        # Airtable
+                        'airtable_query': 'airtable', 'airtable_insert': 'airtable',
+                        'airtable_update': 'airtable',
+                        # OpenWeather
+                        'get_weather': 'weather', 'weather_forecast': 'weather',
+                        # OpenWeather / CRM move/stale
+                        'move_lead_stage': 'amo', 'advance_deal': 'amo', 'move_deal': 'amo',
+                        'get_stale_leads': 'amo', 'check_pipeline': 'amo',
                     }
                     _SEC_KEYWORDS = {
                         'amo': ('amocrm', 'amo'),
@@ -1850,6 +2323,46 @@ class HybridAutonomousAgent:
                         'stripe': ('stripe',),
                         'crypto': ('binance', 'bybit', 'coinbase', 'crypto'),
                         'hh': ('hh.ru', 'headhunter', 'superjob', 'hh_'),
+                        'yandex_mail': ('yandex mail', 'яндекс почт', 'yandexmail'),
+                        'mailru': ('mail.ru', 'mailru', 'майл'),
+                        'telegram_bot': ('telegram bot', 'тг бот', 'телеграм бот', 'bot_token'),
+                        'vk': ('вконтакт', 'vkontakte', 'vk_'),
+                        'youtube': ('youtube', 'ютуб'),
+                        'coingecko': ('coingecko', 'gecko'),
+                        'calendly': ('calendly',),
+                        'resend': ('resend',),
+                        'database': ('postgresql', 'postgres', 'mysql', 'mongodb', 'redis'),
+                        'ai_api': ('openai', 'replicate', 'gemini'),
+                        'sms': ('twilio', 'sms.ru', 'sms_ru'),
+                        'scraping': ('playwright', 'scraping', 'scrape'),
+                        'firebase': ('firebase',),
+                        'aws': ('aws', 'amazon s3', 's3'),
+                        'avito': ('avito', 'авито'),
+                        'ya_direct': ('yandex direct', 'яндекс директ', 'direct_'),
+                        'ya_market': ('yandex market', 'яндекс маркет', 'ya_market'),
+                        'moysklad': ('мойсклад', 'moysklad'),
+                        'travel': ('aviasales', 'tutu', 'flightradar', 'авиа'),
+                        'gcalendar': ('google calendar', 'gcalendar', 'google cal'),
+                        'tinkoff': ('тинькофф', 'tinkoff'),
+                        'findata': ('alphavantage', 'finnhub', 'twelvedata', 'polygon', 'yahoo finance', 'fmp'),
+                        'cdek': ('сдэк', 'cdek'),
+                        'whatsapp': ('whatsapp', 'ватсап'),
+                        'onec': ('1c ', '1с ', 'onec', '1c_', '1с_'),
+                        'gdrive': ('google drive', 'gdrive', 'googledr'),
+                        'msteams': ('ms teams', 'microsoft teams', 'teams_'),
+                        'outlook': ('outlook',),
+                        'clickup': ('clickup',),
+                        'yadisk': ('яндекс диск', 'yandex disk', 'yadisk'),
+                        'ga4': ('google analytics', 'ga4'),
+                        'linear': ('linear',),
+                        'gmaps': ('google maps', 'gmaps', 'гугл карт'),
+                        'gforms': ('google forms', 'gforms', 'гугл форм'),
+                        'strava': ('strava',),
+                        'webhook': ('webhook', 'вебхук', 'http_api'),
+                        'twitter': ('twitter', 'твиттер'),
+                        'linkedin': ('linkedin', 'линкедин'),
+                        'airtable': ('airtable',),
+                        'weather': ('openweather', 'weather', 'погода'),
                     }
                     _target = _ACTION_SECTION_MAP.get(action.lower(), '')
                     if _target:

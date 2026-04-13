@@ -281,9 +281,10 @@ _CAT_ACTIONS: dict[str, list[str]] = {
         '{name}, собери дайджест по теме «{goal}» из своей RSS-ленты и создай пост с обзором.',
     ],
     'crm': [
-        '{name}, проверь воронку по «{goal}» — переведи зависшие >3 дней лиды на следующий этап или зафиксируй блокер.',
-        '{name}, обнови статусы сделок по «{goal}» и зафиксируй конкретные следующие шаги для каждой.',
-        '{name}, свяжи новые контакты со сделками: создай лиды, привяжи контакты, проверь pipeline.',
+        '{name}, проверь зависшие сделки через run_agent_action(action="get_stale_leads" days="3") — по каждой вызови move_lead_stage чтобы продвинуть по воронке, или create_task чтобы добавить задачу.',
+        '{name}, переведи зависшие лиды по «{goal}» на следующий этап через run_agent_action(action="move_lead_stage" id="...") — сначала get_pipelines чтобы узнать status_id.',
+        '{name}, создай follow-up задачу через run_agent_action(action="create_task" id="..." text="Следующий шаг") для всех сделок без активности >3 дней по «{goal}».',
+        '{name}, свяжи новые контакты со сделками: create_contact → create_lead с pipeline_id из get_pipelines → link_contact.',
     ],
     'finance': [
         '{name}, проверь актуальные рыночные данные по «{goal}» и зафиксируй изменения за последнюю неделю.',
@@ -1652,6 +1653,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     _has_pm      = 'pm'          in _caps_cats
     _has_cal     = 'calendar'    in _caps_cats
     _has_calls   = 'calls'       in _caps_cats
+    _has_storage = 'storage'     in _caps_cats
+    _has_db      = 'database'    in _caps_cats
+    _has_hr      = 'hr'          in _caps_cats
+    _has_ads     = 'advertising' in _caps_cats
+    _has_scrape  = 'scraping'    in _caps_cats
+    _has_ai_api  = 'ai_api'      in _caps_cats
+    _has_imggen  = 'image_gen'   in _caps_cats
+    _has_msteams = 'ms_teams'    in _caps_cats
+    _has_ananl   = 'analytics'   in _caps_cats
+    _has_webhook = 'automation'  in _caps_cats
     _has_content = (
         'telegram' in _caps_cats or 'discord' in _caps_cats
         or bool(getattr(user, 'telegram_channel', None))
@@ -2518,22 +2529,65 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
            "                action='create_issue' title='...' body='...' — создать issue\n"
            "                action='list_issues' — список открытых issues\n"
            if _has_github else '')
-        + ("  AmoCRM:        action='get_contacts' query='Иван' — поиск контакта в CRM\n"
-           "                 action='get_pipelines' — воронки и status_id этапов (берёт ПЕРЕД create_lead!)\n"
-           "                 action='create_lead' name='Сделка' price='1000' pipeline_id='...' status_id='...'\n"
-           "                 action='update_lead' id='...' status_id='...' — продвинуть сделку по воронке\n"
-           "                 action='create_contact' name='Имя' email='...' phone='...'\n"
-           "                 action='link_contact' lead_id='...' contact_id='...'\n"
-           "                 action='add_note' entity_type='contacts' id='...' text='...'\n"
-           "                 action='get_leads' — последние 10 сделок\n"
+        + ("  AmoCRM:        action='get_contacts' / 'get_pipelines' / 'create_lead' / 'update_lead'\n"
+           "                 action='create_contact' / 'link_contact' / 'add_note' / 'get_leads'\n"
+           "                 action='move_lead_stage' id='...' — продвинуть сделку на следующий этап\n"
+           "                 action='get_stale_leads' days='3' — найти сделки без обновлений >N дней\n"
+           "                 action='create_task' id='...' text='...' — добавить задачу к сделке\n"
+           "                 action='get_lead' id='...' — детали сделки с контактами и задачами\n"
            if _has_crm else '')
-        + ("  Notion:        action='create_page' / 'update_page'\n" if _has_notion else '')
-        + ("  Sheets:        action='update_sheet' / 'append_row'\n" if _has_sheets else '')
+        + ("  Notion:        action='create_page' / 'update_page' / 'search_notion'\n" if _has_notion else '')
+        + ("  Sheets:        action='update_sheet' / 'append_row' / 'read_sheet'\n" if _has_sheets else '')
         + ("  Slack:         action='post_message' channel='#X'\n" if _has_slack else '')
-        + ("  Stripe:        action='get_charges' / 'get_revenue'\n" if _has_stripe else '')
+        + ("  Stripe:        action='get_charges' / 'get_revenue' / 'create_customer'\n" if _has_stripe else '')
+        + ("  Календарь:     action='create_event' title='...' start='2026-04-10T10:00' / 'list_events' / 'get_calendly'\n"
+           if _has_cal else '')
+        + ("  СМС/Звонки:    action='send_sms' to='+7...' text='...' / 'send_whatsapp' to='+7...' / 'make_call'\n"
+           if _has_calls else '')
+        + ("  Соцсети:       action='vk_post' text='...' / 'post_tweet' text='...' / 'linkedin_post'\n"
+           "                 action='youtube_stats' / 'get_videos' / 'get_channel_stats'\n"
+           if _has_social else '')
+        + ("  Маркетплейс:   action='get_orders' / 'get_products' / 'get_stocks' (Ozon/WB/Shopify/Avito/MoySklad)\n"
+           "                 action='avito_ads' / 'get_avito_messages' — отвечай на запросы Avito\n"
+           if _has_market else '')
+        + ("  Крипто/Биржа:  action='get_price' symbol='BTC' / 'get_balance' / 'get_coin_price'\n"
+           "                 action='coingecko_price' / 'tinkoff_portfolio' / 'tinkoff_operations'\n"
+           if _has_crypto else '')
+        + ("  ПМ-трекер:     action='create_issue' / 'update_issue' / 'get_sprint' (Jira)\n"
+           "                 action='create_card' / 'move_card' (Trello)\n"
+           "                 action='create_task_clickup' / 'get_tasks_clickup' (ClickUp)\n"
+           "                 action='create_linear_issue' (Linear)\n"
+           if _has_pm else '')
+        + ("  Хранилище:     action='upload_file' / 's3_list' / 'upload_gdrive' / 'ydisk_upload'\n"
+           if _has_storage else '')
+        + ("  БД (SQL/NoSQL): action='query_db' query='SELECT ...' / 'insert_row' / 'mongo_find'\n"
+           "                  action='redis_get' key='...' / 'redis_set' key='...' value='...'\n"
+           if _has_db else '')
+        + ("  HR/Вакансии:   action='search_vacancies' query='Python developer' / 'search_resumes'\n"
+           if _has_hr else '')
+        + ("  Реклама:       action='get_campaigns' / 'get_ad_stats' / 'update_campaign' (Yandex Direct)\n"
+           if _has_ads else '')
+        + ("  Аналитика:     action='ga4_report' / 'get_ga4_metrics' (Google Analytics)\n"
+           "                 action='yandex_metrika_report' counter_id='...' / 'analytics_report'\n"
+           if _has_ananl else '')
+        + ("  MS Teams:      action='send_teams' text='...' / 'teams_message'\n"
+           "                 action='send_outlook' to='...' subject='...' — email через Outlook\n"
+           if _has_msteams else '')
+        + ("  Скрейпинг:     action='scrape_page' url='...' / 'get_page_content' / 'fill_form'\n"
+           if _has_scrape else '')
+        + ("  AI API:        action='generate_text' prompt='...' (OpenAI/Gemini/Replicate)\n"
+           "                 action='replicate_run' model='...' — запустить ML-модель\n"
+           if _has_ai_api else '')
+        + ("  Изображения:   action='generate_image' prompt='...' (Replicate/Stable Diffusion)\n"
+           if _has_imggen else '')
+        + ("  Webhook/HTTP:  action='trigger_webhook' url='...' data='...' / 'http_get' / 'api_call'\n"
+           if _has_webhook else '')
         + ("  (Нет API-ключей агента — run_agent_action недоступен)\n"
            if not any([_has_alpha, _has_news, _has_rss, _has_github, _has_notion,
-                       _has_sheets, _has_slack, _has_stripe, _has_script]) else '')
+                       _has_sheets, _has_slack, _has_stripe, _has_script, _has_crm,
+                       _has_cal, _has_calls, _has_social, _has_market, _has_crypto,
+                       _has_pm, _has_storage, _has_db, _has_hr, _has_ads, _has_ananl,
+                       _has_msteams, _has_scrape, _has_ai_api, _has_imggen, _has_webhook]) else '')
     )
     _sec_research = (
         "\n🔍 Поиск и исследования (LLM + web):\n"
@@ -4120,6 +4174,22 @@ class AnchorEngine:
                                 _st4.skipped_reason = 'auto-closed: stale agent task >24h'
                             _s_rec2.commit()
                             logger.info("[ANCHOR] Auto-closed %d stale agent tasks (>24h pending/in_progress)", len(_stale_tasks))
+                        # Сброс зависших in_progress задач → pending через 4 часа (ретрай вместо отмены)
+                        _ip_cutoff = datetime.now(timezone.utc) - timedelta(hours=4)
+                        _stuck_ip_tasks = (
+                            _s_rec2.query(_RecTask)
+                            .filter(
+                                _RecTask.status == 'in_progress',
+                                _RecTask.created_at < _ip_cutoff,
+                            )
+                            .all()
+                        )
+                        if _stuck_ip_tasks:
+                            for _st5 in _stuck_ip_tasks:
+                                _st5.status = 'pending'
+                                _st5.skipped_reason = (_st5.skipped_reason or '') + ' [reset: stuck in_progress >4h]'
+                            _s_rec2.commit()
+                            logger.info("[ANCHOR] Reset %d stuck in_progress tasks → pending (>4h)", len(_stuck_ip_tasks))
                     finally:
                         _s_rec2.close()
                 except Exception as _rec2_err:

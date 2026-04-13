@@ -4417,6 +4417,79 @@ try:
             else:
                 print('Ошибка: ' + json.dumps(result.get('error_description', result)))
 
+    elif ACTION in ('move_lead_stage', 'advance_deal', 'move_deal'):
+        lead_id = os.environ.get('AGENT_PARAM_ID', '')
+        new_status = os.environ.get('AGENT_PARAM_STATUS_ID', '')
+        if not lead_id:
+            print('Ошибка: укажи params.id (ID лида)')
+        else:
+            fields = {}
+            if new_status:
+                fields['STATUS_ID'] = new_status
+            else:
+                try:
+                    cur = b24('crm.lead.get', {'id': int(lead_id)}).get('result', {})
+                    cur_st = cur.get('STATUS_ID', '')
+                    statuses = b24('crm.status.list', {'filter': {'ENTITY_ID': 'STATUS'}}).get('result', [])
+                    ids = [s['STATUS_ID'] for s in statuses if s.get('SEMANTICS', '') == '']
+                    if cur_st in ids:
+                        idx = ids.index(cur_st)
+                        if idx + 1 < len(ids):
+                            fields['STATUS_ID'] = ids[idx + 1]
+                except:
+                    pass
+            if fields:
+                result = b24('crm.lead.update', {'id': int(lead_id), 'fields': fields})
+                print('OK: лид ' + lead_id + ' переведён. ' + json.dumps(fields))
+            else:
+                print('Не удалось определить следующий этап — укажи params.status_id')
+
+    elif ACTION in ('get_stale_leads', 'check_pipeline', 'get_overdue_leads'):
+        days = int(os.environ.get('AGENT_PARAM_DAYS', '3'))
+        import datetime
+        cutoff = (datetime.datetime.utcnow() - datetime.timedelta(days=days)).strftime('%Y-%m-%d')
+        result = b24('crm.lead.list', {
+            'order': {'DATE_MODIFY': 'ASC'},
+            'filter': {'<=DATE_MODIFY': cutoff, 'STATUS_SEMANTIC_ID': 'P'},
+            'select': ['ID', 'TITLE', 'STATUS_ID', 'DATE_MODIFY'],
+            'start': 0
+        })
+        leads = result.get('result', [])
+        if not leads:
+            print('Зависших лидов не найдено (нет без обновлений >'+str(days)+' дней)')
+        else:
+            print('Лидов без обновлений >'+str(days)+' дней: '+str(len(leads)))
+            for l in leads[:20]:
+                print('ID='+str(l.get('ID',''))+' | '+l.get('TITLE','')+' | '+l.get('STATUS_ID','')+' | изменён: '+l.get('DATE_MODIFY','')[:10])
+
+    elif ACTION in ('create_task', 'add_task', 'create_b24_task'):
+        entity_id = os.environ.get('AGENT_PARAM_ID', '')
+        entity_type = os.environ.get('AGENT_PARAM_ENTITY_TYPE', 'lead')
+        text = os.environ.get('AGENT_PARAM_TEXT', 'Следующий шаг')
+        activity = {'ENTITY_ID': int(entity_id) if entity_id else 0,
+                    'ENTITY_TYPE': entity_type, 'DESCRIPTION': text, 'TYPE_ID': 1}
+        if not entity_id:
+            print('Ошибка: укажи params.id (ID лида или контакта)')
+        else:
+            import datetime
+            activity['DEADLINE'] = (datetime.datetime.utcnow() + datetime.timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%S')
+            result = b24('crm.activity.add', {'fields': activity})
+            if result.get('result'):
+                print('OK: задача создана, ID='+str(result['result'])+' — «'+text+'»')
+            else:
+                print('Ошибка: ' + json.dumps(result.get('error_description', result)))
+
+    elif ACTION in ('get_lead', 'get_deal'):
+        lead_id = os.environ.get('AGENT_PARAM_ID', '')
+        if not lead_id:
+            print('Ошибка: укажи params.id (ID лида)')
+        else:
+            result = b24('crm.lead.get', {'id': int(lead_id)}).get('result', {})
+            contacts_res = b24('crm.lead.contact.items.get', {'id': int(lead_id)}).get('result', [])
+            print('ID='+str(result.get('ID',''))+' | '+result.get('TITLE','')+' | '+result.get('STATUS_ID','')+' | '+result.get('DATE_CREATE','')[:10])
+            if contacts_res:
+                print('Связанные контакты: ' + ', '.join([str(c.get('CONTACT_ID','')) for c in contacts_res]))
+
     else:
         result = b24('crm.lead.list', {'order': {'DATE_CREATE': 'DESC'}, 'select': ['ID','TITLE','NAME','STATUS_ID','DATE_CREATE'], 'start': 0})
         leads = result.get('result', [])
@@ -4578,6 +4651,100 @@ try:
             link = [{'to_entity_id': int(contact_id), 'to_entity_type': 'contacts'}]
             result = amo('/leads/' + str(lead_id) + '/link', data=link, method='POST')
             print('OK: контакт ' + str(contact_id) + ' привязан к сделке ' + str(lead_id))
+
+    elif ACTION in ('move_lead_stage', 'advance_deal', 'move_deal'):
+        lead_id = os.environ.get('AGENT_PARAM_ID', os.environ.get('AGENT_PARAM_LEAD_ID', ''))
+        new_status = os.environ.get('AGENT_PARAM_STATUS_ID', '')
+        pipeline_id = os.environ.get('AGENT_PARAM_PIPELINE_ID', '')
+        if not lead_id:
+            print('Ошибка: укажи params.id (ID сделки)')
+        else:
+            patch = {}
+            if new_status:
+                try: patch['status_id'] = int(new_status)
+                except: pass
+            if pipeline_id:
+                try: patch['pipeline_id'] = int(pipeline_id)
+                except: pass
+            if not patch:
+                try:
+                    lead = amo('/leads/' + str(lead_id))
+                    cur_pid = lead.get('pipeline_id', '')
+                    cur_sid = lead.get('status_id', '')
+                    if cur_pid:
+                        pipe = amo('/leads/pipelines/' + str(cur_pid))
+                        statuses = [s for s in pipe.get('_embedded', {}).get('statuses', []) if s.get('type') != 'won' and s.get('type') != 'loss']
+                        ids = [s['id'] for s in statuses]
+                        if cur_sid in ids:
+                            idx = ids.index(cur_sid)
+                            if idx + 1 < len(ids):
+                                patch['status_id'] = ids[idx + 1]
+                except Exception as e:
+                    print('Ошибка получения воронки: ' + str(e))
+            if patch:
+                result = amo('/leads/' + str(lead_id), data=patch, method='PATCH')
+                print('OK: сделка ' + str(lead_id) + ' переведена на этап status_id=' + str(patch.get('status_id', '?')))
+            else:
+                print('Нет данных о следующем этапе — укажи params.status_id вручную или сначала вызови get_pipelines')
+
+    elif ACTION in ('get_stale_leads', 'check_pipeline', 'get_overdue_leads'):
+        import time as _t
+        days = int(os.environ.get('AGENT_PARAM_DAYS', '3'))
+        cutoff = int(_t.time()) - days * 86400
+        result = amo('/leads?filter[updated_at][to]=' + str(cutoff) + '&order[updated_at]=asc&limit=20')
+        leads = result.get('_embedded', {}).get('leads', [])
+        if not leads:
+            print('Зависших сделок не найдено (нет сделок без обновлений >' + str(days) + ' дней)')
+        else:
+            print('Сделок без обновлений >' + str(days) + ' дней: ' + str(len(leads)))
+            for l in leads:
+                age = (int(_t.time()) - l.get('updated_at', 0)) // 86400
+                print('ID=' + str(l.get('id','')) + ' | ' + l.get('name','') + ' | ' + str(age) + ' дней без изменений | status_id=' + str(l.get('status_id','')))
+
+    elif ACTION in ('create_task', 'add_task', 'create_amo_task'):
+        entity_id = os.environ.get('AGENT_PARAM_ID', os.environ.get('AGENT_PARAM_LEAD_ID', ''))
+        entity_type = os.environ.get('AGENT_PARAM_ENTITY_TYPE', 'leads')
+        text = os.environ.get('AGENT_PARAM_TEXT', os.environ.get('AGENT_PARAM_TASK', 'Следующий шаг'))
+        due_raw = os.environ.get('AGENT_PARAM_DUE', '')
+        task = {'task_type_id': 1, 'text': text}
+        if entity_id:
+            try:
+                task['entity_id'] = int(entity_id)
+                task['entity_type'] = entity_type
+            except: pass
+        if due_raw:
+            try:
+                import datetime as _dt
+                if due_raw.isdigit():
+                    task['complete_till'] = int(due_raw)
+                else:
+                    task['complete_till'] = int(_dt.datetime.strptime(due_raw[:10], '%Y-%m-%d').timestamp()) + 43200
+            except: pass
+        else:
+            import time as _t2
+            task['complete_till'] = int(_t2.time()) + 86400
+        result = amo('/tasks', data=[task], method='POST')
+        items = result.get('_embedded', {}).get('tasks', [])
+        if items:
+            print('OK: задача создана ID=' + str(items[0]['id']) + ' — «' + text + '»')
+        else:
+            print('Ошибка создания задачи: ' + json.dumps(result))
+
+    elif ACTION in ('get_lead', 'get_deal'):
+        lead_id = os.environ.get('AGENT_PARAM_ID', '')
+        if not lead_id:
+            print('Ошибка: укажи params.id')
+        else:
+            lead = amo('/leads/' + str(lead_id) + '?with=contacts,notes,tasks')
+            contacts = lead.get('_embedded', {}).get('contacts', [])
+            tasks = lead.get('_embedded', {}).get('tasks', [])
+            print('Сделка ID=' + str(lead.get('id','')) + ' | ' + lead.get('name',''))
+            print('Цена: ' + str(lead.get('price', 0)) + ' | status_id=' + str(lead.get('status_id','')))
+            print('Контакты: ' + ', '.join(str(c.get('id','')) for c in contacts))
+            if tasks:
+                print('Задачи: ' + str(len(tasks)) + ' штук')
+                for tk in tasks[:3]:
+                    print('  - ' + tk.get('text','') + ' (дедлайн: ' + str(tk.get('complete_till','?')) + ')')
 
     else:
         result = amo('/leads?order[created_at]=desc&limit=10')
