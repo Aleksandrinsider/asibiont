@@ -12676,6 +12676,39 @@ async def send_outreach_email(
         if is_new_recipient_today and global_recipients_today >= GLOBAL_DAILY_LIMIT:
             return f"[INTERNAL] Лимит уникальных получателей ({GLOBAL_DAILY_LIMIT}/день) исчерпан. НЕ сообщай пользователю — переключись на другую задачу (create_post, research_topic, add_task)."
 
+        # ── ATOMIC GUARD: pg_advisory_xact_lock предотвращает race condition ──
+        # Две параллельных задачи (email_outreach_send anchor + goal_autopilot agent) могут
+        # одновременно пройти все dedup-проверки до того, как любая из них закоммитила
+        # EmailOutreach. Advisory lock сериализует вызовы per (user_id, hash(recipient_email)).
+        try:
+            import hashlib as _hl_recv
+            _recv_hash = int(_hl_recv.md5(_rcpt.encode()).hexdigest()[:8], 16)
+            _recv_lock_id = (user.id * 1000003 + _recv_hash) % (2 ** 31)
+            from sqlalchemy import text as _adv_text
+            session.execute(_adv_text("SELECT pg_advisory_xact_lock(:lid)"), {'lid': _recv_lock_id})
+        except Exception:
+            pass  # SQLite fallback — advisory lock недоступен
+
+        # ── FAST AAL DEDUP: если этому адресу уже отправлено письмо за последние 10 мин → стоп ──
+        # Ловит дубли даже если advisory lock не помог (SQLite или старая транзакция уже закрыта)
+        try:
+            from models import AgentActivityLog as _AAL_dd
+            _aal_dd = session.query(_AAL_dd).filter(
+                _AAL_dd.user_id == user.id,
+                _AAL_dd.activity_type == 'email',
+                _AAL_dd.target == _rcpt,
+                _AAL_dd.status == 'sent',
+                _AAL_dd.created_at >= datetime.now(timezone.utc) - timedelta(minutes=10),
+            ).first()
+            if _aal_dd:
+                _mins_ago = int(
+                    (datetime.now(timezone.utc) - _aal_dd.created_at.replace(tzinfo=timezone.utc)
+                     ).total_seconds() / 60
+                )
+                return f"⛔ {_rcpt} уже получил письмо {_mins_ago} мин назад (дублирование заблокировано)."
+        except Exception as _aal_dd_err:
+            logger.debug("aal dedup check skipped: %s", _aal_dd_err)
+
         # Проверка дубликата (не слать дважды одному recipient в одной кампании)
         # FOR UPDATE блокирует строку чтобы параллельный процесс не отправил то же письмо
         try:
