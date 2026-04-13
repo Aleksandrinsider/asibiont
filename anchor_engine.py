@@ -10292,9 +10292,30 @@ class AnchorEngine:
             _coord_sent_today = data.get('emails_sent_today', 0)
             _coord_daily_limit = data.get('email_daily_limit', 100)
             _coord_email_limit_hit = _coord_sent_today >= _coord_daily_limit
+
+            # ── ARCH FIX: есть активный email_outreach_send anchor → координатор НЕ отправляет ──
+            # email_outreach_send anchor уже обработает черновики — дублировать через агента нельзя.
+            _active_batch_anchors = False
+            try:
+                _active_batch_anchors = session.query(Anchor.id).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'email_outreach_send',
+                    Anchor.delivered_at.is_(None),
+                    Anchor.suppress_until.is_(None) | (Anchor.suppress_until <= datetime.now(timezone.utc)),
+                ).first() is not None
+            except Exception:
+                pass
+
             if _coord_email_limit_hit:
                 _unsent_contacts_str = (
                     f"\nℹ️ Лимит email: отправлено сегодня {_coord_sent_today}/{_coord_daily_limit}.\n"
+                )
+            elif _active_batch_anchors:
+                # Автоматический batch email_outreach_send уже запланирован → агентам не нужно
+                _unsent_contacts_str = (
+                    "\n⚙️ РАССЫЛКА: batch email_outreach_send уже обрабатывает черновики автоматически. "
+                    "Агентам НЕ нужно вызывать send_outreach_email — это приведёт к дублированию писем. "
+                    "Сосредоточьтесь на поиске НОВЫХ контактов, контентных задачах или работе с ответами.\n"
                 )
             elif _unsent_contacts_data:
                 import re as _re_uc
