@@ -416,6 +416,18 @@ _INTEGRATION_REQUEST_RULES: list[dict] = [
         'setup': 'CDEK_CLIENT_ID/CDEK_CLIENT_SECRET',
     },
     {
+        'label': 'MarineTraffic',
+        'keywords': ('marinetraffic', 'marine traffic', 'судно', 'суда', 'флот', 'порт судно', 'vessel', 'mmsi', 'судоходств', 'морск перевозк'),
+        'presence': ('marinetraffic', 'marinetraffic_api_key'),
+        'setup': 'MARINETRAFFIC_API_KEY',
+    },
+    {
+        'label': 'Почта России',
+        'keywords': ('почта росс', 'почта рф', 'pochta', 'otpravka', 'посылк почт', 'отслеживание почт'),
+        'presence': ('pochta', 'pochta_access_token', 'pochta_russia'),
+        'setup': 'POCHTA_ACCESS_TOKEN/POCHTA_USER_TOKEN',
+    },
+    {
         'label': 'WhatsApp (Twilio/360dialog)',
         'keywords': ('whatsapp', 'ватсап', 'вотсап'),
         'presence': ('whatsapp_', 'twilio', 'wa_token'),

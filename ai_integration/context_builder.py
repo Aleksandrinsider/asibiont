@@ -1862,6 +1862,17 @@ class ContextBuilder:
         _has_crm = 'BITRIX' in _kup or 'AMOCRM' in _kup or 'HUBSPOT' in _kup or 'SALESFORCE' in _kup
         _has_webhook = 'WEBHOOK_URL' in _kup or 'webhook' in _clo
         _has_1c = '1C' in _kup or 'ODATA' in _kup
+        _has_cdek = 'CDEK' in _kup
+        _has_marinetraffic = 'MARINETRAFFIC' in _kup
+        _has_pochta = 'POCHTA' in _kup
+        _has_gmaps = 'GOOGLE_MAPS' in _kup or 'GMAPS' in _kup
+        _has_alphavantage = 'ALPHAVANTAGE' in _kup or 'ALPHA_VANTAGE' in _kup
+        _has_newsapi = 'NEWSAPI' in _kup
+        _has_hh = 'HH_' in _kup or 'HEADHUNTER' in _kup
+        _has_avito = 'AVITO' in _kup
+        _has_wb = 'WILDBERRIES' in _kup or 'WB_TOKEN' in _kup or 'wildberries' in _clo
+        _has_ozon = 'OZON' in _kup or 'ozon' in _clo
+        _has_moysklad = 'MOYSKLAD' in _kup or 'moysklad' in _clo
 
         # Проверяем использование фич
         _has_content_campaign = False
@@ -1980,6 +1991,50 @@ class ContextBuilder:
              "OpenAI / GPT-4",
              "использование GPT-4 для специализированных задач агента",
              "агент + OPENAI_API_KEY"),
+            (not _has_cdek,
+             "СДЭК",
+             "трекинг посылок, расчёт тарифов, создание заказов, список ПВЗ",
+             "агент + CDEK_CLIENT_ID + CDEK_CLIENT_SECRET (lk.cdek.ru)"),
+            (not _has_marinetraffic,
+             "MarineTraffic",
+             "отслеживание судов в реальном времени, поиск по MMSI/IMO/названию, ожидаемые суда в порту",
+             "агент + MARINETRAFFIC_API_KEY (marinetraffic.com → My API)"),
+            (not _has_pochta,
+             "Почта России",
+             "трекинг посылок по трек-номеру, расчёт тарифов, нормализация адресов",
+             "агент + POCHTA_ACCESS_TOKEN + POCHTA_USER_TOKEN (otpravka.pochta.ru)"),
+            (not _has_gmaps,
+             "Google Maps",
+             "поиск организаций, геокодирование адресов, построение маршрутов, матрица расстояний",
+             "агент + GOOGLE_MAPS_API_KEY (console.cloud.google.com)"),
+            (not _has_alphavantage,
+             "Alpha Vantage",
+             "котировки акций/нефти/форекс/металлов, исторические данные",
+             "агент + ALPHAVANTAGE_API_KEY (alphavantage.co, бесплатно)"),
+            (not _has_newsapi,
+             "NewsAPI",
+             "поток новостей из 100+ источников по любой теме",
+             "агент + NEWSAPI_KEY (newsapi.org, бесплатно 100 req/день)"),
+            (not _has_hh,
+             "hh.ru / HeadHunter",
+             "поиск вакансий и кандидатов, парсинг резюме",
+             "агент + HH_QUERY + HH_AREA"),
+            (not _has_avito,
+             "Авито",
+             "мониторинг объявлений, управление собственными объявлениями",
+             "агент + AVITO_CLIENT_ID + AVITO_CLIENT_SECRET"),
+            (not _has_wb,
+             "Wildberries",
+             "аналитика продаж, остатки, цены, отзывы и рейтинги товаров",
+             "агент + WB_TOKEN (seller.wildberries.ru → Настройки → Токены)"),
+            (not _has_ozon,
+             "Ozon",
+             "статистика заказов, остатки, управление ценами и контентом карточек",
+             "агент + OZON_CLIENT_ID + OZON_API_KEY (seller.ozon.ru)"),
+            (not _has_moysklad,
+             "МойСклад",
+             "управление складом, накладными, заказами и остатками",
+             "агент + MOYSKLAD_TOKEN"),
         ]
 
         # ═══ ФИЧИ ПЛАТФОРМЫ (не активированы) ═══
@@ -2051,6 +2106,17 @@ class ContextBuilder:
                 'Telegram-канал': ['telegram', 'канал', 'подписчик', 'контент', 'пост', 'публикац'],
                 'Google Calendar': ['календар', 'расписан', 'встреч', 'событи'],
                 'RSS-мониторинг': ['rss', 'новост', 'мониторинг', 'дайджест'],
+                'СДЭК': ['сдэк', 'cdek', 'доставк', 'посылк', 'трекинг', 'отправк', 'склад', 'логистик'],
+                'MarineTraffic': ['судн', 'суда', 'флот', 'морск', 'порт', 'vessel', 'mmsi', 'грузоперевозк', 'maritime', 'судоходств'],
+                'Почта России': ['почта росс', 'посылк', 'отправлен', 'трекинг', 'индекс', 'доставк письм'],
+                'Google Maps': ['карт', 'маршрут', 'адрес', 'геолокац', 'место', 'навигац', 'доставк', 'логистик'],
+                'Alpha Vantage': ['акци', 'котировк', 'нефт', 'газ', 'биржа', 'форекс', 'металл', 'финанс', 'трейдинг'],
+                'NewsAPI': ['новост', 'мониторинг', 'сми', 'медиа', 'тренд', 'инфопотоk'],
+                'hh.ru / HeadHunter': ['вакансия', 'кандидат', 'резюме', 'найм', 'рекрутинг', 'персонал'],
+                'Авито': ['авито', 'объявлен', 'авто', 'недвижим', 'продаж б/у'],
+                'Wildberries': ['wildberries', 'вб', 'маркетплейс', 'товар', 'остатк', 'карточк', 'продаж'],
+                'Ozon': ['ozon', 'озон', 'маркетплейс', 'товар', 'остатк', 'карточк', 'продаж'],
+                'МойСклад': ['мойсклад', 'склад', 'накладн', 'инвентар', 'остатк', 'товарооборот'],
             }
             _scored = []
             for name, benefit, how in available_integrations:
