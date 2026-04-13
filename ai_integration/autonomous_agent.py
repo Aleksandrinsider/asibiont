@@ -4409,8 +4409,9 @@ class HybridAutonomousAgent:
                     rf'[^.!?\n]*\b{_bs_f}\b[^.!?\n]*[.!?]?\s*',
                     '', final, flags=_re_svc_fin.IGNORECASE
                 )
-            # Зачищаем осиротевшие фрагменты: строки/предложения с висящим ':' в конце
-            final = _re_svc_fin.sub(r'[^\n.!?]*:\s*(?=\n|$)', '', final)
+            # Зачищаем осиротевшие фрагменты: ТОЛЬКО короткие строки с висящим ':' (≤30 симв.)
+            # Длинные строки типа "Найденные контакты:" / "Следующий шаг:" — не трогаем
+            final = _re_svc_fin.sub(r'(?m)^[^\n.!?]{1,30}:\s*$', '', final)
             final = _re_svc_fin.sub(r'\n{3,}', '\n\n', final)
             final = final.strip()
 
@@ -4460,11 +4461,14 @@ class HybridAutonomousAgent:
                                 _targs = {}
                             if not isinstance(_targs, dict):
                                 _targs = {}
-                            _res_arr = await self.execute_actions(
-                                [{"tool": _tname, "params": _targs, "reason": "strategy_retry"}],
-                                user_id,
-                                session=None,
-                                user_message=user_message,
+                            _res_arr = await asyncio.wait_for(
+                                self.execute_actions(
+                                    [{"tool": _tname, "params": _targs, "reason": "strategy_retry"}],
+                                    user_id,
+                                    session=None,
+                                    user_message=user_message,
+                                ),
+                                timeout=60,
                             )
                             _res = _res_arr[0] if _res_arr else {"success": False, "error": "no result", "tool": _tname}
                             _retry_exec_results.append(_res)
@@ -5167,11 +5171,23 @@ class HybridAutonomousAgent:
                     _sys_ready.append((tc_item, name, args, f"system:{mode} iter {iteration+1}"))
 
                 # ── Pass 2: выполняем ПАРАЛЛЕЛЬНО ────────────────────────────────
+                _SYS_TOOL_TIMEOUT_MAP = {
+                    'delegate_task': 120, 'run_agent_action': 120,
+                    'research_topic': 90, 'web_search': 45,
+                    'send_outreach_email': 45, 'send_follow_up_email': 45,
+                    'check_emails': 45, 'generate_image': 90,
+                    'publish_to_telegram': 45, 'publish_to_discord': 45,
+                    'create_post': 60,
+                }
                 async def _sys_exec_one(_tc, _name, _args, _reason):
+                    _sys_tto = _SYS_TOOL_TIMEOUT_MAP.get(_name, 60)
                     try:
-                        _results = await self.execute_actions(
-                            [{"tool": _name, "params": _args, "reason": _reason}],
-                            user_id, session=None, user_message=instruction)
+                        _results = await asyncio.wait_for(
+                            self.execute_actions(
+                                [{"tool": _name, "params": _args, "reason": _reason}],
+                                user_id, session=None, user_message=instruction),
+                            timeout=_sys_tto,
+                        )
                         _r = _results[0] if _results else {"success": False, "error": "no result"}
                         if _r.get('success'):
                             _raw_res_s = _r['result']
@@ -5181,6 +5197,10 @@ class HybridAutonomousAgent:
                                 _rc = json.dumps(_raw_res_s, ensure_ascii=False, default=str)[:1500]
                         else:
                             _rc = json.dumps({"error": str(_r.get('error', ''))}, ensure_ascii=False)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"[AGENT:SYSTEM] {_name} timed out after {_sys_tto}s")
+                        _r = {"success": False, "error": f"timeout_{_sys_tto}s"}
+                        _rc = json.dumps({"error": f"Инструмент не ответил за {_sys_tto}с."}, ensure_ascii=False)
                     except Exception as _err:
                         logger.error(f"[AGENT:SYSTEM] {_name} parallel failed: {_err}\n{traceback.format_exc()}")
                         _r = {"success": False, "error": str(_err)}
