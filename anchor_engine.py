@@ -14123,22 +14123,21 @@ class AnchorEngine:
                 _loop_risk_step = bool(_assignment_health.get('stalled'))
                 if _loop_risk_step:
                     logger.info(
-                        "[COORD] ⛔ skipping assignment to stalled agent %s (sent=%s results=%s gap=%s)",
+                        "[COORD] stalled agent %s (sent=%s results=%s gap=%s) — assignment shown, skipping execution",
                         _ag_name,
                         _assignment_health.get('assignments', 0),
                         _assignment_health.get('results', 0),
                         _assignment_health.get('gap', 0),
                     )
-                    continue
                 # Гард: пустой/слишком короткий текст — не сохраняем
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
                     continue
-                # ── SMART DEDUP: block exact same task text to same agent within 40min ──
-                # (Soft: same goal is OK — different tasks per goal are normal)
+                # ── SMART DEDUP: block exact same task text to same agent within 25min ──
+                # (25min < 30min coordinator interval — каждый цикл виден для каждого агента)
                 if _ag_goal_title:
                     try:
-                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=40)
+                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=25)
                         _dedup_exists = session.query(Interaction.id).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'agent_msg',
@@ -14148,7 +14147,7 @@ class AnchorEngine:
                             Interaction.content.ilike(f'%"__goal_title": "{_ag_goal_title[:80]}%'),
                         ).first()
                         if _dedup_exists:
-                            logger.info("[COORD] ⛔ dedup: agent %s same tool+goal within 40min, skipping", _ag_name)
+                            logger.info("[COORD] ⛔ dedup: agent %s same tool+goal within 25min, skipping", _ag_name)
                             continue
                     except Exception:
                         pass
@@ -14196,6 +14195,10 @@ class AnchorEngine:
                         await _safe_send(self.bot, user.telegram_id, f"[ASI] {_asi_assign_text}")
                     except Exception:
                         pass
+
+                # Поручение отображено — если агент застрял (stalled), пропускаем тяжёлое выполнение
+                if _loop_risk_step:
+                    continue
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
