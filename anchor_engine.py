@@ -3390,6 +3390,66 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             "Рекомендация: проанализируй результаты (research_topic) и предложи пользователю стратегическую смену подхода.\n"
         )
 
+    # ── Статистика поиска лидов: агент видит РЕАЛЬНУЮ эффективность каждой попытки ──
+    # Если последние N поисков нашли 0 — агент сам решает менять стратегию.
+    _lead_search_stats_block = ''
+    if user:
+        try:
+            from models import Session as _SLS, AnchorDeliveryLog as _ADL_ls
+            import re as _re_ls
+            _sess_ls = _SLS()
+            try:
+                _lead_logs = _sess_ls.query(_ADL_ls).filter(
+                    _ADL_ls.user_id == user.id,
+                    _ADL_ls.anchor_types.contains('email_need_leads'),
+                ).order_by(_ADL_ls.created_at.desc()).limit(10).all()
+                _lead_results = []
+                for _log in _lead_logs:
+                    _m = _re_ls.search(r'found (\d+) new leads', _log.message_text or '')
+                    if _m:
+                        _lead_results.append(int(_m.group(1)))
+                if _lead_results:
+                    _avg_leads = sum(_lead_results) / len(_lead_results)
+                    _zero_streak = 0
+                    for _r in _lead_results:
+                        if _r == 0:
+                            _zero_streak += 1
+                        else:
+                            break
+                    _results_str = ', '.join(str(r) for r in _lead_results[:8])
+                    _lead_search_stats_block = (
+                        f"\n\n🔎 ИСТОРИЯ ПОИСКА ЛИДОВ (последние {len(_lead_results)} итераций): [{_results_str}] лидов найдено\n"
+                        f"  Среднее за итерацию: {_avg_leads:.1f} лидов.\n"
+                    )
+                    if _zero_streak >= 5:
+                        _lead_search_stats_block += (
+                            f"  🔴 {_zero_streak} попыток подряд нашли 0 лидов — текущий запрос полностью исчерпан.\n"
+                            "  ТВОЁ РЕШЕНИЕ (выбери одно):\n"
+                            "    a) Предложи пользователю расширить аудиторию кампании (смежные роли, другие сегменты)\n"
+                            "    b) Попробуй через другой канал: web_search('site:habr.com [тема] email') или LinkedIn bio\n"
+                            "    c) Сообщи через send_message_to_user что пул исчерпан и нужна корректировка цели\n"
+                            "  → НЕ запускай поиск ещё раз теми же ключевыми словами.\n"
+                        )
+                    elif _zero_streak >= 3:
+                        _lead_search_stats_block += (
+                            f"  ⚠️ {_zero_streak} попытки подряд нашли 0 лидов — текущий запрос/канал иссякает.\n"
+                            "  Подумай: тот же GitHub query с теми же словами — даст ли другой результат?\n"
+                            "    → Если нет — смени угол: другой язык программирования, другая страна, другая платформа.\n"
+                            "    → Или предложи пользователю: send_message_to_user с конкретным вопросом о расширении аудитории.\n"
+                        )
+                    elif _avg_leads < 1.0 and len(_lead_results) >= 4:
+                        _lead_search_stats_block += (
+                            "  ⚠️ Низкий выход лидов — возможно ключевые слова слишком узкие или пул контактов близок к исчерпанию.\n"
+                            "  → Рассмотри: другие синонимы аудитории, другая площадка, или контентный охват вместо 1:1 outreach.\n"
+                        )
+                    else:
+                        _lead_search_stats_block += "  ✅ Поиск работает — продолжай, но варьируй запросы каждый цикл.\n"
+            finally:
+                _sess_ls.close()
+        except Exception as _e_ls:
+            import logging as _log_ls
+            _log_ls.getLogger(__name__).debug('[AUTOPILOT] lead search stats: %s', _e_ls)
+
     # ── Директива активных email-кампаний ──
     # Если у пользователя есть активная кампания с нехваткой лидов —
     # явно указываем агенту campaign_id и команду add_email_leads.
@@ -3908,6 +3968,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         f"{_scale_block}"
         f"{_personalized_strategy_block}"
         f"{_personal_guard}"
+        f"{_lead_search_stats_block}"
         f"{_campaign_directive}"
         f"{_goal_state_hint}"
         f"{_outreach_stats}"
@@ -21479,7 +21540,7 @@ class AnchorEngine:
                 return
 
             elif anchor.anchor_type == 'email_need_leads':
-                # Напрямую вызываем _auto_find_leads — без AI-модели
+                # Вызываем _auto_find_leads: если streak >= 3 нулей — AI генерирует новый поисковый запрос
                 campaign_id = anchor_data.get('campaign_id')
                 if not campaign_id:
                     logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: no campaign_id, skip")
@@ -21492,16 +21553,74 @@ class AnchorEngine:
                     session.commit()
                     return
 
+                # ── Считаем streak нулевых поисков для этой кампании ──
+                _zero_streak_count = 0
+                try:
+                    import re as _re_nl
+                    _recent_logs = session.query(AnchorDeliveryLog).filter(
+                        AnchorDeliveryLog.user_id == user.id,
+                        AnchorDeliveryLog.anchor_types.contains('email_need_leads'),
+                    ).order_by(AnchorDeliveryLog.created_at.desc()).limit(8).all()
+                    for _nl in _recent_logs:
+                        _m_nl = _re_nl.search(r'found (\d+) new leads', _nl.message_text or '')
+                        if _m_nl:
+                            if int(_m_nl.group(1)) == 0:
+                                _zero_streak_count += 1
+                            else:
+                                break  # серия нулей прервана — стоп
+                except Exception as _e_nl:
+                    logger.debug("[ANCHOR] email_need_leads streak check: %s", _e_nl)
+
+                # ── Если streak >= 3 — AI сам предлагает другой поисковый запрос ──
+                _base_audience = anchor_data.get('target_audience', campaign.target_audience or '')
+                _effective_audience = _base_audience
+                if _zero_streak_count >= 3:
+                    logger.info(
+                        f"[ANCHOR] email_need_leads #{anchor.id}: {_zero_streak_count} consecutive zeros — "
+                        f"asking AI to suggest alternative search angle"
+                    )
+                    try:
+                        from ai_integration.api_client import get_api_client as _get_api_nl
+                        _api_nl = _get_api_nl()
+                        _refine_prompt = (
+                            f"Мы ищем email-контакты для email-кампании.\n"
+                            f"Аудитория: «{_base_audience[:300]}»\n"
+                            f"Цель кампании: «{(campaign.goal or '')[:200]}»\n"
+                            f"Предложение: «{(campaign.offer or '')[:150]}»\n\n"
+                            f"Последние {_zero_streak_count} попыток автоматического поиска нашли 0 новых контактов.\n"
+                            f"Это значит текущие ключевые слова исчерпаны или слишком узкие.\n\n"
+                            f"Предложи РАСШИРЕННОЕ описание аудитории (2-3 предложения) с NEW ключевыми словами:\n"
+                            f"- Добавь синонимы и смежные роли/специальности\n"
+                            f"- Добавь английские эквиваленты если аудитория русскоязычная\n"
+                            f"- Расширь до смежных областей если чистая ниша мала\n"
+                            f"Верни ТОЛЬКО текст расширенной аудитории, без объяснений."
+                        )
+                        _refined = await _api_nl.deepseek_analyze(
+                            prompt=_refine_prompt,
+                            system_prompt="Ты эксперт по email outreach. Расширяй аудиторию конкретными терминами.",
+                            max_tokens=200,
+                            temperature=0.7,
+                        )
+                        if _refined and len(_refined.strip()) > 20:
+                            _effective_audience = _base_audience + " " + _refined.strip()
+                            logger.info(
+                                f"[ANCHOR] email_need_leads #{anchor.id}: AI-refined audience: "
+                                f"{_effective_audience[:120]}..."
+                            )
+                    except Exception as _e_refine:
+                        logger.warning(f"[ANCHOR] email_need_leads AI refine error: {_e_refine}")
+
                 from ai_integration.handlers import _auto_find_leads
                 count, msg = await _auto_find_leads(
                     campaign=campaign,
                     user=user,
-                    target_audience=anchor_data.get('target_audience', campaign.target_audience or ''),
+                    target_audience=_effective_audience,
                     goal=anchor_data.get('campaign_goal', campaign.goal or ''),
                     offer=anchor_data.get('offer', campaign.offer or ''),
                     session=session,
                 )
-                logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: found {count} leads for campaign #{campaign_id}")
+                logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: found {count} leads for campaign #{campaign_id}"
+                            + (f" (streak was {_zero_streak_count}, used AI-refined audience)" if _zero_streak_count >= 3 else ""))
 
                 # Помечаем якорь как доставленный
                 anchor.delivered_at = datetime.now(timezone.utc)
