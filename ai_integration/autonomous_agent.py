@@ -4499,12 +4499,42 @@ class HybridAutonomousAgent:
         try:
             _missing_hint = _build_missing_integration_hint(user_id, user_message or '', final or '')
             if _missing_hint and (user_message or '').strip():
-                # Добавляем только если пользователь ЯВНО упомянул сервис в своём сообщении
+                # Добавляем если пользователь явно упомянул сервис ИЛИ подразумевает задачу под него
+                _msg_l = (user_message or '').lower()
                 _msg_has_service = any(
-                    kw in (user_message or '').lower()
+                    kw in _msg_l
                     for rule in _INTEGRATION_REQUEST_RULES
                     for kw in rule['keywords']
                 )
+                # Семантические паттерны: задача без явного названия интеграции
+                if not _msg_has_service:
+                    _SEMANTIC_INTENTS = [
+                        (['отследи посылк', 'где посылк', 'статус посылк', 'трекинг посылк', 'посылка не пришл', 'найди посылк'],
+                         ['cdek', 'cdek_client', 'pochta', 'pochta_access']),
+                        (['где судно', 'статус судна', 'отследи судн', 'морской груз', 'судно в порт', 'флот на карт'],
+                         ['marinetraffic', 'marinetraffic_api']),
+                        (['котировки нефт', 'цена нефт', 'данные биржи', 'цена акц', 'стоимость активов', 'курс нефт'],
+                         ['alphavantage', 'alpha_vantage', 'finnhub', 'tinkoff']),
+                        (['оптимизируй рекламу', 'рекламный бюджет', 'кампания директ', 'управляй объявлен'],
+                         ['yandex_direct', 'yadirect', 'direct_token']),
+                        (['воронка продаж', 'новые лиды', 'добавь лид', 'обнови сделк', 'статус сделк'],
+                         ['amocrm', 'bitrix', 'hubspot']),
+                        (['остатки на складе', 'обнови цены', 'карточка товара', 'статистика продаж маркет'],
+                         ['wildberries', 'wb_token', 'ozon', 'moysklad']),
+                        (['опубликуй пост', 'запости в телеграм', 'отправь в канал'],
+                         ['telegram_bot_token', 'tg_bot']),
+                    ]
+                    try:
+                        _snap = _get_active_agent_integration_snapshot(user_id)
+                        _snap_keys = (_snap.get('keys_text') or '').lower()
+                        _snap_caps = (_snap.get('caps_text') or '').lower()
+                        for _intent_kws, _presence_kws in _SEMANTIC_INTENTS:
+                            if any(kw in _msg_l for kw in _intent_kws):
+                                if not any(p in _snap_keys or p in _snap_caps for p in _presence_kws):
+                                    _msg_has_service = True
+                                    break
+                    except Exception:
+                        pass
                 if _msg_has_service:
                     final = f"{final}\n\n{_missing_hint}".strip()
         except Exception as _lh_err:

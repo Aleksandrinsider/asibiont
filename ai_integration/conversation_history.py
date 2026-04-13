@@ -10,7 +10,22 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 16  # Keep last 16 messages (8 exchanges) for topic extraction
+MAX_HISTORY_MESSAGES = 30  # Keep last 30 messages (15 exchanges) for better context
+
+
+def _smart_truncate(content: str, role: str) -> str:
+    """Smart truncation: keeps beginning + end for long assistant messages.
+    Short messages pass through unchanged. Long assistant answers preserve
+    first 800 chars (context/result summary) + last 300 chars (next steps).
+    """
+    max_len = 1200 if role == 'assistant' else 800
+    if len(content) <= max_len:
+        return content
+    if role == 'assistant':
+        keep_start = 800
+        keep_end = 300
+        return content[:keep_start] + '\n…[сокращено]…\n' + content[-keep_end:]
+    return content[:max_len]
 
 # Паттерны фраз, которые могут содержать галлюцинированные данные о задачах
 # Эти фразы в сообщениях ассистента будут удалены при загрузке истории
@@ -113,11 +128,9 @@ def save_message_to_history(user_id, role, content, session=None):
                 history = []
         
         # Add new message
-        # Ассистент пишет длиннее — даём больше места для контекста
-        max_len = 800 if role == 'assistant' else 600
         message = {
             "role": role,
-            "content": content[:max_len],
+            "content": _smart_truncate(content, role),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         history.append(message)

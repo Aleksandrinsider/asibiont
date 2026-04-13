@@ -1809,6 +1809,7 @@ class ContextBuilder:
 
     # Кэш: user_id → datetime последней рекомендации
     _integration_rec_cache: dict = {}
+    _integration_rec_agent_hash: dict = {}  # uid → md5 набора ключей/кода агентов
 
     def _recommend_integration(self, user, profile, all_goals, session) -> str | None:
         """Передаёт агенту список неподключённых интеграций И неиспользуемых фич —
@@ -1819,8 +1820,20 @@ class ContextBuilder:
         uid = user.id
         now = datetime.now(timezone.utc)
 
+        from models import UserAgent as _UA_rec
+        _agents = session.query(_UA_rec).filter(
+            _UA_rec.author_id == user.id,
+            _UA_rec.status != 'disabled',
+        ).all()
+
+        # Anti-spam: не чаще 1 раза за 24ч, но сбрасываем при смене агентов
+        import hashlib as _hl
+        _agent_hash = _hl.md5(''.join(sorted(
+            (a.user_api_keys or '') + (a.python_code or '')[:100] for a in _agents
+        )).encode()).hexdigest()[:16]
         last = self._integration_rec_cache.get(uid)
-        if last and (now - last).total_seconds() < 24 * 3600:
+        _agents_changed = self._integration_rec_agent_hash.get(uid) != _agent_hash
+        if last and not _agents_changed and (now - last).total_seconds() < 24 * 3600:
             return None
 
         # --- что подключено ---
@@ -1829,11 +1842,6 @@ class ContextBuilder:
         _has_gmail_oauth = bool(getattr(user, 'google_oauth_token', None))
         _has_autopilot = bool(getattr(profile, 'goal_autopilot_enabled', False)) if profile else False
 
-        from models import UserAgent as _UA_rec
-        _agents = session.query(_UA_rec).filter(
-            _UA_rec.author_id == user.id,
-            _UA_rec.status != 'disabled',
-        ).all()
         _has_agents = len(_agents) > 0
         _kup = ' '.join((_a.user_api_keys or '').upper() for _a in _agents)
         _clo = ' '.join((_a.python_code or '').lower() for _a in _agents)
@@ -2154,6 +2162,7 @@ class ContextBuilder:
         )
 
         self._integration_rec_cache[uid] = now
+        self._integration_rec_agent_hash[uid] = _agent_hash
         return '\n'.join(all_items)
 
     def _find_similar_users(self, user, profile, session, user_tz):
