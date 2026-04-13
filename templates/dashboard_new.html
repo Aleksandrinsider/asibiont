@@ -2078,8 +2078,8 @@
                 }
             }
             
-            // "Save to Notes" button for AI messages
-            const saveBtn = normalizedSender === 'ai' ? `<a href="#" onclick="saveMessageToNotes(this); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">${t('save-to-notes')}</a>` : '';
+            // "Save to Notes" button for AI messages (excluding reminders and proactive)
+            const saveBtn = (normalizedSender === 'ai' && sender !== 'reminder' && sender !== 'proactive') ? `<a href="#" onclick="saveMessageToNotes(this); return false;" style="background: none; border: none; cursor: pointer; padding: 0; color: #6C727F; font-size: 13px; text-decoration: none; margin-left: 8px;">${t('save-to-notes')}</a>` : '';
             
             messageDiv.innerHTML = `
                 <div style="display: flex; align-items: flex-start; gap: 0;">
@@ -16824,7 +16824,7 @@ except Exception as e:
                     const data = await response.json();
                     const btn = document.getElementById('header-token-balance');
                     if (btn) {
-                        btn.textContent = data.balance + ' ' + t('tokens');
+                        btn.textContent = data.balance;
                     }
                     // Update mobile token balance (number only)
                     const mobileBtn = document.getElementById('mobile-token-balance');
