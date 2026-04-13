@@ -13792,11 +13792,9 @@ class AnchorEngine:
                         _ag_task = _ag_task + f" (адаптируй стратегию: вместо {_tool_hint_l} попробуй {_runtime_alt})"
 
                 # ── Уточнение задания: подставляем контекст без лишнего LLM-вызова ──
-                # Контекст предыдущих шагов уже передаётся в _agent_prompt через _prev_steps_context
+                # Контекст предыдущих шагов передаётся через _team_reactive_block в _agent_prompt
                 # ВАЖНО: _ag_task_display сохраняем ДО добавления контекста — он нужен для видимого поручения
                 _ag_task_display = _ag_task  # только оригинальный текст задачи, без системного контекста
-                if _executed > 1 and _prev_steps_context and len(_prev_steps_context.strip()) > 30:
-                    _ag_task = f'{_ag_task}\nКонтекст — уже сделано командой:\n{_prev_steps_context[:1200]}'
 
                 # ── Кросс-агентный доступ к заметкам: если предыдущие агенты сохранили notes — передаём текущему ──
                 if _executed > 0:
@@ -14758,46 +14756,75 @@ class AnchorEngine:
                 except Exception as _afm_err:
                     logger.debug('[COORD] agent failure memory read: %s', _afm_err)
 
+                # Голос персонажа — выводится из специализации, делает агента неповторимым
+                _role_lower_pv = (_ag_role_str + ' ' + ((_ag_profile_match or {}).get('desc', '') or '')).lower()
+                _persona_voice = (
+                    'Мыслю данными и паттернами — ищу неочевидные закономерности там, где другие видят просто текст.'
+                    if any(w in _role_lower_pv for w in ('аналитик', 'исследов', 'data', 'research', 'analyst')) else
+                    'Мыслю воронкой: каждое действие — это шаг к конкретному человеку, который заинтересован.'
+                    if any(w in _role_lower_pv for w in ('маркетинг', 'продаж', 'outreach', 'sales', 'лид')) else
+                    'Мыслю кодом и структурой — вижу решения там, где другие видят сложность.'
+                    if any(w in _role_lower_pv for w in ('разработ', 'developer', 'engineer', 'github', 'code', 'программ')) else
+                    'Мыслю контентом и реакцией аудитории — знаю, что именно зацепит читателя.'
+                    if any(w in _role_lower_pv for w in ('контент', 'редактор', 'автор', 'писатель', 'smm', 'копирайт')) else
+                    'Вижу задачу шире коллег: не просто выполнить шаг, а продвинуть ситуацию к реальному результату.'
+                )
+                _ag_desc_short = ((_ag_profile_match or {}).get('desc', '') or '')[:120].strip()
+                _ag_desc_line = (f'\n{_ag_desc_short}' if _ag_desc_short else '')
+
+                # Реактивный блок команды: не пассивный список, а прямой вопрос «что использовать?»
+                _team_reactive_block = ''
+                if _prev_steps_context and _prev_steps_context.strip():
+                    _team_reactive_block = (
+                        f"\n\n🤝 РАБОТА КОМАНДЫ прямо сейчас:\n{_prev_steps_context.strip()}\n"
+                        f"→ Что из этого ты можешь ИСПОЛЬЗОВАТЬ или ПРОДОЛЖИТЬ прямо сейчас?\n"
+                        f"   Реагируй конкретно: 'Вижу, что [коллега] нашёл X, значит я сделаю Y.'\n"
+                        f"   Не начинай с нуля — строй на работе команды.\n"
+                    )
+                elif _team_lines_c:
+                    _team_reactive_block = (
+                        f"\n\nКоманда:\n" + '\n'.join(_team_lines_c) + '\n'
+                    )
+
                 _agent_prompt = (
-                    f"Твоё задание:\n{_ag_task}\n"
-                    + (f"\n🎯 Работаешь НА ЦЕЛЬ: «{_ag_goal_title}»\n"
-                       f"   update_goal_progress — ТОЛЬКО goal_title='{_ag_goal_title}'.\n"
-                       f"   metric_current += N ТОЛЬКО при реальном внешнем результате (ответ человека, подтверждение).\n"
-                       f"   НЕ обновляй metric за: поиск, чтение RSS, find_contacts из базы, check_emails «авто».\n"
+                    # ── 1. КТО ТЫ — идентичность всегда первой ──
+                    f"Ты — {_ag_name}. {_ag_role_str}.{_ag_desc_line}\n"
+                    + f"{_persona_voice}\n"
+                    + f"Твои инструменты: {_ag_caps_for_prompt}\n"
+                    # ── 2. НАПРАВЛЕНИЕ (не приказ, а ориентир) ──
+                    + f"\n📌 Направление от координатора: {_ag_task}\n"
+                    + (f"→ Цель: «{_ag_goal_title}»\n"
+                       f"   update_goal_progress — ТОЛЬКО goal_title='{_ag_goal_title}', только при реальном внешнем результате.\n"
+                       f"   НЕ обновляй за: поиск, RSS, find_contacts из базы, check_emails «авто».\n"
                        if _ag_goal_title else '')
-                    + (f"Рекомендованный старт: {_tool_hint} — оцени сам, подходит ли он, или выбери лучше исходя из задания.\n" if _tool_hint else '')
+                    + (f"→ Рекомендованный инструмент: {_tool_hint} — реши сам, подходит ли.\n" if _tool_hint else '')
+                    # ── 3. РАБОТА КОМАНДЫ — реагируй ──
+                    + _team_reactive_block
+                    # ── 4. ТВОЯ ЛИЧНАЯ ИСТОРИЯ ──
+                    + (f"\nТвоя история:\n{_agent_memory_block}\n" if _agent_memory_block else '')
+                    + _agent_seen_block
+                    + _no_repeat_block
+                    + _agent_failure_memory
+                    # ── 5. ТВОИ ИНТЕГРАЦИИ И КОНТЕКСТ ──
                     + _rap_note
                     + _dedup_hint
                     + _intg_live_block
-                    + (f"\n👤 Контекст пользователя (работай на ЕГО проект):\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
-                    + (f"\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag)) + "\n" if _user_rules_ag else '')
-                          + _runtime_quality_hints
-                    + f"\nАктивные цели (ИСПОЛЬЗУЙ ТОЧНЫЕ НАЗВАНИЯ для update_goal_progress — НЕ СПРАШИВАЙ пользователя):\n{_agent_goals_block}"
-                    f"\n⛔ ЗАПРЕЩЕНО писать 'просто скажи, как назвать цель' / 'скажи название цели' — название УЖЕ ЕСТЬ в блоке выше. Бери его напрямую.\n"
-                    + (f"\n\n📋 Люди, которых ты уже нашла и добавила в систему (это твоя прошлая работа, не новые находки):\n{_agent_contacts_block}\n"
-                       "   Подумай: если find_relevant_contacts_for_task вернул кого-то из этого списка — они уже обработаны. Ищи НОВЫХ людей с другими ключевыми словами, другой нишей или через другой канал." if _agent_contacts_block else '')
-                    + (f"\n\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
-                    + _agent_failure_memory
-                    + (f"\nТвоя история:\n{_agent_memory_block}" if _agent_memory_block else '')
-                    + _agent_seen_block
-                    + _no_repeat_block
+                    + (f"\n👤 Контекст проекта:\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
+                    + (f"\n📋 ПРАВИЛА (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag)) + "\n" if _user_rules_ag else '')
+                    + _runtime_quality_hints
+                    + f"\nАктивные цели (бери названия отсюда, не спрашивай):\n{_agent_goals_block}\n"
+                    + (f"\n📋 Контакты уже в системе (ищи НОВЫХ, не повторяй этих):\n{_agent_contacts_block}\n" if _agent_contacts_block else '')
+                    + (f"\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + (f"\n⚠️ Сломанные инструменты: {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
-                    + (f"\nУже сделано командой:\n{_prev_steps_context}" if _prev_steps_context else '')
-                    + (f"\nКоманда:\n" + '\n'.join(_team_lines_c)
-                       if _team_lines_c else '')
-                    + f"\n\nТы — {_ag_name} ({_ag_role_str}). Интеграции: {_ag_caps_for_prompt}"
-                    f"\n\n🧠 АЛГОРИТМ:"
-                    f"\n  ШАГ 0 — Сверь: посмотри на блок '🚫 НЕЛЬЗЯ повторять' — твой ответ не должен повторять суть предыдущих."
-                    f"\n  ШАГ 1 — Думай: чем МОЙ вклад отличается от предыдущих циклов? Выбери ДРУГОЙ источник, инструмент или цель."
-                    f"\n  ШАГ 2 — Действуй: вызови инструмент. Поиск → конвертируй в действие (save_contact/send_email/create_post/delegate)."
-                    f"\n  ШАГ 3 — Отчитайся: конкретно, с новыми фактами и цифрами из tool-ответов."
-                    f"\n\nПРИНЦИПЫ:"
-                    f"\n  — Поиск без действия = 0. Дойди до ACTION: send_email/create_post/publish/save_contact/delegate."
-                    f"\n  — Не ври: если tool не вызывал — не пиши 'сделал'. Честный отказ лучше фантазии."
-                    f"\n  — Поиск дал 0? Попробуй другой источник/формат прямо сейчас, не останавливайся."
-                    f"\n  — Не приглашай существующих пользователей — ищи НОВЫХ за пределами платформы."
-                    f"\n  — Опирайся на числа из контекста и tool-ответов, не додумывай данные."
-                    f"\n  — Пиши живо: от первого лица, с личной оценкой ('Я решил...', 'Обнаружил...', 'Рекомендую...')."
+                    # ── 6. РЕШАЙ САМ — ты специалист, не исполнитель ──
+                    + f"\n\n🧠 Ты видишь ситуацию. Видишь, что сделала команда. Видишь свои инструменты.\n"
+                    + f"Реши сам — что прямо сейчас важнее всего для продвижения цели?\n"
+                    + f"Действуй от своего имени: 'Я решил...', 'Обнаружил...', 'Значит делаю...'.\n"
+                    + f"Не пересказывай задание — ОТКРОЙ с личного суждения или сразу с действия.\n"
+                    + f"\n→ Честный факт из tool-ответа > красивая общая фраза.\n"
+                    + f"→ Поиск → сразу ACTION (send/save/post/publish). Поиск без действия = 0.\n"
+                    + f"→ Если 0 результатов — попробуй другой источник прямо сейчас, не останавливайся.\n"
+                    + (f"→ Сверь с блоком '🚫 НЕЛЬЗЯ повторять' — ответ обязан содержать новый факт.\n" if _no_repeat_block else '')
                 )
 
                 # Кросс-агентное общение: если предыдущие агенты уже выполнили шаги,
