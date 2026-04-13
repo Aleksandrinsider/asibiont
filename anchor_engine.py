@@ -10989,7 +10989,8 @@ class AnchorEngine:
             # Количество шагов которые просим у LLM-планировщика.
             # Гарантируем минимум 1 шаг на каждого реального агента + 1 на каждую цель.
             _n_real_agents = len([a for a in real_agents if getattr(a, 'id', 0) != 0])
-            _n_plan_steps = max(len(_goals[:5]), _n_real_agents, min(_n_agents * 2, 12))
+            # Динамическая формула: каждый агент + каждая цель получают шаг, но не более 20
+            _n_plan_steps = max(_n_real_agents + len(_goals[:5]), _n_real_agents, min(_n_agents * 2, 20))
 
             # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
@@ -13263,7 +13264,7 @@ class AnchorEngine:
                     _missing_scored.append((_h.get('results', 0), -_h.get('gap', 0), _mp))
                 _missing_scored.sort(key=lambda x: (x[0], x[1]))
 
-                for _, _, _mp in _missing_scored[:3]:
+                for _, _, _mp in _missing_scored[:max(3, _n_real_agents)]:
                     _goal_counts = {}
                     for _ps in _plan:
                         _gg = (_ps.get('goal') or '').strip()
@@ -13575,16 +13576,16 @@ class AnchorEngine:
             _minor_updates_summary = []
             _all_tools = []
             _prev_steps_context = ''  # результат предыдущих агентов передаётся следующим
-            # Масштабируем лимит шагов с размером команды: больше агентов → больше действий за цикл.
-            # Формула: max(6, min(agents + goals, 12)) — но не более 12 чтобы цикл не затягивался.
-            _MAX_DYNAMIC_STEPS = max(6, min(len(real_agents) + len(_goals), 12))
+            # Минимум len(real_agents) чтобы каждый агент мог выполнить хотя бы 1 шаг,
+            # максимум 20 чтобы цикл не затягивался при большой команде.
+            _MAX_DYNAMIC_STEPS = max(len(real_agents), 6, min(len(real_agents) + len(_goals), 20))
 
             _step_queue = list(_plan)  # Полный план — выполняем последовательно, динамически уточняя каждый шаг
             _current_run_agent_tools: dict = {}  # инструменты каждого агента в ТЕКУЩЕМ прогоне координатора
             _retry_done: dict = {}  # retry-флаги локальны для цикла (не persist между циклами)
 
             _executed = 0
-            while _executed < _MAX_DYNAMIC_STEPS:
+            while _executed < _MAX_DYNAMIC_STEPS or _executed < len(real_agents):
                 # ── Получаем следующий шаг ──
                 if _step_queue:
                     _step = _step_queue.pop(0)
