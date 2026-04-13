@@ -12389,8 +12389,11 @@ class AnchorEngine:
                 "  ❌ ПЛОХО: 'поищи контактов технических специалистов' (абстракция без деталей)\n"
                 "  ✓ ХОРОШО: 'Найди 5 CTO/Lead биотех-компаний через web_search site:linkedin.com OR site:habr.com, "
                 "сохрани через save_email_contact, отправь каждому персонализированное письмо с предложением тестирования платформы'\n"
-                "• НЕ ДУБЛИРУЙ ЗАДАЧИ МЕЖДУ АГЕНТАМИ: если Марк ищет через search_users/GitHub, Кристина ОБЯЗАНА делать другое (web_search LinkedIn, send_outreach_email, publish_to_telegram). Два агента с одинаковым поиском одной цели = потеря цикла. Разные агенты = разные шаги цепочки.\n"
-                "• НЕ используй слова: амбассадор, ambassador — вместо них: партнёр, эксперт, участник программы.\n"
+                "• НЕ ДУБЛИРУЙ ЗАДАЧИ МЕЖДУ АГЕНТАМИ: если один агент ищет через search_users/GitHub, другой ОБЯЗАН делать другое (web_search LinkedIn, send_outreach_email, publish_to_telegram). Два агента с одинаковым поиском одной цели = потеря цикла. Разные агенты = разные шаги цепочки.\n"
+                + f"• КАЖДЫЙ АГЕНТ ОБЯЗАН ПОЛУЧИТЬ МИНИМУМ 1 ЗАДАЧУ. В команде {_n_real_agents} агентов: {', '.join(p['name'] for p in _profiles)}.\n"
+                  f"  ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: каждое из этих имён присутствует в поле 'agent' хотя бы один раз.\n"
+                  f"  НЕДОПУСТИМО: план где {', '.join(p['name'] for p in _profiles[1:]) or 'кто-то'} вообще не упомянут — это гарантированный провал цикла.\n"
+                + "• НЕ используй слова: амбассадор, ambassador — вместо них: партнёр, эксперт, участник программы.\n"
                 + (f"• GitHub запросы уже использованные: {'; '.join(_used_github_queries[:4])}\n"
                    if _used_github_queries else '')
                 + "• Агент без интеграций: web_search, research_topic, create_post, save_note, DELEGATE[].\n"
@@ -12403,7 +12406,8 @@ class AnchorEngine:
                     for g in _goals[:5]
                 )
                 + "\n"
-                f"\nВерни JSON-массив из {_n_plan_steps} шагов (min 1 на активную цель).\n"
+                f"\nВерни JSON-массив из {_n_plan_steps} шагов — МИНИМУМ 1 шаг на каждого агента "
+                f"({', '.join(p['name'] for p in _profiles)}).\n"
                 "Формат каждого шага: agent=имя, tool=snake_case, goal=точное_название, "
                 "reason=почему именно этот подход (объяснение стратегического выбора, 1-2 предложения), "
                 "task=ПОЛНОЕ конкретное задание (повелительное наклонение, ≥50 слов: ЧТО сделать + КАК именно + ГДЕ искать / какие критерии + СКОЛЬКО + ожидаемый результат).\n"
@@ -13298,14 +13302,37 @@ class AnchorEngine:
                     _mp_last_action = ''
                     if _mp_hist:
                         _mp_last_action = f" Твоё последнее действие: «{_mp_hist[0][:120]}». Дай СЛЕДУЮЩИЙ шаг, не повтор."
-                    _fb_task = (
-                        f"Исходя из своей специализации ({_mp_spec}) и ТОЛЬКО доступных интеграций, "
-                        f"сделай один конкретный шаг по цели «{_target_goal}».{_mp_last_action} "
-                        f"Доведи до реального действия через свои инструменты."
-                    ) if _mp_spec else (
-                        f"Сделай один конкретный шаг по цели «{_target_goal}» через свои инструменты.{_mp_last_action} "
-                        f"Цель шага — реальное действие, а не только исследование."
-                    )
+
+                    # Формируем конкретную задачу на основе инструмента агента
+                    _g_short = _target_goal[:50]
+                    if _tool_fb == 'run_agent_action' and _mp_actions:
+                        _sa = _mp_actions[0]
+                        _fb_task = (
+                            f"Выполни run_agent_action(action='{_sa}') по цели «{_g_short}».{_mp_last_action} "
+                            f"Запусти действие '{_sa}', сохрани результат через save_note."
+                        )
+                    elif _tool_fb == 'find_relevant_contacts_for_task':
+                        _fb_task = (
+                            f"Найди 5 контактов целевой аудитории для цели «{_g_short}» через find_relevant_contacts_for_task.{_mp_last_action} "
+                            f"Критерии: соответствие теме цели, наличие контактных данных. Сохрани через save_email_contact."
+                        )
+                    elif _tool_fb == 'check_emails':
+                        _fb_task = (
+                            f"Проверь входящие письма через check_emails по цели «{_g_short}».{_mp_last_action} "
+                            f"Если есть ответы — reply_to_outreach_email с персональным ответом. "
+                            f"Если молчат >2 дней — send_follow_up_email с новым углом подачи."
+                        )
+                    elif _tool_fb == 'get_news_trends':
+                        _fb_task = (
+                            f"Получи свежие тренды через get_news_trends по теме цели «{_g_short}».{_mp_last_action} "
+                            f"Выбери 2-3 актуальных тренда, создай create_post с инсайтом для целевой аудитории."
+                        )
+                    else:
+                        _fb_task = (
+                            f"Проведи исследование через research_topic по теме цели «{_g_short}».{_mp_last_action} "
+                            f"Найди 3-5 конкретных факта/контакта/ресурса. Сохрани через save_note с анализом."
+                            + (f" Специализация: {_mp_spec}." if _mp_spec else '')
+                        )
 
                     _plan.append({
                         'agent': _mp['name'],
