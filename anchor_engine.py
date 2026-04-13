@@ -204,7 +204,7 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'notion': 'run_agent_action(action="add_page"|"update_page"|"query_db"|"get_page") — создание, ОБНОВЛЕНИЕ и поиск страниц/баз',
     'sheets': 'run_agent_action(action="append_row"|"update_cell"|"get_range"|"find_row") — чтение, запись, обновление и поиск данных в таблицах',
     'crypto': 'run_agent_action или http_api_request(url="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")',
-    'finance': 'get_stock_price(symbol, data_type) — Alpha Vantage; run_agent_action(action="get_price"|"get_quote"|"get_volume") — Finnhub/Polygon.io/Twelve Data; http_api_request — любой финансовый API',
+    'finance': 'get_stock_price(symbol, data_type) — ТОЛЬКО цена/объём/мультипликаторы акции. НЕ ИСПОЛЬЗОВАТЬ для поиска людей/инвесторов/сообществ — для этого web_search или LinkedIn. Alpha Vantage; run_agent_action(action="get_price"|"get_quote"|"get_volume") — Finnhub/Polygon.io/Twelve Data; http_api_request — любой финансовый API',
     'news': 'run_agent_action(action="get_news", query="..."), get_news_trends',
     'slack': 'run_agent_action(action="send_message") или http_api_request(url="https://slack.com/api/chat.postMessage", method="POST", auth_key="SLACK_TOKEN")',
     'social': 'run_agent_action(action="post_wall") или http_api_request — VK, Twitter и др. по REST API',
@@ -3158,6 +3158,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _github_rules = (
             "\nGitHub — МУЛЬТИФУНКЦИОНАЛЬНЫЙ КАНАЛ (не только поиск людей!):\n"
             "  • search_users + save_email_contact + send_outreach_email — поиск и outreach (query = ТОЛЬКО квалификаторы: language: followers: repos: location:)\n"
+            "    ⚠️ location: требует конкретную страну/город (location:russia, location:germany), НЕ location:world/europe\n"
+            "    ⚠️ topic: — только для search_repos, НЕ для search_users\n"
+            "    ⚠️ Авторов статей Habr/Medium НЕ ищи через search_users — они там не найдутся. Для Habr-авторов → web_search 'статья site:habr.com' и ищи email в профиле автора\n"
             "  • search_repos — анализ конкурентов, трендов, поиск потенциальных партнёров по их проектам\n"
             "  • create_issue — предложить коллаборацию в чужом репо, создать идею/баг в своём\n"
             "  • comment_on_issue — участвовать в обсуждениях = органический нетворкинг\n"

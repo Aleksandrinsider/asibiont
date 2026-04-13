@@ -1968,7 +1968,27 @@ class HybridAutonomousAgent:
                         _d_gh = _gh_get(f'/search/users?q={_up_gh.quote(_q_gh)}&per_page=10&page={_page_gh}')
                         _items_gh = _d_gh.get('items', [])
                         if not _items_gh:
-                            _gh_out = f'По запросу «{_q_gh}» пользователей GitHub не найдено.'
+                            # Диагностика: объясняем агенту ПОЧЕМУ запрос провалился
+                            _diag = []
+                            if 'location:world' in _q_gh.lower() or 'location:europe' in _q_gh.lower() or 'location:global' in _q_gh.lower():
+                                _diag.append('• location: — используй конкретную страну или город (location:russia, location:moscow, location:germany), не регион')
+                            if 'topic:' in _q_gh.lower():
+                                _diag.append('• topic: — это квалификатор репозиториев, не пользователей; для поиска людей используй language: followers: repos:')
+                            if any(w in _q_gh.lower() for w in ('habr', 'хабр', 'medium', 'dev.to', 'habrahabr')):
+                                _diag.append('• GitHub не индексирует авторов статей на Habr/Medium — для поиска авторов используй web_search "имя статьи site:habr.com" и ищи профиль автора')
+                            # Проверяем наличие незащищённых ключевых слов (без квалификатора)
+                            _valid_qualifiers = ('language:', 'followers:', 'repos:', 'location:', 'in:', 'created:', 'type:', 'user:')
+                            _words = _q_gh.split()
+                            _plain_words = [w for w in _words if not any(w.lower().startswith(q) for q in _valid_qualifiers)]
+                            if len(_plain_words) > 2:
+                                _diag.append(f'• Слова без квалификатора ({", ".join(_plain_words[:4])}) дают широкий поиск — упрости до 1-2 или добавь language:/location:/followers:')
+                            _diag_str = '\n'.join(_diag) if _diag else '• Попробуй упростить запрос: убери лишние слова, используй только language: followers: location: (конкретная страна)'
+                            _gh_out = (
+                                f'По запросу «{_q_gh}» пользователей GitHub не найдено.\n'
+                                f'Вероятные причины:\n{_diag_str}\n'
+                                f'Правильные примеры: "language:python followers:>10 location:russia" | "language:python machine-learning" | "bioinformatics followers:>5"\n'
+                                f'Альтернативы: web_search "bioinformatics developer github" или LinkedIn поиск через web_search site:linkedin.com'
+                            )
                         else:
                             _lines_gh = [f'Найдено {_d_gh.get("total_count", 0)} пользователей (стр.{_page_gh}):']
                             for _u_gh in _items_gh:
