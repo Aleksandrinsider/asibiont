@@ -10343,13 +10343,20 @@ class AnchorEngine:
                         f"  🏢 Корпоративные ({len(_uc_corp)}): "
                         + ', '.join(f"{n} <{e}>" for n, e in _uc_corp[:5])
                     )
-                # Нейтральная информация — LLM решает что делать на основе целей
-                _unsent_contacts_str = (
-                    f"\n📋 КОНТАКТЫ В БАЗЕ БЕЗ ПИСЬМА ({len(_unsent_contacts_data)} чел.):\n"
-                    + '\n'.join(_uc_lines)
-                    + f"\n  Доступно send_outreach_email (до {min(len(_unsent_contacts_data), 5)} за цикл)."
-                    + "\n  Решай сам: если цель требует поиска НОВЫХ — сначала ищи; "
+                # Force-action директива: ≥5 unsent контактов без активного batch → обязательная отправка
+                _uc_count = len(_unsent_contacts_data)
+                _force_send_note = (
+                    f"\n⚡ ДИРЕКТИВА: {_uc_count} контактов ждут первого письма. "
+                    "ОБЯЗАТЕЛЬНО назначь send_outreach_email в этом цикле — не планируй очередной поиск.\n"
+                    if _uc_count >= 5 else
+                    "\n  Решай сам: если цель требует поиска НОВЫХ — сначала ищи; "
                     "если цель — рассылка/outreach — пиши существующим.\n"
+                )
+                _unsent_contacts_str = (
+                    f"\n📋 КОНТАКТЫ В БАЗЕ БЕЗ ПИСЬМА ({_uc_count} чел.):\n"
+                    + '\n'.join(_uc_lines)
+                    + f"\n  Доступно send_outreach_email (до {min(_uc_count, 5)} за цикл)."
+                    + _force_send_note
                 )
             elif _email_sent > 0 and _goals:
                 # Все контакты уже получили письма — информируем координатора
@@ -11745,8 +11752,23 @@ class AnchorEngine:
                             _ag_name_res = 'агент'
                         _result_text = str(_aal_row.result or '').strip()
                         if _result_text and len(_result_text) > 20:
+                            # Извлекаем ключевые числа для структурированного резюме цикла
+                            import re as _re_nt
+                            _nt_found = _re_nt.search(
+                                r'(?:найдено|нашёл|нашла|найден|добавлено|новых)\s+(\d+)',
+                                _result_text, _re_nt.I,
+                            )
+                            _nt_sent = _re_nt.search(
+                                r'(?:отправлено|отправил|отправила|sent)\s+(\d+)',
+                                _result_text, _re_nt.I,
+                            )
+                            _nt_tags = ''
+                            if _nt_found:
+                                _nt_tags += f' [найдено:{_nt_found.group(1)}]'
+                            if _nt_sent:
+                                _nt_tags += f' [отправлено:{_nt_sent.group(1)}]'
                             _res_by_agent.setdefault(_ag_name_res, []).append({
-                                'title': (_aal_row.title or '')[:80],
+                                'title': ((_aal_row.title or '')[:80] + _nt_tags).strip(),
                                 'result': _result_text[:400],
                                 'type': _aal_row.activity_type or '',
                                 'ts': _aal_row.created_at,
@@ -12254,6 +12276,42 @@ class AnchorEngine:
             except Exception as _ca_err:
                 logger.debug('[COORD] cycle_assigns_ctx: %s', _ca_err)
 
+            # ── Subject → reply_rate: конверсия по темам писем за 30 дней ──
+            _subj_reply_str = ''
+            if _has_outreach_goals or _email_sent > 0:
+                try:
+                    from models import EmailOutreach as _EO_sr
+                    from sqlalchemy import func as _fn_sr, case as _case_sr
+                    _sr_rows = session.query(
+                        _fn_sr.left(_EO_sr.subject, 40).label('subj'),
+                        _fn_sr.count().label('sent'),
+                        _fn_sr.sum(_case_sr(
+                            [(_EO_sr.status == 'replied', 1)], else_=0
+                        )).label('replied'),
+                    ).filter(
+                        _EO_sr.user_id == user.id,
+                        _EO_sr.sent_at >= datetime.now(timezone.utc) - timedelta(days=30),
+                    ).group_by(_fn_sr.left(_EO_sr.subject, 40)).having(
+                        _fn_sr.count() >= 2
+                    ).order_by(
+                        _fn_sr.sum(_case_sr([(_EO_sr.status == 'replied', 1)], else_=0)).desc()
+                    ).limit(6).all()
+                    if _sr_rows:
+                        _sr_lines = []
+                        for _sr_r in _sr_rows:
+                            _sr_rate = int(_sr_r.replied / _sr_r.sent * 100) if _sr_r.sent else 0
+                            _sr_tag = '⭐' if _sr_rate >= 10 else ('❌' if _sr_r.sent >= 3 and _sr_rate == 0 else '')
+                            _sr_lines.append(
+                                f"  {_sr_tag} «{_sr_r.subj}»: {_sr_r.sent} отправлено, {_sr_r.replied} ответов ({_sr_rate}%)"
+                            )
+                        _subj_reply_str = (
+                            "📈 КОНВЕРСИЯ ПО ТЕМАМ ПИСЕМ (30 дней):\n"
+                            + '\n'.join(_sr_lines)
+                            + "\n→ Используй темы со ⭐. Избегай тем с ❌ (0 ответов при ≥3 отправках).\n\n"
+                        )
+                except Exception as _sr_err:
+                    logger.debug('[COORD] subject reply stats: %s', _sr_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
@@ -12263,6 +12321,7 @@ class AnchorEngine:
                 + _channel_stagnation_str
                 + _tool_outcome_str
                 + _email_analytics_str
+                + _subj_reply_str
                 + _situation_analysis_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
@@ -21743,6 +21802,31 @@ class AnchorEngine:
                         logger.warning(f"[ANCHOR] email_need_leads AI refine error: {_e_refine}")
 
                 from ai_integration.handlers import _auto_find_leads
+
+                # ── Исключаем домены, ранее давшие bounced ──
+                try:
+                    from models import EmailOutreach as _EO_bd
+                    _bd_emails = session.query(_EO_bd.recipient_email).filter(
+                        _EO_bd.user_id == user.id,
+                        _EO_bd.status == 'bounced',
+                        _EO_bd.recipient_email.isnot(None),
+                    ).limit(80).all()
+                    _bounce_domains = list({
+                        e[0].split('@')[-1].lower().strip()
+                        for e in _bd_emails
+                        if e[0] and '@' in e[0] and '.' in e[0].split('@')[-1]
+                    })
+                    if _bounce_domains:
+                        _effective_audience += (
+                            f"\n\nИСКЛЮЧАЙ email с этих доменов (ранее bounced): "
+                            + ', '.join(_bounce_domains[:20])
+                        )
+                        logger.info(
+                            "[ANCHOR] email_need_leads: excluding %d bounced domains", len(_bounce_domains)
+                        )
+                except Exception as _bd_err:
+                    logger.debug("[ANCHOR] bounce exclusion: %s", _bd_err)
+
                 count, msg = await _auto_find_leads(
                     campaign=campaign,
                     user=user,

@@ -12587,6 +12587,7 @@ async def send_outreach_email(
         # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
         RESEND_API_KEY = _platform_resend_key
         _personal_resend_from = ''
+        _smtp_creds_out = None  # SMTP credentials detected from agent keys
         try:
             from models import UserAgent as _UA_rs
             for _ag_rs in session.query(_UA_rs).filter(
@@ -12612,12 +12613,55 @@ async def send_outreach_email(
                         f'[EMAIL_OUTREACH] Using personal RESEND_API_KEY from agent {_ag_rs.name}'
                     )
                     break
+                # Detect SMTP credentials (Yandex / Mail.ru / Gmail app-password / custom)
+                if not _smtp_creds_out:
+                    if _env_rs.get('YANDEX_USER') and (
+                        _env_rs.get('YANDEX_PASSWORD') or _env_rs.get('YANDEX_PASS')
+                    ):
+                        _smtp_creds_out = {
+                            'host': 'smtp.yandex.ru', 'port': 587,
+                            'user': _env_rs['YANDEX_USER'],
+                            'pass': _env_rs.get('YANDEX_PASSWORD') or _env_rs.get('YANDEX_PASS', ''),
+                            'label': 'Яндекс',
+                        }
+                    elif _env_rs.get('MAILRU_USER') and (
+                        _env_rs.get('MAILRU_PASSWORD') or _env_rs.get('MAILRU_PASS')
+                    ):
+                        _smtp_creds_out = {
+                            'host': 'smtp.mail.ru', 'port': 587,
+                            'user': _env_rs['MAILRU_USER'],
+                            'pass': _env_rs.get('MAILRU_PASSWORD') or _env_rs.get('MAILRU_PASS', ''),
+                            'label': 'Mail.ru',
+                        }
+                    elif _env_rs.get('GMAIL_USER') and (
+                        _env_rs.get('GMAIL_APP_PASSWORD') or _env_rs.get('GMAIL_PASS') or _env_rs.get('GMAIL_PASSWORD')
+                    ):
+                        _smtp_creds_out = {
+                            'host': 'smtp.gmail.com', 'port': 587,
+                            'user': _env_rs['GMAIL_USER'],
+                            'pass': (
+                                _env_rs.get('GMAIL_APP_PASSWORD') or
+                                _env_rs.get('GMAIL_PASS') or
+                                _env_rs.get('GMAIL_PASSWORD', '')
+                            ),
+                            'label': 'Gmail SMTP',
+                        }
+                    elif _env_rs.get('SMTP_HOST') and _env_rs.get('SMTP_USER') and (
+                        _env_rs.get('SMTP_PASS') or _env_rs.get('SMTP_PASSWORD')
+                    ):
+                        _smtp_creds_out = {
+                            'host': _env_rs['SMTP_HOST'],
+                            'port': int(_env_rs.get('SMTP_PORT', '587')),
+                            'user': _env_rs['SMTP_USER'],
+                            'pass': _env_rs.get('SMTP_PASS') or _env_rs.get('SMTP_PASSWORD', ''),
+                            'label': 'SMTP',
+                        }
         except Exception as _rs_err:
             import logging as _log_rs2
             _log_rs2.getLogger(__name__).debug(f'[EMAIL_OUTREACH] Personal Resend lookup: {_rs_err}')
 
-        if not RESEND_API_KEY:
-            return " Resend API не настроен. Добавьте RESEND_API_KEY в настройки агента (API-ключи)."
+        if not RESEND_API_KEY and not _smtp_creds_out:
+            return " Email не настроен. Добавьте RESEND_API_KEY или SMTP-ключи (YANDEX_USER+YANDEX_PASSWORD, MAILRU_USER+MAILRU_PASSWORD, GMAIL_USER+GMAIL_APP_PASSWORD) в настройки агента."
 
         # Найти кампанию
         campaign = None
@@ -12864,65 +12908,108 @@ async def send_outreach_email(
         from config import WEB_APP_URL
         _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
         resend_id = None
-        try:
-            async with _aiohttp.ClientSession() as http:
-                # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
-                # _personal_resend_from: из user_api_keys агента (RESEND_FROM/SENDER_EMAIL/FROM_EMAIL)
-                from config import RESEND_FROM as _resend_from_cfg
-                _effective_resend_from = _personal_resend_from or _resend_from_cfg
-                _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
-                                 'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
-                _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
-                # Free-mail domains (gmail, yandex, mail.ru etc.) cannot be used as Resend
-                # sender — Resend requires a verified domain. Always use RESEND_FROM / platform
-                # default for free-mail senders. reply_to is set to the real user address below.
-                if _sender_domain in _free_domains:
-                    _from_addr = _effective_resend_from or 'outreach@asibiont.com'
-                else:
-                    _from_addr = campaign.sender_email or _effective_resend_from or 'outreach@asibiont.com'
-                from_header = f"{campaign.sender_name} <{_from_addr}>"
-                # reply_to указывает на реальный адрес пользователя (может быть gmail)
-                _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
-                # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
-                _body_with_footer = body + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
-                resp = await http.post(
-                    'https://api.resend.com/emails',
-                    headers={
-                        'Authorization': f'Bearer {RESEND_API_KEY}',
-                        'Content-Type': 'application/json',
-                    },
-                    json={
-                        'from': from_header,
-                        'to': [recipient_email],
-                        'reply_to': [_reply_to_addr] if _reply_to_addr else None,
-                        'subject': subject,
-                        'text': _body_with_footer,
-                        'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
-                    },
-                    timeout=_aiohttp.ClientTimeout(total=15),
+
+        # ── SMTP dispatch (Яндекс / Mail.ru / Gmail / custom SMTP) — приоритет перед Resend ──
+        _smtp_sent_out = False
+        if _smtp_creds_out:
+            import smtplib as _smtplib_out
+            from email.mime.text import MIMEText as _MimeOut
+            from email.mime.multipart import MIMEMultipart as _MMOut
+            import asyncio as _aio_out
+            import ssl as _ssl_out
+            _body_smtp = body + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
+            def _do_smtp_outreach():
+                _msg_out = _MMOut('alternative')
+                _msg_out['From'] = f"{campaign.sender_name} <{_smtp_creds_out['user']}>"
+                _msg_out['To'] = recipient_email
+                _msg_out['Subject'] = subject
+                try:
+                    _msg_out['List-Unsubscribe'] = f'<{_unsub_url}>'
+                    _msg_out['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+                except Exception:
+                    pass
+                _msg_out.attach(_MimeOut(_body_smtp, 'plain', 'utf-8'))
+                _ctx_out = _ssl_out.create_default_context()
+                with _smtplib_out.SMTP(_smtp_creds_out['host'], _smtp_creds_out['port'], timeout=30) as _srv:
+                    _srv.ehlo(); _srv.starttls(context=_ctx_out); _srv.ehlo()
+                    _srv.login(_smtp_creds_out['user'], _smtp_creds_out['pass'].replace(' ', ''))
+                    _srv.sendmail(_smtp_creds_out['user'], recipient_email, _msg_out.as_string())
+            _loop_out = _aio_out.get_running_loop()
+            try:
+                await _aio_out.wait_for(
+                    _loop_out.run_in_executor(None, _do_smtp_outreach), timeout=35.0
                 )
-                resp_data = await resp.json()
-                if resp.status in (200, 201):
-                    resend_id = resp_data.get('id')
-                    logger.info(f"[EMAIL_OUTREACH] Sent to {redact_email(recipient_email)}: {resend_id}")
-                    # Сбрасываем запись ошибки при успехе
-                    try:
-                        from .service_health import clear_error as _clr_svc
-                        _clr_svc('resend')
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
-                else:
-                    err = resp_data.get('message', str(resp_data))
-                    logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
-                    try:
-                        from .service_health import record_error as _rec_svc
-                        _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
-                    except Exception as _e:
-                        logger.debug("suppressed: %s", _e)
-                    return f" Ошибка Resend API: {err}"
-        except Exception as e:
-            logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
-            return f" Ошибка отправки: {str(e)}"
+                logger.info(
+                    f"[EMAIL_OUTREACH] Sent via SMTP ({_smtp_creds_out['label']}) to {redact_email(recipient_email)}"
+                )
+                _smtp_sent_out = True
+            except Exception as _smtp_out_err:
+                logger.warning(
+                    f"[EMAIL_OUTREACH] SMTP ({_smtp_creds_out['label']}) failed: {_smtp_out_err} — falling back to Resend"
+                )
+
+        if not _smtp_sent_out:
+            if not RESEND_API_KEY:
+                return " SMTP отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
+            try:
+                async with _aiohttp.ClientSession() as http:
+                    # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
+                    # _personal_resend_from: из user_api_keys агента (RESEND_FROM/SENDER_EMAIL/FROM_EMAIL)
+                    from config import RESEND_FROM as _resend_from_cfg
+                    _effective_resend_from = _personal_resend_from or _resend_from_cfg
+                    _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+                                     'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
+                    _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
+                    # Free-mail domains (gmail, yandex, mail.ru etc.) cannot be used as Resend
+                    # sender — Resend requires a verified domain. Always use RESEND_FROM / platform
+                    # default for free-mail senders. reply_to is set to the real user address below.
+                    if _sender_domain in _free_domains:
+                        _from_addr = _effective_resend_from or 'outreach@asibiont.com'
+                    else:
+                        _from_addr = campaign.sender_email or _effective_resend_from or 'outreach@asibiont.com'
+                    from_header = f"{campaign.sender_name} <{_from_addr}>"
+                    # reply_to указывает на реальный адрес пользователя (может быть gmail)
+                    _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
+                    # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
+                    _body_with_footer = body + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={
+                            'Authorization': f'Bearer {RESEND_API_KEY}',
+                            'Content-Type': 'application/json',
+                        },
+                        json={
+                            'from': from_header,
+                            'to': [recipient_email],
+                            'reply_to': [_reply_to_addr] if _reply_to_addr else None,
+                            'subject': subject,
+                            'text': _body_with_footer,
+                            'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
+                        },
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    resp_data = await resp.json()
+                    if resp.status in (200, 201):
+                        resend_id = resp_data.get('id')
+                        logger.info(f"[EMAIL_OUTREACH] Sent to {redact_email(recipient_email)}: {resend_id}")
+                        # Сбрасываем запись ошибки при успехе
+                        try:
+                            from .service_health import clear_error as _clr_svc
+                            _clr_svc('resend')
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                    else:
+                        err = resp_data.get('message', str(resp_data))
+                        logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
+                        try:
+                            from .service_health import record_error as _rec_svc
+                            _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                        return f" Ошибка Resend API: {err}"
+            except Exception as e:
+                logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
+                return f" Ошибка отправки: {str(e)}"
 
         # Anti-spam задержка между письмами (10 сек)
         import asyncio as _asyncio_delay
