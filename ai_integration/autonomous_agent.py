@@ -3287,7 +3287,7 @@ class HybridAutonomousAgent:
 
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
-            full_history = get_conversation_history(user_id, session=None, limit=6)
+            full_history = get_conversation_history(user_id, session=None, limit=20)
 
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
             # ВАЖНО: все дополнения идут в dynamic_context, НЕ в base_prompt!
@@ -3410,13 +3410,23 @@ class HybridAutonomousAgent:
             except Exception as e:
                 logger.warning(f"[SELF-LEARN] Preferences failed: {e}")
 
-            if len(full_history) > 8:
-                old_msgs = full_history[:-6]
-                history = full_history[-6:]
-                topics = CognitiveEngine.extract_conversation_topics(old_msgs)
-                if topics:
-                    _lbl = "PREVIOUSLY DISCUSSED" if user_lang == 'en' else "РАНЕЕ ОБСУЖДАЛИ"
-                    dynamic_context += f"\n\n[{_lbl}: {', '.join(topics)}]"
+            if len(full_history) > 14:
+                old_msgs = full_history[:-14]
+                history = full_history[-14:]
+                # Краткий дайджест: не просто слова, а реальные пары фраз из старых сообщений
+                _digest_pairs = []
+                for _om in old_msgs:
+                    _role_o = _om.get('role', '')
+                    _text_o = (_om.get('content', '') or '').strip()
+                    if _role_o == 'user' and _text_o:
+                        _digest_pairs.append(f'  👤 {_text_o[:100]}')
+                    elif _role_o == 'assistant' and _text_o:
+                        _digest_pairs.append(f'  🤖 {_text_o[:120]}')
+                if _digest_pairs:
+                    _lbl = 'EARLIER IN THIS CONVERSATION' if user_lang == 'en' else 'РАНЕЕ В ЭТОМ РАЗГОВОРЕ'
+                    dynamic_context += (f'\n\n[{_lbl}]\n'
+                                        + '\n'.join(_digest_pairs[-14:])  # последние 7 пар
+                                        + '\n→ Веди диалог непрерывно: помни договорённости и не начинай заново.')
             else:
                 history = full_history
 
@@ -3849,7 +3859,7 @@ class HybridAutonomousAgent:
                 _prev_ai_responses = []
                 for _h_msg in reversed(history):
                     if _h_msg.get('role') == 'assistant' and _h_msg.get('content'):
-                        _prev_ai_responses.append(_h_msg['content'][:150])
+                        _prev_ai_responses.append(_h_msg['content'][:300])
                     if len(_prev_ai_responses) >= 3:
                         break
                 if _prev_ai_responses:

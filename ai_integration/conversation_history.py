@@ -10,7 +10,7 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 30  # Keep last 30 messages (15 exchanges) for better context
+MAX_HISTORY_MESSAGES = 40  # Keep last 40 messages (20 exchanges) for cross-session continuity
 
 
 def _smart_truncate(content: str, role: str) -> str:
