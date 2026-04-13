@@ -14089,17 +14089,45 @@ class AnchorEngine:
                         _result_hint = _reason_suffix
                         if not _result_hint:
                             if _tool_hint in ('web_search', 'find_relevant_contacts_for_task',
-                                              'quick_topic_search', 'research_topic', 'save_email_contact'):
-                                _result_hint = ' Сохрани ключевые находки через save_note.'
+                                              'quick_topic_search', 'research_topic'):
+                                _result_hint = ' Сохрани найденные email через save_email_contact, инсайты — через save_note.'
+                            elif _tool_hint == 'save_email_contact':
+                                _result_hint = ' Сохрани каждый контакт с именем, email и источником.'
                             elif _tool_hint in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
                                 _result_hint = ' Опубликуй или передай пользователю через send_message_to_user.'
+                        # ── ЗАЧЕМ: берём goal из плана или «тянем» из первой активной цели ──
+                        # Координатор иногда не заполняет поле goal → фолбэк к целям из контекста
+                        _eff_goal_title = _ag_goal_title
+                        if not _eff_goal_title or len(_eff_goal_title.strip()) < 5:
+                            try:
+                                _eff_goal_title = next(
+                                    (g.get('title', '') for g in _goals[:1] if g.get('title', '').strip()),
+                                    '',
+                                )
+                            except Exception:
+                                pass
+                        # Шаг цепочки — обогащаем reason коротким контекстом где мы в воронке
+                        _chain_pos_hint = ''
+                        _tl_lower = (_tool_hint or '').lower()
+                        if _tl_lower in ('web_search', 'find_relevant_contacts_for_task', 'research_topic'):
+                            _chain_pos_hint = ' (поиск)'
+                        elif _tl_lower in ('save_email_contact',):
+                            _chain_pos_hint = ' (сохранение контакта)'
+                        elif _tl_lower in ('send_outreach_email', 'send_follow_up_email'):
+                            _chain_pos_hint = ' (отправка письма)'
+                        elif _tl_lower in ('reply_to_outreach_email',):
+                            _chain_pos_hint = ' (ответ на письмо)'
+                        elif _tl_lower in ('check_emails',):
+                            _chain_pos_hint = ' (проверка входящих)'
+                        elif _tl_lower in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
+                            _chain_pos_hint = ' (публикация)'
                         # ЗАЧЕМ: добавляем контекст цели чтобы поручение было 2 предложения, а не 1
                         # Для send_message_to_user — не оборачиваем в "следующий шаг по цели", звучит странно
                         if _tool_hint == 'send_message_to_user':
                             _asi_assign_text = f'{_ag_name}, сообщи пользователю о статусе цели и предложи варианты дальнейших действий.'
-                        elif _ag_goal_title and len(_ag_goal_title.strip()) > 5:
-                            _gt = _ag_goal_title.strip()[:55].rstrip('.,;')
-                            _asi_assign_text = f'{_ag_name}, следующий шаг по цели «{_gt}» — {_task_str}.{_result_hint}'
+                        elif _eff_goal_title and len(_eff_goal_title.strip()) > 5:
+                            _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
+                            _asi_assign_text = f'{_ag_name}, следующий шаг{_chain_pos_hint} по цели «{_gt}» — {_task_str}.{_result_hint}'
                         else:
                             _asi_assign_text = f'{_ag_name}, {_task_str}.{_result_hint}'
                     elif _step_reason:
