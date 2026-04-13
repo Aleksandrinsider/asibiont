@@ -6123,19 +6123,19 @@ except Exception as e:
                     {k:'CDEK_CLIENT_ID', label:'Client ID СДЭК API', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
                     {k:'CDEK_CLIENT_SECRET', label:'Client Secret', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'}
                 ],
-                hint: 'Личный кабинет СДЭК → Интеграция → API ключи. Или lk.cdek.ru/integration.',
-                code: `import urllib.request, json, os
+                hint: 'Личный кабинет СДЭК → Интеграция → API ключи. Или lk.cdek.ru/integration. Actions: track (трекинг), calculate_tariff (расчёт), create_order (заказ), list_offices (ПВЗ).',
+                code: `import urllib.request, urllib.parse, json, os
 CLIENT_ID = os.environ.get('CDEK_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('CDEK_CLIENT_SECRET', '')
+ACTION = os.environ.get('AGENT_ACTION', 'track')
 TRACKING = os.environ.get('AGENT_PARAM_TRACKING', '')
 try:
-    # Auth
     auth_data = 'grant_type=client_credentials&client_id=' + CLIENT_ID + '&client_secret=' + CLIENT_SECRET
     req = urllib.request.Request('https://api.cdek.ru/v2/oauth/token', data=auth_data.encode(), headers={'Content-Type': 'application/x-www-form-urlencoded'})
     with urllib.request.urlopen(req, timeout=10) as r:
         token = json.loads(r.read().decode()).get('access_token', '')
     hdrs = {'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}
-    if TRACKING:
+    if ACTION in ('track', 'get_order') and TRACKING:
         req = urllib.request.Request('https://api.cdek.ru/v2/orders?cdek_number=' + TRACKING, headers=hdrs)
         with urllib.request.urlopen(req, timeout=15) as r:
             d = json.loads(r.read().decode())
@@ -6151,10 +6151,225 @@ try:
             print('  Куда: ' + str(orders.get('to_location', {}).get('city', '?')))
         else:
             print('Посылка ' + TRACKING + ' не найдена.')
+    elif ACTION == 'calculate_tariff':
+        from_city = os.environ.get('AGENT_PARAM_FROM', 'Москва')
+        to_city = os.environ.get('AGENT_PARAM_TO', 'Екатеринбург')
+        weight = int(float(os.environ.get('AGENT_PARAM_WEIGHT', '1')) * 1000)
+        def get_city_code(city_name):
+            url = 'https://api.cdek.ru/v2/location/cities?city=' + urllib.parse.quote(city_name) + '&size=1'
+            r2 = urllib.request.Request(url, headers=hdrs)
+            with urllib.request.urlopen(r2, timeout=10) as resp:
+                cities = json.loads(resp.read().decode())
+            return cities[0].get('code') if cities else None
+        from_code = get_city_code(from_city)
+        to_code = get_city_code(to_city)
+        if not from_code or not to_code:
+            print('Ошибка: город не найден. from=' + from_city + ' to=' + to_city)
+        else:
+            calc_data = json.dumps({'from_location': {'code': from_code}, 'to_location': {'code': to_code}, 'packages': [{'weight': weight}]}).encode()
+            req = urllib.request.Request('https://api.cdek.ru/v2/calculator/tarifflist', data=calc_data, headers=hdrs)
+            with urllib.request.urlopen(req, timeout=15) as r:
+                result = json.loads(r.read().decode())
+            tariffs = result.get('tariff_codes', [])
+            if tariffs:
+                print('Тарифы СДЭК: ' + from_city + ' → ' + to_city + ' (' + str(weight/1000) + ' кг):')
+                for t in tariffs[:6]:
+                    print('  ' + t.get('tariff_name','?') + ': ' + str(t.get('delivery_sum','?')) + ' руб. | ' + str(t.get('period_min','?')) + '-' + str(t.get('period_max','?')) + ' дней')
+            else:
+                print('Тарифы не найдены: ' + from_city + ' → ' + to_city)
+    elif ACTION == 'create_order':
+        from_city = os.environ.get('AGENT_PARAM_FROM', 'Москва')
+        to_city = os.environ.get('AGENT_PARAM_TO', '')
+        name = os.environ.get('AGENT_PARAM_NAME', '')
+        phone = os.environ.get('AGENT_PARAM_PHONE', '')
+        address = os.environ.get('AGENT_PARAM_ADDRESS', '')
+        weight = int(float(os.environ.get('AGENT_PARAM_WEIGHT', '1')) * 1000)
+        tariff = int(os.environ.get('AGENT_PARAM_TARIFF', '137'))
+        if not name or not phone or not to_city or not address:
+            print('Ошибка: укажи params.name, params.phone, params.to, params.address')
+        else:
+            order_data = json.dumps({'tariff_code': tariff, 'from_location': {'city': from_city}, 'to_location': {'city': to_city, 'address': address}, 'recipient': {'name': name, 'phones': [{'number': phone}]}, 'packages': [{'number': '1', 'weight': weight, 'length': 10, 'width': 10, 'height': 10}]}).encode()
+            req = urllib.request.Request('https://api.cdek.ru/v2/orders', data=order_data, headers=hdrs)
+            with urllib.request.urlopen(req, timeout=20) as r:
+                result = json.loads(r.read().decode())
+            entity = result.get('entity', {})
+            print('OK: заказ СДЭК создан. UUID=' + entity.get('uuid','?') + ' Номер=' + entity.get('cdek_number','(присвоится позже)'))
+    elif ACTION == 'list_offices':
+        city = os.environ.get('AGENT_PARAM_CITY', 'Москва')
+        req_cc = urllib.request.Request('https://api.cdek.ru/v2/location/cities?city=' + urllib.parse.quote(city) + '&size=1', headers=hdrs)
+        with urllib.request.urlopen(req_cc, timeout=10) as r:
+            cities = json.loads(r.read().decode())
+        if cities:
+            code = cities[0].get('code', '')
+            req = urllib.request.Request('https://api.cdek.ru/v2/deliverypoints?city_code=' + str(code) + '&size=10', headers=hdrs)
+            with urllib.request.urlopen(req, timeout=15) as r:
+                offices = json.loads(r.read().decode())
+            if offices:
+                print('ПВЗ СДЭК в ' + city + ':')
+                for o in offices[:10]:
+                    addr = o.get('location', {}).get('address_full', o.get('location', {}).get('address', '?'))
+                    print('  ' + o.get('name','?') + ': ' + addr + ' | ' + o.get('work_time','?'))
+            else:
+                print('ПВЗ в ' + city + ' не найдено.')
+        else:
+            print('Город ' + city + ' не найден в базе СДЭК.')
     else:
-        print('Укажи трек-номер СДЭК для отслеживания.')
+        print('СДЭК API подключён. Actions: track tracking="..." | calculate_tariff from="Москва" to="..." weight="1" | create_order from="..." to="..." name="..." phone="+7..." address="..." | list_offices city="..."')
 except Exception as e:
     print('Ошибка СДЭК: ' + str(e))`
+            },
+            marinetraffic: {
+                name: 'MarineTraffic (суда / порты)',
+                fields: [
+                    {k:'MARINETRAFFIC_API_KEY', label:'API Key MarineTraffic', ph:'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', t:'password'}
+                ],
+                hint: 'marinetraffic.com → My API → API Credentials. Нужен тариф Extended (от $42/мес). Бесплатный план: 10 запросов/7 дней к /getvessel. Actions: track_vessel (по MMSI/IMO/названию), search_vessels, port_vessels, vessel_route.',
+                code: `import urllib.request, urllib.parse, json, os
+API_KEY = os.environ.get('MARINETRAFFIC_API_KEY', '')
+ACTION = os.environ.get('AGENT_ACTION', 'track_vessel')
+try:
+    def mt_get(endpoint, extra=''):
+        url = 'https://services.marinetraffic.com/api/' + endpoint + '/' + API_KEY + '/protocol:jsono' + extra
+        req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read().decode())
+    if ACTION == 'track_vessel':
+        mmsi = os.environ.get('AGENT_PARAM_MMSI', '')
+        imo = os.environ.get('AGENT_PARAM_IMO', '')
+        name = os.environ.get('AGENT_PARAM_NAME', '')
+        if mmsi:
+            d = mt_get('getvessel/v:3', '/mmsi:' + mmsi)
+        elif imo:
+            d = mt_get('getvessel/v:3', '/imo:' + imo)
+        elif name:
+            d = mt_get('getvessel/v:3', '/shipname:' + urllib.parse.quote(name))
+        else:
+            print('Укажи params.mmsi, params.imo или params.name для поиска судна')
+            raise SystemExit
+        vessels = d if isinstance(d, list) else [d]
+        for v in (vessels or [])[:3]:
+            if not v: continue
+            print('Судно: ' + v.get('SHIPNAME','?') + ' (' + v.get('FLAG','?') + ')')
+            print('  Позиция: ' + str(v.get('LAT','?')) + ', ' + str(v.get('LON','?')))
+            print('  Скорость: ' + str(v.get('SPEED','?')) + ' уз | Курс: ' + str(v.get('COURSE','?')) + 'deg')
+            print('  Назначение: ' + v.get('DESTINATION','?') + ' | Обновлено: ' + str(v.get('TIMESTAMP','?'))[:16])
+    elif ACTION == 'search_vessels':
+        name = os.environ.get('AGENT_PARAM_NAME', '')
+        if not name:
+            print('Укажи params.name для поиска судна по названию')
+        else:
+            d = mt_get('getvessel/v:3', '/shipname:' + urllib.parse.quote(name))
+            vessels = d if isinstance(d, list) else [d]
+            print('Найдено по запросу "' + name + '": ' + str(len(vessels)) + ' судов')
+            for v in vessels[:5]:
+                if v: print('  ' + v.get('SHIPNAME','?') + ' | MMSI: ' + str(v.get('MMSI','?')) + ' | Флаг: ' + v.get('FLAG','?') + ' | Тип: ' + v.get('SHIPTYPE','?'))
+    elif ACTION == 'port_vessels':
+        port = os.environ.get('AGENT_PARAM_PORT', '')
+        if not port:
+            print('Укажи UNLOCODE порта: напр. RULED (Деловой порт), RUMO (Мурманск), RURNS (Новороссийск)')
+        else:
+            import datetime
+            today = datetime.date.today().strftime('%Y-%m-%d')
+            d = mt_get('getexpectedarrivals/v:1', '/portid:' + port + '/fromdate:' + today)
+            vessels = d if isinstance(d, list) else []
+            if vessels:
+                print('Ожидаемые суда в порту ' + port + ':')
+                for v in vessels[:10]:
+                    print('  ' + v.get('SHIPNAME','?') + ' (' + v.get('FLAG','?') + ') — ETA: ' + str(v.get('ETA','?'))[:16] + ' | тип: ' + v.get('SHIPTYPE','?'))
+            else:
+                print('Нет данных об ожидаемых судах в порту ' + port)
+    elif ACTION == 'vessel_route':
+        mmsi = os.environ.get('AGENT_PARAM_MMSI', '')
+        if not mmsi:
+            print('Укажи params.mmsi для получения маршрута')
+        else:
+            d = mt_get('exportroutes/v:1', '/mmsi:' + mmsi + '/days:7')
+            points = d if isinstance(d, list) else []
+            print('Маршрут MMSI ' + mmsi + ' за 7 дней: ' + str(len(points)) + ' точек')
+            for p in points[:5]:
+                print('  ' + str(p.get('TIMESTAMP','?'))[:16] + ' | порт: ' + p.get('PORT_ID','?'))
+    else:
+        print('MarineTraffic подключён. Actions:')
+        print('  track_vessel mmsi="..." / imo="..." / name="..." — позиция и статус судна')
+        print('  search_vessels name="..." — поиск судна по названию')
+        print('  port_vessels port="RULED" — ожидаемые суда в порту (UNLOCODE)')
+        print('  vessel_route mmsi="..." — маршрут судна за 7 дней')
+except Exception as e:
+    print('Ошибка MarineTraffic: ' + str(e))`
+            },
+            pochta_russia: {
+                name: 'Почта России',
+                fields: [
+                    {k:'POCHTA_ACCESS_TOKEN', label:'Access Token (otpravka.pochta.ru)', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'password'},
+                    {k:'POCHTA_USER_TOKEN', label:'User Token (base64 из login:password)', ph:'dXNlcjpwYXNz...', t:'password'}
+                ],
+                hint: '1. Зарегистрируйтесь на otpravka.pochta.ru.\n2. Личный кабинет → Настройки → API → Получить токен доступа (Access Token).\n3. User Token = base64(email:пароль) — в терминале: echo -n "email@mail.ru:пароль" | base64\nActions: track (трекинг), calculate_tariff (расчёт стоимости), normalize_address (нормализация адреса).',
+                code: `import urllib.request, json, os, base64
+ACCESS_TOKEN = os.environ.get('POCHTA_ACCESS_TOKEN', '')
+USER_TOKEN = os.environ.get('POCHTA_USER_TOKEN', '')
+ACTION = os.environ.get('AGENT_ACTION', 'track')
+TRACKING = os.environ.get('AGENT_PARAM_TRACKING', '')
+def pochta_hdrs():
+    return {
+        'Authorization': 'AccessToken ' + ACCESS_TOKEN,
+        'X-User-Authorization': 'Basic ' + USER_TOKEN,
+        'Content-Type': 'application/json;charset=UTF-8',
+        'Accept': 'application/json;charset=UTF-8'
+    }
+try:
+    if ACTION in ('track', 'track_parcel') and TRACKING:
+        url = 'https://otpravka-api.pochta.ru/1.0/tracking/single?barcode=' + TRACKING
+        req = urllib.request.Request(url, headers=pochta_hdrs())
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode())
+        ops = d.get('operationHistoryData', {}).get('historyRecord', [])
+        if ops:
+            print('Почта России: ' + TRACKING)
+            for op in ops[-5:]:
+                nm = op.get('operationParameters', {}).get('operType', {}).get('name', '?')
+                dt = op.get('operationParameters', {}).get('operDate', '?')[:16]
+                city = op.get('addressParameters', {}).get('operationAddress', {}).get('description', '?')
+                print('  [' + dt + '] ' + nm + ' — ' + city)
+        else:
+            print('История для ' + TRACKING + ' пуста. Проверьте токены в настройках агента.')
+    elif ACTION == 'calculate_tariff':
+        from_idx = os.environ.get('AGENT_PARAM_FROM', '101000')
+        to_idx = os.environ.get('AGENT_PARAM_TO', '630000')
+        weight = int(float(os.environ.get('AGENT_PARAM_WEIGHT', '0.5')) * 1000)
+        mail_type = os.environ.get('AGENT_PARAM_TYPE', 'POSTAL_PARCEL')
+        data = json.dumps({'index-from': from_idx, 'index-to': to_idx, 'mail-category': 'ORDINARY', 'mail-type': mail_type, 'mass': weight, 'fragile': False, 'with-order-of-notice': False}).encode()
+        req = urllib.request.Request('https://otpravka-api.pochta.ru/1.0/tariff', data=data, headers=pochta_hdrs(), method='POST')
+        with urllib.request.urlopen(req, timeout=15) as r:
+            d = json.loads(r.read().decode())
+        total = d.get('total-rate', 0) / 100
+        dmin = d.get('delivery-time', {}).get('min-days', '?')
+        dmax = d.get('delivery-time', {}).get('max-days', '?')
+        print('Тариф Почта России (' + mail_type + '):')
+        print('  Индекс: ' + from_idx + ' → ' + to_idx + ' | Вес: ' + str(weight/1000) + ' кг')
+        print('  Стоимость: ' + str(total) + ' руб. | Срок: ' + str(dmin) + '-' + str(dmax) + ' дней')
+    elif ACTION == 'normalize_address':
+        address = os.environ.get('AGENT_PARAM_ADDRESS', '')
+        if not address:
+            print('Укажи params.address для нормализации')
+        else:
+            data = json.dumps([{'id': '1', 'original-address': address}]).encode()
+            req = urllib.request.Request('https://otpravka-api.pochta.ru/1.0/clean/address', data=data, headers=pochta_hdrs(), method='POST')
+            with urllib.request.urlopen(req, timeout=15) as r:
+                d = json.loads(r.read().decode())
+            if d and isinstance(d, list):
+                a = d[0]
+                print('Нормализованный адрес:')
+                print('  Регион: ' + a.get('region', ''))
+                print('  Место: ' + (a.get('place', '') or a.get('city', '')))
+                print('  Улица: ' + a.get('street', '') + ' ' + a.get('house', ''))
+                print('  Индекс: ' + str(a.get('index', '?')) + ' | Качество: ' + a.get('quality-code', '?'))
+    else:
+        print('Почта России API подключена. Actions:')
+        print('  track tracking="..." — отследить посылку (14 цифр или RM/CP...RU)')
+        print('  calculate_tariff from="101000" to="630000" weight="0.5" type="POSTAL_PARCEL" — расчёт тарифа')
+        print('  normalize_address address="Москва Тверская 1" — нормализация с индексом')
+except Exception as e:
+    print('Ошибка Почта России: ' + str(e))`
             },
             whatsapp: {
                 name: 'WhatsApp Business',
@@ -6564,31 +6779,30 @@ except Exception as e:
                 fields: [
                     {k:'GOOGLE_MAPS_API_KEY', label:'API Key (Google Maps Platform)', ph:'AIzaSy...', t:'text'}
                 ],
-                hint: 'console.cloud.google.com → APIs → Places API / Geocoding API → включить → Credentials → Create API Key.',
-                code: `import urllib.request, json, os
+                hint: 'console.cloud.google.com → APIs → включить: Places API, Geocoding API, Directions API, Distance Matrix API → Credentials → Create API Key. Actions: search (поиск мест), geocode (координаты), route (маршрут), distance_matrix (расстояние/время).',
+                code: `import urllib.request, urllib.parse, json, os
 API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 ACTION = os.environ.get('AGENT_ACTION', 'search')
 QUERY = os.environ.get('AGENT_PARAM_QUERY', '')
+BASE = 'https://maps.googleapis.com/maps/api/'
 try:
     if ACTION == 'search' and QUERY:
-        url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?query=' + urllib.parse.quote(QUERY) + '&key=' + API_KEY + '&language=ru'
-        import urllib.parse
+        url = BASE + 'place/textsearch/json?query=' + urllib.parse.quote(QUERY) + '&key=' + API_KEY + '&language=ru'
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read().decode())
         results = data.get('results', [])[:5]
         if results:
             for p in results:
-                name = p.get('name', '')
+                nm = p.get('name', '')
                 addr = p.get('formatted_address', '')
                 rating = p.get('rating', '-')
                 total = p.get('user_ratings_total', 0)
-                print(name + ' | ' + addr + ' | рейтинг: ' + str(rating) + ' (' + str(total) + ' отзывов)')
+                print(nm + ' | ' + addr + ' | рейтинг: ' + str(rating) + ' (' + str(total) + ' отзывов)')
         else:
             print('Ничего не найдено по запросу: ' + QUERY)
     elif ACTION == 'geocode' and QUERY:
-        import urllib.parse
-        url = 'https://maps.googleapis.com/maps/api/geocode/json?address=' + urllib.parse.quote(QUERY) + '&key=' + API_KEY + '&language=ru'
+        url = BASE + 'geocode/json?address=' + urllib.parse.quote(QUERY) + '&key=' + API_KEY + '&language=ru'
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read().decode())
@@ -6599,8 +6813,65 @@ try:
             print('Координаты: ' + str(loc.get('lat', '')) + ', ' + str(loc.get('lng', '')))
         else:
             print('Адрес не найден: ' + QUERY)
+    elif ACTION == 'route':
+        origin = os.environ.get('AGENT_PARAM_ORIGIN', '')
+        destination = os.environ.get('AGENT_PARAM_DESTINATION', '')
+        mode = os.environ.get('AGENT_PARAM_MODE', 'driving')
+        if not origin or not destination:
+            print('Укажи params.origin и params.destination для построения маршрута')
+        else:
+            url = BASE + 'directions/json?origin=' + urllib.parse.quote(origin) + '&destination=' + urllib.parse.quote(destination) + '&mode=' + mode + '&key=' + API_KEY + '&language=ru'
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read().decode())
+            routes = data.get('routes', [])
+            if routes:
+                leg = routes[0].get('legs', [{}])[0]
+                dist = leg.get('distance', {}).get('text', '?')
+                dur = leg.get('duration', {}).get('text', '?')
+                summary = routes[0].get('summary', '')
+                print('Маршрут: ' + origin + ' → ' + destination + ' (' + mode + ')')
+                print('  Расстояние: ' + dist + ' | Время в пути: ' + dur)
+                if summary:
+                    print('  Через: ' + summary)
+                steps = leg.get('steps', [])[:3]
+                for s in steps:
+                    import re as _re
+                    txt = _re.sub(r'<[^>]+>', '', s.get('html_instructions', ''))
+                    print('  • ' + txt + ' (' + s.get('distance', {}).get('text', '?') + ')')
+            else:
+                print('Маршрут не найден: ' + origin + ' → ' + destination)
+    elif ACTION == 'distance_matrix':
+        origins = os.environ.get('AGENT_PARAM_ORIGINS', '')
+        destinations = os.environ.get('AGENT_PARAM_DESTINATIONS', '')
+        mode = os.environ.get('AGENT_PARAM_MODE', 'driving')
+        if not origins or not destinations:
+            print('Укажи params.origins и params.destinations (через | для нескольких)')
+        else:
+            url = BASE + 'distancematrix/json?origins=' + urllib.parse.quote(origins) + '&destinations=' + urllib.parse.quote(destinations) + '&mode=' + mode + '&key=' + API_KEY + '&language=ru'
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=15) as r:
+                data = json.loads(r.read().decode())
+            rows = data.get('rows', [])
+            dest_addrs = data.get('destination_addresses', [])
+            orig_addrs = data.get('origin_addresses', [])
+            if rows:
+                print('Матрица расстояний (' + mode + '):')
+                for i, row in enumerate(rows):
+                    orig_lbl = orig_addrs[i] if i < len(orig_addrs) else origins
+                    for j, el in enumerate(row.get('elements', [])):
+                        dest_lbl = dest_addrs[j] if j < len(dest_addrs) else destinations
+                        dist = el.get('distance', {}).get('text', '?')
+                        dur = el.get('duration', {}).get('text', '?')
+                        print('  ' + orig_lbl + ' → ' + dest_lbl + ': ' + dist + ' / ' + dur)
+            else:
+                print('Нет данных для: ' + origins + ' → ' + destinations)
     else:
-        print('Google Maps подключён. Actions: search (поиск мест), geocode (геокодирование). Параметр: query.')
+        print('Google Maps подключён. Actions:')
+        print('  search query="..." — поиск мест (Places API)')
+        print('  geocode query="адрес" — координаты по адресу')
+        print('  route origin="..." destination="..." mode="driving/walking/transit" — маршрут')
+        print('  distance_matrix origins="..." destinations="..." — матрица расстояний')
 except Exception as e:
     print('Ошибка Google Maps: ' + str(e))`
             },
@@ -7500,6 +7771,8 @@ except Exception as e:
                             <option value="tutu">Tutu.ru (ЖД билеты)</option>
                             <option value="flightradar">Flightradar24 (рейсы)</option>
                             <option value="cdek">СДЭК (доставка)</option>
+                            <option value="marinetraffic">MarineTraffic (суда / порты)</option>
+                            <option value="pochta_russia">Почта России (трекинг / тарифы)</option>
                             <option disabled style="color:#9CA3AF;font-size:11px;font-weight:600;">Финансы / Календарь</option>
                             <option value="google_calendar">Google Calendar</option>
                             <option value="tinkoff">Тинькофф Инвестиции</option>

@@ -169,6 +169,8 @@ _CAP_CATEGORY_MAP: list[tuple[tuple[str, ...], str]] = [
     (('сдэк', 'cdek', 'sdek'), 'marketplace'),
     (('aviasales',), 'script'),
     (('tutu',), 'script'),
+    (('marinetraffic', 'marine traffic', 'судно', 'vessel', 'ммси', 'mmsi', 'порт (судо'), 'marinetraffic'),
+    (('почта росс', 'почта рф', 'pochta', 'otpravka', 'otpravka.pochta'), 'pochta'),
     # Анализ данных (pandas и т.п.)
     (('pandas', 'анализ данных'), 'analytics'),
     # Google API (общий, без конкретного сервиса)
@@ -186,6 +188,7 @@ _CAP_CATEGORY_NAMES: dict[str, str] = {
     'storage': 'Облачное хранилище', 'analytics': 'Аналитика', 'ms_teams': 'MS Teams',
     'automation': 'Webhook/Автоматизация', 'database': 'БД',
     'hr': 'HR / Работа', 'advertising': 'Реклама', 'scraping': 'Web Scraping', 'ai_api': 'AI/LLM API',
+    'marinetraffic': 'MarineTraffic (суда)', 'pochta': 'Почта России',
 }
 
 # Инструменты по категории (для координатора)
@@ -220,6 +223,8 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'advertising': 'run_agent_action(action="get_campaigns"|"update_campaign"|"get_stats"|"create_campaign") — создание, мониторинг и оптимизация рекламных кампаний',
     'scraping': 'run_agent_action — скрейпит URL по CSS-селектору',
     'ai_api': 'run_agent_action(action="ask"|"analyze") или http_api_request — любой AI API (OpenAI, Anthropic и др.)',
+    'marinetraffic': 'run_agent_action(action="track_vessel" mmsi="..." / imo="..." / name="...") — позиция и статус судна; action="port_vessels" port="UNLOCODE" — ожидаемые суда в порту; action="vessel_route" mmsi="..." — маршрут',
+    'pochta': 'run_agent_action(action="track" tracking="трек-номер") — история посылки; action="calculate_tariff" from="101000" to="..." weight="0.5" — тариф; action="normalize_address" address="..." — нормализация адреса',
 }
 
 # ── Универсальная модель: единый источник правды для целей × интеграций ──
@@ -254,6 +259,7 @@ _CAP_TO_SCORE: dict[str, str] = {
     'database': 'analytics', 'hr': 'hr',
     'advertising': 'content', 'scraping': 'search',
     'ai_api': 'search',
+    'marinetraffic': 'search', 'pochta': 'marketplace',
 }
 
 # Шаблоны действий по категории интеграции (scoring category).
@@ -366,6 +372,14 @@ _CAT_ACTIONS: dict[str, list[str]] = {
     ],
     'news': [
         '{name}, проверь свежие новости через run_agent_action(action="get_news") по теме «{goal}» — выдели 3-5 наиболее релевантных, сохрани через save_note с кратким резюме каждой.',
+    ],
+    'marinetraffic': [
+        '{name}, отследи суда по «{goal}» через run_agent_action(action="track_vessel") — укажи MMSI, IMO или название судна. Позиция, скорость, порт назначения.',
+        '{name}, проверь ожидаемые суда в порту через run_agent_action(action="port_vessels" port="UNLOCODE") — сохрани через save_note ключевые прибытия по теме «{goal}».',
+    ],
+    'pochta': [
+        '{name}, отследи посылку по «{goal}» через run_agent_action(action="track" tracking="трек-номер") — история операций с датами и местами.',
+        '{name}, рассчитай тариф доставки Почты России через run_agent_action(action="calculate_tariff") — укажи индексы и вес посылки для «{goal}».',
     ],
 }
 

@@ -2247,6 +2247,12 @@ class HybridAutonomousAgent:
                         'search_flights': 'travel', 'get_tickets': 'travel',
                         'aviasales_search': 'travel', 'tutu_search': 'travel',
                         'flightradar_status': 'travel',
+                        # MarineTraffic (судоходство)
+                        'track_vessel': 'marinetraffic', 'search_vessels': 'marinetraffic',
+                        'port_vessels': 'marinetraffic', 'vessel_route': 'marinetraffic',
+                        # Почта России
+                        'pochta_track': 'pochta', 'pochta_tariff': 'pochta',
+                        'normalize_address': 'pochta', 'calculate_tariff_pochta': 'pochta',
                         # Google Calendar
                         'create_event': 'gcalendar', 'list_events': 'gcalendar',
                         'update_event': 'gcalendar', 'delete_event': 'gcalendar',
@@ -2346,6 +2352,8 @@ class HybridAutonomousAgent:
                         'tinkoff': ('тинькофф', 'tinkoff'),
                         'findata': ('alphavantage', 'finnhub', 'twelvedata', 'polygon', 'yahoo finance', 'fmp'),
                         'cdek': ('сдэк', 'cdek'),
+                        'marinetraffic': ('marinetraffic', 'marine traffic', 'судно', 'суда', 'морск', 'порт', 'vessel', 'mmsi'),
+                        'pochta': ('почта росс', 'почта рф', 'pochta', 'otpravka', 'otpravka.pochta'),
                         'whatsapp': ('whatsapp', 'ватсап'),
                         'onec': ('1c ', '1с ', 'onec', '1c_', '1с_'),
                         'gdrive': ('google drive', 'gdrive', 'googledr'),
