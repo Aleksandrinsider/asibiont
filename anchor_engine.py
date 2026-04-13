@@ -8621,13 +8621,7 @@ class AnchorEngine:
                                 if not any(rt in _tu_lower for rt in _req_tools):
                                     _halluc_warns.append(_ch_label)
                         if _halluc_warns:
-                            # Добавляем пометку что действие не подтверждено инструментом
-                            _halluc_note = (
-                                '\n⚠️ Примечание: публикация в '
-                                + ', '.join(_halluc_warns)
-                                + ' не подтверждена — возможно, произошла ошибка при отправке.'
-                            )
-                            _cleaned_result = _cleaned_result.rstrip('.!?… ') + '.' + _halluc_note
+                            # Только логируем — пользователю не показываем технический артефакт
                             logger.warning(
                                 "[ANCHOR-AUTOPILOT] HALLUCINATION detected user=%d agent=%s claims=%s tools=%s",
                                 user.id, _chosen_name, _halluc_warns, _tools_used,
@@ -14456,7 +14450,17 @@ class AnchorEngine:
                 )
                 # Личная история этого агента (не глобальная) — что он сам уже делал
                 _this_agent_hist = _per_agent_history.get(_ag_name, [])
-                _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:5])
+                _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:8])
+
+                # Последние текстовые ответы пользователю — строгий запрет на повтор сути
+                _last_result_texts = [h for h in _this_agent_hist[:12] if '→ РЕЗУЛЬТАТ' in h][:3]
+                _no_repeat_block = (
+                    "\n\n🚫 НЕЛЬЗЯ повторять — твои последние 3 ответа (сверь ПЕРЕД отправкой):\n"
+                    + '\n'.join(f"  {t[:200]}" for t in _last_result_texts)
+                    + "\n  → Новый ответ ОБЯЗАН содержать СВЕЖИЙ ФАКТ (имя, число, ссылку), "
+                    "которого нет ни в одной строке выше!\n"
+                    if _last_result_texts else ''
+                )
 
                 _repetition_warning = ''
 
@@ -14776,21 +14780,24 @@ class AnchorEngine:
                     + _agent_failure_memory
                     + (f"\nТвоя история:\n{_agent_memory_block}" if _agent_memory_block else '')
                     + _agent_seen_block
+                    + _no_repeat_block
                     + (f"\n⚠️ Сломанные инструменты: {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')
                     + (f"\nУже сделано командой:\n{_prev_steps_context}" if _prev_steps_context else '')
                     + (f"\nКоманда:\n" + '\n'.join(_team_lines_c)
                        if _team_lines_c else '')
                     + f"\n\nТы — {_ag_name} ({_ag_role_str}). Интеграции: {_ag_caps_for_prompt}"
                     f"\n\n🧠 АЛГОРИТМ:"
-                    f"\n  ШАГ 1 — Думай: чем МОЙ вклад отличается от предыдущих циклов? Какой НОВЫЙ подход?"
+                    f"\n  ШАГ 0 — Сверь: посмотри на блок '🚫 НЕЛЬЗЯ повторять' — твой ответ не должен повторять суть предыдущих."
+                    f"\n  ШАГ 1 — Думай: чем МОЙ вклад отличается от предыдущих циклов? Выбери ДРУГОЙ источник, инструмент или цель."
                     f"\n  ШАГ 2 — Действуй: вызови инструмент. Поиск → конвертируй в действие (save_contact/send_email/create_post/delegate)."
-                    f"\n  ШАГ 3 — Отчитайся: конкретно, с фактами и цифрами из tool-ответов. Без фантазий."
+                    f"\n  ШАГ 3 — Отчитайся: конкретно, с новыми фактами и цифрами из tool-ответов."
                     f"\n\nПРИНЦИПЫ:"
                     f"\n  — Поиск без действия = 0. Дойди до ACTION: send_email/create_post/publish/save_contact/delegate."
                     f"\n  — Не ври: если tool не вызывал — не пиши 'сделал'. Честный отказ лучше фантазии."
                     f"\n  — Поиск дал 0? Попробуй другой источник/формат прямо сейчас, не останавливайся."
                     f"\n  — Не приглашай существующих пользователей — ищи НОВЫХ за пределами платформы."
                     f"\n  — Опирайся на числа из контекста и tool-ответов, не додумывай данные."
+                    f"\n  — Пиши живо: от первого лица, с личной оценкой ('Я решил...', 'Обнаружил...', 'Рекомендую...')."
                 )
 
                 # Кросс-агентное общение: если предыдущие агенты уже выполнили шаги,
