@@ -21608,6 +21608,10 @@ class AnchorEngine:
 
                     except Exception as _compose_err:
                         logger.error(f"[ANCHOR] Compose/send error for {redact_email(email)}: {_compose_err}")
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                         _draft_failures.append(f'{d_obj.id}:exception:{str(_compose_err)[:60]}')
                         continue
 

@@ -5411,7 +5411,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
     """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
     global _SHARED_AI_SESSION
     _max_attempts = 2
-    _timeouts = [30, 45]
+    _timeouts = [12, 20]
     for _att in range(_max_attempts):
       try:
         if os.getenv('PYTEST_CURRENT_TEST'):

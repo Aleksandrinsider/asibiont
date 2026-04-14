@@ -12742,7 +12742,10 @@ async def send_outreach_email(
             from sqlalchemy import text as _adv_text
             session.execute(_adv_text("SELECT pg_advisory_xact_lock(:lid)"), {'lid': _recv_lock_id})
         except Exception:
-            pass  # SQLite fallback — advisory lock недоступен
+            try:
+                session.rollback()
+            except Exception:
+                pass  # SQLite fallback — advisory lock недоступен
 
         # ── FAST AAL DEDUP: если этому адресу уже отправлено письмо за последние 10 мин → стоп ──
         # Ловит дубли даже если advisory lock не помог (SQLite или старая транзакция уже закрыта)
@@ -12772,6 +12775,10 @@ async def send_outreach_email(
                 recipient_email=recipient_email,
             ).with_for_update(skip_locked=False).first()
         except Exception:
+            try:
+                session.rollback()
+            except Exception:
+                pass
             # SQLite fallback
             existing = session.query(EmailOutreach).filter_by(
                 campaign_id=campaign.id,
