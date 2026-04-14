@@ -12930,6 +12930,12 @@ async def send_outreach_email(
         _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
         resend_id = None
 
+        # Подпись отправителя в теле (если ИИ не добавил сам)
+        _sig_name = (campaign.sender_name or '').strip()
+        _body_signed = body
+        if _sig_name and _sig_name.lower() not in body.lower()[-200:]:
+            _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
+
         # ── SMTP dispatch (Яндекс / Mail.ru / Gmail / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False
         if _smtp_creds_out:
@@ -12938,7 +12944,7 @@ async def send_outreach_email(
             from email.mime.multipart import MIMEMultipart as _MMOut
             import asyncio as _aio_out
             import ssl as _ssl_out
-            _body_smtp = body + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
+            _body_smtp = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
             def _do_smtp_outreach():
                 _msg_out = _MMOut('alternative')
                 _msg_out['From'] = f"{campaign.sender_name} <{_smtp_creds_out['user']}>"
@@ -12992,7 +12998,7 @@ async def send_outreach_email(
                     # reply_to указывает на реальный адрес пользователя (может быть gmail)
                     _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
                     # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
-                    _body_with_footer = body + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
+                    _body_with_footer = _body_signed + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
                     resp = await http.post(
                         'https://api.resend.com/emails',
                         headers={
