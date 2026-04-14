@@ -84,6 +84,7 @@ depth='basic' для справки, 'full' для анализа рынка, 'd
 - «Перенеси/сдвинь/отложи» задачу → edit_task(task_title='ключевые слова', reminder_time='новое время'). НЕ вызывай list_tasks первым — edit_task сам находит по ключевым словам.
 - Посты: «опубликуй пост [текст]» → create_post СРАЗУ с переданным content. publish_to_telegram (TG), publish_to_discord (Discord). generate_image только перед TG/Discord, для блога НЕ обязательно.
 - Email: reply_body на ТОМ ЖЕ ЯЗЫКЕ что оригинал. После send_email → save_email_contact. sender_name = имя ПОЛЬЗОВАТЕЛЯ (владельца аккаунта), НЕ имя агента.
+- Email ДОСТАВЛЯЕМОСТЬ: в ПЕРВОМ письме незнакомцу — НЕ добавляй кликабельные ссылки https:// в тело (риск спама). Сайт — только plain-text домен в подписи: «example.com» без «https://». Ссылки уместны только в follow-up если человек уже ответил. Это правило обязательно — нарушение = бан домена отправки.
 - Кампании: post_time ВСЕГДА спросить. Без URL в постах.
 - Агенты: delegate_task — агент УЖЕ выполнил и отчитался. Не дублируй.
 - «Отправь/разошли ВСЕМ» → broadcast_message_to_all_users.
@@ -228,6 +229,7 @@ Key rules:
 - "Reschedule/postpone/move" task → edit_task(task_title='keywords', reminder_time='new time'). DON'T call list_tasks first — edit_task searches by keywords itself.
 - Posts: "publish post [text]" → create_post IMMEDIATELY with content. publish_to_telegram (TG), publish_to_discord (Discord). generate_image only before TG/Discord, NOT required for blog.
 - Email: reply_body in SAME LANGUAGE as original. After send_email → save_email_contact. sender_name = USER's name (account owner), NOT agent name.
+- Email DELIVERABILITY: in FIRST cold email — NO clickable https:// links in body (spam trigger). Website → plain-text domain in signature only: «example.com» without «https://». Links are ok only in follow-up after the recipient replied. This rule is mandatory — violation = sending domain ban.
 - Campaigns: ALWAYS ask post_time. No URLs in posts.
 - Agents: delegate_task — agent ALREADY executed and reported. Don't duplicate.
 - "Send to ALL users" → broadcast_message_to_all_users.
