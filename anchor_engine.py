@@ -11812,6 +11812,58 @@ class AnchorEngine:
               except Exception as _ih_err:
                 logger.debug("[COORD] integration hypotheses: %s", _ih_err)
 
+            # ── СВЕЖАЯ ЦЕПОЧКА: результаты агентов за последние 40 минут ──
+            # Координатор ОБЯЗАН видеть, кто что только что сделал, чтобы:
+            #   1) не повторять уже выполненный шаг
+            #   2) продолжить цепочку через ТОГО ЖЕ агента (у него контекст)
+            #   3) выбрать правильного следующего агента (с интеграцией для следующего шага)
+            _fresh_chain_str = ''
+            try:
+                from models import Interaction as _Inter_fc
+                _fc_cutoff = datetime.now(timezone.utc) - timedelta(minutes=40)
+                _fc_rows = session.query(_Inter_fc).filter(
+                    _Inter_fc.user_id == user.id,
+                    _Inter_fc.message_type.in_(['agent_msg', 'proactive']),
+                    _Inter_fc.created_at >= _fc_cutoff,
+                ).order_by(_Inter_fc.created_at.desc()).limit(20).all()
+                _fc_lines = []
+                for _fc_r in _fc_rows:
+                    try:
+                        _fc_d = json.loads(_fc_r.content or '{}')
+                        _fc_text = (_fc_d.get('text') or '').strip()
+                        if not _fc_text or len(_fc_text) < 40:
+                            continue
+                        # Определяем имя агента
+                        _fc_agent = (
+                            (_fc_d.get('__agent') or {}).get('name')
+                            or _fc_d.get('__to_agent')
+                            or _fc_d.get('agent_name')
+                            or ''
+                        )
+                        if not _fc_agent:
+                            continue
+                        _fc_mins = int((datetime.now(timezone.utc) - (
+                            _fc_r.created_at.replace(tzinfo=timezone.utc)
+                            if _fc_r.created_at.tzinfo is None else _fc_r.created_at
+                        )).total_seconds() / 60)
+                        _fc_snippet = _fc_text[:500].replace('\n', ' ')
+                        _fc_lines.append(f"  [{_fc_mins}мин назад] {_fc_agent}: {_fc_snippet}")
+                        if len(_fc_lines) >= 6:
+                            break
+                    except Exception:
+                        pass
+                if _fc_lines:
+                    _fresh_chain_str = (
+                        '\n🔗 СВЕЖИЕ РЕЗУЛЬТАТЫ АГЕНТОВ (последние 40 мин — КЛЮЧЕВОЙ КОНТЕКСТ):\n'
+                        + '\n'.join(_fc_lines)
+                        + '\n→ ПРАВИЛА ЦЕПОЧКИ: если агент A только что нашёл данные X'
+                        ' → следующий шаг должен ИСПОЛЬЗОВАТЬ X (не искать заново).\n'
+                        '→ Агент, который сделал ШАГ 1, имеет контекст — продолжи через него или через агента с нужной интеграцией.\n'
+                        '→ НЕ давай двум агентам одинаковый поиск если один уже выполнил его выше.\n\n'
+                    )
+            except Exception as _fc_err:
+                logger.debug('[COORD] fresh chain harvest: %s', _fc_err)
+
             # ── Последние результаты каждого агента (для передачи данных между агентами) ──
             # Координатор видит ЧТО именно нашёл каждый агент → может поручить другому агенту
             # использовать эти данные (хайрешать авторов, написать письма, создать пост и т.д.)
@@ -12420,6 +12472,7 @@ class AnchorEngine:
                 + _situation_analysis_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
+                + _fresh_chain_str
                 + _agent_results_str
                 + _multiday_review_str
                 + f"{_degraded_note}"
@@ -12508,6 +12561,9 @@ class AnchorEngine:
                 "   НЕ назначай A ту же задачу снова. Дай A НОВУЮ задачу следующего шага.\n"
                 "   Если B ещё работает над переданной задачей → жди результата, не дублируй.\n"
                 "3. СООТВЕТСТВИЕ АГЕНТА: спроси себя — эта задача в зоне СПЕЦИАЛИЗАЦИИ агента?\n"
+                "   🔗 СНАЧАЛА ПРОЧИТАЙ «СВЕЖИЕ РЕЗУЛЬТАТЫ» выше: если агент только что нашёл данные —\n"
+                "   дай СЛЕДУЮЩИЙ ШАГ по цепочке тому агенту, у кого есть нужная интеграция для продолжения.\n"
+                "   Пример: Марк нашёл статью → следующий шаг — найти контакт автора → Марк (если есть web_search) или агент с API поиска людей.\n"
                 "   Агент с RSS/аналитикой → мониторинг, обзоры, тренды. НЕ email-outreach.\n"
                 "   Агент с email/CRM → рассылки, follow-up, переговоры. НЕ RSS-анализ.\n"
                 "   Если задача не по профилю — передай тому, у кого есть нужная интеграция.\n"
