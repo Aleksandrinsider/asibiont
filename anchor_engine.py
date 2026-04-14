@@ -293,12 +293,12 @@ _CAT_ACTIONS: dict[str, list[str]] = {
         '{name}, свяжи новые контакты со сделками: create_contact → create_lead с pipeline_id из get_pipelines → link_contact.',
     ],
     'finance': [
-        '{name}, проверь актуальные рыночные данные по «{goal}» и зафиксируй изменения за последнюю неделю.',
-        '{name}, проанализируй финансовые показатели по «{goal}» — выдели 3 ключевых тренда.',
+        '{name}, без свежих цифр не видно что менять в стратегии по «{goal}». Найди актуальные рыночные данные через web_search — биржи, агрегаторы, официальные отчёты. Сохрани через save_note: 3 ключевых изменения за неделю с источниками и выводом что именно это значит для следующего шага.',
+        '{name}, аналитика по «{goal}» устарела и мешает принимать решения. Проанализируй финансовые показатели через research_topic за последние 7 дней. Результат: 3 конкретных тренда с цифрами — зафикс через save_note с ответом «что это значит для нашей стратегии».',
     ],
     'analytics': [
-        '{name}, проанализируй данные по «{goal}» — выдели 3 метрики, которые изменились за неделю.',
-        '{name}, создай краткий отчёт по прогрессу «{goal}»: что сделано, что блокирует, план на неделю.',
+        '{name}, не знаем что изменилось — нельзя двигаться по «{goal}» вслепую. Проанализируй ключевые метрики через research_topic или web_search за последнюю неделю. Выдели 3 показателя которые изменились больше всего — сохрани через save_note с объяснением причин и выводом что делать дальше.',
+        '{name}, нужен свежий срез по «{goal}» чтобы скорректировать план. Создай отчёт через save_note в трёх частях: (1) что конкретно сделано с цифрами, (2) что тормозит прямо сейчас, (3) следующий конкретный шаг с инструментом.',
     ],
     'marketplace': [
         '{name}, проверь позиции, отзывы и остатки по «{goal}» — если есть негатив, предложи ответ.',
@@ -7434,18 +7434,39 @@ class AnchorEngine:
                                     if _retry_vague_gen and len(_retry_vague_gen.strip()) > 80:
                                         _rvg_lower = _retry_vague_gen.strip().lower()
                                         _rvg_sent_count = len(_re_sent_c.findall(r'[.!?]', _retry_vague_gen.strip()))
+                                        # Разрешаем русские глагол-инструменты без «через» (AI не всегда пишет snake_case)
+                                        _COORD_TOOL_NAMES_EXT = _COORD_TOOL_NAMES + (
+                                            'поищи', 'найди ', 'проверь почту', 'проверь inbox',
+                                            'сохрани заметку', 'создай отчёт', 'зафикс',
+                                            'опубликуй', 'отправь письмо', 'запусти агент',
+                                            'исследуй', 'сделай поиск', 'проанализируй',
+                                        )
                                         _rvg_ok = (
-                                            any(t in _rvg_lower for t in _COORD_TOOL_NAMES)  # tool name REQUIRED
+                                            any(t in _rvg_lower for t in _COORD_TOOL_NAMES_EXT)
                                             and any(v in _rvg_lower for v in _IMPERATIVE_VERBS)
                                             and not any(v in _rvg_lower for v in _VAGUE_COORD_PATTERNS)
                                             and len(_retry_vague_gen.strip()) > 80
-                                            and _rvg_sent_count >= 2  # Минимум 2 предложения (ЗАЧЕМ + КАК + РЕЗУЛЬТАТ)
+                                            and _rvg_sent_count >= 2  # Минимум 2 предложения
                                         )
                                         if _rvg_ok:
                                             _coord_text = _retry_vague_gen.strip()
                                             logger.info("[ANCHOR-AUTOPILOT] vague-retry: success for %s", _chosen_name)
+                                        elif (
+                                            # Retry провалился, но исходный AI-текст был контекстным —
+                                            # лучше показать его чем безличный fallback-шаблон
+                                            _gen_s and len(_gen_s) > 60
+                                            and _has_imperative
+                                            and _has_action_chain_verb
+                                            and not any(v in _gen_lower for v in _VAGUE_COORD_PATTERNS)
+                                        ):
+                                            _coord_text = _gen_s
+                                            logger.info("[ANCHOR-AUTOPILOT] vague-retry: fallback to original AI text for %s", _chosen_name)
                                 except Exception as _vague_retry_err:
                                     logger.debug('[ANCHOR-AUTOPILOT] vague-retry: %s', _vague_retry_err)
+                                    # При ошибке retry — тоже предпочитаем контекстный AI-текст шаблону
+                                    if (_gen_s and len(_gen_s) > 60 and _has_imperative
+                                            and not any(v in _gen_lower for v in _VAGUE_COORD_PATTERNS)):
+                                        _coord_text = _gen_s
                             else:
                                 _coord_text = _gen_s
                                 # ── Truncation guard: если LLM обрезал на середине предложения ──
