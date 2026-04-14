@@ -4739,8 +4739,10 @@ class HybridAutonomousAgent:
             # ── ЦЕЛЕВЫЕ СТРАТЕГИИ (специфичные для текущих целей) ──
             _has_search_keywords = any(w in _msg_lower for w in ['ищем', 'ищи', 'искат', 'search', 'find', 'целевой', 'аудиторий', 'привлеч'])
             _has_not_keywords = any(w in _msg_lower for w in ['не ', 'не,', ' не', 'instead', 'вместо', 'except', 'а не'])
-            
-            if _has_search_keywords and _has_not_keywords and not _is_global_rule:
+            # «не только X но и Y» — аудиторный инсайт: обновляем цели/кампании независимо от _is_global_rule
+            _has_audience_expand = ('не только' in _msg_lower and ('но и' in _msg_lower or 'а также' in _msg_lower or 'плюс' in _msg_lower))
+
+            if _has_search_keywords and (_has_not_keywords or _has_audience_expand):
                 # Похоже на целевое указание типа "ищем [не_это] [а_то]" для текущего проекта
                 # Например: "ищем не тестировщиков а бизнесменов"
                 from models import Session, Goal, User
