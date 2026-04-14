@@ -619,6 +619,7 @@ class EmailCampaign(Base):
     tone = Column(String(50), default='professional')  # professional, friendly, formal
     sender_name = Column(String(200))        # Имя отправителя
     sender_email = Column(String(200))       # Email (верифицирован в Resend)
+    landing_url = Column(String(500))        # Ссылка на сайт/лендинг для CTA в письмах
 
     # Лимиты
     max_emails = Column(Integer, default=50)    # Макс. писем в кампании

@@ -12075,6 +12075,7 @@ async def start_email_campaign(
     tone: str = 'professional',
     max_emails: int = 0,
     daily_limit: int = 100,
+    landing_url: str = None,
     user_id: int = None,
     session=None,
     close_session: bool = True,
@@ -12090,6 +12091,8 @@ async def start_email_campaign(
     max_emails: 0 = безлимитно (рекомендуется). Кампания работает пока AI видит отдачу.
         НЕ ставь произвольные числа вроде 100 — автопилот сам решает когда остановиться.
     daily_limit: макс. писем в день (обычно 100).
+    landing_url: ссылка на сайт/лендинг пользователя. Автоматически добавляется в конец каждого
+        письма как CTA (→ https://...). Если не указана — ссылка не добавляется.
     """
     if not session:
         session = Session()
@@ -12151,6 +12154,7 @@ async def start_email_campaign(
             tone=tone,
             sender_name=sender_name,
             sender_email=sender_email,
+            landing_url=(landing_url or '').strip()[:500] or None,
             max_emails=max_emails,
             daily_limit=min(daily_limit, 100),
             status='active',
@@ -12936,11 +12940,11 @@ async def send_outreach_email(
         if _sig_name and _sig_name.lower() not in body.lower()[-200:]:
             _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
 
-        # CTA-ссылка: добавляем ссылку на платформу если её нет в теле письма
+        # CTA-ссылка: если в кампании задан landing_url — вставляем его в тело
         # Без реальной ссылки получатель не может перейти на сайт — конверсия = 0
-        _web_url = WEB_APP_URL.rstrip('/')
-        if _web_url and _web_url.replace('https://', '').replace('http://', '') not in _body_signed.lower():
-            _body_signed = _body_signed.rstrip() + f"\n\n→ {_web_url}"
+        _cta_url = (campaign.landing_url or '').strip()
+        if _cta_url and _cta_url.replace('https://', '').replace('http://', '') not in _body_signed.lower():
+            _body_signed = _body_signed.rstrip() + f"\n\n→ {_cta_url}"
 
         # ── SMTP dispatch (Яндекс / Mail.ru / Gmail / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False

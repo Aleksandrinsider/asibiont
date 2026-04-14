@@ -366,6 +366,7 @@ def _migrate_email_campaigns(session, inspector):
         cols = [col['name'] for col in inspector.get_columns('email_campaigns')]
         _add_columns(session, 'email_campaigns', cols, {
             'max_follow_ups': 'ALTER TABLE email_campaigns ADD COLUMN max_follow_ups INTEGER DEFAULT 2',
+            'landing_url': 'ALTER TABLE email_campaigns ADD COLUMN landing_url VARCHAR(500)',
         })
     if inspector.has_table('email_outreach'):
         cols = [col['name'] for col in inspector.get_columns('email_outreach')]
