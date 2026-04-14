@@ -8689,8 +8689,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         # Detect goal progress rejection from handlers.py (returns success=True with error text)
                         if _tname == 'update_goal_progress' and _tc_result:
                             _ugp_lower = _tc_result.lower() if isinstance(_tc_result, str) else ''
-                            if 'не обновлён' in _ugp_lower or '⛔' in _tc_result or 'нельзя увеличить' in _ugp_lower or 'обновляй через metric_current' in _ugp_lower:
+                            # "обновляй через metric_current" — это редирект, а не блокировка:
+                            # агент получит инструкцию и должен повторить с metric_current=N.
+                            # Флаг ставим только при реально заблокированных обновлениях.
+                            if 'не обновлён' in _ugp_lower or '⛔' in _tc_result or 'нельзя увеличить' in _ugp_lower:
                                 _goal_progress_blocked = True
+                            elif _goal_progress_blocked:
+                                # Успешное обновление после ранних ошибок — снимаем флаг
+                                _goal_progress_blocked = False
                         if _tname == 'save_note':
                             _save_note_count += 1
                         if _tname in _ACTION_EVIDENCE_TOOLS:
@@ -9002,7 +9008,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             r'(?:обновил[аи]?\s+прогресс\s+(?:до\s+)?\d+\s*%[.!]?\s*)',
             '', _final_text, flags=_re_gpb.IGNORECASE,
         ).strip()
-        # (не добавляем системную пометку в пользовательский чат)
+        # Если прогресс был заблокирован по реальной причине (⛔) — сообщаем пользователю понятно
+        if _final_text and _goal_progress_blocked:
+            _ft_lower_chk = _final_text.lower()
+            # Не дублируем если агент сам уже написал о проблеме
+            if 'прогресс' not in _ft_lower_chk and 'не удал' not in _ft_lower_chk and 'не смог' not in _ft_lower_chk:
+                _final_text += "\n\n⚠️ Прогресс цели не обновлён — нужно выполнить реальное действие (отправить письмо, получить ответ, сохранить контакт), прежде чем фиксировать результат."
 
     # ── Интеграционные подсказки: если инструмент реально не сработал ──
     # Добавляем макс. 1 подсказку, только если агент сам не написал об этом.
