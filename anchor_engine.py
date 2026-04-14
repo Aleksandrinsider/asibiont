@@ -12532,6 +12532,9 @@ class AnchorEngine:
                 + _forced_rotation_str
                 + _cycle_assigns_ctx
                 + f"\n=== ТВОЯ ЗАДАЧА ===\n"
+                "🌐 УНИВЕРСАЛЬНОСТЬ: ты работаешь с ЛЮБЫМ пользователем и ЛЮБОЙ комбинацией интеграций.\n"
+                "Не предполагай конкретный workflow (email / GitHub / CRM / etc.) — читай профили агентов выше.\n"
+                "Думай: что у ЭТОГО агента есть → что из этого подходит ДЛЯ ЭТОЙ ЦЕЛИ → дай КОНКРЕТНЫЙ шаг.\n\n"
                 "Ты — живой директор офиса. Думай исходя из ситуации. РЕЗУЛЬТАТ ВАЖНЕЕ ПРОЦЕССА.\n"
                 "⚠️ АНТИ-ШАБЛОН: не генерируй однотипные задачи вроде 'найди 3 контакта на dev.to/ProductHunt'. "
                 "Прочитай историю агента и дай ЗАДАЧУ СЛЕДУЮЩЕГО ШАГА исходя из того что он уже сделал.\n"
@@ -13428,56 +13431,50 @@ class AnchorEngine:
                 if _VAGUE_TASK_RE.search(_qf_task) and len(_qf_task) < 60:
                     # Только добавляем хинт — НЕ стираем оригинальную задачу координатора
                     _qf_step['task'] = _qf_task + ' (используй инструменты для конкретного результата — данные, контакты, действия)'
-            # ── Обогащение коротких task: если task <80 символов — подставляем детали из reason+goal ──
-            # Это решает случай когда DeepSeek генерирует one-liner вместо полного задания.
-            _TOOL_EXPANSION_HINTS = {
-                'search_users': lambda g, r: (
-                    f'Найди 5 активных разработчиков через search_users (язык/тема из цели «{g[:40]}»), '
-                    f'только с email в профиле. Сохрани каждого через save_email_contact. '
-                    f'Затем отправь каждому письмо через send_outreach_email.'
-                ),
-                'web_search': lambda g, r: (
-                    f'Найди через web_search 5 человек/ресурсов по теме из цели «{g[:40]}», '
-                    f'с публичными контактами. Сохрани результаты через save_note. '
-                    f'Если email найдены — добавь через save_email_contact.'
-                ),
-                'send_outreach_email': lambda g, r: (
-                    f'Отправь персональное письмо каждому сохранённому контакту через send_outreach_email. '
-                    f'Тема — суть предложения из цели «{g[:40]}». '
-                    f'Текст: кратко кто мы, что предлагаем, почему им это полезно, призыв к действию.'
-                ),
-                'check_emails': lambda g, r: (
-                    f'Проверь входящие через check_emails. '
-                    f'Если есть ответы — reply_to_outreach_email с персональным ответом по контексту. '
-                    f'Если молчат >2 дней — send_follow_up_email с новым углом подачи.'
-                ),
-                'create_post': lambda g, r: (
-                    f'Создай пост через create_post на тему из цели «{g[:40]}». '
-                    f'Включи: конкретный факт/тренд, пользу для целевой аудитории, призыв к действию. '
-                    f'Опубликуй или сохрани через save_note.'
-                ),
-                'save_email_contact': lambda g, r: (
-                    f'Сохрани найденные контакты через save_email_contact (name, email, source, notes). '
-                    f'После сохранения — отправь каждому письмо через send_outreach_email с предложением.'
-                ),
-            }
+            # ── Универсальное обогащение коротких task: от реального профиля агента ──
+            # НЕ шаблоны под конкретные инструменты — а ДИНАМИЧЕСКИ от того, что у агента есть.
+            # Работает для ЛЮБЫХ интеграций: GitHub, email, CRM, Discord, custom tools, etc.
+            # Принцип: ИИ должен ДУМАТЬ от профиля, а не заполнять шаблон — мы лишь даём ему контекст.
+            _profiles_by_name_qf = {p.get('name', '').strip().lower(): p for p in _profiles}
             for _qf2_step in _plan:
                 _qf2_task = (_qf2_step.get('task') or '').strip()
                 _qf2_tool = (_qf2_step.get('tool') or '').lower().strip()
                 _qf2_goal = (_qf2_step.get('goal') or '').strip()
                 _qf2_reason = (_qf2_step.get('reason') or '').strip()
-                # Обогащаем если task слишком короткий (одна строка без деталей)
-                if len(_qf2_task) < 80 and _qf2_tool in _TOOL_EXPANSION_HINTS:
-                    _expanded = _TOOL_EXPANSION_HINTS[_qf2_tool](_qf2_goal, _qf2_reason)
-                    # Сохраняем оригинальный текст как контекст, добавляем детали
-                    if _qf2_task and _qf2_task.lower() not in _expanded.lower():
-                        _qf2_step['task'] = _qf2_task + '. ' + _expanded
-                    else:
-                        _qf2_step['task'] = _expanded
-                    logger.info('[COORD] task-enrichment: expanded short task for %s/%s: %s',
-                                _qf2_step.get('agent'), _qf2_tool, _qf2_step['task'][:80])
-                    logger.info("[COORD] quality-hint: appended hint for %s: %s",
-                                _qf_step.get('agent'), _qf_step['task'][:80])
+                _qf2_agent_name = (_qf2_step.get('agent') or '').strip()
+                # Обогащаем только если task слишком короткий (one-liner без деталей)
+                if len(_qf2_task) >= 80:
+                    continue
+                # Ищем реальный профиль агента — его инструменты и специализация
+                _qf2_profile = _profiles_by_name_qf.get(_qf2_agent_name.strip().lower())
+                _qf2_agent_tools = list(dict.fromkeys(
+                    (_qf2_profile.get('tools') or []) + (_qf2_profile.get('caps') or [])
+                ))[:6] if _qf2_profile else []
+                _qf2_agent_spec = (_qf2_profile.get('spec') or '') if _qf2_profile else ''
+                _qf2_agent_job = (_qf2_profile.get('job') or '') if _qf2_profile else ''
+                # Строим подсказку от реального профиля + цели + reason — универсально
+                _tool_hint = (
+                    f'Выбери подходящий инструмент из [{", ".join(_qf2_agent_tools[:4])}]. '
+                    if _qf2_agent_tools else
+                    'Используй доступные инструменты (web_search, save_note, run_agent_action). '
+                )
+                _spec_hint = (
+                    f'Специализация агента: {_qf2_agent_spec}. '
+                    if _qf2_agent_spec else
+                    (f'Роль: {_qf2_agent_job}. ' if _qf2_agent_job else '')
+                )
+                _universal_hint = (
+                    f'{_spec_hint}'
+                    f'ЗАЧЕМ: следующий шаг для цели «{_qf2_goal[:50]}»'
+                    + (f' — {_qf2_reason[:100]}' if _qf2_reason and len(_qf2_reason) > 10 else '')
+                    + f'. {_tool_hint}'
+                    f'РЕЗУЛЬТАТ: конкретный измеримый итог (данные, созданный объект, отправленное действие).'
+                )
+                _qf2_step['task'] = (
+                    f'{_qf2_task}. {_universal_hint}' if _qf2_task else _universal_hint
+                )
+                logger.info('[COORD] task-enrichment universal: %s/%s → %s',
+                            _qf2_agent_name, _qf2_tool, _qf2_step['task'][:100])
 
             # ── Fair assignment backfill: если часть активных агентов пропущена, добавляем им шаги ──
             # Универсально для всех пользователей: снижает перекос, когда один агент выполняет всё.
