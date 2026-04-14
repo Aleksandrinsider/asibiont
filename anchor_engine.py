@@ -6749,10 +6749,15 @@ class AnchorEngine:
                                     ).order_by(Interaction.created_at.desc()).limit(40).all()
                                     _my_assign_texts = []
                                     _other_assigns: list[tuple[str, str]] = []  # (agent_name, text)
+                                    # Включаем ВСЕ типы поручений: goal_autopilot_assignment, agent_delegation, coordinator_assignment
+                                    _ASSIGN_ANCHOR_TYPES = {
+                                        'goal_autopilot_assignment', 'agent_delegation',
+                                        'coordinator_assignment',
+                                    }
                                     for _rmc in _recent_my_coords:
                                         try:
                                             _rmc_d = json.loads(_rmc.content or '{}')
-                                            if _rmc_d.get('__anchor_type') != 'goal_autopilot_assignment':
+                                            if _rmc_d.get('__anchor_type') not in _ASSIGN_ANCHOR_TYPES:
                                                 continue
                                             _rmc_to = _rmc_d.get('__to_agent', '')
                                             _atxt = (_rmc_d.get('text', '') or '').strip()[:350]
@@ -6765,7 +6770,7 @@ class AnchorEngine:
                                                 _other_assigns.append((_rmc_to, _atxt))
                                         except Exception:
                                             pass
-                                        if len(_my_assign_texts) >= 5 and len(_other_assigns) >= 6:
+                                        if len(_my_assign_texts) >= 10 and len(_other_assigns) >= 6:
                                             break
                                     if _my_assign_texts:
                                         _my_recent_assigns_ctx = '\n'.join(
@@ -6832,13 +6837,27 @@ class AnchorEngine:
                                             _ft_reason = (_ft_r or '')[:120]
                                             _ft_lines.append(f'  ✗ {_ft_key}: {_ft_reason}')
                                         if _ft_lines:
+                                            # Считаем повторяющиеся темы в failed-задачах
+                                            _ft_topics: dict[str, int] = {}
+                                            for _ft_t2, _ft_r2 in _ft_rows:
+                                                _ftl2 = (_ft_t2 or '').lower()
+                                                for _kw_pat in ('хабр', 'habr', 'github', 'биоинформатик', 'linkedin', 'vc.ru', 'medium', 'dev.to'):
+                                                    if _kw_pat in _ftl2:
+                                                        _ft_topics[_kw_pat] = _ft_topics.get(_kw_pat, 0) + 1
+                                            _ft_repeat_warn = ''
+                                            _ft_repeats = [f'{kw}({cnt}x)' for kw, cnt in _ft_topics.items() if cnt >= 2]
+                                            if _ft_repeats:
+                                                _ft_repeat_warn = (
+                                                    f'\n🚫 ПОВТОРЯЮЩИЙСЯ ПАТТЕРН ПРОВАЛОВ: {", ".join(_ft_repeats)} — '
+                                                    f'эти задачи падают снова и снова. ЗАПРЕЩЕНО давать похожую задачу снова.\n'
+                                                    f'  Нужна ПРИНЦИПИАЛЬНО другая стратегия: другой инструмент, другая площадка, другой тип действия.\n'
+                                                )
                                             _failed_tasks_ctx = (
-                                                '\n📊 ЧТО НЕ СРАБОТАЛО (за 12ч) — изучи и учти при следующем поручении:\n'
+                                                '\n📊 ЧТО НЕ СРАБОТАЛО (за 12ч) — ОБЯЗАТЕЛЬНО учти, не повторяй те же действия:\n'
                                                 + '\n'.join(_ft_lines[:5])
-                                                + '\n  → Это не запреты — это подсказки для анализа. Спроси себя:\n'
-                                                + '     • ПОЧЕМУ конкретно это не сработало?\n'
-                                                + '     • Что именно нужно найти/сделать? Какой тип источника подходит для ЭТОЙ информации?\n'
-                                                + '     • Что я ещё не пробовал, что имеет смысл попробовать?\n'
+                                                + _ft_repeat_warn
+                                                + '\n  → Задачи с timeout/process_restart = слишком длинные. Давай КОРОТКИЕ задачи (≤2 шага, один инструмент).\n'
+                                                + '  → Если один и тот же тип поиска падал 2+ раза — это тупик. Смени СТРАТЕГИЮ полностью.\n'
                                             )
                                 except Exception:
                                     pass
@@ -6954,11 +6973,14 @@ class AnchorEngine:
                                     _bn_universal = 0
                                     for _bnl in _bn_logs:
                                         _bnc = (_bnl.content or '').lower() + ' ' + (_bnl.title or '').lower()
+                                        # Считаем web-поиски И поисковые run_agent_action (CRM/GitHub search)
                                         _bn_search += _bnc.count('web_search') + _bnc.count('research_topic') + _bnc.count('quick_topic_search')
+                                        # run_agent_action с поиском: search_users, get_contacts, get_pipelines, search_repos, search_contacts
+                                        _bn_search += sum(1 for kw in ('search_users', 'get_contacts', 'get_pipelines', 'search_repos', 'search_contacts', 'get_leads', 'get_overdue_leads', 'get_stale_leads') if kw in _bnc)
                                         _bn_send += _bnc.count('send_outreach_email') + _bnc.count('send_email')
-                                        _bn_save_contact += _bnc.count('save_email_contact')
+                                        _bn_save_contact += _bnc.count('save_email_contact') + _bnc.count('create_contact') + _bnc.count('create_lead')
                                         _bn_create_post += _bnc.count('create_post') + _bnc.count('publish_to_telegram')
-                                        _bn_universal += _bnc.count('save_note') + _bnc.count('add_task') + _bnc.count('set_reminder') + _bnc.count('run_agent_action') + _bnc.count('generate_image')
+                                        _bn_universal += _bnc.count('save_note') + _bnc.count('add_task') + _bnc.count('set_reminder') + _bnc.count('generate_image')
                                     _bn_actions = _bn_send + _bn_save_contact + _bn_create_post + _bn_universal
                                     # ── Статистика использования интеграций за 24ч ──
                                     _intg_usage: dict[str, int] = {}
@@ -6987,18 +7009,26 @@ class AnchorEngine:
                                             _usage_parts.append(f'{_uname}: {_ucnt}x')
                                         _intg_usage_str = ', '.join(_usage_parts)
                                     if _bn_search >= 5 and _bn_actions <= 2:
-                                        _bottleneck_hint_c = (
-                                            f'� ФАЗА КОНВЕРСИИ: за 24ч команда сделала {_bn_search} поисков, '
-                                            f'но только {_bn_actions} конкретных действий. '
-                                            f'Данных ДОСТАТОЧНО — пора их использовать. '
-                                            f'Назначь задачу с КОНВЕРСИЕЙ результатов поиска:\n'
-                                            f'  — заметки/план → save_note (выводы, конспект, подборка)\n'
-                                            f'  — конкретные шаги → add_task (план действий)\n'
-                                            f'  — аналитика/тренды → create_post (обзор, статья, инсайты)\n'
-                                            f'  — контакты → save_email_contact + send_outreach_email (если цель связана с людьми)\n'
-                                            f'  — идеи/данные для коллеги → delegate_task с конкретикой\n'
-                                            f'Если назначаешь поиск — он должен быть ТОЧЕЧНЫМ (имя+email), не обзорным.'
-                                        )
+                                        _bn_ratio = _bn_search / max(_bn_actions, 1)
+                                        if _bn_ratio >= 3:
+                                            _bottleneck_hint_c = (
+                                                f'🔴 СТОП-ПОИСК: за 6ч было {_bn_search} поисков (CRM/GitHub/web), '
+                                                f'но только {_bn_actions} конверсионных действий (соотношение {_bn_ratio:.0f}:1). '
+                                                f'ЗАПРЕЩЕНО давать ещё один поисковый запрос. '
+                                                f'Назначь ТОЛЬКО конверсионное действие:\n'
+                                                f'  — отправить письмо → send_outreach_email (данные есть в CRM)\n'
+                                                f'  — создать пост → create_post (использовать найденные тренды)\n'
+                                                f'  — зафиксировать итоги → save_note (сводка по найденному)\n'
+                                                f'  — двинуть сделку → update_lead в CRM\n'
+                                                f'Поиск имеет смысл только после того, как найденное конвертировано в результат.'
+                                            )
+                                        else:
+                                            _bottleneck_hint_c = (
+                                                f'⚠️ ФАЗА КОНВЕРСИИ: за 6ч команда сделала {_bn_search} поисков, '
+                                                f'но только {_bn_actions} конкретных действий. '
+                                                f'Данных ДОСТАТОЧНО — назначь задачу с результатом: '
+                                                f'письмо (send_outreach_email), пост (create_post), заметка (save_note), сделка (update_lead).'
+                                            )
                                     elif _bn_search >= 5 and _bn_actions <= 1:
                                         _bottleneck_hint_c = (
                                             f'⚠️ ДИСБАЛАНС: {_bn_search} поисков за 6ч, но мало конверсий ({_bn_actions}). '
@@ -7240,9 +7270,12 @@ class AnchorEngine:
                             + (
                                 f"\n📋 ЧТО ТЫ УЖЕ ПОРУЧАЛ {_chosen_name.upper()} (последние {len(_my_assign_texts)} задания, от нового к старому):\n"
                                 f"{_my_recent_assigns_ctx}\n"
-                                f"→ Твоё НОВОЕ поручение ДОЛЖНО отличаться от перечисленных выше:\n"
-                                f"  другой канал ИЛИ другой инструмент ИЛИ другой тип результата.\n"
-                                f"  Если ты снова напишешь то же самое — это зацикливание, и оно бесполезно.\n"
+                                f"🚫 НОВОЕ ПОРУЧЕНИЕ ЗАПРЕЩЕНО если оно повторяет ТИП задачи из списка выше:\n"
+                                f"  — тот же канал (Хабр→Хабр, GitHub→GitHub) = зацикливание\n"
+                                f"  — то же действие (найди контакты→найди контакты) = зацикливание\n"
+                                f"  — та же площадка / тема = зацикливание\n"
+                                f"  Обязательно: другой инструмент ИЛИ другой тип результата ИЛИ другой канал.\n"
+                                f"  Если все очевидные варианты исчерпаны — поручи КОНВЕРТИРОВАТЬ найденное в действие (письмо/заметка/пост).\n"
                                 if _my_recent_assigns_ctx else ''
                             )
                             + (_other_assigns_ctx if _other_assigns_ctx else '')
