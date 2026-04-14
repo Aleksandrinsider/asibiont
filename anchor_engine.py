@@ -11812,6 +11812,58 @@ class AnchorEngine:
               except Exception as _ih_err:
                 logger.debug("[COORD] integration hypotheses: %s", _ih_err)
 
+            # ── STALE ACK: агент дал ACK, но не вернул результат >30 мин → считается свободным ──
+            # Без этого координатор думает что агент «занят» и не назначает ему новое задание.
+            _stale_ack_str = ''
+            try:
+                from models import Interaction as _Inter_ack
+                _ack_window = datetime.now(timezone.utc) - timedelta(minutes=45)
+                _ack_rows = session.query(_Inter_ack).filter(
+                    _Inter_ack.user_id == user.id,
+                    _Inter_ack.message_type == 'agent_msg',
+                    _Inter_ack.created_at >= _ack_window,
+                    _Inter_ack.content.like('%"goal_autopilot_ack"%'),
+                ).order_by(_Inter_ack.created_at.asc()).all()
+                _stale_ack_lines = []
+                for _ack_r in _ack_rows:
+                    try:
+                        _ack_d = json.loads(_ack_r.content or '{}')
+                        _ack_agent = (
+                            (_ack_d.get('__agent') or {}).get('name')
+                            or _ack_d.get('agent_name') or ''
+                        )
+                        if not _ack_agent:
+                            continue
+                        _ack_ts = _ack_r.created_at.replace(tzinfo=timezone.utc) if _ack_r.created_at.tzinfo is None else _ack_r.created_at
+                        _ack_mins = int((datetime.now(timezone.utc) - _ack_ts).total_seconds() / 60)
+                        if _ack_mins < 30:
+                            continue  # ещё в работе, нормально
+                        # Проверяем: был ли result от этого агента ПОСЛЕ этого ACK?
+                        _result_after = session.query(_Inter_ack.id).filter(
+                            _Inter_ack.user_id == user.id,
+                            _Inter_ack.message_type == 'agent_msg',
+                            _Inter_ack.created_at > _ack_r.created_at,
+                            _Inter_ack.content.like(f'%{_ack_agent}%'),
+                            _Inter_ack.content.like('%"goal_autopilot_result"%'),
+                        ).first()
+                        if _result_after:
+                            continue  # результат пришёл, агент завершил
+                        _stale_ack_lines.append(
+                            f'  ⏳ {_ack_agent}: подтвердил задачу {_ack_mins} мин назад,'
+                            f' но результат так и не пришёл — скорее всего задача зависла или выполнена молча.'
+                            f' Считай его СВОБОДНЫМ и назначь новое конкретное задание.'
+                        )
+                    except Exception:
+                        pass
+                if _stale_ack_lines:
+                    _stale_ack_str = (
+                        '\n🔔 АГЕНТЫ С ЗАВИСШИМ ACK (назначь им новое задание — они свободны):\n'
+                        + '\n'.join(_stale_ack_lines)
+                        + '\n→ ACK без результата >30 мин = задача провалилась или агент завис. НЕ жди — дай новое задание.\n\n'
+                    )
+            except Exception as _ack_err:
+                logger.debug('[COORD] stale_ack: %s', _ack_err)
+
             # ── СВЕЖАЯ ЦЕПОЧКА: результаты агентов за последние 40 минут ──
             # Координатор ОБЯЗАН видеть, кто что только что сделал, чтобы:
             #   1) не повторять уже выполненный шаг
@@ -12283,11 +12335,15 @@ class AnchorEngine:
                 if _rss_agents_no_email and any(_crd_goal_type(g) == 'outreach' for g in _goals[:5]):
                     _rss_names = ', '.join(_rss_agents_no_email)
                     _goal_phase_str += (
-                        f'\n⛔ RSS-АГЕНТЫ НА OUTREACH-ЦЕЛИ ({_rss_names}):\n'
-                        f'  Эти агенты не имеют email → они НЕ МОГУТ закрыть цепочку outreach.\n'
-                        f'  ЗАПРЕЩЕНО: назначать им "найди контакты", "ищи лидов", "анализируй потенциальных клиентов".\n'
-                        f'  РАЗРЕШЕНО: create_post (inbound-контент), get_news_trends (тренды рынка), save_note (аналитика).\n'
-                        f'  Если нужен поиск контактов — назначь email-агенту; RSS-агенту дай задачу по контенту.\n'
+                        f'\n⚡ RSS-АГЕНТ(Ы) ({_rss_names}) — ПАРАЛЛЕЛЬНЫЙ КОНТЕНТ-ТРЕК:\n'
+                        f'  Нет email → не участвуют в email-цепочке, но НЕ СИДЯТ БЕЗ ДЕЛА.\n'
+                        f'  ✅ НАЗНАЧЬ В ЭТОТ ЦИКЛ (обязательно!): create_post с инсайтом из RSS-ленты.\n'
+                        f'  Логика: outreach = краткосрочный трек; контент = долгосрочный органический трафик.\n'
+                        f'  Оба трека нужны ПАРАЛЛЕЛЬНО — пока {",".join(p["name"] for p in _profiles if "email" in _agent_caps_categories.get(p["name"], set()))}'
+                        f' делает outreach, {_rss_names} создаёт контент.\n'
+                        f'  Хорошая задача: "Прочитай RSS-ленту, найди самый резонансный материал за неделю,'
+                        f' создай пост с нашим углом зрения через create_post — добавь вопрос для вовлечения аудитории."\n'
+                        f'  ⛔ НЕЛЬЗЯ: назначать outreach-поиск контактов, email-задачи.\n'
                     )
             except Exception as _gp_err:
                 logger.debug('[COORD] goal_phase_constraints: %s', _gp_err)
@@ -12502,6 +12558,7 @@ class AnchorEngine:
                 + _situation_analysis_str
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
+                + _stale_ack_str
                 + _fresh_chain_str
                 + _stale_tasks_str
                 + _agent_results_str
@@ -12566,6 +12623,11 @@ class AnchorEngine:
                 "🌐 УНИВЕРСАЛЬНОСТЬ: ты работаешь с ЛЮБЫМ пользователем и ЛЮБОЙ комбинацией интеграций.\n"
                 "Не предполагай конкретный workflow (email / GitHub / CRM / etc.) — читай профили агентов выше.\n"
                 "Думай: что у ЭТОГО агента есть → что из этого подходит ДЛЯ ЭТОЙ ЦЕЛИ → дай КОНКРЕТНЫЙ шаг.\n\n"
+                f"⚡ ПАРАЛЛЕЛИЗМ: у тебя {_n_agents} агент(а/ов) в команде. Каждый агент — ресурс:\n"
+                f"  • Команда работает ПАРАЛЛЕЛЬНО — каждый должен получить задачу в этот цикл.\n"
+                f"  • Простаивающий агент = упущенная скорость = цель движется в разы медленнее.\n"
+                f"  • Если один делает outreach → другие делают контент, аналитику, research параллельно.\n"
+                f"  • Проверь блок '🔔 АГЕНТЫ С ЗАВИСШИМ ACK' выше → там свободные агенты ждут задания.\n\n"
                 "Ты — живой директор офиса. Думай исходя из ситуации. РЕЗУЛЬТАТ ВАЖНЕЕ ПРОЦЕССА.\n"
                 "⚠️ АНТИ-ШАБЛОН: не генерируй однотипные задачи вроде 'найди 3 контакта на dev.to/ProductHunt'. "
                 "Прочитай историю агента и дай ЗАДАЧУ СЛЕДУЮЩЕГО ШАГА исходя из того что он уже сделал.\n"
