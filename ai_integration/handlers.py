@@ -12936,6 +12936,12 @@ async def send_outreach_email(
         if _sig_name and _sig_name.lower() not in body.lower()[-200:]:
             _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
 
+        # CTA-ссылка: добавляем ссылку на платформу если её нет в теле письма
+        # Без реальной ссылки получатель не может перейти на сайт — конверсия = 0
+        _web_url = WEB_APP_URL.rstrip('/')
+        if _web_url and _web_url.replace('https://', '').replace('http://', '') not in _body_signed.lower():
+            _body_signed = _body_signed.rstrip() + f"\n\n→ {_web_url}"
+
         # ── SMTP dispatch (Яндекс / Mail.ru / Gmail / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False
         if _smtp_creds_out:
