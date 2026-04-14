@@ -7329,6 +7329,8 @@ class AnchorEngine:
                             'посмотри что можно', 'поработай над', 'займись',
                             'сделай что-нибудь', 'подумай что можно', 'проверь что можно',
                             'поработай с целями', 'продолжай работу',
+                            'сообщи пользователю о статусе цели и предложи варианты',
+                            'сообщи о статусе и предложи варианты',
                         )
                         if _gen and len(_gen.strip()) > 15:
                             _gen_s = _gen.strip()
@@ -14214,9 +14216,23 @@ class AnchorEngine:
                         elif _tl_lower in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
                             _chain_pos_hint = ' (публикация)'
                         # ЗАЧЕМ: добавляем контекст цели чтобы поручение было 2 предложения, а не 1
-                        # Для send_message_to_user — не оборачиваем в "следующий шаг по цели", звучит странно
+                        # Для send_message_to_user — строим конкретный шаблон с названием цели и причиной
                         if _tool_hint == 'send_message_to_user':
-                            _asi_assign_text = f'{_ag_name}, сообщи пользователю о статусе цели и предложи варианты дальнейших действий.'
+                            _smu_goal_ref = (
+                                f' по цели «{_eff_goal_title.strip()[:50].rstrip(".,;")}»'
+                                if _eff_goal_title and len(_eff_goal_title.strip()) > 5 else ''
+                            )
+                            _smu_reason = (
+                                f' — {_step_reason_show[:70].rstrip(".")}' if _step_reason_show and len(_step_reason_show) > 10 else ''
+                            )
+                            _smu_done_ref = (
+                                f': {_task_str[:80].rstrip(".")}' if _task_str and len(_task_str.strip()) > 10 else ''
+                            )
+                            _asi_assign_text = (
+                                f'{_ag_name}, сообщи пользователю о статусе{_smu_goal_ref}{_smu_reason}. '
+                                f'Кратко: что уже сделано{_smu_done_ref}, где сейчас застряли, '
+                                f'и предложи 2–3 конкретных варианта дальнейших действий через send_message_to_user.'
+                            )
                         elif _eff_goal_title and len(_eff_goal_title.strip()) > 5:
                             _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
                             _asi_assign_text = f'{_ag_name}, следующий шаг{_chain_pos_hint} по цели «{_gt}» — {_task_str}.{_result_hint}'
