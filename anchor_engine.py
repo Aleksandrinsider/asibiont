@@ -11944,6 +11944,36 @@ class AnchorEngine:
             except Exception as _ar_err:
                 logger.debug("[COORD] agent results harvest: %s", _ar_err)
 
+            # ── Зависшие задачи: in_progress >30 мин без результата ──
+            # Координатор видит их и НЕ повторяет тот же подход, а даёт другой
+            _stale_tasks_str = ''
+            try:
+                from models import Task as _Task_stale
+                _stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+                _stale_rows = session.query(_Task_stale).filter(
+                    _Task_stale.user_id == user.id,
+                    _Task_stale.source == 'agent',
+                    _Task_stale.status == 'in_progress',
+                    _Task_stale.created_at <= _stale_cutoff,
+                ).order_by(_Task_stale.created_at.desc()).limit(5).all()
+                if _stale_rows:
+                    _stale_lines = []
+                    for _st in _stale_rows:
+                        _st_mins = int((datetime.now(timezone.utc) - (
+                            _st.created_at.replace(tzinfo=timezone.utc)
+                            if _st.created_at.tzinfo is None else _st.created_at
+                        )).total_seconds() / 60)
+                        _st_agent = _st.delegated_to_username or f'agent#{_st.created_by_agent_id}'
+                        _stale_lines.append(f'  ⚠️ {_st_agent}: «{(_st.title or "")[:80]}» — зависла {_st_mins}мин (id={_st.id})')
+                    _stale_tasks_str = (
+                        '\n🔴 ЗАВИСШИЕ ЗАДАЧИ (in_progress >30мин, результата НЕТ):\n'
+                        + '\n'.join(_stale_lines)
+                        + '\n→ ОБЯЗАТЕЛЬНО: поменяй подход для зависших задач — другой инструмент, другой агент, другая формулировка.\n'
+                        + '→ НЕ давай те же задачи снова. Зависание = провал стратегии, нужна КАРДИНАЛЬНАЯ смена.\n\n'
+                    )
+            except Exception as _stale_err:
+                logger.debug('[COORD] stale tasks: %s', _stale_err)
+
             # ── Недавние выполненные задачи (anti-repeat для координатора) ──
             _recent_done_str = ''
             try:
@@ -12473,6 +12503,7 @@ class AnchorEngine:
                 + _empirical_guidance_str
                 + _integration_hypothesis_str
                 + _fresh_chain_str
+                + _stale_tasks_str
                 + _agent_results_str
                 + _multiday_review_str
                 + f"{_degraded_note}"

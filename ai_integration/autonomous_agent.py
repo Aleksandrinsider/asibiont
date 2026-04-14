@@ -8324,6 +8324,29 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _aname = _m.group(1).strip()
                     _atask = _m.group(2).strip()[:400]
                     if _aname and _atask:
+                        # ── DELEGATE quality guard: обогащаем короткие делегирования ──
+                        # Если задача < 100 символов — добавляем контекст из последних результатов агента
+                        if len(_atask) < 120:
+                            _dlg_ctx = ''
+                            # Ищем конкретные данные в последних tool-ответах (имена, URL, email)
+                            for _msg in reversed(_messages[-8:]):
+                                _msg_role = _msg.get('role', '')
+                                _msg_cnt = ''
+                                if _msg_role == 'tool':
+                                    _msg_cnt = str(_msg.get('content', ''))[:600]
+                                elif _msg_role == 'assistant':
+                                    _msg_cnt = str(_msg.get('content', ''))[:400]
+                                if _msg_cnt and len(_msg_cnt) > 40:
+                                    _dlg_ctx = _msg_cnt.replace('\n', ' ')[:400]
+                                    break
+                            if _dlg_ctx:
+                                _atask = (
+                                    f'{_atask}. '
+                                    f'КОНТЕКСТ (из моих результатов): {_dlg_ctx[:300]}. '
+                                    f'Используй эти данные — ищи конкретно этого человека/объект, '
+                                    f'не делай общий поиск. Укажи свой инструмент и ожидаемый результат.'
+                                )
+                                logger.info('[DELEGATE-ENRICH] enriched short task for %s: %s', _aname, _atask[:100])
                         _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
                 # Убираем DELEGATE-строки из финального текста
                 _content = _re_sub.sub(
@@ -8942,6 +8965,25 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _aname = _m.group(1).strip()
                 _atask = _m.group(2).strip()[:400]
                 if _aname and _atask:
+                    # ── DELEGATE quality guard (финальный парсинг) ──
+                    if len(_atask) < 120:
+                        _dlg_ctx2 = ''
+                        for _msg2 in reversed(_messages[-8:]):
+                            _mc2 = ''
+                            if _msg2.get('role') == 'tool':
+                                _mc2 = str(_msg2.get('content', ''))[:600]
+                            elif _msg2.get('role') == 'assistant':
+                                _mc2 = str(_msg2.get('content', ''))[:400]
+                            if _mc2 and len(_mc2) > 40:
+                                _dlg_ctx2 = _mc2.replace('\n', ' ')[:400]
+                                break
+                        if _dlg_ctx2:
+                            _atask = (
+                                f'{_atask}. '
+                                f'КОНТЕКСТ: {_dlg_ctx2[:300]}. '
+                                f'Используй эти данные напрямую, не делай общий поиск. '
+                                f'Укажи конкретный инструмент и ожидаемый результат.'
+                            )
                     _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
             _final_text = _re_fin.sub(
                 r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _final_text,
