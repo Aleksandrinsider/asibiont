@@ -91,14 +91,11 @@ env.bak/
 venv.bak/
 
 # Debug/Test files (dev only)
-_check*.py
-_chk*.py
-_analyze*.py
-_watch*.py
+_*.py
 _*.txt
-_schema.py
 local.db
 test_adaptability.db
+*.db
 
 # Spyder project settings
 .spyderproject

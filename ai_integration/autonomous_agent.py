@@ -9866,6 +9866,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _dm_display = director_message
             else:
                 _dm_display = f"{_ag_n}, {director_message}"
+            # Если director_message слишком короткий (< 80 символов) — обогащаем из task
+            # чтобы пользователь видел конкретику, а не расплывчатое "найди 2-3 контакта"
+            if len(_dm_display.strip()) < 80 and task and len(task.strip()) > 80:
+                _task_snippet = task.split('\n')[0].strip()[:250]
+                if _task_snippet and _task_snippet.lower() not in _dm_display.lower():
+                    _dm_display = _dm_display.rstrip(' .,') + '. ' + _task_snippet
             # Нормализуем: после "Имя, " первая буква должна быть строчной
             import re as _re_dm
             _dm_display = _re_dm.sub(
@@ -10150,8 +10156,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
         "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
         "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
-        "director_message: живое личное обращение к агенту — разговорный стиль, как в рабочем чате. Имя + глагол + контекст. До 25 слов.\n"
-        "director_message — пример: 'Марк, найди 5 площадок где сидят AI-энтузиасты и напиши им'. НЕ: 'Марк, Найти и привлечь тестировщиков'.\n"
+        "director_message: конкретное поручение как в рабочем чате. 1-2 предложения, 40-80 слов.\n"
+        "Структура: Имя + глагол + ЧТО ТОЧНО (число, тип аудитории, площадка) + через какой инструмент/источник + ожидаемый результат.\n"
+        "Пример ХОРОШО: 'Кристина, найди 5 Python-разработчиков на GitHub (language:python followers>30 с публичным email) через search_users, сохрани через save_email_contact. Затем отправь каждому персональное письмо через send_outreach_email — упомяни конкретный проект из их профиля.'\n"
+        "Пример ПЛОХО: 'Кристина, найди 2-3 новых контакта' — нет источника, нет критериев, нет инструмента.\n"
         "ПРАВИЛО: после запятой — глагол в повелительном наклонении строчными: найди, подготовь, напиши, исследуй.\n\n"
         "JSON без ```:\n"
         '{"action":"self"}\n'
@@ -10218,16 +10226,16 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "Ответь ТОЛЬКО JSON без ```:\n"
                 '{"action": "delegate", "agent_name": "точное имя агента", '
                 '"agent_task": "задача", '
-                '"director_message": "живое: имя + глагол (Кристина, подготовь... / Марк, исследуй...)"}\n'
+                '"director_message": "Имя, конкретное действие + откуда/инструмент + результат (40-80 слов, 1-2 предложения)"}\n'
                 "или\n"
                 '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
                 '"first_agent_name": "имя", "first_agent_task": "задача", '
-                '"director_message": "живое: имя + глагол"}'
+                '"director_message": "Имя, конкретное действие + откуда + результат (40-80 слов)"}'
             )
         elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
             return None  # Отмена — сброс миссии
 
-    decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=250, _caller='director_decision')
+    decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=400, _caller='director_decision')
     if not decision_raw:
         return None
 
