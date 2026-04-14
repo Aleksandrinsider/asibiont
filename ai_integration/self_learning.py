@@ -320,6 +320,36 @@ class SelfLearner:
         else:
             metrics['tool_fail'][tool_name] += 1
 
+    def record_tool_result(self, user_id: int, tool_name: str, success: bool, result_str: str = '') -> None:
+        """Записывает результат вызова инструмента — обновляет tool_success / tool_fail.
+
+        Вызывается из autonomous_agent после каждого tool call.
+        Данные накапливаются и инъектируются в system_prompt через get_tool_effectiveness_hint().
+        """
+        self._load_from_db(user_id)
+        m = self.user_metrics[user_id]
+
+        # Семантическая неудача: инструмент не поднял исключение, но вернул строку с ошибкой
+        if success and result_str:
+            _r_low = result_str.lower()
+            _FAIL_SIGNALS = (
+                '"error"', 'traceback', 'exception', 'forbidden', 'unauthorized',
+                '403', '404', '429', 'timeout', 'timed out',
+            )
+            if any(s in _r_low for s in _FAIL_SIGNALS):
+                success = False
+
+        if success:
+            m['tool_success'][tool_name] += 1
+        else:
+            m['tool_fail'][tool_name] += 1
+
+        # Батчевое сохранение через общий счётчик
+        self._unsaved_turns[user_id] += 1
+        if self._unsaved_turns[user_id] >= self._SAVE_EVERY_N_TURNS:
+            self._save_to_db(user_id)
+            self._unsaved_turns[user_id] = 0
+
     def get_tool_effectiveness_hint(self, user_id: int) -> str:
         """Возвращает подсказку об эффективности инструментов для системного промпта.
         

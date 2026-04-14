@@ -2719,6 +2719,10 @@ class HybridAutonomousAgent:
                     self.tool_discovery.learn_from_success(
                         func_name=tool_name, user_id=user_id,
                         context=reason, result=result)
+                    try:
+                        get_learner().record_tool_result(user_id, tool_name, True, str(result)[:300])
+                    except Exception as _le:
+                        logger.debug("suppressed learner: %s", _le)
 
                     results.append({"tool": tool_name, "success": True,
                                     "result": result, "reason": reason})
@@ -2769,6 +2773,10 @@ class HybridAutonomousAgent:
                             func_name=tool_name, error=str(e))
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
+                    try:
+                        get_learner().record_tool_result(user_id, tool_name, False)
+                    except Exception as _le:
+                        logger.debug("suppressed learner: %s", _le)
                     results.append({"tool": tool_name, "success": False,
                                     "error": str(e), "reason": reason})
         finally:
