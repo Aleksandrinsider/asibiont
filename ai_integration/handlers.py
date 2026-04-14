@@ -12359,10 +12359,12 @@ async def send_outreach_email(
         if not user:
             return " Пользователь не найден"
 
-        # ── GUARD: проверка user_rules — запрет email-рассылки ──
+        # ── GUARD: проверка user_rules — запрет email-рассылки + извлечение сайта ──
+        _user_landing_url = None
         try:
             from ai_integration.memory import decrypt_data as _dec_email_rule
             import json as _json_er
+            import re as _re_url
             _mem_er = _json_er.loads(_dec_email_rule(user.memory)) if user.memory else {}
             _EMAIL_STOP_KW = ('не писать', 'не отправлять', 'не слать', 'стоп email',
                               'stop email', 'без email', 'без рассылк', 'запрет email',
@@ -12371,9 +12373,16 @@ async def send_outreach_email(
                               'не отправляй email', 'не отправляй письм',
                               'не пиши по email', 'не пиши email', 'не пиши по почте',
                               'не писать по email', 'не писать email', 'не писать по почте')
+            _URL_RE = _re_url.compile(r'https?://[^\s\'">,]+', _re_url.IGNORECASE)
+            _SITE_KW = ('сайт', 'site', 'landing', 'лендинг', 'url', 'ссылк', 'мой сайт', 'наш сайт', 'платформ')
             for _r_er in _mem_er.get('rules', []):
                 if any(kw in _r_er.lower() for kw in _EMAIL_STOP_KW):
                     return f"⛔ Email-рассылка заблокирована правилом пользователя: «{_r_er[:80]}»"
+                # Извлекаем URL из правил вида "мой сайт https://..." или "landing: https://..."
+                if not _user_landing_url and any(kw in _r_er.lower() for kw in _SITE_KW):
+                    _url_match = _URL_RE.search(_r_er)
+                    if _url_match:
+                        _user_landing_url = _url_match.group(0).rstrip('/')
         except Exception as _e_er:
             logger.debug("suppressed email rule check: %s", _e_er)
 
@@ -12940,9 +12949,9 @@ async def send_outreach_email(
         if _sig_name and _sig_name.lower() not in body.lower()[-200:]:
             _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
 
-        # CTA-ссылка: если в кампании задан landing_url — вставляем его в тело
+        # CTA-ссылка: приоритет — landing_url кампании, затем сайт из пользовательских правил
         # Без реальной ссылки получатель не может перейти на сайт — конверсия = 0
-        _cta_url = (campaign.landing_url or '').strip()
+        _cta_url = (campaign.landing_url or '').strip() or (_user_landing_url or '')
         if _cta_url and _cta_url.replace('https://', '').replace('http://', '') not in _body_signed.lower():
             _body_signed = _body_signed.rstrip() + f"\n\n→ {_cta_url}"
 
