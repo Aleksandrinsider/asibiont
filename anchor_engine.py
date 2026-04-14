@@ -14440,10 +14440,11 @@ class AnchorEngine:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
                     continue
                 # ── SMART DEDUP: block exact same task text to same agent within 25min ──
-                # (25min < 30min coordinator interval — каждый цикл виден для каждого агента)
+                # 55min > 30min coordinator interval — перекрывает 1 полный цикл и не позволяет
+                # повторять одно задание каждые 30 мин без прогресса
                 if _ag_goal_title:
                     try:
-                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=25)
+                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=55)
                         _dedup_exists = session.query(Interaction.id).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'agent_msg',
@@ -14453,7 +14454,7 @@ class AnchorEngine:
                             Interaction.content.ilike(f'%"__goal_title": "{_ag_goal_title[:80]}%'),
                         ).first()
                         if _dedup_exists:
-                            logger.info("[COORD] ⛔ dedup: agent %s same tool+goal within 25min, skipping", _ag_name)
+                            logger.info("[COORD] ⛔ dedup: agent %s same tool+goal within 55min, skipping", _ag_name)
                             continue
                     except Exception:
                         pass
@@ -14823,17 +14824,30 @@ class AnchorEngine:
                 _user_profile_ag = data.get('user_profile', {})
                 _user_profile_sum_ag = (_user_profile_ag.get('summary', '') or '') if _user_profile_ag else ''
                 _user_rules_ag = data.get('user_rules', [])
-                _rap_note = (
-                    f"⚠️ run_agent_action запускает ТОЛЬКО твой встроенный скрипт (RSS/GitHub/etc.) — "
-                    f"он вернёт данные СВОЕЙ ленты, а не произвольные API.\n"
-                    f"   Если run_agent_action вернул данные НЕ по теме задачи:\n"
-                    f"     → ЧЕСТНО скажи пользователю: 'Мои RSS-ленты посвящены [X], а не [теме задачи]. "
-                    f"Переключаюсь на web_search.'\n"
-                    f"     → СРАЗУ вызови research_topic или web_search с нужными ключевыми словами.\n"
-                    f"     → НИКОГДА не называй нерелевантные данные 'аналитикой по [теме задачи]'!\n"
-                    f"     → НЕ обновляй update_goal_progress если данные нерелевантны теме цели!\n"
-                    if (_ag_data.get('python_code') or '').strip() else ''
-                )
+                _SEARCH_HINTS = {'web_search', 'research_topic', 'find_relevant_contacts_for_task',
+                                  'quick_topic_search', 'get_news_trends'}
+                _has_py_code = bool((_ag_data.get('python_code') or '').strip())
+                _task_is_search = _tool_hint in _SEARCH_HINTS
+                _rap_note = ''
+                if _has_py_code:
+                    if _task_is_search:
+                        _rap_note = (
+                            f"🚨 ЗАДАЧА — ПОИСК, НЕ СКРИПТ:\n"
+                            f"   НЕ запускай run_agent_action в начале — он вернёт данные твоего встроенного скрипта\n"
+                            f"   (CRM-сделки, входящие письма, GitHub-активность, Яндекс.Метрика и т.д.),\n"
+                            f"   а не контакты из форумов/LinkedIn/Reddit, которые тебе поручили найти.\n"
+                            f"   Первый вызов = {_tool_hint} по теме задачи. Скрипт — только если он нужен именно для ЭТОЙ задачи.\n"
+                        )
+                    else:
+                        _rap_note = (
+                            f"⚠️ run_agent_action запускает ТОЛЬКО твой встроенный скрипт (RSS/GitHub/etc.) — "
+                            f"он вернёт данные СВОЕЙ ленты, а не произвольные API.\n"
+                            f"   Если run_agent_action вернул данные НЕ по теме задачи:\n"
+                            f"     → ЧЕСТНО скажи: 'Мой скрипт посвящён [X], а не [теме задачи]. Переключаюсь на web_search.'\n"
+                            f"     → СРАЗУ вызови research_topic или web_search.\n"
+                            f"     → НИКОГДА не называй нерелевантные данные 'аналитикой по [теме задачи]'!\n"
+                            f"     → НЕ обновляй update_goal_progress если данные нерелевантны теме цели!\n"
+                        )
                 _ag_is_fem = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
                 _ag_role_str = (
                     f"{_ag_data.get('job_title', '') or _ag_data.get('specialization', 'специалист')}"

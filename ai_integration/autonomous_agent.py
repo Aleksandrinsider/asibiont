@@ -9959,6 +9959,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _task_snippet = task.split('\n')[0].strip()[:250]
                 if _task_snippet and _task_snippet.lower() not in _dm_display.lower():
                     _dm_display = _dm_display.rstrip(' .,') + '. ' + _task_snippet
+            # Если и задача короткая — ищем контекст в extra_context (история, проактив)
+            if len(_dm_display.strip()) < 80 and extra_context and len(extra_context.strip()) > 100:
+                import re as _re_ctx_enrich
+                # Ищем предложение из context, которое упоминает ключевые слова задачи
+                _task_words_ec = set(w.lower() for w in (_dm_display + ' ' + (task or '')).split() if len(w) > 4)
+                _ctx_sents = _re_ctx_enrich.split(r'(?<=[.!?\n])\s+', extra_context[:2000])
+                for _cs in _ctx_sents:
+                    _cs_clean = _cs.strip()[:200]
+                    if len(_cs_clean) > 30 and sum(1 for w in _task_words_ec if w in _cs_clean.lower()) >= 2:
+                        _dm_display = _dm_display.rstrip(' .,') + '. ' + _cs_clean
+                        break
             # Нормализуем: после "Имя, " первая буква должна быть строчной
             import re as _re_dm
             _dm_display = _re_dm.sub(
