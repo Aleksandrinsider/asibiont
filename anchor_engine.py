@@ -6678,7 +6678,7 @@ class AnchorEngine:
                             _lar_rows = session.query(Interaction).filter(
                                 Interaction.user_id == user.id,
                                 Interaction.message_type.in_(['proactive', 'agent_msg']),
-                                Interaction.created_at >= _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=12),
+                                Interaction.created_at >= datetime.now(timezone.utc) - timedelta(hours=12),
                             ).order_by(Interaction.created_at.desc()).limit(30).all()
                             for _lar in _lar_rows:
                                 try:
@@ -6701,6 +6701,13 @@ class AnchorEngine:
                         _last_cycle_ctx_c = ''
                         _loop_channel_hint_c = ''
                         _bottleneck_hint_c = ''
+                        # Pre-init: обязательно до if _last_aals_c — иначе NameError в _coord_prompt
+                        _my_recent_assigns_ctx = ''
+                        _other_assigns_ctx = ''
+                        _my_assign_texts = []
+                        _failed_tasks_ctx = ''
+                        _pending_tasks_ctx = ''
+                        _intg_usage_str = ''
                         try:
                             from models import AgentActivityLog as _AAL_coord_ctx
                             import datetime as _dt_cc
