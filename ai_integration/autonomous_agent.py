@@ -6114,6 +6114,8 @@ def _build_user_context_sync(user_db_id: int) -> str:
                 identity_parts.append(f'Сейчас: {profile.current_plans[:100]}')
         if profile.content_strategy:
             identity_parts.append(f'Контент-стратегия: {profile.content_strategy[:100]}')
+        if profile.website:
+            identity_parts.append(f'Сайт: {profile.website}')
 
     if identity_parts:
         _owner_block = '👤 ВЛАДЕЛЕЦ (твой босс, НЕ контакт для outreach!): ' + ', '.join(identity_parts)

@@ -197,6 +197,7 @@ class UserProfile(Base):
     goal_autopilot_enabled = Column(Boolean, default=False)  # Enable/disable autonomous goal advancement
     auto_post_time = Column(String(5), default='12:00')  # Preferred time for auto-posting in HH:MM format (Premium)
     status_text = Column(String(100))  # User status: 'Инвестор', 'Ищу работу', 'Ищу партнёра', etc.
+    website = Column(String(500))  # Сайт/лендинг пользователя
 
     # Normalized (English) versions of profile fields for cross-language matching
     skills_normalized = Column(Text)

@@ -12386,6 +12386,16 @@ async def send_outreach_email(
         except Exception as _e_er:
             logger.debug("suppressed email rule check: %s", _e_er)
 
+        # Fallback: берём сайт из профиля пользователя
+        if not _user_landing_url:
+            try:
+                from models import UserProfile as _UP_cta
+                _prof_cta = session.query(_UP_cta).filter_by(user_id=user.id).first()
+                if _prof_cta and getattr(_prof_cta, 'website', None):
+                    _user_landing_url = _prof_cta.website.strip().rstrip('/') or None
+            except Exception as _e_prof_cta:
+                logger.debug("suppressed profile website fetch: %s", _e_prof_cta)
+
         # ── GUARD: не отправлять email на адрес самого пользователя ИЛИ IMAP-аккаунт агента ──
         _rcpt = (recipient_email or '').strip().lower()
         _user_email = (getattr(user, 'email', '') or '').strip().lower()
@@ -12949,11 +12959,16 @@ async def send_outreach_email(
         if _sig_name and _sig_name.lower() not in body.lower()[-200:]:
             _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
 
-        # CTA-ссылка: приоритет — landing_url кампании, затем сайт из пользовательских правил
-        # Без реальной ссылки получатель не может перейти на сайт — конверсия = 0
+        # Сайт: добавляем как plain-text домен в подпись БЕЗ https:// и без гиперссылки.
+        # Ссылки (→ https://...) в холодных письмах — главный триггер спам-фильтров,
+        # они снижают доставляемость и могут убить репутацию домена отправки.
+        # Plain-text домен в подписи безопасен и при этом сообщает пользователю о сайте.
         _cta_url = (campaign.landing_url or '').strip() or (_user_landing_url or '')
-        if _cta_url and _cta_url.replace('https://', '').replace('http://', '') not in _body_signed.lower():
-            _body_signed = _body_signed.rstrip() + f"\n\n→ {_cta_url}"
+        if _cta_url:
+            # Извлекаем чистый домен без схемы: https://example.com → example.com
+            _plain_domain = _cta_url.replace('https://', '').replace('http://', '').split('/')[0]
+            if _plain_domain and _plain_domain.lower() not in _body_signed.lower():
+                _body_signed = _body_signed.rstrip() + f"\n{_plain_domain}"
 
         # ── SMTP dispatch (Яндекс / Mail.ru / Gmail / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False

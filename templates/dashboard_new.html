@@ -1699,8 +1699,8 @@
                         <input type="text" id="quick-position" placeholder="Ваша должность" data-i18n-ph="position-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="status">Статус</label>
-                        <input type="text" id="quick-status" placeholder="Инвестор, Фрилансер..." data-i18n-ph="status-ph" maxlength="100" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Сайт</label>
+                        <input type="url" id="quick-website" placeholder="https://ваш-сайт.com" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <!-- Password change section -->
                     <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 10px; margin-top: 2px;">
@@ -14697,7 +14697,7 @@ except Exception as e:
                 const interestsField = document.getElementById('quick-interests');
                 const skillsField = document.getElementById('quick-skills');
                 const goalsField = document.getElementById('quick-goals');
-                const statusField = document.getElementById('quick-status');
+                const websiteField = document.getElementById('quick-website');
                 const bioField = document.getElementById('quick-bio');
                 const contentStrategyField = document.getElementById('quick-content-strategy');
                 const telegramChannelField = document.getElementById('quick-telegram-channel');
@@ -14716,7 +14716,7 @@ except Exception as e:
                 if (interestsField) interestsField.value = {{ (profile.interests or "") | tojson }};
                 if (skillsField) skillsField.value = {{ (profile.skills or "") | tojson }};
                 if (goalsField) goalsField.value = {{ (profile.goals or "") | tojson }};
-                if (statusField) statusField.value = {{ (profile.status_text or "") | tojson }};
+                if (websiteField) websiteField.value = {{ (profile.website or "") | tojson }};
                 if (bioField) bioField.value = {{ (profile.bio or "") | tojson }};
                 if (contentStrategyField) contentStrategyField.value = {{ (profile.content_strategy or "") | tojson }};
                 {% endif %}
@@ -14898,7 +14898,7 @@ except Exception as e:
             const interests = document.getElementById('quick-interests').value.trim();
             const skills = document.getElementById('quick-skills').value.trim();
             const goals = document.getElementById('quick-goals').value.trim();
-            const statusText = document.getElementById('quick-status').value.trim();
+            const websiteVal = document.getElementById('quick-website')?.value?.trim() || '';
             const bio = document.getElementById('quick-bio')?.value?.trim() || '';
             const contentStrategy = document.getElementById('quick-content-strategy')?.value?.trim() || '';
             const telegramChannel = document.getElementById('quick-telegram-channel').value.trim();
@@ -14937,7 +14937,7 @@ except Exception as e:
                 profileData.goals = goals;
                 profileData.company = company;
                 profileData.position = position;
-                profileData.status_text = statusText;
+                profileData.website = websiteVal;
                 profileData.bio = bio;
                 profileData.content_strategy = contentStrategy;
                 profileData.telegram_channel = telegramChannel;

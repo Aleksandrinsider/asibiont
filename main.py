@@ -9765,6 +9765,8 @@ async def api_profile_handler(request):
                             logger.info(f"[API PROFILE] Auto-created goal '{_gtitle}' for user {user_id}")
                 if 'status_text' in data:
                     profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
+                if 'website' in data:
+                    profile.website = data['website'].strip()[:500] if data['website'] and data['website'].strip() else None
                 if 'bio' in data:
                     profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
                 if 'content_strategy' in data:

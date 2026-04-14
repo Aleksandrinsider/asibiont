@@ -46,6 +46,7 @@ def _migrate_user_profiles(session, inspector):
         'auto_delegation_enabled': 'ALTER TABLE user_profiles ADD COLUMN auto_delegation_enabled BOOLEAN DEFAULT TRUE',
         'auto_post_time': "ALTER TABLE user_profiles ADD COLUMN auto_post_time VARCHAR(5) DEFAULT '12:00'",
         'status_text': 'ALTER TABLE user_profiles ADD COLUMN status_text VARCHAR(100)',
+        'website': 'ALTER TABLE user_profiles ADD COLUMN website VARCHAR(500)',
         # Normalized (English) fields for cross-language contact matching
         'skills_normalized': 'ALTER TABLE user_profiles ADD COLUMN skills_normalized TEXT',
         'interests_normalized': 'ALTER TABLE user_profiles ADD COLUMN interests_normalized TEXT',
