@@ -5466,10 +5466,17 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
         break  # non-5xx error, don't retry
       except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
         logger.warning(f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}")
-        if _SHARED_AI_SESSION and not os.getenv('PYTEST_CURRENT_TEST'):
-            try: await _SHARED_AI_SESSION.close()
-            except Exception: pass
+        if not os.getenv('PYTEST_CURRENT_TEST'):
+            # Закрываем сессию И коннектор чтобы не оставлять Unclosed connection
+            _sess_to_close = _SHARED_AI_SESSION
             _SHARED_AI_SESSION = None
+            if _sess_to_close is not None and not _sess_to_close.closed:
+                try:
+                    await _sess_to_close.close()
+                    # Даём event loop время очистить pending callbacks коннектора
+                    await asyncio.sleep(0.1)
+                except Exception:
+                    pass
         if _att < _max_attempts - 1:
             await asyncio.sleep(2)
             continue
