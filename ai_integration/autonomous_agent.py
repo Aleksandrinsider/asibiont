@@ -2983,19 +2983,6 @@ class HybridAutonomousAgent:
                 params['__block_error__'] = (f"⛔ {_rcpt} — некорректный формат email. "
                                              "Используй только формат user@domain.tld. Найди правильный адрес через web_search.")
                 return params
-            # GUARD: язык письма — если имя получателя латиницей, тело не должно быть на русском
-            _recip_name_lang = (params.get('recipient_name') or '').strip()
-            _body_lang = (params.get('body') or '') + (params.get('subject') or '')
-            _name_is_latin = bool(_recip_name_lang) and not any('\u0400' <= c <= '\u04FF' for c in _recip_name_lang)
-            _body_cyrillic_count = sum(1 for c in _body_lang if '\u0400' <= c <= '\u04FF')
-            if _name_is_latin and _body_cyrillic_count > 30:
-                params['__skip__'] = True
-                params['__block_error__'] = (
-                    f"⛔ Несоответствие языка: имя получателя '{_recip_name_lang}' написано латиницей — "
-                    f"значит, это англоязычный контакт. Письмо составлено на русском. "
-                    f"Перепиши subject и body на английском языке и вызови send_outreach_email снова."
-                )
-                return params
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:
