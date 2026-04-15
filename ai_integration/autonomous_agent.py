@@ -5422,7 +5422,7 @@ def _is_question_message(msg: str) -> bool:
     return False
 
 
-async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '') -> str:
+async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '', temperature: float = 0.7) -> str:
     """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
     global _SHARED_AI_SESSION
     _max_attempts = 2
@@ -5434,7 +5434,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
                 async with _tmp.post(
                         "https://api.deepseek.com/chat/completions",
                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                        json={"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.7},
+                        json={"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
                         timeout=aiohttp.ClientTimeout(total=_timeouts[min(_att, len(_timeouts)-1)]),
                     ) as resp:
                         if resp.status == 200:
@@ -5451,7 +5451,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
             async with _sess.post(
                     "https://api.deepseek.com/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                    json={"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": 0.7},
+                    json={"model": DEEPSEEK_MODEL, "messages": messages, "max_tokens": max_tokens, "temperature": temperature},
                     timeout=aiohttp.ClientTimeout(total=_timeouts[min(_att, len(_timeouts)-1)]),
                 ) as resp:
                     if resp.status == 200:

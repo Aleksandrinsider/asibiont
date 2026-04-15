@@ -12907,9 +12907,19 @@ class AnchorEngine:
                 # Больше токенов когда шагов больше (350 на шаг, минимум 900, максимум 3200)
                 # Увеличен минимум: task должен быть ≥50 слов с деталями — нужно место
                 _plan_max_tokens = min(max(900, _n_plan_steps * 350), 3200)
-                _plan_json = await asyncio.wait_for(
-                    _quick_ai_call_raw([{"role": "user", "content": _plan_prompt}], max_tokens=_plan_max_tokens),
-                    timeout=30,
+                # Логируем размер промпта координатора для мониторинга latency
+                _prompt_chars = len(_plan_prompt)
+                if _prompt_chars > 20000:
+                    logger.warning('[COORD] plan_prompt large: %d chars (~%d tokens) — consider trimming', _prompt_chars, _prompt_chars // 4)
+                else:
+                    logger.debug('[COORD] plan_prompt: %d chars (~%d tokens)', _prompt_chars, _prompt_chars // 4)
+                # Без внешнего wait_for — _quick_ai_call_raw имеет встроенный retry [25s, 45s]
+                # wait_for(30) убивало 2-ю попытку до того как она запускалась
+                _plan_json = await _quick_ai_call_raw(
+                    [{"role": "user", "content": _plan_prompt}],
+                    max_tokens=_plan_max_tokens,
+                    temperature=0.3,  # Низкая температура для стабильного JSON
+                    _caller='coordinator_plan',
                 )
             except Exception as _pe:
                 logger.warning("[COORD] plan generation failed: %s", _pe)
