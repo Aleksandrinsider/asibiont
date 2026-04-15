@@ -11390,6 +11390,27 @@ class AnchorEngine:
             except Exception as _emp_err:
                 logger.debug("[COORD] empirical scores: %s", _emp_err)
 
+            # ── Персистентные выводы координатора (CoordinatorInsight) ──
+            _coordinator_insights_str = ''
+            try:
+                from models import CoordinatorInsight as _CI_load, Session as _CI_Sess_load
+                _ci_sess = _CI_Sess_load()
+                try:
+                    _ci_rows = _ci_sess.query(_CI_load).filter(
+                        _CI_load.user_id == user.id,
+                    ).order_by(_CI_load.updated_at.desc()).limit(20).all()
+                    if _ci_rows:
+                        _ci_lines = ['\n🧠 ЧТО КООРДИНАТОР УЗНАЛ О РАБОТЕ С ЭТИМ ПОЛЬЗОВАТЕЛЕМ (накоплено за несколько дней):']
+                        for _ci_r in _ci_rows:
+                            _ci_tag = f' [подтверждено ×{_ci_r.confirmation_count}]' if (_ci_r.confirmation_count or 1) > 1 else ''
+                            _ci_lines.append(f'  • {_ci_r.summary}{_ci_tag}')
+                        _coordinator_insights_str = '\n'.join(_ci_lines) + '\n  → Используй эти выводы при выборе стратегии и инструментов.\n'
+                finally:
+                    try: _ci_sess.close()
+                    except Exception: pass
+            except Exception as _ci_load_err:
+                logger.debug('[COORD] coordinator_insights load: %s', _ci_load_err)
+
             def _tool_emp_score(_agent_name: str, _tool: str) -> float:
                 _ag_l = (_agent_name or '').strip().lower()
                 _tl_l = (_tool or '').strip().lower()
@@ -12658,6 +12679,7 @@ class AnchorEngine:
                 + _subj_reply_str
                 + _situation_analysis_str
                 + _empirical_guidance_str
+                + _coordinator_insights_str
                 + _integration_hypothesis_str
                 + _stale_ack_str
                 + _fresh_chain_str
@@ -12891,7 +12913,39 @@ class AnchorEngine:
                 )
             except Exception as _pe:
                 logger.warning("[COORD] plan generation failed: %s", _pe)
-                return False
+                # Fallback: строим минимальный план из доступных агентов и первой активной цели
+                try:
+                    _fb_goal_title = _goals[0]['title'] if _goals else 'основная цель'
+                    _fb_plan = []
+                    for _fb_prof in (_profiles[:_n_plan_steps] if _profiles else []):
+                        _fb_name = _fb_prof.get('name', '')
+                        if not _fb_name:
+                            continue
+                        _fb_keys = (_fb_prof.get('user_api_keys', '') or '').lower()
+                        _fb_has_email = any(k in _fb_keys for k in ('smtp_', 'resend_api_key', 'sendgrid_', 'gmail_user='))
+                        _fb_tool = 'send_outreach_email' if _fb_has_email else 'research_topic'
+                        _fb_task = (
+                            f'Найди 3 новых потенциальных клиентов через web_search для цели «{_fb_goal_title[:50]}», '
+                            f'сохрани каждого через save_email_contact, затем отправь персональные письма.'
+                            if _fb_has_email else
+                            f'Исследуй возможности для достижения цели «{_fb_goal_title[:50]}»: '
+                            f'найди актуальные данные, людей или каналы которые ещё не использовались.'
+                        )
+                        _fb_plan.append({
+                            'agent': _fb_name,
+                            'task': _fb_task,
+                            'tool': _fb_tool,
+                            'goal': _fb_goal_title,
+                            'reason': 'fallback: основной AI-вызов не ответил, используется резервный план',
+                        })
+                    if _fb_plan:
+                        logger.info("[COORD] fallback plan: %d steps", len(_fb_plan))
+                        _plan_json = json.dumps(_fb_plan, ensure_ascii=False)
+                    else:
+                        return False
+                except Exception as _fb_err:
+                    logger.warning("[COORD] fallback plan failed: %s", _fb_err)
+                    return False
 
             import re as _re_coord
             _plan = []
@@ -16045,6 +16099,84 @@ class AnchorEngine:
                             pass
                 except Exception as _upd_outer:
                     logger.warning("[COORD] AAL update session setup: %s", _upd_outer)
+
+            # ── Запись накопленных выводов (CoordinatorInsight) ──
+            try:
+                _insight_records: list[tuple[str, str]] = []  # (insight_type, summary)
+
+                # Вывод 1: channel_effectiveness — эффективность email
+                try:
+                    _ci_email_sent = _total_email_sent if '_total_email_sent' in dir() else 0  # noqa
+                    _ci_reply_rate = _email_reply_rate if '_email_reply_rate' in dir() else 0.0  # noqa
+                except Exception:
+                    _ci_email_sent, _ci_reply_rate = 0, 0.0
+                if _ci_email_sent > 30 and _ci_reply_rate < 2.0:
+                    _insight_records.append((
+                        'channel_effectiveness',
+                        f'Email outreach показывает низкую конверсию ({_ci_reply_rate}% при {_ci_email_sent} письмах). '
+                        f'Стоит попробовать контент-стратегию или изменить аудиторию/тему.',
+                    ))
+                elif _ci_email_sent > 30 and _ci_reply_rate > 10.0:
+                    _insight_records.append((
+                        'channel_effectiveness',
+                        f'Email outreach работает хорошо ({_ci_reply_rate}% конверсия). '
+                        f'Приоритизироватать этот канал.',
+                    ))
+
+                # Вывод 2: strategy_pattern — прогресс/стагнация
+                _ci_has_progress = '_any_real_progress' in dir() and _any_real_progress  # noqa
+                _ci_tools_used = list(_all_tools) if '_all_tools' in dir() and _all_tools else []  # noqa
+                if not _ci_has_progress and _ci_tools_used:
+                    _ci_top_tool = max(set(_ci_tools_used), key=_ci_tools_used.count)
+                    _insight_records.append((
+                        'strategy_pattern',
+                        f'Цикл без реального прогресса. Наиболее частый инструмент: {_ci_top_tool}. '
+                        f'Возможно, стоит попробовать другой инструмент или подход.',
+                    ))
+                elif _ci_has_progress and _ci_tools_used:
+                    _ci_top_tool = max(set(_ci_tools_used), key=_ci_tools_used.count)
+                    _insight_records.append((
+                        'tool_preference',
+                        f'Цикл с реальным прогрессом. Ключевой инструмент: {_ci_top_tool}. '
+                        f'Продолжать использовать этот подход.',
+                    ))
+
+                if _insight_records:
+                    from models import CoordinatorInsight as _CI_write, Session as _CI_Sess_write
+                    _ci_w_sess = _CI_Sess_write()
+                    try:
+                        import datetime as _ci_dt
+                        for _ci_itype, _ci_summary in _insight_records:
+                            # Ищем похожий инсайт того же типа (по первым 80 символам)
+                            _ci_key = _ci_summary[:80]
+                            _existing_ci = _ci_w_sess.query(_CI_write).filter(
+                                _CI_write.user_id == user.id,
+                                _CI_write.insight_type == _ci_itype,
+                                _CI_write.summary.like(_ci_key[:40] + '%'),
+                            ).first()
+                            if _existing_ci:
+                                _existing_ci.confirmation_count = (_existing_ci.confirmation_count or 1) + 1
+                                _existing_ci.updated_at = _ci_dt.datetime.utcnow()
+                            else:
+                                _new_ci = _CI_write(
+                                    user_id=user.id,
+                                    insight_type=_ci_itype,
+                                    summary=_ci_summary,
+                                    evidence_score=0.5,
+                                    confirmation_count=1,
+                                )
+                                _ci_w_sess.add(_new_ci)
+                        _ci_w_sess.commit()
+                        logger.info('[COORD] coordinator_insights written: %d records', len(_insight_records))
+                    except Exception as _ci_w_err:
+                        logger.debug('[COORD] coordinator_insights write: %s', _ci_w_err)
+                        try: _ci_w_sess.rollback()
+                        except Exception: pass
+                    finally:
+                        try: _ci_w_sess.close()
+                        except Exception: pass
+            except Exception as _ci_outer_err:
+                logger.debug('[COORD] coordinator_insights outer: %s', _ci_outer_err)
 
             # ── Финальный отчёт пользователю: что РЕАЛЬНО сделано за этот цикл ──
             # Фильтруем placeholder/pending записи — они бесполезны в отчёте

@@ -1045,6 +1045,41 @@ class DecisionLog(Base):
     )
 
 
+class CoordinatorInsight(Base):
+    """Накопленные выводы координатора — персистентная память между циклами.
+
+    Хранит: что работало, что не работало, какие паттерны замечены для конкретного пользователя.
+    Обновляется в конце каждого успешного цикла автопилота.
+    Загружается в начало промпта планировщика у следующего цикла.
+    """
+    __tablename__ = 'coordinator_insights'
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+
+    # Тип вывода: 'channel_effectiveness', 'audience_fit', 'strategy_pattern', 'tool_preference'
+    insight_type = Column(String(50), nullable=False, index=True)
+
+    # Краткое описание (для промпта): что именно узнали
+    summary = Column(Text, nullable=False)
+
+    # Числовое подтверждение (если есть): конверсия, кол-во, %
+    evidence_score = Column(Float)
+
+    # Сколько раз этот паттерн подтверждался
+    confirmation_count = Column(Integer, default=1)
+
+    # Последний раз обновлён
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    user = relationship("User", backref="coordinator_insights")
+
+    __table_args__ = (
+        Index('ix_coord_insight_user_type', 'user_id', 'insight_type'),
+    )
+
+
 class EmailContactPreference(Base):
     """Накопленные предпочтения конкретного email-контакта.
     Обновляется каждый раз когда контакт отвечает — чтобы следующее письмо было точнее."""
