@@ -204,7 +204,7 @@ _CAP_TOOL_HINTS: dict[str, str] = {
     'notion': 'run_agent_action(action="add_page"|"update_page"|"query_db"|"get_page") — создание, ОБНОВЛЕНИЕ и поиск страниц/баз',
     'sheets': 'run_agent_action(action="append_row"|"update_cell"|"get_range"|"find_row") — чтение, запись, обновление и поиск данных в таблицах',
     'crypto': 'run_agent_action или http_api_request(url="https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")',
-    'finance': 'get_stock_price(symbol, data_type) — ТОЛЬКО цена/объём/мультипликаторы акции. НЕ ИСПОЛЬЗОВАТЬ для поиска людей/инвесторов/сообществ — для этого web_search или LinkedIn. Alpha Vantage; run_agent_action(action="get_price"|"get_quote"|"get_volume") — Finnhub/Polygon.io/Twelve Data; http_api_request — любой финансовый API',
+    'finance': 'get_stock_price(symbol, data_type) — ТОЛЬКО цена/объём/мультипликаторы акции. НЕ ИСПОЛЬЗОВАТЬ для поиска людей/инвесторов/сообществ — для этого web_search или GitHub/Habr. Alpha Vantage; run_agent_action(action="get_price"|"get_quote"|"get_volume") — Finnhub/Polygon.io/Twelve Data; http_api_request — любой финансовый API',
     'news': 'run_agent_action(action="get_news", query="..."), get_news_trends',
     'slack': 'run_agent_action(action="send_message") или http_api_request(url="https://slack.com/api/chat.postMessage", method="POST", auth_key="SLACK_TOKEN")',
     'social': 'run_agent_action(action="post_wall") или http_api_request — VK, Twitter и др. по REST API',
@@ -269,7 +269,7 @@ _CAP_TO_SCORE: dict[str, str] = {
 _CAT_ACTIONS: dict[str, list[str]] = {
     'email': [
         '{name}, проверь почту — если кто-то ответил на письма, напиши ответ через check_emails и reply_to_outreach_email с конкретным предложением о сотрудничестве. Если контакты молчат 2+ дня — отправь через send_follow_up_email с новым аргументом (не повторяй прошлое письмо). Жду содержательный ответ хотя бы одному контакту.',
-        '{name}, база контактов по «{goal}» слишком мала — нужны новые лиды для роста. Найди 2-3 новых контакта через web_search — ищи в публикациях, LinkedIn-профилях, конференционных списках по теме. Сохрани через save_email_contact и каждому отправь персональное письмо через send_outreach_email с упоминанием их проекта или публикации.',
+        '{name}, база контактов по «{goal}» слишком мала — нужны новые лиды для роста. Найди 2-3 новых контакта через web_search — ищи в публикациях, GitHub-профилях, списках спикеров конференций, ProductHunt. Сохрани через save_email_contact и каждому отправь персональное письмо через send_outreach_email с упоминанием их проекта или публикации.',
         '{name}, прогресс по «{goal}» буксует — нужны новые контакты из профильных источников. Найди через web_search 3 email специалистов по теме — ищи на GitHub, в публикациях, среди спикеров конференций. Сохрани через save_email_contact и отправь первое письмо через send_outreach_email.',
     ],
     'content': [
@@ -311,7 +311,7 @@ _CAT_ACTIONS: dict[str, list[str]] = {
         '{name}, висящие задачи по «{goal}» тормозят команду — нужна ревизия. Проверь через save_note зависшие >2 дней задачи — обнови статус каждой или раздели крупные на подзадачи через add_task.',
     ],
     'hr': [
-        '{name}, воронка кандидатов по «{goal}» пустеет — нужны новые лиды. Найди через web_search 3 новых кандидата с контактами — ищи в профильных сообществах, LinkedIn, GitHub. Сохрани через save_email_contact и отправь каждому персональное письмо через send_outreach_email.',
+        '{name}, воронка кандидатов по «{goal}» пустеет — нужны новые лиды. Найди через web_search 3 новых кандидата с контактами — ищи в профильных сообществах, GitHub, Habr, dev.to. Сохрани через save_email_contact и отправь каждому персональное письмо через send_outreach_email.',
         '{name}, не знаем рыночный уровень зарплат по «{goal}» — рискуем потерять кандидатов из-за офера. Подготовь через research_topic обзор рынка: уровень зарплат, доступность, ключевые площадки. Сохрани через save_note с рекомендацией.',
         '{name}, кандидаты ждут ответа >2 дней по «{goal}» — они уходят к конкурентам. Проверь воронку — кто ждёт ответа? Напиши follow-up через send_outreach_email или обнови статус через save_note.',
     ],
@@ -3430,7 +3430,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                             f"  🔴 {_zero_streak} попыток подряд нашли 0 лидов — текущий запрос полностью исчерпан.\n"
                             "  ТВОЁ РЕШЕНИЕ (выбери одно):\n"
                             "    a) Предложи пользователю расширить аудиторию кампании (смежные роли, другие сегменты)\n"
-                            "    b) Попробуй через другой канал: web_search('site:habr.com [тема] email') или LinkedIn bio\n"
+                            "    b) Попробуй через другой канал: web_search('site:habr.com [тема] email') или web_search('site:github.com [тема] email')\n"
                             "    c) Сообщи через send_message_to_user что пул исчерпан и нужна корректировка цели\n"
                             "  → НЕ запускай поиск ещё раз теми же ключевыми словами.\n"
                         )
@@ -7234,7 +7234,7 @@ class AnchorEngine:
                                         f'  Пользователь явно запретил работать с текущей базой.\n'
                                         f'  НИКОГДА не поручай: «переключись на тёплых/ответивших/уже в базе».\n'
                                         f'  Если холодные письма не дают отклика — СМЕНИ АУДИТОРИЮ или ПЛАТФОРМУ:\n'
-                                        f'  другой сегмент (другие страны/ниши/профессии), другой канал (GitHub, LinkedIn, dev.to),\n'
+                                        f'  другой сегмент (другие страны/ниши/профессии), другой канал (GitHub, Habr, dev.to, ProductHunt),\n'
                                         f'  другой формат письма — но всегда к НОВЫМ людям, которых ещё не контактировали.\n'
                                     )
                                 # Расширение аудитории: «не только X, но и Y» —
@@ -7348,7 +7348,7 @@ class AnchorEngine:
                             "Если есть «Последний результат» — отталкивайся от него.\n"
                             f"✅ Примеры ПРАВИЛЬНОГО поручения (ЗАЧЕМ+КАК+РЕЗУЛЬТАТ):\n"
                             f"  СЛАБОЕ ❌: '{_chosen_name}, найди email Андрея Калинина (Альфа-Банк) для outreach.' — нет стратегии, нет инструмента, нет критерия.\n"
-                            f"  СИЛЬНОЕ ✅ (контакт): '{_chosen_name}, нам нужно выйти на ЛПР в финтехе — сейчас по этому сегменту база пустая, а цель по привлечению клиентов буксует. Найди личный email Андрея Калинина через web_search (LinkedIn + упоминания в профильных СМИ), приоритет — прямой адрес, не info@. Сохрани через save_email_contact с должностью и названием компании — жду 1 готовый контакт для cold outreach.'\n"
+                            f"  СИЛЬНОЕ ✅ (контакт): '{_chosen_name}, нам нужно выйти на ЛПР в финтехе — сейчас по этому сегменту база пустая, а цель по привлечению клиентов буксует. Найди личный email Андрея Калинина через web_search (GitHub профиль + упоминания в профильных СМИ), приоритет — прямой адрес, не info@. Сохрани через save_email_contact с должностью и названием компании — жду 1 готовый контакт для cold outreach.'\n"
                             f"  СИЛЬНОЕ ✅ (контент): '{_chosen_name}, нужно перейти от накопленного анализа к публичному контенту — привлечь новую аудиторию разработчиков, которые пока нас не знают. Создай пост через publish_to_telegram на основе свежих трендов из твоей RSS-ленты — выбери 1 инсайт с практической пользой, добавь конкретный пример. Жду 1 пост с вопросом для вовлечения аудитории в конце.'\n"
                             f"{_dynamic_examples_str}\n"
                             "❗ Формат: сплошной текст как в мессенджере. Без заголовков, списков, markdown.\n\n"
@@ -12901,9 +12901,10 @@ class AnchorEngine:
                 "• ИСЧЕРПАНИЕ ИСТОЧНИКА: если search за 2+ цикла даёт 0 новых результатов — стоит спросить: другой запрос или другая платформа дадут новых людей? Или данных уже достаточно для действия (send_outreach, create_post)?\n"
                 "• search_contacts / get_contact = ТОЛЬКО CRM (AmoCRM). Это НЕ поиск новых людей!\n"
                 "  get_contact ОБЯЗАН иметь параметр id=<числовой_ID_из_CRM>.\n"
-                "  Для поиска НОВЫХ контактов: web_search site:linkedin.com / search_users (GitHub) / save_email_contact.\n"
+                "  Для поиска НОВЫХ контактов: search_users (GitHub) / web_search site:github.com / web_search site:habr.com / save_email_contact.\n"
+                "  ⚠️ LinkedIn НЕ показывает email без авторизации — не используй site:linkedin.com для поиска контактов.\n"
                 "• search_repos = анализ РЕПОЗИТОРИЕВ (код, issues). НЕ используй search_repos для поиска людей.\n"
-                "  Для поиска людей: search_users (GitHub) или web_search (LinkedIn/Habr).\n"
+                "  Для поиска людей: search_users (GitHub) или web_search (Habr/dev.to/ProductHunt).\n"
                 "• task = конкретное действие, повелительное наклонение (найди/отправь/проверь/опубликуй/создай).\n"
                 "• task ОБЯЗАН содержать: ЧТО делать + С КЕМ/ЧЕМ (критерии) + СКОЛЬКО. «Поиск контактов» = мусор. «Найди 5 DevOps-инженеров с GitHub Python-проектов» = задача.\n"
                 "• КОНТЕКСТ ЧАТА → В ЗАДАНИЕ: если пользователь попросил что-то конкретное (см. «Последний диалог»), "
@@ -12913,9 +12914,9 @@ class AnchorEngine:
                 "Тон — деловое предложение сотрудничества, не вербовка. Обновить тексты во всех активных кампаниях.'\n"
                 "  ❌ ПЛОХО: 'обнови email-шаблоны с профессиональной терминологией' (потеря сути запроса)\n"
                 "  ❌ ПЛОХО: 'поищи контактов технических специалистов' (абстракция без деталей)\n"
-                "  ✓ ХОРОШО: 'Найди 5 CTO/Lead биотех-компаний через web_search site:linkedin.com OR site:habr.com, "
+                "  ✓ ХОРОШО: 'Найди 5 CTO/Lead биотех-компаний через web_search site:habr.com OR site:producthunt.com, "
                 "сохрани через save_email_contact, отправь каждому персонализированное письмо с предложением тестирования платформы'\n"
-                "• НЕ ДУБЛИРУЙ ЗАДАЧИ МЕЖДУ АГЕНТАМИ: если один агент ищет через search_users/GitHub, другой ОБЯЗАН делать другое (web_search LinkedIn, send_outreach_email, publish_to_telegram). Два агента с одинаковым поиском одной цели = потеря цикла. Разные агенты = разные шаги цепочки.\n"
+                "• НЕ ДУБЛИРУЙ ЗАДАЧИ МЕЖДУ АГЕНТАМИ: если один агент ищет через search_users/GitHub, другой ОБЯЗАН делать другое (web_search Habr/ProductHunt, send_outreach_email, publish_to_telegram). Два агента с одинаковым поиском одной цели = потеря цикла. Разные агенты = разные шаги цепочки.\n"
                 + f"• КАЖДЫЙ АГЕНТ ОБЯЗАН ПОЛУЧИТЬ МИНИМУМ 1 ЗАДАЧУ. В команде {_n_real_agents} агентов: {', '.join(p['name'] for p in _profiles)}.\n"
                   f"  ПРОВЕРЬ ПЕРЕД ОТПРАВКОЙ: каждое из этих имён присутствует в поле 'agent' хотя бы один раз.\n"
                   + (f"  НЕДОПУСТИМО: план где {', '.join(p['name'] for p in _profiles[1:])} вообще не упомянут — это гарантированный провал цикла.\n"
@@ -14273,7 +14274,7 @@ class AnchorEngine:
                     _ag_goal_enrich = _ag_goal_title.strip()
                     _tool_human_map = {
                         'search_users': 'search_users (language:python OR language:javascript followers:>30)',
-                        'web_search': 'web_search (site:linkedin.com OR site:habr.com)',
+                        'web_search': 'web_search (site:habr.com OR site:producthunt.com)',
                         'find_relevant_contacts_for_task': 'find_relevant_contacts_for_task',
                         'send_outreach_email': 'send_outreach_email',
                         'send_follow_up_email': 'send_follow_up_email',
