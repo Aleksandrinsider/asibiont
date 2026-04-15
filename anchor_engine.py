@@ -1189,8 +1189,8 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
 
     if untried:
         first_untried_name = _UNIVERSAL_PATTERNS[untried[0]][0]
-        lines.append(f"\n🔴 Попробуй непопробованный паттерн: {first_untried_name}")
-        lines.append("   Особенно важно: если 'direct_action' опробован 2+ раза → переключись на 'infrastructure'")
+        lines.append(f"\n🔴 Ещё не пробовали: {first_untried_name}")
+        lines.append("   Если direct_action опробован 2+ раза без результата: что именно не работает — аудитория, посыл, канал? 'infrastructure' может дать другой результат.")
     elif len(tried) == len(_UNIVERSAL_PATTERNS):
         lines.append("\n✅ Все паттерны опробованы! Масштабируй самый эффективный.")
 
@@ -1201,10 +1201,11 @@ def _build_tactic_wheel(goal_type: str, used_tools: set, agent_history: list) ->
     _got_blocks = any(w in _h_combined for w in ('cooldown', 'уже отправлено', 'already sent', 'лимит', 'ошибка'))
     if _did_outreach and not _got_replies and len(agent_history or []) >= 4:
         lines.append(
-            "\n💡 СТРАТЕГИЯ: прямой аутрич без ответов 4+ циклов. AI рекомендует:\n"
-            "  — Сменить целевую аудиторию (другой query, другая платформа)\n"
-            "  — Создать контент (пост, статья) чтобы привлечь органически\n"
-            "  — Переключиться на infrastructure: FAQ, landing, демо-материалы"
+            "\n💡 СИТУАЦИЯ: прямой аутрич без ответов 4+ циклов.\n"
+            "  Вопрос: что именно не работает — аудитория, посыл или канал?\n"
+            "  • Аудитория — попробуй другой query или другую платформу\n"
+            "  • Посыл — человек не видит зачем отвечать — перепиши тему/текст письма\n"
+            "  • Канал — email не работает для этой аудитории — попробуй контент или infrastructure"
         )
     elif _did_outreach and _got_blocks:
         lines.append(
@@ -12210,10 +12211,10 @@ class AnchorEngine:
                 if _dnc_rows:
                     _dnc_entries = [f'{r[0] or "?"} <{r[1]}>' for r in _dnc_rows if r[1]]
                     _do_not_contact_str = (
-                        '\n⛔ НЕ КОНТАКТИРОВАТЬ (bounced/unsubscribed — домены не работают или отписались):\n  '
+                        '\n⚠️ КОНТАКТЫ С ПРОБЛЕМАМИ (bounced/unsubscribed):\n  '
                         + ', '.join(_dnc_entries[:15])
-                        + '\n  → НЕ упоминай этих людей в задачах. НЕ назначай отправку им писем.'
-                        ' Если агент сообщил что домен не принимает почту — значит адрес мёртв.\n'
+                        + '\n  → Что пошло не так с этими людьми — сообщение, момент, неверная аудитория?'
+                        ' Если домен технически не принимает почту — адрес мёртв: найди этого человека другим каналом или переходи к новым людям.\n'
                     )
             except Exception as _dnc_err:
                 logger.debug('[COORD] do_not_contact: %s', _dnc_err)
@@ -12241,11 +12242,12 @@ class AnchorEngine:
                 if _age_days >= 2 and _prog_md < 15:
                     _multiday_review_str += (
                         f"\n🔴 ЗАСТОЙ «{_gt_md}»: {_age_days} дней, прогресс {_prog_md}%.\n"
-                        f"  → Текущая стратегия НЕ РАБОТАЕТ. ОБЯЗАТЕЛЬНО:\n"
-                        f"  1. НЕ ПОВТОРЯЙ прошлые действия — они не дали результат.\n"
-                        f"  2. Назначь КОНКРЕТНЫЕ action-tools: send_outreach_email, create_post, check_emails.\n"
-                        f"  3. Если контакты есть → пиши им. Если нет → ищи на ДРУГОЙ платформе.\n"
-                        f"  4. При {_age_days}+ днях застоя — уведоми пользователя через send_message_to_user.\n"
+                        f"  → Настоящий вопрос: ПОЧЕМУ не движемся? Три частые причины:\n"
+                        f"  1. Не та аудитория — ищем не тех людей или не на той платформе.\n"
+                        f"  2. Не тот посыл — человек не понимает зачем откликаться.\n"
+                        f"  3. Не тот канал — email не работает для этой цели, стоит проверить content или community.\n"
+                        f"  Выбери наиболее вероятную причину → назначь задачу, которая проверяет именно её.\n"
+                        f"  При {_age_days}+ днях честно расскажи пользователю через send_message_to_user: что пробовали, что не вышло и почему.\n"
                     )
                     _stuck_notify_goals.append((_gt_md, _age_days, _prog_md))
                 # Slow progress: 1+ days but little movement
@@ -12253,7 +12255,7 @@ class AnchorEngine:
                     _rate = round(_prog_md / max(_age_days, 1), 1)
                     _multiday_review_str += (
                         f"\n⚠️ МЕДЛЕННЫЙ ПРОГРЕСС «{_gt_md}»: {_prog_md}% за {_age_days} дней ({_rate}%/день).\n"
-                        f"  → Проанализируй что давало результат, что нет. Удвой усилия на работающее направление.\n"
+                        f"  → Что из сделанного дало хоть что-то? Именно это стоит усилить — остальное пока притормози.\n"
                     )
             # If there are stuck goals 5+ days — add strong escalation directive
             if any(d >= 5 for _, d, _ in _stuck_notify_goals):
@@ -12264,14 +12266,88 @@ class AnchorEngine:
                     "  → Пользователь должен знать и принять решение о смене стратегии.\n"
                 )
 
-            # ── GOAL PHASE CONSTRAINTS: механически вычисляем что РАЗРЕШЕНО/ЗАПРЕЩЕНО ──
-            # Computed from real DB facts — placed at end of prompt so LLM reads last and applies first.
+            # ── Стратегическая память 7 дней: учим координатора видеть паттерны длиннее 8ч ──
+            _strategic_7day_str = ''
+            try:
+                from models import AgentActivityLog as _AAL_7d
+                _7d_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+                _7d_rows = session.query(_AAL_7d).filter(
+                    _AAL_7d.user_id == user.id,
+                    _AAL_7d.activity_type == 'agent_task',
+                    _AAL_7d.created_at >= _7d_cutoff,
+                ).order_by(_AAL_7d.created_at.asc()).all()
+                if len(_7d_rows) >= 8:
+                    _7d_total = len(_7d_rows)
+                    _7d_completed_n = sum(1 for r in _7d_rows if r.status == 'completed')
+                    _7d_failed_rows = [r for r in _7d_rows if r.status == 'failed']
+                    _7d_rate = int(_7d_completed_n / _7d_total * 100) if _7d_total else 0
+                    # Классифицируем задачи по типу
+                    _7d_strat: dict = {}
+                    _7d_kw_map = [
+                        ('поиск',    ('поиск', 'search', 'найди', 'find', 'scan')),
+                        ('outreach', ('письм', 'email', 'outreach', 'рассыл', 'отправ')),
+                        ('контент',  ('пост', 'контент', 'publish', 'create_post', 'статья')),
+                        ('follow-up', ('ответ', 'reply', 'follow', 'переговор')),
+                        ('аналитика', ('анализ', 'rss', 'тренд', 'мониторинг', 'research')),
+                    ]
+                    for _r7 in _7d_rows:
+                        _t7 = ((_r7.title or '') + ' ' + (_r7.result or '')).lower()
+                        _s7 = 'другое'
+                        for _sname, _skws in _7d_kw_map:
+                            if any(kw in _t7 for kw in _skws):
+                                _s7 = _sname
+                                break
+                        _7d_strat.setdefault(_s7, {'total': 0, 'done': 0})
+                        _7d_strat[_s7]['total'] += 1
+                        if _r7.status == 'completed':
+                            _7d_strat[_s7]['done'] += 1
+                    # Извлекаем имена людей из упавших задач — ищем повторы
+                    import re as _re_7d
+                    _name_attempts: dict = {}
+                    for _r7f in _7d_failed_rows:
+                        _t7f = (_r7f.title or '') + ' ' + (_r7f.result or '')
+                        for _nm in _re_7d.findall(r'[А-ЯA-Z][а-яa-z]+\s+[А-ЯA-Z][а-яa-z]+', _t7f):
+                            _name_attempts[_nm] = _name_attempts.get(_nm, 0) + 1
+                    _repeated_names = sorted(
+                        ((n, c) for n, c in _name_attempts.items() if c >= 2),
+                        key=lambda x: -x[1]
+                    )[:4]
+                    _7d_lines = ['\n🧠 СТРАТЕГИЧЕСКИЙ ИТОГ 7 ДНЕЙ (обучение координатора):']
+                    _7d_lines.append(
+                        f'  Задач: {_7d_total} → выполнено: {_7d_completed_n} ({_7d_rate}%), '
+                        f'упало: {len(_7d_failed_rows)} ({100 - _7d_rate}%)'
+                    )
+                    _7d_lines.append('  По типу задач:')
+                    for _sn, _sd in sorted(_7d_strat.items(), key=lambda x: -x[1]['total']):
+                        _sr = int(_sd['done'] / _sd['total'] * 100) if _sd['total'] else 0
+                        _tag = ' ⭐ работает' if _sr >= 60 else (
+                            ' ⚠️ низкая эффективность' if _sd['total'] >= 5 and _sr < 30 else ''
+                        )
+                        _7d_lines.append(f'    • {_sn}: {_sd["total"]} задач, {_sr}% завершено{_tag}')
+                    if _repeated_names:
+                        _7d_lines.append('  Поиски одних и тех же людей повторялись без результата:')
+                        for _nm, _cnt in _repeated_names:
+                            _7d_lines.append(
+                                f'    • «{_nm}» — {_cnt} попытки без успеха. '
+                                f'Стоит ли продолжать или другой человек той же роли даст лучший результат?'
+                            )
+                    _7d_lines.append(
+                        '  → Используй эти данные для диагноза: что реально работает для этого пользователя?\n'
+                        '  Какой тип задач даёт результат? Какой буксует и почему — инструмент, аудитория или посыл?\n'
+                        '  Координатор думает от фактов, а не повторяет привычный шаблон.'
+                    )
+                    _strategic_7day_str = '\n'.join(_7d_lines) + '\n'
+            except Exception as _7d_err:
+                logger.debug('[COORD] strategic_7day: %s', _7d_err)
+
+            # ── GOAL PHASE CONTEXT: текущая фаза цели из реальных данных БД ──
+            # Computed from real DB facts — helps coordinator reason about where the goal actually is.
             _goal_phase_str = ''
             try:
                 _n_replied_pc = (_status_counts_data or {}).get('replied', 0)
                 _n_interested_pc = (_status_counts_data or {}).get('interested', 0)
                 _has_replies_pc = (_n_replied_pc + _n_interested_pc) > 0
-                _gp_lines = ['\n⚙️ ФАЗА ЦЕЛЕЙ (вычислено из БД — ОБЯЗАТЕЛЬНО следуй):']
+                _gp_lines = ['\n⚙️ ФАЗА ЦЕЛЕЙ (данные из БД — ориентиры для выбора следующего шага):']
                 _any_constraint = False
                 for _g_pc in _goals[:5]:
                     _gt_pc = _g_pc.get('title', '')[:55]
@@ -12428,9 +12504,9 @@ class AnchorEngine:
                     )
                 if _fr_lines:
                     _forced_rotation_str = (
-                        '\n🔁 ПРИНУДИТЕЛЬНАЯ РОТАЦИЯ (3 одинаковых цикла = петля):\n'
+                        '\n🔁 ПАТТЕРН ПОВТОРЕНИЙ (стоит разобраться в корне):\n'
                         + '\n'.join(_fr_lines) + '\n'
-                        '  → Назначь ДРУГОЙ инструмент из профиля агента. Петля = потеря циклов.\n'
+                        '  → Повторяющийся инструмент без результата — сигнал диагностировать глубже, а не продолжать прежний путь.\n'
                     )
             except Exception as _fr_err:
                 logger.debug('[COORD] forced_rotation: %s', _fr_err)
@@ -12587,6 +12663,7 @@ class AnchorEngine:
                 + _fresh_chain_str
                 + _stale_tasks_str
                 + _agent_results_str
+                + _strategic_7day_str
                 + _multiday_review_str
                 + f"{_degraded_note}"
                 + _pending_replies_str
@@ -12678,7 +12755,7 @@ class AnchorEngine:
                 "2. РЕШИ СТРАТЕГИЮ:\n"
                 "   • Работает (есть результаты) → удвой усилия\n"
                 "   • Не работает 2+ цикла → КАРДИНАЛЬНО смени подход: другой инструмент, другой канал, другой формат\n"
-                "   • Только исследования без действий → ЗАПРЕТИ research, НАЗНАЧЬ action-tool из подключённых\n"
+                "   • Только исследования без действий → диагноз: данные уже есть, осталось действовать. Какой action-tool агента позволяет сделать следующий шаг прямо сейчас?\n"
                 "   🔗 ДЕЛЕГИРОВАНИЯ: если агент A передал задачу агенту B — A свою часть ВЫПОЛНИЛ.\n"
                 "   НЕ назначай A ту же задачу снова. Дай A НОВУЮ задачу следующего шага.\n"
                 "   Если B ещё работает над переданной задачей → жди результата, не дублируй.\n"
@@ -12699,9 +12776,9 @@ class AnchorEngine:
                 "5. ЗАДАЧИ — ТОЛЬКО КОНКРЕТНЫЕ ДЕЙСТВИЯ С ИЗМЕРИМЫМ РЕЗУЛЬТАТОМ:\n"
                 "   ⚠️ САМОПРОВЕРКА перед каждым task: 👤 КОМУ/ЧТО? 📊 СКОЛЬКО? 🎯 КРИТЕРИИ?\n"
                 "   Если task не отвечает на все 3 — он АБСТРАКТНЫЙ и будет потерянный цикл.\n"
-                "   ⛔ ЗАПРЕЩЕНЫ МЕТА-ЗАДАЧИ: «получить метрики кампании», «проверить статистику рассылки»,\n"
-                "      «собрать аналитику», «проверить статус писем». Это диагностика, а не работа!\n"
-                "      Вместо → дай задачу СЛЕДУЮЩЕГО ШАГА: отправь ЕЩЁ 5 писем / напиши follow-up / найди НОВЫЕ контакты.\n"
+                "   ⚠️ МЕТА-ЗАДАЧИ — спроси себя: что именно я хочу узнать и как это изменит следующее действие?\n"
+                "      Если уже знаешь что делать — назначь это действие сразу.\n"
+                "      check_emails → если ответы → reply, если нет → follow-up. Назначь конечное действие, а не промежуточную диагностику.\n"
                 "   ПРИМЕРЫ по типам целей:\n"
                 "   [outreach] ✗ «Поиск email контактов через GitHub API» (кому? сколько? зачем?)\n"
                 "              ✓ «Найди 5 email CTO/DevOps из open-source проектов на Python через web_search, сохрани через save_email_contact»\n"
@@ -12731,8 +12808,7 @@ class AnchorEngine:
                 "• Данные собраны → ДЕЙСТВУЙ через подключённые инструменты агента.\n"
                 "• Каждый агент в каждом цикле делает МИНИМУМ 1 action-tool.\n"
                 "• Застой 2+ цикла → ПОЛНАЯ смена стратегии: другой инструмент, другая аудитория, другой формат.\n"
-                "• ИСЧЕРПАНИЕ ИСТОЧНИКА: если search_users/search_contacts/search_repos за 2+ цикла дал 0 новых результатов — источник ИСЧЕРПАН.\n"
-                "  Переключись: web_search с другими запросами, create_post вместо поиска, другой канал.\n"
+                "• ИСЧЕРПАНИЕ ИСТОЧНИКА: если search за 2+ цикла даёт 0 новых результатов — стоит спросить: другой запрос или другая платформа дадут новых людей? Или данных уже достаточно для действия (send_outreach, create_post)?\n"
                 "• search_contacts / get_contact = ТОЛЬКО CRM (AmoCRM). Это НЕ поиск новых людей!\n"
                 "  get_contact ОБЯЗАН иметь параметр id=<числовой_ID_из_CRM>.\n"
                 "  Для поиска НОВЫХ контактов: web_search site:linkedin.com / search_users (GitHub) / save_email_contact.\n"
