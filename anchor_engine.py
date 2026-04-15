@@ -6661,6 +6661,114 @@ class AnchorEngine:
                         )
                         for g in data.get('goals', [])[:2]
                     ) if data.get('goals') else ''
+
+                    # ── Динамический сигнал приоритетов: что работает, что стагнирует ──
+                    # Координатор САМ видит по результатам что приоритетно — без хардкод-правил.
+                    _priority_signal = ''
+                    try:
+                        import datetime as _dt_pri
+                        _pri_window_48h = _dt_pri.datetime.now(_dt_pri.timezone.utc) - _dt_pri.timedelta(hours=48)
+                        _pri_window_7d = _dt_pri.datetime.now(_dt_pri.timezone.utc) - _dt_pri.timedelta(days=7)
+
+                        # 1) Скорость прогресса по каждой цели
+                        _goal_velocity: list[tuple[str, int, int, str]] = []  # (title, pct, velocity, status)
+                        for _pg in data.get('goals', [])[:5]:
+                            _pt = (_pg.get('title') or '')[:60]
+                            _pc = int(_pg.get('progress') or 0)
+                            _pmc = int(_pg.get('metric_current') or 0)
+                            _pmt = _pg.get('metric_target')
+                            # Прирост метрики за 48ч — смотрим в activity log по этой цели
+                            try:
+                                _aal_pri = session.query(AgentActivityLog).filter(
+                                    AgentActivityLog.user_id == user.id,
+                                    AgentActivityLog.activity_type == 'agent_task',
+                                    AgentActivityLog.status == 'completed',
+                                    AgentActivityLog.created_at >= _pri_window_48h,
+                                    AgentActivityLog.title.ilike(f'%{_pt[:20]}%'),
+                                ).count()
+                            except Exception:
+                                _aal_pri = 0
+                            if _pt:
+                                _vel_label = '🟢 активно' if _aal_pri >= 2 else ('🟡 медленно' if _aal_pri == 1 else '🔴 стагнация')
+                                _goal_velocity.append((_pt, _pc, _aal_pri, _vel_label))
+
+                        # 2) Эффективность каналов: что реально даёт ответы/конверсии
+                        _channel_effectiveness: list[str] = []
+                        # Email: reply rate по кампаниям
+                        if 'email' in _cats_c:
+                            try:
+                                from models import EmailOutreach as _EO_pri
+                                _pri_sent = session.query(_EO_pri).filter(
+                                    _EO_pri.user_id == user.id,
+                                    _EO_pri.created_at >= _pri_window_7d,
+                                ).count()
+                                _pri_replied = session.query(_EO_pri).filter(
+                                    _EO_pri.user_id == user.id,
+                                    _EO_pri.status == 'replied',
+                                    _EO_pri.created_at >= _pri_window_7d,
+                                ).count()
+                                if _pri_sent > 0:
+                                    _rr = round(_pri_replied / _pri_sent * 100)
+                                    if _pri_replied > 0:
+                                        _channel_effectiveness.append(f'📧 Email: {_pri_replied}/{_pri_sent} ответов ({_rr}%) — РАБОТАЕТ, продолжай')
+                                    elif _pri_sent >= 10:
+                                        _channel_effectiveness.append(f'📧 Email: {_pri_sent} отправлено, 0 ответов — смени аудиторию или текст письма')
+                                    else:
+                                        _channel_effectiveness.append(f'📧 Email: {_pri_sent} отправлено — мало данных, наращивай базу')
+                            except Exception:
+                                pass
+                        # Посты: смотрим созданные за 7 дней
+                        try:
+                            from models import Post as _Post_pri
+                            _pri_posts = session.query(_Post_pri).filter(
+                                _Post_pri.user_id == user.id,
+                                _Post_pri.created_at >= _pri_window_7d,
+                            ).count()
+                            if _pri_posts > 0:
+                                _channel_effectiveness.append(f'📝 Контент: {_pri_posts} публикаций за 7 дней')
+                        except Exception:
+                            pass
+                        # Задачи агентов: completed vs failed за 48ч
+                        try:
+                            _pri_done = session.query(AgentActivityLog).filter(
+                                AgentActivityLog.user_id == user.id,
+                                AgentActivityLog.activity_type == 'agent_task',
+                                AgentActivityLog.status == 'completed',
+                                AgentActivityLog.created_at >= _pri_window_48h,
+                            ).count()
+                            _pri_fail = session.query(AgentActivityLog).filter(
+                                AgentActivityLog.user_id == user.id,
+                                AgentActivityLog.activity_type == 'agent_task',
+                                AgentActivityLog.status == 'failed',
+                                AgentActivityLog.created_at >= _pri_window_48h,
+                            ).count()
+                            if _pri_done + _pri_fail > 0:
+                                _success_rate = round(_pri_done / (_pri_done + _pri_fail) * 100)
+                                _channel_effectiveness.append(f'⚙️ Задачи агентов (48ч): {_pri_done} выполнено / {_pri_fail} упало ({_success_rate}% успех)')
+                        except Exception:
+                            pass
+
+                        # 3) Собираем итоговый сигнал
+                        _pri_lines: list[str] = []
+                        if _goal_velocity:
+                            _stagnant = [g for g in _goal_velocity if g[2] == 0]
+                            _active_goals = [g for g in _goal_velocity if g[2] >= 2]
+                            if _active_goals:
+                                _pri_lines.append('Активно движутся: ' + ', '.join(f'«{g[0]}» {g[1]}%' for g in _active_goals))
+                            if _stagnant:
+                                _pri_lines.append('Стагнируют (0 завершённых задач за 48ч): ' + ', '.join(f'«{g[0]}» {g[1]}%' for g in _stagnant))
+                        if _channel_effectiveness:
+                            _pri_lines.extend(_channel_effectiveness)
+
+                        if _pri_lines:
+                            _priority_signal = (
+                                '\n📊 СИГНАЛЫ РЕЗУЛЬТАТОВ (основывай приоритеты на них, не на интуиции):\n'
+                                + '\n'.join(f'  {l}' for l in _pri_lines)
+                                + '\n→ Что РАБОТАЕТ — усиливай. Что стагнирует — меняй стратегию или инструмент.\n'
+                                + '→ Не трать цикл на канал с 0 результатами если есть канал который даёт отклик.\n'
+                            )
+                    except Exception as _pri_err:
+                        logger.debug('[ANCHOR-AUTOPILOT] priority signal: %s', _pri_err)
                     # Fallback: конкретное поручение на основе целей и интеграций агента
                     _goal_titles_fb = [g.get('title', '')[:120] for g in data.get('goals', [])[:5] if g.get('title')]
                     _g0 = ' '.join(t.lower() for t in _goal_titles_fb)
@@ -7347,6 +7455,7 @@ class AnchorEngine:
                             + f"{_channels_info_c}\n"
                             f"Что нужно сделать: {_task_hint_human}\n"
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
+                            + (_priority_signal if _priority_signal else '')
                             + (_acquisition_hint_c if _acquisition_hint_c else '')
                             + (f"Результаты команды за последний цикл:\n{_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + _coord_effectiveness_c
