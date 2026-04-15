@@ -10903,6 +10903,13 @@ async def resend_webhook_handler(request):
 
         session_db = Session()
         try:
+            # Отключаем statement_timeout для этого соединения — вебхук делает несколько
+            # сложных запросов (scan по func.lower), и Railway 30s timeout их обрывает.
+            try:
+                from sqlalchemy import text as _wh_text
+                session_db.execute(_wh_text("SET LOCAL statement_timeout = 0"))
+            except Exception:
+                pass
             # --- Tracking events (delivered, opened, bounced, complained) ---
             if event_type in ('email.delivered', 'email.opened', 'email.bounced', 'email.complained'):
                 email_id = payload.get('email_id', '')

@@ -5036,8 +5036,14 @@ class AnchorEngine:
                     }
                     for a in new_anchors
                 ]
+                # Сериализуем user-поля ДО ensure_future — ORM-объект не привязан к сессии
+                # после закрытия основного цикла, что вызывает DetachedInstanceError.
+                _dispatch_user_id = int(getattr(user, 'id', 0) or 0)
+                _dispatch_user_tid = int(getattr(user, 'telegram_id', 0) or 0)
                 asyncio.ensure_future(
-                    self._dispatch_agents_for_new_anchors(user, _anchor_dicts)
+                    self._dispatch_agents_for_new_anchors(
+                        _dispatch_user_id, _dispatch_user_tid, _anchor_dicts
+                    )
                 )
 
         # 2. EVALUATE — собрать доставляемые якоря
@@ -9024,7 +9030,7 @@ class AnchorEngine:
                     pass
             # delivered_at уже поставлен в начале функции через raw SQL
 
-    async def _dispatch_agents_for_new_anchors(self, user, new_anchors: list):
+    async def _dispatch_agents_for_new_anchors(self, user_id_or_obj, user_tid_or_anchors, new_anchors: list = None):
         """
         Event-driven: когда AnchorEngine создаёт signal-якорь (goal_stagnation,
         goal_deadline, task_stale и т.д.), мы сразу находим подходящего агента
@@ -9032,8 +9038,23 @@ class AnchorEngine:
 
         Это заменяет «polling каждые 2-4ч» реакцией на конкретное событие.
         Fire-and-forget: не блокирует основной цикл доставки якорей.
+
+        Принимает (user_id: int, user_telegram_id: int, new_anchors: list)
+        или устаревший формат (user_orm, new_anchors).
         new_anchors: список dict с ключами anchor_type/source/topic/data
         """
+        # Backward-compat: старый вызов передавал ORM-объект + list
+        if new_anchors is None:
+            # Старый формат: (user_orm, new_anchors_list)
+            _user_obj = user_id_or_obj
+            new_anchors = user_tid_or_anchors  # type: ignore[assignment]
+            _uid = int(getattr(_user_obj, 'id', 0) or 0)
+            _user_telegram_id = int(getattr(_user_obj, 'telegram_id', 0) or 0)
+        else:
+            # Новый формат: (user_id: int, user_telegram_id: int, new_anchors: list)
+            _uid = int(user_id_or_obj or 0)
+            _user_telegram_id = int(user_tid_or_anchors or 0)
+
         # Поддерживаем как dict (новый формат), так и ORM-объекты (обратная совместимость)
         def _get(obj, key, default=None):
             if isinstance(obj, dict):
@@ -9048,7 +9069,6 @@ class AnchorEngine:
         if not trigger_anchors:
             return
 
-        _uid = getattr(user, 'id', None) or 0
         try:
             from models import Session as _Db, UserAgent as _UA, AgentActivityLog as _AAL
             from ai_integration.autonomous_agent import _exec_agent_for_director
@@ -9056,7 +9076,7 @@ class AnchorEngine:
             _s = _Db()
             try:
                 from models import AgentSubscription as _AS_evd
-                _sub_ids_evd = {r.agent_id for r in _s.query(_AS_evd).filter_by(user_id=user.id).all()}
+                _sub_ids_evd = {r.agent_id for r in _s.query(_AS_evd).filter_by(user_id=_uid).all()}
                 agents = (
                     _s.query(_UA)
                     .filter(
@@ -9073,7 +9093,7 @@ class AnchorEngine:
                     recent_dispatch = (
                         _s.query(_AAL)
                         .filter(
-                            _AAL.user_id == user.id,
+                            _AAL.user_id == _uid,
                             _AAL.activity_type == 'agent_event_dispatch',
                             _AAL.target == _get(anchor, 'source'),
                             _AAL.created_at >= datetime.now(timezone.utc) - timedelta(hours=4),
@@ -9103,17 +9123,17 @@ class AnchorEngine:
                     from token_service import has_enough_tokens as _het_ev, spend_tokens as _sp_ev
                     from config import FREE_ACCESS_MODE as _FAM_ev
                     if not _FAM_ev:
-                        if not _het_ev(user.telegram_id, 'proactive_message', session=_s):
-                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — not enough tokens", user.id, _a_type)
+                        if not _het_ev(_user_telegram_id, 'proactive_message', session=_s):
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — not enough tokens", _uid, _a_type)
                             continue
-                        _sp_res_ev = _sp_ev(user.telegram_id, 'proactive_message', description=f'event_dispatch_{_a_type}', session=_s, auto_commit=False)
+                        _sp_res_ev = _sp_ev(_user_telegram_id, 'proactive_message', description=f'event_dispatch_{_a_type}', session=_s, auto_commit=False)
                         if not _sp_res_ev.get('success'):
-                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — spend race: %s", user.id, _a_type, _sp_res_ev.get('error', ''))
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — spend race: %s", _uid, _a_type, _sp_res_ev.get('error', ''))
                             continue
 
                     # Логируем dispatch (cooldown guard)
                     _s.add(_AAL(
-                        user_id=user.id,
+                        user_id=_uid,
                         activity_type='agent_event_dispatch',
                         title=f'{chosen.name} → {_a_type}',
                         content=task_text[:500],
@@ -9143,15 +9163,15 @@ class AnchorEngine:
                     # ── Биллинг кастомного агента (роялти автору) ──
                     if getattr(chosen, 'id', 0) != 0:
                         from ai_integration.user_agents import bill_agent_message as _bam_ev
-                        _bill_ev = _bam_ev(user.telegram_id, chosen.id, session=_s)
+                        _bill_ev = _bam_ev(_user_telegram_id, chosen.id, session=_s)
                         if not _bill_ev.get('success'):
-                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — agent billing failed: %s", user.id, chosen.name, _bill_ev.get('error', ''))
+                            logger.info("[ANCHOR-DISPATCH] user %d: skip %s — agent billing failed: %s", _uid, chosen.name, _bill_ev.get('error', ''))
                             continue
 
                     # Запускаем агента и при необходимости продолжаем цепочку
                     try:
                         _raw_result = await _exec_agent_for_director(
-                            agent_data, task_text, user.telegram_id,
+                            agent_data, task_text, _user_telegram_id,
                         )
                         result = _raw_result[0] if isinstance(_raw_result, (tuple, list)) else _raw_result
                         _ev_tools_used = list(_raw_result[1]) if isinstance(_raw_result, (tuple, list)) and len(_raw_result) > 1 else []
@@ -9161,7 +9181,7 @@ class AnchorEngine:
                             _log = (
                                 _s2.query(_AAL)
                                 .filter_by(
-                                    user_id=user.id,
+                                    user_id=_uid,
                                     activity_type='agent_event_dispatch',
                                     target=_get(anchor, 'source'),
                                 )
@@ -9176,14 +9196,14 @@ class AnchorEngine:
 
                         logger.info(
                             "[ANCHOR-DISPATCH] user %d: %s triggered by %s → %d chars",
-                            user.id, chosen.name, _get(anchor, 'anchor_type'), len(result or ''),
+                            _uid, chosen.name, _get(anchor, 'anchor_type'), len(result or ''),
                         )
 
                         # Отправляем результат агента пользователю в Telegram
                         if result and result.strip() and self.bot:
                             try:
                                 await self.bot.send_message(
-                                    chat_id=user.telegram_id,
+                                    chat_id=_user_telegram_id,
                                     text=f"{chosen.name}:\n\n{result.strip()}",
                                 )
                                 _ev_agent_content = json.dumps({
@@ -9197,14 +9217,14 @@ class AnchorEngine:
                                     '__anchor_type': _get(anchor, 'anchor_type'),
                                 }, ensure_ascii=False)
                                 _s.add(Interaction(
-                                    user_id=user.id,
+                                    user_id=_uid,
                                     message_type='proactive',
                                     content=_ev_agent_content,
                                 ))
                                 _s.commit()
                                 try:
                                     from ai_integration.conversation_history import save_message_to_history as _smh_ev
-                                    _smh_ev(user.telegram_id, 'assistant', result.strip(), session=_s)
+                                    _smh_ev(_user_telegram_id, 'assistant', result.strip(), session=_s)
                                 except Exception as _e:
                                     logger.debug("suppressed: %s", _e)
                             except Exception as _e_ev_send:
@@ -9213,8 +9233,10 @@ class AnchorEngine:
                         # ── ASI-продолжение: анализ результата → следующий агент ──
                         if result and len(result) > 30:
                             _chain_max_ev = 1 if _get(anchor, 'anchor_type') == 'goal_autopilot_review' else 3
+                            import types as _t_chain
+                            _user_proxy = _t_chain.SimpleNamespace(id=_uid, telegram_id=_user_telegram_id)
                             await self._maybe_continue_chain(
-                                user, chosen, anchor, task_text, result, agents, _s,
+                                _user_proxy, chosen, anchor, task_text, result, agents, _s,
                                 max_cont=_chain_max_ev,
                             )
 
@@ -9226,7 +9248,7 @@ class AnchorEngine:
                             _fl = (
                                 _sf.query(_AAL)
                                 .filter_by(
-                                    user_id=user.id,
+                                    user_id=_uid,
                                     activity_type='agent_event_dispatch',
                                     target=_get(anchor, 'source'),
                                     status='in_progress',
@@ -21381,6 +21403,12 @@ class AnchorEngine:
         Не отправляет сообщение пользователю — только выполняет email-действие.
         """
         try:
+            # Отключаем statement_timeout для email-операций — Railway 30s лимит слишком агрессивен
+            try:
+                from sqlalchemy import text as _esa_text
+                session.execute(_esa_text("SET LOCAL statement_timeout = 0"))
+            except Exception:
+                pass
             # ── ЗАЩИТА ОТ ДУБЛЕЙ ──
             fresh = session.query(Anchor).filter_by(id=anchor.id).with_for_update(skip_locked=True).first()
             if not fresh or fresh.delivered_at is not None:
