@@ -10180,6 +10180,12 @@ class AnchorEngine:
                 })
 
             _goals = data.get('goals', [])
+            # Нормализуем progress из метрики (progress_percentage в снапшоте может быть устаревшим)
+            for _g_norm in _goals:
+                _mt_n = _g_norm.get('metric_target')
+                _mc_n = _g_norm.get('metric_current', 0) or 0
+                if _mt_n and float(_mt_n) > 0:
+                    _g_norm['progress'] = min(100, round(_mc_n / float(_mt_n) * 100))
             # ── Filter stale goals from anchor snapshot ──
             if _goals:
                 try:
@@ -10201,11 +10207,15 @@ class AnchorEngine:
                         _Goal_coord.user_id == user.id,
                         _Goal_coord.status == 'active',
                     ).order_by(_Goal_coord.created_at.desc()).limit(8).all()
+                    def _fresh_pct(g) -> int:
+                        if g.metric_target and float(g.metric_target) > 0:
+                            return min(100, round((g.metric_current or 0) / float(g.metric_target) * 100))
+                        return g.progress_percentage or 0
                     _goals = [
                         {
                             'id': g.id, 'title': g.title,
                             'description': (g.description or '')[:300],
-                            'progress': g.progress_percentage or 0,
+                            'progress': _fresh_pct(g),
                             'metric_current': g.metric_current or 0,
                             'metric_target': g.metric_target,
                             'created_at': g.created_at,
@@ -11118,7 +11128,13 @@ class AnchorEngine:
 
             for _g_plan in _goals[:5]:
                 _g_title = (_g_plan.get('title') or '')[:50]
-                _g_prog = _g_plan.get('progress', 0)
+                # Пересчитываем процент из метрики, если она есть — progress_percentage в БД может быть устаревшим
+                _g_mt = _g_plan.get('metric_target')
+                _g_mc = _g_plan.get('metric_current', 0) or 0
+                if _g_mt and float(_g_mt) > 0:
+                    _g_prog = min(100, round(_g_mc / float(_g_mt) * 100))
+                else:
+                    _g_prog = _g_plan.get('progress', 0) or 0
                 # Для каждой цели показываем конкретные шаблоны task по каждой доступной интеграции
                 _g_task_patterns: list[str] = []
                 for _intg_key in sorted(_all_connected_types):
@@ -16366,10 +16382,14 @@ class AnchorEngine:
                             _Goal_fresh.status == 'active',
                         ).order_by(_Goal_fresh.created_at.desc()).limit(5).all()
                         if _fresh_goals:
+                            def _rpt_pct(g) -> int:
+                                if g.metric_target and float(g.metric_target) > 0:
+                                    return min(100, round((g.metric_current or 0) / float(g.metric_target) * 100))
+                                return g.progress_percentage or 0
                             _goals_for_report = [
                                 {
                                     'title': g.title,
-                                    'progress': g.progress_percentage or 0,
+                                    'progress': _rpt_pct(g),
                                     'metric_current': g.metric_current or 0,
                                     'metric_target': g.metric_target,
                                     'metric_unit': getattr(g, 'metric_unit', '') or '',
@@ -16380,8 +16400,14 @@ class AnchorEngine:
                             _goals_for_report = _goals
                     except Exception:
                         _goals_for_report = _goals
+                    def _calc_progress(g: dict) -> int:
+                        _mt = g.get('metric_target')
+                        _mc = g.get('metric_current', 0) or 0
+                        if _mt and float(_mt) > 0:
+                            return min(100, round(_mc / float(_mt) * 100))
+                        return g.get('progress', 0) or 0
                     _goals_state_now = '\n'.join(
-                        f"  {g['title'][:60] + '…' if len(g['title']) > 60 else g['title']} — {g.get('progress', 0)}%"
+                        f"  {g['title'][:60] + '…' if len(g['title']) > 60 else g['title']} — {_calc_progress(g)}%"
                         + (f" ({int(g.get('metric_current', 0))}/{int(g.get('metric_target', 0))} {g.get('metric_unit', '')})"
                            if g.get('metric_target') else '')
                         for g in _goals_for_report[:3]
