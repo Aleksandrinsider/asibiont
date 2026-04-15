@@ -12671,8 +12671,22 @@ class AnchorEngine:
             # AI сначала диагностирует ЧТО происходит, потом использует этот вывод при составлении плана
             _coordinator_analysis_str = ''
             try:
+                # Текущее состояние активных циклов — AI видит и учитывает
+                _active_dispatches = 0
+                try:
+                    from models import AgentActivityLog as _AAL_act
+                    _active_dispatches = session.query(_AAL_act).filter(
+                        _AAL_act.user_id == user.id,
+                        _AAL_act.activity_type == 'goal_autopilot_dispatch',
+                        _AAL_act.status == 'in_progress',
+                    ).count()
+                except Exception:
+                    pass
+
                 _analysis_ctx = (
-                    f"ЦЕЛИ: {'; '.join(g['title'] for g in _goals[:3])}\n\n"
+                    f"ЦЕЛИ: {'; '.join(g['title'] for g in _goals[:3])}\n"
+                    + (f"АКТИВНЫХ ЦИКЛОВ СЕЙЧАС: {_active_dispatches} (если >0 — часть агентов уже работает)\n\n"
+                       if _active_dispatches > 0 else "\n")
                     + (_strategic_7day_str[:700] if _strategic_7day_str else '')
                     + (_email_analytics_str[:500] if _email_analytics_str else '')
                     + (_multiday_review_str[:500] if _multiday_review_str else '')
@@ -16148,81 +16162,111 @@ class AnchorEngine:
                 except Exception as _upd_outer:
                     logger.warning("[COORD] AAL update session setup: %s", _upd_outer)
 
-            # ── Запись накопленных выводов (CoordinatorInsight) ──
+            # ── Запись накопленных выводов (CoordinatorInsight) — AI сам решает что запомнить ──
+            # Вместо хардкод-правил: даём AI данные цикла + существующие выводы → AI обновляет память
             try:
-                _insight_records: list[tuple[str, str]] = []  # (insight_type, summary)
-
-                # Вывод 1: channel_effectiveness — эффективность email
+                from models import CoordinatorInsight as _CI_write, Session as _CI_Sess_write
+                import datetime as _ci_dt
+                _ci_rw_sess = _CI_Sess_write()
                 try:
-                    _ci_email_sent = _total_email_sent if '_total_email_sent' in dir() else 0  # noqa
-                    _ci_reply_rate = _email_reply_rate if '_email_reply_rate' in dir() else 0.0  # noqa
-                except Exception:
-                    _ci_email_sent, _ci_reply_rate = 0, 0.0
-                if _ci_email_sent > 30 and _ci_reply_rate < 2.0:
-                    _insight_records.append((
-                        'channel_effectiveness',
-                        f'Email outreach показывает низкую конверсию ({_ci_reply_rate}% при {_ci_email_sent} письмах). '
-                        f'Стоит попробовать контент-стратегию или изменить аудиторию/тему.',
-                    ))
-                elif _ci_email_sent > 30 and _ci_reply_rate > 10.0:
-                    _insight_records.append((
-                        'channel_effectiveness',
-                        f'Email outreach работает хорошо ({_ci_reply_rate}% конверсия). '
-                        f'Приоритизироватать этот канал.',
-                    ))
+                    # Читаем существующие выводы
+                    _ci_existing = _ci_rw_sess.query(_CI_write).filter(
+                        _CI_write.user_id == user.id,
+                    ).order_by(_CI_write.updated_at.desc()).limit(10).all()
+                    _ci_existing_txt = '\n'.join(
+                        f'  [{r.insight_type}] {r.summary} (подтверждено ×{r.confirmation_count or 1})'
+                        for r in _ci_existing
+                    ) or '  (нет)'
 
-                # Вывод 2: strategy_pattern — прогресс/стагнация
-                _ci_has_progress = '_any_real_progress' in dir() and _any_real_progress  # noqa
-                _ci_tools_used = list(_all_tools) if '_all_tools' in dir() and _all_tools else []  # noqa
-                if not _ci_has_progress and _ci_tools_used:
-                    _ci_top_tool = max(set(_ci_tools_used), key=_ci_tools_used.count)
-                    _insight_records.append((
-                        'strategy_pattern',
-                        f'Цикл без реального прогресса. Наиболее частый инструмент: {_ci_top_tool}. '
-                        f'Возможно, стоит попробовать другой инструмент или подход.',
-                    ))
-                elif _ci_has_progress and _ci_tools_used:
-                    _ci_top_tool = max(set(_ci_tools_used), key=_ci_tools_used.count)
-                    _insight_records.append((
-                        'tool_preference',
-                        f'Цикл с реальным прогрессом. Ключевой инструмент: {_ci_top_tool}. '
-                        f'Продолжать использовать этот подход.',
-                    ))
-
-                if _insight_records:
-                    from models import CoordinatorInsight as _CI_write, Session as _CI_Sess_write
-                    _ci_w_sess = _CI_Sess_write()
+                    # Данные текущего цикла
+                    _ci_cycle_has_progress = '_any_real_progress' in dir() and _any_real_progress  # noqa
+                    _ci_tools_used = sorted(set(_all_tools)) if '_all_tools' in dir() and _all_tools else []  # noqa
+                    _ci_results = ' | '.join(_results_summary[:4]) if _results_summary else 'нет результатов'
                     try:
-                        import datetime as _ci_dt
-                        for _ci_itype, _ci_summary in _insight_records:
-                            # Ищем похожий инсайт того же типа (по первым 80 символам)
-                            _ci_key = _ci_summary[:80]
-                            _existing_ci = _ci_w_sess.query(_CI_write).filter(
+                        _ci_email_sent = _total_email_sent if '_total_email_sent' in dir() else 0  # noqa
+                        _ci_reply_rate = _email_reply_rate if '_email_reply_rate' in dir() else 0.0  # noqa
+                    except Exception:
+                        _ci_email_sent, _ci_reply_rate = 0, 0.0
+
+                    _ci_cycle_data = (
+                        f"РЕЗУЛЬТАТЫ ЦИКЛА:\n"
+                        f"  Прогресс: {'да' if _ci_cycle_has_progress else 'нет'}\n"
+                        f"  Инструменты: {', '.join(_ci_tools_used) or 'нет'}\n"
+                        f"  Результаты: {_ci_results[:300]}\n"
+                        f"  Email: {_ci_email_sent} отправлено, {_ci_reply_rate}% конверсия\n"
+                        f"  Анализ этого цикла: {(_coordinator_analysis_str or 'нет')[:300]}\n\n"
+                        f"ТЕКУЩИЕ ВЫВОДЫ В ПАМЯТИ:\n{_ci_existing_txt}\n"
+                    )
+
+                    _ci_prompt = (
+                        "Ты — память координатора AI-команды. Прочитай данные цикла и текущие выводы.\n"
+                        "Реши: что стоит запомнить как устойчивые паттерны THIS пользователя?\n\n"
+                        + _ci_cycle_data
+                        + "\nВерни JSON-массив из 0-3 выводов (только если есть реальные наблюдения):\n"
+                        '[{"type": "channel_effectiveness|strategy_pattern|tool_preference|audience_fit", '
+                        '"summary": "конкретный вывод ≤80 символов", "keep_old": true/false}]\n'
+                        "keep_old=false означает: этот вывод ЗАМЕНЯЕТ старый того же типа.\n"
+                        "Если новых наблюдений нет — верни пустой массив [].\n"
+                        "Не выдумывай паттерны из одного цикла — только устойчивое."
+                    )
+
+                    _ci_raw = await _quick_ai_call_raw(
+                        [{"role": "user", "content": _ci_prompt}],
+                        max_tokens=300,
+                        temperature=0.3,
+                        _caller='coordinator_insights',
+                    )
+
+                    import re as _ci_re
+                    _ci_m = _ci_re.search(r'\[[\s\S]*?\]', _ci_raw or '')
+                    if _ci_m:
+                        _ci_new_list = json.loads(_ci_m.group())
+                        _saved = 0
+                        for _ci_item in (_ci_new_list or []):
+                            _ci_itype = _ci_item.get('type', 'strategy_pattern')
+                            _ci_summary = (_ci_item.get('summary') or '').strip()
+                            _ci_keep_old = _ci_item.get('keep_old', True)
+                            if not _ci_summary or len(_ci_summary) < 10:
+                                continue
+                            if not _ci_keep_old:
+                                # Заменяем старый вывод того же типа
+                                _ci_old = _ci_rw_sess.query(_CI_write).filter(
+                                    _CI_write.user_id == user.id,
+                                    _CI_write.insight_type == _ci_itype,
+                                ).order_by(_CI_write.updated_at.desc()).first()
+                                if _ci_old:
+                                    _ci_old.summary = _ci_summary
+                                    _ci_old.updated_at = _ci_dt.datetime.utcnow()
+                                    _ci_old.confirmation_count = (_ci_old.confirmation_count or 1) + 1
+                                    _saved += 1
+                                    continue
+                            # Ищем идентичный или добавляем новый
+                            _ci_dup = _ci_rw_sess.query(_CI_write).filter(
                                 _CI_write.user_id == user.id,
                                 _CI_write.insight_type == _ci_itype,
-                                _CI_write.summary.like(_ci_key[:40] + '%'),
+                                _CI_write.summary.like(_ci_summary[:40] + '%'),
                             ).first()
-                            if _existing_ci:
-                                _existing_ci.confirmation_count = (_existing_ci.confirmation_count or 1) + 1
-                                _existing_ci.updated_at = _ci_dt.datetime.utcnow()
+                            if _ci_dup:
+                                _ci_dup.confirmation_count = (_ci_dup.confirmation_count or 1) + 1
+                                _ci_dup.updated_at = _ci_dt.datetime.utcnow()
                             else:
-                                _new_ci = _CI_write(
+                                _ci_rw_sess.add(_CI_write(
                                     user_id=user.id,
                                     insight_type=_ci_itype,
                                     summary=_ci_summary,
-                                    evidence_score=0.5,
+                                    evidence_score=0.6,
                                     confirmation_count=1,
-                                )
-                                _ci_w_sess.add(_new_ci)
-                        _ci_w_sess.commit()
-                        logger.info('[COORD] coordinator_insights written: %d records', len(_insight_records))
-                    except Exception as _ci_w_err:
-                        logger.debug('[COORD] coordinator_insights write: %s', _ci_w_err)
-                        try: _ci_w_sess.rollback()
-                        except Exception: pass
-                    finally:
-                        try: _ci_w_sess.close()
-                        except Exception: pass
+                                ))
+                            _saved += 1
+                        _ci_rw_sess.commit()
+                        logger.info('[COORD] coordinator_insights: AI wrote %d records', _saved)
+                except Exception as _ci_w_err:
+                    logger.debug('[COORD] coordinator_insights write: %s', _ci_w_err)
+                    try: _ci_rw_sess.rollback()
+                    except Exception: pass
+                finally:
+                    try: _ci_rw_sess.close()
+                    except Exception: pass
             except Exception as _ci_outer_err:
                 logger.debug('[COORD] coordinator_insights outer: %s', _ci_outer_err)
 
