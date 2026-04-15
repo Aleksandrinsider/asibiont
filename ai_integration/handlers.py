@@ -12399,6 +12399,22 @@ async def send_outreach_email(
             except Exception as _e_prof_cta:
                 logger.debug("suppressed profile website fetch: %s", _e_prof_cta)
 
+        # ── NORMALIZE: извлекаем чистый email из любого формата ──
+        # Агент может передать "Имя <email@example.com>", "email@example.com (GitHub)",
+        # строку с пробелами/переносами и т.п. — извлекаем только email.
+        import re as _re_email_norm
+        _raw_rcpt = (recipient_email or '').strip()
+        _email_norm_m = _re_email_norm.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _raw_rcpt)
+        if _email_norm_m:
+            recipient_email = _email_norm_m.group().strip().lower()
+        else:
+            recipient_email = _raw_rcpt.lower()
+
+        # ── GUARD: невалидный email после нормализации ──
+        if not recipient_email or '@' not in recipient_email or '.' not in recipient_email.split('@')[-1]:
+            return (f"⛔ Невалидный email получателя: «{_raw_rcpt[:120]}». "
+                    f"Укажи адрес в формате email@example.com. Если адрес не найден — не отправляй письмо.")
+
         # ── GUARD: не отправлять email на адрес самого пользователя ИЛИ IMAP-аккаунт агента ──
         _rcpt = (recipient_email or '').strip().lower()
         _user_email = (getattr(user, 'email', '') or '').strip().lower()
