@@ -6097,6 +6097,9 @@ def find_relevant_contacts_for_task(task_description: str, user_id: int = None, 
         'инвестиции': ['инвестор', 'финансы', 'бизнес'],
     }
     
+    stop_words = {'в', 'и', 'с', 'на', 'по', 'для', 'от', 'к', 'о', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'что', 'как', 'это', 'не', 'из', 'за', 'то', 'но', 'а'}
+    task_keywords = set()
+
     # Снижаем минимальную длину до 2 символов чтобы захватить "AI", "ML", "бег"
     words = [w.lower().strip() for w in task_description.split() if len(w) >= 2 and w.lower() not in stop_words]
     task_keywords.update(words)
