@@ -2137,7 +2137,7 @@ class HybridAutonomousAgent:
             if _is_bad_query:
                 # Build a meaningful fallback from the raw query words instead of hardcoded search
                 _q_words = [w for w in _raw_query.split() if len(w) > 2 and '@' not in w][:3]
-                _safe_default = ' '.join(_q_words) + ' repos:>5 followers:>3' if _q_words else 'developer repos:>5 followers:>3'
+                _safe_default = ' '.join(_q_words) + ' repos:>5 followers:>3' if _q_words else 'repos:>5 followers:>3'
                 logger.warning(
                     "[ACTION] search_users bad query=%r → replacing with safe default=%r",
                     _raw_query, _safe_default,
@@ -10299,8 +10299,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
         "director_message: конкретное поручение как в рабочем чате. 1-2 предложения, 40-80 слов.\n"
         "Структура: Имя + глагол + ЧТО ТОЧНО (число, тип аудитории, площадка) + через какой инструмент/источник + ожидаемый результат.\n"
-        "Пример ХОРОШО: 'Кристина, найди 5 Python-разработчиков на GitHub (language:python followers>30 с публичным email) через search_users, сохрани через save_email_contact. Затем отправь каждому персональное письмо через send_outreach_email — упомяни конкретный проект из их профиля.'\n"
+        "Пример ХОРОШО: 'Кристина, найди 5 потенциальных партнёров по теме ЦЕЛИ через web_search (ищи по ключевым словам из описания цели), сохрани через save_email_contact. Затем отправь каждому персональное письмо через send_outreach_email — упомяни их конкретный проект/продукт/публикацию.'\n"
         "Пример ПЛОХО: 'Кристина, найди 2-3 новых контакта' — нет источника, нет критериев, нет инструмента.\n"
+        "ВАЖНО: director_message должен точно отражать аудиторию из ЦЕЛИ пользователя — не придумывай 'разработчиков' если цель про предпринимателей, трейдеров, врачей и т.д.\n"
         "ПРАВИЛО: после запятой — глагол в повелительном наклонении строчными: найди, подготовь, напиши, исследуй.\n\n"
         "JSON без ```:\n"
         '{"action":"self"}\n'
