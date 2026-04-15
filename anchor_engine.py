@@ -7264,6 +7264,7 @@ class AnchorEngine:
                                         'она неэффективна. Реши: поменять оффер (update_email_campaign), '
                                         'сменить аудиторию или поставить на паузу (pause_email_campaign).\n'
                                         '  Если кампания достигла лимита или отменена — создай новую с улучшенным оффером.\n'
+                                        '  📝 ПЕРСОНАЛИЗАЦИЯ = REPLY RATE: шаблонные письма без инфоповода дают <2% ответов. Перед send_outreach_email поручай агенту найти 1 конкретный факт о получателе — проект на GitHub, статья, пост, достижение — и упомянуть в первом абзаце. Пример: «Видел твой проект X» или «Читал твою статью о Y» → reply rate 5-15%.\n'
                                     )
                             except Exception:
                                 pass
@@ -7283,6 +7284,32 @@ class AnchorEngine:
                                         '\n⛔ НЕ КОНТАКТИРОВАТЬ (bounced/unsubscribed):\n  '
                                         + ', '.join(_dnc_entries_c[:15])
                                         + '\n  → Не упоминай этих людей. Домены не работают.\n'
+                                    )
+                            except Exception:
+                                pass
+
+                        # ── Pending follow-ups context (contacts silent 3+ days) ──
+                        _pending_followup_ctx = ''
+                        if 'email' in _cats_c:
+                            try:
+                                from datetime import datetime as _dt_fu, timezone as _tz_fu, timedelta as _td_fu
+                                _fu_cutoff = _dt_fu.now(_tz_fu.utc) - _td_fu(days=3)
+                                _pending_fups = session.query(EmailOutreach).filter(
+                                    EmailOutreach.user_id == user.id,
+                                    EmailOutreach.status.in_(['sent', 'delivered']),
+                                    EmailOutreach.sent_at <= _fu_cutoff,
+                                    EmailOutreach.follow_up_count == 0,
+                                ).order_by(EmailOutreach.sent_at.asc()).limit(5).all()
+                                if _pending_fups:
+                                    _fu_lines = [
+                                        f'  {_e.recipient_name or _e.recipient_email} <{_e.recipient_email}>'
+                                        for _e in _pending_fups
+                                    ]
+                                    _pending_followup_ctx = (
+                                        '\n⏰ ОЖИДАЮТ FOLLOW-UP (молчат 3+ дней, follow-up не отправлялся):\n'
+                                        + '\n'.join(_fu_lines)
+                                        + '\n  → Поручи send_follow_up_email с ДРУГИМ аргументом (не копируй первое письмо).\n'
+                                        '  → Другой угол: задай вопрос, покажи новый кейс или конкретную пользу для их задач.\n'
                                     )
                             except Exception:
                                 pass
@@ -7452,7 +7479,9 @@ class AnchorEngine:
                             f"     save_note ТОЛЬКО промежуточный шаг. Поручение ОБЯЗАНО заканчиваться: create_post / send_outreach_email / publish_to_telegram / add_task.\n"
                             f"     ⚠️ Если агент уже сохранял аналитику в Заметках — НЕ проси его снова. Используй эти данные для ДЕЙСТВИЯ.\n"
                             f"  ❌ Повторять задачи с timeout/failed без смены инструмента = запрещено. Смотри раздел «ЧТО НЕ СРАБОТАЛО» ниже.\n"
-                            f"  📧 Язык email: имя/ник контакта латиницей (нет кириллицы) → outreach ТОЛЬКО на английском языке.\n\n"
+                            f"  📧 Язык email: имя/ник контакта латиницей (нет кириллицы) → outreach ТОЛЬКО на английском языке.\n"
+                            f"  ❌ Email-агенту с outreach/acquisition-целью — НЕ назначай RSS/stock/news/finance задачи. Email-агент = email + поиск контактов. web_search допустим ТОЛЬКО как шаг ПЕРЕД send_outreach_email (найти адрес человека).\n"
+                            f"  ❌ Выдумывать email из GitHub-username — ЗАПРЕЩЕНО (user@gmail.com, firstname.lastname@domain — фантазия). Алгоритм: web_search \"name site:github.com OR dev.to email contact\" → если нашёл реальный адрес → save_email_contact. Не нашёл → пропусти этого человека, ищи следующего.\n\n"
                             # Email-специфичные факты — только для агентов с email И целями outreach
                             + (
                                 f"📌 ФАКТЫ О ПЛАТФОРМЕ (используй ТОЛЬКО эти числа, НЕ придумывай другие):\n"
@@ -7512,6 +7541,7 @@ class AnchorEngine:
                             + (_failed_tasks_ctx if _failed_tasks_ctx else '')
                             + (_pending_tasks_ctx if _pending_tasks_ctx else '')
                             + (_active_campaigns_ctx if _active_campaigns_ctx else '')
+                            + (_pending_followup_ctx if _pending_followup_ctx else '')
 
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
                             f"  0) Посмотри на список инструментов выше. Задай себе: «Каким конкретным инструментом\n"
