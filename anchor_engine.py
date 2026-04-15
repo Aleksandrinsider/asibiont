@@ -7098,6 +7098,8 @@ class AnchorEngine:
 
                         # ── Active email campaigns context ──
                         _active_campaigns_ctx = ''
+                        _active_camps = []  # pre-init for multi-campaign example below
+                        _least_active_camp = None
                         if 'email' in _cats_c:
                             try:
                                 from models import EmailCampaign as _EC_camp_ctx
@@ -7125,12 +7127,27 @@ class AnchorEngine:
                                             f'доставлено {_delivered}, ответов {_replied}, bounced {_bounced}, '
                                             f'дневной лимит {_ac.daily_limit}'
                                         )
+                                    # Определяем наименее активную кампанию для ротации
+                                    _least_active_camp = min(_active_camps, key=lambda c: c.emails_sent or 0)
+                                    _most_active_camp = max(_active_camps, key=lambda c: c.emails_sent or 0)
+                                    _rotation_hint = ''
+                                    if len(_active_camps) > 1:
+                                        _rotation_hint = (
+                                            f'\n  ⚖️ РОТАЦИЯ КАМПАНИЙ: у тебя {len(_active_camps)} активные кампании — '
+                                            f'работай с КАЖДОЙ, а не только с одной!\n'
+                                            f'  Наименее активная: #{_least_active_camp.id} «{_least_active_camp.name}» '
+                                            f'({_least_active_camp.emails_sent or 0} писем) — приоритет сейчас.\n'
+                                            f'  Наиболее активная: #{_most_active_camp.id} «{_most_active_camp.name}» '
+                                            f'({_most_active_camp.emails_sent or 0} писем).\n'
+                                            f'  → Когда даёшь задание по email — ЯВНО указывай campaign_id из списка выше.\n'
+                                        )
                                     _active_campaigns_ctx = (
                                         '\n📧 АКТИВНЫЕ EMAIL-КАМПАНИИ (учти перед созданием новой):\n'
                                         + '\n'.join(_camp_parts)
+                                        + _rotation_hint
                                         + '\n  → Если нужно добавить лиды в существующую → add_email_leads(campaign_id=...).\n'
                                         '  → Если нужна НОВАЯ кампания с другой аудиторией → start_email_campaign.\n'
-                                        '  → Для отправки писем → send_outreach_email(recipient_email, subject, body).\n'
+                                        '  → Для отправки писем → send_outreach_email(recipient_email, subject, body, campaign_id=...).\n'
                                     )
                             except Exception:
                                 pass
@@ -7155,8 +7172,19 @@ class AnchorEngine:
                                 pass
 
                         # ── Динамические примеры: строятся из реальных интеграций агента, а не захардкожены ──
+                        # Для email: если несколько кампаний — пример с явным указанием campaign_id
+                        _multi_camp_example = ''
+                        if _active_campaigns_ctx and len(_active_camps if 'email' in _cats_c else []) > 1:
+                            _mc_names = ' и '.join(f'#{c.id} «{c.name}»' for c in _active_camps[:2])
+                            _multi_camp_example = (
+                                f'«{{name}}, у нас {len(_active_camps)} активные кампании: {_mc_names}. '
+                                f'Работай с наименее активной: проверь статус через check_emails(campaign_id={_least_active_camp.id}), '
+                                f'отправь follow-up тем кто молчит >2 дней через send_follow_up_email(campaign_id={_least_active_camp.id}). '
+                                f'Жду отчёт: сколько ответило, сколько в очереди.»'
+                            )
                         _COORD_EXAMPLE_BY_CAT: dict[str, str] = {
                             'email': (
+                                _multi_camp_example if _multi_camp_example else
                                 '«{name}, отправь персональное письмо через send_outreach_email контакту из базы — с коротким питчем под его сферу, упомяни конкретную пользу от нашего продукта для их задач. Если контактов нет — найди через web_search на профильных площадках и сохрани через save_email_contact.»'
                                 if _active_campaigns_ctx else
                                 '«{name}, запусти email-кампанию через start_email_campaign — цель: привлечь beta-тестеров из AI-сообщества, тон дружелюбный и конкретный, в теме упомяни что даёт продукт. Потом отправляй персональные письма через send_outreach_email с адаптацией под сферу каждого контакта.»'
