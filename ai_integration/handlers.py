@@ -12728,12 +12728,13 @@ async def send_outreach_email(
                 id=campaign_id, user_id=user.id
             ).first()
         else:
-            # Берём наиболее активно используемую кампанию (emails_sent наибольший)
-            # Исключаем 'personal' — они для личных писем, не для outreach автопилота
+            # Берём наименее активную кампанию (emails_sent наименьший) — для ротации
+            # Это гарантирует что при нескольких кампаниях они развиваются равномерно,
+            # а не одна накапливает все письма пока остальные стоят
             campaign = session.query(EmailCampaign).filter(
                 EmailCampaign.user_id == user.id,
                 EmailCampaign.status == 'active',
-            ).order_by(EmailCampaign.emails_sent.desc()).first()
+            ).order_by(EmailCampaign.emails_sent.asc()).first()
 
         if not campaign:
             return " Нет активной email-кампании. Сначала создай кампанию."

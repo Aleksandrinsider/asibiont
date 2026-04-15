@@ -7244,10 +7244,12 @@ class AnchorEngine:
                                             f'\n  ⚖️ РОТАЦИЯ КАМПАНИЙ: у тебя {len(_active_camps)} активные кампании — '
                                             f'работай с КАЖДОЙ, а не только с одной!\n'
                                             f'  Наименее активная: #{_least_active_camp.id} «{_least_active_camp.name}» '
-                                            f'({_least_active_camp.emails_sent or 0} писем) — приоритет сейчас.\n'
+                                            f'({_least_active_camp.emails_sent or 0} писем) — ПРИОРИТЕТ ПРЯМО СЕЙЧАС.\n'
                                             f'  Наиболее активная: #{_most_active_camp.id} «{_most_active_camp.name}» '
                                             f'({_most_active_camp.emails_sent or 0} писем).\n'
-                                            f'  → Когда даёшь задание по email — ЯВНО указывай campaign_id из списка выше.\n'
+                                            f'  ❌ ЗАПРЕЩЕНО давать задание по email без явного campaign_id — '
+                                            f'иначе система выберет наименее загруженную, что может не совпасть с нужной.\n'
+                                            f'  → В поручении ОБЯЗАТЕЛЬНО пиши: send_outreach_email(campaign_id={_least_active_camp.id}, ...)\n'
                                         )
                                     _active_campaigns_ctx = (
                                         '\n📧 АКТИВНЫЕ EMAIL-КАМПАНИИ (учти перед созданием новой):\n'
