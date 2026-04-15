@@ -12667,8 +12667,46 @@ class AnchorEngine:
                 except Exception as _sr_err:
                     logger.debug('[COORD] subject reply stats: %s', _sr_err)
 
+            # ── ШАГ 1: Анализ ситуации (chain-of-thought перед планированием) ──
+            # AI сначала диагностирует ЧТО происходит, потом использует этот вывод при составлении плана
+            _coordinator_analysis_str = ''
+            try:
+                _analysis_ctx = (
+                    f"ЦЕЛИ: {'; '.join(g['title'] for g in _goals[:3])}\n\n"
+                    + (_strategic_7day_str[:700] if _strategic_7day_str else '')
+                    + (_email_analytics_str[:500] if _email_analytics_str else '')
+                    + (_multiday_review_str[:500] if _multiday_review_str else '')
+                    + (_empirical_guidance_str[:600] if _empirical_guidance_str else '')
+                    + (_coordinator_insights_str[:400] if _coordinator_insights_str else '')
+                )
+                _analysis_prompt = (
+                    "Ты — стратегический советник команды AI-агентов. "
+                    "Прочитай данные о ситуации и дай краткий диагноз — МАКСИМУМ 120 слов.\n\n"
+                    + _analysis_ctx
+                    + "\nОТВЕТЬ ТРЕМЯ ПУНКТАМИ:\n"
+                    "1. КОРЕНЬ: что реально тормозит прогресс — инструмент, аудитория, канал, или данных достаточно и нужно действовать?\n"
+                    "2. СИЛА: что работает лучше всего — продолжать и усилить.\n"
+                    "3. ПРОРЫВ: одно конкретное действие этого цикла которое изменит динамику.\n"
+                )
+                _analysis_raw = await _quick_ai_call_raw(
+                    [{"role": "user", "content": _analysis_prompt}],
+                    max_tokens=220,
+                    temperature=0.7,
+                    _caller='coordinator_analysis',
+                )
+                if _analysis_raw and len(_analysis_raw) > 30:
+                    _coordinator_analysis_str = (
+                        "\n🔍 АНАЛИЗ СИТУАЦИИ (прочитай перед составлением плана):\n"
+                        + _analysis_raw.strip()
+                        + "\n→ Используй этот анализ как основу для решений ниже.\n\n"
+                    )
+                    logger.info('[COORD] situation analysis: %d chars', len(_analysis_raw))
+            except Exception as _sa_err:
+                logger.debug('[COORD] situation analysis failed: %s', _sa_err)
+
             _plan_prompt = (
                 f"Команда: {_n_agents} агентов:\n{_profiles_str}\n\n"
+                + _coordinator_analysis_str
                 + (f"Пользователь: {_user_profile_str_c}\n\n" if _user_profile_str_c else '')
                 + (f"Последний диалог с пользователем (контекст):\n{_recent_chat_str}\n\n" if _recent_chat_str else '')
                 + _effectiveness_str
