@@ -908,11 +908,50 @@ _SHARED_AI_SESSION_LOCK: asyncio.Lock | None = None
 _SHARED_AI_SESSION_CREATED: float = 0.0
 _SESSION_TTL_SECONDS: int = 1800  # 30 minutes
 
+# === Отдельная сессия для фоновых вызовов (координатор/инсайты) ===
+# Изолирована от чата: фоновые задачи не конкурируют с ответами пользователям
+_QUICK_AI_SESSION: aiohttp.ClientSession | None = None
+_QUICK_AI_SESSION_LOCK: asyncio.Lock | None = None
+_QUICK_AI_SESSION_CREATED: float = 0.0
+
 def _get_session_lock() -> asyncio.Lock:
     global _SHARED_AI_SESSION_LOCK
     if _SHARED_AI_SESSION_LOCK is None:
         _SHARED_AI_SESSION_LOCK = asyncio.Lock()
     return _SHARED_AI_SESSION_LOCK
+
+def _get_quick_session_lock() -> asyncio.Lock:
+    global _QUICK_AI_SESSION_LOCK
+    if _QUICK_AI_SESSION_LOCK is None:
+        _QUICK_AI_SESSION_LOCK = asyncio.Lock()
+    return _QUICK_AI_SESSION_LOCK
+
+async def _get_quick_ai_session() -> aiohttp.ClientSession:
+    """Отдельная сессия для фоновых AI-вызовов (не чат).
+    limit=5 — максимум 5 параллельных TCP-соединений, чтобы не занимать пул чата."""
+    global _QUICK_AI_SESSION, _QUICK_AI_SESSION_CREATED
+    import time as _time_mod
+    _now = _time_mod.monotonic()
+    if (_QUICK_AI_SESSION is not None and not _QUICK_AI_SESSION.closed
+            and (_now - _QUICK_AI_SESSION_CREATED) < _SESSION_TTL_SECONDS):
+        return _QUICK_AI_SESSION
+    async with _get_quick_session_lock():
+        _now = _time_mod.monotonic()
+        if (_QUICK_AI_SESSION is None or _QUICK_AI_SESSION.closed
+                or (_now - _QUICK_AI_SESSION_CREATED) >= _SESSION_TTL_SECONDS):
+            if _QUICK_AI_SESSION is not None and not _QUICK_AI_SESSION.closed:
+                try:
+                    await _QUICK_AI_SESSION.close()
+                except Exception:
+                    pass
+            _connector = aiohttp.TCPConnector(limit=5)
+            _QUICK_AI_SESSION = aiohttp.ClientSession(
+                connector=_connector,
+                timeout=aiohttp.ClientTimeout(total=120, connect=10)
+            )
+            _QUICK_AI_SESSION_CREATED = _now
+            logger.debug("[AI] Created new quick (background) AI session")
+    return _QUICK_AI_SESSION
 
 async def _get_shared_ai_session() -> aiohttp.ClientSession:
     global _SHARED_AI_SESSION, _SHARED_AI_SESSION_CREATED
@@ -5423,8 +5462,9 @@ def _is_question_message(msg: str) -> bool:
 
 
 async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '', temperature: float = 0.7) -> str:
-    """Прямой вызов DeepSeek без tool calling — быстро и без overhead."""
-    global _SHARED_AI_SESSION
+    """Прямой вызов DeepSeek без tool calling — для фоновых задач (координатор, инсайты).
+    Использует отдельную сессию (_QUICK_AI_SESSION) чтобы не блокировать чат пользователей."""
+    global _QUICK_AI_SESSION
     _max_attempts = 2
     _timeouts = [25, 45]
     for _att in range(_max_attempts):
@@ -5447,7 +5487,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
                             await asyncio.sleep(2)
                             continue
         else:
-            _sess = await _get_shared_ai_session()
+            _sess = await _get_quick_ai_session()
             async with _sess.post(
                     "https://api.deepseek.com/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
@@ -5467,13 +5507,12 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
       except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
         logger.warning(f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}")
         if not os.getenv('PYTEST_CURRENT_TEST'):
-            # Закрываем сессию И коннектор чтобы не оставлять Unclosed connection
-            _sess_to_close = _SHARED_AI_SESSION
-            _SHARED_AI_SESSION = None
+            # Закрываем фоновую сессию (не трогаем сессию чата)
+            _sess_to_close = _QUICK_AI_SESSION
+            _QUICK_AI_SESSION = None
             if _sess_to_close is not None and not _sess_to_close.closed:
                 try:
                     await _sess_to_close.close()
-                    # Даём event loop время очистить pending callbacks коннектора
                     await asyncio.sleep(0.1)
                 except Exception:
                     pass
