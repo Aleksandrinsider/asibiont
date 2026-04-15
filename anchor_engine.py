@@ -7258,6 +7258,12 @@ class AnchorEngine:
                                         + '\n  → Если нужно добавить лиды в существующую → add_email_leads(campaign_id=...).\n'
                                         '  → Если нужна НОВАЯ кампания с другой аудиторией → start_email_campaign.\n'
                                         '  → Для отправки писем → send_outreach_email(recipient_email, subject, body, campaign_id=...).\n'
+                                        '  → Пауза/отмена кампании → pause_email_campaign(campaign_id=..., action="pause"/"cancel").\n'
+                                        '\n  📊 АНАЛИЗ ЭФФЕКТИВНОСТИ: оценивай кампании по данным выше.\n'
+                                        '  Если у кампании отправлено ≥30 писем И ответов=0 И bounced>10% — '
+                                        'она неэффективна. Реши: поменять оффер (update_email_campaign), '
+                                        'сменить аудиторию или поставить на паузу (pause_email_campaign).\n'
+                                        '  Если кампания достигла лимита или отменена — создай новую с улучшенным оффером.\n'
                                     )
                             except Exception:
                                 pass
