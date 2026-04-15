@@ -8034,7 +8034,7 @@ class AnchorEngine:
                             from sqlalchemy import text as _aal_fail_text
                             session.execute(_aal_fail_text(
                                 "UPDATE agent_activity_log SET status='failed', result=:res, updated_at=NOW() WHERE id=:aid"
-                            ), {'aid': _aal_id, 'res': f'AI call error: {str(_ai_err)[:200]}'})
+                            ), {'aid': _aal_id, 'res': f'AI call error: {type(_ai_err).__name__}: {str(_ai_err)[:200]}'})
                             session.commit()
                             logger.info("[ANCHOR-AUTOPILOT] AAL %s marked failed after AI error", _aal_id)
                         except Exception as _aal_fail_err:

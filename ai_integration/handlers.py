@@ -12404,14 +12404,16 @@ async def send_outreach_email(
         # строку с пробелами/переносами и т.п. — извлекаем только email.
         import re as _re_email_norm
         _raw_rcpt = (recipient_email or '').strip()
-        _email_norm_m = _re_email_norm.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _raw_rcpt)
+        _email_norm_m = _re_email_norm.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _raw_rcpt, _re_email_norm.ASCII)
         if _email_norm_m:
             recipient_email = _email_norm_m.group().strip().lower()
         else:
             recipient_email = _raw_rcpt.lower()
 
         # ── GUARD: невалидный email после нормализации ──
-        if not recipient_email or '@' not in recipient_email or '.' not in recipient_email.split('@')[-1]:
+        if (not recipient_email or '@' not in recipient_email
+                or '.' not in recipient_email.split('@')[-1]
+                or not recipient_email.isascii()):
             return (f"⛔ Невалидный email получателя: «{_raw_rcpt[:120]}». "
                     f"Укажи адрес в формате email@example.com. Если адрес не найден — не отправляй письмо.")
 
@@ -13058,14 +13060,14 @@ async def send_outreach_email(
                             'Authorization': f'Bearer {RESEND_API_KEY}',
                             'Content-Type': 'application/json',
                         },
-                        json={
+                        json={k: v for k, v in {
                             'from': from_header,
                             'to': [recipient_email],
                             'reply_to': [_reply_to_addr] if _reply_to_addr else None,
                             'subject': subject,
                             'text': _body_with_footer,
                             'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
-                        },
+                        }.items() if v is not None},
                         timeout=_aiohttp.ClientTimeout(total=15),
                     )
                     resp_data = await resp.json()
