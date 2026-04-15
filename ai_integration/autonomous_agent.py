@@ -2975,6 +2975,14 @@ class HybridAutonomousAgent:
                 params['__block_error__'] = (f"⛔ {_rcpt} — некорректный email (содержит спецсимволы). "
                                              "Это не персональный адрес. Найди реальный email.")
                 return params
+            # GUARD: финальная проверка формата email — блокируем всё что не пройдёт Resend API
+            import re as _re_email
+            _email_fmt = _re_email.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+            if _rcpt and not _email_fmt.match(_rcpt):
+                params['__skip__'] = True
+                params['__block_error__'] = (f"⛔ {_rcpt} — некорректный формат email. "
+                                             "Используй только формат user@domain.tld. Найди правильный адрес через web_search.")
+                return params
 
         elif tool_name == 'quick_topic_search' and not params.get('topic'):
             if user_message:
