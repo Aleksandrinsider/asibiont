@@ -11278,14 +11278,8 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
             )
             _crm_m = _re_al.search(r'(\d+)\s*email', _crm_result or '')
             _crm_added = int(_crm_m.group(1)) if _crm_m else 0
-            # Обновляем статус контактов на 'contacted'
-            if _crm_added > 0:
-                _added_emails = {c['email'] for c in _crm_candidates[:50]}
-                for _ec in _crm_contacts:
-                    if (_ec.email or '').strip().lower() in _added_emails:
-                        _ec.status = 'contacted'
-                        _ec.last_contacted_at = datetime.now(timezone.utc)
-                session.commit()
+            # НЕ помечаем email_contacts как 'contacted' здесь — только при реальной отправке
+            # (send_outreach_email устанавливает status='contacted' сам после успешной доставки)
             logger.info(f"[AUTO_LEADS] PASS -1 CRM contacts: {len(_crm_contacts)} total, "
                         f"{len(_crm_candidates)} candidates → {_crm_added} added to campaign #{campaign.id}")
         else:
