@@ -14355,40 +14355,54 @@ class AnchorEngine:
 
                     # Формируем осмысленную задачу (не «эксплорация», а конкретная цепочка).
                     _mp_spec = (_mp.get('spec') or _mp.get('job') or '').strip()
-                    # Контекст: что агент уже делал — подсказка для следующего шага
+                    # Контекст: что агент уже делал — подсказка для следующего шага.
+                    # Очищаем сырую запись от timestamp и [tool_names] перед вставкой в user-facing текст.
                     _mp_hist = _per_agent_history.get(_mp['name'], [])
                     _mp_last_action = ''
                     if _mp_hist:
-                        _mp_last_action = f" Твоё последнее действие: «{_mp_hist[0][:120]}». Дай СЛЕДУЮЩИЙ шаг, не повтор."
+                        import re as _re_hist_clean
+                        _raw_hist = _mp_hist[0][:180]
+                        # Убираем timestamp «16.04 21:25 » в начале
+                        _raw_hist = _re_hist_clean.sub(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s+', '', _raw_hist).strip()
+                        # Убираем [tool, tool, ...] блоки
+                        _raw_hist = _re_hist_clean.sub(r'\[[^\]]{3,80}\]\s*', '', _raw_hist).strip()
+                        # Обрезаем до первого предложения
+                        _sent_end = _re_hist_clean.search(r'[.!?]', _raw_hist)
+                        if _sent_end and _sent_end.start() > 10:
+                            _raw_hist = _raw_hist[:_sent_end.start() + 1]
+                        else:
+                            _raw_hist = _raw_hist[:100]
+                        if _raw_hist and len(_raw_hist) > 8:
+                            _mp_last_action = f" Предыдущее: {_raw_hist} Дай следующий шаг."
 
                     # Формируем конкретную задачу на основе инструмента агента
                     _g_short = _target_goal[:50]
                     if _tool_fb == 'run_agent_action' and _mp_actions:
                         _sa = _mp_actions[0]
                         _fb_task = (
-                            f"Выполни run_agent_action(action='{_sa}') по цели «{_g_short}».{_mp_last_action} "
-                            f"Запусти действие '{_sa}', сохрани результат через save_note."
+                            f"Выполни действие '{_sa}' по цели «{_g_short}».{_mp_last_action} "
+                            f"Сохрани результат в заметку."
                         )
                     elif _tool_fb == 'find_relevant_contacts_for_task':
                         _fb_task = (
-                            f"Найди 5 контактов целевой аудитории для цели «{_g_short}» через find_relevant_contacts_for_task.{_mp_last_action} "
-                            f"Критерии: соответствие теме цели, наличие контактных данных. Сохрани через save_email_contact."
+                            f"Найди 5 контактов целевой аудитории для цели «{_g_short}».{_mp_last_action} "
+                            f"Критерии: соответствие теме цели, наличие контактных данных. Сохрани каждого контакта."
                         )
                     elif _tool_fb == 'check_emails':
                         _fb_task = (
-                            f"Проверь входящие письма через check_emails по цели «{_g_short}».{_mp_last_action} "
-                            f"Если есть ответы — reply_to_outreach_email с персональным ответом. "
-                            f"Если молчат >2 дней — send_follow_up_email с новым углом подачи."
+                            f"Проверь входящие письма по цели «{_g_short}».{_mp_last_action} "
+                            f"Если есть ответы — ответь персонально. "
+                            f"Если молчат больше 2 дней — отправь follow-up с новым углом подачи."
                         )
                     elif _tool_fb == 'get_news_trends':
                         _fb_task = (
-                            f"Получи свежие тренды через get_news_trends по теме цели «{_g_short}».{_mp_last_action} "
-                            f"Выбери 2-3 актуальных тренда, создай create_post с инсайтом для целевой аудитории."
+                            f"Найди 2-3 актуальных тренда по теме «{_g_short}».{_mp_last_action} "
+                            f"Напиши пост с ключевым инсайтом для целевой аудитории и опубликуй."
                         )
                     else:
                         _fb_task = (
-                            f"Проведи исследование через research_topic по теме цели «{_g_short}».{_mp_last_action} "
-                            f"Найди 3-5 конкретных факта/контакта/ресурса. Сохрани через save_note с анализом."
+                            f"Исследуй возможности для цели «{_g_short}».{_mp_last_action} "
+                            f"Найди 3-5 конкретных факта, контакта или ресурса и сохрани с анализом."
                             + (f" Специализация: {_mp_spec}." if _mp_spec else '')
                         )
 
