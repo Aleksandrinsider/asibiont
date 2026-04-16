@@ -996,7 +996,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 30  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # ── Cache for integration hypothesis (avoid extra AI call every coordinator cycle) ──
@@ -19563,7 +19563,7 @@ class AnchorEngine:
             data=json.dumps(context_data, ensure_ascii=False),
             triggered_at=now_utc,
             expires_at=now_utc + timedelta(hours=4),
-            cooldown_hours=0.5,  # 30 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
+            cooldown_hours=0.25,  # 15 мин — гейт MIN_AUTOPILOT_GAP_MINUTES
             batch_group='goals',
         )]
 
