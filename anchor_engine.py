@@ -14872,6 +14872,10 @@ class AnchorEngine:
                                 pass
                         # Шаг цепочки — обогащаем reason коротким контекстом где мы в воронке
                         _chain_pos_hint = ''
+                        # Sanitize: LLM иногда возвращает "()" или "None" как tool — игнорируем
+                        import re as _re_tool_san
+                        if _tool_hint and not _re_tool_san.match(r'^[a-z_][a-z0-9_]*$', _tool_hint.strip()):
+                            _tool_hint = ''
                         _tl_lower = (_tool_hint or '').lower()
                         if _tl_lower in ('web_search', 'find_relevant_contacts_for_task', 'research_topic'):
                             _chain_pos_hint = ' (поиск)'
