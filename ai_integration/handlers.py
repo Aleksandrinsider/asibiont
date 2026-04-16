@@ -2092,7 +2092,7 @@ async def delegate_task(
                         _goals_str_del = '\n'.join(
                             f"  • {g.title} ({g.progress_percentage or 0}%)" for g in _active_goals_del
                         )
-                        _agent_task_text += f"\n\nАктивные цели пользователя (НЕ спрашивай «какую цель обновить?» — выбери сам по теме задачи):\n{_goals_str_del}"
+                        _agent_task_text += f"\n\nАктивные цели пользователя (сопоставь по теме задачи; уточни у пользователя только если совсем непонятно):\n{_goals_str_del}"
                 except Exception as _ge:
                     logger.debug("[DELEGATE] goals ctx error: %s", _ge)
 
