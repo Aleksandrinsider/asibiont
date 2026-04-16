@@ -314,7 +314,7 @@ _CAT_ACTIONS: dict[str, list[str]] = {
         '{name}, висящие задачи по «{goal}» тормозят команду — нужна ревизия. Найди зависшие >2 дней задачи и раздели крупные на подзадачи через add_task — каждая с конкретным исполнителем и дедлайном. Жду минимум 2 новых чётких задачи.',
     ],
     'hr': [
-        '{name}, воронка кандидатов по «{goal}» пустеет — нужны новые лиды. Найди через web_search 3 новых кандидата с контактами — ищи в профильных сообществах, GitHub, Habr, dev.to. Сохрани через save_email_contact и отправь каждому персональное письмо через send_outreach_email.',
+        '{name}, воронка кандидатов по «{goal}» пустеет — нужны новые лиды. Найди через web_search 3 новых кандидата с контактами — ищи в профильных профессиональных платформах и сообществах по нише цели. Сохрани через save_email_contact и отправь каждому персональное письмо через send_outreach_email.',
         '{name}, не знаем рыночный уровень зарплат по «{goal}» — рискуем потерять кандидатов из-за офера. Подготовь через research_topic обзор рынка: уровень зарплат, доступность, ключевые площадки. Оформи вывод как задачу через add_task с конкретной рекомендацией по оферу.',
         '{name}, кандидаты ждут ответа >2 дней по «{goal}» — они уходят к конкурентам. Проверь воронку — кто ждёт ответа? Напиши follow-up каждому через send_outreach_email — персональный текст, другой аргумент чем первое письмо.',
     ],
@@ -1992,9 +1992,9 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 f"\n\n📐 МАСШТАБ ЦЕЛИ: {_lt_desc}.\n"
                 "Осмысли математику: если нужно 100+ человек, то:\n"
                 "  • 1 email = 1 потенциальный человек (конверсия холодного email ~2-5%)\n"
-                "  • 1 статья на Habr/dev.to = 1 000–50 000 просмотров\n"
+                "  • 1 статья или пост в нишевой платформе = 1 000–50 000 просмотров\n"
                 "  • 1 пост в тематическое сообщество = сотни целевых людей\n"
-                "  • 1 Product Hunt/релиз = тысячи за день\n"
+                "  • 1 публичный релиз/анонс = тысячи за день\n"
                 "Для МАСШТАБА приоритет стратегии:\n"
                 "  1️⃣ Создай КОНТЕНТ (create_post → publish_to_telegram) — органический рост\n"
                 "  2️⃣ Выйди в СООБЩЕСТВА через организаторов/администраторов (web_search → email к ЛПР сообщества)\n"
@@ -3138,32 +3138,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     )
     _is_people_goal = any(w in _goals_text_for_map for w in _PEOPLE_KW)
     if _is_people_goal and _goal_type in ('outreach', 'general', 'dev', 'hr', 'startup', 'learning', 'health'):
-        # Определяем предметную область из цели для точных примеров
-        _domain_hint = 'QA automation'
-        _habr_query = 'тестировщик OR "QA engineer" OR "автоматизатор"'
-        _devto_query = '"qa automation" OR "software tester" OR "test engineer"'
-        _conf_query = 'конференции QA testing 2026 спикеры email contact'
+        # Определяем предметную область из цели — извлекаем из реальных данных
+        # Берём первые 5 значимых слов из названия цели как домен-хинт
+        _goal_words = [
+            w for w in _goals_text_for_map.split()
+            if len(w) > 3 and w not in ('найти', 'привлечь', 'создать', 'сделать', 'цель', 'тема', 'нужно', 'через')
+        ]
+        _domain_hint = ' '.join(_goal_words[:4]) if _goal_words else 'специалист'
+        _conf_query = f'конференции 2026 {_domain_hint} спикеры email contact'
         _gh_query_examples = (
-            "'language:python repos:>3', 'language:javascript repos:>10 location:Russia', "
-            "'language:java automation repos:>3', 'language:go testing followers:>2'"
+            f"'followers:>10 location:Russia', 'repos:>5 followers:>3 location:Ukraine', "
+            f"'followers:>20 location:Germany'"
         )
-        if any(w in _goals_text_for_map for w in ('разработчик', 'developer', 'девелопер', 'программист')):
-            _domain_hint = 'python developer'
-            _habr_query = 'разработчик OR программист OR "software developer"'
-            _devto_query = '"software developer" OR "backend developer" OR "python developer"'
-            _conf_query = 'конференции разработчики Python 2026 спикеры email'
-            _gh_query_examples = (
-                "'language:python followers:>10', 'language:go repos:>10 location:Russia', "
-                "'language:rust repos:>5 followers:>3'"
-            )
-        elif any(w in _goals_text_for_map for w in ('клиент', 'пользователь', 'подписчик', 'b2b', 'saas')):
-            _domain_hint = 'SaaS user'
-            _habr_query = '"product manager" OR "стартап" OR "технический директор" email'
-            _devto_query = '"product manager" OR "startup founder" OR "tech lead"'
-            _conf_query = 'конференции стартапы продукт 2026 участники email'
-            _gh_query_examples = (
-                "'language:python repos:>20 followers:>10', 'language:javascript repos:>15 followers:>5'"
-            )
 
         # Нумерованный список каналов, расставленных по приоритету (интеграция первая)
         _ch_lines = []
@@ -3182,18 +3168,20 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             _ch_num += 1
 
         _ch_lines.append(
-            f"{_ch_num}. ✉️ Habr.ru авторы — пишут о {_domain_hint}:\n"
-            f"   web_search('site:habr.com {_habr_query} email')\n"
+            f"{_ch_num}. 🔍 Поиск профессионалов по теме через web_search:\n"
+            f"   web_search('{_domain_hint} email contact site:habr.com OR site:vc.ru OR site:medium.com')\n"
+            f"   web_search('{_domain_hint} специалист email личный сайт')\n"
             "   → save_email_contact → send_outreach_email\n"
-            "   Habr-авторы обычно указывают email в профиле или в bio статьи."
+            "   Адаптируй запрос под нишу: для IT — Habr/GitHub, для бизнеса — VC.ru/Forbes, для медицины — профессиональные реестры, для HR — hh.ru/профили."
         )
         _ch_num += 1
 
         _ch_lines.append(
-            f"{_ch_num}. 🌐 dev.to / Stack Overflow профили:\n"
-            f"   web_search('site:dev.to {_devto_query} email contact')\n"
-            f"   web_search('site:stackoverflow.com/users {_domain_hint} profile email')\n"
-            "   → save_email_contact → send_outreach_email"
+            f"{_ch_num}. 🌐 Профессиональные платформы по нише цели:\n"
+            f"   web_search('{_domain_hint} эксперт блог email contact')\n"
+            f"   web_search('{_domain_hint} конференция 2025 2026 спикер email')\n"
+            "   → save_email_contact → send_outreach_email\n"
+            "   Примеры источников по нише: IT → GitHub/Habr/dev.to, бизнес → Forbes/VC.ru, медицина → профреестры/конференции, дизайн → Behance/Dribbble, маркетинг → Cossa/vc.ru"
         )
         _ch_num += 1
 
@@ -3223,17 +3211,16 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _ch_num += 1
 
         _ch_lines.append(
-            f"{_ch_num}. 🔗 GitHub bio / email в профиле напрямую:\n"
-            f"   web_search('\"@gmail.com\" OR \"@yandex.ru\" site:github.com {_domain_hint}')\n"
-            f"   web_search('\"contact me\" OR \"email me\" github.com {_domain_hint}')\n"
+            f"{_ch_num}. 🔗 Личные сайты и профили — часто есть email в bio:\n"
+            f"   web_search('\"@gmail.com\" OR \"@yandex.ru\" {_domain_hint} профиль email')\n"
+            f"   web_search('\"написать мне\" OR \"contact me\" OR \"email me\" {_domain_hint}')\n"
             "   → save_email_contact → send_outreach_email"
         )
         _ch_num += 1
 
         _ch_lines.append(
-            f"{_ch_num}. 🏘️ Администраторы QA-сообществ (не прямой постинг, только контакт):\n"
-            f"   web_search('{_domain_hint} Telegram community admin OR moderator email contact')\n"
-            f"   web_search('{_domain_hint} Discord server invite email admin')\n"
+            f"{_ch_num}. 🏘️ Организаторы сообществ по теме (не прямой постинг, только контакт):\n"
+            f"   web_search('{_domain_hint} сообщество Telegram Discord admin организатор email contact')\n"
             "   → save_email_contact → send_outreach_email к организатору/модератору\n"
             "   ℹ️ Прямой постинг в чужие каналы/серверы не поддерживается платформой.\n"
             "   ℹ️ Telegram-username (@username) — не email. Используй web_search('@username email') для поиска контакта."
@@ -3252,7 +3239,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             f"\n\n🗺️ КАРТА ВСЕХ КАНАЛОВ ДЛЯ ПОИСКА (выбирай следующий когда текущий исчерпан):\n"
             + '\n\n'.join(_ch_lines)
             + "\n\n📌 СТРАТЕГИЯ: не застревай на одном канале. "
-            "GitHub → Habr → dev.to/SO → Конференции → Платформа → Курсы → bio → Сообщества.\n"
+            "Интеграции → Поиск в нишевых платформах → Конференции → ASI Biont → Личные сайты → Сообщества.\n"
             "Каждый цикл — ДРУГОЙ канал ИЛИ другой query в том же канале.\n"
             "\n📧 Качество контакта — это соответствие адреса цели: личный — для любого outreach; press@/media@ — для публикаций; partners@ — для B2B.\n"
             "info@ малого стартапа часто читает основатель, info@ крупной компании — автоответ. Спроси кто за ящиком, прежде чем решать.\n"
@@ -8220,9 +8207,9 @@ class AnchorEngine:
                                 f"Стиль: неформальный рабочий чат между коллегами. Ты — реальный человек, не бот.\n"
                                 f"От первого лица, {'по-женски' if _is_ack_fem else 'по-мужски'}. С характером, живо.\n"
                                 f"✅ Хорошие примеры:\n"
-                                f"  «Гляну почту — жду ответ от двух разработчиков из прошлой рассылки. Если тишина, переключусь на GitHub Issues: там обычно народ живее реагирует, чем на холодные email. Целюсь в 3-5 новых контактов.»\n"
-                                f"  «Ок, зайду через Хабр — раньше искали только на dev.to, а на Хабре сейчас много AI-стартаперов. Попробую найти 2-3 автора по теме биоинформатики и сразу напишу каждому.»\n"
-                                f"  «Проверю RSS-ленту по AI новостям, потом сделаю выжимку ключевых событий за неделю. В прошлый раз неплохо зашли новости про open-source LLM — соберу свежую подборку и отправлю.»\n"
+                                f"  «Гляну почту — жду ответ от нескольких контактов из прошлой рассылки. Если тишина, переключусь на другой канал: там обычно живее реагируют. Целюсь в 3-5 новых контактов.»\n"
+                                f"  «Попробую другой поисковый запрос — в прошлый раз нашла только общие адреса, сейчас поищу через личные профили и сайты. Хочу найти 2-3 человека с прямым email.»\n"
+                                f"  «Проверю RSS-ленту по теме цели, потом сделаю выжимку ключевых событий за неделю. Соберу свежую подборку и отправлю.»\n"
                                 f"❌ Пустые фразы вроде «Приступаю к работе», «Погружусь в поиск», «Сейчас изучу», «Хорошо, сейчас найду» — "
                                 f"не сообщают ничего нового. Вместо этого раскрой свой план действий с конкретикой."
                             )
