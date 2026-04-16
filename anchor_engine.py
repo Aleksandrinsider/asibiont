@@ -11958,17 +11958,46 @@ class AnchorEngine:
                     # ── Контент-детектор: агент только создаёт контент без поиска аудитории ──
                     # Срабатывает при пониженном пороге (2+ цикла) для контентных инструментов.
                     # Контент без роста аудитории = пост в пустоту.
+                    # ВАЖНО: некоторые агенты публикуют через web_search+save_note, но TEXT содержит
+                    # «пост готов», «опубликован» — детектируем по тексту, не только по tool-именам.
                     _recent_3 = _cycles_mono[-3:]
+                    _summaries_mono = _all_cycles_summaries.get(_pn_mono, [])
+                    _recent_3_texts = [
+                        s[1].lower()
+                        for s in _summaries_mono[-len(_recent_3):]
+                    ] if _summaries_mono else []
+                    _CONTENT_TEXT_KW = ('пост готов', 'опубликован', 'запостил',
+                                        'published', 'posted', 'создал пост', 'новый пост',
+                                        'написал пост', 'разместил', 'telegram-канал')
                     if len(_recent_3) >= 2:
                         _content_cycles = sum(
-                            1 for _c in _recent_3
-                            if _CONTENT_TOOLS & set(_c)
+                            1 for i, _c in enumerate(_recent_3)
+                            if (_CONTENT_TOOLS & set(_c))
+                            or (i < len(_recent_3_texts)
+                                and any(kw in _recent_3_texts[i] for kw in _CONTENT_TEXT_KW))
                         )
                         _audience_cycles = sum(
                             1 for _c in _recent_3
                             if {'web_search', 'find_relevant_contacts_for_task',
                                 'save_email_contact', 'find_and_message_relevant_users',
                                 'run_agent_action'} & set(_c)
+                        )
+                        # Если агент публикует контент И использует web_search в том же цикле —
+                        # это НЕ поиск аудитории, это поиск для контента. Снижаем audience_cycles
+                        # если все web_search циклы совпадают с content-циклами (это исследование).
+                        _web_search_for_audience_cycles = sum(
+                            1 for i, _c in enumerate(_recent_3)
+                            if 'web_search' in _c
+                            and not (
+                                (i < len(_recent_3_texts)
+                                 and any(kw in _recent_3_texts[i] for kw in _CONTENT_TEXT_KW))
+                                or (_CONTENT_TOOLS & set(_c))
+                            )
+                        )
+                        _audience_cycles = _web_search_for_audience_cycles + sum(
+                            1 for _c in _recent_3
+                            if {'find_relevant_contacts_for_task', 'save_email_contact',
+                                'find_and_message_relevant_users', 'run_agent_action'} & set(_c)
                         )
                         # 2+ контентных цикла подряд без единого поиска аудитории
                         if _content_cycles >= 2 and _audience_cycles == 0:
