@@ -5474,7 +5474,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
     Использует отдельную сессию (_QUICK_AI_SESSION) чтобы не блокировать чат пользователей."""
     global _QUICK_AI_SESSION
     _max_attempts = 2
-    _timeouts = [25, 45]
+    _timeouts = [40, 70]
     for _att in range(_max_attempts):
       try:
         if os.getenv('PYTEST_CURRENT_TEST'):
@@ -5515,15 +5515,22 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
       except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
         logger.warning(f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}")
         if not os.getenv('PYTEST_CURRENT_TEST'):
-            # Закрываем фоновую сессию (не трогаем сессию чата)
-            _sess_to_close = _QUICK_AI_SESSION
-            _QUICK_AI_SESSION = None
-            if _sess_to_close is not None and not _sess_to_close.closed:
-                try:
-                    await _sess_to_close.close()
-                    await asyncio.sleep(0.1)
-                except Exception:
-                    pass
+            # Закрываем сессию только при реальных ошибках соединения.
+            # asyncio.TimeoutError НЕ ломает сессию — per-request timeout уже закрыл
+            # конкретное соединение через context manager. Закрытие всей сессии при
+            # таймауте убивает другие активные запросы → Unclosed connection.
+            _is_conn_broken = isinstance(e, (aiohttp.ServerDisconnectedError,
+                                             aiohttp.ClientConnectorError,
+                                             ConnectionResetError))
+            if _is_conn_broken:
+                _sess_to_close = _QUICK_AI_SESSION
+                _QUICK_AI_SESSION = None
+                if _sess_to_close is not None and not _sess_to_close.closed:
+                    try:
+                        await _sess_to_close.close()
+                        await asyncio.sleep(0.25)
+                    except Exception:
+                        pass
         if _att < _max_attempts - 1:
             await asyncio.sleep(2)
             continue
