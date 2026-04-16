@@ -12477,7 +12477,12 @@ async def send_outreach_email(
                 _UA_oe.author_id == user.id,
                 _UA_oe.user_api_keys.isnot(None),
             ).all():
-                for _ln_oe in (_ag_oe.user_api_keys or '').splitlines():
+                _raw_oe = _ag_oe.user_api_keys or ''
+                try:
+                    _raw_oe = decrypt_token(_raw_oe)
+                except Exception:
+                    pass
+                for _ln_oe in _raw_oe.splitlines():
                     _ln_oe = _ln_oe.strip()
                     if _ln_oe.upper().startswith('GMAIL_USER=') or _ln_oe.upper().startswith('IMAP_USER='):
                         _imap_val_oe = _ln_oe.split('=', 1)[1].strip().lower()
@@ -12713,7 +12718,13 @@ async def send_outreach_email(
                 _UA_rs.user_api_keys.isnot(None),
             ).all():
                 _env_rs = {}
-                for _ln_rs in (_ag_rs.user_api_keys or '').splitlines():
+                _raw_keys_rs = _ag_rs.user_api_keys or ''
+                # Ключи могут быть зашифрованы (enc:...) — расшифровываем перед парсингом
+                try:
+                    _raw_keys_rs = decrypt_token(_raw_keys_rs)
+                except Exception:
+                    pass
+                for _ln_rs in _raw_keys_rs.splitlines():
                     _ln_rs = _ln_rs.strip()
                     if '=' in _ln_rs and not _ln_rs.startswith('#'):
                         _k_rs, _, _v_rs = _ln_rs.partition('=')
@@ -13938,7 +13949,12 @@ async def add_email_leads(
                 _UA_leads.author_id == user.id,
                 _UA_leads.user_api_keys.isnot(None),
             ).all():
-                for _ln_leads in (_ag_leads.user_api_keys or '').splitlines():
+                _raw_leads = _ag_leads.user_api_keys or ''
+                try:
+                    _raw_leads = decrypt_token(_raw_leads)
+                except Exception:
+                    pass
+                for _ln_leads in _raw_leads.splitlines():
                     _ln_leads = _ln_leads.strip()
                     if _ln_leads.upper().startswith(('GMAIL_USER=', 'IMAP_USER=')):
                         _imap_v = _ln_leads.split('=', 1)[1].strip().lower()
@@ -14933,7 +14949,14 @@ def _get_user_email_integrations(user, session) -> list:
         ]
         for agent in agents:
             env: dict = {}
-            for line in (agent.user_api_keys or '').splitlines():
+            _raw_ag_keys = agent.user_api_keys or ''
+            # Ключи могут быть зашифрованы (enc:...) — расшифровываем
+            try:
+                from config import decrypt_token as _dt_egu
+                _raw_ag_keys = _dt_egu(_raw_ag_keys)
+            except Exception:
+                pass
+            for line in _raw_ag_keys.splitlines():
                 line = line.strip()
                 if '=' in line and not line.startswith('#'):
                     k, _, v = line.partition('=')
