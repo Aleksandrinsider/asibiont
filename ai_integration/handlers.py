@@ -12113,6 +12113,28 @@ async def start_email_campaign(
         if not sender_email:
             sender_email = 'outreach@asibiont.com'
 
+        # Блокируем фейковые домены в sender_email
+        _FAKE_SENDER_DOMAINS = {'example.com', 'example.org', 'test.com', 'placeholder.com', 'domain.com', 'yourdomain.com'}
+        _sender_domain_check = (sender_email or '').split('@')[-1].lower()
+        if _sender_domain_check in _FAKE_SENDER_DOMAINS:
+            sender_email = 'outreach@asibiont.com'
+
+        # Если аудитория не русскоязычная — sender_name должен быть на английском
+        # (сепаратор "От:“ в Gmail покажет русское имя даже если письмо на английском)
+        _RU_CHARS = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')
+        _audience_lower = (target_audience or '').lower()
+        _is_ru_audience = any(c in _RU_CHARS for c in _audience_lower) or any(
+            kw in _audience_lower for kw in ('russian', 'русск', 'редак', 'предприним')
+        )
+        if not _is_ru_audience and sender_name and any(c in _RU_CHARS for c in sender_name.lower()):
+            # Аудитория не русская, а sender_name на русском — заменяем на английское
+            _TRANSLATIONS = {
+                'Команда ASI Biont': 'ASI Biont Team',
+                'Команда': 'Team',
+                'Поддержка': 'Support',
+            }
+            sender_name = _TRANSLATIONS.get(sender_name, 'ASI Biont Team')
+
         # Проверка на дубликат — если есть активная кампания с похожей целью (personal скрытые исключаем)
         from sqlalchemy import func as sa_func
         existing = session.query(EmailCampaign).filter(

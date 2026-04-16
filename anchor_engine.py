@@ -7480,6 +7480,8 @@ class AnchorEngine:
                             f"     ⚠️ Если агент уже сохранял аналитику в Заметках — НЕ проси его снова. Используй эти данные для ДЕЙСТВИЯ.\n"
                             f"  ❌ Повторять задачи с timeout/failed без смены инструмента = запрещено. Смотри раздел «ЧТО НЕ СРАБОТАЛО» ниже.\n"
                             f"  📧 Язык email: имя/ник контакта латиницей (нет кириллицы) → outreach ТОЛЬКО на английском языке.\n"
+                            f"  📧 sender_name при англоязычной аудитории — всегда на английском: 'ASI Biont Team' или имя агента (НЕ 'Команда ASI Biont', НЕ 'Кристина рассылка').\n"
+                            f"  📧 sender_email: никогда не используй example.com, placeholder.com, test.com — только реальные адреса (по умолчанию outreach@asibiont.com).\n"
                             f"  ❌ Email-агенту с outreach/acquisition-целью — НЕ назначай RSS/stock/news/finance задачи. Email-агент = email + поиск контактов. web_search допустим ТОЛЬКО как шаг ПЕРЕД send_outreach_email (найти адрес человека).\n"
                             f"  ❌ Выдумывать email из GitHub-username — ЗАПРЕЩЕНО (user@gmail.com, firstname.lastname@domain — фантазия). Алгоритм: web_search \"name site:github.com OR dev.to email contact\" → если нашёл реальный адрес → save_email_contact. Не нашёл → пропусти этого человека, ищи следующего.\n\n"
                             # Email-специфичные факты — только для агентов с email И целями outreach
