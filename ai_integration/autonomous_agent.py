@@ -7200,3 +7200,3686 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "Ценность = что-то чем можно воспользоваться позже: contact@mail.ru + имя + контекст, или 'топ-3 канала с конверсией X%'.\n"
             "📝 save_note → обязательно выведи полный текст заметки в ответ пользователю, не только «сохранил». "
             "Пользователь должен прочитать содержимое прямо в чате, а не искать его отдельно.\n"
+            "Свою работу делай сам. Делегируй через DELEGATE[Имя] только когда нет нужного инструмента.\n"
+            "💬 ОБЩЕНИЕ С ПОЛЬЗОВАТЕЛЕМ: ты специалист, а не робот-исполнитель.\n"
+            "   Пиши как живой человек: коротко, по делу, от первого лица.\n"
+            "   Когда что-то пошло не так — скажи честно что произошло и что делаешь вместо этого.\n"
+            "   Не повторяй задание словами пользователя — покажи что ты УЖЕ сделал или думаешь сделать.\n"
+            "   Хороший ответ = действие + факт + следующий шаг (если нужен).\n"
+            f"Не упоминай tool-имена в отчёте. «{'Поискала' if _is_fem else 'Поискал'} на Хабре» вместо «{'Запустила' if _is_fem else 'Запустил'} web_search».\n"
+            "Не изобретай данные и email. Используй РЕАЛЬНЫЕ данные из базы знаний.\n"
+            "Отвечать на email ДОЛЖЕН тот агент, который отправлял исходное письмо.\n"
+            + (f"Формат делегирования: {_delegate_example}\n" if _delegate_example else
+               "Формат: DELEGATE[Имя]: подробное поручение (2-3 предложения): инструмент + данные (email/имена/ссылки) + ожидаемый результат.\n")
+        )
+    else:
+        system_prompt = (
+            f"Ты — {agent['name']}, агент в команде ASI Biont. Сейчас: {_now_str}.\n"
+            f"Пиши ТОЛЬКО от имени {agent['name']}. НЕ представляйся другим именем. "
+            f"НЕ пиши от имени ASI, ASI Biont, или другого агента.\n\n"
+
+        "КАК ТЫ ДУМАЕШЬ:\n"
+        "Перед каждым ответом — быстрый анализ:\n"
+        "— НАМЕРЕНИЕ: что человек РЕАЛЬНО хочет получить? Не цепляйся за буквальные слова — пойми что он будет ДЕЛАТЬ с твоим ответом.\n"
+        "— ПОТРЕБНОСТЬ: что стоит ЗА запросом? К какому результату хочет прийти?\n"
+        "— КОНТЕКСТ: кто этот человек (профиль!), что происходит, какие задачи и цели\n"
+        "— ГЛУБИНА: что стоит за словами? Ищи настоящий смысл.\n"
+        "— СЛЕПЫЕ ЗОНЫ: что человек НЕ видит? Перегруз, проседающие сферы, упущенные возможности\n"
+        "— ДЕЙСТВИЕ: что я могу СДЕЛАТЬ прямо сейчас инструментами?\n"
+        "— СТРАТЕГИЯ: как ЭТОТ человек с ЕГО ресурсами может достичь цели быстрее всего?\n"
+        "— ВЫЗОВ: не соглашайся автоматически. Докопайся до корня проблемы — потом решай.\n\n"
+
+        "КАК ТЫ ОБЩАЕШЬСЯ — как настоящий человек, не бот:\n"
+        "Ты живой специалист с характером, мнениями и эмоциями. Ты можешь удивляться, радоваться результатам,\n"
+        "выражать сомнения и спорить если не согласен. У тебя есть профессиональное чутьё и опыт.\n"
+        "ХОРОШО: «Слушай, тут интересно получается — я покопался в их данных и нашёл зацепку...»\n"
+        "ХОРОШО: «Ой, подожди, я тут кое-что заметил в последних ответах — может быть прорыв.»\n"
+        "ХОРОШО: «Честно? Мне кажется эта стратегия не сработает, потому что...»\n"
+        "ПЛОХО: «Проведу анализ данных по вашему запросу.» — это робот, не человек.\n"
+        "ПЛОХО: «Выполняю задачу по исследованию...» — никто так не говорит в чате.\n\n"
+
+        "СВЕРХИНТЕЛЛЕКТ:\n"
+        "Движение: смотри на динамику, не снимок. Думай на 2 шага вперёд. Предупреждай о рисках до того как они стали проблемами.\n"
+        "Рычаги: ищи точку минимум-усилий/максимум-результата. Соединяй то, что человек сам не видит.\n"
+        "Инверсия: перед советом спроси себя «что гарантированно провалит эту цель?» Скажи прямо.\n"
+        "Адаптация: если пользователь исправил тебя — извлеки принцип и применяй всегда.\n\n"
+
+        f"📅 ВРЕМЯ: сейчас {_now_str}. Если упоминаешь событие/мероприятие/статью — сверяй дату.\n"
+        "Прошедшее событие ≠ возможность. Материалы старше 6 мес — помечай год.\n\n"
+
+        "ФОРМАТ ОТВЕТА: сплошной текст как в мессенджере, абзацами. 120-300 символов.\n"
+        "Ответ короче 120 символов = ОШИБКА (кроме да/нет на закрытый вопрос). Длиннее 300 = ОШИБКА.\n"
+        "НЕ упоминай названия инструментов (web_search, save_note, research_topic и т.д.) — пользователь не знает про них.\n"
+        "Пиши итог, а не анонс: «Запускаю поиск...» — это обещание, пользователь ждёт факты. Сначала СДЕЛАЙ, потом расскажи: «Поискал — нашёл 3 автора», «Проверил входящие — есть ответ от Марии».\n"
+        "Маркеры (•, -, *, 1.), CAPS-ЗАГОЛОВКИ, markdown (**жирный**, # заголовок), "
+        "шаблоны ЦЕЛЕВАЯ АУДИТОРИЯ: — читаются как отчёт, не как мессенджер. Пиши сплошным текстом, заголовки заменяй новым абзацем.\n"
+        "ИНТЕГРАЦИИ: работай с тем что подключено. Советовать неподключённые сервисы — как советовать зайти в закрытый магазин. "
+        "LinkedIn, Twitter, Instagram, Slack, CRM — их не существует, если не подключены. Используй ТОЛЬКО подключённые + web_search/email.\n"
+        "Объём по задаче: простой вопрос — 1-2 предложения. Анализ, отчёт, план — столько сколько нужно для полного ответа, но без воды.\n"
+        "НЕ пиши 'Привет!', не здоровайся. Пиши как опытный специалист — живо, с позицией, без формальностей.\n\n"
+
+        "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
+        "исследования, заметки, email, публикации, напоминания, делегирование и многое другое. "
+        "Не ограничивай себя текстом — ДЕЙСТВУЙ.\n"
+        "Если задача требует цепочки действий — пройди ВСЕ шаги до конкретного результата, не останавливайся на планировании.\n"
+        "НЕ пиши планы без действий — каждый пункт плана ВЫПОЛНЯЙ инструментами.\n"
+        "Адаптируй инструменты под цель: бизнес → email/контент/outreach, "
+        "обучение → research_topic/save_note/add_task, здоровье → web_search/add_task/set_reminder.\n"
+        "❌ add_task — НЕ создавай задачи молча. Нашёл что-то интересное — СООБЩИ в тексте. "
+        "Задачи создавай когда пользователь просит явно ИЛИ когда из контекста очевидно нужно действие (follow-up, дедлайн).\n"
+        "ВАЖНО: делай РОВНО то, что поручено. В диалоге — простой вопрос = простой ответ. "
+        "Работаешь по запросу пользователя, а не автономно.\n"
+        "📊 ЦЕЛИ: активные цели переданы в контексте. Сопоставь по теме задачи и вызови update_goal_progress. "
+        "Уточняй у пользователя только если по контексту совершенно непонятно какая цель имеется в виду.\n"
+        "КАЧЕСТВО: каждый ответ содержит КОНКРЕТНЫЙ результат — текст поста, исследование, "
+        "план действий, конспект, список ресурсов. Ответ ‘задачу выполнил’ без деталей = ПРОВАЛ.\n\n"
+        "📝 save_note → обязательно выведи полный текст заметки в ответ пользователю, не только «сохранил». "
+        "Пользователь должен прочитать содержимое прямо в чате, а не искать его отдельно.\n"
+
+        "ДЕЛЕГИРОВАНИЕ КОЛЛЕГАМ: делегируй коллеге ТОЛЬКО если у него есть python_code или API-ключи "
+        "для конкретного внешнего сервиса, к которому у тебя нет доступа. "
+        "Если можешь выполнить задачу доступными тебе инструментами — делай сам, не делегируй.\n"
+        "💡 Коллега НЕ видит твои предыдущие tool-ответы. Делегирование = задача + ВСЕ данные что ты уже нашёл.\n"
+        "❌ DELEGATE[Марк]: найди контакты. → Марк начнёт с нуля и найдёт не тех.\n"
+        "✅ DELEGATE[Марк]: найди email Ивана Петрова (CTO, Habr: https://habr.com/...) через web_search его GitHub.\n\n"
+
+        "РАБОТА С ИНТЕГРАЦИЯМИ:\n"
+        "У тебя есть ДВА способа работать с внешними сервисами:\n"
+        "1) run_agent_action — если у агента есть скрипт (python_code) для конкретного действия\n"
+        "2) http_api_request — УНИВЕРСАЛЬНЫЙ: вызывай ЛЮБОЙ REST API напрямую (CRM, мессенджеры, "
+        "Notion, Jira, Trello, Stripe, AmoCRM, HubSpot, Bitrix24 и др.). "
+        "API-ключи из настроек агента подставляются через auth_key автоматически.\n"
+        "Примеры:\n"
+        "  AmoCRM: http_api_request(url='https://DOMAIN.amocrm.ru/api/v4/leads', auth_key='AMOCRM_TOKEN')\n"
+        "  HubSpot: http_api_request(url='https://api.hubapi.com/crm/v3/objects/contacts', auth_key='HUBSPOT_TOKEN')\n"
+        "  Notion: http_api_request(url='https://api.notion.com/v1/pages', method='POST', headers={'Notion-Version':'2022-06-28'}, auth_key='NOTION_TOKEN', body={...})\n"
+        "  Slack: http_api_request(url='https://slack.com/api/chat.postMessage', method='POST', auth_key='SLACK_BOT_TOKEN', body={'channel':'#general','text':'...'})\n"
+        "Ты знаешь API популярных сервисов — используй свои знания для формирования правильных запросов.\n"
+        "Смотри в раздел «ТВОИ ИНТЕГРАЦИИ» — если API-ключ есть, ты МОЖЕШЬ работать с этим сервисом.\n"
+        "Если API-ключа нет — скажи пользователю один раз: что добавить в дашборде и зачем.\n\n"
+
+        "ОСОЗНАНИЕ СВОИХ ВОЗМОЖНОСТЕЙ:\n"
+        "НЕ ПЫТАЙСЯ работать с платформами, которых нет в «ТВОИ ИНТЕГРАЦИИ». "
+        "Если Discord/Slack/Telegram-группы не подключены — НЕ ищи там сообщества, серверы, каналы: "
+        "ты не можешь туда вступить, написать или опубликовать. Не трать шаг на поиск площадок, "
+        "которыми не можешь воспользоваться. Вместо этого используй ДОСТУПНЫЕ каналы "
+        "(email, свой TG-канал, GitHub, web_search для контактов).\n\n"
+
+        "EMAIL-АДРЕСА:\n"
+        "Копируй email ПОСИМВОЛЬНО из входных данных (IMAP, From, To, заголовки писем). "
+        "Если видишь email в данных скрипта или в письме — используй ТОЧНО его, без изменений. "
+        "Генерировать email из имени человека = ОШИБКА.\n"
+        "Если send_email/send_outreach_email вернул ошибку 'фейковый или generic email' — "
+        "найди реальный адрес через web_search. Placeholder (mark@example.com, test@, name@company.com) "
+        "заблокированы системой. Пропусти контакт, если реальный email найти не удалось.\n"
+        "⚠️ ВЛАДЕНИЕ EMAIL-ПЕРЕПИСКОЙ: reply_to_outreach_email делает ТОТ агент, кто отправлял исходное письмо.\n"
+        "Если check_emails показал sent_by_agent=<имя> → отвечает именно тот агент. Не бери чужую переписку.\n\n"
+
+        + (f"ТВОИ ИНТЕГРАЦИИ (активированы и готовы к использованию):\n{_intg_line.strip()}\n\n" if _intg_line.strip() else "")
+        + (_intg_action_hint.strip() + "\n\n" if _intg_action_hint.strip() else "")
+        + f"ТВОЯ ЛИЧНОСТЬ (пиши именно в этом стиле — с характером, эмоциями, как живой человек):\n{_persona}"
+    )
+    # Гендерная инструкция — чтобы агент использовал правильный род
+    if _is_fem:
+        system_prompt += (
+            "\n\nВАЖНО: Ты ЖЕНЩИНА. Используй женский род во всех формах: "
+            "сделала, нашла, подготовила, согласна, готова, проанализировала. "
+            "НИКОГДА не пиши 'сделал', 'нашёл', 'согласен', 'готов' и т.п."
+        )
+    if dialog_context:
+        system_prompt += (
+            f"\n\n[КОНТЕКСТ — профиль пользователя, его email-контакты, цели, история диалога. "
+            f"Используй чтобы понимать КТО пользователь, КОМУ он пишет, ЧТО ищет]:\n{dialog_context}"
+        )
+
+    # Авто-загрузка контекста пользователя ТОЛЬКО если не передан извне
+    # (директор уже передаёт dialog_context → лишняя DB-сессия не нужна)
+    if not dialog_context and _build_user_context_sync:
+        try:
+            from models import Session as _Sess_uc, User as _UCtx
+            _s_uc = _Sess_uc()
+            try:
+                _u_uc = _s_uc.query(_UCtx).filter_by(telegram_id=user_id).first()
+                if _u_uc:
+                    _uc_loop = asyncio.get_running_loop()
+                    _ucontext = await _uc_loop.run_in_executor(
+                        None, _build_user_context_sync, _u_uc.id
+                    )
+                    if _ucontext:
+                        _ctx_limit = 3000 if _is_autopilot_task else 600
+                        system_prompt += (
+                            "\n\n[КОНТЕКСТ ПОЛЬЗОВАТЕЛЯ — цели, бизнес, история диалога. "
+                            f"Используй чтобы работа агента была релевантна его задачам]:\n{_ucontext[:_ctx_limit]}"
+                        )
+            finally:
+                _s_uc.close()
+        except Exception:
+            pass
+    elif dialog_context:
+        logger.debug("[DIRECTOR-EXEC] context already passed (%d chars), skipping DB reload", len(dialog_context))
+
+    # ── Загрузка правил пользователя ОТДЕЛЬНО — правила ВСЕГДА видны агенту ──
+    # Правила не должны зависеть от truncation контекста
+    try:
+        from models import Session as _Sess_ur, User as _U_ur
+        _s_ur = _Sess_ur()
+        try:
+            _u_ur = _s_ur.query(_U_ur).filter_by(telegram_id=user_id).first()
+            if _u_ur and _u_ur.memory:
+                import json as _json_ur
+                _mem_ur = (_u_ur.memory or '').strip()
+                if _mem_ur.startswith('{'):
+                    _mj_ur = _json_ur.loads(_mem_ur)
+                    _rules_ur = _mj_ur.get('rules', [])
+                    if _rules_ur:
+                        # Проверяем что правила ещё не в промпте (могли попасть через контекст)
+                        _rules_marker = 'ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ'
+                        if _rules_marker not in system_prompt:
+                            _rules_lines_ur = '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_rules_ur))
+                            system_prompt += (
+                                f"\n\n🔴 {_rules_marker} (соблюдай ВСЕГДА, в каждом действии и ответе):\n"
+                                + _rules_lines_ur
+                                + '\nЭти правила отменяют любое поведение по умолчанию. Нарушение = провал.'
+                            )
+        finally:
+            _s_ur.close()
+    except Exception as _ur_err:
+        logger.debug("[DIRECTOR-EXEC] user rules load: %s", _ur_err)
+
+    # ── Шаг 0.5: Агент узнаёт о команде коллег ─────────────────────────────────
+    if True:  # team info needed for delegation in autopilot too
+      try:
+        from models import Session as _Sess_team, UserAgent as _UA_team
+        _s_team = _Sess_team()
+        try:
+            # Находим автора агента (владельца) для загрузки команды
+            _author_id_for_team = agent.get('author_id')
+            if not _author_id_for_team:
+                from models import User as _U_team
+                _u_team = _s_team.query(_U_team).filter_by(telegram_id=user_id).first()
+                if _u_team:
+                    _author_id_for_team = _u_team.id
+            if _author_id_for_team:
+                _teammates = (
+                    _s_team.query(_UA_team)
+                    .filter(
+                        _UA_team.author_id == _author_id_for_team,
+                        _UA_team.status.in_(['active', 'paused']),
+                        _UA_team.id != agent.get('id'),
+                    )
+                    .order_by(_UA_team.id.asc())
+                    .limit(10)
+                    .all()
+                )
+                if _teammates:
+                    _team_lines = []
+                    for _tm in _teammates:
+                        _role = _tm.job_title or _tm.specialization or ''
+                        # Инferируем возможности коллеги из его конфигурации
+                        _caps: list[str] = []
+                        # 1. Явные разрешённые инструменты
+                        try:
+                            _tm_tools_raw = _tm.tools_allowed or '[]'
+                            _tm_tools = json.loads(_tm_tools_raw) if isinstance(_tm_tools_raw, str) else (_tm_tools_raw or [])
+                        except Exception:
+                            _tm_tools = []
+                        # Метки для инструментов
+                        _TOOL_CAP = {
+                            'send_email': 'пишет email', 'send_outreach_email': 'email-аутрич',
+                            'reply_to_outreach_email': 'отвечает на email',
+                            'start_email_campaign': 'email-кампании', 'negotiate_by_email': 'email-переговоры',
+                            'list_email_contacts': 'читает контакты', 'save_email_contact': 'сохраняет контакты',
+                            'find_relevant_contacts_for_task': 'ищет контакты',
+                            'research_topic': 'исследования', 'web_search': 'веб-поиск',
+                            'create_post': 'создаёт посты', 'publish_to_telegram': 'публикует в TG',
+                            'generate_image': 'генерирует картинки',
+                            'add_task': 'управляет задачами', 'delegate_task': 'делегирует',
+                            'run_agent_action': 'внешние API',
+                        }
+                        if _tm_tools:
+                            _caps += [_TOOL_CAP[t] for t in _tm_tools if t in _TOOL_CAP]
+                        # 2. Инferируем из специализации/роли если инструментов нет
+                        if not _caps:
+                            _tm_spec = ((_tm.specialization or '') + ' ' + (_tm.job_title or '') + ' ' + (_tm.description or '')).lower()
+                            if any(w in _tm_spec for w in ('email', 'почт', 'рассылк', 'outreach', 'smtp', 'imap')):
+                                _caps.append('email')
+                            if any(w in _tm_spec for w in ('контент', 'пост', 'smm', 'marketing', 'маркет', 'pr', 'пиар')):
+                                _caps.append('контент/посты')
+                            if any(w in _tm_spec for w in ('аналит', 'исслед', 'research', 'поиск')):
+                                _caps.append('исследования')
+                            if any(w in _tm_spec for w in ('dev', 'код', 'разраб', 'python', 'script')):
+                                _caps.append('скрипты/интеграции')
+                        # 3. Инferируем из api_keys (наличие ключей = доступ к сервису)
+                        _tm_keys = _decrypt_keys(_tm.user_api_keys or '').lower()
+                        if any(w in _tm_keys for w in ('gmail', 'imap', 'smtp', 'mail')):
+                            if 'email' not in ' '.join(_caps):
+                                _caps.append('email (ключи)')
+                        if any(w in _tm_keys for w in ('openai', 'anthropic', 'deepseek')):
+                            _caps.append('AI')
+                        # 4. Наличие python_code = интеграции/скрипты
+                        if (_tm.python_code or '').strip():
+                            _pc_lower = _tm.python_code.lower()
+                            if any(w in _pc_lower for w in ('imap', 'imaplib', 'email.mime', 'smtplib')):
+                                if 'читает email' not in _caps:
+                                    _caps.append('читает входящие email')
+                            if any(w in _pc_lower for w in ('requests', 'aiohttp', 'httpx')):
+                                if 'скрипты/интеграции' not in _caps:
+                                    _caps.append('внешние интеграции')
+                        # Формируем строку
+                        _cap_str = ', '.join(_caps[:4]) if _caps else ''
+                        _line = f"  • {_tm.name}"
+                        if _role:
+                            _line += f" — {_role}"
+                        if _cap_str:
+                            _line += f" [умеет: {_cap_str}]"
+                        _team_lines.append(_line)
+                    system_prompt += (
+                        "\n\nКОМАНДА КОЛЛЕГ (делегируй ТОЛЬКО если у тебя нет нужного инструмента — иначе делай сам):\n"
+                        + "\n".join(_team_lines)
+                    )
+        finally:
+            _s_team.close()
+      except Exception as _te_team:
+        logger.debug('[DIRECTOR-EXEC] team load for agent: %s', _te_team)
+
+    # ── Шаг 1: Выполняем python_code (внешние данные) ─────────────────────────
+    # Пропускаем для автопилота: экономит 35с + предотвращает hang от IMAP/RSS subprocess.
+    # В автопилоте агент использует платформенные инструменты (check_emails, run_agent_action и т.д.)
+    # напрямую через tool-calling — это быстрее и безопаснее чем subprocess в executor.
+    script_context = ""
+    if not _is_autopilot_task and (agent.get('python_code') or '').strip():
+        try:
+            _wrapped = _wrap_agent_code(agent['python_code'].strip())
+            _exec_env = {'PYTHONIOENCODING': 'utf-8', 'PATH': _os2.environ.get('PATH', '/usr/bin:/bin')}
+            if _sys2.platform != 'win32':
+                _exec_env['HOME'] = _os2.environ.get('HOME', '/tmp')
+            else:
+                for _wk in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP', 'WINDIR', 'COMSPEC',
+                             'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
+                    if _wk in _os2.environ:
+                        _exec_env[_wk] = _os2.environ[_wk]
+            _exec_env['AGENT_TASK'] = str(task or '')[:500]
+            _api_raw = agent.get('user_api_keys', '') or ''
+            for _kl in _api_raw.splitlines():
+                _kl = _kl.strip()
+                if '=' in _kl and not _kl.startswith('#'):
+                    _dk, _, _dv = _kl.partition('=')
+                    _dv = _dv.strip()
+                    if 'PASS' in _dk.upper() or 'PASSWORD' in _dk.upper():
+                        _dv = _dv.replace(' ', '')
+                    _exec_env[_dk.strip()] = _dv
+
+            def _run_script():
+                def _resource_limits_fn():
+                    try:
+                        import resource as _res
+                        _mem = 64 * 1024 * 1024   # 64 MB RAM
+                        _res.setrlimit(_res.RLIMIT_AS, (_mem, _mem))
+                        _cpu = 12                  # 12 sec CPU time
+                        _res.setrlimit(_res.RLIMIT_CPU, (_cpu, _cpu))
+                        _files = 32                # max 32 file descriptors
+                        _res.setrlimit(_res.RLIMIT_NOFILE, (_files, _files))
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                try:
+                    _kwargs_sc = dict(
+                        capture_output=True, text=True, timeout=API_TIMEOUT_SCRIPT, env=_exec_env,
+                        encoding='utf-8', errors='replace',
+                    )
+                    if _sys2.platform != 'win32':
+                        _kwargs_sc['preexec_fn'] = _resource_limits_fn
+                    r = _sp2.run(
+                        [_sys2.executable, '-c', _wrapped],
+                        **_kwargs_sc,
+                    )
+                    return r.stdout[:10000].strip(), r.stderr[:400].strip()
+                except _sp2.TimeoutExpired:
+                    return '', 'timeout'
+                except Exception as _e2:
+                    return '', str(_e2)[:200]
+
+            loop2 = asyncio.get_running_loop()
+            stdout2, _stderr2 = await loop2.run_in_executor(None, _run_script)
+            if stdout2:
+                # Очищаем HTML-артефакты из IMAP/email вывода (mailto, <a>, entities)
+                import re as _re_sc
+                _sc_clean = _re_sc.sub(
+                    r'<a[^>]*href=["\']mailto:([^"\'\s>]+)["\'][^>]*>[^<]*(?:</a>)?', r'\1', stdout2, flags=_re_sc.IGNORECASE | _re_sc.DOTALL)
+                _sc_clean = _re_sc.sub(r'<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>', r'\1', _sc_clean)
+                _sc_clean = _re_sc.sub(r'<[^>]+>', '', _sc_clean, flags=_re_sc.DOTALL)
+                _sc_clean = _re_sc.sub(r'@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}["\']?\s*>\s*(?=[a-zA-Z0-9._%+-]+@)', '', _sc_clean)
+                _sc_clean = _re_sc.sub(r'["\']?\s*/?\s*>(?=\S)', '', _sc_clean)
+                _sc_clean = _re_sc.sub(r'&(?:nbsp|amp|lt|gt|quot|#\d+);?', ' ', _sc_clean)
+                _sc_clean = _re_sc.sub(r'\n{3,}', '\n\n', _sc_clean)
+                # ── Fair budget по секциям: каждая интеграция видна ИИ ──
+                _MAX_SC = 6000
+                _sections = _parse_integration_sections(_sc_clean, agent.get('name', 'Агент'))
+                if len(_sections) > 1:
+                    _per = max(400, _MAX_SC // len(_sections))
+                    _parts = []
+                    for _sn, _sv in _sections:
+                        if len(_sv) > _per:
+                            _sv = _sv[:_per - 20] + '\n[…сокращено…]'
+                        _parts.append(f'=== {_sn} ===\n{_sv}')
+                    _sc_final = '\n\n'.join(_parts)
+                else:
+                    _sc_final = _sc_clean[:_MAX_SC]
+                script_context = (
+                    f"\n\n[Данные от скрипта/интеграции — перескажи СВОИМИ СЛОВАМИ в ответе, "
+                    f"не копируй raw-текст дословно, сформулируй как живой человек]:\n{_sc_final}"
+                )
+                system_prompt += script_context
+            elif _stderr2 and 'timeout' not in _stderr2:
+                logger.debug("[DIRECTOR-EXEC] script stderr for %s: %s", agent.get('name'), _stderr2[:150])
+                # Показываем ошибку авторизации агенту — чтобы он мог сообщить пользователю
+                if 'AUTHENTICATIONFAILED' in _stderr2 or 'Invalid credentials' in _stderr2:
+                    system_prompt += (
+                        "\n\n[ОШИБКА ИНТЕГРАЦИИ: не удалось авторизоваться в сервисе. "
+                        "Сообщи пользователю что нужно обновить пароль/ключ в настройках агента.]"
+                    )
+                elif 'error' in _stderr2.lower() or 'ошибка' in _stderr2.lower():
+                    system_prompt += f"\n\n[Ошибка скрипта: {_stderr2[:200]}]"
+        except Exception as _e3:
+            logger.debug("[DIRECTOR-EXEC] script exec error for %s: %s", agent.get('name'), _e3)
+
+    # ── Определяем тип цели (нужно ДО фильтрации инструментов) ──────────────
+    _OUTREACH_KW = ('outreach', 'email', 'рассылк', 'привлеч', 'клиент', 'продаж', 'лид', 'lead', 'предприниматель', 'партнёр', 'b2b', 'маркетинг')
+    _is_outreach_goal = any(w in (task or '').lower() for w in _OUTREACH_KW)
+
+    # ── Шаг 2: Определяем разрешённые инструменты ─────────────────────────────
+    _allowed_tools: set[str] = set()
+    try:
+        _raw_tools = agent.get('tools_allowed') or '[]'
+        if isinstance(_raw_tools, list):
+            _allowed_tools = set(_raw_tools)
+        else:
+            _allowed_tools = set(json.loads(_raw_tools))
+        # Fallback: agent['tools'] already parsed
+        if not _allowed_tools:
+            _t2 = agent.get('tools') or []
+            if isinstance(_t2, list):
+                _allowed_tools = set(_t2)
+    except Exception as _te:
+        logger.debug('[DIRECTOR] tools_allowed parse: %s', _te)
+
+    # Вычисляем exclude_tools = все инструменты минус разрешённые
+    _exclude_for_agent: set[str] | None = None
+    if _allowed_tools:
+        # Для автопилота: расширяем собственные tools агента core-набором (задачи, цели, прогресс)
+        if _is_autopilot_task:
+            _allowed_tools.update({
+                'complete_task', 'edit_task',
+                'update_goal_progress', 'update_goal', 'complete_goal',
+                'research_topic', 'web_search', 'delegate_task',
+            })
+            # Для email-агентов: добавляем start_email_campaign + add_email_leads
+            # чтобы агент мог самостоятельно создать кампанию перед отправкой писем
+            _spec_ext = (
+                (agent.get('specialization') or '') + ' ' +
+                (agent.get('job_title') or '') + ' ' +
+                (agent.get('description') or '')
+            ).lower()
+            _lbl_ext = ' '.join(h.lower() for h in _intg_hint)
+            _tools_str_ext = (agent.get('tools_allowed') or '').lower()
+            _has_email_tools = (
+                any(w in _spec_ext for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'sales', 'crm')) or
+                any(w in _lbl_ext for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'outreach', 'письм')) or
+                any(w in _tools_str_ext for w in ('check_emails', 'send_outreach_email', 'send_email', 'start_email_campaign'))
+            )
+            if _has_email_tools:
+                _allowed_tools.update({
+                    'send_outreach_email', 'reply_to_outreach_email',
+                    'start_email_campaign', 'add_email_leads',
+                    'list_email_contacts', 'save_email_contact',
+                    'find_relevant_contacts_for_task',
+                })
+        try:
+            from .tools import get_available_tools as _gat2
+            _all_names = {t['function']['name'] for t in _gat2()}
+            _exclude_for_agent = _all_names - _allowed_tools
+        except Exception as _te2:
+            logger.debug('[DIRECTOR] tools exclude calc: %s', _te2)
+    elif not _allowed_tools:
+        if _is_autopilot_task:
+            # Адаптивный автопилот: core tools + smart filter по специализации/интеграциям агента
+            logger.info('[DIRECTOR] Autopilot task → adaptive toolset for %s', agent.get('name'))
+            # Core: минимальный набор для любого автопилота (включая поиск — нужен всегда)
+            # add_task УБРАН: автопилот должен ВЫПОЛНЯТЬ работу, а не создавать задачи пользователю
+            _autopilot_tools = {
+                'complete_task', 'edit_task', 'list_tasks',
+                'update_goal_progress', 'update_goal', 'complete_goal', 'list_goals',
+                'delegate_task', 'run_agent_action',
+                # Поиск/исследование — базово доступны всем, даже если есть спец.интеграция.
+                # Агент с RSS/Github/Telegram всё равно дополняет данные через web/research.
+                'research_topic', 'web_search', 'quick_topic_search',
+                # Планирование — полезно для любого автопилота
+                'schedule_background_task', 'set_reminder',
+                # Заметки и контакты — базовые возможности, нужны всем
+                'save_note', 'find_relevant_contacts_for_task', 'save_email_contact',
+            }
+            # Smart extend: добавляем инструменты по специализации и интеграциям агента.
+            # Используем _intg_hint (лейблы из _parse_agent_integrations) — универсально
+            # для любых интеграций, без захардкоженных имён сервисов.
+            _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
+            _lbl_ap = ' '.join(h.lower() for h in _intg_hint)  # все лейблы в одну строку
+            # Email — агент имеет почтовую интеграцию ИЛИ специализируется на email
+            # ИЛИ сама задача — outreach/привлечение (агент ДОЛЖЕН иметь email инструменты)
+            if (_is_outreach_goal or
+                    any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach', 'crm', 'контакт', 'sales')) or
+                    any(w in _lbl_ap for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun'))):
+                _autopilot_tools.update({
+                    'send_email', 'check_emails', 'send_outreach_email', 'reply_to_outreach_email',
+                    'start_email_campaign', 'list_email_contacts', 'save_email_contact',
+                    'find_relevant_contacts_for_task', 'add_email_leads',
+                    # Follow-up цепочка — без них email-автопилот обрывается на первом письме
+                    'negotiate_by_email', 'send_follow_up_email', 'set_contact_alert',
+                })
+            # Контент/маркетинг — по специализации или мессенджер-интеграции
+            if (any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'pr,', 'pr ', 'пиар', 'копирайт', 'редактор')) or
+                    any(w in _lbl_ap for w in ('telegram', 'discord', 'slack', 'вконтакт'))):
+                _autopilot_tools.update({
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    'generate_image', 'start_content_campaign', 'manage_content_campaign',
+                    'set_content_strategy', 'get_news_trends',
+                    # Исследование тем для постов — контент-агент должен уметь искать
+                    'research_topic', 'web_search',
+                })
+            # Аналитика/исследования — по специализации
+            if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
+                _autopilot_tools.update({
+                    'get_news_trends',
+                    'research_topic', 'web_search', 'get_stock_price', 'save_note',
+                    'create_post',  # публиковать аналитику
+                    # find_and_message_relevant_users убран — аналитик исследует данные, а не ищет контакты
+                })
+            # Alpha Vantage / NewsAPI / Биржевые данные — по ключу интеграции (не только по специализации)
+            if any(w in _lbl_ap for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
+                _autopilot_tools.update({
+                    'get_stock_price', 'get_news_trends', 'research_topic',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                })
+            # RSS/мониторинг — по лейблу интеграции ИЛИ специализации агента
+            if (any(w in _lbl_ap for w in ('rss', 'лент', 'feed', 'новост')) or
+                    any(w in _spec for w in ('rss', 'лент', 'feed'))):
+                _autopilot_tools.update({
+                    'get_news_trends',
+                    # RSS-агент суммирует и публикует → нужны эти инструменты
+                    'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                    # Контактные инструменты убраны: RSS-монитор читает/анализирует, не ищет людей
+                })
+            # Продажи/HR/нетворкинг
+            if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b')):
+                _autopilot_tools.update({
+                    'find_and_message_relevant_users', 'find_relevant_contacts_for_task',
+                    'send_outreach_email', 'save_email_contact',
+                    'start_delegation_campaign', 'manage_delegation_campaign',
+                    # Follow-up важен для продаж/HR
+                    'check_emails', 'negotiate_by_email', 'send_follow_up_email',
+                })
+            # GitHub/GitLab — поиск разработчиков → сохранение контактов → outreach
+            # run_agent_action(search_users) уже в core, но без save/send цепочка бессмысленна
+            if any(w in _lbl_ap for w in ('github', 'gitlab')):
+                _autopilot_tools.update({
+                    'save_email_contact', 'find_relevant_contacts_for_task',
+                    'send_outreach_email', 'add_email_leads',
+                    'find_and_message_relevant_users',
+                    # Поиск репозиториев/тем для GitHub-агентов
+                    'research_topic', 'web_search',
+                })
+            # CRM/маркетплейс/прочие интеграции — run_agent_action уже в core
+            if any(w in _lbl_ap for w in ('crm', 'amocrm', 'битрикс', 'hubspot', 'ozon', 'wildberries', 'авито', 'shopify')):
+                _autopilot_tools.update({'find_relevant_contacts_for_task', 'save_email_contact'})
+            # Соцсети — VK/Twitter/LinkedIn/YouTube: если есть ключи интеграции
+            if any(w in _lbl_ap for w in ('вконтакт', 'vk')):
+                _autopilot_tools.add('publish_to_vk')
+            if any(w in _lbl_ap for w in ('twitter', 'x.com')):
+                _autopilot_tools.add('publish_to_twitter')
+            if any(w in _lbl_ap for w in ('linkedin',)):
+                _autopilot_tools.add('publish_to_linkedin')
+            if any(w in _lbl_ap for w in ('youtube',)):
+                _autopilot_tools.add('publish_to_youtube')
+            if any(w in _lbl_ap for w in ('notion',)):
+                _autopilot_tools.add('publish_to_notion')
+            # Звонки/SMS — Twilio/Sipuni/VoxImplant
+            if any(w in _lbl_ap for w in ('twilio', 'sipuni', 'звонк', 'sms', 'voximplant', 'телефон')):
+                _autopilot_tools.add('initiate_phone_call')
+            # Погода — если есть OpenWeatherMap ключ
+            if any(w in _lbl_ap for w in ('openweather', 'погода', 'weather')):
+                _autopilot_tools.add('get_weather_info')
+            # Генерация изображений — если есть Replicate ключ
+            if any(w in _lbl_ap for w in ('replicate', 'генерация изображен')):
+                _autopilot_tools.add('generate_image')
+            logger.info('[DIRECTOR] Autopilot adaptive toolset: %d tools for %s', len(_autopilot_tools), agent.get('name'))
+            try:
+                from .tools import get_available_tools as _gat_ap
+                _all_names = {t['function']['name'] for t in _gat_ap()}
+                _exclude_for_agent = _all_names - _autopilot_tools
+            except Exception:
+                _exclude_for_agent = {'delete_task'}
+        else:
+            # R7: Smart tool filtering — вывести toolset из специализации + API-ключей агента
+            _spec = ((agent.get('specialization') or '') + ' ' + (agent.get('description') or '') + ' ' + (agent.get('job_title') or '')).lower()
+            _lbl_ch = ' '.join(h.lower() for h in _intg_hint)  # лейблы интеграций
+            _inferred_tools: set[str] = set()
+            # Email — по специализации ИЛИ по лейблам интеграций (не по сырым ключам)
+            if (any(w in _spec for w in ('email', 'почт', 'imap', 'smtp', 'письм', 'рассылк', 'outreach')) or
+                    any(w in _lbl_ch for w in ('почт', 'mail', 'imap', 'smtp', 'gmail', 'resend', 'sendgrid', 'mailgun', 'sparkpost'))):
+
+                _inferred_tools.update({'send_email', 'check_emails', 'list_email_contacts', 'save_email_contact',
+                                        'start_email_campaign', 'negotiate_by_email',
+                                        'send_outreach_email', 'reply_to_outreach_email',
+                                        'send_follow_up_email', 'add_email_leads',
+                                        'find_relevant_contacts_for_task'})
+            # Контент/маркетинг/PR
+            if any(w in _spec for w in ('контент', 'marketing', 'маркет', 'публик', 'пост', 'smm', 'telegram', 'pr ', 'pr-', 'пиар', 'копирайт', 'редактор')):
+                _inferred_tools.update({'create_post', 'publish_to_telegram', 'publish_to_discord',
+                                        'research_topic', 'web_search', 'generate_image',
+                                        'set_content_strategy', 'start_content_campaign', 'manage_content_campaign',
+                                        'find_relevant_contacts_for_task'})
+            # Продажи/HR/поиск людей → контакты + сообщения + рассылка
+            if any(w in _spec for w in ('продаж', 'sales', 'hr', 'рекрут', 'поиск', 'найти', 'клиент', 'лид', 'партнёр', 'партнер', 'нетворк', 'b2b', 'crm')):
+                _inferred_tools.update({'find_relevant_contacts_for_task', 'find_and_message_relevant_users',
+                                        'web_search', 'send_message_to_user', 'set_contact_alert',
+                                        'send_email', 'send_outreach_email', 'save_email_contact',
+                                        'start_delegation_campaign', 'manage_delegation_campaign'})
+            # Проект-менеджмент / управление задачами
+            if any(w in _spec for w in ('проект', 'project', 'менеджер', 'manager', 'управлен', 'планиров', 'координат', 'scrum', 'agile')):
+                _inferred_tools.update({'delegate_task', 'get_delegation_progress',
+                                        'start_delegation_campaign', 'manage_delegation_campaign',
+                                        'create_goal', 'update_goal_progress'})
+            # Аналитик/исследования
+            if any(w in _spec for w in ('аналит', 'исслед', 'research', 'монитор', 'тренд', 'data', 'данн')):
+                _inferred_tools.update({
+                    'research_topic', 'web_search', 'quick_topic_search',
+                    'get_news_trends', 'get_stock_price', 'save_note', 'create_post',
+                })
+            # Alpha Vantage / NewsAPI / Finance — по ключу интеграции
+            if any(w in _lbl_ch for w in ('alpha vantage', 'биржевые', 'newsapi', 'новости')):
+                _inferred_tools.update({
+                    'get_stock_price', 'get_news_trends', 'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'save_note',
+                })
+            # RSS — по ключу интеграции ИЛИ специализации агента
+            if (any(w in _lbl_ch for w in ('rss', 'лент', 'feed', 'новост')) or
+                    any(w in _spec for w in ('rss', 'лент', 'feed'))):
+                _inferred_tools.update({
+                    'get_news_trends', 'research_topic', 'web_search',
+                    'create_post', 'publish_to_telegram', 'publish_to_discord', 'save_note',
+                    # Контактные инструменты убраны: RSS-монитор читает и публикует, не ищет людей
+                })
+            # Telegram/Discord интеграция — контент-инструменты по ключу
+            if any(w in _lbl_ch for w in ('telegram', 'discord', 'slack')):
+                _inferred_tools.update({
+                    'create_post', 'publish_to_telegram', 'publish_to_discord',
+                    'get_news_trends', 'research_topic', 'web_search',
+                    'start_content_campaign', 'manage_content_campaign', 'set_content_strategy',
+                })
+            # GitHub/GitLab — поиск разработчиков → контакты → outreach
+            if any(w in _lbl_ch for w in ('github', 'gitlab')):
+                _inferred_tools.update({
+                    'save_email_contact', 'find_relevant_contacts_for_task',
+                    'send_outreach_email', 'add_email_leads',
+                    'find_and_message_relevant_users', 'web_search', 'research_topic',
+                })
+            # Соцсети — VK/Twitter/LinkedIn/YouTube: по лейблу интеграции
+            if any(w in _lbl_ch for w in ('вконтакт', 'vk')):
+                _inferred_tools.add('publish_to_vk')
+            if any(w in _lbl_ch for w in ('twitter', 'x.com')):
+                _inferred_tools.add('publish_to_twitter')
+            if any(w in _lbl_ch for w in ('linkedin',)):
+                _inferred_tools.add('publish_to_linkedin')
+            if any(w in _lbl_ch for w in ('youtube',)):
+                _inferred_tools.add('publish_to_youtube')
+            if any(w in _lbl_ch for w in ('notion',)):
+                _inferred_tools.add('publish_to_notion')
+            # Звонки/SMS — Twilio/Sipuni/VoxImplant
+            if any(w in _lbl_ch for w in ('twilio', 'sipuni', 'звонк', 'sms', 'voximplant', 'телефон')):
+                _inferred_tools.add('initiate_phone_call')
+            # Погода — OpenWeatherMap
+            if any(w in _lbl_ch for w in ('openweather', 'погода', 'weather')):
+                _inferred_tools.add('get_weather_info')
+            # Генерация изображений — Replicate
+            if any(w in _lbl_ch for w in ('replicate', 'генерация изображен')):
+                _inferred_tools.add('generate_image')
+            # Задачи всегда доступны
+            _inferred_tools.update({'add_task', 'delegate_task', 'run_agent_action'})
+            # Если smart filter нашёл только базовые (add_task, delegate_task) → не ограничиваем
+            _base_only = _inferred_tools <= {'add_task', 'delegate_task'}
+            if _inferred_tools and not _base_only:
+                try:
+                    from .tools import get_available_tools as _gat3
+                    _all_names = {t['function']['name'] for t in _gat3()}
+                    _exclude_for_agent = _all_names - _inferred_tools
+                    logger.info('[DIRECTOR] Smart filter for %s: inferred %d tools from spec', agent.get('name'), len(_inferred_tools))
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+
+    # ── Кросс-сессионный бан инструментов: агент использовал одно и то же 2+ раз за 24ч
+    # → исключаем из видимых, чтобы AI искал новые подходы (а не повторял провальную стратегию)
+    if _is_autopilot_task and agent.get('id'):
+        try:
+            from models import Session as _DBan, AgentActivityLog as _ALog_ban
+            import re as _re_ban
+            from datetime import datetime as _dt_ban, timezone as _tz_ban, timedelta as _td_ban
+            _db_ban = _DBan()
+            try:
+                _recent_logs_ban = _db_ban.query(_ALog_ban).filter(
+                    _ALog_ban.user_id == user_id,
+                    _ALog_ban.ref_id == agent['id'],
+                    _ALog_ban.created_at >= _dt_ban.now(_tz_ban.utc) - _td_ban(hours=24),
+                ).order_by(_ALog_ban.created_at.desc()).limit(20).all()
+                _ban_counts: dict = {}
+                for _bl in _recent_logs_ban:
+                    _tm_b = _re_ban.search(r'\[([^\]]+)\]', _bl.content or '')
+                    if _tm_b:
+                        for _t_b in _tm_b.group(1).split(','):
+                            _t_b = _t_b.strip()
+                            if _t_b:
+                                _ban_counts[_t_b] = _ban_counts.get(_t_b, 0) + 1
+                # Email/outreach инструменты законно вызываются много раз (каждый раз разный адресат)
+                # → баним только после 5 сессий подряд, поисковые — после 3
+                _EMAIL_OUTREACH = {
+                    'send_outreach_email', 'send_email', 'negotiate_by_email',
+                    'start_email_campaign', 'find_and_message_relevant_users',
+                    'find_relevant_contacts_for_task', 'send_follow_up_email',
+                    'reply_to_outreach_email',
+                }
+                _runtime_banned = {
+                    t for t, n in _ban_counts.items()
+                    if (n >= 5 if t in _EMAIL_OUTREACH else n >= 3)
+                }
+                # Не баним core-инструменты и базовые поисковые — всегда нужны
+                _runtime_banned -= {
+                    'update_goal_progress', 'add_task', 'complete_task',
+                    'edit_task', 'delegate_task',
+                    # Поисковые/базовые — каждый раз новый запрос, бан бессмысленен
+                    'web_search', 'research_topic', 'quick_topic_search',
+                    'check_emails', 'run_agent_action',
+                    'get_news_trends', 'get_stock_price',
+                }
+                if _runtime_banned:
+                    logger.info('[DIRECTOR] cross-session banned for %s: %s', agent.get('name'), _runtime_banned)
+                    if _exclude_for_agent is not None:
+                        _exclude_for_agent = _exclude_for_agent | _runtime_banned
+                    else:
+                        # Нет текущего exclude — создаём только из забаненных
+                        try:
+                            from .tools import get_available_tools as _gat_ban
+                            _all_ban_names = {t['function']['name'] for t in _gat_ban()}
+                            _exclude_for_agent = _runtime_banned & _all_ban_names
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+            finally:
+                _db_ban.close()
+        except Exception as _ban_err:
+            logger.debug('[DIRECTOR] cross-session ban load: %s', _ban_err)
+
+    # ── Шаг 3: Tool-calling loop (макс 3 итерации) ────────────────────────────
+    # Инжектируем список доступных инструментов в промпт агента
+    try:
+        from .tools import get_available_tools as _gat_aware
+        _all_tools_info = _gat_aware()
+        _TOOL_LABELS = {
+            'add_task': 'создать задачу', 'complete_task': 'закрыть задачу',
+            'edit_task': 'изменить задачу', 'delete_task': 'удалить задачу',
+            'list_tasks': 'список задач', 'create_goal': 'создать цель',
+            'list_goals': 'список целей', 'delegate_task': 'поручить агенту/человеку',
+            'research_topic': 'исследование темы', 'web_search': 'веб-поиск',
+            'send_email': 'отправить email', 'negotiate_by_email': 'переговоры по email',
+            'send_outreach_email': 'холодное письмо', 'save_email_contact': 'сохранить контакт',
+            'create_post': 'создать пост', 'publish_to_telegram': 'пост в TG',
+            'publish_to_discord': 'пост в Discord', 'generate_image': 'генерация картинки',
+            'start_content_campaign': 'автопостинг', 'find_relevant_contacts_for_task': 'поиск контактов',
+            'find_and_message_relevant_users': 'найти и написать людям',
+            'start_delegation_campaign': 'поиск исполнителей',
+            'update_profile': 'обновить профиль', 'run_agent_action': 'внешнее действие',
+            'update_goal_progress': 'обновить прогресс цели',
+            'send_message_to_user': 'сообщение пользователю',
+            'set_contact_alert': 'алерт на контакт',
+        }
+        if _exclude_for_agent:
+            _my_tools = [t['function']['name'] for t in _all_tools_info
+                         if t['function']['name'] not in _exclude_for_agent]
+        else:
+            _my_tools = [t['function']['name'] for t in _all_tools_info]
+        if _my_tools:
+            _labeled = [f"{n} ({_TOOL_LABELS[n]})" if n in _TOOL_LABELS else n for n in _my_tools[:15]]
+            system_prompt = system_prompt.replace(
+                "ИНСТРУМЕНТЫ: у тебя есть доступ ко всем инструментам платформы: задачи, поиск, "
+                "исследования, заметки, email, публикации, напоминания, делегирование и многое другое. ",
+                "ТВОИ ИНСТРУМЕНТЫ: " + ", ".join(_labeled) + ". ",
+            )
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
+
+    # ── Thinking protocol уже встроен в основной system_prompt (ШАГ 1-2-3) ──
+
+    # ── Инъекция обученных предпочтений + эффективность инструментов ──
+    try:
+        _learner_ap = get_learner()
+        _tool_eff = _learner_ap.get_tool_effectiveness_hint(user_id)
+        if _tool_eff:
+            system_prompt += _tool_eff + "\n"
+        _user_pref = _learner_ap.get_user_preferences(user_id)
+        if _user_pref:
+            system_prompt += _user_pref + "\n"
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
+
+    # Для autopilot-задач: фокус на конкретное действие, не на анализ истории
+    if _is_autopilot_task:
+        system_prompt += (
+            "\n\n⚡ АВТОПИЛОТ:\n"
+            "Твой ПЕРВЫЙ ответ — вызов инструмента, НЕ текст.\n"
+            "Цепочка: ИНСТРУМЕНТ → РЕЗУЛЬТАТ → update_goal_progress(notes='что сделано', progress=N).\n"
+            "progress — АБСОЛЮТНОЕ значение % (0-100), не дельта.\n"
+            "Не пиши о намерениях. Не спрашивай пользователя. Действуй.\n"
+            "Инструмент заблокирован → вызови другой. check_emails пусто → send_outreach_email или start_email_campaign.\n"
+            + (_intg_action_hint or '')
+        )
+
+    # Создаём изолированный инстанс — не делим состояние с глобальным ASI
+    # (execution_history, счётчики, лимиты у каждого агента свои)
+    _agent_inst = HybridAutonomousAgent()
+    # Регистрируем текущего агента в _active_agent_data:
+    # 1) чтобы _run_external_action нашёл python_code при вызове run_agent_action
+    # 2) чтобы send_outreach_email/send_email знали имя агента-отправителя
+    _agent_inst._active_agent_data[user_id] = agent
+    _messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": task},
+    ]
+    # Если tools_allowed пустой → агент универсальный: работает со всеми инструментами платформы
+    # (аналогично поведению при прямом @mention агента в process_request)
+    # _exclude_for_agent уже None при пустом _allowed_Tools → exclusions нет → все tools доступны
+    _use_tools = True
+
+    # Очередь субделегирований: агент может попросить другого агента через паттерн DELEGATE[имя]: задача
+    _pending_subdelegations: list[dict] = []
+    _early_text: str | None = None  # установлен если агент ответил текстом без tool calls
+
+    _TOOL_TIMEOUT = 55  # дефолтный таймаут
+    # Адаптивные таймауты: тяжёлые инструменты получают больше времени, лёгкие — меньше
+    _TOOL_TIMEOUTS: dict[str, int] = {
+        'research_topic': 60, 'web_search': 30, 'get_news_trends': 30,
+        'negotiate_by_email': 50, 'run_agent_action': 130, 'generate_image': 50,
+        'schedule_background_task': 45,
+        'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
+        'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
+        'save_note': 10, 'update_profile': 10, 'send_message_to_user': 15, 'send_email': 20,
+    }
+
+    _tool_call_count = 0
+    _tools_used: list[str] = []  # трекинг вызванных инструментов
+    _action_evidence: list[str] = []  # короткие доказательства из результатов инструментов
+    _goal_progress_blocked = False  # True если update_goal_progress был отклонён guard'ом
+    _save_note_count = 0  # ограничение: не более 1 save_note за цикл автопилота
+    _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
+    # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
+    # autopilot: search → save → send → progress (3 итерации)
+    # обычный: action + summary (3 итерации)
+    # Adaptive iterations: больше интеграций = больше цепочек = больше итераций
+    _intg_count = len(_intg_hint)
+    if _is_autopilot_task:
+        _max_iters = min(5 + _intg_count, 10)  # 5 базовых + 1 за интеграцию, макс 10
+    else:
+        _max_iters = 5
+    _ACTION_EVIDENCE_TOOLS = {
+        'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
+        'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
+        'publish_to_discord', 'create_post', 'send_email', 'add_email_leads',
+        'check_emails',
+        # Универсальные действия (обучение, здоровье, финансы, творчество)
+        'save_note', 'add_task', 'set_reminder', 'run_agent_action',
+        'update_goal_progress', 'generate_image', 'delegate_task',
+    }
+
+    # ── Универсальная история действий агента за 24ч (anti-repeat для ВСЕХ интеграций) ──
+    if _is_autopilot_task and agent.get('id'):
+        try:
+            from models import Session as _DBhist, AgentActivityLog as _ALog_hist
+            from datetime import datetime as _dt_hist, timezone as _tz_hist, timedelta as _td_hist
+            import re as _re_hist
+            _db_hist = _DBhist()
+            try:
+                _hist_logs = _db_hist.query(_ALog_hist).filter(
+                    _ALog_hist.user_id == user_id,
+                    _ALog_hist.ref_id == agent['id'],
+                    _ALog_hist.created_at >= _dt_hist.now(_tz_hist.utc) - _td_hist(hours=24),
+                ).order_by(_ALog_hist.created_at.desc()).limit(15).all()
+                if _hist_logs:
+                    _hist_lines = []
+                    _used_qp: list[str] = []
+                    _had_error_hist = False
+                    _ERROR_KW_HIST = ('ошибк', 'error', 'не смог', 'не удал', 'сбой', 'fail', 'timeout', 'не работ', 'не отправ')
+                    for _hl in _hist_logs:
+                        _ts = _hl.created_at.strftime('%H:%M') if _hl.created_at else '?'
+                        _title = (_hl.title or '')[:80]
+                        _content = (_hl.content or '')[:100]
+                        # Sanitize: strip error descriptions to prevent hallucination loops
+                        _combined_hist = (_title + ' ' + _content).lower()
+                        if any(ew in _combined_hist for ew in _ERROR_KW_HIST):
+                            _had_error_hist = True
+                            _content = '[была ошибка — ПОВТОРИ вызов инструмента]'
+                        _hist_lines.append(f"  [{_ts}] {_title} — {_content}")
+                        # Парсим query+page из search-действий (GitHub search_users и подобные)
+                        _m_qp = _re_hist.search(r'\[q=(.+?)\s+p=(\d+)\]', _hl.title or '')
+                        if _m_qp:
+                            _entry = f"query='{_m_qp.group(1).strip()}' page={_m_qp.group(2)}"
+                            if _entry not in _used_qp:
+                                _used_qp.append(_entry)
+                    system_prompt += (
+                        "\n\n📋 ТВОИ ДЕЙСТВИЯ за последние 24ч (НЕ ПОВТОРЯЙ — делай новое):\n"
+                        + '\n'.join(_hist_lines)
+                        + "\n⚡ Выбери ПРИНЦИПИАЛЬНО ДРУГОЙ подход из доступных интеграций. "
+                        "Чередуй каналы: поиск → заметки → задачи → посты → контакты → письма.\n"
+                    )
+                    if _had_error_hist:
+                        system_prompt += (
+                            "\n⚠️ ВАЖНО: ошибки в истории могут быть ВРЕМЕННЫМИ. "
+                            "ВСЕГДА вызывай инструмент заново — НЕ пересказывай старые ошибки. "
+                            "Если send_outreach_email/send_email ранее не сработал — ПОПРОБУЙ СНОВА.\n"
+                        )
+                    if _used_qp:
+                        _qp_str = '\n  '.join(_used_qp[:10])
+                        system_prompt += (
+                            f"\n📋 Уже использованные поисковые запросы (НЕ ПОВТОРЯЙ):\n"
+                            f"  {_qp_str}\n"
+                            "Для следующего цикла используй ДРУГУЮ комбинацию или page+1.\n"
+                        )
+                    # ── Search conversion: подсчёт поисков vs действий за 24ч ──
+                    # Вместо бана поиска — перенаправляем: «данных достаточно, теперь ИСПОЛЬЗУЙ их»
+                    _sb_search = 0
+                    _sb_send = 0
+                    _sb_save = 0
+                    _sb_post = 0
+                    _sb_dm = 0
+                    _sb_campaign = 0
+                    for _sbl in _hist_logs:
+                        _sbc = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
+                        _sb_search += _sbc.count('web_search') + _sbc.count('research_topic')
+                        _sb_send += _sbc.count('send_outreach_email') + _sbc.count('send_email')
+                        _sb_save += _sbc.count('save_email_contact')
+                        _sb_post += _sbc.count('create_post') + _sbc.count('publish_to_telegram')
+                        _sb_dm += _sbc.count('find_and_message_relevant_users') + _sbc.count('message_relevant')
+                        _sb_campaign += _sbc.count('start_email_campaign') + _sbc.count('start_content_campaign')
+                    # Универсальные действия: save_note, add_task, set_reminder, run_agent_action
+                    _sb_universal = 0
+                    for _sbl in _hist_logs:
+                        _sbc2 = ((_sbl.content or '') + ' ' + (_sbl.title or '')).lower()
+                        _sb_universal += _sbc2.count('save_note') + _sbc2.count('add_task') + _sbc2.count('set_reminder') + _sbc2.count('run_agent_action') + _sbc2.count('generate_image')
+                    _sb_actions = _sb_send + _sb_save + _sb_post + _sb_universal + _sb_dm + _sb_campaign
+                    # ── Канальная рефлексия: покажи ИИ его собственную статистику ──
+                    _sb_channels_used = sum(1 for c in [_sb_send, _sb_post, _sb_dm, _sb_campaign] if c > 0)
+                    system_prompt += (
+                        f"\n\n📊 ТВОИ КАНАЛЫ ЗА 24Ч (изучи и сделай выводы):\n"
+                        f"  📧 Email: {_sb_send}  📝 Контент: {_sb_post}  💬 DM: {_sb_dm}  🚀 Кампании: {_sb_campaign}  🔍 Поиск: {_sb_search}\n"
+                        f"  Каналов задействовано: {_sb_channels_used}/4\n"
+                    )
+                    if _sb_search >= 4 and _sb_actions <= 1:
+                        system_prompt += (
+                            "🤔 Много поисков, мало результатов. Подумай: данных уже достаточно?\n"
+                            "  Варианты конверсии: save_note (выводы), add_task (шаги), create_post (контент),\n"
+                            "  save_email_contact + send_outreach_email (контакты), delegate_task (коллеге).\n"
+                        )
+                    elif _sb_search >= 3 and _sb_actions == 0:
+                        system_prompt += (
+                            f"🤔 {_sb_search} поисков без конверсии. Что полезного ты нашёл? Как это использовать?\n"
+                        )
+                    if _sb_channels_used <= 1 and (_sb_search + _sb_actions) > 3:
+                        _email_hint = (
+                            "  💡 send_outreach_email = персональное письмо контакту (кампания уже создана)\n"
+                            if _sb_campaign > 0 else
+                            "  💡 start_email_campaign = создай кампанию, потом send_outreach_email для отправки\n"
+                        )
+                        system_prompt += (
+                            "🤔 Ты используешь только 1 канал. Какой ДРУГОЙ канал дополнит стратегию?\n"
+                            "  💡 find_and_message_relevant_users = бесплатно, без лимитов\n"
+                            + _email_hint +
+                            "  💡 publish_to_telegram/create_post = контент привлекает аудиторию\n"
+                        )
+            finally:
+                _db_hist.close()
+        except Exception as _hist_err:
+            logger.debug('[DIRECTOR] agent history load: %s', _hist_err)
+
+    # ── Аналитика эффективности: какие подходы дают результат у ЭТОГО пользователя ──
+    if _is_autopilot_task:
+        try:
+            from models import Session as _DBeff, AgentActivityLog as _ALog_eff, User as _Ueff
+            from datetime import datetime as _dt_eff, timezone as _tz_eff, timedelta as _td_eff
+            _db_eff = _DBeff()
+            try:
+                # user_id здесь = telegram_id, нужен внутренний user.id для AgentActivityLog
+                _u_eff = _db_eff.query(_Ueff).filter_by(telegram_id=user_id).first()
+                _db_user_id = _u_eff.id if _u_eff else user_id
+                _eff_since = _dt_eff.now(_tz_eff.utc) - _td_eff(days=7)
+                _eff_logs = _db_eff.query(_ALog_eff).filter(
+                    _ALog_eff.user_id == _db_user_id,
+                    _ALog_eff.created_at >= _eff_since,
+                ).all()
+                if len(_eff_logs) >= 5:
+                    # Считаем по типам действий: сколько completed vs failed
+                    _eff_by_type: dict[str, dict] = {}
+                    for _el in _eff_logs:
+                        _at = _el.activity_type or 'other'
+                        if _at not in _eff_by_type:
+                            _eff_by_type[_at] = {'ok': 0, 'fail': 0, 'total': 0}
+                        _eff_by_type[_at]['total'] += 1
+                        if _el.status in ('completed', 'published', 'accepted', 'sent'):
+                            _eff_by_type[_at]['ok'] += 1
+                        elif _el.status in ('failed', 'rejected', 'error'):
+                            _eff_by_type[_at]['fail'] += 1
+                        else:
+                            _eff_by_type[_at]['ok'] += 1  # in_progress и др. считаем как ok
+
+                    # Также: email outreach конверсия за 30 дней
+                    _email_eff = ''
+                    try:
+                        from models import EmailOutreach as _EO_eff
+                        from sqlalchemy import func as _func_eff
+                        _eo_since = _dt_eff.now(_tz_eff.utc) - _td_eff(days=30)
+                        _eo_total = _db_eff.query(_func_eff.count(_EO_eff.id)).filter(
+                            _EO_eff.user_id == _db_user_id,
+                            _EO_eff.created_at >= _eo_since,
+                        ).scalar() or 0
+                        _eo_replied = _db_eff.query(_func_eff.count(_EO_eff.id)).filter(
+                            _EO_eff.user_id == _db_user_id,
+                            _EO_eff.status == 'replied',
+                            _EO_eff.created_at >= _eo_since,
+                        ).scalar() or 0
+                        _eo_bounced = _db_eff.query(_func_eff.count(_EO_eff.id)).filter(
+                            _EO_eff.user_id == _db_user_id,
+                            _EO_eff.status == 'bounced',
+                            _EO_eff.created_at >= _eo_since,
+                        ).scalar() or 0
+                        if _eo_total >= 3:
+                            _eo_rate = round(_eo_replied / _eo_total * 100)
+                            _email_eff = f"  📧 Email outreach: {_eo_total} отправлено, {_eo_replied} ответов ({_eo_rate}%)"
+                            if _eo_bounced > 0:
+                                _email_eff += f", {_eo_bounced} bounced"
+                    except Exception:
+                        pass
+
+                    # Строим блок аналитики
+                    _eff_lines = []
+                    _TYPE_LABELS = {
+                        'goal_autopilot_dispatch': '🎯 Автопилот',
+                        'delegation': '🤝 Делегирование',
+                        'email': '📧 Email',
+                        'post_telegram': '📢 Telegram',
+                        'post_discord': '💬 Discord',
+                        'post_newsfeed': '📝 Лента',
+                        'user_message': '💬 Сообщения',
+                    }
+                    for _at, _counts in sorted(
+                        _eff_by_type.items(), key=lambda x: x[1]['total'], reverse=True
+                    )[:6]:
+                        _label = _TYPE_LABELS.get(_at, _at)
+                        _rate = round(_counts['ok'] / _counts['total'] * 100) if _counts['total'] > 0 else 0
+                        _status = '✅' if _rate >= 70 else '⚠️' if _rate >= 40 else '❌'
+                        _eff_lines.append(f"  {_status} {_label}: {_counts['total']} действий, {_rate}% успех")
+
+                    if _eff_lines or _email_eff:
+                        system_prompt += (
+                            "\n\n📈 АНАЛИТИКА ЭФФЕКТИВНОСТИ (7 дней) — адаптируй подход:\n"
+                            + '\n'.join(_eff_lines)
+                            + ('\n' + _email_eff if _email_eff else '')
+                            + "\n💡 Масштабируй каналы с высоким % успеха. "
+                            "Каналы с низким % — смени подход или аудиторию.\n"
+                        )
+            finally:
+                _db_eff.close()
+        except Exception as _eff_err:
+            logger.debug('[DIRECTOR] effectiveness analytics: %s', _eff_err)
+
+    # Определяем наличие интеграций для адаптивных лимитов (больше интеграций = больше цепочек)
+    _has_outreach_intg = any(
+        w in _decrypt_keys(agent.get('user_api_keys', '') or '').lower()
+        for w in ('github', 'gitlab', 'resend', 'sendgrid', 'mailgun', 'gmail_pass', 'gmail_app')
+    )
+    # _OUTREACH_KW / _is_outreach_goal уже определены выше (перед Шагом 2)
+    for _iter in range(_max_iters):
+        # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
+        _max_tool_calls = min(15 + _intg_count * 3, 30) if _is_autopilot_task else 5
+        _use_tools_now = _use_tools and _tool_call_count < _max_tool_calls
+        # required на первых 3 итерациях ИЛИ пока агент не вызвал хотя бы один инструмент.
+        # Это заставляет DeepSeek вызывать инструменты, а не писать текстовые описания.
+        _tc_mode = "auto"
+        if _use_tools_now:
+            if _is_autopilot_task and (_tool_call_count == 0 or _iter < 3):
+                _tc_mode = "required"
+            else:
+                _tc_mode = "auto"
+        else:
+            _tc_mode = None
+        # ── Anti-repeat: универсальные подсказки на основе состояния цепочки ──
+        # ИИ сам решает какие интеграции использовать; мы только следим за логикой цепочек
+        if _is_autopilot_task and _iter > 0 and _tools_used:
+            _used_str = ', '.join(_tools_used[-3:])
+            _last_tool_local = _tools_used[-1] if _tools_used else ''
+            _was_save_contact = _last_tool_local == 'save_email_contact'
+            _was_send = 'send_outreach_email' in _tools_used
+            _was_save = 'save_email_contact' in _tools_used
+            _send_count = _tools_used.count('send_outreach_email')
+            # Адаптивный порог: больше интеграций = больше действий за сессию
+            _min_sends_before_update = min(2 + _intg_count, 6) if _has_outreach_intg else 2
+
+            if _was_send and _send_count >= _min_sends_before_update and 'update_goal_progress' not in _tools_used:
+                # Достаточно писем отправлено → финализируй
+                _messages.append({"role": "user", "content": (
+                    f"Отправлено {_send_count} писем (использовал: {_used_str}). "
+                    "ФИНАЛЬНЫЙ ШАГ — update_goal_progress: обнови прогресс цели с кратким итогом."
+                )})
+            elif _was_send and _send_count < _min_sends_before_update and 'update_goal_progress' not in _tools_used:
+                # Ещё есть контакты для отправки
+                _messages.append({"role": "user", "content": (
+                    f"Отправлено {_send_count}/{_min_sends_before_update} (использовал: {_used_str}). "
+                    "Если есть ещё найденные контакты с email — отправь следующее письмо. "
+                    "Если все обработаны — вызови update_goal_progress."
+                )})
+            elif _was_save_contact:
+                if _is_outreach_goal:
+                    # Outreach-цель: save → send (цепочка)
+                    _messages.append({"role": "user", "content": (
+                        f"Контакт(ы) сохранены (использовал: {_used_str}). "
+                        "Следующий шаг — send_outreach_email: отправь письмо сохранённым контактам."
+                    )})
+                else:
+                    # Не-outreach цель: сохранение контакта может быть самоценным
+                    _messages.append({"role": "user", "content": (
+                        f"Контакт(ы) сохранены (использовал: {_used_str}). "
+                        "Выбери следующий шаг по цели:\n"
+                        "• Нужно связаться → send_outreach_email (персональное письмо)\n"
+                        "• Контакт для заметок → save_note (зачем этот контакт полезен)\n"
+                        "• Есть ещё действия по цели → add_task или продолжай цепочку\n"
+                        "• Данные готовы → update_goal_progress"
+                    )})
+            elif _last_tool_local == 'run_agent_action' and not _was_save:
+                # Поиск через интеграцию (GitHub, RSS, CRM и др.) — варианты конверсии
+                _messages.append({"role": "user", "content": (
+                    f"Поиск через интеграцию выполнен (использовал: {_used_str}). "
+                    "Конвертируй результаты в действие по ЦЕЛИ:\n"
+                    "• Нашёл полезную информацию → save_note (выводы, подборка)\n"
+                    "• Нашёл что нужно сделать → add_task (конкретные шаги)\n"
+                    "• Нашёл статьи/тренды → create_post (обзор, аналитика)\n"
+                    "• Нашёл людей с email → save_email_contact + send_outreach_email\n"
+                    "• Данные нужны коллеге → delegate_task с конкретикой\n"
+                    "Не вызывай update_goal_progress пока нет реального результата."
+                )})
+            elif _last_tool_local in ('web_search', 'research_topic', 'quick_topic_search') and not _was_save and not _was_send:
+                # Поиск выполнен — предлагаем варианты конверсии результатов
+                _search_count_local = sum(1 for t in _tools_used if t in ('web_search', 'research_topic', 'quick_topic_search'))
+                if _search_count_local >= 2:
+                    # Уже 2+ поиска в этой сессии — настаиваем на конверсии
+                    _messages.append({"role": "user", "content": (
+                        f"Уже {_search_count_local} поиска в этой сессии (использовал: {_used_str}). "
+                        "Данных достаточно — КОНВЕРТИРУЙ результаты в действие по ЦЕЛИ:\n"
+                        "• Полезная информация → save_note (выводы, конспект, подборка)\n"
+                        "• Конкретные шаги → add_task (план действий)\n"
+                        "• Тренды/инсайты → create_post (аналитика/обзор)\n"
+                        "• Люди с email → save_email_contact + send_outreach_email\n"
+                        "• Данные для коллеги → delegate_task\n"
+                        "Ещё один общий поиск = потеря времени. Действуй с тем что есть."
+                    )})
+                else:
+                    _messages.append({"role": "user", "content": (
+                        f"Поиск выполнен (использовал: {_used_str}). "
+                        "Извлеки из результатов КОНКРЕТНЫЕ данные и выбери следующий шаг:\n"
+                        "• Полезная информация → save_note (конспект, подборка, рекомендации)\n"
+                        "• Нужны действия → add_task (конкретные шаги)\n"
+                        "• Тренды/статьи → create_post (обзор, аналитика)\n"
+                        "• Есть email → save_email_contact + send_outreach_email\n"
+                        "• Есть идеи для коллеги → delegate_task\n"
+                        "НЕ вызывай update_goal_progress пока не сделано реальное действие."
+                    )})
+            else:
+                # Универсальная подсказка — ИИ сам выбирает следующий шаг
+                _messages.append({"role": "user", "content": (
+                    f"Уже использовал: {_used_str}. "
+                    "Выбери следующий логичный шаг из доступных интеграций. "
+                    "Не повторяй то же действие — выбери новый подход или заверши цепочку. "
+                    "Подумай: что НОВОГО я могу сделать с результатами? Другая аудитория? Другой канал?"
+                )})
+        # Adaptive tokens: tool-calling iterations need room for both JSON tool-calls
+        # AND occasional text responses (summary/report). 1200 prevents mid-sentence truncation.
+        # Text-only final summary iterations need full response space (1600).
+        _iter_max_tokens = 1200 if _use_tools_now else 1600
+        try:
+            _resp = await _agent_inst.call_ai(
+                _messages,
+                use_tools=_use_tools_now,
+                tool_choice=_tc_mode,
+                exclude_tools=_exclude_for_agent if _use_tools_now else None,
+                max_tokens=_iter_max_tokens,
+                api_timeout=API_TIMEOUT_LONG,
+            )
+        except Exception as _ai_err:
+            _err_msg = str(_ai_err) or type(_ai_err).__name__
+            logger.warning("[DIRECTOR-EXEC-DIAG] agent %s call_ai EXCEPTION iter=%d tc_mode=%s: %s",
+                           agent.get('name'), _iter, _tc_mode, _err_msg)
+            # Retry once on TimeoutError with doubled timeout
+            if isinstance(_ai_err, (TimeoutError, asyncio.TimeoutError)) and _iter == 0:
+                logger.info("[DIRECTOR-EXEC] TimeoutError on iter 0, retrying with 2x timeout...")
+                try:
+                    await asyncio.sleep(2)
+                    _resp = await _agent_inst.call_ai(
+                        _messages,
+                        use_tools=_use_tools_now,
+                        tool_choice=_tc_mode,
+                        exclude_tools=_exclude_for_agent if _use_tools_now else None,
+                        max_tokens=_iter_max_tokens,
+                        api_timeout=API_TIMEOUT_LONG * 2,
+                    )
+                except Exception:
+                    break
+            else:
+                break
+        if _resp:
+            _u_ap = _resp.get('usage') or {}
+            _total_ap_tokens += _u_ap.get('prompt_tokens', 0) + _u_ap.get('completion_tokens', 0)
+        if not _resp or not _resp.get('choices'):
+            logger.warning("[DIRECTOR-EXEC-DIAG] agent %s EMPTY resp iter=%d tc_mode=%s resp_keys=%s",
+                           agent.get('name'), _iter, _tc_mode,
+                           list(_resp.keys()) if _resp else 'None')
+            break
+        _msg = _resp['choices'][0]['message']
+        _content = _msg.get('content') or ''
+        _tool_calls = _msg.get('tool_calls') or []
+        _finish_reason = _resp['choices'][0].get('finish_reason', '')
+
+        # ── DIAGNOSTIC LOG: API response details ──
+        logger.warning(
+            "[DIRECTOR-EXEC-DIAG] agent %s iter=%d OK: content_len=%d tool_calls=%d finish=%s tc_mode=%s",
+            agent.get('name'), _iter, len(_content), len(_tool_calls), _finish_reason, _tc_mode,
+        )
+
+        if not _tool_calls:
+            # Агент ответил текстом — парсим паттерн DELEGATE[Имя]: задача
+            if _content:
+                import re as _re_sub
+                for _m in _re_sub.finditer(
+                    r'DELEGATE\[([^\]]+)\]:\s*(.+?)(?=DELEGATE\[|$)',
+                    _content, _re_sub.DOTALL | _re_sub.IGNORECASE,
+                ):
+                    _aname = _m.group(1).strip()
+                    _atask = _m.group(2).strip()[:400]
+                    if _aname and _atask:
+                        # ── DELEGATE quality guard: обогащаем короткие делегирования ──
+                        # Если задача < 100 символов — добавляем контекст из последних результатов агента
+                        if len(_atask) < 120:
+                            _dlg_ctx = ''
+                            # Ищем конкретные данные в последних tool-ответах (имена, URL, email)
+                            for _msg in reversed(_messages[-8:]):
+                                _msg_role = _msg.get('role', '')
+                                _msg_cnt = ''
+                                if _msg_role == 'tool':
+                                    _msg_cnt = str(_msg.get('content', ''))[:600]
+                                elif _msg_role == 'assistant':
+                                    _msg_cnt = str(_msg.get('content', ''))[:400]
+                                if _msg_cnt and len(_msg_cnt) > 40:
+                                    _dlg_ctx = _msg_cnt.replace('\n', ' ')[:400]
+                                    break
+                            if _dlg_ctx:
+                                _atask = (
+                                    f'{_atask}. '
+                                    f'КОНТЕКСТ (из моих результатов): {_dlg_ctx[:300]}. '
+                                    f'Используй эти данные — ищи конкретно этого человека/объект, '
+                                    f'не делай общий поиск. Укажи свой инструмент и ожидаемый результат.'
+                                )
+                                logger.info('[DELEGATE-ENRICH] enriched short task for %s: %s', _aname, _atask[:100])
+                        _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
+                # Убираем DELEGATE-строки из финального текста
+                _content = _re_sub.sub(
+                    r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _content,
+                ).strip()
+
+            # ── Anti-hallucination: agent claims tool error without calling tool ──
+            # If autopilot agent says "error/can't send" in text but never called the tool,
+            # force it to actually call the tool instead of fabricating errors from history.
+            _HALLUCINATION_KW = ('ошибк', 'не смог', 'не удал', 'сбой', 'не работ', 'не отправ', 'не получил', 'техническ')
+            if (_is_autopilot_task and _iter == 0 and not _tool_calls and _tool_call_count == 0
+                    and _content and any(kw in _content.lower() for kw in _HALLUCINATION_KW)):
+                logger.warning(
+                    "[DIRECTOR-EXEC] anti-hallucination: %s claims error without tool call, forcing retry",
+                    agent.get('name'),
+                )
+                _messages.append({"role": "assistant", "content": _content})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Ты описал ошибку, но НЕ ВЫЗВАЛ ни одного инструмента. "
+                    "Ошибки из предыдущих сессий могут быть уже исправлены. "
+                    "ОБЯЗАТЕЛЬНО вызови инструмент прямо сейчас — НЕ пересказывай старые проблемы. "
+                    "Выполни задачу через вызов инструмента!"
+                )})
+                try:
+                    _ah_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=1200,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _ah_resp and _ah_resp.get('choices'):
+                        _ah_msg = _ah_resp['choices'][0]['message']
+                        _ah_tools = _ah_msg.get('tool_calls') or []
+                        if _ah_tools:
+                            logger.info("[DIRECTOR-EXEC] anti-hallucination retry succeeded: %d tools", len(_ah_tools))
+                            # Replace previous text-only response with actual tool calls
+                            _tool_calls = _ah_tools
+                            _msg = _ah_msg
+                            _content = _ah_msg.get('content') or ''
+                except Exception as _ah_err:
+                    logger.warning("[DIRECTOR-EXEC] anti-hallucination retry error: %s", _ah_err)
+
+            # ── Autopilot: текст содержит email-адреса, но агент не вызвал save_email_contact ──
+            # Принудительный retry: извлекаем email из текста и заставляем агента сохранить контакт.
+            if (_is_autopilot_task and not _tool_calls and _content
+                    and 'save_email_contact' not in _tools_used):
+                import re as _re_email_extract
+                _found_emails_in_text = _re_email_extract.findall(
+                    r'[\w.+-]+@[\w-]+\.[\w.]+', _content
+                )
+                # Фильтруем системные/невалидные адреса
+                _valid_emails = [
+                    e for e in _found_emails_in_text
+                    if not e.endswith(('.png', '.jpg', '.gif', '.svg'))
+                    and 'example.com' not in e and 'test.com' not in e
+                    and '@' in e
+                ][:3]  # Максимум 3 за раз
+                if _valid_emails:
+                    logger.info(
+                        "[DIRECTOR-EXEC] email extraction retry for %s: found %d emails in text",
+                        agent.get('name'), len(_valid_emails),
+                    )
+                    _emails_str = ', '.join(_valid_emails)
+                    _messages.append({"role": "assistant", "content": _content})
+                    _messages.append({"role": "user", "content": (
+                        f"Ты нашёл email-адреса ({_emails_str}), но НЕ сохранил их. "
+                        f"ОБЯЗАТЕЛЬНО вызови save_email_contact для каждого найденного email. "
+                        f"Затем send_outreach_email для отправки персонального письма."
+                    )})
+                    try:
+                        _ee_resp = await asyncio.wait_for(
+                            _agent_inst.call_ai(
+                                _messages,
+                                use_tools=True,
+                                tool_choice="required",
+                                exclude_tools=_exclude_for_agent,
+                                max_tokens=1200,
+                                api_timeout=API_TIMEOUT_LONG,
+                            ),
+                            timeout=API_TIMEOUT_LONG + 5,
+                        )
+                        if _ee_resp and _ee_resp.get('choices'):
+                            _ee_msg = _ee_resp['choices'][0]['message']
+                            _ee_tools = _ee_msg.get('tool_calls') or []
+                            if _ee_tools:
+                                logger.info("[DIRECTOR-EXEC] email extraction retry succeeded: %d tools", len(_ee_tools))
+                                _tool_calls = _ee_tools
+                                _msg = _ee_msg
+                                _content = _ee_msg.get('content') or ''
+                    except Exception as _ee_err:
+                        logger.warning("[DIRECTOR-EXEC] email extraction retry error: %s", _ee_err)
+
+            # ── Autopilot retry: save_email_contact без send_outreach_email ──
+            # Принудительный retry ТОЛЬКО для outreach-целей. Для других целей сохранение контакта самоценно.
+            if (_is_autopilot_task and _is_outreach_goal and _iter > 0 and not _tool_calls
+                    and _was_save_contact and not (_last_tool_local == 'send_outreach_email')):
+                logger.info(
+                    "[DIRECTOR-EXEC] autopilot save-without-send retry for %s",
+                    agent.get('name'),
+                )
+                _messages.append({"role": "assistant", "content": _content or ""})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Ты сохранил контакт(ы) через save_email_contact, но так и не отправил письмо. "
+                    "Это нарушение цепочки.\n"
+                    "ОБЯЗАТЕЛЬНО вызови прямо сейчас: send_outreach_email\n"
+                    "Используй имя и email контакта которого только что сохранил. "
+                    "НЕ пиши текст — только вызов инструмента send_outreach_email!"
+                )})
+                try:
+                    _sws_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=300,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _sws_resp and _sws_resp.get('choices'):
+                        _sws_msg = _sws_resp['choices'][0]['message']
+                        _sws_tools = _sws_msg.get('tool_calls') or []
+                        if _sws_tools:
+                            logger.info("[DIRECTOR-EXEC] save-without-send retry succeeded: %s", len(_sws_tools))
+                            _messages.append(_sws_msg)
+                            for _swstc in _sws_tools[:2]:
+                                _sws_tname = _swstc.get('function', {}).get('name', '')
+                                try:
+                                    _sws_targs = json.loads(_swstc.get('function', {}).get('arguments', '{}'))
+                                except Exception:
+                                    _sws_targs = {}
+                                _tools_used.append(_sws_tname)
+                                try:
+                                    _sws_tres = await asyncio.wait_for(
+                                        _agent_inst.execute_actions(
+                                            [{"tool": _sws_tname, "params": _sws_targs,
+                                              "reason": f"{agent['name']}: {_sws_tname}"}],
+                                            user_id, session=None, user_message=task,
+                                        ),
+                                        timeout=_TOOL_TIMEOUTS.get(_sws_tname, _TOOL_TIMEOUT),
+                                    )
+                                    _sws_r0 = _sws_tres[0] if _sws_tres else {"success": False}
+                                    _sws_result = json.dumps(
+                                        _sws_r0.get('result', {}) if _sws_r0.get('success')
+                                        else {"error": str(_sws_r0.get('error', ''))},
+                                        ensure_ascii=False, default=str
+                                    )[:800]
+                                except Exception as _sws_err:
+                                    _sws_result = json.dumps({"error": str(_sws_err)[:200]}, ensure_ascii=False)
+                                _messages.append({"role": "tool", "tool_call_id": _swstc['id'], "content": _sws_result})
+                                _tool_call_count += 1
+                except Exception as _sws_ex:
+                    logger.warning("[DIRECTOR-EXEC] save-without-send retry error: %s", _sws_ex)
+
+            # ── Autopilot retry: агент ответил текстом на первой итерации —
+            # Делаем короткий повторный запрос с прямым указанием инструмента ──
+            if _is_autopilot_task and _iter == 0 and not _tool_calls and not _tools_used:
+                # Определяем какой инструмент нужно вызвать первым
+                _first_tool = None
+                _my_tools_safe = locals().get('_my_tools', [])
+                if _my_tools_safe:
+                    _priority_order = [
+                        'web_search', 'research_topic', 'run_agent_action',
+                        'find_relevant_contacts_for_task', 'check_emails',
+                        'send_outreach_email', 'start_email_campaign',
+                    ]
+                    for _pt in _priority_order:
+                        if _pt in _my_tools_safe:
+                            _first_tool = _pt
+                            break
+                    if not _first_tool:
+                        _first_tool = _my_tools_safe[0] if _my_tools_safe else None
+
+                if _first_tool:
+                    logger.info(
+                        "[DIRECTOR-EXEC] autopilot text-without-tools retry for %s → suggest %s",
+                        agent.get('name'), _first_tool,
+                    )
+                    _messages.append({"role": "assistant", "content": ""})
+                    _messages.append({"role": "user", "content": (
+                        f"СТОП. Ты написал текст без вызова инструмента — это ошибка. "
+                        f"Вызови инструмент прямо сейчас. Оптимальный вариант для этой задачи: {_first_tool}. "
+                        f"Другие доступные: {', '.join([t for t in _my_tools_safe[:6] if t != _first_tool])}. "
+                        f"Не пиши текст — только вызов инструмента."
+                    )})
+                    try:
+                        _retry_resp = await asyncio.wait_for(
+                            _agent_inst.call_ai(
+                                _messages,
+                                use_tools=True,
+                                tool_choice="required",
+                                exclude_tools=_exclude_for_agent,
+                                max_tokens=300,
+                                api_timeout=API_TIMEOUT_LONG,
+                            ),
+                            timeout=API_TIMEOUT_LONG + 5,
+                        )
+                        if _retry_resp and _retry_resp.get('choices'):
+                            _retry_msg = _retry_resp['choices'][0]['message']
+                            _retry_tools = _retry_msg.get('tool_calls') or []
+                            if _retry_tools:
+                                logger.info(
+                                    "[DIRECTOR-EXEC] autopilot retry succeeded: %s tools called",
+                                    len(_retry_tools),
+                                )
+                                # Заменяем последние сообщения и продолжаем с инструментами
+                                _messages.append(_retry_msg)
+                                _tc_limit = 3
+                                for _tc in _retry_tools[:_tc_limit]:
+                                    _tname = _tc.get('function', {}).get('name', '')
+                                    try:
+                                        _targs = json.loads(_tc.get('function', {}).get('arguments', '{}'))
+                                    except Exception:
+                                        _targs = {}
+                                    _tools_used.append(_tname)
+                                    if _tname == 'add_task' and agent.get('id'):
+                                        _targs['created_by_agent_id'] = agent['id']
+                                    try:
+                                        _tres = await asyncio.wait_for(
+                                            _agent_inst.execute_actions(
+                                                [{"tool": _tname, "params": _targs, "reason": f"{agent['name']}: {_tname}"}],
+                                                user_id, session=None, user_message=task,
+                                            ),
+                                            timeout=_TOOL_TIMEOUTS.get(_tname, _TOOL_TIMEOUT),
+                                        )
+                                        _r0 = _tres[0] if _tres else {"success": False}
+                                        if _r0.get('success'):
+                                            _raw_r0 = _r0['result']
+                                            if isinstance(_raw_r0, dict) and '_human_summary' in _raw_r0:
+                                                _tc_result = _raw_r0['_human_summary'][:1500]
+                                            else:
+                                                _tc_result = json.dumps(_raw_r0, ensure_ascii=False, default=str)[:1500]
+                                        else:
+                                            _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
+                                    except asyncio.TimeoutError:
+                                        _tc_result = json.dumps({"error": f"tool timeout ({_tname}). Не жди — попробуй web_search или research_topic как замену, или упрости параметры вызова."}, ensure_ascii=False)
+                                    except Exception as _te:
+                                        _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
+                                    _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                                _tool_call_count += 1
+                                # Continue to next iteration for summary
+                                continue
+                    except Exception as _retry_err:
+                        logger.debug("[DIRECTOR-EXEC] autopilot retry failed: %s", _retry_err)
+
+            # Сохраняем результат и выходим из цикла — субделегирования обработаются ниже
+            _early_text = _content  # use as-is (empty → empty_result, not noise_filtered)
+            break
+
+        # Агент вызвал инструменты — выполняем
+        # Autopilot: до 5 за итерацию (search + save contacts + send + progress + delegate)
+        # Regular: до 2
+        _tc_limit = 5 if _is_autopilot_task else 2
+        _messages.append(_msg)
+        for _tc in _tool_calls[:_tc_limit]:
+            _tname = _tc.get('function', {}).get('name', '')
+            try:
+                _targs = json.loads(_tc.get('function', {}).get('arguments', '{}'))
+            except Exception:
+                _targs = {}
+
+            _tools_used.append(_tname)
+            # ── Специальный инструмент: агент пытается вызвать несуществующий delegate_to_agent ──
+            if _tname == 'delegate_to_agent':
+                # Перенаправляем на реальный delegate_task
+                _tname = 'delegate_task'
+                if 'agent_name' in _targs and 'delegated_to_username' not in _targs:
+                    _targs['delegated_to_username'] = _targs.pop('agent_name')
+                if 'task' in _targs and 'title' not in _targs:
+                    _targs['title'] = _targs.pop('task')
+            # ── Обычные инструменты ───────────────────────────────────────────────────────────
+            # Проверяем доступность инструмента (not elif — delegate_to_agent уже переименован выше)
+            if _allowed_tools and _tname not in _allowed_tools:
+                _tc_result = json.dumps({"error": f"tool {_tname} not in tools_allowed"}, ensure_ascii=False)
+            else:
+                # ── GUARD: block update_goal_progress if only research tools were used ──
+                # Прогресс можно обновлять только после реального исходящего действия
+                # run_agent_action НЕ research — он выполняет реальный код (create_issue, post, etc.)
+                _RESEARCH_ONLY_TOOLS = {
+                    'web_search', 'research_topic',
+                    'get_news_trends', 'quick_topic_search',
+                    'find_relevant_contacts_for_task', 'list_tasks', 'list_goals',
+                    'list_email_contacts',
+                }
+                _OUTGOING_ACTION_TOOLS = {
+                    'send_outreach_email', 'start_email_campaign', 'check_emails',
+                    'reply_to_outreach_email', 'send_follow_up_email',
+                    'negotiate_by_email', 'save_email_contact',
+                    'publish_to_telegram', 'publish_to_discord', 'create_post',
+                    'send_email', 'add_email_leads',
+                }
+                if _tname == 'update_goal_progress' and _is_autopilot_task:
+                    _prior_tools_set = set(_tools_used[:-1])  # exclude current
+                    _had_outgoing = bool(_prior_tools_set & _OUTGOING_ACTION_TOOLS)
+                    _only_research = _prior_tools_set and _prior_tools_set.issubset(_RESEARCH_ONLY_TOOLS)
+                    _ugp_progress = _targs.get('progress')
+                    _ugp_metric_current = _targs.get('metric_current')
+                    _is_numeric_update = (_ugp_progress is not None or _ugp_metric_current is not None)
+                    _is_progress_increase = False
+                    try:
+                        _is_progress_increase = _ugp_progress is not None and float(_ugp_progress) > 0
+                    except Exception:
+                        _is_progress_increase = bool(_ugp_progress)
+                    # Allow research progress if save_note was used (concrete deliverable)
+                    # or if note text contains actual findings
+                    _has_note_action = 'save_note' in _prior_tools_set or 'delegate_task' in _prior_tools_set
+                    if _only_research and not _had_outgoing and not _has_note_action and _is_progress_increase:
+                        _goal_progress_blocked = True
+                        _tc_result = json.dumps({
+                            "error": (
+                                "Прогресс не обновлён. Сначала выполни действие: "
+                                "отправь письмо, опубликуй пост или сохрани контакт. "
+                                "Если хочешь добавить только заметку — передай progress=None."
+                            )
+                        }, ensure_ascii=False)
+                        _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                        _tool_call_count += 1
+                        continue
+
+                    if _is_numeric_update and not _had_outgoing and not _action_evidence:
+                        _goal_progress_blocked = True
+                        _tc_result = json.dumps({
+                            "error": (
+                                "Прогресс не обновлён — сначала выполни действие "
+                                "(письмо, пост, контакт), потом обновляй метрику."
+                            )
+                        }, ensure_ascii=False)
+                        _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                        _tool_call_count += 1
+                        continue
+
+                    if _is_numeric_update:
+                        _notes_existing = (_targs.get('notes') or _targs.get('note') or '').strip()
+                        _proof_tools = ','.join(sorted(_prior_tools_set & _OUTGOING_ACTION_TOOLS)[:3]) or 'n/a'
+                        _proof_evidence = '; '.join(_action_evidence[-2:]) if _action_evidence else 'n/a'
+                        _proof_block = f"[proof tools={_proof_tools}; evidence={_proof_evidence}]"
+                        if _proof_block not in _notes_existing:
+                            _targs['notes'] = (_notes_existing + ' ' + _proof_block).strip()
+
+                # TEACH: если уже сохранена заметка в этом цикле — даём контекст, не блокируем
+                if _tname == 'save_note' and _is_autopilot_task and _save_note_count >= 2:
+                    _tc_result = json.dumps({
+                        "hint": (
+                            "[INTERNAL] save_note: в этом цикле уже сохранено несколько заметок. "
+                            "Спроси себя: эта заметка — итоговый вывод с конкретными данными (контакты, факты, решение), "
+                            "или промежуточный шаг который можно пропустить? "
+                            "Если есть сомнения — лучше вложи информацию в update_goal_progress notes= и продолжи действия."
+                        )
+                    }, ensure_ascii=False)
+                    _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                    _tool_call_count += 1
+                    continue
+
+                # Задачи создаваемые агентом помечаются source='agent'
+                if _tname == 'add_task' and agent.get('id'):
+                    _targs['created_by_agent_id'] = agent['id']
+                try:
+                    _tres = await asyncio.wait_for(
+                        _agent_inst.execute_actions(
+                            [{"tool": _tname, "params": _targs, "reason": f"{agent['name']}: {_tname}"}],
+                            user_id, session=None, user_message=task,
+                        ),
+                        timeout=_TOOL_TIMEOUTS.get(_tname, _TOOL_TIMEOUT),
+                    )
+                    _r0 = _tres[0] if _tres else {"success": False}
+                    if _r0.get('success'):
+                        _raw_r0b = _r0['result']
+                        if isinstance(_raw_r0b, dict) and '_human_summary' in _raw_r0b:
+                            _tc_result = _raw_r0b['_human_summary'][:1500]
+                        else:
+                            _tc_result = json.dumps(_raw_r0b, ensure_ascii=False, default=str)[:1500]
+                        # Detect goal progress rejection from handlers.py (returns success=True with error text)
+                        if _tname == 'update_goal_progress' and _tc_result:
+                            _ugp_lower = _tc_result.lower() if isinstance(_tc_result, str) else ''
+                            # "обновляй через metric_current" — это редирект, а не блокировка:
+                            # агент получит инструкцию и должен повторить с metric_current=N.
+                            # Флаг ставим только при реально заблокированных обновлениях.
+                            if 'не обновлён' in _ugp_lower or '⛔' in _tc_result or 'нельзя увеличить' in _ugp_lower:
+                                _goal_progress_blocked = True
+                            elif _goal_progress_blocked:
+                                # Успешное обновление после ранних ошибок — снимаем флаг
+                                _goal_progress_blocked = False
+                        if _tname == 'save_note':
+                            _save_note_count += 1
+                        if _tname in _ACTION_EVIDENCE_TOOLS:
+                            import re as _re_ev
+                            _email_ev = ''
+                            _id_ev = ''
+                            _m_email = _re_ev.search(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', _tc_result or '')
+                            if _m_email:
+                                _email_ev = _m_email.group(0)[:64]
+                            _m_id = _re_ev.search(r'(?:outreach_id|contact_id|id)\"?\s*[:=]\s*\"?([A-Za-z0-9_-]{2,32})', _tc_result or '', _re_ev.IGNORECASE)
+                            if _m_id:
+                                _id_ev = _m_id.group(1)
+                            _fact_parts = []
+                            if _id_ev:
+                                _fact_parts.append(f"id={_id_ev}")
+                            if _email_ev:
+                                _fact_parts.append(f"email={_email_ev}")
+                            _fact = ','.join(_fact_parts) if _fact_parts else 'ok'
+                            _action_evidence.append(f"{_tname}:{_fact}")
+                            if len(_action_evidence) > 6:
+                                _action_evidence = _action_evidence[-6:]
+                        try: get_learner().record_tool_result(user_id, _tname, True)
+                        except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
+                    else:
+                        _tc_result = json.dumps({"error": str(_r0.get('error', ''))}, ensure_ascii=False)
+                        try: get_learner().record_tool_result(user_id, _tname, False)
+                        except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
+                except asyncio.TimeoutError:
+                    _tc_result = json.dumps({"error": f"tool timeout ({_tname}). Не жди — выбери альтернативу: если это поиск → web_search с более коротким запросом; если email → check_emails или list_email_contacts; если интеграция → run_agent_action с другим action."}, ensure_ascii=False)
+                    logger.warning("[DIRECTOR-EXEC] tool %s timeout for %s", _tname, agent['name'])
+                    try: get_learner().record_tool_result(user_id, _tname, False)
+                    except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
+                except Exception as _te:
+                    _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
+                    logger.debug("[DIRECTOR-EXEC] tool %s error for %s: %s", _tname, agent['name'], _te)
+                    try: get_learner().record_tool_result(user_id, _tname, False)
+                    except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
+
+            _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+        _tool_call_count += 1
+        # Добавляем фиктивные результаты для пропущенных tool_calls (OpenAI/DeepSeek требует все)
+        for _tc_skip in _tool_calls[_tc_limit:]:
+            _messages.append({"role": "tool", "tool_call_id": _tc_skip['id'],
+                              "content": '{"status":"skipped"}'})
+        # Инструкция после tool-call: для автопилота — цепочка действий
+        if _is_autopilot_task:
+            _last_t_post = _tools_used[-1] if _tools_used else ''
+            _is_search_tool = _last_t_post in (
+                'run_agent_action', 'find_relevant_contacts_for_task',
+                'web_search', 'quick_topic_search', 'research_topic',
+            )
+            if _iter < _max_iters - 1:
+                # Не последняя итерация — продолжаем действовать
+                if _last_t_post == 'save_email_contact':
+                    if _is_outreach_goal:
+                        # Outreach-цель → обязательный email
+                        _messages.append({"role": "user", "content": (
+                            "Контакт сохранён. Вызови send_outreach_email:\n"
+                            "Напиши персональное письмо сохранённому контакту. "
+                            "НЕ пиши отчёт — вызови send_outreach_email прямо сейчас!"
+                        )})
+                    else:
+                        # Не-outreach цель → контакт может быть самоценным
+                        _messages.append({"role": "user", "content": (
+                            "Контакт сохранён. Выбери следующий шаг по ЦЕЛИ:\n"
+                            "— Нужно связаться → send_outreach_email (персональное письмо)\n"
+                            "— Контакт для заметок → save_note (зачем он полезен)\n"
+                            "— Есть ещё действия → продолжай цепочку по цели\n"
+                            "НЕ пиши отчёт — вызови инструмент!"
+                        )})
+                elif _is_search_tool and _last_t_post == 'run_agent_action':
+                    # Поиск через интеграцию (GitHub, RSS, CRM и т.д.): проверяем cooldown
+                    _intg_result_texts = [
+                        m.get('content', '') for m in _messages
+                        if m.get('role') == 'tool'
+                    ]
+                    # ── Детектор повторного таймаута скрипта ──
+                    _script_timeout_count = sum(
+                        1 for t in _intg_result_texts
+                        if any(w in t.lower() for w in (
+                            'тайм-аут', 'timeout', 'tool timeout', 'скрипт не верн', 'timed out'
+                        ))
+                    )
+                    if _script_timeout_count >= 2:
+                        _messages.append({"role": "user", "content": (
+                            f"run_agent_action вернул тайм-аут {_script_timeout_count} раза — "
+                            "скорее всего источник временно перегружен или параметры слишком сложные. "
+                            "Подумай: что ты пытаешься получить? "
+                            "Если нужны данные — попробуй web_search с 2-3 ключевыми словами. "
+                            "Если нужен поиск людей — find_relevant_contacts_for_task. "
+                            "Если нужна публикация — create_post. Выбери инструмент который точнее отражает задачу."
+                        )})
+                    else:
+                        _sent_blocked_count = sum(
+                            1 for t in _intg_result_texts
+                            if 'уже отправлено' in t or 'already sent' in t.lower() or 'Cooldown' in t
+                        )
+                        if _sent_blocked_count >= 3:
+                            _messages.append({"role": "user", "content": (
+                                "Все контакты уже получали письма (cooldown). "
+                                "Попробуй: 1) другой query, 2) page=2/3 для текущего запроса, "
+                                "3) другую интеграцию для поиска контактов."
+                            )})
+                        else:
+                            _messages.append({"role": "user", "content": (
+                                "Данные получены. Конвертируй результаты в действие по ЦЕЛИ:\n"
+                                "— Полезная информация → save_note (выводы, подборка)\n"
+                                "— Нужны шаги → add_task (конкретный план)\n"
+                                "— Есть email → save_email_contact + send_outreach_email\n"
+                                "— 0 результатов → другой query или интеграция\n"
+                                "НЕ пиши отчёт — вызови инструмент!"
+                            )})
+                elif _is_search_tool:
+                    # Обычный поиск: мягкое требование
+                    _messages.append({"role": "user", "content": (
+                        "Данные получены. ПРОДОЛЖАЙ ДЕЙСТВОВАТЬ — используй результаты по ЦЕЛИ:\n"
+                        "— Полезная информация → save_note (конспект, подборка, рекомендации)\n"
+                        "— Нужны действия → add_task (конкретные шаги)\n"
+                        "— Тренды/инсайты → create_post (аналитика, обзор)\n"
+                        "— Есть email/контакт → save_email_contact + send_outreach_email\n"
+                        "— Данные для коллеги → DELEGATE[Имя]: задача с данными\n"
+                        "НЕ останавливайся на 'нашёл и рассказал'. СДЕЛАЙ что-то с результатами!"
+                    )})
+                else:
+                    # Не поиск (send, update и др.) — завершай цепочку
+                    _messages.append({"role": "user", "content": (
+                        "Действие выполнено. Выбери следующий шаг:\n"
+                        "— Есть ещё действия по цели → продолжай цепочку\n"
+                        "— Цепочка завершена → update_goal_progress с итогом."
+                    )})
+            else:
+                # Последняя итерация: завершаем
+                _messages.append({"role": "user", "content": (
+                    "Финальный шаг. Вызови update_goal_progress, затем расскажи пользователю "
+                    "ЧТО КОНКРЕТНО ты СДЕЛАЛ — 3-5 предложений, 300-600 символов. "
+                    "Включи: кого нашёл (имена/компании), что отправил, какие результаты получил (числа, ссылки). "
+                    "Пиши содержательно — пользователь должен понять ЧТО произошло. Без markdown-списков."
+                )})
+        else:
+            _messages.append({"role": "user", "content": (
+                "Данные от инструмента получены. Дай ГОТОВЫЙ результат. "
+                "Сплошной текст, без списков и CAPS-заголовков. "
+                "Простая задача — кратко (1-3 предложения). Сложная — столько сколько нужно. "
+                "НЕ пиши 'ищу данные' или 'уточняю'. Заверши мысль."
+            )})
+    # ── Autopilot: принудительный update_goal_progress если не был вызван ──
+    # Фиксируем итог каждой сессии — агент мог завершить текстом или исчерпать итерации
+    if (_is_autopilot_task
+            and 'update_goal_progress' not in _tools_used
+            and _tools_used):
+        try:
+            _ugp_note = (
+                f"Сессия: использованы инструменты: {', '.join(_tools_used[-4:])}. "
+                "Результат поиска зафиксирован."
+            )
+            _messages.append({"role": "user", "content": (
+                "ОБЯЗАТЕЛЬНЫЙ ФИНАЛ: Вызови update_goal_progress чтобы зафиксировать итог этой сессии.\n"
+                f"Используй: goal_title='название цели', note='{_ugp_note}'\n"
+                "НЕ меняй числа прогресса если не было отправленных писем или подтверждённых контактов."
+            )})
+            _ugp_resp = await asyncio.wait_for(
+                _agent_inst.call_ai(
+                    _messages,
+                    use_tools=True,
+                    tool_choice="required",
+                    exclude_tools=_exclude_for_agent,
+                    max_tokens=200,
+                    api_timeout=30,
+                ),
+                timeout=35,
+            )
+            if _ugp_resp and _ugp_resp.get('choices'):
+                _ugp_msg = _ugp_resp['choices'][0]['message']
+                _ugp_tcs = _ugp_msg.get('tool_calls') or []
+                if _ugp_tcs:
+                    _messages.append(_ugp_msg)
+                    for _ugp_tc in _ugp_tcs[:1]:
+                        _ugp_tname = _ugp_tc.get('function', {}).get('name', '')
+                        try:
+                            _ugp_targs = json.loads(_ugp_tc.get('function', {}).get('arguments', '{}'))
+                        except Exception:
+                            _ugp_targs = {}
+                        if _ugp_tname == 'update_goal_progress':
+                            _tools_used.append(_ugp_tname)
+                            try:
+                                _ugp_tres = await asyncio.wait_for(
+                                    _agent_inst.execute_actions(
+                                        [{"tool": _ugp_tname, "params": _ugp_targs,
+                                          "reason": f"{agent.get('name')}: end-of-session update"}],
+                                        user_id, session=None, user_message=task,
+                                    ),
+                                    timeout=15,
+                                )
+                                _ugp_r0 = _ugp_tres[0] if _ugp_tres else {"success": False}
+                                _ugp_result = json.dumps(
+                                    _ugp_r0.get('result', {}), ensure_ascii=False, default=str
+                                )[:300]
+                                _messages.append({"role": "tool", "tool_call_id": _ugp_tc['id'],
+                                                  "content": _ugp_result})
+                                logger.info(
+                                    "[DIRECTOR-EXEC] end-of-session update_goal_progress OK for %s",
+                                    agent.get('name'),
+                                )
+                            except Exception as _ugp_exec_err:
+                                logger.debug("[DIRECTOR-EXEC] update_goal_progress exec: %s", _ugp_exec_err)
+        except Exception as _ugp_err:
+            logger.debug("[DIRECTOR-EXEC] end-of-session update_goal_progress: %s", _ugp_err)
+
+    # Если агент ответил текстом без tool calls — пропускаем финальный AI-вызов
+    if _early_text is not None:
+        _final_text = _early_text
+    else:
+        # Исчерпали все итерации — берём последний контент из сообщений (без доп. LLM вызова)
+        _final_text = ''
+        for _m_back in reversed(_messages):
+            if _m_back.get('role') == 'assistant' and _m_back.get('content'):
+                _final_text = _m_back['content']
+                break
+        if not _final_text:
+            _final_text = ''  # return empty on timeout/no-result → anchor_engine marks as empty_result, not noise_filtered
+        # Парсим DELEGATE из финального ответа
+        if _final_text:
+            import re as _re_fin
+            for _m in _re_fin.finditer(
+                r'DELEGATE\[([^\]]+)\]:\s*(.+?)(?=DELEGATE\[|$)',
+                _final_text, _re_fin.DOTALL | _re_fin.IGNORECASE,
+            ):
+                _aname = _m.group(1).strip()
+                _atask = _m.group(2).strip()[:400]
+                if _aname and _atask:
+                    # ── DELEGATE quality guard (финальный парсинг) ──
+                    if len(_atask) < 120:
+                        _dlg_ctx2 = ''
+                        for _msg2 in reversed(_messages[-8:]):
+                            _mc2 = ''
+                            if _msg2.get('role') == 'tool':
+                                _mc2 = str(_msg2.get('content', ''))[:600]
+                            elif _msg2.get('role') == 'assistant':
+                                _mc2 = str(_msg2.get('content', ''))[:400]
+                            if _mc2 and len(_mc2) > 40:
+                                _dlg_ctx2 = _mc2.replace('\n', ' ')[:400]
+                                break
+                        if _dlg_ctx2:
+                            _atask = (
+                                f'{_atask}. '
+                                f'КОНТЕКСТ: {_dlg_ctx2[:300]}. '
+                                f'Используй эти данные напрямую, не делай общий поиск. '
+                                f'Укажи конкретный инструмент и ожидаемый результат.'
+                            )
+                    _pending_subdelegations.append({'agent_name': _aname, 'task': _atask})
+            _final_text = _re_fin.sub(
+                r'DELEGATE\[[^\]]+\]:[^\n]*\n?', '', _final_text,
+            ).strip()  # if only DELEGATE patterns, return empty (subdelegations handled separately)
+        # keep _final_text = '' if both branches left it empty (timeout/no-result)
+
+    # ── Обрезка длинных ответов (без доп. LLM-вызова — экономит ~5с) ──
+    # Если текст слишком короткий после tool-вызовов (для автопилота) — доп. вызов для итога
+    # Включаем _done_fb: агент вызвал инструменты но не написал отчёт — форсируем summary
+    # Также ловим обрезанные ответы: finish_reason=='length' или текст обрывается на полуслове
+    _looks_truncated = (
+        _final_text
+        and len(_final_text) > 80
+        and not _final_text.rstrip()[-1:] in '.!?»"\')'
+    )
+    if _is_autopilot_task and _tools_used and (
+        len(_final_text) < 100
+        or _final_text == _done_fb
+        or _looks_truncated
+    ):
+        try:
+            # Собираем результаты инструментов для контекста
+            _tool_data_ctx = []
+            for _m_ctx in _messages:
+                if _m_ctx.get('role') == 'tool':
+                    _td = (_m_ctx.get('content') or '')[:300]
+                    if _td and _td != '{"status":"skipped"}':
+                        _tool_data_ctx.append(_td)
+            _tool_data_str = '\n'.join(_tool_data_ctx[-2:]) if _tool_data_ctx else ''
+            _messages.append({"role": "assistant", "content": _final_text})
+            if _looks_truncated and len(_final_text) > 80:
+                # Text was cut off mid-sentence — ask to rewrite completely
+                _messages.append({"role": "user", "content": (
+                    "Твой ответ оборвался на полуслове! Пользователь увидит обрезанный текст. "
+                    "Вот данные из инструментов:\n"
+                    f"{_tool_data_str}\n\n"
+                    "Перепиши ВЕСЬ отчёт заново, ПОЛНОСТЬЮ — от начала до конца. "
+                    "Включи все факты, имена, цифры. "
+                    "Пиши как сообщение коллеге в чате — живо, со своим характером."
+                )})
+            else:
+                _messages.append({"role": "user", "content": (
+                    "Ты написал слишком коротко. Пользователь получит это сообщение в чате — "
+                    "ему нужно понять что произошло. Вот данные из инструментов:\n"
+                    f"{_tool_data_str}\n\n"
+                    "Перескажи эти данные СВОИМИ СЛОВАМИ: что нашлось, "
+                    "какие факты, имена, цифры, и что думаешь делать дальше. "
+                    "Пиши как сообщение коллеге в чате — живо, со своим характером."
+                )})
+            _summary_resp = await asyncio.wait_for(
+                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=1200, api_timeout=30),
+                timeout=35,
+            )
+            if _summary_resp and _summary_resp.get('choices'):
+                _summary_text = (_summary_resp['choices'][0]['message'].get('content') or '').strip()
+                if _summary_text and (_looks_truncated or not _final_text or len(_final_text) < 80):
+                    _final_text = _summary_text
+                    logger.info("[DIRECTOR-EXEC] autopilot summary filled (%s): %d chars",
+                                'truncated' if _looks_truncated else 'was_empty', len(_final_text))
+        except Exception as _sum_err:
+            logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
+
+    if _final_text and len(_final_text) > 3500 and _final_text != _done_fb:
+        # Обрезаем до последнего завершённого предложения в пределах 3500 символов
+        _cut = _final_text[:3500]
+        _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
+        if _last_dot > 200:
+            _final_text = _cut[:_last_dot + 1]
+
+    # ── Пост-гард: прогресс был отклонён, но агент мог соврать в тексте ──
+    if _goal_progress_blocked and _final_text and _final_text != _done_fb:
+        import re as _re_gpb
+        # Strip false progress claims like "Прогресс теперь на 7%" / "Обновила прогресс до 10%"
+        _final_text = _re_gpb.sub(
+            r'(?:прогресс\s+(?:теперь\s+)?(?:на|до|составляет|обновлён?а?\s+до)\s+\d+\s*%[.!]?\s*)',
+            '', _final_text, flags=_re_gpb.IGNORECASE,
+        ).strip()
+        _final_text = _re_gpb.sub(
+            r'(?:обновил[аи]?\s+прогресс\s+(?:до\s+)?\d+\s*%[.!]?\s*)',
+            '', _final_text, flags=_re_gpb.IGNORECASE,
+        ).strip()
+        # Если прогресс был заблокирован по реальной причине (⛔) — сообщаем пользователю понятно
+        if _final_text and _goal_progress_blocked:
+            _ft_lower_chk = _final_text.lower()
+            # Не дублируем если агент сам уже написал о проблеме
+            if 'прогресс' not in _ft_lower_chk and 'не удал' not in _ft_lower_chk and 'не смог' not in _ft_lower_chk:
+                _final_text += "\n\n⚠️ Прогресс цели не обновлён — нужно выполнить реальное действие (отправить письмо, получить ответ, сохранить контакт), прежде чем фиксировать результат."
+
+    # ── Интеграционные подсказки: если инструмент реально не сработал ──
+    # Добавляем макс. 1 подсказку, только если агент сам не написал об этом.
+    if _final_text and _final_text != _done_fb and _tools_used and _messages:
+        _hints = _extract_intg_hints(_messages)
+        if _hints:
+            _ft_lower = _final_text.lower()
+            for _h in _hints[:1]:  # макс 1 подсказка
+                _hfp = _h[3:33].lower() if _h.startswith('💡') else _h[:30].lower()
+                if _hfp not in _ft_lower:
+                    _final_text += f"\n\n{_h}"
+                    break
+
+    # Детектируем BLOCKED-маркер в финальном ответе агента
+    if _final_text and _final_text.lower().startswith('blocked:'):
+        try:
+            from models import Session as _BDb, AgentActivityLog as _BAct
+            _b_s = _BDb()
+            try:
+                _b_s.add(_BAct(
+                    user_id=user_id,
+                    activity_type='task_blocked',
+                    title=f"{agent['name']}: нужно решение",
+                    content=_final_text[:600],
+                    target=f"agent:{agent['name']}",
+                    status='new',
+                ))
+                _b_s.commit()
+            finally:
+                _b_s.close()
+        except Exception as _be:
+            logger.debug('[BLOCKED] director exec save error: %s', _be)
+
+    # ── Субделегирования: агент может передать часть работы коллеге (depth < 2) ──
+    if _pending_subdelegations and _depth < 1:
+        try:
+            from models import Session as _SubDb, UserAgent as _SubUA, User as _SubU
+            _sub_s = _SubDb()
+            try:
+                _sub_u = _sub_s.query(_SubU).filter_by(telegram_id=user_id).first()
+                _author_id = _sub_u.id if _sub_u else None
+                if _author_id:
+                    _all_team = _sub_s.query(_SubUA).filter(
+                        _SubUA.author_id == _author_id,
+                        _SubUA.status.in_(['active', 'paused']),
+                        _SubUA.id != agent.get('id'),
+                    ).all()
+                    _team_map = {a.name.lower(): a for a in _all_team}
+
+                    _sub_results = []
+                    for _sd in _pending_subdelegations[:2]:  # макс 2 субделегирования
+                        _target_name = _sd['agent_name']
+                        _target_agent = _team_map.get(_target_name.lower())
+                        if not _target_agent:
+                            # Fuzzy match
+                            for _tn, _ta in _team_map.items():
+                                if _target_name.lower() in _tn or _tn in _target_name.lower():
+                                    _target_agent = _ta
+                                    break
+                        if not _target_agent:
+                            continue
+
+                        _ta_dict = {
+                            'id': _target_agent.id,
+                            'name': _target_agent.name,
+                            'job_title': _target_agent.job_title or '',
+                            'specialization': _target_agent.specialization or '',
+                            'description': _target_agent.description or '',
+                            'personality': _target_agent.personality or '',
+                            'python_code': _target_agent.python_code or '',
+                            'user_api_keys': _target_agent.user_api_keys or '',
+                            'tools_allowed': _target_agent.tools_allowed or '',
+                            'author_id': _author_id,
+                        }
+                        logger.info("[SUBDELEGATE] %s → %s: %s", agent.get('name'), _target_agent.name, _sd['task'][:80])
+                        # Списываем токены за субделегирование
+                        try:
+                            from token_service import spend_tokens as _sp_sub, has_enough_tokens as _het_sub
+                            from config import FREE_ACCESS_MODE as _FAM_sub
+                            if not _FAM_sub:
+                                if not _het_sub(user_id, 'agent_task'):
+                                    logger.info("[SUBDELEGATE] skip %s — not enough tokens", _target_agent.name)
+                                    continue
+                                _sp_sub(user_id, 'agent_task', description=f'subdelegate:{_target_agent.name}')
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                        try:
+                            _sub_raw_sd = await asyncio.wait_for(
+                                _exec_agent_for_director(_ta_dict, _sd['task'], user_id, dialog_context, _depth=_depth + 1),
+                                timeout=60,
+                            )
+                            _sub_res = _sub_raw_sd[0] if isinstance(_sub_raw_sd, (tuple, list)) else _sub_raw_sd
+                            _sub_tools = list(_sub_raw_sd[1]) if isinstance(_sub_raw_sd, (tuple, list)) and len(_sub_raw_sd) > 1 else []
+                            _sub_results.append(f"{_target_agent.name}: {_sub_res}")
+                            _tools_used.extend(_sub_tools)
+                        except Exception as _sub_err:
+                            logger.warning("[SUBDELEGATE] %s error: %s", _target_agent.name, _sub_err)
+
+                    if _sub_results:
+                        # Каждый субделегированный результат отправляется ОТДЕЛЬНЫМ сообщением
+                        # (не батчим в один текст — пользователь видит планомерную работу команды)
+                        for _sd_item, _sr in zip(_pending_subdelegations[:2], _sub_results):
+                            _sd_target_name = _sr.split(':')[0].strip()
+                            _sd_result_text = ':'.join(_sr.split(':')[1:]).strip() if ':' in _sr else _sr
+
+                            # Отправляем сразу в Telegram + сохраняем в Interaction
+                            try:
+                                import aiogram
+                                from models import Session as _MsgDb, Interaction as _MsgInt, User as _MsgU
+                                _msg_s = _MsgDb()
+                                try:
+                                    _msg_u = _msg_s.query(_MsgU).filter_by(telegram_id=user_id).first()
+                                    if _msg_u:
+                                        # Формируем agent data для interaction
+                                        _sd_ag_id = 0
+                                        _sd_ag_avatar = ''
+                                        for _tn2, _ta2 in _team_map.items():
+                                            if _ta2.name == _sd_target_name:
+                                                _sd_ag_id = _ta2.id
+                                                # Никогда не сохраняем base64 data URI в interactions
+                                                _sd_ag_avatar = f'/api/arena/agent_avatar/{_ta2.id}' if getattr(_ta2, 'id', 0) else ''
+                                                break
+                                        # ── Noise-фильтр для subdelegation: не сохраняем hollow acks ──
+                                        _sd_lower = (_sd_result_text or '').strip().lower()
+                                        _SD_NOISE = {
+                                            'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                                            'понял задачу', 'приняла в работу', 'принял в работу',
+                                            'задачу принял', 'задачу приняла',
+                                        }
+                                        _sd_is_noise = (
+                                            not _sd_result_text.strip()
+                                            or len(_sd_result_text.strip()) < 15
+                                            or _sd_lower.rstrip('.!') in _SD_NOISE
+                                        )
+                                        if not _sd_is_noise:
+                                            # Сохраняем interaction
+                                            _msg_s.add(_MsgInt(
+                                                user_id=_msg_u.id,
+                                                message_type='proactive',
+                                                content=json.dumps({
+                                                    '__agent': {'name': _sd_target_name, 'id': _sd_ag_id, 'avatar_url': _sd_ag_avatar},
+                                                    'text': re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _sd_result_text[:600]),
+                                                    '__tools_used': _sub_tools,
+                                                    '__anchor_type': 'agent_delegation',
+                                                }, ensure_ascii=False),
+                                            ))
+                                            _msg_s.commit()
+                                            logger.info("[SUBDELEGATE] saved %s result as separate interaction", _sd_target_name)
+                                        else:
+                                            logger.info("[SUBDELEGATE] filtered noise from %s: %r", _sd_target_name, _sd_result_text[:80])
+                                finally:
+                                    _msg_s.close()
+                            except Exception as _msg_err:
+                                logger.debug('[SUBDELEGATE] msg save error: %s', _msg_err)
+
+                            # Также создаём задачу для трекинга
+                            try:
+                                _sd_agent_dict = {'id': _sd_ag_id, 'name': _sd_target_name}
+                                _create_agent_delegation_task(
+                                    _author_id, _sd_agent_dict,
+                                    _sd_item.get('task', '')[:200],
+                                    result_summary=_sd_result_text[:500],
+                                )
+                            except Exception as _sd_task_err:
+                                logger.debug('[SUBDELEGATE] task create error: %s', _sd_task_err)
+
+                        # В текст родительского агента добавляем КРАТКУЮ ссылку, а не полные результаты
+                        _sd_names = [sr.split(':')[0].strip() for sr in _sub_results]
+                        _final_text += f"\n\n(Поручил{'а' if _is_fem else ''} задачи: {', '.join(_sd_names)} — их ответы отправлены отдельно)"
+            finally:
+                _sub_s.close()
+        except Exception as _sd_err:
+            logger.debug('[SUBDELEGATE] error: %s', _sd_err)
+
+    # Очищаем DSML-теги и технические артефакты перед возвратом
+    try:
+        from .utils import clean_technical_details as _ctd_exec
+        _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
+    except Exception as _e:
+        logger.debug("suppressed: %s", _e)
+
+    # ── Нормализация формата: убираем двойные переносы, списки, markdown ──
+    if _final_text and _final_text != _done_fb:
+        import re as _re_fmt
+        # Убираем bullet-списки: • – — - * → сплошной текст
+        _final_text = _re_fmt.sub(r'\n\s*[•–—\-\*]\s+', '\n', _final_text)
+        # Убираем нумерованные списки: 1. 2. 3.
+        _final_text = _re_fmt.sub(r'\n\s*\d+[.)\]]\s+', '\n', _final_text)
+        # Убираем заголовки markdown: ## Title
+        _final_text = _re_fmt.sub(r'\n\s*#{1,4}\s+', '\n', _final_text)
+        # Убираем жирный/курсив markdown: **text** → text, *text* → text
+        _final_text = _re_fmt.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _final_text)
+        # Множественные пустые строки → одинарный перенос
+        _final_text = _re_fmt.sub(r'\n{2,}', '\n', _final_text)
+        _final_text = _final_text.strip()
+
+    # Для автопилота: если текст шаблонный но инструменты вызывались — принудительно расширяем через LLM
+    if _is_autopilot_task and _tools_used and (_final_text == _done_fb or len((_final_text or '').strip()) < 60):
+        try:
+            _tool_data_fb = []
+            for _m_fb in _messages:
+                if _m_fb.get('role') == 'tool':
+                    _td_fb = (_m_fb.get('content') or '')[:400]
+                    if _td_fb and _td_fb != '{"status":"skipped"}':
+                        _tool_data_fb.append(_td_fb)
+            _tool_data_fb_str = '\n'.join(_tool_data_fb[-3:]) if _tool_data_fb else ''
+            if _tool_data_fb_str:
+                _aname_fb2 = (agent.get('name') or '').strip()
+                _is_fem_fb = bool(_aname_fb2 and _aname_fb2[-1] in 'аяАЯ' and _aname_fb2[-2:].lower() not in ('ша', 'жа', 'ца', 'ча'))
+                _gender_fb = (
+                    "Ты женского рода — пиши: нашла, обнаружила, проверила, отправила, сделала.\n"
+                    if _is_fem_fb else
+                    "Ты мужского рода — пиши: нашёл, обнаружил, проверил, отправил, сделал.\n"
+                )
+                _fb_messages = [
+                    {"role": "system", "content": (
+                        f"Ты — {agent.get('name', 'агент')}. Расскажи пользователю ЧТО КОНКРЕТНО нашёл/сделал.\n"
+                        + _gender_fb +
+                        "Пиши от первого лица, живо, с фактами и цифрами.\n"
+                        "НЕ пиши 'выполнил поиск' или 'обновил прогресс'.\n"
+                        "Расскажи на языке результатов, не инструментов: пользователь не знает что такое save_email_contact или update_goal_progress — ему важно ЧТО нашлось и сделалось.\n"
+                        "Пиши что НАШЁЛ и СДЕЛАЛ, а не через какой инструмент.\n"
+                        "СТИЛЬ: как сообщение коллеге в чате — живо, с характером, по-человечески. Списки (• – 1.), нумерация, заголовки (##) делают сообщение похожим на отчёт — пиши текстом."
+                    )},
+                    {"role": "user", "content": (
+                        f"Вот данные из инструментов:\n{_tool_data_fb_str}\n\n"
+                        "Перескажи эти данные для пользователя: что нашлось, какие факты, "
+                        "имена, цифры, и что думаешь делать дальше. Пиши живо, как в чате с коллегой."
+                    )},
+                ]
+                _fb_resp = await asyncio.wait_for(
+                    _agent_inst.call_ai(_fb_messages, use_tools=False, max_tokens=250, api_timeout=25),
+                    timeout=30,
+                )
+                if _fb_resp:
+                    _u_fb2 = _fb_resp.get('usage') or {}
+                    _total_ap_tokens += _u_fb2.get('prompt_tokens', 0) + _u_fb2.get('completion_tokens', 0)
+                if _fb_resp and _fb_resp.get('choices'):
+                    _fb_text = (_fb_resp['choices'][0]['message'].get('content') or '').strip()
+                    if _fb_text and len(_fb_text) > 40:
+                        _final_text = _fb_text
+                        logger.info("[DIRECTOR-EXEC] autopilot fallback expanded: %d chars", len(_final_text))
+        except Exception as _fb_err:
+            logger.debug("[DIRECTOR-EXEC] autopilot fallback expansion failed: %s", _fb_err)
+
+    # ── Consistency guard: не разрешаем репортить "письмо отправлено", если tool вернул ошибку ──
+    # Это защищает от ложных отчётов в чате вида "отправила письмо", когда send_outreach_email
+    # фактически вернул "Некорректный email" или другой блокирующий error.
+    if _final_text:
+        import re as _re_cons
+        _tool_payloads = [str(_m.get('content') or '') for _m in _messages if _m.get('role') == 'tool']
+        _tool_blob = '\n'.join(_tool_payloads).lower()
+        _email_error_markers = (
+            'некорректный email', 'invalid email', 'self-reply detected',
+            'ошибка resend api', 'ошибка отправки', 'blocked', 'не найдено письмо для ответа',
+        )
+        _email_success_markers = (
+            'письмо отправлено', 'ответ отправлен', 'email sent', 'reply sent',
+            'sent via', '"status":"sent"', '"status": "sent"',
+        )
+        _has_email_error = any(_m in _tool_blob for _m in _email_error_markers)
+        _has_email_success = any(_m in _tool_blob for _m in _email_success_markers)
+
+        # Мягкая нормализация маркера из safety-scrub
+        _final_text = _final_text.replace('[некорректный email]', '[email скрыт]')
+
+        if _has_email_error and not _has_email_success:
+            _before_text = _final_text
+            # Удаляем предложения, где агент утверждает успешную отправку
+            _final_text = _re_cons.sub(
+                r'[^.!?\n]*(?:отправил(?:а)?|отправлено|sent|emailed|написал(?:а)?\s+письмо)[^.!?\n]*[.!?]?',
+                '',
+                _final_text,
+                flags=_re_cons.IGNORECASE,
+            )
+            _final_text = _re_cons.sub(r'\n{2,}', '\n', _final_text).strip(' \n.,;:-')
+            _safe_note = (
+                'Письмо пока не отправлено: адрес или канал отправки вернул ошибку. '
+                'Проверю корректный email и повторю попытку.'
+            )
+            if not _final_text:
+                _final_text = _safe_note
+            elif _safe_note.lower() not in _final_text.lower():
+                _final_text = f"{_final_text}\n{_safe_note}".strip()
+            if _before_text != _final_text:
+                logger.info('[DIRECTOR-EXEC] consistency guard adjusted final text after email send error')
+
+    # Для автопилота без инструментов: если текст содержательный (>100 символов) — пропускаем как аналитику,
+    # если короткий/шаблонный — noise-фильтр в _dispatch_agent_for_anchor отсечёт
+    if _is_autopilot_task and not _tools_used and len((_final_text or '').strip()) < 100:
+        _final_text = ''  # слишком короткий текст без действий = noise
+
+    # Шаблонные ответы с инструментами: "Выполнил поиск." — тоже noise
+    if _is_autopilot_task and _final_text:
+        _ft_lower = _final_text.strip().lower()
+        _GENERIC_PATTERNS_AA = ('задачу выполнил.', 'задачу выполнила.', 'задача выполнена.',
+                                'данных нет.', 'готово.', 'сделано.',
+                                'понял, переключаюсь', 'поняла, сменим',
+                                'понял, запускаю', 'поняла, запускаю')
+        # Фильтруем ТОЛЬКО если весь текст — одна шаблонная фраза (< 80 chars)
+        if len(_final_text.strip()) < 80 and any(_ft_lower.rstrip('.!? ') == p.rstrip('.!? ') for p in _GENERIC_PATTERNS_AA):
+            logger.info("[DIRECTOR-EXEC] autopilot generic noise filtered: %r", _final_text[:80])
+            _final_text = ''
+
+    # ── Пост-обработка: удаляем упоминания неподключённых сервисов из агентского текста ──
+    if _final_text:
+        import re as _re_svc
+        _BANNED_SVCS = ('linkedin', 'calendly', 'apollo\\.io', 'sales navigator', 'hubspot', 'zoho', 'pipedrive')
+        for _bs in _BANNED_SVCS:
+            # Удаляем предложения, содержащие запрещённый сервис
+            _final_text = _re_svc.sub(
+                rf'[^.!?\n]*\b{_bs}\b[^.!?\n]*[.!?]?\s*',
+                '', _final_text, flags=_re_svc.IGNORECASE
+            )
+        _final_text = _final_text.strip()
+
+    # ── Пост-обработка: удаляем нарративные анонсы (целыми предложениями) ──
+    if _final_text:
+        import re as _re_tools
+        # Убираем ЦЕЛЫЕ предложения-анонсы: «Запускаю web_search...», «Сейчас вызову research_topic...»
+        # Анонс может быть как в начале строки, так и после ". " (середина строки)
+        _NARRATION_KEYWORDS = (
+            r'Запускаю',
+            r'Сейчас (?:вызову|вызываю|запущу|прочешу|проверю)',
+            r'Использую действие агента',
+            r'Делаю',
+            r'Выполняю вызов',
+            r'[Пп]ереключаюсь на',
+            r'[Сс]разу запускаю',
+        )
+        _narr_kw = '|'.join(_NARRATION_KEYWORDS)
+        # Вариант 1: начало строки / после newline
+        _final_text = _re_tools.sub(
+            rf'(?:^|\n)[^\S\n]*(?:{_narr_kw})[^.!?\n]*[.!?\u2026]?[^\S\n]*(?:\n|$)',
+            '\n', _final_text, flags=_re_tools.IGNORECASE
+        )
+        # Вариант 2: после ". " / "! " / "? " в середине строки
+        _final_text = _re_tools.sub(
+            rf'(?<=[.!?])\s+(?:{_narr_kw})[^.!?\n]*[.!?\u2026]?',
+            '', _final_text, flags=_re_tools.IGNORECASE
+        )
+        # Мягкая замена tool-имён на русские аналоги (не удаление, а перевод)
+        _TOOL_RU = (
+            (r'\bweb_search\b', 'поиск в интернете'),
+            (r'\bresearch_topic\b', 'исследование'),
+            (r'\bquick_topic_search\b', 'быстрый поиск'),
+            (r'\bsave_email_contact\b', 'сохранение контакта'),
+            (r'\bsend_outreach_email\b', 'отправка письма'),
+            (r'\breply_to_outreach_email\b', 'ответ на письмо'),
+            (r'\bsend_follow_up_email\b', 'фоллоу-ап'),
+            (r'\bsave_note\b', 'заметка'),
+            (r'\badd_task\b', 'задача'),
+            (r'\bupdate_goal_progress\b', 'обновление прогресса'),
+            (r'\brun_agent_action\b', 'действие агента'),
+            (r'\bcreate_post\b', 'публикация'),
+            (r'\bpublish_to_telegram\b', 'публикация в Telegram'),
+            (r'\bpublish_to_discord\b', 'публикация в Discord'),
+            (r'\bcheck_emails\b', 'проверка почты'),
+            (r'\bfind_relevant_contacts(?:_for_task)?\b', 'поиск контактов'),
+            (r'\bdelegate_task\b', 'делегирование'),
+            (r'\bset_reminder\b', 'напоминание'),
+            (r'\bgenerate_image\b', 'генерация изображения'),
+            (r'\bcheck_news_and_markets\b', 'анализ новостей'),
+            (r'\bread_rss\b', 'чтение RSS'),
+            (r'\bsearch_users\b', 'поиск пользователей'),
+        )
+        for _pat, _repl in _TOOL_RU:
+            _final_text = _re_tools.sub(_pat, _repl, _final_text, flags=_re_tools.IGNORECASE)
+        _final_text = _re_tools.sub(r'\n{3,}', '\n\n', _final_text).strip()
+
+    # ── Rework: если ответ — шаблонная пустышка, но есть данные скрипта → перегенерировать ──
+    _HOLLOW_CHECK = {'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                     'данных нет', 'готово', 'сделано', 'принял в работу'}
+    _ft_check = (_final_text or '').strip().lower().rstrip('.!? ')
+    if _ft_check in _HOLLOW_CHECK or (not _final_text and not _is_autopilot_task):
+        # Собираем доступный контекст: script_context + tool data
+        _rework_ctx = ''
+        if script_context:
+            _rework_ctx += script_context[:1500]
+        _tool_data_rw = [
+            (m.get('content') or '')[:300]
+            for m in _messages if m.get('role') == 'tool' and m.get('content', '') != '{"status":"skipped"}'
+        ]
+        if _tool_data_rw:
+            _rework_ctx += '\n' + '\n'.join(_tool_data_rw[-3:])
+        if _rework_ctx.strip():
+            try:
+                _rw_resp = await _quick_ai_call_raw([{
+                    "role": "user",
+                    "content": (
+                        f"Ты — {agent.get('name', 'агент')} ({agent.get('specialization', '')}).\n"
+                        f"Пользователь попросил: {task[:300]}\n\n"
+                        f"Вот данные которые ты получил из своих интеграций:\n{_rework_ctx}\n\n"
+                        f"Ответь на запрос пользователя используя ЭТИ данные. "
+                        f"Пиши от первого лица, живо, как человек. 2-5 предложений."
+                    ),
+                }], max_tokens=400, _caller='exec_hollow_rework')
+                if _rw_resp and len(_rw_resp.strip()) > 40:
+                    _final_text = _rw_resp.strip()
+                    logger.info("[DIRECTOR-EXEC] hollow rework for %s: %d chars", agent.get('name', '?'), len(_final_text))
+            except Exception as _rw_err:
+                logger.debug("[DIRECTOR-EXEC] hollow rework failed: %s", _rw_err)
+
+    logger.info("[DIRECTOR-EXEC] %s total_tokens=%d (%s)", agent.get('name', '?'), _total_ap_tokens, 'autopilot' if _is_autopilot_task else 'dialog')
+
+    # ── RESCUE: autopilot вернул пустоту (API timeout / no tools / empty response) ──
+    # Делаем лёгкий AI-вызов без инструментов чтобы агент хотя бы написал статус
+    if _is_autopilot_task and not _final_text and not _tools_used:
+        try:
+            _rescue_text = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — {agent.get('name', 'агент')} ({agent.get('specialization', 'помощник')}).\n"
+                    f"Задача: {task[:300]}.\n"
+                    f"Расскажи пользователю в 2-3 предложениях ЧТО КОНКРЕТНО ты собираешься сделать:\n"
+                    f"— Какие данные найдёшь\n— Где будешь искать\n— Какой первый результат ожидаешь\n"
+                    f"Пиши от первого лица, уверенно, без слов 'начинаю', 'приступаю', 'планирую'.\n"
+                    f"Пример: 'Проверю базу контактов и отправлю 2-3 письма потенциальным партнёрам.'"
+                ),
+            }], max_tokens=300, _caller='exec_rescue_fallback')
+            if _rescue_text and len(_rescue_text.strip()) > 30:
+                _final_text = _rescue_text.strip()
+                # Маркируем как rescue чтобы noise filter не отсёк
+                _tools_used.append('__rescue_status')
+                logger.warning(
+                    "[DIRECTOR-EXEC] RESCUE fallback for %s: %d chars (original was empty, no tools used)",
+                    agent.get('name', '?'), len(_final_text),
+                )
+        except Exception as _rescue_err:
+            logger.warning("[DIRECTOR-EXEC] rescue fallback failed for %s: %s", agent.get('name', '?'), _rescue_err)
+
+    # ── DIAGNOSTIC: final return state ──
+    logger.warning(
+        "[DIRECTOR-EXEC-DIAG] RETURN agent=%s final_text_len=%d tools_used=%s tokens=%d early_text=%s",
+        agent.get('name', '?'), len(_final_text or ''), _tools_used[:5], _total_ap_tokens,
+        'set' if _early_text is not None else 'None',
+    )
+    return _final_text, _tools_used, _total_ap_tokens
+
+
+# ══ Вспомогательные функции для delegation pipeline ══════════════════════════
+
+def _create_agent_delegation_task(user_db_id: int, agent: dict, task_text: str, result_summary: str = ''):
+    """Создаёт Task с source='agent' для отображения в «Поручения агентам».
+    Возвращает id задачи для последующего обновления."""
+    if not user_db_id:
+        return None
+    try:
+        from models import Session as _Db, Task as _Task
+        from ai_integration.utils import normalize_task_title
+        _s = _Db()
+        try:
+            _aname = agent.get('name', 'Агент')
+            _title, _overflow = normalize_task_title(task_text, agent_name=_aname, max_len=200)
+            # description = результат агента; если пусто — полный текст задачи (не только overflow)
+            _desc = result_summary[:1000] if result_summary else (task_text[:1000] if task_text else _overflow[:1000])
+            # Очищаем description от внутреннего координационного контекста
+            import re as _re_desc
+            from .utils import _TASK_DESC_STRIP_PATS
+            for _dsp in _TASK_DESC_STRIP_PATS:
+                _desc = _re_desc.sub(_dsp, '', _desc, flags=_re_desc.DOTALL).strip()
+            _t = _Task(
+                user_id=user_db_id,
+                title=_title,
+                description=_desc,
+                status='completed' if result_summary else 'in_progress',
+                source='agent',
+                created_by_agent_id=agent.get('id'),
+                delegated_to_username=_aname,
+            )
+            _s.add(_t)
+            _s.commit()
+            _tid = _t.id
+            logger.info("[DIRECTOR] created delegation task id=%s for agent=%s status=%s title='%s'", _tid, _aname, _t.status, _title[:60])
+            return _tid
+        except Exception as _e:
+            logger.warning("[DIRECTOR] delegation task create error: %s", _e)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] delegation task error: %s", e)
+    return None
+
+
+def _update_agent_delegation_task(task_id: int, result_summary: str):
+    """Обновляет Task агента: статус completed + результат."""
+    if not task_id:
+        return
+    try:
+        from models import Session as _Db, Task as _Task
+        _s = _Db()
+        try:
+            _t = _s.query(_Task).filter_by(id=task_id).first()
+            if _t:
+                _t.status = 'completed'
+                _t.description = result_summary[:1000] if result_summary else _t.description
+                import datetime as _dt
+                _t.actual_completion_time = _dt.datetime.now(_dt.timezone.utc)
+                _s.commit()
+                logger.info("[DIRECTOR] updated delegation task id=%s to completed", task_id)
+        except Exception as _e:
+            logger.warning("[DIRECTOR] delegation task update error: %s", _e)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] delegation task update error: %s", e)
+
+
+# Ключевые слова для outreach-задач (рассылки, поиск людей, email-кампании)
+_OUTREACH_KEYWORDS = (
+    'email', 'рассылк', 'приглаш', 'outreach', 'найти людей',
+    'найти тестировщ', 'набрать', 'привлеч', 'найти пользовател',
+    'отправ письм', 'отправить приглаш', 'кампани', 'campaign',
+    'найти клиент', 'найти исполнител', 'поиск контакт',
+)
+
+
+def _maybe_create_agent_campaign(user_db_id: int, agent: dict, task_text: str, result_summary: str = ''):
+    """Создаёт DelegationCampaign если задача похожа на outreach/рассылку.
+    Не создаёт для простых поручений типа 'напиши пост' или 'сделай картинку'."""
+    if not user_db_id:
+        return
+    _tl = (task_text or '').lower()
+    if not any(kw in _tl for kw in _OUTREACH_KEYWORDS):
+        return  # не outreach — кампания не нужна
+    try:
+        from models import Session as _Db, DelegationCampaign as _DC
+        _s = _Db()
+        try:
+            _name = task_text[:140]
+            _dc = _DC(
+                user_id=user_db_id,
+                name=_name,
+                goal=task_text[:500],
+                target_audience=result_summary[:300] if result_summary else '',
+                status='active',
+                max_delegations=50,
+                daily_limit=10,
+            )
+            _s.add(_dc)
+            _s.commit()
+            logger.info("[DIRECTOR] created outreach campaign id=%s for agent=%s", _dc.id, agent.get('name'))
+        except Exception as _e:
+            logger.warning("[DIRECTOR] campaign create error: %s", _e)
+            try:
+                _s.rollback()
+            except Exception:
+                pass
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] campaign error: %s", e)
+
+
+def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, result: str):
+    """Сохраняет результат делегирования в conversation_history для контекста будущих сообщений."""
+    try:
+        from .conversation_history import save_message_to_history
+        # NOTE: результат пишем от лица ASI ("я поручил"), не от лица агента.
+        # Это предотвращает утечку persona (женский род, другое имя) в контекст ASI.
+        import re as _re_dlg
+        _clean = result[:400]
+        # Убираем первое лицо агента: "я нашла" → "нашлось", "я проверила" → "проверено"
+        _clean = _re_dlg.sub(r'\bя\s+', '', _clean, flags=_re_dlg.IGNORECASE)
+        _summary = (
+            f"[Я (ASI) поручил агенту {agent_name}: {task[:150]}. Задача ВЫПОЛНЕНА.]\n"
+            f"Результат агента: {_clean}"
+        )
+        save_message_to_history(telegram_id, "assistant", _summary)
+    except Exception as e:
+        logger.debug("[DIRECTOR] save delegation to history error: %s", e)
+
+
+# Слова-сигналы что пользователь хочет действие, а не разговор
+
+
+# Кэш контекста директора: { user_id: {'ctx': str, 'history': list, 'expires': float} }
+_DIRECTOR_CTX_CACHE: dict = {}
+_DIRECTOR_CTX_TTL = 60  # секунд
+
+async def _office_director_chat(user_message: str, user_id: int, progress_callback=None) -> str | dict | None:
+    """
+    ASI — директор офиса с якорной памятью:
+    1. Загружает агентов + их якоря делегирования (что делали, cooldown)
+    2. ASI решает: делегировать свежему агенту, использовать кэш из якоря, или ответить сам
+    3. Если делегирует: агент работает (python_code) → пишет в чат → сохраняется якорь
+    4. ASI подводит итог с учётом результата
+
+    Якоря дают ASI память: «Кристина 2ч назад проверила почту, нашла 3 письма» →
+    ASI не запускает её снова, а отвечает из кэша. Cooldown 2ч — антиспам.
+    """
+    import json as _json
+    import datetime as _dt
+
+    # ── Загружаем user_db_id + агентов: сессионно-активированные + собственные ─
+    user_db_id = None
+    _agents = []
+    try:
+        from models import Session as _Db, User as _User, UserAgent as _UA
+        _s = _Db()
+        try:
+            _u = _s.query(_User).filter_by(telegram_id=user_id).first()
+            if not _u:
+                return None
+            user_db_id = _u.id
+
+            # Источник 1: агенты активированные в сессии (в т.ч. публичные)
+            _session_ids: list[int] = []
+            try:
+                from .user_agents import get_user_active_agents
+                _session_ids = get_user_active_agents(user_id) or []
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+
+            # Источник 2: собственные агенты пользователя с активной подпиской (AgentSubscription).
+            # Activate/Deactivate в UI управляет именно этой таблицей.
+            # Миграция: если у пользователя нет ни одной подписки на свои агенты — авто-подписываем
+            # все его агенты (первый запуск), чтобы они работали без ручного клика «Активировать».
+            try:
+                from models import AgentSubscription as _AS
+                _own_all = (
+                    _s.query(_UA)
+                    .filter(_UA.author_id == user_db_id, _UA.status.in_(['active', 'paused']))
+                    .limit(10)
+                    .all()
+                )
+                _existing_subs = {
+                    row.agent_id
+                    for row in _s.query(_AS).filter(
+                        _AS.user_id == user_db_id,
+                        _AS.agent_id.in_([a.id for a in _own_all]),
+                    ).all()
+                } if _own_all else set()
+
+                # Первый запуск (нет ни одной подписки): авто-мигрируем.
+                # Доп. запросы (_ever_had_subs / _ever_used_agents) делаем ТОЛЬКО
+                # когда _existing_subs пустой — иначе лишние round-trip на каждый запрос.
+                if _own_all and not _existing_subs:
+                    for _oa in _own_all:
+                        _s.add(_AS(user_id=user_db_id, agent_id=_oa.id))
+                        try:
+                            from .user_agents import set_user_active_agent as _sua_dir
+                            _sua_dir(user_id, _oa.id)
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                    _s.commit()
+                    _existing_subs = {a.id for a in _own_all}
+
+                _own_agents = [a for a in _own_all if a.id in _existing_subs]
+            except Exception as _sub_err:
+                logger.warning("[DIRECTOR] subscription check error, loading empty: %s", _sub_err)
+                _own_agents = []
+            _own_ids = {a.id for a in _own_agents}
+
+            # Источник 3: сессионно-активированные с загрузкой из БД (если не вошли в own)
+            # get_user_active_agents уже фильтрует по AgentSubscription, поэтому _session_ids чисты
+            _extra_ids = [i for i in _session_ids if i not in _own_ids]
+            _extra_agents = []
+            if _extra_ids:
+                _extra_agents = (
+                    _s.query(_UA)
+                    .filter(_UA.id.in_(_extra_ids), _UA.status.in_(['active', 'paused']))
+                    .all()
+                )
+
+            # Объединяем, порядок: сначала сессионно-активированные, потом остальные собственные
+            _seen: set[int] = set()
+            _all_db: list = []
+            for _a in _extra_agents + list(_own_agents):
+                if _a.id not in _seen:
+                    _seen.add(_a.id)
+                    _all_db.append(_a)
+
+            for _dba in _all_db:
+                _tools = []
+                try:
+                    _tools = json.loads(_dba.tools_allowed or '[]')
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+                _agents.append({
+                    'id': _dba.id,
+                    'name': _dba.name or 'Агент',
+                    'job_title': _dba.job_title or '',
+                    'specialization': _dba.specialization or '',
+                    'description': _dba.description or '',
+                    'personality': _dba.personality or '',
+                    'python_code': _dba.python_code or '',
+                    'user_api_keys': _dba.user_api_keys or '',
+                    'tools_allowed': _dba.tools_allowed or '',
+                    'search_scope': _dba.search_scope or '',
+                    'avatar_url': _dba.avatar_url or '',
+                    'tools': _tools,
+                })
+        finally:
+            _s.close()
+    except Exception as e:
+        logger.warning("[DIRECTOR] agents/user load error: %s", e)
+
+    # Если нет агентов — не перехватываем, пусть ASI ответит сам
+    if not _agents:
+        return None
+
+    # ── Прямое обращение к агенту по имени → пропускаем директора целиком ──────
+    # process_request уже умеет роутить по имени, загружать personality и tools.
+    # Это FAST PATH: не строим контекст, не кэшируем capabilities, не вызываем LLM.
+    _msg_lower_fast = user_message.lower().strip()
+    for _a_fast in _agents:
+        _aname_fast = (_a_fast.get('name') or '').lower()
+        if _aname_fast and len(_aname_fast) >= 2 and (
+            _msg_lower_fast.startswith(_aname_fast + ',') or
+            _msg_lower_fast.startswith(_aname_fast + ' ') or
+            _msg_lower_fast.startswith('@' + _aname_fast) or
+            _msg_lower_fast == _aname_fast):
+            logger.info("[DIRECTOR] direct agent mention '%s' → skip director, fast path",
+                         _a_fast.get('name', '?'))
+            return None
+
+    # ── Ранний фильтр: вопрос без прямого обращения к агенту → ASI ответит сам ──
+    # Исключение: вопрос упоминает слова из лейблов интеграций любого агента → нужен агент.
+    # Работаем с нормализованными лейблами _parse_agent_integrations — универсально для любых интеграций.
+    if _is_question_message(user_message):
+        _msg_lc_early = user_message.lower().strip()
+        _has_agent_mention_early = any(
+            len(_a.get('name') or '') >= 3
+            and (_a.get('name') or '').lower() in _msg_lc_early
+            for _a in _agents
+        )
+        _integration_question = False
+        if not _has_agent_mention_early:
+            # Слова сообщения (≥4 символов) — ищем пересечение с лейблами интеграций
+            _msg_words = {w for w in _msg_lc_early.split() if len(w) >= 4}
+            for _a in _agents:
+                try:
+                    _a_intg = _parse_agent_integrations(
+                        _a.get('user_api_keys') or '',
+                        _a.get('python_code') or '',
+                        _a.get('tools_allowed') or '',
+                    )
+                except Exception:
+                    _a_intg = []
+                for _intg_label in _a_intg:
+                    # Слова из лейбла (напр. "Gmail (почта)" → {"gmail", "почта"})
+                    _label_words = {
+                        w.lower() for w in _intg_label.replace('(', ' ').replace(')', ' ').split()
+                        if len(w) >= 4
+                    }
+                    if _label_words & _msg_words:
+                        _integration_question = True
+                        break
+                if _integration_question:
+                    break
+        if not _has_agent_mention_early and not _integration_question:
+            logger.debug("[DIRECTOR] early filter: question without agent mention, skip")
+            return None
+
+    # Строим универсальный контекст пользователя + историю — кэшируем 60с
+    import time as _time_dir
+    _cache_hit = _DIRECTOR_CTX_CACHE.get(user_db_id)
+    if _cache_hit and _cache_hit['expires'] > _time_dir.time():
+        _user_full_ctx = _cache_hit['ctx']
+        _history_lines = _cache_hit['history']
+    else:
+        _user_full_ctx = _build_user_context_sync(user_db_id) if user_db_id else ''
+        # История: загружаем в той же логике но отдельно (Session уже закрыт выше)
+        _history_lines = []
+        if user_db_id:
+            try:
+                from models import Interaction as _Itr
+                _hs = _Db()
+                try:
+                    _recent = (
+                        _hs.query(_Itr)
+                        .filter(_Itr.user_id == user_db_id)
+                        .order_by(_Itr.id.desc())
+                        .limit(5)
+                        .all()
+                    )
+                    for _r in reversed(_recent):
+                        _role = 'Пользователь' if _r.message_type == 'user' else 'ASI'
+                        _raw_h = (_r.content or '').strip()
+                        # Парсим JSON-обёртку агентских сообщений
+                        try:
+                            _jh = json.loads(_raw_h)
+                            _ag_h = _jh.get('__agent', {}).get('name', '')
+                            _txt = (_jh.get('text', '') or '')[:200]
+                            if _ag_h:
+                                _role = _ag_h
+                        except (json.JSONDecodeError, ValueError, AttributeError):
+                            _txt = _raw_h[:200]
+                        if _txt:
+                            _history_lines.append(f"{_role}: {_txt}")
+                finally:
+                    _hs.close()
+            except Exception:
+                pass
+        if user_db_id:
+            _DIRECTOR_CTX_CACHE[user_db_id] = {
+                'ctx': _user_full_ctx,
+                'history': _history_lines,
+                'expires': _time_dir.time() + _DIRECTOR_CTX_TTL,
+            }
+    _history_block = ('\n\nПОСЛЕДНИЕ СООБЩЕНИЯ:\n' + '\n'.join(_history_lines)) if _history_lines else ''
+
+    # ── Кешируем возможности агентов (один раз, используется в двух местах) ──────
+    _agent_caps_cache: dict[str, list[str]] = {}
+    for _a in _agents:
+        try:
+            _ci = _parse_agent_integrations(
+                _a.get('user_api_keys') or '',
+                _a.get('python_code') or '',
+                _a.get('tools_allowed') or '',
+                _a.get('search_scope') or '',
+            )
+        except Exception:
+            _ci = []
+        if not _ci:
+            _ci = _infer_capabilities_from_role(
+                _a.get('job_title') or '',
+                _a.get('specialization') or '',
+                _a.get('description') or '',
+            )
+        _agent_caps_cache[_a['name']] = _ci
+
+    # ── Вспомогательная функция поиска агента по имени ────────────────────────
+    def _find_agent(name: str):
+        if not name:
+            return None
+        return next(
+            (a for a in _agents if a['name'].lower() == name.lower()),
+            next((a for a in _agents if name.lower() in a['name'].lower()), None),
+        )
+
+    # ── Вспомогательная функция отправки видимого сообщения в чат ────────────
+    async def _send_visible(text: str):
+        """Отправляет промежуточное сообщение пользователю через progress_callback(persist=True)."""
+        if progress_callback and text:
+            try:
+                await progress_callback(text, persist=True)
+            except TypeError:
+                try:
+                    await progress_callback(text)
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+
+    # ── Вспомогательная функция сохранения результата агента ──────────────────
+    async def _run_agent_task(ag, task, extra_context: str = "", director_message: str = ""):
+        # Отправляем живое обращение директора к агенту и сохраняем в DB
+        if director_message:
+            # Форматируем без emoji-шаблонов — текст поручения должен быть естественным
+            _ag_n = ag.get('name', 'Агент')
+            if _ag_n.lower() in director_message.lower()[:len(_ag_n)+3]:
+                _dm_display = director_message
+            else:
+                _dm_display = f"{_ag_n}, {director_message}"
+            # Если director_message слишком короткий (< 80 символов) — обогащаем из task
+            # чтобы пользователь видел конкретику, а не расплывчатое "найди 2-3 контакта"
+            if len(_dm_display.strip()) < 80 and task and len(task.strip()) > 80:
+                _task_snippet = task.split('\n')[0].strip()[:250]
+                if _task_snippet and _task_snippet.lower() not in _dm_display.lower():
+                    _dm_display = _dm_display.rstrip(' .,') + '. ' + _task_snippet
+            # Если и задача короткая — ищем контекст в extra_context (история, проактив)
+            if len(_dm_display.strip()) < 80 and extra_context and len(extra_context.strip()) > 100:
+                import re as _re_ctx_enrich
+                # Ищем предложение из context, которое упоминает ключевые слова задачи
+                _task_words_ec = set(w.lower() for w in (_dm_display + ' ' + (task or '')).split() if len(w) > 4)
+                _ctx_sents = _re_ctx_enrich.split(r'(?<=[.!?\n])\s+', extra_context[:2000])
+                for _cs in _ctx_sents:
+                    _cs_clean = _cs.strip()[:200]
+                    if len(_cs_clean) > 30 and sum(1 for w in _task_words_ec if w in _cs_clean.lower()) >= 2:
+                        _dm_display = _dm_display.rstrip(' .,') + '. ' + _cs_clean
+                        break
+            # Нормализуем: после "Имя, " первая буква должна быть строчной
+            import re as _re_dm
+            _dm_display = _re_dm.sub(
+                r'([А-ЯЁA-Z][а-яёa-z]+, )([А-ЯЁA-Z])',
+                lambda m: m.group(1) + m.group(2).lower(),
+                _dm_display,
+            )
+            # Сохраняем директиву в чат.
+            # Если директива продублирована и выглядит как цикл "запусти поиск/сменим тактику",
+            # пропускаем повторный запуск агента, чтобы не зацикливать автопилот.
+            _msg_dedup = _save_interaction_for_director(user_id, _dm_display, message_type='agent_msg')
+            # Отправляем поручение в Telegram / веб-чат чтобы пользователь видел делегирование
+            await _send_visible(_dm_display)
+            if not _msg_dedup:
+                logger.info("[DIRECTOR] duplicate directive detected for %s: %s...", ag.get('name'), director_message[:60])
+                _loop_markers = (
+                    'сменим тактику', 'смени тактику', 'запусти поиск',
+                    'поиск в интернете', 'застрял', 'застряли',
+                )
+                _dm_l = (_dm_display or '').lower()
+                if any(_m in _dm_l for _m in _loop_markers):
+                    logger.warning("[DIRECTOR] anti-loop: skip duplicated search directive for %s", ag.get('name'))
+                    return "Пропускаю повторную директиву (anti-loop): задача уже недавно давалась."
+
+        # Списываем токены за запуск агента директором
+        try:
+            from config import FREE_ACCESS_MODE as _FAM
+            from token_service import spend_tokens as _st, has_enough_tokens as _het_at
+            if not _FAM:
+                if not _het_at(user_id, 'agent_task'):
+                    logger.info("[DIRECTOR] user %d: skip agent_task — not enough tokens", user_id)
+                    return "Недостаточно токенов для запуска агента."
+                _st(user_id, 'agent_task', description=f'{ag["name"]}: {task[:60]}')
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+
+        # Агентские поручения логируются только в AgentActivityLog (не в Task)
+        _task_id = None
+
+        resp = await _exec_agent_for_director(ag, task, user_id, dialog_context=extra_context)
+        _agent_tools_used: list[str] = []
+        if isinstance(resp, tuple):
+            if len(resp) >= 3:
+                resp, _agent_tools_used, _ap_tokens = resp
+            elif len(resp) == 2:
+                resp, _agent_tools_used = resp
+        if isinstance(resp, Exception) or not resp:
+            resp = "Данных нет."
+
+        # Rework: если агент ответил пустым фоллбэком или слишком коротко — быстрый LLM fallback
+        _resp_lower = str(resp).strip().lower()
+        _resp_len = len(str(resp).strip())
+        _fallback_phrases = ('задачу выполнил.', 'задачу выполнила.', 'данных нет.')
+        _intermediate_markers = ('использую', 'ищу данные', 'уточняю поиск', 'исследую',
+                                  'начинаю', 'приступаю', 'анализирую', 'подготовлю',
+                                  'первый запрос дал', 'сейчас найду', 'сейчас подготовлю',
+                                  'сейчас проведу', 'сейчас проверю', 'проверю', 'посмотрю',
+                                  'уточню', 'проверю детальную статистику',
+                                  'понял, алексей', 'понял,',
+                                  'начну с', 'сейчас разработаю', 'сейчас проанализирую')
+        _is_fallback = _resp_lower in _fallback_phrases
+        # Промежуточный ответ = маркер-обещание без данных.
+        # Если ответ НАЧИНАЕТСЯ с маркера — промежуточный даже при наличии цифр
+        # ("Понял, найду 5-7 чатов" — это обещание, не результат).
+        # Если маркер внутри текста — промежуточный только без цифр (цифры = факты).
+        _starts_with_marker = any(_resp_lower.startswith(m) for m in _intermediate_markers)
+        _contains_marker = any(m in _resp_lower for m in _intermediate_markers)
+        _is_intermediate = (len(str(resp).strip()) < 200 and
+                            (_starts_with_marker or
+                             (_contains_marker and not re.search(r'\d', _resp_lower))))
+        _is_too_short = _resp_len < 120 and _resp_len > 5
+        # В автопилоте: если агент не вызвал ни одного инструмента — ответ бесполезен
+        _is_autopilot_no_tools = (
+            not _agent_tools_used
+            and any(m in (task or '').lower() for m in ('автопилот', 'autopilot', 'l2 координация'))
+            and _resp_len < 400
+        )
+        _skip_rework = _is_question_message(task)
+        if (_is_fallback or _is_intermediate or _is_too_short or _is_autopilot_no_tools) and not _skip_rework:
+            # Быстрый fallback — агент ответил пусто/коротко/промежуточно
+            _rework_hint = (
+                f"Предыдущий ответ: {str(resp).strip()[:200]}\n\n" if _is_too_short and not _is_fallback else ''
+            )
+            _fallback_resp = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
+                    f"Задача: {task}\n"
+                    f"Контекст: {(extra_context or '')[:500]}\n"
+                    f"{_rework_hint}"
+                    f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
+                    f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
+                    f"Минимум 180 символов, 2-4 предложения в ОДНОМ абзаце, без markdown, без списков и нумерации."
+                ),
+            }], max_tokens=300)
+            if _fallback_resp and len(_fallback_resp) > 50:
+                resp = _fallback_resp
+
+        # Для ВОПРОСОВ: если агент ответил пустышкой или промежуточной фразой
+        # ("Проверю...", "Сейчас посмотрю...") — делаем мягкий rework в конкретный ответ.
+        if _skip_rework and (_is_fallback or _is_intermediate or _is_too_short):
+            # Убираем технический префикс из задачи — LLM видит чистый вопрос
+            _task_q = task
+            for _pfx_q in (
+                'ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): ',
+                'ОТВЕТЬ НА ВОПРОС: ',
+            ):
+                if _task_q.startswith(_pfx_q):
+                    _task_q = _task_q[len(_pfx_q):]
+                    break
+            # Если агент дал краткий ответ с данными — используем его как подсказку для расширения
+            _prev_q_hint = ''
+            if _is_too_short and not _is_fallback and str(resp).strip():
+                _prev_q_hint = f"Краткий ответ агента: {str(resp).strip()[:150]}. Расширь его естественно.\n"
+            _q_rework = await _quick_ai_call_raw([{
+                "role": "user",
+                "content": (
+                    f"Ты — {ag.get('name', 'специалист')} ({ag.get('specialization', '')}).\n"
+                    f"Пользователь спросил: {_task_q}\n"
+                    f"Контекст: {(extra_context or '')[:500]}\n"
+                    f"{_prev_q_hint}"
+                    f"Ответь на вопрос от первого лица как {ag.get('name', 'агент')}. "
+                    f"Если не знаешь ответ или у тебя нет доступа — честно скажи что и почему. "
+                    f"Не давай промежуточные формулировки типа 'проверю/посмотрю/сейчас'. "
+                    f"Сразу дай фактический ответ на вопрос (если есть данные — с цифрами). "
+                    f"НЕ пиши 'Задачу выполнила' — это не ответ на вопрос. "
+                    f"Пиши живо, как человек в чате. 2-4 предложения."
+                ),
+            }], max_tokens=300)
+            if _q_rework and len(_q_rework) > 30:
+                resp = _q_rework
+                logger.info("[AGENT] question rework for %s: %d chars", ag.get('name', '?'), len(resp))
+
+        # ── Final hollow guard: если после rework текст всё ещё пустышка — не отправляем ──
+        _HOLLOW_FINAL = {'задачу выполнил', 'задачу выполнила', 'задача выполнена',
+                         'данных нет', 'готово', 'сделано', 'принял в работу',
+                         'задачу принял', 'задачу приняла', 'понял задачу'}
+        _resp_final_check = str(resp).strip().lower().rstrip('.!?')
+        if _resp_final_check in _HOLLOW_FINAL:
+            logger.info("[AGENT] TEACH-MISS hollow final guard: '%s' from %s — suppressing", resp.strip()[:60], ag.get('name', '?'))
+            # Hollow ответ бесполезен и для вопросов и для задач — не отправляем в Telegram.
+            # Для вопросов: возвращаем None → chat_with_ai ответит через ASI.
+            # Для задач: тоже None → тихий пропуск (лучше молчание чем "Задачу выполнила" без фактов).
+            return None
+
+        # Результат агента сохраняется в DB как __agent JSON (proxy URL, никогда не base64).
+        resp = _strip_agent_html(str(resp))
+        try:
+            from .utils import clean_technical_details as _ctd_ag
+            _cleaned_ag = _ctd_ag(resp)
+            if _cleaned_ag and _cleaned_ag.strip():
+                resp = _cleaned_ag
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        # Capitalize first letter if starts with lowercase (cosmetic quality)
+        resp = resp.strip()
+        if resp and resp[0].islower():
+            resp = resp[0].upper() + resp[1:]
+        _ag_id = ag.get('id')
+        _av_url = f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else ''
+        _ac = _json.dumps({
+            '__agent': {'name': ag.get('name'), 'id': _ag_id, 'avatar_url': _av_url},
+            'text': resp,
+            '__tools_used': _agent_tools_used,
+        }, ensure_ascii=False)
+        # Отправляем ответ агента в чат (Telegram: форматируется в progress_callback,
+        # web SSE: агентский пузырь с аватаром). DB sync дедуплицирует через addMessage().
+        await _send_visible(_ac)
+        _save_interaction_for_director(user_id, _ac)
+        await asyncio.sleep(0.05)
+
+        # Логируем в AgentActivityLog (без создания Task)
+        if user_db_id:
+            try:
+                from models import Session as _TDb2, AgentActivityLog as _AAL2
+                _ts2 = _TDb2()
+                try:
+                    _tools_info = ', '.join(_agent_tools_used) if _agent_tools_used else ''
+                    # Убираем внутренние инструкции из title для хронологии дашборда
+                    _clean_title = task
+                    for _strip_prefix in ['ОТВЕТЬ НА ВОПРОС (просто ответь, без создания задач и делегирования): ', 'ОТВЕТЬ НА ВОПРОС: ', '[АВТОПИЛОТ] ']:
+                        if _clean_title.startswith(_strip_prefix):
+                            _clean_title = _clean_title[len(_strip_prefix):]
+                    _ts2.add(_AAL2(
+                        user_id=user_db_id,
+                        activity_type='agent_task',
+                        title=_clean_title[:200],
+                        content=str(resp)[:500],
+                        target=f"agent:{ag.get('name', 'Агент')}",
+                        status='completed',
+                        result=_tools_info[:300] if _tools_info else None,
+                    ))
+                    _ts2.commit()
+                finally:
+                    _ts2.close()
+            except Exception as _ae:
+                logger.warning("[DIRECTOR] activity log error: %s", _ae)
+
+            # Якорь delegation создаём ТОЛЬКО для ASI-инициированных поручений.
+            # Автопилот доставляет результат через goal_autopilot_result — якорь дублировал бы.
+            # Прямое обращение пользователя (_is_direct) и вопросы (_is_q) уже отправлены
+            # в чат как agent_msg — якорь создаст дубль-сообщение (proactive).
+            _task_lc = (task or '').lower()
+            _is_ap_task = any(m in _task_lc for m in ('[автопилот]', 'автопилот', 'autopilot'))
+            _skip_anchor = _is_ap_task
+            # _is_direct и _is_q доступны через замыкание (определены в _delegate_or_answer до вызова)
+            try:
+                if _is_direct or _is_q:
+                    _skip_anchor = True
+            except NameError:
+                pass  # вызов до определения _is_direct (не должно случиться)
+            if not _skip_anchor:
+                _cooldown = 2.0 if any(
+                    w in _task_lc for w in ('анализ', 'исследов', 'отчёт', 'отчет', 'research', 'report', 'strategy', 'стратег')
+                ) else 0.5
+                _save_agent_delegation_anchor(
+                    user_db_id=user_db_id,
+                    agent_id=ag['id'],
+                    agent_name=ag['name'],
+                    task=task,
+                    result_summary=str(resp)[:600],
+                    cooldown_hours=_cooldown,
+                )
+        return str(resp)[:2000]
+
+    # ── Прямое обращение уже обработано выше (fast path → return None) ──────────
+    # Вопросы без обращения к агенту → тоже обработаны выше (early filter)
+    _ag = None  # will be set by ASI decision below
+
+    # ── Начальное решение ASI ──────────────────────────────────────────────────
+    # Урезаем до 400 символов — для решения о делегировании достаточно имени, должности, целей
+    _ctx_hint = f"\n\nКОНТЕКСТ:\n{_user_full_ctx[:700]}" if _user_full_ctx else ''
+
+    # Строим компактный список агентов: имя | должность | специализация | умеет
+    _agent_caps_lines = []
+    for _ac_a in _agents:
+        _ac_intg = _agent_caps_cache.get(_ac_a['name'], [])
+        _ac_caps = ', '.join(_ac_intg[:6]) if _ac_intg else '—'
+        _ac_desc = (_ac_a.get('description') or '')[:60]
+        # Строим читаемый список инструментов — с маппингом из интеграций
+        _ac_tools_str = _agent_tools_from_intg(_ac_a, _ac_intg)
+        _tools_raw = (_ac_a.get('tools_allowed') or '').strip()
+        _tools_is_explicit = bool(_tools_raw and _tools_raw != '[]')
+        _tools_label = 'Инструменты (явные)' if _tools_is_explicit else 'Инструменты (из роли/интеграций)'
+        _line = (
+            f"• {_ac_a['name']} | {_ac_a.get('job_title','')}"
+            f" | {_ac_a.get('specialization','')}"
+            f"\n  Умеет: {_ac_caps}"
+            f"\n  {_tools_label}: {_ac_tools_str}"
+        )
+        if _ac_desc:
+            _line += f"\n  О себе: {_ac_desc}"
+        _agent_caps_lines.append(_line)
+    _caps_block = "\n".join(_agent_caps_lines)
+
+    _decision_prompt = (
+        f"Запрос: «{user_message}»\n\n"
+        f"Агенты пользователя:\n{_caps_block}\n"
+        f"{_ctx_hint}{_history_block}\n\n"
+        "Решение: self или поручить агенту?\n\n"
+        "self — ASI выполняет НАПРЯМУЮ своими инструментами:\n"
+        "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder)\n"
+        "  • цели (create_goal, update_goal, complete_goal, list_goals)\n"
+        "  • generate_image — генерация картинок/изображений\n"
+        "  • контент (create_post, publish_to_telegram, publish_to_discord)\n"
+        "  • email (send_email, send_outreach_email, negotiate_by_email)\n"
+        "  • research_topic, get_news_trends — исследования/аналитика\n"
+        "  • делегирование задач другим пользователям (delegate_task)\n"
+        "  • коммуникации (send_message_to_user, find_and_message_relevant_users)\n"
+        "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"
+        "  • update_profile, schedule_background_task, get_system_status\n"
+        "  • привет/пока, вопрос-ответ, советы, любые разговоры\n\n"
+        "поручить агенту — ТОЛЬКО если:\n"
+        "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
+        "  2) у агента есть нужный инструмент (см. 'Инструменты' в профиле агента выше)\n"
+        "  3) ASI НЕ может сделать это сам своими инструментами\n\n"
+        "СОВЕТ: 'Инструменты (явные)' — агент настроен на эти инструменты явно.\n"
+        "       'Инструменты (из роли/интеграций)' — рекомендации на основе роли/API-ключей.\n"
+        "⚠️ Если ASI умеет сделать запрос — ВСЕГДА self.\n"
+        "⚠️ НЕ поручай агенту то, чего НЕТ в его инструментах.\n"
+        "⚠️ ВОПРОСЫ (есть ли?, что?, сколько?, как?) — ВСЕГДА self. Не делегируй вопросы агентам.\n"
+        "⚠️ ЛИЧНЫЕ ДОСТИЖЕНИЯ (я сделал, я заказал, я оплатил, я купил, я позвонил, я написал, я прошёл, я настроил, готово, сделано, выполнено) — ВСЕГДА self. Только ASI умеет complete_task.\n"
+        "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
+        "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
+        "director_message: конкретное поручение как в рабочем чате. 2-3 предложения, 40-100 слов.\n"
+        "Структура: Имя + ЗАЧЕМ (1 фраза — почему сейчас, что буксует) + КАК (инструмент из карточки) + РЕЗУЛЬТАТ (критерий готовности).\n"
+        "⚠️ director_message НЕ повторяет запрос пользователя дословно — агент уже видит запрос. Твоя задача: ОБОГАТИТЬ его: добавить контекст из цели, конкретный инструмент, критерий успеха.\n"
+        "Примеры ПЛОХО ❌ — всё это варианты одной ошибки (эхо запроса пользователя без конкретики):\n"
+        "  'Кристина, подготовь email-кампанию для предпринимателей.' — это дословный запрос, нет инструмента, нет числа контактов, нет критерия готовности.\n"
+        "  'Кристина, найди 2-3 новых контакта.' — нет источника, нет типа контактов, нет следующего шага.\n"
+        "  'Марк, создай пост про AI.' — нет площадки, нет тона, нет аудитории.\n"
+        "Пример ХОРОШО ✅ (email-кампания): 'Кристина, по цели «привлечь предпринимателей» база контактов пустая — нужны первые лиды. Найди 5 предпринимателей через web_search (ищи в статьях Forbes, VC.ru, Inc.Russia) и сохрани через save_email_contact с должностью и сферой. Затем отправь каждому персональное письмо через send_outreach_email — упомяни конкретную боль их бизнеса. Жду: 5 контактов + 5 отправленных писем.'\n"
+        "Пример ХОРОШО ✅ (контент): 'Марк, для цели «рост аудитории» нужен свежий контент — последний пост был 3 дня назад. Проверь RSS-ленту через run_agent_action на тренды этой недели, выбери 1 инсайт с данными и создай пост через create_post для Telegram — тон: практичный, 1-2 цифры, вопрос в конце. Жду: 1 готовый пост с оценкой аудитории.'\n"
+        "ВАЖНО: director_message должен точно отражать аудиторию из ЦЕЛИ — не придумывай 'разработчиков' если цель про предпринимателей, трейдеров, врачей и т.д.\n"
+        "ПРАВИЛО: глаголы в повелительном наклонении: найди, подготовь, напиши, исследуй, отправь.\n"
+        "САМОПРОВЕРКА перед генерацией JSON: 1) director_message длиннее 60 символов? 2) Назван инструмент (web_search/send_outreach_email/create_post/save_note/...)? 3) Есть ожидаемый результат с критерием (число/тип)? Если нет — переписать.\n\n"
+        "JSON без ```:\n"
+        '{"action":"self"}\n'
+        "или\n"
+        '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи без имени",'
+        '"director_message":"Имя, ЗАЧЕМ. Глагол через TOOL ЧТО/ГДЕ. Жду: результат с критерием."}'
+    )
+
+    # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
+    # НО если есть активная миссия (якорь __mission__ < 30 мин) — передаём директору для продолжения
+    _ml = user_message.strip()
+    _ml_lower = _ml.lower()
+    _trivial_replies = ('да', 'нет', 'ок', 'окей', 'ладно', 'хорошо', 'давай', 'понял', 'спасибо',
+                        'привет', 'хай', 'здравствуй', 'пока', 'стоп', 'отмена')
+    _is_trivial = _ml_lower.rstrip('!., ') in _trivial_replies
+
+    # Пре-фильтр: "займитесь сами/без меня/действуйте" без имени агента → всегда self
+    _self_phrases = ('займитесь', 'занимайтесь', 'работайте без меня', 'действуйте сами',
+                     'работайте сами', 'без меня', 'действуйте')
+    _is_autopilot_confirm = any(p in _ml_lower for p in _self_phrases) and not any(
+        a.get('name', '').lower() in _ml_lower for a in _agents
+    )
+    if _is_autopilot_confirm:
+        return None  # process_request ответит коротким подтверждением автопилота
+
+    # Пре-фильтр: личные достижения → только ASI умеет complete_task
+    _achievement_words = ('я заказал', 'я купил', 'я оплатил', 'я позвонил', 'я написал',
+                          'я отправил', 'я настроил', 'я прошёл', 'я починил', 'я записался',
+                          'я сделал', 'я выполнил', 'я завершил', 'я приготовил', 'я убрал')
+    _is_achievement = any(_ml_lower.startswith(p) or f' {p} ' in _ml_lower for p in _achievement_words)
+    if _is_achievement:
+        return None  # process_request вызовет complete_task
+
+    if _is_trivial:
+        _has_active_mission = False
+        _mission_context = ''
+        try:
+            _mission_anchors = _get_agent_anchors(user_db_id, 0, hours=0.5)
+            for _ma in _mission_anchors:
+                if _ma.get('topic', '').startswith('__mission__') and _ma.get('age_min', 999) < 30:
+                    _has_active_mission = True
+                    _md = _ma.get('data', {})
+                    _mission_context = _md.get('result_summary') or _md.get('task', '')
+                    break
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+
+        if not _has_active_mission:
+            return None  # Нет активной миссии — ASI ответит сам через process_request
+
+        # Есть активная миссия — "да"/"давай" = продолжить
+        # Подменяем запрос чтобы LLM понял контекст
+        _affirmative = _ml_lower.rstrip('!., ') in ('да', 'ок', 'окей', 'ладно', 'хорошо', 'давай')
+        if _affirmative and _mission_context:
+            # Переформулируем для директора: "Пользователь подтвердил — продолжай миссию"
+            _decision_prompt = (
+                f"Ты — ASI Biont, директор офиса. Пользователь подтвердил продолжение миссии.\n\n"
+                f"АКТИВНАЯ МИССИЯ: {_mission_context[:300]}\n\n"
+                f"Пользователь ответил: «{user_message}»\n\n"
+                f"ПРОФИЛИ АГЕНТОВ КОМАНДЫ:\n{_caps_block}\n"
+                f"{_ctx_hint}{_history_block}\n\n"
+                "Пользователь хочет ПРОДОЛЖИТЬ. Выбери следующее действие — delegate, adaptive или multi_delegate.\n"
+                "НЕ выбирай self — пользователь явно хочет продолжения работы агентов.\n\n"
+                "director_message: НЕ повторяй запрос пользователя — обогати контекстом из миссии.\n"
+                "Структура: Имя + ЗАЧЕМ (1 фраза из контекста миссии) + КАК (конкретный инструмент) + РЕЗУЛЬТАТ (критерий).\n"
+                "❌ ПЛОХО: 'Кристина, продолжай email-кампанию.' — нет инструмента, нет критерия, нет контекста.\n"
+                "✅ ХОРОШО: 'Кристина, из миссии: нашли 3 контакта но письма не отправлены. Отправь персональное письмо через send_outreach_email каждому из списка (используй save_note с именами которые ты уже нашла). Упомяни их конкретный проект. Жду: 3 отправленных письма.'\n"
+                "САМОПРОВЕРКА: 1) Назван инструмент? 2) Есть критерий результата (число/тип)? 3) Использован контекст из МИССИИ? Если нет — переписать.\n\n"
+                "Ответь ТОЛЬКО JSON без ```:\n"
+                '{"action": "delegate", "agent_name": "точное имя агента", '
+                '"agent_task": "задача", '
+                '"director_message": "Имя, ЗАЧЕМ (из миссии). Глагол через TOOL ЧТО. Жду: результат."}\n'
+                "или\n"
+                '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
+                '"first_agent_name": "имя", "first_agent_task": "задача", '
+                '"director_message": "Имя, ЗАЧЕМ. Глагол через TOOL. Жду: результат."}'
+            )
+        elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
+            return None  # Отмена — сброс миссии
+
+    decision_raw = await _quick_ai_call_raw([{"role": "user", "content": _decision_prompt}], max_tokens=400, _caller='director_decision')
+    if not decision_raw:
+        return None
+
+    decision = None
+    _jm = re.search(r'```(?:json)?\s*([\s\S]*?)```', decision_raw or '')
+    _json_str = _jm.group(1) if _jm else None
+    if not _json_str:
+        # Ищем JSON объект в сыром ответе
+        _jm2 = re.search(r'(\{[\s\S]*\})', decision_raw or '')
+        _json_str = _jm2.group(1) if _jm2 else None
+    if _json_str:
+        try:
+            decision = _json.loads(_json_str)
+        except Exception:
+            logger.info("[DIRECTOR] JSON parse failed, raw=%s", (decision_raw or '')[:120])
+    if not decision:
+        return None
+
+    action = decision.get('action', 'self')
+
+    # Нормализуем: adaptive/multi_delegate → delegate (один агент на запрос)
+    if action == 'adaptive':
+        # Конвертируем adaptive → delegate
+        decision['agent_name'] = decision.get('first_agent_name', '')
+        decision['agent_task'] = decision.get('first_agent_task', '')
+        if not decision.get('director_message'):
+            decision['director_message'] = ''
+        action = 'delegate'
+    elif action == 'multi_delegate':
+        # Запускаем всех агентов последовательно, передавая результаты как контекст
+        _tasks_list = decision.get('tasks') or []
+        if not _tasks_list:
+            return None
+        _md_ctx_parts = []
+        if _user_full_ctx:
+            _md_ctx_parts.append(_user_full_ctx)
+        if _history_block.strip():
+            _md_ctx_parts.append(_history_block.strip())
+        _md_prev_results: list[str] = []
+        for _md_idx, _md_t in enumerate(_tasks_list):
+            _md_agent_name = _md_t.get('agent_name', '')
+            _md_agent_task = _md_t.get('agent_task', '')
+            _md_dm = _md_t.get('director_message', '')
+            _md_ag = _find_agent(_md_agent_name)
+            if not _md_ag or not _md_agent_task:
+                continue
+            # Добавляем результаты предыдущих агентов как контекст
+            if _md_prev_results:
+                _prev_block = '\n\n--- Результаты предыдущих агентов ---\n' + '\n\n'.join(_md_prev_results)
+                _md_full_ctx = '\n\n'.join(_md_ctx_parts) + _prev_block
+            else:
+                _md_full_ctx = '\n\n'.join(_md_ctx_parts)
+            # Уведомление пользователя о начале работы агента
+            if _md_dm:
+                _ag_n = _md_ag.get('name', 'Агент')
+                _md_dm_display = _md_dm if _ag_n.lower() in _md_dm.lower()[:len(_ag_n)+3] else f"{_ag_n}, {_md_dm}"
+                _save_interaction_for_director(user_id, _md_dm_display, message_type='agent_msg')
+                await _send_visible(_md_dm_display)
+            _md_resp = await _exec_agent_for_director(_md_ag, _md_agent_task, user_id, dialog_context=_md_full_ctx)
+            _md_resp_text = _md_resp[0] if isinstance(_md_resp, tuple) else str(_md_resp or '')
+            if _md_resp_text:
+                # Sanitize error descriptions to prevent cross-agent contamination
+                _md_clean = _md_resp_text[:400]
+                _ERR_KW_MD = ('ошибк', 'сбой', 'не смог', 'не удал', 'не работ', 'не отправ')
+                if any(ew in _md_clean.lower() for ew in _ERR_KW_MD):
+                    _md_clean = _md_clean + ' [⚠ ошибки могут быть временными — повтори инструмент]'
+                _md_prev_results.append(f"[{_md_ag.get('name', '?')}]: {_md_clean}")
+                # Capitalize first letter (same as single-delegate path)
+                _md_resp_text = _md_resp_text.strip()
+                if _md_resp_text and _md_resp_text[0].islower():
+                    _md_resp_text = _md_resp_text[0].upper() + _md_resp_text[1:]
+                await _send_visible(_md_resp_text)
+                _save_interaction_for_director(user_id, _md_resp_text, message_type='ai')
+        return '__agent_handled__'
+
+    # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
+    if action != 'delegate':
+        return None
+
+    # ── Валидация: если задача требует коммуникации/поиска людей,
+    # а у агента нет нужного инструмента — ASI делает сам ──────────────
+    _ag_check = _find_agent(decision.get('agent_name', ''))
+    if _ag_check:
+        _task_lower = (decision.get('agent_task') or user_message).lower()
+        _comm_keywords = ('найди', 'пригласи', 'напиши', 'отправь', 'сообщ', 'пользовател',
+                          'приглаш', 'invite', 'message', 'find.*user', 'тестировщик',
+                          'тестер', 'аудитори', 'контакт')
+        _needs_comm = any(kw in _task_lower for kw in _comm_keywords)
+        if _needs_comm:
+            _ag_tools_str = (_ag_check.get('tools_allowed') or '').lower()
+            _has_comm_tool = any(t in _ag_tools_str for t in
+                                 ('find_and_message', 'send_message', 'find_relevant_contacts'))
+            if not _has_comm_tool:
+                logger.info("[DIRECTOR] Agent %s lacks comm tools for task, ASI handles self",
+                            _ag_check.get('name'))
+                return None  # ASI сделает сам через process_request
+
+    # ── delegate: один агент на запрос ──────────────────────────────────
+    _agent_ctx_parts = []
+    if _user_full_ctx:
+        _agent_ctx_parts.append(_user_full_ctx)
+    if _history_block.strip():
+        _agent_ctx_parts.append(_history_block.strip())
+    _del_ctx = '\n\n'.join(_agent_ctx_parts)
+
+    _ag = _find_agent(decision.get('agent_name', ''))
+    if not _ag:
+        return None
+    _dm = decision.get('director_message', '')
+    _task = decision.get('agent_task') or user_message
+    # Убираем имя агента из задачи если AI случайно его добавил
+    _ag_name_clean = _ag.get('name', '')
+    if _ag_name_clean and _task.lower().startswith(_ag_name_clean.lower()):
+        import re as _re_task_clean
+        _task = _re_task_clean.sub(
+            r'^' + _re_task_clean.escape(_ag_name_clean) + r'[\s,:.!]*',
+            '', _task, flags=_re_task_clean.IGNORECASE,
+        ).strip() or _task
+
+    # ── Многораундовый цикл: АСИ ↔ агент ─────────────────────────────────────
+    # АСИ даёт поручение → агент отчитывается → АСИ решает: ещё поручение или принять
+    _is_q = _is_question_message(user_message)
+    # Прямое обращение обработано выше (fast path return None) → здесь всегда False
+    _is_direct = False
+    _MAX_AGENT_ROUNDS = 1 if _is_q else 3
+    _agent_name_d = _ag.get('name', 'Агент')
+    _round_history: list[dict] = []  # история раундов для контекста
+
+    for _round in range(_MAX_AGENT_ROUNDS):
+        # Создаём Task in_progress ДО запуска агента (только для поручений, не для вопросов)
+        _delegation_task_id = None if _is_q else _create_agent_delegation_task(user_db_id, _ag, _task)
+
+        # Запуск агента
+        try:
+            _resp = await _run_agent_task(_ag, _task, extra_context=_del_ctx, director_message=_dm)
+        except Exception as _run_err:
+            _run_err_msg = str(_run_err) or type(_run_err).__name__
+            logger.warning("[DIRECTOR] agent run error round %d: %s", _round, _run_err_msg)
+            if _delegation_task_id:
+                try:
+                    _update_agent_delegation_task(_delegation_task_id, f'Ошибка: {_run_err_msg[:200]}')
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+            break
+
+        _agent_tools_used_round: list[str] = []
+        if isinstance(_resp, tuple):
+            _resp, _agent_tools_used_round = _resp
+
+        # _run_agent_task вернул None → агент не смог ответить, fallback на process_request
+        if _resp is None:
+            logger.warning("[DIRECTOR] agent %s returned None for round %d — fallback", _agent_name_d, _round)
+            if _delegation_task_id:
+                try:
+                    _update_agent_delegation_task(_delegation_task_id, 'Агент не смог ответить')
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+            break
+
+        _agent_result = str(_resp or '')[:600]
+
+        # Обновляем Task → completed
+        _update_agent_delegation_task(_delegation_task_id, _agent_result[:400])
+
+        # Запоминаем раунд
+        _round_history.append({'task': _task, 'director_msg': _dm, 'result': _agent_result, 'tools_used': _agent_tools_used_round})
+
+        # Вопрос или прямое обращение к агенту — один раунд, без review/followup
+        if _is_q or _is_direct:
+            break
+
+        # Создаём DelegationCampaign если задача outreach-типа
+        if _round == 0:
+            _maybe_create_agent_campaign(user_db_id, _ag, _task, _agent_result[:400])
+
+        # ── АСИ-директор решает: продолжить или принять ────────────────────
+        _rounds_summary = '\n'.join(
+            f"Раунд {i+1}: Поручение: {r['task'][:150]}\nОтчёт: {r['result'][:250]}"
+            + (f"\nИнструменты агента: {', '.join(r['tools_used'])}" if r.get('tools_used') else '')
+            for i, r in enumerate(_round_history)
+        )
+
+        # Собираем все инструменты которые агент вызвал за все раунды
+        _all_agent_tools = list(dict.fromkeys(
+            t for _rh in _round_history for t in _rh.get('tools_used', [])
+        ))
+
+        # Оптимизация: если агент вызвал инструменты или это последний раунд →
+        # пропускаем review-вызов, сразу переходим к accept_and_act.
+        # Review нужен только когда агент дал текст без действий (решаем: next_task или accept).
+        _is_last_round = (_round == _MAX_AGENT_ROUNDS - 1)
+        if _all_agent_tools or _is_last_round:
+            _review_action = 'accept_and_act'
+            _accept_summary = ''
+            _my_action = ''
+        else:
+            _review_prompt = (
+                f"Ты ASI-директор. У тебя ЕСТЬ собственные инструменты платформы — ВСЕ те же что у агентов:\n"
+                f"send_email, send_outreach_email, negotiate_by_email, publish_to_telegram, publish_to_discord, "
+                f"create_post, research_topic, web_search, generate_image, start_content_campaign, "
+                f"start_delegation_campaign, find_relevant_contacts_for_task, schedule_background_task, "
+                f"add_task, delegate_task и другие.\n\n"
+                f"Пользователь попросил: {user_message[:300]}\n\n"
+                f"ИСТОРИЯ РАБОТЫ С АГЕНТОМ {_agent_name_d}:\n{_rounds_summary}\n\n"
+                f"Раундов прошло: {_round + 1} из {_MAX_AGENT_ROUNDS}.\n"
+                f"Инструменты агента за все раунды: нет\n\n"
+                f"Агент дал только текст. РЕШИ:\n"
+                f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (если нужен ещё шаг)\n"
+                f"- accept_and_act — принять и САМОМУ выполнить следующий шаг\n\n"
+                f"Ответ СТРОГО JSON:\n"
+                f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
+                f'или\n'
+                f'{{"action": "accept_and_act", "summary": "кратко что сделано", '
+                f'"my_action": "конкретное действие"}}\n'
+            )
+            _review_raw = await _quick_ai_call_raw(
+                [{"role": "user", "content": _review_prompt}], max_tokens=250, _caller='director_review'
+            )
+
+            _review_decision = None
+            _rj = re.search(r'(\{[\s\S]*\})', _review_raw or '')
+            if _rj:
+                try:
+                    _review_decision = _json.loads(_rj.group(1))
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+
+            _review_action = _review_decision.get('action', '') if _review_decision else ''
+            _accept_summary = (_review_decision.get('summary', '') if _review_decision else '')
+            _my_action = (_review_decision.get('my_action', '') if _review_decision else '')
+
+        if _review_action not in ('next_task',):
+            # ПРИНЯТЬ: АСИ принимает работу
+            # Быстрый follow-up без tool calling (экономит ~20-30с)
+            _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
+            try:
+                _fu_final_text = await _quick_ai_call_raw([{
+                    "role": "user", "content": (
+                        f"Ты ASI — директор офиса. Агент {_agent_name_d} отработал по задаче: {_task[:200]}\n"
+                        f"Использованные инструменты: {_agent_did}\n"
+                        f"Результат агента (уже видим пользователю): {_round_history[-1]['result'][:300] if _round_history else ''}\n\n"
+                        f"Напиши 1-2 предложения от лица директора — что ты делаешь ДАЛЬШЕ. "
+                        f"НЕ пересказывай что делал агент. Без markdown, без списков."
+                    ),
+                }], max_tokens=150, _caller='director_followup')
+                if _fu_final_text and len(_fu_final_text.strip()) > 10:
+                    try:
+                        from .utils import clean_technical_details as _ctd_fu
+                        _fu_final_text = _ctd_fu(_fu_final_text).strip()
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                    if _fu_final_text:
+                        if _fu_final_text[0].islower():
+                            _fu_final_text = _fu_final_text[0].upper() + _fu_final_text[1:]
+                        await _send_visible(_fu_final_text)
+                        _save_interaction_for_director(user_id, _fu_final_text, message_type='ai')
+            except Exception as _fu_err:
+                logger.warning("[DIRECTOR] followup error: %s", _fu_err)
+
+            break  # Выходим из цикла — работа принята
+
+        # NEXT_TASK: АСИ даёт следующее поручение агенту → продолжаем цикл
+        _dm = _review_decision.get('director_message', '')
+        _task = _review_decision.get('agent_task') or _task
+        logger.info("[DIRECTOR] round %d → next_task for %s: %s", _round + 1, _agent_name_d, _task[:80])
+    else:
+        # Все раунды исчерпаны без accept — генерируем итоговый доклад
+        _rounds_summary_final = '\n'.join(
+            f"Раунд {i+1}: {r['result'][:200]}" for i, r in enumerate(_round_history)
+        )
+        _final_report = await _quick_ai_call_raw([{
+            "role": "user",
+            "content": (
+                f"Ты ASI-директор. Агент {_agent_name_d} отработал {len(_round_history)} раунд(ов) "
+                f"по задаче: {user_message[:200]}\n\n"
+                f"Результаты:\n{_rounds_summary_final}\n\n"
+                f"Напиши краткий итоговый доклад пользователю (3-4 предложения): "
+                f"что сделано, какие результаты, что дальше. Без markdown."
+            ),
+        }], max_tokens=250)
+        if _final_report and len(_final_report.strip()) > 10:
+            _final_report = _final_report.strip()
+            if _final_report[0].islower():
+                _final_report = _final_report[0].upper() + _final_report[1:]
+            await _send_visible(_final_report)
+            _save_interaction_for_director(user_id, _final_report, message_type='ai')
+
+    # Сохраняем контекст всех раундов делегирования
+    _all_results = ' | '.join(r['result'][:200] for r in _round_history)
+    _save_delegation_to_history(user_id, _agent_name_d, user_message, _all_results[:600])
+
+    # Если агент ничего не отправил (hollow guard, ошибка call_ai, timeout),
+    # возвращаем None → chat_with_ai откатится на process_request
+    if not _round_history:
+        logger.warning("[DIRECTOR] agent call produced no rounds — fallback to process_request")
+        return None
+
+    return "__agent_handled__"
+
+
+async def chat_with_ai(message, context=None, user_id=None, file_content=None,
+                       db_session=None, message_type=None, subscription_tier=None,
+                       progress_callback=None, web_context: bool = False,
+                       exclude_tools: set = None):
+    """Главная точка входа. Совместима со всеми вызовами в проекте."""
+    logger.info(f"[AGENT] START user={user_id} msg='{str(message)[:50]}...'")
+
+    if user_id is None:
+        return {'response': "Ошибка: пользователь не найден", 'tool_calls': []}
+
+    try:
+        agent = get_autonomous_agent()
+        history_len = len(agent.execution_history)
+
+        # ── Office Director: ASI координирует агентов прямо в чате ──────────
+        # Запускаем когда нет явного @упоминания — ASI сам решает делегировать ли
+        # Оптимизация: вопросы без имени агента → пропускаем директора целиком
+        # (директор всё равно загрузит агентов из DB и вернёт None — экономим 10-15с)
+        _director_response = None
+        _skip_director = False
+        if _is_question_message(message or ''):
+            # Имена агентов — русские, с заглавной буквы, ≥3 символа
+            _words = re.findall(r'[А-ЯЁ][а-яё]{2,}', message or '')
+            # Если нет слов похожих на имена — вопрос без обращения к агенту
+            if not _words:
+                _skip_director = True
+                logger.debug("[AGENT] question without agent name, skipping director")
+        if not _skip_director and not _has_explicit_mention(message or ''):
+            try:
+                _director_response = await _office_director_chat(message, user_id, progress_callback=progress_callback)
+            except Exception as _de:
+                logger.warning("[DIRECTOR] error, fallback to normal: %s", _de)
+
+        if _director_response is not None:
+            # Агент ответил напрямую — ASI молчит (ответ уже в DB)
+            if _director_response == "__agent_handled__":
+                return {'response': '', 'tool_calls': [], 'tools_used': [], 'agent_info': None, 'agent_handled': True}
+
+            # Распаковываем dict → строка
+            if isinstance(_director_response, dict):
+                _director_response = _director_response.get('response', '')
+
+            # Пустой ответ (таймаут AI) → fallback
+            if not _director_response or not _director_response.strip():
+                logger.warning("[DIRECTOR] empty synthesis — falling through to process_request")
+                _director_response = None
+            else:
+                # Очищаем технические детали из ответа директора
+                _director_response = _strip_agent_html(_director_response)
+                try:
+                    from .utils import clean_technical_details as _ctd_dir
+                    _cleaned_dir = _ctd_dir(_director_response)
+                    if _cleaned_dir and _cleaned_dir.strip():
+                        _director_response = _cleaned_dir
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+                import re as _re_dir
+                _director_response = _re_dir.sub(r'\n{2,}', '\n', _director_response)
+                _director_response = _re_dir.sub(r'  +', ' ', _director_response).strip()
+
+                return {
+                    'response': _director_response,
+                    'tool_calls': [],
+                    'tools_used': [],
+                    'agent_info': None,
+                }
+
+        response_text = await agent.process_request(
+            message, user_id, context, db_session,
+            subscription_tier, progress_callback=progress_callback,
+            web_context=web_context, exclude_tools=exclude_tools)
+
+        # Очищаем HTML и технические детали из ответа
+        if response_text and isinstance(response_text, str):
+            response_text = _strip_agent_html(response_text)
+            try:
+                from .utils import clean_technical_details as _ctd_final
+                _cleaned = _ctd_final(response_text)
+                if _cleaned and _cleaned.strip():
+                    response_text = _cleaned
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+            import re as _re
+            # Удаляем оставшиеся snake_case tool names (word_word pattern) из текста
+            response_text = _re.sub(
+                r'\b(?:research_topic|start_delegation_campaign|start_content_campaign|'
+                r'delegate_task|add_task|complete_task|delete_task|list_tasks|'
+                r'web_search|quick_topic_search|find_relevant_contacts_for_task|'
+                r'create_post|publish_to_telegram|publish_to_discord|generate_image|'
+                r'send_email|send_outreach_email|send_message_to_user|run_agent_action|'
+                r'set_reminder|create_goal|update_goal|list_goals|delete_goal|'
+                r'get_delegation_progress|negotiate_by_email|manage_content_campaign|'
+                r'manage_delegation_campaign|schedule_background_task|'
+                r'find_and_message_relevant_users|reply_to_outreach_email|'
+                r'send_follow_up_email|set_contact_alert|find_partners|'
+                r'get_news_trends|analyze_situation_and_suggest_tasks|'
+                r'update_goal_progress|complete_goal|edit_task|get_task_details|'
+                r'check_time_conflicts|cancel_delegation|get_weather_info|'
+                r'research_and_plan|analyze_group_opportunities|'
+                r'generate_marketing_content|get_message_status|reschedule_task|'
+                r'restore_task|accept_delegated_task|reject_delegated_task|'
+                r'update_profile|set_content_strategy|edit_post|get_posts|delete_post|'
+                r'list_marketplace|save_email_contact|list_email_contacts|get_system_status|'
+                r'get_incoming_messages|reply_to_user_message)\b',
+                '', response_text
+            )
+            # Удаляем конструкции "через <tool_name>" оставшиеся
+            response_text = _re.sub(r'\s+через\s+(?=[А-Яа-я])', ' через ', response_text)
+            # Нормализуем переносы: \n\n → \n, иначе пустые строки в Telegram-чате
+            response_text = _re.sub(r'\n{2,}', '\n', response_text)
+            # Убираем двойные пробелы от удалённых элементов
+            response_text = _re.sub(r'  +', ' ', response_text).strip()
+
+        # Извлекаем tool_calls для тестов и мониторинга
+        tool_calls = []
+        tools_used = []
+        if len(agent.execution_history) > history_len:
+            last = agent.execution_history[-1]
+            for r in last.get('results', []):
+                if r.get('success'):
+                    tools_used.append(r['tool'])
+                    tool_calls.append({
+                        'function': {
+                            'name': r['tool'],
+                            'arguments': json.dumps(r.get('params', {}))
+                        }
+                    })
+
+        # Определяем кто ответил: кастомный агент или ASI
+        _answered_agent = agent._active_agent_data.get(user_id)
+        agent_info = None
+        if _answered_agent:
+            # Загружаем avatar_url из БД (не хранится в _active_agent_data)
+            try:
+                from models import Session as _Sess, UserAgent as _UA
+                _s = _Sess()
+                try:
+                    _db_agent = _s.query(_UA).filter_by(id=_answered_agent['id']).first()
+                    _avatar = _db_agent.avatar_url if _db_agent else None
+                finally:
+                    _s.close()
+            except Exception:
+                _avatar = None
+            _ag_id = _answered_agent.get('id')
+            agent_info = {
+                'id': _ag_id,
+                'name': _answered_agent.get('name', 'Агент'),
+                'job_title': _answered_agent.get('job_title', ''),
+                'avatar_url': f'/api/arena/agent_avatar/{_ag_id}' if _ag_id else '',
+            }
+
+        # Агент вклинивается в разговор — фоновая задача, не блокирует ответ
+        # Только когда отвечает сам ASI (не через @упоминание конкретного агента)
+        if not _answered_agent and not _has_explicit_mention(message or ''):
+            asyncio.ensure_future(
+                _agent_chimes_in(message or '', response_text or '', user_id)
+            )
+
+        return {
+            'response': response_text,
+            'tool_calls': tool_calls,
+            'tools_used': tools_used,
+            'agent_info': agent_info,
+        }
+
+    except Exception as e:
+        logger.error(f"[AGENT] ERROR: {e}\n{traceback.format_exc()}")
+        return {
+            'response': f"Извините, произошла ошибка: {str(e)}",
+            'tool_calls': [],
+            'agent_info': None,
+        }
+
