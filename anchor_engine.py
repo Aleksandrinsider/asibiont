@@ -3602,6 +3602,15 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                         + '\n'.join(_camp_directives)
                         + ("\n→ Найди контакты через web_search / find_relevant_contacts_for_task → save_email_contact → send_outreach_email.\n" if _needs_help else "\n")
                     )
+                elif _goal_type in ('outreach', 'general', 'startup', 'ecommerce', 'hr', 'finance') and _has_imap:
+                    # Нет активных кампаний, но цель связана с привлечением и email подключён
+                    _campaign_directive = (
+                        f"\n\n🚀 НУЖНА EMAIL-КАМПАНИЯ — её нет, создай первым шагом:\n"
+                        f"  Вызови start_email_campaign(name='...', goal='...', target_audience='...', offer='...')\n"
+                        f"  name — короткое имя (до 5 слов), goal — из активных целей пользователя, target_audience — кто получатель.\n"
+                        f"  После создания: сразу найди контакты → save_email_contact → send_outreach_email.\n"
+                        f"  ❌ НЕ используй send_outreach_email без активной кампании — письма не будут засчитаны в статистику.\n"
+                    )
             finally:
                 _db_ap.close()
         except Exception as _e_cap:
