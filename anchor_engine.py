@@ -14298,8 +14298,8 @@ class AnchorEngine:
                 logger.info('[COORD] task-enrichment universal: %s/%s → %s',
                             _qf2_agent_name, _qf2_tool, _qf2_step['task'][:100])
 
-            # ── Fair assignment backfill: если часть активных агентов пропущена, добавляем им шаги ──
-            # Универсально для всех пользователей: снижает перекос, когда один агент выполняет всё.
+            # ── Fair assignment backfill: если LLM пропустил агентов — генерируем задачи LLM, не шаблоном ──
+            # Второй мини-вызов только для пропущенных агентов: маленький контекст → быстрый ответ.
             try:
                 _agents_in_plan_l = {
                     (p.get('agent') or '').strip().lower()
@@ -14312,108 +14312,104 @@ class AnchorEngine:
                     and p.get('name') not in _fully_blocked_agents
                 ]
 
-                # Приоритизируем «молчащих» агентов: у кого меньше результатов в недавнем окне,
-                # чтобы не было ощущения, что отвечает только один агент.
-                _missing_scored = []
-                for _mp in _missing_profiles:
-                    _h = self._recent_assignment_result_health(session, user.id, _mp.get('name', ''), hours=8)
-                    _missing_scored.append((_h.get('results', 0), -_h.get('gap', 0), _mp))
-                _missing_scored.sort(key=lambda x: (x[0], x[1]))
+                if _missing_profiles:
+                    # Приоритизируем: кто давно не получал задачи
+                    _missing_scored = []
+                    for _mp in _missing_profiles:
+                        _h = self._recent_assignment_result_health(session, user.id, _mp.get('name', ''), hours=8)
+                        _missing_scored.append((_h.get('results', 0), -_h.get('gap', 0), _mp))
+                    _missing_scored.sort(key=lambda x: (x[0], x[1]))
+                    _missing_to_fill = [mp for _, _, mp in _missing_scored[:max(3, _n_real_agents)]]
 
-                for _, _, _mp in _missing_scored[:max(3, _n_real_agents)]:
-                    _goal_counts = {}
+                    # Определяем цель для каждого пропущенного агента
+                    _goal_counts_fb = {}
                     for _ps in _plan:
                         _gg = (_ps.get('goal') or '').strip()
                         if _gg:
-                            _goal_counts[_gg] = _goal_counts.get(_gg, 0) + 1
-                    _target_goal = None
-                    if _goals:
-                        _goal_titles = [g.get('title', '') for g in _goals if g.get('title', '').strip()]
-                        if _goal_titles:
-                            _target_goal = min(_goal_titles, key=lambda g: _goal_counts.get(g, 0))
-                    if not _target_goal:
-                        _target_goal = _goals[0]['title'] if _goals else 'активные цели'
+                            _goal_counts_fb[_gg] = _goal_counts_fb.get(_gg, 0) + 1
 
-                    _mp_tools = [str(t).strip().lower() for t in (_mp.get('tools') or []) if str(t).strip()]
-                    _mp_actions = [str(a).strip().lower() for a in (_mp.get('script_actions') or []) if str(a).strip()]
-                    _mp_caps = [str(cap).lower() for cap in (_mp.get('caps') or [])]
+                    # Строим компактный промпт для мини-вызова
+                    _fb_agent_blocks = []
+                    for _mp in _missing_to_fill:
+                        _mp_name = _mp['name']
+                        _goal_titles_fb = [g.get('title', '') for g in _goals if g.get('title', '').strip()]
+                        _fb_target_goal = (
+                            min(_goal_titles_fb, key=lambda g: _goal_counts_fb.get(g, 0))
+                            if _goal_titles_fb else 'активные цели'
+                        )
+                        _mp_hist_raw = _per_agent_history.get(_mp_name, [])
+                        import re as _re_fb_hist
+                        _mp_hist_clean = ''
+                        if _mp_hist_raw:
+                            _h = _mp_hist_raw[0][:150]
+                            _h = _re_fb_hist.sub(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s+', '', _h).strip()
+                            _h = _re_fb_hist.sub(r'\[[^\]]{3,80}\]\s*', '', _h).strip()
+                            _sent = _re_fb_hist.search(r'[.!?]', _h)
+                            _h = _h[:_sent.start() + 1] if _sent and _sent.start() > 10 else _h[:100]
+                            _mp_hist_clean = _h.strip()
 
-                    # Выбираем лучший инструмент для backfill на основе интеграций агента.
-                    # tools=[] означает что агент работает через run_agent_action (python_code/scripts).
-                    if _mp_actions:
-                        _tool_fb = 'run_agent_action'
-                    elif 'find_relevant_contacts_for_task' in _mp_tools:
-                        _tool_fb = 'find_relevant_contacts_for_task'
-                    elif 'check_emails' in _mp_tools or any('mail' in c or 'email' in c for c in _mp_caps):
-                        _tool_fb = 'check_emails'
-                    elif 'run_agent_action' in _mp_tools:
-                        _tool_fb = 'run_agent_action'
-                    elif any('rss' in c or 'news' in c for c in _mp_caps):
-                        _tool_fb = 'get_news_trends'
-                    else:
-                        _tool_fb = 'research_topic'
-
-                    # Формируем осмысленную задачу (не «эксплорация», а конкретная цепочка).
-                    _mp_spec = (_mp.get('spec') or _mp.get('job') or '').strip()
-                    # Контекст: что агент уже делал — подсказка для следующего шага.
-                    # Очищаем сырую запись от timestamp и [tool_names] перед вставкой в user-facing текст.
-                    _mp_hist = _per_agent_history.get(_mp['name'], [])
-                    _mp_last_action = ''
-                    if _mp_hist:
-                        import re as _re_hist_clean
-                        _raw_hist = _mp_hist[0][:180]
-                        # Убираем timestamp «16.04 21:25 » в начале
-                        _raw_hist = _re_hist_clean.sub(r'^\d{2}\.\d{2}\s+\d{2}:\d{2}\s+', '', _raw_hist).strip()
-                        # Убираем [tool, tool, ...] блоки
-                        _raw_hist = _re_hist_clean.sub(r'\[[^\]]{3,80}\]\s*', '', _raw_hist).strip()
-                        # Обрезаем до первого предложения
-                        _sent_end = _re_hist_clean.search(r'[.!?]', _raw_hist)
-                        if _sent_end and _sent_end.start() > 10:
-                            _raw_hist = _raw_hist[:_sent_end.start() + 1]
-                        else:
-                            _raw_hist = _raw_hist[:100]
-                        if _raw_hist and len(_raw_hist) > 8:
-                            _mp_last_action = f" Предыдущее: {_raw_hist} Дай следующий шаг."
-
-                    # Формируем конкретную задачу на основе инструмента агента
-                    _g_short = _target_goal[:50]
-                    if _tool_fb == 'run_agent_action' and _mp_actions:
-                        _sa = _mp_actions[0]
-                        _fb_task = (
-                            f"Выполни действие '{_sa}' по цели «{_g_short}».{_mp_last_action} "
-                            f"Сохрани результат в заметку."
-                        )
-                    elif _tool_fb == 'find_relevant_contacts_for_task':
-                        _fb_task = (
-                            f"Найди 5 контактов целевой аудитории для цели «{_g_short}».{_mp_last_action} "
-                            f"Критерии: соответствие теме цели, наличие контактных данных. Сохрани каждого контакта."
-                        )
-                    elif _tool_fb == 'check_emails':
-                        _fb_task = (
-                            f"Проверь входящие письма по цели «{_g_short}».{_mp_last_action} "
-                            f"Если есть ответы — ответь персонально. "
-                            f"Если молчат больше 2 дней — отправь follow-up с новым углом подачи."
-                        )
-                    elif _tool_fb == 'get_news_trends':
-                        _fb_task = (
-                            f"Найди 2-3 актуальных тренда по теме «{_g_short}».{_mp_last_action} "
-                            f"Напиши пост с ключевым инсайтом для целевой аудитории и опубликуй."
-                        )
-                    else:
-                        _fb_task = (
-                            f"Исследуй возможности для цели «{_g_short}».{_mp_last_action} "
-                            f"Найди 3-5 конкретных факта, контакта или ресурса и сохрани с анализом."
-                            + (f" Специализация: {_mp_spec}." if _mp_spec else '')
+                        _fb_agent_blocks.append(
+                            f'Агент: {_mp_name}\n'
+                            f'  Роль/специализация: {_mp.get("job") or _mp.get("spec") or "нет"}\n'
+                            f'  Интеграции: {", ".join(_mp.get("caps", [])[:4]) or "базовые инструменты"}\n'
+                            f'  Что делал в прошлом цикле: {_mp_hist_clean or "нет данных"}\n'
+                            f'  Цель: {_fb_target_goal[:60]}'
                         )
 
-                    _plan.append({
-                        'agent': _mp['name'],
-                        'tool': _tool_fb,
-                        'goal': _target_goal,
-                        'task': _fb_task,
-                        'reason': 'fair_assignment diversification',
-                    })
-                    logger.info("[COORD] fairness backfill: added step for %s via %s", _mp['name'], _tool_fb)
+                    # Что уже делает основной план — чтобы не дублировать
+                    _plan_summary_fb = '; '.join(
+                        f'{s.get("agent")}: {(s.get("task") or "")[:60]}'
+                        for s in _plan[:6]
+                    )
+
+                    _fb_prompt = (
+                        f"Ты — операционный директор команды ИИ-агентов.\n"
+                        f"В этом цикле СЛЕДУЮЩИЕ АГЕНТЫ не получили задачу — исправь это:\n\n"
+                        + '\n\n'.join(_fb_agent_blocks)
+                        + f"\n\nУже назначено другим агентам (не дублируй): {_plan_summary_fb}\n\n"
+                        f"Для каждого пропущенного агента придумай задачу — следующий шаг по его цели.\n"
+                        f"Учитывай его специализацию, интеграции и что он делал в прошлом цикле — дай СЛЕДУЮЩИЙ шаг, не повтор.\n"
+                        f"Задача на естественном языке: конкретно что сделать, с каким критерием, какой результат ожидается.\n"
+                        f"Верни JSON-массив: "
+                        f'[{{"agent":"имя","task":"задача на рус. языке","tool":"snake_case_tool","goal":"точное название цели"}}]\n'
+                        f"Только JSON, без пояснений."
+                    )
+
+                    _fb_json = await asyncio.wait_for(
+                        _quick_ai_call_raw(
+                            [{"role": "user", "content": _fb_prompt}],
+                            max_tokens=min(300 * len(_missing_to_fill), 900),
+                            temperature=0.35,
+                            _caller='backfill_plan',
+                        ),
+                        timeout=20,
+                    )
+
+                    import re as _re_fb_parse
+                    _fb_steps = []
+                    _fb_m = _re_fb_parse.search(r'\[[\s\S]*?\]', _fb_json or '')
+                    if _fb_m:
+                        try:
+                            _fb_steps = json.loads(_fb_m.group())
+                        except Exception:
+                            pass
+
+                    for _fbs in _fb_steps:
+                        _fbs_agent = (_fbs.get('agent') or '').strip()
+                        _fbs_task = (_fbs.get('task') or '').strip()
+                        _fbs_tool = (_fbs.get('tool') or 'research_topic').strip()
+                        _fbs_goal = (_fbs.get('goal') or (_goals[0]['title'] if _goals else '')).strip()
+                        if not _fbs_agent or not _fbs_task:
+                            continue
+                        _plan.append({
+                            'agent': _fbs_agent,
+                            'tool': _fbs_tool,
+                            'goal': _fbs_goal,
+                            'task': _fbs_task,
+                            'reason': 'fair_assignment diversification',
+                        })
+                        logger.info("[COORD] fairness backfill (LLM): added step for %s via %s", _fbs_agent, _fbs_tool)
+
             except Exception as _fa_err:
                 logger.debug("[COORD] fairness backfill skipped: %s", _fa_err)
 
