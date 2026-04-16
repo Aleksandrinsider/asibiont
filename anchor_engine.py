@@ -9193,24 +9193,27 @@ class AnchorEngine:
                             f"«{g.get('title', '')}» ({g.get('progress', 0)}%)"
                             for g in data.get('goals', [])[:2]
                         )
-                        _dir_p = (
-                            f"Ты — ASI, координатор проекта (МУЖСКОЙ род: я нашёл, я проверил, я сделал). Пишешь ПОЛЬЗОВАТЕЛЮ краткий статус-апдейт.\n"
+                        _dir_user_content = (
                             f"Агент {_chosen_name} только что отчитался:\n"
                             f"«{result.strip()[:400]}»\n\n"
                             f"Цели пользователя: {_dir_goals}\n"
-                            f"Предупреждения: {'; '.join(str(w)[:100] for w in _fw_dir[:2])}\n\n"
-                            "Напиши 1-2 предложения (20-40 слов) ДЛЯ ПОЛЬЗОВАТЕЛЯ:\n"
-                            "— Кратко: что {_chosen_name} сделал и какой следующий шаг команды.\n"
+                            f"Напиши 1-2 предложения (20-40 слов) ДЛЯ ПОЛЬЗОВАТЕЛЯ:\n"
+                            f"— Кратко: что {_chosen_name} сделал и какой следующий шаг команды.\n"
                             "— НЕ повторяй отчёт дословно — добавь ценность: контекст, план, связь с целями.\n"
                             "— Можно упоминать агентов по имени — пользователю нравится видеть командную работу.\n"
                             "Прямо и конкретно — без общих слов. Живо. Без markdown."
                         )
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_d
                         _dir_resp = await _qar_d(
-                            [{'role': 'user', 'content': _dir_p}],
+                            [
+                                {'role': 'system', 'content': 'Ты — ASI, координатор команды ASI Biont. Пишешь краткие статус-апдейты для пользователя. Отвечай только текстом на русском языке.'},
+                                {'role': 'user', 'content': _dir_user_content},
+                            ],
                             max_tokens=150, _caller='asi_dir',
                         )
-                        if _dir_resp and len(_dir_resp.strip()) > 20:
+                        # Фильтруем отказы/галлюцинации директора
+                        _dir_refusal_kw = ('не могу', 'не имею доступа', 'обратитесь', 'не способен', 'cannot', 'unable to')
+                        if _dir_resp and len(_dir_resp.strip()) > 20 and not any(kw in _dir_resp.lower() for kw in _dir_refusal_kw):
                             _dir_txt = _dir_resp.strip()
                             await _safe_send(self.bot, user.telegram_id, f"ASI:\n{_dir_txt}")
                             session.add(Interaction(
