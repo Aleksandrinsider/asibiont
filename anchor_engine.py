@@ -860,6 +860,7 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
     # These make the agent sound like a bureaucratic form, not a live person.
     _section_headers = (
         r'Что обнаружил[аи]?|Что сделал[аи]?|Что нашёл|Что нашла|Дальше думаю так|Что дальше'
+        r'|Что думаю делать дальше|Что планирую делать|Мои дальнейшие действия'
         r'|Итог|Результат|Факты|Вывод|Резюме|Статус|Отчёт|Коротко о результате'
         r'|Следующий шаг[и]?|Что планирую|Мой план|Предлагаю|Что предлагаю'
         r'|Найдено|Обнаружено|Выполнено|Сделано|Готово'
@@ -877,6 +878,17 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
         t,
         flags=_re_san.IGNORECASE,
     )
+    # Strip Russian ordinal list openers: "Во-первых,", "Во-вторых,", "В-третьих,", "Кроме того,"
+    t = _re_san.sub(
+        r'(?m)^(?:Во-первых|Во-вторых|В-третьих|В-четвёртых|В-пятых|Кроме того,?)\s*[,:]?\s*',
+        '',
+        t,
+        flags=_re_san.IGNORECASE,
+    )
+    # Strip technical DB IDs shown to user: "(ID 84830326)", "ID: 10773290", "с ID 84830"
+    t = _re_san.sub(r'\(?\bID[:\s]*\d{4,}\)?', '', t, flags=_re_san.IGNORECASE)
+    t = _re_san.sub(r'\bc ID\s+\d{4,}\b', '', t)  # "с ID XXXX"
+    t = _re_san.sub(r'\bс ID\s+\d{4,}\b', '', t)
     # Translated tool names in Russian
     t = _re_san.sub(r'\b(?:через\s+)?(?:действие агента|сохранение контакта|поиск контактов|отправка письма)\b', '', t, flags=_re_san.IGNORECASE)
     # "исследование темы через исследование темы" → "исследование темы"
