@@ -15063,6 +15063,11 @@ async def _send_via_gmail_api(
 # check_emails — чтение входящих писем из почты пользователя
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Кеш результатов check_emails: user_id → (timestamp, result_str)
+# TTL 2 минуты — повторные запросы «есть новые письма?» возвращаются мгновенно
+_CHECK_EMAILS_CACHE: dict = {}
+_CHECK_EMAILS_CACHE_TTL = 120  # секунд
+
 async def check_emails(
     limit: int = 5,
     from_account: str = None,
@@ -15071,6 +15076,14 @@ async def check_emails(
     close_session: bool = True,
 ):
     """Проверить входящие письма из подключённой почты пользователя (Gmail/Яндекс/Mail.ru)."""
+    import time as _time_ce
+    # Кеш: если результат свежий (< 2 мин) — не идём в почту снова
+    _cache_key_ce = (user_id, from_account)
+    _cached_ce = _CHECK_EMAILS_CACHE.get(_cache_key_ce)
+    if _cached_ce and _time_ce.time() - _cached_ce[0] < _CHECK_EMAILS_CACHE_TTL:
+        logger.debug("[CHECK_EMAILS] cache hit for user %s", user_id)
+        return _cached_ce[1] + "\n\n_(результат из кеша, проверено менее 2 минут назад)_"
+
     if not session:
         session = Session()
         close_session = True
@@ -15875,6 +15888,12 @@ async def check_emails(
             except Exception as _e_air:
                 logger.debug('[CHECK_EMAILS] ai_reply_sent_at filter failed: %s', _e_air)
 
+        # Кешируем результат (2 мин) — повторный "есть новые письма?" будет мгновенным
+        try:
+            import time as _time_ce2
+            _CHECK_EMAILS_CACHE[_cache_key_ce] = (_time_ce2.time(), result)
+        except Exception:
+            pass
         return result
     except Exception as e:
         logger.error(f"[CHECK_EMAILS] Error: {e}", exc_info=True)
@@ -15882,6 +15901,9 @@ async def check_emails(
     finally:
         if close_session:
             session.close()
+
+    # Недостижимо — но на случай рефакторинга: кеш сохраняется только при успехе
+    # (см. ниже в блоке try: result = ...; _CHECK_EMAILS_CACHE[...] = ...)
 
 
 async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_emails: set = None, outreach_map: dict = None, registered_emails: set = None) -> str:
@@ -15992,17 +16014,27 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                             return _sub
                 return ''
 
-            for msg_ref in msgs[:limit]:
-                # format=full чтобы получить полный текст письма
-                msg_resp = await _h.get(
-                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
-                    headers={'Authorization': f'Bearer {tok}'},
-                    params={'format': 'full'},
-                    timeout=aiohttp.ClientTimeout(total=15),
-                )
-                if msg_resp.status != 200:
+            # Параллельный fetch всех сообщений — вместо последовательного (экономия ~5-10с)
+            async def _fetch_one_msg(msg_ref):
+                try:
+                    r = await _h.get(
+                        f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
+                        headers={'Authorization': f'Bearer {tok}'},
+                        params={'format': 'full'},
+                        timeout=aiohttp.ClientTimeout(total=15),
+                    )
+                    if r.status != 200:
+                        return None
+                    return await r.json()
+                except Exception:
+                    return None
+
+            import asyncio as _aio_gm
+            msgs_data = await _aio_gm.gather(*[_fetch_one_msg(m) for m in msgs[:limit]])
+
+            for msg_data in msgs_data:
+                if not msg_data:
                     continue
-                msg_data = await msg_resp.json()
                 headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
                 # Извлекаем полный текст тела письма (приоритет: body_text > snippet)
                 body_text = _gmail_extract_body(msg_data.get('payload', {}))
