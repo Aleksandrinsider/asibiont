@@ -900,6 +900,9 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
     t = _re_san.sub(r'\b(?:через|с помощью|используя|действие)\s*$', '', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\bРезультат\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\bЗафикси\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
+    # Strip empty parentheses artifacts "()" left by LLM coordinator template placeholders
+    # e.g. "следующий шаг () по цели" → "следующий шаг по цели"
+    t = _re_san.sub(r'\s*\(\s*\)\s*', ' ', t)
     # Clean up leftover artifacts: double spaces, dangling dashes/commas
     t = _re_san.sub(r'\s+—\s+—', ' —', t)
     t = _re_san.sub(r'\s{2,}', ' ', t)

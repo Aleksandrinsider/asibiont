@@ -4822,6 +4822,9 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
 
         # ── progress_increment: auto-tracking adds N% to current progress ──
         if progress_increment is not None and progress is None and metric_current is None:
+            # GUARD: цели с numeric metric_target не трогаем — прогресс только через metric_current
+            if matched.metric_target and matched.metric_target > 0:
+                return "OK"  # silently skip — metric goal manages its own percentage
             try:
                 _incr = int(progress_increment)
                 _old_pct = matched.progress_percentage or 0
@@ -5013,6 +5016,16 @@ def update_goal_progress(goal_title=None, progress=None, status=None, notes=None
                 # Полный запрет: агент НЕ должен вручную ставить progress на цели с метриками
                 if matched.metric_target and matched.metric_target > 0:
                     actual_pct = int((matched.metric_current or 0) / matched.metric_target * 100)
+                    # Self-heal: если в БД завышенный progress — исправляем автоматически
+                    if matched.progress_percentage != actual_pct:
+                        matched.progress_percentage = actual_pct
+                        try:
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     return (
                         f"У цели '{matched.title}' есть числовая метрика "
                         f"({int(matched.metric_current or 0)}/{int(matched.metric_target)} {matched.metric_unit or ''}, {actual_pct}%). "
