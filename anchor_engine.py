@@ -8975,7 +8975,6 @@ class AnchorEngine:
                                 _cleaned_result = _cut_r[:_last_end + 1]
                             else:
                                 _cleaned_result = _cut_r.rsplit(' ', 1)[0] + '…'
-                        _cleaned_result = _finish_sentence(_cleaned_result)
                         # Sanitize tool names from user-facing text
                         _is_fem_agent = _chosen_name and _chosen_name[-1] in 'аяАЯ' and _chosen_name[-2:].lower() not in ('ша', 'жа')
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result, is_fem=_is_fem_agent)
@@ -10116,7 +10115,6 @@ class AnchorEngine:
                 or _is_delegation_message(_chain_clean, _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
-                _chain_clean = _finish_sentence(_chain_clean)
                 _is_fem_chain = _next_ag.name and _next_ag.name[-1] in 'аяАЯ' and _next_ag.name[-2:].lower() not in ('ша', 'жа')
                 _chain_sanitized = _sanitize_proactive_text(_chain_clean, is_fem=_is_fem_chain)
                 try:
