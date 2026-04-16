@@ -1096,6 +1096,11 @@ REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 _IH_CACHE: dict = {}
 _IH_CACHE_TTL = 6 * 3600  # 6 hours
 
+# Кулдаун предложений интеграций: user_id → timestamp последнего предложения
+# 2 дня = 172800 сек. Одно предложение на пользователя раз в 2 дня — не надоедает.
+_INTG_SUGGEST_COOLDOWN: dict[int, float] = {}
+_INTG_SUGGEST_TTL = 2 * 24 * 3600  # 2 days
+
 # Если пользователь писал в последние N минут — НЕ отправлять проактивные (кроме CRITICAL)
 ACTIVE_DIALOG_SUPPRESS_MINUTES = 3
 
@@ -11449,6 +11454,89 @@ class AnchorEngine:
             else:
                 _intg_advisor_str = "\n\n[ПОДКЛЮЧЁННЫЕ ИНТЕГРАЦИИ АГЕНТОВ]: нет подключённых\n"
 
+            # ── Советник по отсутствующим интеграциям ──
+            # Когда уместно (цель не движется + конкретная интеграция разблокирует новый канал) —
+            # даём координатору факты, чтобы он мог ОДИН РАЗ сказать об этом пользователю.
+            # Кулдаун 2 дня: не надоедаем, только по ситуации.
+            _missing_intg_hint_str = ''
+            try:
+                import time as _time_mis
+                _mis_last = _INTG_SUGGEST_COOLDOWN.get(user.id, 0.0)
+                _mis_elapsed = _time_mis.time() - _mis_last
+                # Проверяем кулдаун и наличие стагнирующих целей
+                _mis_stagnant = [g for g in _goals if g.get('progress', 0) < 50]
+                if _mis_elapsed > _INTG_SUGGEST_TTL and _mis_stagnant:
+                    # Маппинг: тип цели → список (catalog_type, название, польза)
+                    _MIS_USEFUL: dict = {
+                        'outreach': [
+                            ('github', 'GitHub', 'поиск разработчиков/авторов через GitHub API — search_users по языку, топику, локации'),
+                            ('crm', 'AmoCRM / Bitrix24', 'воронка лидов: статусы, сделки, напоминания — не теряем тёплые контакты'),
+                            ('linkedin', 'LinkedIn', 'профессиональная аудитория через LinkedIn API'),
+                        ],
+                        'content': [
+                            ('tg_channel', 'Telegram-канал', 'прямая публикация постов — агент публикует без участия пользователя'),
+                            ('discord', 'Discord', 'публикация в Discord-сервер — ещё один канал охвата'),
+                            ('rss', 'RSS / NewsAPI', 'автоматический мониторинг трендов — агент всегда знает что горячее'),
+                            ('vk', 'ВКонтакте', 'публикация в группу ВКонтакте — русскоязычная аудитория'),
+                        ],
+                        'ecommerce': [
+                            ('ecommerce', 'Wildberries / Ozon', 'управление товарами, заказами, ценами через API'),
+                            ('analytics', 'Яндекс.Метрика', 'аналитика конверсий — видим откуда приходят покупатели'),
+                            ('sheets', 'Google Sheets', 'учёт товаров и финансов в таблицах'),
+                        ],
+                        'finance': [
+                            ('alphavantage', 'Alpha Vantage', 'биржевые котировки в реальном времени'),
+                            ('coingecko', 'CoinGecko', 'данные крипторынка — цены, объёмы, тренды'),
+                        ],
+                        'dev': [
+                            ('github', 'GitHub', 'управление репозиториями, issues, PR — агент ведёт разработку'),
+                            ('pm', 'Jira / Linear / Trello', 'таск-трекер: создание задач, статусы, спринты'),
+                        ],
+                        'general': [
+                            ('email', 'Email (Gmail / SMTP / Resend)', 'рассылки и outreach — прямой контакт с аудиторией'),
+                            ('github', 'GitHub', 'поиск контактов через GitHub API'),
+                            ('tg_channel', 'Telegram-канал', 'публикация контента напрямую в канал'),
+                        ],
+                    }
+                    _mis_lines = []
+                    for _mg in _mis_stagnant[:3]:
+                        _mg_title = (_mg.get('title') or '')[:50]
+                        _mg_type = _crd_goal_type(_mg) or 'general'
+                        _mg_prog = _mg.get('progress', 0)
+                        _useful = _MIS_USEFUL.get(_mg_type, _MIS_USEFUL['general'])
+                        # Оставляем только те, которых реально нет
+                        _actually_missing = [
+                            (ct, nm, desc) for ct, nm, desc in _useful
+                            if ct not in _all_connected_types
+                        ]
+                        if not _actually_missing:
+                            continue
+                        # Максимум 2 предложения на цель
+                        for _ct, _nm, _desc in _actually_missing[:2]:
+                            _mis_lines.append(
+                                f"  • Цель «{_mg_title}» ({_mg_prog}%) → "
+                                f"**{_nm}**: {_desc}"
+                            )
+                    if _mis_lines:
+                        _missing_intg_hint_str = (
+                            "\n💡 ИНТЕГРАЦИИ КОТОРЫЕ УСКОРЯТ РАБОТУ (сейчас не подключены):\n"
+                            + '\n'.join(_mis_lines) + '\n'
+                            "  Ссылка для подключения: https://asibiont.com/dashboard\n"
+                            "  → ПРАВИЛО: упомяни одно из этих предложений пользователю ТОЛЬКО ЕСЛИ:\n"
+                            "    а) ASI уже пишет пользователю в этом цикле (send_message_to_user)\n"
+                            "    б) ИЛИ цель стагнирует 3+ дня и нет других идей\n"
+                            "    Не добавляй отдельный шаг send_message_to_user ТОЛЬКО ради этого совета.\n"
+                            "    Формулируй кратко (1 предложение): что подключить и конкретно что это даст.\n"
+                        )
+                        # Обновляем кулдаун — используем счётчик, чтобы не повторять в каждом цикле
+                        _INTG_SUGGEST_COOLDOWN[user.id] = _time_mis.time()
+                        logger.info(
+                            "[COORD] missing_intg_hint: %d suggestions for user %s",
+                            len(_mis_lines), user.id,
+                        )
+            except Exception as _mis_err:
+                logger.debug("[COORD] missing_intg_hint: %s", _mis_err)
+
             # ── Строим per-goal блок: capability-driven вместо keyword-matching ──
             # Координатор видит профили агентов (интеграции) + цели → сам решает как их связать.
             # Мы лишь даём ФАКТЫ: какие каналы доступны и принцип выбора инструмента.
@@ -13188,6 +13276,7 @@ class AnchorEngine:
                 + f"{_do_not_contact_str}"
                 + _missing_intg_str_c
                 + _intg_advisor_str
+                + _missing_intg_hint_str
                 + (f"📋 ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (обязательны для ВСЕХ агентов):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_coord)) + '\n' if _user_rules_coord else '')
                 # Структурный enforce ключевых правил (дополняет текстовое чтение)
                 + (
