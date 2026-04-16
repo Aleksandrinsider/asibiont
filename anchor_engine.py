@@ -15664,7 +15664,7 @@ class AnchorEngine:
                     + (f"\n👤 Контекст проекта:\n{_user_profile_sum_ag}\n" if _user_profile_sum_ag else '')
                     + (f"\n📋 ПРАВИЛА (ОБЯЗАТЕЛЬНЫ):\n" + '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_user_rules_ag)) + "\n" if _user_rules_ag else '')
                     + _runtime_quality_hints
-                    + f"\nАктивные цели (бери названия отсюда, не спрашивай):\n{_agent_goals_block}\n"
+                    + f"\nАктивные цели (бери названия отсюда, НЕ спрашивай пользователя «какую цель обновить?»):\n{_agent_goals_block}\n"
                     + (f"\n📋 Контакты уже в системе (ищи НОВЫХ, не повторяй этих):\n{_agent_contacts_block}\n" if _agent_contacts_block else '')
                     + (f"\n⚠️ {_sent_emails_block}" if _sent_emails_block else '')
                     + (f"\n⚠️ Сломанные инструменты: {_failed_str}\n" if _failed_str and _failed_str != 'нет' else '')

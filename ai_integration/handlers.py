@@ -2081,6 +2081,21 @@ async def delegate_task(
                 if reminder_time:
                     _agent_task_text += f"\n\nДедлайн: {reminder_time}"
 
+                # Добавляем активные цели чтобы агент не спрашивал «какую цель обновить?»
+                try:
+                    from models import Goal as _Goal_del
+                    _active_goals_del = session.query(_Goal_del).filter(
+                        _Goal_del.user_id == delegator.id,
+                        _Goal_del.status == 'active',
+                    ).limit(5).all()
+                    if _active_goals_del:
+                        _goals_str_del = '\n'.join(
+                            f"  • {g.title} ({g.progress_percentage or 0}%)" for g in _active_goals_del
+                        )
+                        _agent_task_text += f"\n\nАктивные цели пользователя (НЕ спрашивай «какую цель обновить?» — выбери сам по теме задачи):\n{_goals_str_del}"
+                except Exception as _ge:
+                    logger.debug("[DELEGATE] goals ctx error: %s", _ge)
+
                 # ── Inline-выполнение каждого агента СИНХРОННО ────────────────────
                 _results_parts = []
                 for _agent_recipient in _found_agents:
