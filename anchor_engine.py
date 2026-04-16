@@ -11852,6 +11852,7 @@ class AnchorEngine:
             _monotony_str = ''
             if _all_cycles_tools:
                 _mono_lines = []
+                _CONTENT_TOOLS = frozenset({'create_post', 'publish_to_telegram', 'publish_to_discord', 'get_news_trends'})
                 for _pn_mono, _cycles_mono in _all_cycles_tools.items():
                     if len(_cycles_mono) < 3:
                         continue
@@ -11865,6 +11866,34 @@ class AnchorEngine:
                             f"  ⚠️ {_pn_mono} зациклился на {_dominant[0]} ({_dominant[1]}x за 4 цикла) — "
                             f"ОБЯЗАТЕЛЬНО дай другой инструмент/подход в этом цикле!"
                         )
+
+                    # ── Контент-детектор: агент только создаёт контент без поиска аудитории ──
+                    # Срабатывает при пониженном пороге (2+ цикла) для контентных инструментов.
+                    # Контент без роста аудитории = пост в пустоту.
+                    _recent_3 = _cycles_mono[-3:]
+                    if len(_recent_3) >= 2:
+                        _content_cycles = sum(
+                            1 for _c in _recent_3
+                            if _CONTENT_TOOLS & set(_c)
+                        )
+                        _audience_cycles = sum(
+                            1 for _c in _recent_3
+                            if {'web_search', 'find_relevant_contacts_for_task',
+                                'save_email_contact', 'find_and_message_relevant_users',
+                                'run_agent_action'} & set(_c)
+                        )
+                        # 2+ контентных цикла подряд без единого поиска аудитории
+                        if _content_cycles >= 2 and _audience_cycles == 0:
+                            _mono_lines.append(
+                                f"  📢 {_pn_mono} создаёт контент {_content_cycles} цикла подряд БЕЗ поиска аудитории. "
+                                f"Контент без роста = пост в пустоту.\n"
+                                f"     → В этом цикле: web_search для поиска потенциальных читателей/подписчиков "
+                                f"(сайты, форумы, сообщества, профили авторов по теме цели) "
+                                f"→ save_email_contact интересных → или find_relevant_contacts_for_task.\n"
+                                f"     Пример задачи: «Найди 5 авторов/экспертов по теме X через web_search "
+                                f"site:habr.com OR site:dev.to OR site:github.com — сохрани email/контакт через save_email_contact»"
+                            )
+
                 if _mono_lines:
                     _monotony_str = (
                         "\n🔴 МОНОТОННОСТЬ АГЕНТОВ (агент повторяет один инструмент каждый цикл):\n"
@@ -13227,6 +13256,9 @@ class AnchorEngine:
                 "   дай СЛЕДУЮЩИЙ ШАГ по цепочке тому агенту, у кого есть нужная интеграция для продолжения.\n"
                 "   Пример: Марк нашёл статью → следующий шаг — найти контакт автора → Марк (если есть web_search) или агент с API поиска людей.\n"
                 "   Агент с RSS/аналитикой → мониторинг, обзоры, тренды. НЕ email-outreach.\n"
+                "   НО: контент-агент, создающий посты 2+ цикла подряд, ДОЛЖЕН получить задачу на поиск аудитории:\n"
+                "     web_search «авторы/эксперты/сообщества по теме» → save_email_contact → передай email-агенту.\n"
+                "     Контент без роста аудитории = пост в пустоту. Чередуй: пост → поиск → пост → поиск.\n"
                 "   Агент с email/CRM → рассылки, follow-up, переговоры. НЕ RSS-анализ.\n"
                 "   Если задача не по профилю — передай тому, у кого есть нужная интеграция.\n"
                 "   Посмотри [spec] каждого агента в профилях выше: это его СИЛЬНАЯ сторона.\n"
