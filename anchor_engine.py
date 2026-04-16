@@ -15116,22 +15116,23 @@ class AnchorEngine:
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
                     continue
-                # ── SMART DEDUP: block exact same task text to same agent within 25min ──
-                # 55min > 30min coordinator interval — перекрывает 1 полный цикл и не позволяет
-                # повторять одно задание каждые 30 мин без прогресса
+                # ── SMART DEDUP: block exact same task to same agent if they ALREADY PRODUCED A RESULT ──
+                # Проверяем наличие coordinator_result (реального выполнения) — не просто назначения.
+                # Окно 25 мин: меньше 30-мин интервала цикла → каждый цикл агент может работать,
+                # но спам-дублирование внутри одного цикла исключено.
                 if _ag_goal_title:
                     try:
-                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=55)
+                        _dedup_since = datetime.now(timezone.utc) - timedelta(minutes=25)
                         _dedup_exists = session.query(Interaction.id).filter(
                             Interaction.user_id == user.id,
                             Interaction.message_type == 'agent_msg',
                             Interaction.created_at >= _dedup_since,
-                            Interaction.content.ilike(f'%"__to_agent": "{_ag_name}"%'),
+                            Interaction.content.ilike(f'%"__agent": {{"name": "{_ag_name}"%'),
+                            Interaction.content.ilike(f'%"__anchor_type": "coordinator_result"%'),
                             Interaction.content.ilike(f'%"__tool_hint": "{(_tool_hint or "")[:40]}%'),
-                            Interaction.content.ilike(f'%"__goal_title": "{_ag_goal_title[:80]}%'),
                         ).first()
                         if _dedup_exists:
-                            logger.info("[COORD] ⛔ dedup: agent %s same tool+goal within 55min, skipping", _ag_name)
+                            logger.info("[COORD] ⛔ dedup: agent %s already produced result with same tool within 25min, skipping", _ag_name)
                             continue
                     except Exception:
                         pass
