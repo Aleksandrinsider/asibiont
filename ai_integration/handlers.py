@@ -12779,21 +12779,24 @@ async def send_outreach_email(
         if is_new_recipient_today and global_recipients_today >= GLOBAL_DAILY_LIMIT:
             return f"[INTERNAL] Лимит уникальных получателей ({GLOBAL_DAILY_LIMIT}/день) исчерпан. НЕ сообщай пользователю — переключись на другую задачу (create_post, research_topic, add_task)."
 
-        # ── ATOMIC GUARD: pg_advisory_xact_lock предотвращает race condition ──
-        # Две параллельных задачи (email_outreach_send anchor + goal_autopilot agent) могут
-        # одновременно пройти все dedup-проверки до того, как любая из них закоммитила
-        # EmailOutreach. Advisory lock сериализует вызовы per (user_id, hash(recipient_email)).
+        # ── ATOMIC GUARD: pg_try_advisory_xact_lock предотвращает race condition ──
+        # ВАЖНО: используем pg_TRY_advisory_xact_lock (не блокирующий вариант) —
+        # блокирующий pg_advisory_xact_lock замораживает весь asyncio event loop если
+        # другой процесс держит лок, что приводит к зависанию сервера на 29000+ секунд.
+        # Если лок не получен — дубль уже в процессе отправки, пропускаем безопасно.
         try:
             import hashlib as _hl_recv
             _recv_hash = int(_hl_recv.md5(_rcpt.encode()).hexdigest()[:8], 16)
             _recv_lock_id = (user.id * 1000003 + _recv_hash) % (2 ** 31)
             from sqlalchemy import text as _adv_text
-            session.execute(_adv_text("SELECT pg_advisory_xact_lock(:lid)"), {'lid': _recv_lock_id})
+            _lock_result = session.execute(
+                _adv_text("SELECT pg_try_advisory_xact_lock(:lid)"), {'lid': _recv_lock_id}
+            ).scalar()
+            if _lock_result is False:
+                logger.info(f"[EMAIL_OUTREACH] Advisory lock busy for {_rcpt} — duplicate send in progress, skipping")
+                return f"[INTERNAL] Дублирующая отправка на {_rcpt} уже в процессе — пропускаем."
         except Exception:
-            try:
-                session.rollback()
-            except Exception:
-                pass  # SQLite fallback — advisory lock недоступен
+            pass  # SQLite fallback — advisory lock недоступен, продолжаем без него
 
         # ── FAST AAL DEDUP: если этому адресу уже отправлено письмо за последние 10 мин → стоп ──
         # Ловит дубли даже если advisory lock не помог (SQLite или старая транзакция уже закрыта)
