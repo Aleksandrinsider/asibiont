@@ -18547,14 +18547,28 @@ class AnchorEngine:
                 _sqla_func.count(_sqla_case(
                     (EmailOutreach.status == 'draft', 1)
                 )),
+                _sqla_func.count(_sqla_case(
+                    (EmailOutreach.status == 'failed', 1)
+                )),
+                _sqla_func.count(_sqla_case(
+                    (EmailOutreach.status == 'delivered', 1)
+                )),
             ).filter(
                 EmailOutreach.campaign_id.in_(_camp_ids)
             ).group_by(EmailOutreach.campaign_id).all()
-            _stats_map = {row[0]: (row[1], row[2], row[3]) for row in _camp_stats}
+            _stats_map = {row[0]: (row[1], row[2], row[3], row[4], row[5]) for row in _camp_stats}
             for c in email_campaigns:
-                sent, replied, drafts = _stats_map.get(c.id, (0, 0, 0))
+                sent, replied, drafts, failed, delivered = _stats_map.get(c.id, (0, 0, 0, 0, 0))
+                _total_processed = sent + delivered + failed
+                _complaint_rate = int(failed * 100 / _total_processed) if _total_processed > 0 else 0
+                _health = ''
+                if _complaint_rate >= 30:
+                    _health = f' ⚠️ ВЫСОКИЙ ПРОЦЕНТ ЖАЛОБ/ОТКАЗОВ ({_complaint_rate}%) — стоп или смена стратегии'
+                elif _complaint_rate >= 10:
+                    _health = f' ⚠️ жалобы/отказы {_complaint_rate}% — снизить темп'
                 email_summary.append(
-                    f"Кампания «{c.name}»: отправлено={sent}, ответов={replied}, черновиков={drafts}"
+                    f"Кампания «{c.name}»: отправлено={sent}, доставлено={delivered}, "
+                    f"ответов={replied}, черновиков={drafts}, failed={failed}{_health}"
                 )
 
         # Email контакты пользователя — кому уже писали (replied/interested первыми)
@@ -22208,6 +22222,16 @@ class AnchorEngine:
                             continue
 
                     # Определяем язык получателя (домен, имя, платформы) → фолбэк на язык кампании
+                    # Перед AI compose: коммитим накопленные guard failures, чтобы они
+                    # не откатились если compose выбросит исключение
+                    if _draft_failures:
+                        try:
+                            session.commit()
+                        except Exception:
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
                     lang_hint = _detect_recipient_lang(
                         email=email, name=name, company=company, context=context,
                         campaign_goal=campaign_goal, campaign_offer=offer,

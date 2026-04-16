@@ -10944,13 +10944,37 @@ async def resend_webhook_handler(request):
                                     logger.info(f"[RESEND_WEBHOOK] Contact {outreach.recipient_email} → bounced")
                             except Exception as _e_bc:
                                 logger.warning(f"[RESEND_WEBHOOK] Failed to sync contact bounce: {_e_bc}")
-                            # Очищаем follow-up для bounced
+                            # Очищаем follow-up для bounced/complained
                             if outreach.next_follow_up_at:
                                 outreach.next_follow_up_at = None
                                 try:
                                     session_db.commit()
                                 except Exception:
                                     session_db.rollback()
+                            # Логируем жалобы в AAL для видимости в дашборде
+                            if event_type == 'email.complained':
+                                try:
+                                    from models import AgentActivityLog as _AAL_cmp
+                                    _camp_name = ''
+                                    try:
+                                        from models import EmailCampaign as _EC_cmp
+                                        _cmp = session_db.query(_EC_cmp).filter_by(id=outreach.campaign_id).first()
+                                        if _cmp:
+                                            _camp_name = (_cmp.name or '')[:60]
+                                    except Exception:
+                                        pass
+                                    session_db.add(_AAL_cmp(
+                                        user_id=outreach.user_id,
+                                        agent_name='resend',
+                                        activity_type='email_complained',
+                                        title=f'Жалоба на спам: {(outreach.recipient_email or "?")[:60]} [{_camp_name}]',
+                                        status='failed',
+                                        result=f'email.complained resend_id={email_id}',
+                                    ))
+                                    session_db.commit()
+                                    logger.warning(f"[RESEND_WEBHOOK] SPAM COMPLAINT: outreach #{outreach.id} from {outreach.recipient_email} in campaign #{outreach.campaign_id}")
+                                except Exception as _e_aal:
+                                    logger.debug(f"[RESEND_WEBHOOK] Failed to log complaint to AAL: {_e_aal}")
 
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:
