@@ -2214,6 +2214,7 @@ async def dashboard_handler(request):
             'telegram_linked': (user.telegram_id > 0) if user else False,
             'telegram_username': user.username if user and user.telegram_id > 0 else '',
             'gmail_linked': bool(getattr(user, 'google_oauth_token', None)) if user else False,
+            'google_oauth_available': bool(os.getenv('GOOGLE_CLIENT_ID', '')),
             'gmail_email': (lambda t: (json.loads(decrypt_token(t)).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or '') if user else '',
             'goal_autopilot_enabled': bool(getattr(profile, 'goal_autopilot_enabled', False)) if profile else False,
         })
@@ -9946,6 +9947,7 @@ async def api_profile_handler(request):
             'discord_channel_id': str(user.discord_channel_id) if hasattr(user, 'discord_channel_id') and user.discord_channel_id else None,
             'gmail_linked': bool(getattr(user, 'google_oauth_token', None)),
             'gmail_email': (lambda t: (json.loads(decrypt_token(t)).get('email','') if t else ''))(getattr(user,'google_oauth_token',None) or ''),
+            'google_oauth_available': bool(os.getenv('GOOGLE_CLIENT_ID', '')),
         }
 
         # Добавляем данные активного агента для аватара в чате (focused/first)

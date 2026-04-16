@@ -1755,7 +1755,20 @@
                     </div>
                 </div>
 
-                {# Gmail OAuth — доступно через настройку агентов (сервис Gmail в форме создания агента) #}
+                {% if google_oauth_available %}
+                <div style="margin-top: 12px;">
+                    <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Gmail</label>
+                    {% if gmail_linked %}
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid #22C55E; border-radius: 6px; font-size: 13px; color: #15803D; background: #F0FDF4;">
+                        <span>✓ {{ gmail_email }}</span>
+                        <a href="#" onclick="disconnectGmail(); return false;" style="font-size: 12px; color: #6B7280; text-decoration: none; margin-left: 8px;" data-i18n="unlink">отвязать</a>
+                    </div>
+                    {% else %}
+                    <a href="/oauth/gmail" style="display: block; padding: 8px 12px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; color: #6C727F; background: #F6F8FA; text-decoration: none; text-align: center;" data-i18n="link-gmail">Подключить Gmail</a>
+                    <div style="font-size: 11px; color: #9CA3AF; margin-top: 4px;">Письма будут отправляться прямо с вашей Gmail почты</div>
+                    {% endif %}
+                </div>
+                {% endif %}
 
                 <div class="rating-modal-actions" style="margin-top: 16px;">
                     <button onclick="skipQuickProfile()" class="rating-cancel-btn" data-i18n="skip" title="Пропустить" data-i18n-title="skip">Пропустить</button>
@@ -3152,24 +3165,12 @@ if ACTION == 'send_email':
     subject = os.environ.get('AGENT_PARAM_SUBJECT', '(без темы)')
     body = os.environ.get('AGENT_PARAM_BODY', '')
     try:
-        msg = MIMEMultipart()
-        msg['From'] = USER
-        msg['To'] = to
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        import ssl as _ssl
-        _ctx = _ssl.create_default_context()
-        s = smtplib.SMTP('smtp.gmail.com', 587, timeout=30)
-        s.ehlo()
-        s.starttls(context=_ctx)
-        s.ehlo()
-        s.login(USER, PASS.replace(' ', ''))
-        s.sendmail(USER, to, msg.as_string())
-        s.quit()
-        print('OK: письмо отправлено на ' + to)
+        # Gmail SMTP (smtp.gmail.com:587) недоступен на Railway/большинстве хостингов.
+        # Отправка идёт через Gmail API (OAuth) или Resend. Здесь — только проверка IMAP.
+        print('INFO: Gmail SMTP заблокирован на сервере. Используется Resend (Reply-To → Gmail) или Gmail OAuth.')
     except Exception as e:
-        print('Ошибка отправки: ' + str(e))
-else:
+        print('Ошибка: ' + str(e))
+if True:  # всегда проверяем IMAP
     try:
         mail = imaplib.IMAP4_SSL('imap.gmail.com')
         mail.login(USER, PASS.replace(' ', ''))
