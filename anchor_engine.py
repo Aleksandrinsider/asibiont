@@ -856,6 +856,27 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False) -> str:
         _pattern = r'\b(?:(?:через|с помощью|используя|действие)\s+)?(?:' + '|'.join(_re_san.escape(t) for t in _tool_names) + r')\b'
         _TOOL_NAMES_RE = _re_san.compile(_pattern, _re_san.IGNORECASE)
     t = _TOOL_NAMES_RE.sub('', text)
+    # Strip report-style section headers (e.g. "Что обнаружил:", "Дальше думаю так:", "Итог:")
+    # These make the agent sound like a bureaucratic form, not a live person.
+    _section_headers = (
+        r'Что обнаружил[аи]?|Что сделал[аи]?|Что нашёл|Что нашла|Дальше думаю так|Что дальше'
+        r'|Итог|Результат|Факты|Вывод|Резюме|Статус|Отчёт|Коротко о результате'
+        r'|Следующий шаг[и]?|Что планирую|Мой план|Предлагаю|Что предлагаю'
+        r'|Найдено|Обнаружено|Выполнено|Сделано|Готово'
+    )
+    t = _re_san.sub(
+        r'(?m)^[ \t]*(?:' + _section_headers + r')\s*:\s*\n?',
+        '',
+        t,
+        flags=_re_san.IGNORECASE,
+    )
+    # Also strip inline variants: "Что обнаружил: текст" → "текст"
+    t = _re_san.sub(
+        r'(?:' + _section_headers + r')\s*:\s*',
+        '',
+        t,
+        flags=_re_san.IGNORECASE,
+    )
     # Translated tool names in Russian
     t = _re_san.sub(r'\b(?:через\s+)?(?:действие агента|сохранение контакта|поиск контактов|отправка письма)\b', '', t, flags=_re_san.IGNORECASE)
     # "исследование темы через исследование темы" → "исследование темы"
