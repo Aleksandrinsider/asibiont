@@ -7884,6 +7884,12 @@ class AnchorEngine:
                                     )
                     except Exception as _cgen_err:
                         logger.debug("[ANCHOR-AUTOPILOT] coord msg gen failed: %s", _cgen_err)
+                    # ── Sanitize coord_text: убираем пустые скобки "()" которые AI иногда генерирует ──
+                    # Пример артефакта: "следующий шаг () по цели" → "следующий шаг по цели"
+                    if _coord_text:
+                        import re as _re_ct_parens
+                        _coord_text = _re_ct_parens.sub(r'\s*\(\s*\)\s*', ' ', _coord_text).strip()
+                        _coord_text = _re_ct_parens.sub(r'  +', ' ', _coord_text)
                     # ── Context-aware fallback: если AI не сгенерировал → шаблон + ЗАЧЕМ контекст ──
                     if _coord_text is None:
                         import random as _rnd_fb
@@ -15417,18 +15423,37 @@ class AnchorEngine:
                         f"   Доступные инструменты: check_emails, list_email_contacts, "
                         f"send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task."
                     )
-                    # Неотправленные контакты — нейтральная информация
-                    if _unsent_contacts_data:
-                        _uc_list = []
-                        for _uc_item in _unsent_contacts_data[:8]:
-                            _uc_clean = _uc_item.strip() if isinstance(_uc_item, str) else str(_uc_item)[:60]
-                            _uc_list.append(_uc_clean)
-                        _intg_live_lines.append(
-                            f"  📋 Контакты без письма ({len(_unsent_contacts_data)}): "
-                            + ', '.join(_uc_list[:5])
-                            + ('...' if len(_unsent_contacts_data) > 5 else '')
-                        )
-                    # Pending replies для этого агента
+                elif getattr(user, 'google_oauth_token', None):
+                    # Gmail OAuth подключён на уровне пользователя — агент может отправлять письма
+                    try:
+                        import json as _jsn_goa_ctx
+                        _goa_email = _jsn_goa_ctx.loads(
+                            __import__('ai_integration.handlers', fromlist=['decrypt_token']).decrypt_token(
+                                user.google_oauth_token
+                            )
+                        ).get('email', 'Gmail')
+                    except Exception:
+                        _goa_email = 'Gmail'
+                    _ag_email_user = _goa_email  # чтобы блоки ниже тоже отработали
+                    _intg_live_lines.append(
+                        f"📧 Email-аккаунт: {_goa_email} (Gmail OAuth)\n"
+                        f"   Доступные инструменты: check_emails, list_email_contacts, "
+                        f"send_outreach_email, reply_to_outreach_email, find_relevant_contacts_for_task.\n"
+                        f"   ✅ Письма отправляются напрямую с {_goa_email} через Gmail API — используй send_outreach_email."
+                    )
+                # Неотправленные контакты — нейтральная информация
+                if _ag_email_user and _unsent_contacts_data:
+                    _uc_list = []
+                    for _uc_item in _unsent_contacts_data[:8]:
+                        _uc_clean = _uc_item.strip() if isinstance(_uc_item, str) else str(_uc_item)[:60]
+                        _uc_list.append(_uc_clean)
+                    _intg_live_lines.append(
+                        f"  📋 Контакты без письма ({len(_unsent_contacts_data)}): "
+                        + ', '.join(_uc_list[:5])
+                        + ('...' if len(_unsent_contacts_data) > 5 else '')
+                    )
+                # Pending replies для этого агента
+                if _ag_email_user:
                     _pr_for_agent = list(_pending_replies)  # все ответившие контакты
                     if _pr_for_agent:
                         for _prr in _pr_for_agent[:3]:

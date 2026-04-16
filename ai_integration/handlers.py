@@ -12694,6 +12694,17 @@ async def send_outreach_email(
         RESEND_API_KEY = _platform_resend_key
         _personal_resend_from = ''
         _smtp_creds_out = None  # SMTP credentials detected from agent keys
+        # Gmail SMTP заблокирован Railway (port 587 filtered) — используем Resend+Reply-To
+        _gmail_reply_to = ''   # Gmail addr для Reply-To в Resend-отправке
+        _gmail_oauth_token_data = None  # Gmail OAuth: отправка напрямую через Gmail API
+        # Проверяем Gmail OAuth на уровне пользователя (приоритет #1)
+        if getattr(user, 'google_oauth_token', None):
+            try:
+                import json as _jsn_goa_out
+                _gmail_oauth_token_data = _jsn_goa_out.loads(decrypt_token(user.google_oauth_token))
+                logger.debug('[EMAIL_OUTREACH] Gmail OAuth found for user %d', user.id)
+            except Exception as _goa_err:
+                logger.debug('[EMAIL_OUTREACH] Gmail OAuth read: %s', _goa_err)
         try:
             from models import UserAgent as _UA_rs
             for _ag_rs in session.query(_UA_rs).filter(
@@ -12719,7 +12730,8 @@ async def send_outreach_email(
                         f'[EMAIL_OUTREACH] Using personal RESEND_API_KEY from agent {_ag_rs.name}'
                     )
                     break
-                # Detect SMTP credentials (Yandex / Mail.ru / Gmail app-password / custom)
+                # Detect SMTP credentials (Yandex / Mail.ru / custom SMTP)
+                # NOTE: Gmail SMTP заблокирован Railway — GMAIL_USER регистрируем как Reply-To
                 if not _smtp_creds_out:
                     if _env_rs.get('YANDEX_USER') and (
                         _env_rs.get('YANDEX_PASSWORD') or _env_rs.get('YANDEX_PASS')
@@ -12739,19 +12751,6 @@ async def send_outreach_email(
                             'pass': _env_rs.get('MAILRU_PASSWORD') or _env_rs.get('MAILRU_PASS', ''),
                             'label': 'Mail.ru',
                         }
-                    elif _env_rs.get('GMAIL_USER') and (
-                        _env_rs.get('GMAIL_APP_PASSWORD') or _env_rs.get('GMAIL_PASS') or _env_rs.get('GMAIL_PASSWORD')
-                    ):
-                        _smtp_creds_out = {
-                            'host': 'smtp.gmail.com', 'port': 587,
-                            'user': _env_rs['GMAIL_USER'],
-                            'pass': (
-                                _env_rs.get('GMAIL_APP_PASSWORD') or
-                                _env_rs.get('GMAIL_PASS') or
-                                _env_rs.get('GMAIL_PASSWORD', '')
-                            ),
-                            'label': 'Gmail SMTP',
-                        }
                     elif _env_rs.get('SMTP_HOST') and _env_rs.get('SMTP_USER') and (
                         _env_rs.get('SMTP_PASS') or _env_rs.get('SMTP_PASSWORD')
                     ):
@@ -12762,11 +12761,21 @@ async def send_outreach_email(
                             'pass': _env_rs.get('SMTP_PASS') or _env_rs.get('SMTP_PASSWORD', ''),
                             'label': 'SMTP',
                         }
+                # Gmail app-password: Railway блокирует Gmail SMTP.
+                # Регистрируем адрес для Reply-To — ответы придут на Gmail пользователя.
+                if not _gmail_reply_to and _env_rs.get('GMAIL_USER'):
+                    _gm_pass_key = (
+                        _env_rs.get('GMAIL_APP_PASSWORD') or
+                        _env_rs.get('GMAIL_PASS') or
+                        _env_rs.get('GMAIL_PASSWORD') or ''
+                    )
+                    if _gm_pass_key:  # пароль настроен — не просто IMAP-чтение
+                        _gmail_reply_to = _env_rs['GMAIL_USER']
         except Exception as _rs_err:
             import logging as _log_rs2
             _log_rs2.getLogger(__name__).debug(f'[EMAIL_OUTREACH] Personal Resend lookup: {_rs_err}')
 
-        if not RESEND_API_KEY and not _smtp_creds_out:
+        if not RESEND_API_KEY and not _smtp_creds_out and not _gmail_oauth_token_data and not _gmail_reply_to:
             return " Email не настроен. Добавьте RESEND_API_KEY или SMTP-ключи (YANDEX_USER+YANDEX_PASSWORD, MAILRU_USER+MAILRU_PASSWORD, GMAIL_USER+GMAIL_APP_PASSWORD) в настройки агента."
 
         # Найти кампанию
@@ -13043,7 +13052,7 @@ async def send_outreach_email(
             if _plain_domain and _plain_domain.lower() not in _body_signed.lower():
                 _body_signed = _body_signed.rstrip() + f"\n{_plain_domain}"
 
-        # ── SMTP dispatch (Яндекс / Mail.ru / Gmail / custom SMTP) — приоритет перед Resend ──
+        # ── SMTP dispatch (Яндекс / Mail.ru / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False
         if _smtp_creds_out:
             import smtplib as _smtplib_out
@@ -13082,9 +13091,28 @@ async def send_outreach_email(
                     f"[EMAIL_OUTREACH] SMTP ({_smtp_creds_out['label']}) failed: {_smtp_out_err} — falling back to Resend"
                 )
 
-        if not _smtp_sent_out:
+        # ── Gmail OAuth: прямая отправка через Gmail API (приоритет над Resend) ──
+        _gmail_oauth_sent = False
+        if not _smtp_sent_out and _gmail_oauth_token_data:
+            _body_gmail_oa = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
+            _ok_goa, _res_goa = await _send_via_gmail_api(
+                _gmail_oauth_token_data,
+                recipient_email,
+                subject,
+                _body_gmail_oa,
+                campaign.sender_name or 'ASI Biont',
+                user,
+                session,
+            )
+            if _ok_goa:
+                logger.info('[EMAIL_OUTREACH] Sent via Gmail API to %s', redact_email(recipient_email))
+                _gmail_oauth_sent = True
+            else:
+                logger.warning('[EMAIL_OUTREACH] Gmail API failed: %s — falling back to Resend', _res_goa)
+
+        if not _smtp_sent_out and not _gmail_oauth_sent:
             if not RESEND_API_KEY:
-                return " SMTP отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
+                return " SMTP/Gmail отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
             try:
                 async with _aiohttp.ClientSession() as http:
                     # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
@@ -13102,8 +13130,11 @@ async def send_outreach_email(
                     else:
                         _from_addr = campaign.sender_email or _effective_resend_from or 'outreach@asibiont.com'
                     from_header = f"{campaign.sender_name} <{_from_addr}>"
-                    # reply_to указывает на реальный адрес пользователя (может быть gmail)
-                    _reply_to_addr = campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None
+                    # reply_to: Gmail (app-password mode) → ответы приходят на Gmail пользователя
+                    _reply_to_addr = (
+                        _gmail_reply_to or
+                        (campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None)
+                    )
                     # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
                     _body_with_footer = _body_signed + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
                     resp = await http.post(
