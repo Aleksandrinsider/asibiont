@@ -8140,7 +8140,7 @@ class AnchorEngine:
                     _agent_spec = (agent_data.get('specialization') or agent_data.get('job_title') or '').strip()[:60]
                     # Приоритет: координаторское поручение (_coord_text) > task_hint > цель
                     if _coord_text and len(_coord_text) > 15 and _coord_text != f"{agent_name}, займись текущими задачами.":
-                        _ap_task_text = _smart_trunc(_coord_text, 500)
+                        _ap_task_text = _coord_text
                     elif _task_hint_human and _task_hint_human != 'займись активными целями':
                         _goal_prefix = _gl_titles_s[0][:120] if _gl_titles_s else ''
                         _ap_task_text = f"{_goal_prefix}: {_task_hint_human}" if _goal_prefix else _task_hint_human
@@ -8211,7 +8211,7 @@ class AnchorEngine:
                             ).strip()
                             _ack_prompt = (
                                 f"Ты — {_chosen_name}, {_ack_role}. "
-                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_smart_trunc(_coord_text_for_ack, 400)}».\n"
+                                f"ASI (твой координатор) написал{'а' if _is_ack_fem else ''} тебе в рабочем чате: «{_coord_text_for_ack}».\n"
                                 f"Напиши 3-5 предложений — ОТВЕТ в чате, как живой коллега.\n"
                                 f"ОБЯЗАТЕЛЬНО объясни:\n"
                                 f"  1) ЧТО конкретно сделаешь (какой инструмент, какой источник, какой канал)\n"
@@ -8468,20 +8468,13 @@ class AnchorEngine:
                     'сейчас ', 'попробую ', 'буду ', 'давай ',
                     'работаю над ', 'анализирую ',
                 )
-                # Ack + intent: "Хорошо, сейчас открою базу...", "Ладно, подготовлю..."
-                # НО: "Принято, обновил CRM (3 контакта)" — полезный ответ, не шум.
-                _ACK_PREFIXES = ('хорошо', 'ладно', 'ok', 'окей', 'конечно', 'разумеется', 'принято', 'есть')
-                _is_ack_planning = (
-                    len(_result_clean) < 250
-                    and any(_result_lower.startswith(p) for p in _ACK_PREFIXES)
-                    and not any(c.isdigit() for c in _result_clean)  # нет цифр вообще (не только в [:80])
-                    and not _has_real_actions  # агент вызвал инструменты → результат ценный
-                )
+                # Планы без действий ("Запускаю поиск...") — промпт уже учит: сначала сделай, потом скажи.
+                # Фильтруем только если message < 60 символов и нет ни одного реального действия.
                 _is_planning_noise = (
                     not _has_real_actions
-                    and len(_result_clean) < 200
+                    and len(_result_clean) < 60
                     and any(_result_lower.startswith(p) for p in _PLANNING_WITHOUT_FACTS)
-                ) or _is_ack_planning
+                )
                 _is_noise_result = (
                     # Hollow acks — noise только БЕЗ реальных инструментов
                     (_result_lower.rstrip('.!') in _EMPTY_RESPONSES and not _has_real_actions)
@@ -8967,14 +8960,6 @@ class AnchorEngine:
                             _cleaned_result,
                             flags=re.IGNORECASE,
                         )
-                        # Truncate overly long agent messages (keep it concise for chat)
-                        if len(_cleaned_result) > 1500:
-                            _cut_r = _cleaned_result[:1500]
-                            _last_end = max(_cut_r.rfind('.'), _cut_r.rfind('!'), _cut_r.rfind('?'))
-                            if _last_end > 400:
-                                _cleaned_result = _cut_r[:_last_end + 1]
-                            else:
-                                _cleaned_result = _cut_r.rsplit(' ', 1)[0] + '…'
                         # Sanitize tool names from user-facing text
                         _is_fem_agent = _chosen_name and _chosen_name[-1] in 'аяАЯ' and _chosen_name[-2:].lower() not in ('ша', 'жа')
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result, is_fem=_is_fem_agent)
@@ -17001,7 +16986,6 @@ class AnchorEngine:
                                         except Exception: pass
                                     # Deduped — НЕ отправляем в Telegram, только AAL для хронологии
                                     return True
-                                _report_text = _finish_sentence(_report_text)
                                 _sum_sess.add(Interaction(
                                     user_id=user.id,
                                     message_type='proactive',
