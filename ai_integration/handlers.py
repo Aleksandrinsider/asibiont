@@ -1824,31 +1824,39 @@ async def delegate_task(
                     'каналы',
                 )
                 _task_lines = [ln.strip() for ln in (_task_text or '').replace('\r\n', '\n').replace('\r', '\n').split('\n') if ln.strip()]
-                # Ищем первую строку, которая не является структурным заголовком
-                _title_line = ''
+                # Берём первые 2-3 содержательные строки (не структурные заголовки) для контекста
+                _content_lines = []
                 for _ln in _task_lines:
                     _ln_lc = _ln.lower().rstrip(' :')
                     if any(_ln_lc.startswith(h) for h in _STRUCT_HEADERS):
                         continue
                     if _ln.endswith(':') and len(_ln) < 80:
                         continue
-                    _title_line = _ln
-                    break
-                _base = _title_line or _strip_structured_text(_task_text, _max_len=280)
-                # Обрезаем если первая строка склеена со структурными секциями
-                _base = _ren.split(
-                    r'(?i)\b(?:на\s+основе\s+анализа|на\s+основе\s+rss|используй|детали|описание|данные\s+для\s+работы|ключевые\s+данные|нужно\s+найти|нужно\s+сделать)\b',
+                    _content_lines.append(_ln)
+                    if len(_content_lines) >= 3:
+                        break
+                _title_line = _content_lines[0] if _content_lines else ''
+                # Склеиваем до 2-3 предложений для показа контекста (не только первая строка)
+                _multi = ' '.join(_content_lines).strip()
+                _base = _multi or _strip_structured_text(_task_text, _max_len=320)
+                # Обрезаем структурные разделители — но ТОЛЬКО если они НЕ в начале строки
+                # (чтобы не уничтожать задачи типа "На основе анализа трендов разработай...")
+                _split_m = _ren.split(
+                    r'(?i)(?<=[а-яёa-z.,])\s+\b(?:используй|детали|описание|данные\s+для\s+работы|ключевые\s+данные|нужно\s+найти|нужно\s+сделать)\b',
                     _base,
                     maxsplit=1,
-                )[0].strip(' ,;:.-')
+                )
+                if len(_split_m) > 1 and len(_split_m[0].strip()) >= 18:
+                    _base = _split_m[0].strip(' ,;:.-')
                 if len(_base) < 18 and len(_task_lines) > 1:
-                    _base = _strip_structured_text('\n'.join(_task_lines[:2]), _max_len=220)
+                    _base = _strip_structured_text('\n'.join(_task_lines[:3]), _max_len=320)
                 _base = _ren.sub(rf'^\s*{_ren.escape(_agent_name)}\s*,?\s*', '', _base, flags=_ren.IGNORECASE).strip(' ,;:.-')
                 _is_fem = (_agent_name or '')[-1:] in 'аяАЯ'
-                _generic = f'{_agent_name}, продолжи работу по текущей задаче.' if not _is_fem else f'{_agent_name}, продолжи работу по текущей задаче.'
+                _generic = f'{_agent_name}, продолжи работу по текущей задаче.'
                 if not _base:
                     return _generic
-                _base = _truncate_by_word(_base, 160)
+                # Показываем до 300 символов — достаточно для 2-3 информативных предложений
+                _base = _truncate_by_word(_base, 300)
                 if _base and _base[:1].isupper() and not _base[:3].isupper():
                     _base = _base[:1].lower() + _base[1:]
                 # Эвристика: глагол (инфинитив/императив) или существительное?
@@ -1882,6 +1890,9 @@ async def delegate_task(
                         'обновить': 'обнови', 'связаться': 'свяжись',
                         'составить': 'составь', 'настроить': 'настрой', 'добавить': 'добавь',
                         'изучить': 'изучи', 'узнать': 'узнай', 'проанализировать': 'проанализируй',
+                        'разработать': 'разработай', 'подключить': 'подключи',
+                        'выбрать': 'выбери', 'протестировать': 'протестируй',
+                        'описать': 'опиши', 'подобрать': 'подбери',
                     }
                     if _first_w in _INF_IMP_DEL:
                         _base = _INF_IMP_DEL[_first_w] + _base[len(_first_w):]
