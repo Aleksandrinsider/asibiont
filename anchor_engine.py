@@ -6942,21 +6942,24 @@ class AnchorEngine:
                             _cc_cutoff = _dt_cc.datetime.now(_dt_cc.timezone.utc) - _dt_cc.timedelta(hours=6)
                             _last_aals_c = session.query(_AAL_coord_ctx).filter(
                                 _AAL_coord_ctx.user_id == user.id,
-                                _AAL_coord_ctx.activity_type.in_(['agent_task', 'coordinator_summary']),
+                                _AAL_coord_ctx.activity_type.in_([
+                                    'agent_task', 'coordinator_summary', 'agent_chain_continue',
+                                ]),
                                 _AAL_coord_ctx.created_at >= _cc_cutoff,
                                 _AAL_coord_ctx.result.isnot(None),
-                            ).order_by(_AAL_coord_ctx.created_at.desc()).limit(10).all()
+                            ).order_by(_AAL_coord_ctx.created_at.desc()).limit(12).all()
                             if _last_aals_c:
                                 # Строим структурированный контекст из последних 3 циклов разных агентов
                                 _cycle_parts_c = []
                                 _seen_agents_c = set()
-                                for _aal_ci in _last_aals_c[:5]:
+                                for _aal_ci in _last_aals_c[:6]:
                                     _aal_agent_c = (_aal_ci.title or '').replace(' — обзор целей', '').strip()[:25]
                                     _aal_res_c = (_aal_ci.result or '').strip()
+                                    _aal_prefix = '[делегировано] ' if _aal_ci.activity_type == 'agent_chain_continue' else ''
                                     if _aal_res_c and _aal_agent_c not in _seen_agents_c:
                                         _seen_agents_c.add(_aal_agent_c)
-                                        _cycle_parts_c.append(f'{_aal_agent_c}: {_aal_res_c[:500]}')
-                                    if len(_cycle_parts_c) >= 4:
+                                        _cycle_parts_c.append(f'{_aal_prefix}{_aal_agent_c}: {_aal_res_c[:500]}')
+                                    if len(_cycle_parts_c) >= 5:
                                         break
                                 _last_cycle_ctx_c = '\n'.join(_cycle_parts_c)[:1800].strip()
                                 # ── История конкретного агента: чтобы координатор видел паттерн ──
@@ -7484,6 +7487,67 @@ class AnchorEngine:
                             except Exception:
                                 pass
 
+                        # ── Реальные DB-факты за последние 24ч для координатора ──
+                        # Координатор видит ground truth: что реально произошло, а не только agent self-report.
+                        _real_outcomes_c = ''
+                        try:
+                            import datetime as _dt_ro
+                            _ro_cutoff = _dt_ro.datetime.now(_dt_ro.timezone.utc) - _dt_ro.timedelta(hours=24)
+                            _ro_parts: list[str] = []
+                            # Письма отправлено и ответов сегодня
+                            if 'email' in _cats_c:
+                                try:
+                                    _ro_sent_24 = session.query(EmailOutreach).filter(
+                                        EmailOutreach.user_id == user.id,
+                                        EmailOutreach.sent_at >= _ro_cutoff,
+                                    ).count()
+                                    _ro_reply_24 = session.query(EmailOutreach).filter(
+                                        EmailOutreach.user_id == user.id,
+                                        EmailOutreach.reply_at >= _ro_cutoff,
+                                        EmailOutreach.status == 'replied',
+                                    ).count()
+                                    if _ro_sent_24 > 0 or _ro_reply_24 > 0:
+                                        _ro_parts.append(f'📧 Писем за 24ч: {_ro_sent_24} отправлено, {_ro_reply_24} новых ответов')
+                                except Exception:
+                                    pass
+                            # Новые контакты сохранены сегодня
+                            try:
+                                from models import EmailContact as _EC_ro
+                                _ro_contacts_24 = session.query(_EC_ro).filter(
+                                    _EC_ro.user_id == user.id,
+                                    _EC_ro.created_at >= _ro_cutoff,
+                                ).count() if hasattr(_EC_ro, 'created_at') else 0
+                                if _ro_contacts_24 > 0:
+                                    _ro_parts.append(f'👤 Новых контактов: {_ro_contacts_24}')
+                            except Exception:
+                                pass
+                            # Посты/заметки/задачи от агентов сегодня
+                            try:
+                                from models import Task as _Task_ro, Note as _Note_ro
+                                _ro_tasks_24 = session.query(_Task_ro).filter(
+                                    _Task_ro.user_id == user.id,
+                                    _Task_ro.source == 'agent',
+                                    _Task_ro.created_at >= _ro_cutoff,
+                                ).count()
+                                _ro_notes_24 = session.query(_Note_ro).filter(
+                                    _Note_ro.user_id == user.id,
+                                    _Note_ro.created_at >= _ro_cutoff,
+                                ).count() if hasattr(_Note_ro, 'created_at') else 0
+                                if _ro_tasks_24 > 0:
+                                    _ro_parts.append(f'✅ Задач создано агентами: {_ro_tasks_24}')
+                                if _ro_notes_24 > 0:
+                                    _ro_parts.append(f'📝 Заметок сохранено: {_ro_notes_24}')
+                            except Exception:
+                                pass
+                            if _ro_parts:
+                                _real_outcomes_c = (
+                                    '\n📈 РЕАЛЬНЫЙ РЕЗУЛЬТАТ (из БД, не агентский отчёт) за 24ч:\n'
+                                    + '\n'.join(f'  {p}' for p in _ro_parts)
+                                    + '\n→ Если прогресс отстаёт — подумай какого действия не хватает.\n'
+                                )
+                        except Exception:
+                            pass
+
                         # ── Правила пользователя → подсказка координатору ──
                         # Читаем user.memory['rules'] и если есть правила — передаём как контекст.
                         # Никаких хардкодных ключевых слов: пользователь сам формулирует что важно.
@@ -7591,6 +7655,7 @@ class AnchorEngine:
                             + (f"Текущий прогресс: {_goals_progress_c}\n" if _goals_progress_c else '')
                             + (_priority_signal if _priority_signal else '')
                             + (_acquisition_hint_c if _acquisition_hint_c else '')
+                            + (_real_outcomes_c if _real_outcomes_c else '')
                             + (f"Результаты команды за последний цикл:\n{_last_cycle_ctx_c}\n" if _last_cycle_ctx_c else '')
                             + _coord_effectiveness_c
                             + (f"\n💬 ПОСЛЕДНИЙ ОТВЕТ {_chosen_name.upper()} (прочитай внимательно — это реальный результат):\n{_last_agent_reply_c}\n"

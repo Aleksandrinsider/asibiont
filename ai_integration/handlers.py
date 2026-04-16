@@ -15759,6 +15759,34 @@ async def check_emails(
                                 except Exception as _e_aal_ir:
                                     logger.debug(f'[CHECK_EMAILS] AAL inbox_reply log failed: {_e_aal_ir}')
                                 break
+                    # ── Авто-прогресс для целей без числовой метрики ──
+                    # Цели типа "найти инвесторов" / "outreach в fintech" не имеют metric_target,
+                    # но реальный ответ — это реальный прогресс. Даём +3% за каждый новый ответ (не более +10% за раз).
+                    _incr_pct = min(10, _newly_replied_this_call * 3)
+                    _outreach_kw_ce = (
+                        'outreach', 'клиент', 'партнёр', 'инвестор', 'лид', 'продаж',
+                        'привлеч', 'контакт', 'пользовател', 'рассылк', 'письм',
+                    )
+                    try:
+                        _no_metric_goals = session.query(_Goal_ce).filter(
+                            _Goal_ce.user_id == user.id,
+                            _Goal_ce.status == 'active',
+                            _Goal_ce.metric_target.is_(None),
+                        ).all()
+                        for _g_nm in _no_metric_goals:
+                            _g_nm_text = (_g_nm.title + ' ' + (_g_nm.description or '')).lower()
+                            if any(w in _g_nm_text for w in _outreach_kw_ce):
+                                if (_g_nm.progress_percentage or 0) < 99:
+                                    update_goal_progress(
+                                        goal_title=_g_nm.title,
+                                        progress_increment=_incr_pct,
+                                        notes=f'check_emails: +{_newly_replied_this_call} ответов → +{_incr_pct}%',
+                                        user_id=user_id,
+                                    )
+                                    logger.info(f'[CHECK_EMAILS] Auto-progress (no-metric) goal: {_g_nm.title} +{_incr_pct}%')
+                                    break
+                    except Exception as _e_nm_gp:
+                        logger.debug(f'[CHECK_EMAILS] no-metric goal progress failed: {_e_nm_gp}')
                 except Exception as _e_auto_gp:
                     logger.debug(f'[CHECK_EMAILS] auto update_goal_progress failed: {_e_auto_gp}')
             else:
