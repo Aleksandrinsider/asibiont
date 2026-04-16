@@ -663,9 +663,16 @@ def _normalize_coordinator_assignment_by_capabilities(
             'publish_to_telegram недоступен без Telegram-канала/бота',
         )
     if tool_norm == 'publish_to_discord' and ('discord' not in cats and not has_user_discord_webhook):
+        # Если есть Telegram-канал — автоматически переключаем на него, иначе create_post
+        if 'telegram' in cats or has_user_tg_channel:
+            return (
+                'publish_to_telegram',
+                (task_norm + ' Discord webhook не подключён, публикую в Telegram-канал как альтернативу.').strip(),
+                'publish_to_discord → publish_to_telegram (Discord не подключён)',
+            )
         return (
             'create_post',
-            (task_norm + ' Discord webhook не подключён: подготовь контент и передай пользователю через send_message_to_user.').strip(),
+            (task_norm + ' Discord webhook не подключён, Telegram-канал тоже недоступен: подготовь контент как пост в ленту.').strip(),
             'publish_to_discord недоступен без Discord webhook',
         )
 
@@ -7483,7 +7490,9 @@ class AnchorEngine:
                             f"  📧 sender_name при англоязычной аудитории — всегда на английском: 'ASI Biont Team' или имя агента (НЕ 'Команда ASI Biont', НЕ 'Кристина рассылка').\n"
                             f"  📧 sender_email: никогда не используй example.com, placeholder.com, test.com — только реальные адреса (по умолчанию outreach@asibiont.com).\n"
                             f"  ❌ Email-агенту с outreach/acquisition-целью — НЕ назначай RSS/stock/news/finance задачи. Email-агент = email + поиск контактов. web_search допустим ТОЛЬКО как шаг ПЕРЕД send_outreach_email (найти адрес человека).\n"
-                            f"  ❌ Выдумывать email из GitHub-username — ЗАПРЕЩЕНО (user@gmail.com, firstname.lastname@domain — фантазия). Алгоритм: web_search \"name site:github.com OR dev.to email contact\" → если нашёл реальный адрес → save_email_contact. Не нашёл → пропусти этого человека, ищи следующего.\n\n"
+                            f"  ❌ Выдумывать email из GitHub-username — ЗАПРЕЩЕНО (user@gmail.com, firstname.lastname@domain — фантазия). Алгоритм: web_search \"name site:github.com OR dev.to email contact\" → если нашёл реальный адрес → save_email_contact. Не нашёл → пропусти этого человека, ищи следующего.\n"
+                            f"  ❌ ДУБЛИРОВАНИЕ ЗАДАЧ: если другому агенту уже поручено искать email/контакт ОДНОГО И ТОГО ЖЕ человека в этом цикле — НЕ повторяй. Вместо этого: поручи ПРИМЕНИТЬ уже найденное ИЛИ работай с другим человеком/сегментом.\n"
+                            f"  ❌ ЗАСТРЯВШАЯ СТРАТЕГИЯ: если один подход (только email-outreach / только поиск одного контакта / только RSS-посты) не даёт роста цели 2+ цикла — СМЕНИ подход. Другой канал, другой сегмент аудитории, другое действие.\n\n"
                             # Email-специфичные факты — только для агентов с email И целями outreach
                             + (
                                 f"📌 ФАКТЫ О ПЛАТФОРМЕ (используй ТОЛЬКО эти числа, НЕ придумывай другие):\n"
