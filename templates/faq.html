@@ -424,7 +424,7 @@
       howTo: 'В Telegram: откройте <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, нажмите /start. В Discord: напишите в личные сообщения @asibiont_bot. Бот зарегистрирует вас. Просто пишите, что нужно сделать — на любом языке. Также доступен <a href="/dashboard" style="color: #374151; font-weight: 500;">веб-дашборд</a>.',
       cta: 'Все функции доступны сразу.',
       btnTop: 'Попробовать бесплатно — 1 500 токенов', btnInstall: 'Установить приложение',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
+      fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
     },
     en: {
       title: 'FAQ — ASI Biont | Frequently Asked Questions about Multilingual AI Agent',
@@ -454,7 +454,7 @@
       howTo: 'In Telegram: open <a href="https://t.me/asibiont_bot" style="color: #374151; font-weight: 500;">@asibiont_bot</a>, press /start. On Discord: DM @asibiont_bot. The bot registers you. Just write what you need in any language. A <a href="/dashboard" style="color: #374151; font-weight: 500;">web dashboard</a> is also available.',
       cta: 'All features available immediately.',
       btnTop: 'Try for free — 1,500 tokens', btnInstall: 'Install App',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
+      fHome: 'Home', fBlog: 'Blog', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -510,12 +510,13 @@
     // Footer links
     var fl = document.querySelectorAll('.footer-links a');
     if (fl[0]) fl[0].textContent = t.fHome;
-    if (fl[1]) fl[1].textContent = t.fFaq;
-    if (fl[2]) fl[2].textContent = t.fPrice;
-    if (fl[3]) fl[3].textContent = t.fSupport;
-    if (fl[4]) fl[4].textContent = t.fPrivacy;
-    if (fl[5]) fl[5].textContent = t.fTerms;
-    if (fl[6]) fl[6].textContent = t.fArena;
+    if (fl[1]) fl[1].textContent = t.fBlog;
+    if (fl[2]) fl[2].textContent = t.fFaq;
+    if (fl[3]) fl[3].textContent = t.fPrice;
+    if (fl[4]) fl[4].textContent = t.fSupport;
+    if (fl[5]) fl[5].textContent = t.fPrivacy;
+    if (fl[6]) fl[6].textContent = t.fTerms;
+    if (fl[7]) fl[7].textContent = t.fArena;
   }
   window.applyLang = apply;
   document.addEventListener('DOMContentLoaded', function() {

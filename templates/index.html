@@ -1206,7 +1206,7 @@
       ],
       cta: 'Все функции доступны сразу.',
       btnTop: 'Попробовать бесплатно — 1 500 токенов', btnInstall: 'Установить приложение',
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI',
+      fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI',
       discordLogin: 'Войти через Discord',
       emailLogin: 'Войти по email', loginBtn: 'Войти', registerBtn: 'Регистрация', passwordPh: 'Пароль (мин. 6 символов)', cancel: 'Отмена', forgotPassword: 'Забыли пароль?', openBeta: 'ОТКРЫТАЯ БЕТА'
     },
@@ -1285,7 +1285,7 @@
       ],
       cta: 'All features available immediately.',
       btnTop: 'Try for free — 1,500 tokens', btnInstall: 'Install App',
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI',
+      fHome: 'Home', fBlog: 'Blog', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI',
       discordLogin: 'Sign in with Discord',
       emailLogin: 'Sign in with email', loginBtn: 'Sign in', registerBtn: 'Register', passwordPh: 'Password (min 6 characters)', cancel: 'Cancel', forgotPassword: 'Forgot password?', openBeta: 'OPEN BETA'
     }
@@ -1344,12 +1344,13 @@
     if (fl) {
       var fa = fl.querySelectorAll('a');
       if (fa[0]) fa[0].textContent = t.fHome;
-      if (fa[1]) fa[1].textContent = t.fFaq;
-      if (fa[2]) fa[2].textContent = t.fPrice;
-      if (fa[3]) fa[3].textContent = t.fSupport;
-      if (fa[4]) fa[4].textContent = t.fPrivacy;
-      if (fa[5]) fa[5].textContent = t.fTerms;
-      if (fa[6]) fa[6].textContent = t.fArena;
+      if (fa[1]) fa[1].textContent = t.fBlog;
+      if (fa[2]) fa[2].textContent = t.fFaq;
+      if (fa[3]) fa[3].textContent = t.fPrice;
+      if (fa[4]) fa[4].textContent = t.fSupport;
+      if (fa[5]) fa[5].textContent = t.fPrivacy;
+      if (fa[6]) fa[6].textContent = t.fTerms;
+      if (fa[7]) fa[7].textContent = t.fArena;
     }
     // Discord login button
     var dcBtn = document.querySelector('[data-i18n="discordLogin"]');

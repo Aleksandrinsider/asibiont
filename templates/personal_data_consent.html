@@ -192,7 +192,7 @@
         { h: '9. Файлы cookie и аналитика', p: 'Веб-интерфейс использует Яндекс.Метрику для анализа посещаемости. Метрика может устанавливать файлы cookie. Вы можете отключить сбор данных, используя настройки браузера или расширение Яндекс Браузера.' },
         { h: '10. Изменения Соглашения', p: 'Оператор вправе вносить изменения в настоящее Соглашение. Актуальная версия всегда размещена по адресу <a href="/privacy">/privacy</a>. Продолжение использования Сервиса после публикации изменений означает их принятие.' }
       ],
-      fHome: 'Главная', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
+      fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI'
     },
     en: {
       title: 'Personal Data Processing Agreement | ASI Biont',
@@ -238,7 +238,7 @@
         { h: '9. Cookies and Analytics', p: 'The web interface uses Yandex.Metrica for traffic analysis. Metrica may set cookies. You can disable data collection using your browser settings or a browser extension.' },
         { h: '10. Changes to the Agreement', p: 'The Operator reserves the right to amend this Agreement. The current version is always available at <a href="/privacy">/privacy</a>. Continued use of the Service after changes are published constitutes acceptance.' }
       ],
-      fHome: 'Home', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
+      fHome: 'Home', fBlog: 'Blog', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support', fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI'
     }
   };
   function detect() {
@@ -291,12 +291,13 @@
     // Footer
     var fl = document.querySelectorAll('.footer-links a');
     if (fl[0]) fl[0].textContent = t.fHome;
-    if (fl[1]) fl[1].textContent = t.fFaq;
-    if (fl[2]) fl[2].textContent = t.fPrice;
-    if (fl[3]) fl[3].textContent = t.fSupport;
-    if (fl[4]) fl[4].textContent = t.fPrivacy;
-    if (fl[5]) fl[5].textContent = t.fTerms;
-    if (fl[6]) fl[6].textContent = t.fArena;
+    if (fl[1]) fl[1].textContent = t.fBlog;
+    if (fl[2]) fl[2].textContent = t.fFaq;
+    if (fl[3]) fl[3].textContent = t.fPrice;
+    if (fl[4]) fl[4].textContent = t.fSupport;
+    if (fl[5]) fl[5].textContent = t.fPrivacy;
+    if (fl[6]) fl[6].textContent = t.fTerms;
+    if (fl[7]) fl[7].textContent = t.fArena;
   }
   document.addEventListener('DOMContentLoaded', function() {
     apply(detect());
