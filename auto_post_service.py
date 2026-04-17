@@ -22,11 +22,27 @@ logger = logging.getLogger(__name__)
 def _detect_gender(first_name: str) -> str:
     """Определяет пол по имени: 'female' или 'male'.
     Русские женские имена как правило заканчиваются на 'а' или 'я'.
+    Для английских — список распространённых имён + окончание на 'a'.
     """
     if not first_name:
         return 'male'
     name = first_name.strip().split()[0].lower()
-    if name.endswith(('а', 'я', 'a', 'ya')):
+    # Явный список английских женских имён (не оканчивающихся на 'a')
+    _EN_FEMALE = {
+        'kate', 'katie', 'jane', 'mary', 'helen', 'sarah', 'emily', 'claire',
+        'eve', 'grace', 'hope', 'joy', 'faith', 'ruth', 'beth', 'sue', 'sue',
+        'rachel', 'hannah', 'naomi', 'abigail', 'charlotte', 'elizabeth',
+        'jennifer', 'jessica', 'ashley', 'brittany', 'megan', 'stephanie',
+        'caroline', 'katherine', 'natalie', 'danielle', 'michelle', 'rachel',
+        'samantha', 'amber', 'crystal', 'heather', 'holly', 'ivy', 'lily',
+        'rose', 'violet', 'daisy', 'iris', 'pearl', 'ruby', 'claire', 'elise',
+        'erin', 'gwen', 'karen', 'kim', 'lauren', 'leigh', 'lynn', 'meredith',
+        'morgan', 'paige', 'quinn', 'robin', 'shelby', 'taylor', 'whitney',
+    }
+    if name in _EN_FEMALE:
+        return 'female'
+    # Русские и большинство европейских женских имён на 'а'/'я'
+    if name.endswith(('а', 'я', 'a')):
         return 'female'
     return 'male'
 
