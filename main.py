@@ -2299,6 +2299,79 @@ async def chat_progress_handler(request):
     return response
 
 
+async def _chat_bg_task(user_id: int, message: str, context, file_content, user_db_id, web_progress_callback):
+    """Фоновая задача: запускает AI и доставляет финальный ответ через SSE.
+    HTTP /chat возвращает {'background': True} немедленно, не дожидаясь AI.
+    """
+    response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
+    ai_result: dict = {'agent_info': None}
+    try:
+        session_db = Session()
+        try:
+            try:
+                ai_result = await chat_with_ai(
+                    message, context, user_id, file_content,
+                    db_session=session_db,
+                    progress_callback=web_progress_callback,
+                    web_context=True,
+                )
+                response = ai_result.get('response') or ''
+                logger.info("[BG CHAT] AI response: %s...", response[:100])
+            except Exception as e:
+                logger.error(f"[BG CHAT] Error getting AI response: {e}", exc_info=True)
+                response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
+
+            # Сохраняем ответ в БД (агентские ответы уже сохранены через _save_interaction_for_director)
+            if user_db_id and response and response.strip():
+                _ai_saved_agent_info = ai_result.get('agent_info')
+                if _ai_saved_agent_info and _ai_saved_agent_info.get('name'):
+                    import json as _json_bg
+                    _save_content = _json_bg.dumps({
+                        '__agent': {
+                            'name': _ai_saved_agent_info['name'],
+                            'id': _ai_saved_agent_info.get('id'),
+                            'avatar_url': _ai_saved_agent_info.get('avatar_url', ''),
+                        },
+                        'text': response,
+                    }, ensure_ascii=False)
+                else:
+                    _save_content = response
+                _save_session = Session()
+                try:
+                    _save_session.add(Interaction(
+                        user_id=user_db_id,
+                        message_type='ai',
+                        content=_save_content,
+                        created_at=datetime.now(dt_timezone.utc),
+                    ))
+                    _save_session.commit()
+                    logger.info("[BG CHAT] Saved AI response to DB")
+                except Exception as _se:
+                    logger.error(f"[BG CHAT] Failed to save AI response: {_se}")
+                    _save_session.rollback()
+                finally:
+                    _save_session.close()
+                if not FREE_ACCESS_MODE:
+                    try:
+                        from token_service import spend_tokens as _st_bg
+                        _st_bg(user_id, 'message', description=message[:100])
+                    except Exception as _ste:
+                        logger.warning(f"[BG CHAT] spend_tokens error: {_ste}")
+        finally:
+            session_db.close()
+    finally:
+        # Доставляем финальный ответ через SSE, затем закрываем стрим
+        queue = _chat_progress_queues.get(user_id)
+        if queue:
+            if response and response.strip():
+                await queue.put({
+                    'type': 'final',
+                    'text': response,
+                    'agent_info': ai_result.get('agent_info'),
+                })
+            await queue.put({'type': 'done'})
+
+
 async def chat_handler(request):
     try:
         user_id = await get_user_id_from_request(request)
@@ -2313,125 +2386,48 @@ async def chat_handler(request):
         file = data.get('file')
         file_content = None
         if file:
-            # Read file content
             file_content = file.file.read().decode('utf-8', errors='ignore')
             logger.info(f"File received: {file.filename}, size: {len(file_content)}")
         logger.info(f"Message received: {message}")
 
-        # Load context from DB
         context = get_context_from_db(user_id, limit=10)
-
         logger.info(f"[WEB CHAT] New message from user {user_id}: '{message[:100]}...'")
 
-        # ═══ Progress callback для SSE стриминга ═══
-        # Заранее создаём очередь, если SSE ещё не подключился (race condition fix)
+        # ═══ Создаём SSE-очередь заранее (race condition fix) ═══
         if user_id not in _chat_progress_queues:
             _chat_progress_queues[user_id] = asyncio.Queue()
 
         async def web_progress_callback(text, persist=False):
-            """Отправляет прогресс в SSE очередь для дашборда.
-            persist=True: сообщение также сохраняется как Interaction (для диалога агентов).
-            """
             queue = _chat_progress_queues.get(user_id)
             if queue:
                 await queue.put({'type': 'progress', 'text': text, 'persist': persist})
 
-        response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
-        ai_result = {'agent_info': None}
+        # Быстрая синхронная часть: сохраняем сообщение, проверяем токены
+        user_db_id = None
+        session_db = Session()
         try:
-            session_db = Session()
-            try:
-                user = session_db.query(User).filter_by(telegram_id=user_id).first()
-                # Запоминаем user.id ДО вызова AI — после него сессия может быть в состоянии expunged
-                user_db_id = user.id if user else None
-
-                # Сохраняем сообщение пользователя ДО вызова AI
-                save_context_to_db(user_id, message, None)
-
-                # Проверяем баланс токенов ДО вызова AI
-                _web_tokens_ok = True
-                if not FREE_ACCESS_MODE:
-                    from token_service import has_enough_tokens as _het_web
-                    if not _het_web(user_id, 'message'):
-                        from token_service import insufficient_balance_message
-                        response = insufficient_balance_message(user_id, 'message')
-                        _web_tokens_ok = False
-
-                if not _web_tokens_ok:
-                    pass  # response уже заполнен сообщением об ошибке
-                else:
-                    # AI работает по готовности — без искусственных ограничений
-                    try:
-                        ai_result = await chat_with_ai(
-                            message, context, user_id, file_content,
-                            db_session=session_db,
-                            progress_callback=web_progress_callback,
-                            web_context=True
-                        )
-                        response = ai_result['response']
-                        logger.info("AI response: %s...", response[:100])
-                    except Exception as e:
-                        logger.error(f"Error getting AI response: {e}", exc_info=True)
-                        response = "Произошла ошибка при обработке запроса. Попробуйте ещё раз."
-
-                # Save agent response to Interaction table (skip empty — agents already saved their own messages)
-                # Используем НОВУЮ сессию для сохранения — основная session_db могла протухнуть
-                # за время долгой AI-обработки, что вызывало 500 при commit()
-                if user_db_id and response and response.strip():
-                    agent_response_timestamp = datetime.now(dt_timezone.utc)
-                    _ai_saved_agent_info = ai_result.get('agent_info')
-                    if _ai_saved_agent_info and _ai_saved_agent_info.get('name'):
-                        import json as _json_chat
-                        _save_content = _json_chat.dumps({
-                            '__agent': {
-                                'name': _ai_saved_agent_info['name'],
-                                'id': _ai_saved_agent_info.get('id'),
-                                'avatar_url': _ai_saved_agent_info.get('avatar_url', ''),
-                            },
-                            'text': response,
-                        }, ensure_ascii=False)
-                    else:
-                        _save_content = response
-                    # Свежая сессия — не пострадает от таймаута соединения в долгих запросах
-                    _save_session = Session()
-                    try:
-                        interaction_agent = Interaction(
-                            user_id=user_db_id,
-                            message_type='ai',
-                            content=_save_content,
-                            created_at=agent_response_timestamp
-                        )
-                        _save_session.add(interaction_agent)
-                        _save_session.commit()
-                        logger.info("Saved AI response to database")
-                    except Exception as _save_err:
-                        logger.error(f"[WEB CHAT] Failed to save AI response: {_save_err}")
-                        _save_session.rollback()
-                    finally:
-                        _save_session.close()
-                    # Списываем токены за сообщение (аналогично TG-пути handlers.py:1026)
-                    if not FREE_ACCESS_MODE:
-                        try:
-                            from token_service import spend_tokens as _st_web
-                            _st_result = _st_web(user_id, 'message', description=message[:100])
-                            if not _st_result.get('success'):
-                                logger.warning(f"[WEB CHAT] spend_tokens failed for user {user_id}: {_st_result}")
-                        except Exception as _ste:
-                            logger.warning(f"[WEB CHAT] spend_tokens error: {_ste}")
-                elif user_db_id and not (response and response.strip()):
-                    logger.debug("[CHAT] Skipping empty response save to Interaction")
-            finally:
-                session_db.close()
+            user = session_db.query(User).filter_by(telegram_id=user_id).first()
+            user_db_id = user.id if user else None
+            save_context_to_db(user_id, message, None)
+            if not FREE_ACCESS_MODE:
+                from token_service import has_enough_tokens as _het_web
+                if not _het_web(user_id, 'message'):
+                    from token_service import insufficient_balance_message
+                    _bal_msg = insufficient_balance_message(user_id, 'message')
+                    queue = _chat_progress_queues.get(user_id)
+                    if queue:
+                        await queue.put({'type': 'final', 'text': _bal_msg, 'agent_info': None})
+                        await queue.put({'type': 'done'})
+                    return web.json_response({'response': '', 'background': True})
         finally:
-            # Сигнализируем SSE что ответ готов — ВСЕГДА, даже при исключении
-            queue = _chat_progress_queues.get(user_id)
-            if queue:
-                await queue.put({'type': 'done'})
+            session_db.close()
 
-        # Ответ возвращается только в веб-чат.
-        # TG и Discord получают ответы только когда пользователь пишет напрямую
-        # через соответствующий канал (TG-бот / Discord-бот).
-        return web.json_response({'response': response, 'agent_info': ai_result.get('agent_info')})
+        # Запускаем AI в фоне — HTTP отвечает немедленно, агенты доставляются через SSE
+        asyncio.create_task(_chat_bg_task(
+            user_id, message, context, file_content, user_db_id, web_progress_callback
+        ))
+        return web.json_response({'response': '', 'background': True})
+
     except Exception as e:
         logger.error(f"Unexpected error in chat_handler: {e}", exc_info=True)
         return web.json_response({'error': 'Internal server error'}, status=500)

@@ -2284,6 +2284,60 @@
 
             // Подключаемся к SSE для получения прогресса в реальном времени
             let evtSource = null;
+            // Вспомогательная функция: синк DB + обновление UI после завершения (вызывается из SSE или HTTP)
+            async function _afterChatDone(finalText, finalAgentInfo, intermediateIdsAlreadyShown) {
+                hideTypingIndicator();
+                // Синкаем DB — забираем промежуточные пузыри агентов
+                try {
+                    const syncResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
+                    if (syncResp.ok) {
+                        const syncData = await syncResp.json();
+                        if (syncData.interactions) {
+                            const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
+                            const fText = normalize(finalText || '');
+                            const sorted = syncData.interactions.sort((a, b) => a.id - b.id);
+                            let msgDelay = 0;
+                            sorted.forEach(i => {
+                                if (!displayedMessageIds.has(i.id)) {
+                                    if (i.message_type === 'ai' || i.message_type === 'agent_msg' || i.message_type === 'proactive') {
+                                        const iRaw = i.content || '';
+                                        let iTextCmp = normalize(iRaw);
+                                        if (iRaw.trim().startsWith('{')) {
+                                            try { const _ip = JSON.parse(iRaw); if (_ip.__agent && _ip.text) iTextCmp = normalize(_ip.text); } catch(e) {}
+                                        }
+                                        if (iTextCmp !== fText) {
+                                            const _i = i;
+                                            setTimeout(() => addMessage(_i.content, _i.message_type, _i.created_at, _i.id), msgDelay);
+                                            msgDelay += 350;
+                                        }
+                                    }
+                                    displayedMessageIds.add(i.id);
+                                }
+                            });
+                            lastMessageCount = syncData.interactions.length;
+                            window._pendingUserMsgText = null;
+                            document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
+                                const rawText = (sep.dataset.pendingText || '').trim();
+                                const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
+                                const match = rawText
+                                    ? userInteractions.filter(i => normalize(i.content) === normalize(rawText)).pop()
+                                    || userInteractions.filter(i => normalize(i.content).includes(normalize(rawText).slice(0, 30))).pop()
+                                    : null;
+                                if (match) { sep.dataset.interactionId = String(match.id); delete sep.dataset.pendingText; }
+                            });
+                        }
+                    }
+                } catch(e) {}
+                // Показываем финальный ответ ASI (если есть и не показан из SSE)
+                if (finalText) {
+                    addMessage(finalText, 'ai', null, null, finalAgentInfo || null);
+                }
+                setTimeout(async () => {
+                    try { await updateTasks(); await updateProfile(); await updatePeople(); await loadGoalsProgress(); } catch(e) {}
+                }, 500);
+                window.sendingMessage = false;
+            }
+
             try {
                 evtSource = new EventSource('/chat/progress');
                 evtSource.onmessage = function(event) {
@@ -2291,12 +2345,25 @@
                         const data = JSON.parse(event.data);
                         if (data.type === 'progress' && data.text) {
                             if (data.persist) {
-                                // Постоянное сообщение (директор → агент, ответ агента) — показываем как реплику
+                                // Постоянное сообщение (директор → агент, ответ агента)
                                 hideTypingIndicator();
                                 addMessage(data.text, 'ai');
                             } else {
                                 showTypingIndicator(data.text);
                             }
+                        } else if (data.type === 'final') {
+                            // Финальный ответ AI доставлен через SSE (background mode)
+                            if (evtSource) { evtSource.close(); evtSource = null; }
+                            _afterChatDone(data.text || '', data.agent_info || null, null);
+                        } else if (data.type === 'done') {
+                            // done без final = агент ответил через persist (agent_handled), нет синтеза
+                            if (evtSource) { evtSource.close(); evtSource = null; }
+                            hideTypingIndicator();
+                            // Синкаем DB чтобы обновить таски/профиль
+                            setTimeout(async () => {
+                                try { await updateTasks(); await updateProfile(); await updatePeople(); await loadGoalsProgress(); } catch(e) {}
+                            }, 500);
+                            window.sendingMessage = false;
                         }
                     } catch(e) {}
                 };
@@ -2304,12 +2371,12 @@
                     if (evtSource) { evtSource.close(); evtSource = null; }
                 };
             } catch(e) {
-                // SSE не поддерживается — будет просто "Думаю..."
+                // SSE не поддерживается
             }
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 300000);
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
                 
                 const formData = new FormData();
                 formData.append('message', message);
@@ -2324,104 +2391,40 @@
                     signal: controller.signal
                 });
                 clearTimeout(timeoutId);
-                if (evtSource) { evtSource.close(); evtSource = null; }
-                hideTypingIndicator();
                 if (!await checkAuth(response)) return;
                 let data;
                 try {
                     data = await response.json();
                 } catch (parseErr) {
+                    if (evtSource) { evtSource.close(); evtSource = null; }
                     hideTypingIndicator();
                     addMessage(t('err-server-unavail'), 'ai');
+                    window.sendingMessage = false;
                     return;
                 }
                 if (response.ok) {
-                    // Сначала синкаем DB — забираем все промежуточные пузыри агентов
-                    // (director intro + agent responses), которые были сохранены во время обработки
-                    let intermediateMessages = [];
-                    try {
-                        const syncResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
-                        if (syncResp.ok) {
-                            const syncData = await syncResp.json();
-                            if (syncData.interactions) {
-                                // Находим новые AI-сообщения, которые ещё не показаны
-                                const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
-                                const finalText = normalize(data.response || '');
-                                const sorted = syncData.interactions.sort((a, b) => a.id - b.id);
-                                sorted.forEach(i => {
-                                    if (!displayedMessageIds.has(i.id)) {
-                                        if (i.message_type === 'ai' || i.message_type === 'agent_msg' || i.message_type === 'proactive') {
-                                            // Пропускаем финальный синтез — он будет показан отдельно
-                                            // Если content — JSON с __agent, сравниваем по вложенному text
-                                            const iRaw = i.content || '';
-                                            let iTextForCmp = normalize(iRaw);
-                                            if (iRaw.trim().startsWith('{')) {
-                                                try {
-                                                    const _ip = JSON.parse(iRaw);
-                                                    if (_ip.__agent && _ip.text) iTextForCmp = normalize(_ip.text);
-                                                } catch(e) {}
-                                            }
-                                            if (iTextForCmp !== finalText) {
-                                                intermediateMessages.push(i);
-                                            }
-                                        }
-                                        displayedMessageIds.add(i.id);
-                                    }
-                                });
-                                lastMessageCount = syncData.interactions.length;
-                                // Сброс pending-защиты от дублей: синк завершён, ID уже в displayedMessageIds
-                                window._pendingUserMsgText = null;
-                                // Update pending checkpoint separators with real interaction IDs
-                                document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
-                                    const rawText = (sep.dataset.pendingText || '').trim();
-                                    const userInteractions = syncData.interactions.filter(i => i.message_type === 'user');
-                                    const match = rawText
-                                        ? userInteractions.filter(i => normalize(i.content) === normalize(rawText)).pop()
-                                        || userInteractions.filter(i => normalize(i.content).includes(normalize(rawText).slice(0, 30))).pop()
-                                        : (() => { const userMsgEl = sep.nextElementSibling; if (!userMsgEl || !userMsgEl.classList.contains('user')) return null; const t2 = normalize(userMsgEl.querySelector('.message-text')?.innerText || ''); return userInteractions.filter(i => normalize(i.content) === t2).pop(); })();
-                                    if (match) { sep.dataset.interactionId = String(match.id); delete sep.dataset.pendingText; }
-                                });
-                            }
-                        }
-                    } catch(syncErr) {}
-
-                    // Показываем сообщения по очереди с задержкой:
-                    // сначала промежуточные пузыри (директор + агенты), потом финальный синтез
-                    let msgDelay = 0;
-                    for (const im of intermediateMessages) {
-                        const _im = im;
-                        setTimeout(() => addMessage(_im.content, _im.message_type, _im.created_at, _im.id), msgDelay);
-                        msgDelay += 350;
+                    if (data.background) {
+                        // Фоновый режим: SSE уже получает прогресс, HTTP вернулся сразу
+                        // Не закрываем SSE — он сам закроется при получении type='final'/'done'
+                        return; // sendingMessage сбросится в SSE handler
                     }
-                    if (data.response) {
-                        setTimeout(() => {
-                            addMessage(data.response, 'ai', null, null, data.agent_info || null);
-                        }, msgDelay);
-                    }
-                    
-                    setTimeout(async () => {
-                        try {
-                            await updateTasks();
-                            await updateProfile();
-                            await updatePeople();
-                            await loadGoalsProgress();
-                        } catch (e) {
-                            console.error('Error updating after message:', e);
-                        }
-                    }, 1500);
+                    // Синхронный режим (fallback: SSE недоступен или старый путь)
+                    if (evtSource) { evtSource.close(); evtSource = null; }
+                    await _afterChatDone(data.response || '', data.agent_info || null, null);
                 } else {
+                    if (evtSource) { evtSource.close(); evtSource = null; }
+                    hideTypingIndicator();
                     addMessage(t('err-prefix') + ' ' + (data.error || t('err-server-unavail')), 'ai');
+                    window.sendingMessage = false;
                 }
             } catch (error) {
                 if (evtSource) { evtSource.close(); evtSource = null; }
                 hideTypingIndicator();
-                // AbortError = cancelled by timeout controller — don't show raw JS error
                 if (error.name === 'AbortError' || (error.message && error.message.toLowerCase().includes('aborted'))) {
-                    addMessage('⏱ ' + t('err-timeout', 'Сервер не ответил за 120 сек. Попробуйте ещё раз.'), 'ai');
+                    addMessage('⏱ ' + t('err-timeout', 'Превышено время ожидания. Попробуйте ещё раз.'), 'ai');
                 } else {
                     addMessage(t('err-prefix') + ' ' + error.message, 'ai');
                 }
-            } finally {
                 window.sendingMessage = false;
             }
         }
