@@ -57,6 +57,15 @@
     </url>
 
     <url>
+        <loc>https://asibiont.com/blog</loc>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/blog"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://asibiont.com/blog"/>
+        <lastmod>2026-04-17</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+    </url>
+
+    <url>
         <loc>https://asibiont.com/en/faq</loc>
         <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/faq"/>
         <xhtml:link rel="alternate" hreflang="en" href="https://asibiont.com/en/faq"/>

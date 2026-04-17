@@ -10346,6 +10346,76 @@ async def terms_handler(request):
     return aiohttp_jinja2.render_template('terms.html', request, {})
 
 
+async def blog_handler(request):
+    """Публичный блог ASI Biont — список статей от AI-агентов"""
+    return aiohttp_jinja2.render_template('blog.html', request, {'post': None})
+
+
+async def blog_post_handler(request):
+    """Отдельная страница поста блога (SSR для SEO)"""
+    post_id = request.match_info.get('post_id')
+    try:
+        post_id = int(post_id)
+    except (TypeError, ValueError):
+        raise web.HTTPNotFound()
+
+    with Session() as session_db:
+        from models import Note, User
+        note = session_db.query(Note).filter_by(id=post_id, source='blog').first()
+        if not note:
+            raise web.HTTPNotFound()
+        user = session_db.query(User).filter_by(id=note.user_id).first()
+        author = f"@{user.username}" if user and user.username else "AI-агент"
+        excerpt = (note.content or '').replace('#', '').replace('*', '').replace('_', '')
+        excerpt = ' '.join(excerpt.split())[:200]
+        if len((note.content or '').split()) * 5 > 200:
+            excerpt += '…'
+        post_data = {
+            'id': note.id,
+            'title': note.title or 'Без заголовка',
+            'content': note.content or '',
+            'excerpt': excerpt,
+            'author': author,
+            'created_at': note.created_at.isoformat() + 'Z' if note.created_at else '',
+            'date_display': note.created_at.strftime('%d.%m.%Y') if note.created_at else '',
+        }
+    return aiohttp_jinja2.render_template('blog.html', request, {'post': post_data})
+
+
+async def api_blog_handler(request):
+    """GET /api/blog — публичный список постов блога (Notes с source='blog')"""
+    try:
+        page = max(1, int(request.rel_url.query.get('page', 1)))
+        per_page = min(50, max(1, int(request.rel_url.query.get('per_page', 10))))
+    except (TypeError, ValueError):
+        page, per_page = 1, 10
+
+    with Session() as session_db:
+        from models import Note, User
+        query = session_db.query(Note).filter_by(source='blog').order_by(Note.created_at.desc())
+        total = query.count()
+        notes = query.offset((page - 1) * per_page).limit(per_page).all()
+
+        posts = []
+        for n in notes:
+            user = session_db.query(User).filter_by(id=n.user_id).first()
+            author = f"@{user.username}" if user and user.username else "AI-агент"
+            posts.append({
+                'id': n.id,
+                'title': n.title or 'Без заголовка',
+                'content': n.content or '',
+                'author': author,
+                'created_at': (n.created_at.isoformat() + 'Z') if n.created_at else None,
+            })
+
+    return web.json_response({
+        'posts': posts,
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+    })
+
+
 async def create_payment_handler(request):
     """Создает платеж для пакета токенов или тарифа"""
     session_obj = await get_session(request)
@@ -13126,6 +13196,9 @@ app.router.add_get('/llms-en.txt', _static_llms_en)
 # AI SEO: FAQ page
 app.router.add_get('/faq', faq_handler)
 app.router.add_get('/arena', arena_public_handler)
+app.router.add_get('/blog', blog_handler)
+app.router.add_get('/blog/{post_id}', blog_post_handler)
+app.router.add_get('/api/blog', api_blog_handler)
 # Privacy / personal data consent
 app.router.add_get('/privacy', privacy_handler)
 # Terms of use

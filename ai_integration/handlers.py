@@ -855,7 +855,7 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
 
 # set_recurring_task removed - feature not critical, required subscription
 
-async def save_note(content: str, title: str = None, user_id: int = None, session=None) -> str:
+async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
     """Сохранить заметку (без напоминания/дедлайна).
 
     Args:
@@ -863,6 +863,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         title: Заголовок заметки (опционально)
         user_id: Telegram ID пользователя
         session: SQLAlchemy session
+        source: 'chat' (личная заметка) или 'blog' (публичная статья в блог ASI Biont)
     """
     if not content or not content.strip():
         return "Текст заметки не может быть пустым."
@@ -938,7 +939,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 user_id=user.id,
                 title=_note_title_contacts,
                 content=content.strip(),
-                source='chat',
+                source=source if source in ('chat', 'blog') else 'chat',
             )
             session.add(note)
             session.commit()
@@ -960,14 +961,18 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         if _url_count_sn >= 3 and len(_non_url_sn) < 40:
             return "[INTERNAL] Заметка отклонена: список ссылок без пояснения — добавь аннотацию."
 
+        _source_val = source if source in ('chat', 'blog') else 'chat'
         note = Note(
             user_id=user.id,
             title=_note_title,
             content=content.strip(),
-            source='chat',
+            source=_source_val,
         )
         session.add(note)
         session.commit()
+        if _source_val == 'blog':
+            logger.info(f"[SAVE_NOTE] Blog post published: id={note.id}, title={_note_title[:60]!r}")
+            return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.id})"
         # === Векторная память (fire-and-forget, не блокирует event loop) ===
         try:
             import asyncio as _aio_sn
