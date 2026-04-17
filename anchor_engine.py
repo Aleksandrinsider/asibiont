@@ -1088,7 +1088,7 @@ AUTOPILOT_DEEP_NIGHT_END = 0
 
 # Минимальный интервал между ПРОАКТИВНЫМИ сообщениями (не блокирует CRITICAL)
 MIN_PROACTIVE_GAP_MINUTES = 30
-MIN_AUTOPILOT_GAP_MINUTES = 15  # Интервал между autopilot dispatch'ами
+MIN_AUTOPILOT_GAP_MINUTES = 30  # Интервал между autopilot dispatch'ами
 REVIEW_SILENT_TYPES = {'goal_autopilot_review', 'chat_ai_review'}
 
 # ── Cache for integration hypothesis (avoid extra AI call every coordinator cycle) ──
@@ -13257,6 +13257,7 @@ class AnchorEngine:
                     max_tokens=220,
                     temperature=0.7,
                     _caller='coordinator_analysis',
+                    _timeouts=[60, 100],
                 )
                 if _analysis_raw and len(_analysis_raw) > 30:
                     _coordinator_analysis_str = (
@@ -13525,13 +13526,15 @@ class AnchorEngine:
                     logger.warning('[COORD] plan_prompt large: %d chars (~%d tokens) — consider trimming', _prompt_chars, _prompt_chars // 4)
                 else:
                     logger.debug('[COORD] plan_prompt: %d chars (~%d tokens)', _prompt_chars, _prompt_chars // 4)
-                # Без внешнего wait_for — _quick_ai_call_raw имеет встроенный retry [25s, 45s]
-                # wait_for(30) убивало 2-ю попытку до того как она запускалась
+                # Координаторский промпт крупный (20k+ символов) → нужны расширенные таймауты
+                # В часы пиковой нагрузки DeepSeek обрабатывает 5000+ входных токенов до 90-120с
+                _coord_plan_timeouts = [90, 150] if _prompt_chars > 15000 else [60, 100]
                 _plan_json = await _quick_ai_call_raw(
                     [{"role": "user", "content": _plan_prompt}],
                     max_tokens=_plan_max_tokens,
                     temperature=0.3,  # Низкая температура для стабильного JSON
                     _caller='coordinator_plan',
+                    _timeouts=_coord_plan_timeouts,
                 )
             except Exception as _pe:
                 logger.warning("[COORD] plan generation failed: %s", _pe)

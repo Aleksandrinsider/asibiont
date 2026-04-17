@@ -5469,12 +5469,14 @@ def _is_question_message(msg: str) -> bool:
     return False
 
 
-async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '', temperature: float = 0.7) -> str:
+async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '', temperature: float = 0.7, _timeouts: list = None) -> str:
     """Прямой вызов DeepSeek без tool calling — для фоновых задач (координатор, инсайты).
-    Использует отдельную сессию (_QUICK_AI_SESSION) чтобы не блокировать чат пользователей."""
+    Использует отдельную сессию (_QUICK_AI_SESSION) чтобы не блокировать чат пользователей.
+    _timeouts: список таймаутов (сек) для каждой попытки. По умолчанию [40, 70].
+    Для больших промптов (координатор) передавай [90, 150]."""
     global _QUICK_AI_SESSION
     _max_attempts = 2
-    _timeouts = [40, 70]
+    _timeouts = _timeouts if _timeouts else [40, 70]
     for _att in range(_max_attempts):
       try:
         if os.getenv('PYTEST_CURRENT_TEST'):
