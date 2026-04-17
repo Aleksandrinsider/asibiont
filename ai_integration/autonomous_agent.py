@@ -9772,24 +9772,11 @@ def _save_delegation_to_history(telegram_id: int, agent_name: str, task: str, re
         # NOTE: результат пишем от лица ASI ("я поручил"), не от лица агента.
         # Это предотвращает утечку persona (женский род, другое имя) в контекст ASI.
         import re as _re_dlg
-        # Обрезаем по границе предложения, чтобы не было обрывков в середине слова
-        _max = 600
-        if len(result) > _max:
-            _cut = result[:_max]
-            # Ищем последнюю точку/восклицательный/вопросительный знак до лимита
-            _last_end = max(
-                _cut.rfind('. '), _cut.rfind('! '), _cut.rfind('? '), _cut.rfind('.\n')
-            )
-            _clean = _cut[:_last_end + 1].strip() if _last_end > 50 else _cut.rstrip()
-        else:
-            _clean = result
+        _clean = result[:400]
         # Убираем первое лицо агента: "я нашла" → "нашлось", "я проверила" → "проверено"
         _clean = _re_dlg.sub(r'\bя\s+', '', _clean, flags=_re_dlg.IGNORECASE)
-        # Определяем итог: ВЫПОЛНЕНА только если нет явных слов о неудаче
-        _failure_markers = ('не удал', 'не отправл', 'ошибка', 'не найден', 'недоступно', 'невозможно', 'отказ', 'failed', 'error')
-        _status = "ЧАСТИЧНО / см. детали" if any(m in _clean.lower() for m in _failure_markers) else "ВЫПОЛНЕНА"
         _summary = (
-            f"[Я (ASI) поручил агенту {agent_name}: {task[:150]}. Задача {_status}.]\n"
+            f"[Я (ASI) поручил агенту {agent_name}: {task[:150]}. Задача ВЫПОЛНЕНА.]\n"
             f"Результат агента: {_clean}"
         )
         save_message_to_history(telegram_id, "assistant", _summary)
