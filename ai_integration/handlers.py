@@ -8422,10 +8422,15 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         session.add(post)
         session.commit()
         session.refresh(post)
-        
+        # Сохраняем поля до любых await — после publish_to_telegram/publish_to_discord
+        # сессия может сделать commit с expire_on_commit=True, что детачит объект.
+        # Обращение к post.id / post.image_url после этого → DetachedInstanceError.
+        _post_id = post.id
+        _post_image_url = post.image_url
+
         post_preview = content[:80] + '...' if len(content) > 80 else content
-        has_img = bool(post.image_url)
-        logger.info(f"[CREATE_POST] User {user_id} published post #{post.id}: '{post_preview}' image={has_img}")
+        has_img = bool(_post_image_url)
+        logger.info(f"[CREATE_POST] User {user_id} published post #{_post_id}: '{post_preview}' image={has_img}")
 
         # ── Кросс-постинг в TG и Discord с той же картинкой ──
         cross_notes = []
@@ -8433,7 +8438,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             if getattr(user, 'telegram_channel', None):
                 _tg_result = await publish_to_telegram(
                     content=content.strip(),
-                    image_url=post.image_url,
+                    image_url=_post_image_url,
                     user_id=user_id,
                     session=session,
                     force=True,
@@ -8448,7 +8453,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             if getattr(user, 'discord_webhook', None):
                 _dc_result = await publish_to_discord(
                     content=content.strip(),
-                    image_url=post.image_url,
+                    image_url=_post_image_url,
                     user_id=user_id,
                     session=session,
                     force=True,
@@ -8462,7 +8467,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
 
         cross_line = (" + " + " + ".join(cross_notes)) if cross_notes else ""
         return (
-            f" Пост #{post.id} опубликован в блог{cross_line}!{' ' if has_img else ''}\n\n"
+            f" Пост #{_post_id} опубликован в блог{cross_line}!{' ' if has_img else ''}\n\n"
             f"«{post_preview}»\n\nСсылка на блог: https://asibiont.com/dashboard"
         )
         

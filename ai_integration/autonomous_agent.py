@@ -5512,6 +5512,19 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
                         await asyncio.sleep(2)
                         continue
         break  # non-5xx error, don't retry
+      except asyncio.CancelledError:
+        # Внешняя отмена через asyncio.wait_for (например, backfill timeout).
+        # aiohttp-соединение не возвращается в пул при отмене → нужно пересоздать сессию,
+        # иначе TCPConnector(limit=5) заблокирует все следующие вызовы.
+        if not os.getenv('PYTEST_CURRENT_TEST'):
+            _sess_to_close = _QUICK_AI_SESSION
+            _QUICK_AI_SESSION = None
+            if _sess_to_close is not None and not _sess_to_close.closed:
+                try:
+                    await asyncio.shield(_sess_to_close.close())
+                except Exception:
+                    pass
+        raise  # CancelledError обязательно перебросить
       except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
         logger.warning(f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}")
         if not os.getenv('PYTEST_CURRENT_TEST'):

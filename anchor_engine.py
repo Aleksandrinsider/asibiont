@@ -4820,7 +4820,11 @@ class AnchorEngine:
         """Обёртка с lock для безопасной параллельной обработки"""
         async with lock:
             try:
-                await self._process_user(user_id)
+                # Внешний таймаут: если _process_user завис (из-за orphaned aiohttp-соединений
+                # или другой причины), lock должен освободиться максимум через 10 минут.
+                await asyncio.wait_for(self._process_user(user_id), timeout=600)
+            except asyncio.TimeoutError:
+                logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 600s — lock released")
             except Exception as e:
                 logger.error(f"[ANCHOR] Error processing user {user_id}: {e}")
 
@@ -14409,14 +14413,15 @@ class AnchorEngine:
                         f"Только JSON, без пояснений."
                     )
 
-                    _fb_json = await asyncio.wait_for(
-                        _quick_ai_call_raw(
-                            [{"role": "user", "content": _fb_prompt}],
-                            max_tokens=min(300 * len(_missing_to_fill), 900),
-                            temperature=0.35,
-                            _caller='backfill_plan',
-                        ),
-                        timeout=20,
+                    # Без внешнего wait_for — внешняя отмена через asyncio.wait_for
+                    # убивает aiohttp-соединение без возврата в пул (Unclosed connection),
+                    # что при limit=5 приводит к вечному зависанию следующего вызова.
+                    # _quick_ai_call_raw имеет встроенные таймауты 40s/70s.
+                    _fb_json = await _quick_ai_call_raw(
+                        [{"role": "user", "content": _fb_prompt}],
+                        max_tokens=min(300 * len(_missing_to_fill), 900),
+                        temperature=0.35,
+                        _caller='backfill_plan',
                     )
 
                     import re as _re_fb_parse
