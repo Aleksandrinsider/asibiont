@@ -81,10 +81,16 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     ("imap не настроен",
      "💡 IMAP не настроен — агент не может читать входящие. Добавь IMAP_HOST + IMAP_USER + IMAP_PASS в настройки агента"),
     # OpenWeatherMap
-    ("openweathermap_api_key",
+    ("openweathermap_api_key не",
+     "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в настройках агента"),
+    ("openweathermap_api_key not",
      "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в настройках агента"),
     # Alpha Vantage
-    ("alphavantage_api_key",
+    ("alphavantage_api_key не",
+     "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+    ("alphavantage_api_key not",
+     "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+    ("alphavantage_api_key: none",
      "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     # Notion
     ("notion_token не настроен",
