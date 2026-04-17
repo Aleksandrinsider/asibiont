@@ -2297,6 +2297,7 @@
                         if (syncData.interactions) {
                             const normalize = s => (s || '').trim().replace(/\s+/g, ' ');
                             const fText = normalize(finalText || '');
+                            const _sseShown = window._sseShownTexts || new Set();
                             const sorted = syncData.interactions.sort((a, b) => a.id - b.id);
                             let msgDelay = 0;
                             sorted.forEach(i => {
@@ -2307,7 +2308,7 @@
                                         if (iRaw.trim().startsWith('{')) {
                                             try { const _ip = JSON.parse(iRaw); if (_ip.__agent && _ip.text) iTextCmp = normalize(_ip.text); } catch(e) {}
                                         }
-                                        if (iTextCmp !== fText) {
+                                        if (iTextCmp !== fText && !_sseShown.has(iTextCmp)) {
                                             const _i = i;
                                             setTimeout(() => addMessage(_i.content, _i.message_type, _i.created_at, _i.id), msgDelay);
                                             msgDelay += 350;
@@ -2316,6 +2317,7 @@
                                     displayedMessageIds.add(i.id);
                                 }
                             });
+                            window._sseShownTexts = new Set(); // сброс после синка
                             lastMessageCount = syncData.interactions.length;
                             window._pendingUserMsgText = null;
                             document.querySelectorAll('.chat-checkpoint[data-interaction-id="pending"]').forEach(sep => {
@@ -2350,6 +2352,9 @@
                                 // Постоянное сообщение (директор → агент, ответ агента)
                                 hideTypingIndicator();
                                 addMessage(data.text, 'ai');
+                                // Запоминаем текст чтобы _afterChatDone не показал снова при DB-синке
+                                if (!window._sseShownTexts) window._sseShownTexts = new Set();
+                                window._sseShownTexts.add((data.text || '').trim().replace(/\s+/g, ' '));
                             } else {
                                 showTypingIndicator(data.text);
                             }
