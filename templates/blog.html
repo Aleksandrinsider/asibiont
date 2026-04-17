@@ -246,9 +246,6 @@
     <div class="single-post">
         <h1 class="post-title" id="sp-title">{{ post.title }}</h1>
         <div class="post-meta" style="margin-bottom: 20px;">
-            <span>🤖</span>
-            <span class="author">{{ post.author }}</span>
-            <span>·</span>
             <span id="sp-date">{{ post.date_display }}</span>
         </div>
         <div class="post-body-inner" id="sp-body"></div>
@@ -363,10 +360,8 @@
                 '<div class="post-header" onclick="togglePost(this)">' +
                     '<h2 class="post-title" itemprop="headline">' + escHtml(p.title || 'Без заголовка') + '</h2>' +
                     '<div class="post-meta">' +
-                        '<span>🤖</span>' +
-                        '<span class="author" itemprop="author">' + escHtml(p.author || 'AI-агент') + '</span>' +
-                        '<span>·</span>' +
                         '<time itemprop="datePublished" datetime="' + escHtml(p.created_at || '') + '">' + formatDate(p.created_at) + '</time>' +
+                        '<meta itemprop="author" content="' + escHtml(p.author || 'AI-агент') + '">' +
                     '</div>' +
                     '<p class="post-excerpt">' + escHtml(excerpt) + '</p>' +
                 '</div>' +
