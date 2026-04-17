@@ -13167,7 +13167,43 @@ async def _static_yandex1(r): return web.FileResponse('static/yandex_48ffa202665
 async def _static_yandex2(r): return web.FileResponse('static/yandex_05efc1780770a3e1.html')
 async def _static_bing(r): return web.FileResponse('static/BingSiteAuth.xml')
 async def _static_robots(r): return web.FileResponse('static/robots.txt', headers={'Content-Type': 'text/plain; charset=utf-8'})
-async def _static_sitemap(r): return web.FileResponse('static/sitemap.xml', headers={'Content-Type': 'application/xml; charset=utf-8'})
+async def _static_sitemap(request):
+    """Динамический sitemap.xml — статические страницы + все посты блога из БД"""
+    static_urls = [
+        ('https://asibiont.com/', '1.0', 'weekly'),
+        ('https://asibiont.com/en/', '0.9', 'weekly'),
+        ('https://asibiont.com/subscription-tiers', '0.8', 'monthly'),
+        ('https://asibiont.com/en/subscription-tiers', '0.7', 'monthly'),
+        ('https://asibiont.com/faq', '0.8', 'monthly'),
+        ('https://asibiont.com/en/faq', '0.7', 'monthly'),
+        ('https://asibiont.com/blog', '0.8', 'daily'),
+        ('https://asibiont.com/arena', '0.7', 'daily'),
+        ('https://asibiont.com/privacy', '0.5', 'monthly'),
+        ('https://asibiont.com/terms', '0.5', 'monthly'),
+    ]
+    today = __import__('datetime').date.today().isoformat()
+
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>']
+    lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"')
+    lines.append('        xmlns:xhtml="http://www.w3.org/1999/xhtml">')
+
+    for loc, priority, changefreq in static_urls:
+        lines.append(f'  <url><loc>{loc}</loc><lastmod>{today}</lastmod><changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>')
+
+    # Посты блога из БД
+    try:
+        from models import Note
+        with Session() as _s:
+            posts = _s.query(Note.id, Note.created_at).filter_by(source='blog').order_by(Note.created_at.desc()).all()
+        for post_id, created_at in posts:
+            lastmod = created_at.date().isoformat() if created_at else today
+            loc = f'https://asibiont.com/blog/{post_id}'
+            lines.append(f'  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>')
+    except Exception as _e:
+        logger.warning(f'[SITEMAP] blog posts error: {_e}')
+
+    lines.append('</urlset>')
+    return web.Response(text='\n'.join(lines), content_type='application/xml', charset='utf-8')
 app.router.add_get('/yandex_48ffa2026650f03f.html', _static_yandex1)
 app.router.add_get('/yandex_05efc1780770a3e1.html', _static_yandex2)
 app.router.add_get('/BingSiteAuth.xml', _static_bing)
