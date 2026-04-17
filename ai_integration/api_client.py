@@ -453,10 +453,37 @@ class ExternalAPIClient:
     _ddg_last_request: float = 0.0  # timestamp последнего запроса
     _DDG_MIN_INTERVAL: float = 0.0  # без искусственной задержки — retry logic обрабатывает rate limit
 
+    # Circuit breaker: Railway IP системно блокируется Yahoo (бэкенд DDG).
+    # После _DDG_FAIL_THRESHOLD подряд идущих ошибок — не дёргаем Yahoo _DDG_SKIP_SECONDS.
+    _ddg_fail_streak: int = 0
+    _ddg_skip_until: float = 0.0
+    _DDG_FAIL_THRESHOLD: int = 4
+    _DDG_SKIP_SECONDS: float = 300.0  # 5 минут
+
     def _get_ddg_semaphore(self) -> asyncio.Semaphore:
         if self._ddg_semaphore is None:
             ExternalAPIClient._ddg_semaphore = asyncio.Semaphore(1)
         return self._ddg_semaphore
+
+    def _ddg_available(self) -> bool:
+        import time as _t
+        return _t.time() >= ExternalAPIClient._ddg_skip_until
+
+    def _ddg_record_fail(self) -> None:
+        import time as _t
+        ExternalAPIClient._ddg_fail_streak += 1
+        if ExternalAPIClient._ddg_fail_streak >= ExternalAPIClient._DDG_FAIL_THRESHOLD:
+            ExternalAPIClient._ddg_skip_until = _t.time() + ExternalAPIClient._DDG_SKIP_SECONDS
+            logger.info(
+                "[DDG] Circuit breaker открыт: пропускаем DDG/Yahoo на %.0fs "
+                "после %d ошибок подряд",
+                ExternalAPIClient._DDG_SKIP_SECONDS, ExternalAPIClient._ddg_fail_streak,
+            )
+            ExternalAPIClient._ddg_fail_streak = 0
+
+    def _ddg_record_success(self) -> None:
+        ExternalAPIClient._ddg_fail_streak = 0
+        ExternalAPIClient._ddg_skip_until = 0.0
 
     async def duckduckgo_search(
         self,
@@ -477,6 +504,10 @@ class ExternalAPIClient:
         cached = await self.cache.get('ddg', cache_params)
         if cached is not None:
             return cached
+
+        # Circuit breaker: DDG/Yahoo системно блокируется — не дёргаем пока открыт
+        if not self._ddg_available():
+            return None
 
         try:
             try:
@@ -521,9 +552,11 @@ class ExternalAPIClient:
                         await self.cache.set('ddg', cache_params, results, cache_ttl)
                         logger.info(f"[DDG] Found {len(results)} results for: {query[:50]}")
                         _clr_err('ddg')
+                        self._ddg_record_success()
                         return results
                     except _aio.TimeoutError:
                         logger.warning(f"[DDG] Search timeout (12s) for: {query[:50]}")
+                        self._ddg_record_fail()
                         if attempt < max_retries - 1:
                             await _aio.sleep(base_delay * (2 ** attempt))
                             continue
@@ -539,14 +572,16 @@ class ExternalAPIClient:
                             logger.warning(f"[DDG] {'Rate limit' if _is_ratelimit else 'Transient error'} on attempt {attempt+1}, retry in {wait:.1f}s: {err_str[:80]}")
                             await _aio.sleep(wait)
                             continue
+                        self._ddg_record_fail()
                         _rec_err('ddg', f"Search failed: {e}")
-                        logger.warning(f"[DDG] Error: {e}")
+                        logger.debug(f"[DDG] failed, circuit_breaker streak={ExternalAPIClient._ddg_fail_streak}: {err_str[:80]}")
                         return None
             return None
 
         except Exception as e:
+            self._ddg_record_fail()
             _rec_err('ddg', f"Search failed: {e}")
-            logger.warning(f"[DDG] Error: {e}")
+            logger.debug(f"[DDG] outer exception: {e}")
             return None
 
     async def bing_search(
@@ -765,16 +800,20 @@ class ExternalAPIClient:
         """
         import re as _re_ws
         region = f"{hl}-{gl}" if gl and hl else "ru-ru"
-        results = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
-        if not results:
-            results = await self.duckduckgo_lite_search(query, num=num, cache_ttl=cache_ttl)
+        _has_site_op = bool(_re_ws.search(r'\bsite:', query))
+        # site: операторы DDG не умеет (Yahoo их игнорирует) → сразу Bing/Google
+        if not _has_site_op:
+            results = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
+            if not results:
+                results = await self.duckduckgo_lite_search(query, num=num, cache_ttl=cache_ttl)
+        else:
+            results = None
         if not results:
             results = await self.bing_search(query, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
         if not results:
             results = await self.google_html_search(query, num=num, region=hl, cache_ttl=cache_ttl)
         # ── Fallback: упростить запрос и повторить, если сложный/специфичный ──
         if not results:
-            _has_site_op = bool(_re_ws.search(r'\bsite:', query))
             _is_long = len(query.split()) > 6
             if _has_site_op or _is_long:
                 simplified = self._simplify_search_query(query)
