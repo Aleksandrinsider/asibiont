@@ -19688,72 +19688,10 @@ class AnchorEngine:
         except Exception as _up_err:
             logger.debug("[AUTOPILOT] user profile load failed: %s", _up_err)
 
-        # ── Авто-обновление прогресса цели (расширенная метрика) ──
-        # Считаем прогресс из нескольких источников:
-        #   - Email: replied/interested на outreach
-        #   - Контакты: найденные и сохранённые email-контакты (весят меньше)
-        #   - Агентские действия: посты, community, partnerships (через activity log)
-        # Формула: replied × 1.0 + interested × 0.5 + unique_contacts × 0.1 (не клиенты пока)
-        # Авто-апдейт никогда не ставит 100% — финальное закрытие только через AI или вручную.
-        try:
-            from models import EmailContact as _EC_au
-            _PPL_KW_AU = ('пользовател', 'тестировщик', 'клиент', 'подписчик', 'лид', 'участник')
-            _PPL_UNIT_AU = ('пользователь', 'пользователей', 'тестировщик', 'тестировщиков',
-                            'человек', 'участник', 'участников', 'подписчик', 'подписчиков')
-            for _g_au in active_goals:
-                _gt_au = (_g_au.title or '').lower()
-                _gunit_au = (_g_au.metric_unit or '').lower()
-                _is_ppl_goal_au = (
-                    any(w in _gt_au for w in _PPL_KW_AU)
-                    or any(u in _gunit_au for u in _PPL_UNIT_AU)
-                )
-                if _is_ppl_goal_au and (_g_au.metric_target or 0) > 0:
-                    from models import EmailOutreach as _EO_au
-                    # Replied = confirmed engagement
-                    _replied_count = session.query(_EO_au).filter(
-                        _EO_au.user_id == user.id,
-                        _EO_au.status == 'replied',
-                    ).count()
-                    # Interested = soft engagement
-                    _interested_count = session.query(_EO_au).filter(
-                        _EO_au.user_id == user.id,
-                        _EO_au.status == 'interested',
-                    ).count()
-                    # Unique contacts found = pipeline (weighted lower)
-                    _contacts_found = session.query(_EC_au).filter(
-                        _EC_au.user_id == user.id,
-                    ).count()
-                    # Composite metric: real users + weighted leads
-                    _composite_metric = (
-                        float(_replied_count)
-                        + float(_interested_count) * 0.5
-                        + float(min(_contacts_found, 200)) * 0.1  # cap at 20 from contacts
-                    )
-                    _cur_mc = _g_au.metric_current or 0
-                    _mt_au = _g_au.metric_target or 0
-                    # Корректируем ТОЛЬКО ВВЕРХ: если composite > metric_current.
-                    # Исключение: metric_current > metric_target (невозможное значение — сбрасываем).
-                    # НЕ корректируем вниз: снижение прогресса расстраивает пользователя.
-                    _needs_upward_correction = _composite_metric > _cur_mc
-                    _needs_cap_correction = _mt_au > 0 and _cur_mc > _mt_au
-                    if _needs_upward_correction or _needs_cap_correction:
-                        _new_mc = max(_composite_metric, _cur_mc) if not _needs_cap_correction else _composite_metric
-                        _safe_pct = min(95, int(_new_mc * 100 / _mt_au)) if _mt_au else 0
-                        if _new_mc > 0 and _safe_pct == 0:
-                            _safe_pct = 1
-                        _g_au.metric_current = _new_mc
-                        _g_au.progress_percentage = _safe_pct
-                        try:
-                            session.commit()
-                            logger.info(
-                                f"[AUTOPILOT] Corrected goal #{_g_au.id}: "
-                                f"metric {_cur_mc}→{_new_mc}/{int(_mt_au)} ({_safe_pct}%) "
-                                f"[replied={_replied_count}, interested={_interested_count}, contacts={_contacts_found}]"
-                            )
-                        except Exception:
-                            session.rollback()
-        except Exception as _au_err:
-            logger.debug("[AUTOPILOT] auto-update goal metric: %s", _au_err)
+        # ── Авто-обновление прогресса цели отключено ──
+        # Ранее здесь считался composite (email replies + contacts) и писался в progress_percentage.
+        # Это давало ложные цифры: 5 ответов на рассылку → 25% цели "1000 пользователей".
+        # Агент должен обновлять прогресс через update_goal_progress только при реальном результате.
 
         # ── Auto-complete: если metric_current >= metric_target → цель достигнута ──
         try:
@@ -19784,33 +19722,9 @@ class AnchorEngine:
         except Exception as _ac_err:
             logger.debug("[AUTOPILOT] auto-complete goals: %s", _ac_err)
 
-        # ── Авто-обновление прогресса для целей БЕЗ metric_target (на основе email ответов) ──
-        # Для целей без явной метрики: прогресс = f(количество ответов на outreach).
-        # Формула: min(75, replied_count * 5). Только вверх, не превышает 75% (финал — вручную).
-        try:
-            from models import EmailOutreach as _EO_nm
-            _eo_nm_replied = session.query(_EO_nm).filter(
-                _EO_nm.user_id == user.id,
-                _EO_nm.status == 'replied',
-            ).count()
-            if _eo_nm_replied > 0:
-                for _g_nm in active_goals:
-                    if (not _g_nm.metric_target) and (_g_nm.progress_percentage or 0) < 75:
-                        _prog_from_emails = min(75, _eo_nm_replied * 5)
-                        if _prog_from_emails > (_g_nm.progress_percentage or 0):
-                            _old_nm_prog = _g_nm.progress_percentage or 0
-                            _g_nm.progress_percentage = _prog_from_emails
-                            _g_nm.metric_current = float(_eo_nm_replied)
-                            try:
-                                session.commit()
-                                logger.info(
-                                    f"[AUTOPILOT] Auto-progress (no-metric) goal #{_g_nm.id}: "
-                                    f"{_old_nm_prog}% → {_prog_from_emails}% (email_replied={_eo_nm_replied})"
-                                )
-                            except Exception:
-                                session.rollback()
-        except Exception as _nm_err:
-            logger.debug("[AUTOPILOT] auto-update no-metric goals: %s", _nm_err)
+        # ── Авто-обновление целей без metric_target отключено ──
+        # Ранее: progress = min(75, replied_count * 5) — давало ложный прогресс (5 ответов → 25%).
+        # Агент обновляет прогресс сам через update_goal_progress при реальных результатах.
 
         # ── Синхронизируем goals_summary с обновлёнными ORM-объектами ──
         # goals_summary был построен ДО авто-обновления метрик → патчим свежими данными
