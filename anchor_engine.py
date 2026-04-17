@@ -8422,7 +8422,7 @@ class AnchorEngine:
                         _exec_agent_for_director(
                             agent_data, _task_trimmed, user.telegram_id,
                         ),
-                        timeout=300,
+                        timeout=450,
                     )
                 except (asyncio.TimeoutError, Exception) as _ai_err:
                     logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
@@ -10124,7 +10124,7 @@ class AnchorEngine:
                 _exec_agent_for_director(
                     _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
                 ),
-                timeout=300,
+                timeout=450,
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
             _next_result = re.sub(r'\n{2,}', '\n', (_next_result or '')).strip()
@@ -16046,11 +16046,11 @@ class AnchorEngine:
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=300,
+                        timeout=450,
                     )
                 except asyncio.TimeoutError:
-                    _ae_msg = f'Таймаут 300с — агент не завершил цикл, но выполненные действия сохранены'
-                    logger.warning("[COORD] agent %s timeout after 300s", _ag_name)
+                    _ae_msg = f'Таймаут 450с — агент не завершил цикл, но выполненные действия сохранены'
+                    logger.warning("[COORD] agent %s timeout after 450s", _ag_name)
                     self._cancel_agent_task(
                         session,
                         _step_task_id,
@@ -16164,7 +16164,7 @@ class AnchorEngine:
                         try:
                             _raw_retry = await asyncio.wait_for(
                                 _exec_agent_for_director(_ag_data, _retry_prompt, user.telegram_id),
-                                timeout=300,
+                                timeout=450,
                             )
                             _result_retry = _raw_retry[0] if isinstance(_raw_retry, (tuple, list)) else _raw_retry
                             _retry_tools = list(_raw_retry[1]) if isinstance(_raw_retry, (tuple, list)) and len(_raw_retry) > 1 else []
@@ -16267,7 +16267,7 @@ class AnchorEngine:
                     try:
                         _raw_value_retry = await asyncio.wait_for(
                             _exec_agent_for_director(_ag_data, _value_retry_prompt, user.telegram_id),
-                            timeout=300,
+                            timeout=450,
                         )
                         _value_result = _raw_value_retry[0] if isinstance(_raw_value_retry, (tuple, list)) else _raw_value_retry
                         _value_tools = list(_raw_value_retry[1]) if isinstance(_raw_value_retry, (tuple, list)) and len(_raw_value_retry) > 1 else []

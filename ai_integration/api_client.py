@@ -28,6 +28,21 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
+# Пул User-Agent строк для ротации — ищем как живой браузер, избегаем bot-detection
+import random as _random
+_UA_POOL = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+]
+
+def _rand_ua() -> str:
+    return _random.choice(_UA_POOL)
+
 # Запись ошибок сервисов (ленивая загрузка — избегаем циклических импортов)
 try:
     from .service_health import record_error as _rec_err, clear_error as _clr_err
@@ -601,19 +616,23 @@ class ExternalAPIClient:
             s = await self._get_session()
             _lang = region.split('-')[0] if '-' in region else 'ru'
             _headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                              '(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'User-Agent': _rand_ua(),
                 'Accept-Language': f'{_lang},{_lang}-{_lang.upper()};q=0.9,en;q=0.8',
-                'Accept': 'text/html,application/xhtml+xml',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
             }
             _q_enc = query.replace(' ', '+')
             _count = min(num, 20)
             _url = f'https://www.bing.com/search?q={_q_enc}&count={_count}&setlang={_lang}'
             async with s.get(
                 _url, headers=_headers,
-                timeout=aiohttp.ClientTimeout(total=12),
+                timeout=aiohttp.ClientTimeout(total=15),
                 ssl=False, allow_redirects=True,
             ) as resp:
+                if resp.status in (429, 403):
+                    logger.debug(f'[BING] blocked ({resp.status}), skip')
+                    return None
                 if resp.status != 200:
                     return None
                 html = await resp.text(errors='replace')
@@ -659,8 +678,7 @@ class ExternalAPIClient:
         try:
             s = await self._get_session()
             _headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                              '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'User-Agent': _rand_ua(),
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'Accept': 'text/html,application/xhtml+xml',
                 'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8',
@@ -669,9 +687,12 @@ class ExternalAPIClient:
                 'https://lite.duckduckgo.com/lite/',
                 data={'q': query, 'kl': 'ru-ru'},
                 headers=_headers,
-                timeout=aiohttp.ClientTimeout(total=12),
+                timeout=aiohttp.ClientTimeout(total=15),
                 ssl=False, allow_redirects=True,
             ) as resp:
+                if resp.status in (429, 403):
+                    logger.debug(f'[DDG_LITE] blocked ({resp.status}), skip')
+                    return None
                 if resp.status != 200:
                     return None
                 html = await resp.text(errors='replace')
@@ -718,21 +739,30 @@ class ExternalAPIClient:
         try:
             s = await self._get_session()
             _headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                              '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'User-Agent': _rand_ua(),
                 'Accept-Language': f'{region},{region}-{region.upper()};q=0.9,en;q=0.8',
-                'Accept': 'text/html,application/xhtml+xml',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Encoding': 'gzip, deflate',
+                'Referer': 'https://www.google.com/',
             }
-            _q_enc = query.replace(' ', '+')
+            import urllib.parse as _ulp
+            _q_enc = _ulp.quote_plus(query)
             _url = f'https://www.google.com/search?q={_q_enc}&num={min(num, 20)}&hl={region}'
             async with s.get(
                 _url, headers=_headers,
-                timeout=aiohttp.ClientTimeout(total=12),
+                timeout=aiohttp.ClientTimeout(total=15),
                 ssl=False, allow_redirects=True,
             ) as resp:
+                if resp.status in (429, 403):
+                    logger.debug(f'[GOOGLE] blocked ({resp.status}), skip')
+                    return None
                 if resp.status != 200:
                     return None
                 html = await resp.text(errors='replace')
+            # Проверяем на captcha / bot detection
+            if 'sorry/index' in html or 'g-recaptcha' in html or 'detected unusual traffic' in html:
+                logger.debug('[GOOGLE] captcha detected, skip')
+                return None
 
             results = []
             # Google: результаты в <div class="g"> блоках
