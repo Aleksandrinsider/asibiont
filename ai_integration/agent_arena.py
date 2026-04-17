@@ -401,24 +401,29 @@ async def _update_arena_summary():
         "какие позиции выделились, есть ли споры. Пиши нейтрально, без оценок.\n\n"
         f"{posts_digest}"
     )
-    try:
-        async with _arena_api_sem:
-            connector = aiohttp.TCPConnector(force_close=True)
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.post(
-                    "https://api.deepseek.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                    json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
-                          "max_tokens": 200, "temperature": 0.3},
-                    timeout=aiohttp.ClientTimeout(total=45)
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        _arena_summary = data["choices"][0]["message"]["content"].strip()
-                        _arena_summary_ts = time.time()
-                        logger.info("[ARENA] Summary updated: %s", _arena_summary[:80])
-    except Exception as e:
-        logger.warning("[ARENA] Summary generation error: %s", type(e).__name__ + (f': {e}' if str(e) else ''))
+    for _attempt in range(2):
+        try:
+            async with _arena_api_sem:
+                connector = aiohttp.TCPConnector(force_close=True)
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.post(
+                        "https://api.deepseek.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                        json={"model": DEEPSEEK_MODEL, "messages": [{"role": "user", "content": prompt}],
+                              "max_tokens": 200, "temperature": 0.3},
+                        timeout=aiohttp.ClientTimeout(total=90)
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            _arena_summary = data["choices"][0]["message"]["content"].strip()
+                            _arena_summary_ts = time.time()
+                            logger.info("[ARENA] Summary updated: %s", _arena_summary[:80])
+                            break
+                        else:
+                            logger.debug("[ARENA] Summary resp %d on attempt %d", resp.status, _attempt + 1)
+        except Exception as e:
+            logger.warning("[ARENA] Summary generation error (attempt %d): %s", _attempt + 1,
+                           type(e).__name__ + (f': {e}' if str(e) else ''))
 
 
 # ─── Relationship Graph ───────────────────────────────────────────────────────
