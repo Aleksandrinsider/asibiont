@@ -6206,7 +6206,7 @@ def _build_user_context_sync(user_db_id: int) -> str:
         if profile.content_strategy:
             identity_parts.append(f'Контент-стратегия: {profile.content_strategy[:100]}')
         if profile.website:
-            identity_parts.append(f'Сайт: {profile.website}')
+            identity_parts.append(f'Сайт (CTA для постов/писем): {profile.website}')
 
     if identity_parts:
         _owner_block = '👤 ВЛАДЕЛЕЦ (твой босс, НЕ контакт для outreach!): ' + ', '.join(identity_parts)
@@ -7194,6 +7194,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  📢 ПУБЛИКАЦИИ — используй только ДОСТУПНЫЕ каналы из твоих интеграций:\n"
             "     Есть Telegram-канал → publish_to_telegram. Есть Discord → publish_to_discord. Оба недоступны → create_post в ленту.\n"
             "     НЕ рассуждай 'есть ли доступ' — смотри список интеграций в карточке и сразу используй что есть.\n"
+            "  🔗 CTA-ССЫЛКИ в постах/письмах — всегда берёт из профиля владельца (ВЛАДЕЛЕЦ → Сайт:).\n"
+            "     Если сайт указан → это и есть единственная правильная CTA-ссылка: используй её без изменений.\n"
+            "     Если сайт НЕ указан → используй ссылку на Telegram-бота (t.me/...) или НЕ добавляй ссылку вообще.\n"
+            "     ❌ НИКОГДА не придумывай URL: /register, /signup, /start, /landing — если их нет в профиле.\n"
             "  Нет нужного инструмента → DELEGATE[Коллега]: конкретная задача + передай ВСЕ данные что ты уже нашёл.\n"
             "  💡 ДЕЛЕГИРОВАНИЕ — это не передача задачи, а передача РАБОТЫ + ДАННЫХ.\n"
             "     Коллега не видит твои tool-ответы. Если не передашь данные — он начнёт с нуля и найдёт не то.\n"
