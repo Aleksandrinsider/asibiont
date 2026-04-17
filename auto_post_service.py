@@ -251,7 +251,8 @@ async def generate_progress_post(user_id, session):
 
         # Profile info
         user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
-        user_gender = _detect_gender(user.first_name or '')
+        user_gender = (profile.gender if profile and profile.gender in ('male', 'female')
+                       else _detect_gender(user.first_name or ''))
         user_city = profile.city or ''
         user_interests = profile.interests or ''
         user_skills = profile.skills or ''
@@ -408,7 +409,8 @@ async def generate_research_post(user_id, query, analysis, session):
         
         # Build AI prompt
         user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
-        user_gender = _detect_gender(user.first_name or '')
+        user_gender = (profile.gender if profile and profile.gender in ('male', 'female')
+                       else _detect_gender(user.first_name or ''))
         _gender_note = (
             'Автор — женщина, используй женский род: «изучила», «обнаружила», «нашла», «решила».'
             if user_gender == 'female' else

@@ -1667,6 +1667,14 @@
                         <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Пол</label>
+                        <select id="quick-gender" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #374151; cursor: pointer;">
+                            <option value="">Не указан</option>
+                            <option value="female">Женский</option>
+                            <option value="male">Мужской</option>
+                        </select>
+                    </div>
+                    <div>
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="country-label2">Страна</label>
                         <input type="text" id="quick-country" placeholder="Например: Россия" data-i18n-ph="country-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
@@ -14690,6 +14698,7 @@ except Exception as e:
             if (modal) {
                 // Заполняем текущие данные профиля
                 const firstNameField = document.getElementById('quick-first-name');
+                const genderField = document.getElementById('quick-gender');
                 const countryField = document.getElementById('quick-country');
                 const cityField = document.getElementById('quick-city');
                 const birthdateField = document.getElementById('quick-birthdate');
@@ -14707,6 +14716,7 @@ except Exception as e:
                 // Получаем текущие данные из профиля
                 {% if profile %}
                 if (firstNameField) firstNameField.value = {{ (user.first_name or "") | tojson }};
+                if (genderField) genderField.value = {{ (profile.gender or "") | tojson }};
                 if (countryField) countryField.value = {{ (profile.country or "") | tojson }};
                 if (cityField) cityField.value = {{ (profile.city or "") | tojson }};
                 if (birthdateField) {
@@ -14891,6 +14901,7 @@ except Exception as e:
 
         async function submitQuickProfile() {
             const firstName = document.getElementById('quick-first-name').value.trim();
+            const gender = document.getElementById('quick-gender')?.value || '';
             const country = document.getElementById('quick-country').value.trim();
             const city = document.getElementById('quick-city').value.trim();
             const birthdate = document.getElementById('quick-birthdate').value.trim();
@@ -14931,6 +14942,7 @@ except Exception as e:
                 const profileData = {};
                 // Всегда отправляем все поля, даже если они пустые (для удаления)
                 profileData.first_name = firstName;
+                profileData.gender = gender;
                 profileData.city = city;
                 profileData.country = country;
                 profileData.interests = interests;
