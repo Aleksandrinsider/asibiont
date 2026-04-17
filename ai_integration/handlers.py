@@ -108,6 +108,19 @@ def _text_to_email_html(text: str) -> str:
     return ''.join(html_parts)
 
 
+def _get_email_tg_link(user) -> str:
+    """Returns plain-text Telegram link for email footer (no https://).
+
+    Prefers public channel (@channel → t.me/channel), falls back to personal
+    username. Returns '' if neither is set — caller must check before appending.
+    Plain-text format is safe for cold emails (no URL = no spam filter hit).
+    """
+    tg = (getattr(user, 'telegram_channel', '') or '').strip().lstrip('@')
+    if not tg:
+        tg = (getattr(user, 'username', '') or '').strip()
+    return f't.me/{tg}' if tg else ''
+
+
 def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '') -> str:
     """Общий HTML-шаблон для email с unsubscribe footer.
 
@@ -13101,6 +13114,10 @@ async def send_outreach_email(
             _plain_domain = _cta_url.replace('https://', '').replace('http://', '').split('/')[0]
             if _plain_domain and _plain_domain.lower() not in _body_signed.lower():
                 _body_signed = _body_signed.rstrip() + f"\n{_plain_domain}"
+        # Telegram: plain-text link (t.me/channel) — безопасен для спам-фильтров
+        _tg_link_oe = _get_email_tg_link(user)
+        if _tg_link_oe and _tg_link_oe not in _body_signed:
+            _body_signed = _body_signed.rstrip() + f'\n{_tg_link_oe}'
 
         # ── SMTP dispatch (Яндекс / Mail.ru / custom SMTP) — приоритет перед Resend ──
         _smtp_sent_out = False
@@ -16513,6 +16530,11 @@ async def send_email(
                 return f"⛔ {to_clean} уже получал письмо менее 4ч назад. Подожди или выбери другого получателя."
         except Exception as _dup_e:
             logger.debug("send_email dup check: %s", _dup_e)
+
+        # Telegram link в подписи (plain-text, безопасно для всех типов писем)
+        _tg_lnk = _get_email_tg_link(user)
+        if _tg_lnk and _tg_lnk not in body:
+            body = body.rstrip() + f'\n{_tg_lnk}'
 
         # ── Gmail OAuth: прямая отправка через Gmail API ──────────────────────
         if _chosen_integration.get('type') == 'gmail_oauth':
