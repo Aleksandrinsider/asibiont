@@ -4537,7 +4537,7 @@ class AnchorEngine:
             'assignments': _assignments,
             'results': _results,
             'gap': _gap,
-            'stalled': _assignments >= 4 and _gap >= 3,  # 8/5→4/3: переключение за ~1ч вместо 2ч
+            'stalled': _assignments >= 3 and _gap >= 2,  # 4/3→3/2: быстрее переключаться при отсутствии результатов
         }
 
     def _recent_task_kpi_health(self, session, user_id: int, task_title: str, lookback_hours: int = 72) -> dict:
@@ -6344,9 +6344,20 @@ class AnchorEngine:
                             fail_penalty = _rr_recent_fails.get(aid, 0) * 15  # 50→15: таймаут API не выбивает агента из ротации на часы
                             cap_bonus = _capability_score(a)  # capability — мягкая подсказка, НЕ перевешивает ротацию
                             # ASI tie_break = медиана id реальных агентов в пуле (не 99999):
-                            # ASI участвует в ротации наравне, но специализированные агенты
-                            # получают приоритет через cap_bonus, а не через tie_break.
-                            tie_break = aid if aid != 0 else _asi_tie
+                            # Тай-брейк: агент с меньшим числом назначений за 2ч (не по id).
+                            # id-тай-брейк всегда выбирал агента с наименьшим id (Кристина=14, Марк=15)
+                            # из одного и того же пула → Марк никогда не получал задач при равных counts.
+                            try:
+                                _cutoff_2h = datetime.now(timezone.utc) - timedelta(hours=2)
+                                _assigns_2h = session.query(Interaction.id).filter(
+                                    Interaction.user_id == user.id,
+                                    Interaction.message_type == 'agent_msg',
+                                    Interaction.created_at >= _cutoff_2h,
+                                    Interaction.content.ilike(f'%"__to_agent": "{getattr(a, "name", "")}%'),
+                                ).count()
+                            except Exception:
+                                _assigns_2h = 0
+                            tie_break = (_assigns_2h, aid if aid != 0 else _asi_tie)
                             return (cnt + fail_penalty - cap_bonus, tie_break)
                         chosen = min(_rotation_pool, key=_rr_key)
                         # Debug: логируем состояние ротации в content
@@ -15276,12 +15287,13 @@ class AnchorEngine:
                 _loop_risk_step = bool(_assignment_health.get('stalled'))
                 if _loop_risk_step:
                     logger.info(
-                        "[COORD] stalled agent %s (sent=%s results=%s gap=%s) — assignment shown, skipping execution",
+                        "[COORD] stalled agent %s (sent=%s results=%s gap=%s) — skipping display+execution",
                         _ag_name,
                         _assignment_health.get('assignments', 0),
                         _assignment_health.get('results', 0),
                         _assignment_health.get('gap', 0),
                     )
+                    continue  # не показываем и не выполняем: повторы без результата — шум
                 # Гард: пустой/слишком короткий текст — не сохраняем
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
@@ -15351,8 +15363,13 @@ class AnchorEngine:
                     except Exception:
                         pass
 
-                # Поручение отображено — если агент застрял (stalled), пропускаем тяжёлое выполнение
+                # Поручение сгенерировано — если агент застрял (stalled), не показываем и не выполняем:
+                # пустые поручения без выполнения — шум в чате и потеря доверия пользователя.
                 if _loop_risk_step:
+                    logger.info(
+                        "[COORD] stalled agent %s — suppressing assignment display and execution",
+                        _ag_name,
+                    )
                     continue
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
