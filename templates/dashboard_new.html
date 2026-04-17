@@ -13011,6 +13011,16 @@ except Exception as e:
                                     displayedMessageIds.add(msgId); // отметить как показанное, не рендерить
                                     return;
                                 }
+                                // Не дублируем сообщения агентов уже показанные через SSE persist
+                                const _ssePollShown = window._sseShownTexts || new Set();
+                                let _iCmpPoll = _normMsg(interaction.content || '');
+                                if ((interaction.content || '').trim().startsWith('{')) {
+                                    try { const _pp = JSON.parse(interaction.content); if (_pp.__agent && _pp.text) _iCmpPoll = _normMsg(_pp.text); } catch(e) {}
+                                }
+                                if (_ssePollShown.has(_iCmpPoll)) {
+                                    displayedMessageIds.add(msgId); // засчитать как показанное, не рендерить
+                                    return;
+                                }
                                 addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
                                 displayedMessageIds.add(msgId);
                                 hasNew = true;
