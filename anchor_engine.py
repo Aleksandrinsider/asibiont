@@ -15282,19 +15282,10 @@ class AnchorEngine:
                     count=1,
                     flags=_re_post_inf.IGNORECASE,
                 )
-                # Сохраняем живое поручение в чат
-                _assignment_health = self._recent_assignment_result_health(session, user.id, _ag_name, hours=8)
-                _loop_risk_step = bool(_assignment_health.get('stalled'))
-                if _loop_risk_step:
-                    logger.info(
-                        "[COORD] stalled agent %s (sent=%s results=%s gap=%s) — skipping display+execution",
-                        _ag_name,
-                        _assignment_health.get('assignments', 0),
-                        _assignment_health.get('results', 0),
-                        _assignment_health.get('gap', 0),
-                    )
-                    continue  # не показываем и не выполняем: повторы без результата — шум
                 # Гард: пустой/слишком короткий текст — не сохраняем
+                # Примечание: stall-guard убран из coordinator dispatch — здесь LLM видит всю историю
+                # и сам разнообразит задания. Stall-reroute остался в round-robin (линия ~6400).
+                _loop_risk_step = False  # coordinator всегда выполняет шаги плана
                 if not _asi_assign_text or len(_asi_assign_text.strip()) < 15:
                     logger.info("[COORD] ⛔ skipping empty assignment to %s: %r", _ag_name, (_asi_assign_text or '')[:50])
                     continue
@@ -15362,15 +15353,6 @@ class AnchorEngine:
                         await _safe_send(self.bot, user.telegram_id, f"[ASI] {_asi_assign_text}")
                     except Exception:
                         pass
-
-                # Поручение сгенерировано — если агент застрял (stalled), не показываем и не выполняем:
-                # пустые поручения без выполнения — шум в чате и потеря доверия пользователя.
-                if _loop_risk_step:
-                    logger.info(
-                        "[COORD] stalled agent %s — suppressing assignment display and execution",
-                        _ag_name,
-                    )
-                    continue
 
                 # ── Создаём задачу «в работе» в Поручениях агентов ──
                 _step_task_id = None
