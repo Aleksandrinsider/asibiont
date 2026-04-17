@@ -3014,8 +3014,8 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + '\n'.join(_mem_lines) + '\n'
         )
         # ── Outcome effectiveness: classify results vs assignments ──
-        _n_results = sum(1 for h in agent_history[:10] if '→ РЕЗУЛЬТАТ' in h)
-        _n_assigns = sum(1 for h in agent_history[:10] if '← ПОРУЧЕНИЕ' in h)
+        _n_results = sum(1 for h in agent_history[:30] if '→ РЕЗУЛЬТАТ' in h)
+        _n_assigns = sum(1 for h in agent_history[:30] if '← ПОРУЧЕНИЕ' in h)
         if _n_assigns > 0 and _n_results == 0:
             _memory_block += (
                 "\n⚠️ ЭФФЕКТИВНОСТЬ: за последние циклы ты получил поручения, но не сдал ни одного результата.\n"
@@ -6534,6 +6534,14 @@ class AnchorEngine:
                     # Перестраиваем task_text — вставляем промпт после placeholder
                     _per_agent_hist = data.get('per_agent_history', {}).get(chosen.name, [])
                     _full_team_hist = data.get('per_agent_history', {})
+                    # ── Обогащаем историю агента данными о КПД тактик из Task-таблицы ──
+                    try:
+                        _eff_block = _build_tool_outcome_block(session, user.id, data.get('per_agent_history', {}))
+                        if _eff_block and _eff_block.strip():
+                            # Вставляем как первую запись — агент видит КПД ДО истории действий
+                            _per_agent_hist = [_eff_block.strip()] + list(_per_agent_hist)
+                    except Exception as _eff_err:
+                        logger.debug("[DISPATCH] outcome block skip: %s", _eff_err)
                     # ── Долгосрочная семантическая память (Pinecone) ──
                     _vector_mem_str = ''
                     try:
