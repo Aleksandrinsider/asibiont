@@ -1497,11 +1497,15 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
 
 
 def _build_tool_outcome_block(session, user_id: int, per_agent_history: dict) -> str:
-    """Measure per-tool/approach OUTCOME effectiveness from actual Task results.
+    """Measure per-tool/approach OUTCOME effectiveness from Tasks, Emails and Posts.
 
     Returns a compact block showing completion rates per approach category,
     with mandatory tactic-change recommendations for low-effectiveness tools.
     """
+    _lines = []
+    _low_eff_cats = []
+
+    # ── Блок 1: Tasks КПД ──
     try:
         from models import Task as _T_eff
         _cut = datetime.now(timezone.utc) - timedelta(hours=48)
@@ -1510,70 +1514,142 @@ def _build_tool_outcome_block(session, user_id: int, per_agent_history: dict) ->
             _T_eff.source == 'agent',
             _T_eff.created_at >= _cut,
         ).all()
-        if not _tasks or len(_tasks) < 3:
-            return ''
-
-        # Base categories + dynamic from _CAP_CATEGORY_MAP
-        _strat_kw: dict = {
-            'Поиск контактов': ('web_search', 'найди контакт', 'найди email', 'find_relevant',
-                                'search', 'поиск', 'save_email_contact'),
-            'Email рассылка': ('send_outreach', 'email', 'письм', 'outreach', 'рассыл',
-                               'start_email_campaign', 'send_follow_up'),
-            'Проверка ответов': ('check_emails', 'проверь входящ', 'проверь почт',
-                                 'reply_to', 'ответь на'),
-            'Контент': ('create_post', 'publish', 'опубликуй', 'пост', 'статью', 'контент'),
-            'Аналитика': ('проанализируй', 'анализ', 'research_topic', 'метрик', 'отчёт'),
-        }
-        # Dynamically add integration categories so any tool's effectiveness is tracked
-        for _cap_kws_o, _cap_cat_o in _CAP_CATEGORY_MAP:
-            _cap_name_o = _CAP_CATEGORY_NAMES.get(_cap_cat_o, _cap_cat_o)
-            if _cap_name_o not in _strat_kw:
-                _strat_kw[_cap_name_o] = tuple(_cap_kws_o[:4])
-
-        _outcomes: dict = {}  # cat -> {completed, skipped, cancelled, total}
-        for _title, _status, _agent in _tasks:
-            _tl = (_title or '').lower()
-            for _cat, _kws in _strat_kw.items():
-                if any(kw in _tl for kw in _kws):
-                    _o = _outcomes.setdefault(_cat, {'completed': 0, 'skipped': 0, 'cancelled': 0, 'total': 0})
-                    _o['total'] += 1
-                    if _status == 'completed':
-                        _o['completed'] += 1
-                    elif _status == 'skipped':
-                        _o['skipped'] += 1
-                    elif _status in ('cancelled', 'deleted'):
-                        _o['cancelled'] += 1
-                    break
-
-        if not _outcomes:
-            return ''
-
-        _lines = ['🎯 КПД ТАКТИК (факты за 48ч — completion rate по реальным задачам):']
-        _low_eff_cats = []
-        for _cat, _o in sorted(_outcomes.items(), key=lambda x: -x[1]['total']):
-            if _o['total'] < 2:
-                continue
-            _rate = round(_o['completed'] / _o['total'] * 100)
-            _label = 'ВЫСОКИЙ' if _rate >= 60 else ('СРЕДНИЙ' if _rate >= 30 else 'НИЗКИЙ')
-            _emoji = '✅' if _rate >= 60 else ('⚠️' if _rate >= 30 else '🔴')
-            _lines.append(
-                f'  {_emoji} {_cat}: {_o["total"]} задач → {_o["completed"]} завершены '
-                f'({_rate}%) → {_label}'
-            )
-            if _o['cancelled'] > 0:
-                _lines.append(f'      отменено/провалено: {_o["cancelled"]}')
-            if _rate < 20 and _o['total'] >= 3:
-                _low_eff_cats.append(_cat)
-
-        if _low_eff_cats:
-            _lines.append(f'\n  ⛔ ОБЯЗАТЕЛЬНАЯ СМЕНА ПОДХОДА для: {", ".join(_low_eff_cats)}')
-            _lines.append('     КПД < 20% за 3+ задач = подход НЕ РАБОТАЕТ.')
-            _lines.append('     → Используй ДРУГОЙ инструмент, ДРУГУЮ аудиторию или ДРУГОЙ формат.')
-            _lines.append('     → Не повторяй ту же тактику — дай кардинально другую задачу.')
-
-        return '\n' + '\n'.join(_lines) + '\n\n'
+        if _tasks and len(_tasks) >= 3:
+            _strat_kw: dict = {
+                'Поиск контактов': ('web_search', 'найди контакт', 'найди email', 'find_relevant',
+                                    'search', 'поиск', 'save_email_contact'),
+                'Email рассылка': ('send_outreach', 'email', 'письм', 'outreach', 'рассыл',
+                                   'start_email_campaign', 'send_follow_up'),
+                'Проверка ответов': ('check_emails', 'проверь входящ', 'проверь почт',
+                                     'reply_to', 'ответь на'),
+                'Контент': ('create_post', 'publish', 'опубликуй', 'пост', 'статью', 'контент'),
+                'Аналитика': ('проанализируй', 'анализ', 'research_topic', 'метрик', 'отчёт'),
+            }
+            for _cap_kws_o, _cap_cat_o in _CAP_CATEGORY_MAP:
+                _cap_name_o = _CAP_CATEGORY_NAMES.get(_cap_cat_o, _cap_cat_o)
+                if _cap_name_o not in _strat_kw:
+                    _strat_kw[_cap_name_o] = tuple(_cap_kws_o[:4])
+            _outcomes: dict = {}
+            for _title, _status, _agent in _tasks:
+                _tl = (_title or '').lower()
+                for _cat, _kws in _strat_kw.items():
+                    if any(kw in _tl for kw in _kws):
+                        _o = _outcomes.setdefault(_cat, {'completed': 0, 'skipped': 0, 'cancelled': 0, 'total': 0})
+                        _o['total'] += 1
+                        if _status == 'completed': _o['completed'] += 1
+                        elif _status == 'skipped': _o['skipped'] += 1
+                        elif _status in ('cancelled', 'deleted'): _o['cancelled'] += 1
+                        break
+            if _outcomes:
+                _lines.append('🎯 КПД ТАКТИК (факты за 48ч — Tasks):')
+                for _cat, _o in sorted(_outcomes.items(), key=lambda x: -x[1]['total']):
+                    if _o['total'] < 2: continue
+                    _rate = round(_o['completed'] / _o['total'] * 100)
+                    _emoji = '✅' if _rate >= 60 else ('⚠️' if _rate >= 30 else '🔴')
+                    _label = 'ВЫСОКИЙ' if _rate >= 60 else ('СРЕДНИЙ' if _rate >= 30 else 'НИЗКИЙ')
+                    _lines.append(f'  {_emoji} {_cat}: {_o["total"]} задач → {_o["completed"]} завершены ({_rate}%) → {_label}')
+                    if _o['cancelled'] > 0:
+                        _lines.append(f'      отменено/провалено: {_o["cancelled"]}')
+                    if _rate < 20 and _o['total'] >= 3:
+                        _low_eff_cats.append(_cat)
     except Exception:
+        pass
+
+    # ── Блок 2: Email-кампании (реальный отклик) ──
+    try:
+        from models import EmailOutreach as _EO
+        _cut_e = datetime.now(timezone.utc) - timedelta(hours=72)
+        _emails = session.query(
+            _EO.status, _EO.has_personalization, _EO.tone_type, _EO.success, _EO.sent_by_agent
+        ).filter(
+            _EO.user_id == user_id,
+            _EO.status.in_(['sent', 'delivered', 'opened', 'replied', 'bounced', 'failed']),
+            _EO.sent_at >= _cut_e,
+        ).all()
+        if _emails:
+            _e_total = len(_emails)
+            _e_opened = sum(1 for e in _emails if e.status in ('opened', 'replied'))
+            _e_replied = sum(1 for e in _emails if e.status == 'replied')
+            _e_bounced = sum(1 for e in _emails if e.status in ('bounced', 'failed'))
+            _e_open_rate = round(_e_opened / _e_total * 100) if _e_total else 0
+            _e_reply_rate = round(_e_replied / _e_total * 100) if _e_total else 0
+            _lines.append(f'\n📧 Email-аутрич за 72ч ({_e_total} писем):')
+            _lines.append(f'  открыто: {_e_opened} ({_e_open_rate}%)  |  ответов: {_e_replied} ({_e_reply_rate}%)  |  отказов: {_e_bounced}')
+            # Эффективность персонализации
+            _pers_replied = sum(1 for e in _emails if e.status == 'replied' and e.has_personalization)
+            _npers_replied = sum(1 for e in _emails if e.status == 'replied' and not e.has_personalization)
+            _pers_total = sum(1 for e in _emails if e.has_personalization)
+            _npers_total = sum(1 for e in _emails if not e.has_personalization)
+            if _pers_total >= 2 and _npers_total >= 2:
+                _pr = round(_pers_replied / _pers_total * 100)
+                _npr = round(_npers_replied / _npers_total * 100)
+                if _pr > _npr + 10:
+                    _lines.append(f'  💡 Персонализированные письма отвечают в {_pr}% vs {_npr}% без персонализации → ВСЕГДА персонализируй')
+                elif _npr > _pr + 10:
+                    _lines.append(f'  ⚠️ Без персонализации отвечают лучше ({_npr}% vs {_pr}%) — проверь качество персонализации')
+            # Эффективность тональности
+            _tone_stats: dict = {}
+            for e in _emails:
+                if e.tone_type:
+                    _ts = _tone_stats.setdefault(e.tone_type, {'replied': 0, 'total': 0})
+                    _ts['total'] += 1
+                    if e.status == 'replied': _ts['replied'] += 1
+            _best_tone = max((_t for _t, _s in _tone_stats.items() if _s['total'] >= 2),
+                             key=lambda t: _tone_stats[t]['replied'] / _tone_stats[t]['total'],
+                             default=None)
+            if _best_tone and _tone_stats[_best_tone]['total'] >= 2:
+                _bt_rate = round(_tone_stats[_best_tone]['replied'] / _tone_stats[_best_tone]['total'] * 100)
+                _lines.append(f'  🏆 Лучший тон письма: {_best_tone} ({_bt_rate}% ответов)')
+            if _e_reply_rate == 0 and _e_total >= 5:
+                _low_eff_cats.append('Email рассылка')
+                _lines.append('  🔴 0 ответов на 5+ писем → смени тему/тон/аудиторию')
+    except Exception:
+        pass
+
+    # ── Блок 3: Посты (лайки, просмотры, комменты) ──
+    try:
+        from models import Post as _Post, PostLike as _PLike, Comment as _Comment
+        _cut_p = datetime.now(timezone.utc) - timedelta(hours=72)
+        _posts = session.query(_Post.id, _Post.content, _Post.created_at).filter(
+            _Post.user_id == user_id,
+            _Post.created_at >= _cut_p,
+        ).order_by(_Post.created_at.desc()).limit(10).all()
+        if _posts:
+            _p_ids = [p.id for p in _posts]
+            _likes_by_post = {}
+            for _pl in session.query(_PLike.post_id).filter(_PLike.post_id.in_(_p_ids)).all():
+                _likes_by_post[_pl.post_id] = _likes_by_post.get(_pl.post_id, 0) + 1
+            _comments_by_post = {}
+            for _cm in session.query(_Comment.post_id).filter(_Comment.post_id.in_(_p_ids)).all():
+                _comments_by_post[_cm.post_id] = _comments_by_post.get(_cm.post_id, 0) + 1
+            _total_likes = sum(_likes_by_post.values())
+            _total_comments = sum(_comments_by_post.values())
+            _engaged_posts = sum(1 for pid in _p_ids if _likes_by_post.get(pid, 0) + _comments_by_post.get(pid, 0) > 0)
+            _lines.append(f'\n📢 Публикации за 72ч ({len(_posts)} постов):')
+            _lines.append(f'  лайков: {_total_likes}  |  комментариев: {_total_comments}  |  постов с откликом: {_engaged_posts}/{len(_posts)}')
+            if _total_likes == 0 and _total_comments == 0 and len(_posts) >= 3:
+                _lines.append('  🔴 Посты без реакций — проверь тему/формат или смени площадку')
+            elif _engaged_posts > 0:
+                # Показываем самый эффективный пост (первые 60 символов)
+                _best_pid = max(_p_ids, key=lambda pid: _likes_by_post.get(pid, 0) + _comments_by_post.get(pid, 0) * 2)
+                _best_score = _likes_by_post.get(_best_pid, 0) + _comments_by_post.get(_best_pid, 0) * 2
+                if _best_score > 0:
+                    _best_post = next((p for p in _posts if p.id == _best_pid), None)
+                    if _best_post:
+                        _preview = (_best_post.content or '')[:60].replace('\n', ' ')
+                        _lines.append(f'  🏆 Лучший пост: «{_preview}…» ({_likes_by_post.get(_best_pid,0)}❤️ {_comments_by_post.get(_best_pid,0)}💬)')
+    except Exception:
+        pass
+
+    if not _lines:
         return ''
+
+    if _low_eff_cats:
+        _lines.append(f'\n  ⛔ ОБЯЗАТЕЛЬНАЯ СМЕНА ПОДХОДА для: {", ".join(set(_low_eff_cats))}')
+        _lines.append('     КПД < 20% / 0 ответов = подход НЕ РАБОТАЕТ.')
+        _lines.append('     → Используй ДРУГОЙ инструмент, ДРУГУЮ аудиторию или ДРУГОЙ формат.')
+
+    return '\n' + '\n'.join(_lines) + '\n\n'
 
 
 def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
