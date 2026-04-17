@@ -16057,6 +16057,29 @@ class AnchorEngine:
                     )
                     _results_summary.append(f"{_ag_name}: [частичный результат — таймаут] {_ag_task[:80]}")
                     _prev_steps_context += f"• {_ag_name}: таймаут, но часть работы выполнена: {_ag_task[:120]}\n"
+                    # Сохраняем видимое сообщение в чат — пользователь должен видеть что агент работал
+                    try:
+                        _tmo_text = (
+                            f"Работал над задачей «{(_ag_task.split(chr(10))[0])[:120].strip()}», "
+                            f"но превысил лимит времени. Задача перенесена на следующий цикл."
+                        )
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id_c, 'avatar_url': _ag_avatar_c},
+                                'text': _tmo_text,
+                                '__anchor_type': 'coordinator_result',
+                                '__to_agent': _ag_name,
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception as _tmo_save_err:
+                        logger.debug("[COORD] timeout interaction save failed: %s", _tmo_save_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                     continue
                 except Exception as _ae:
                     logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
@@ -16069,6 +16092,29 @@ class AnchorEngine:
                         ['Проверить доступность интеграции/ключей', 'Попробовать другой инструмент'],
                     )
                     _prev_steps_context += f"• {_ag_name}: ОШИБКА — {str(_ae)[:100]}\n"
+                    # Сохраняем видимое сообщение в чат — пользователь видит что агент пробовал
+                    try:
+                        _err_text = (
+                            f"Не смог выполнить задачу «{(_ag_task.split(chr(10))[0])[:100].strip()}» "
+                            f"— техническая ошибка. Попробую другой подход в следующем цикле."
+                        )
+                        session.add(Interaction(
+                            user_id=user.id,
+                            message_type='agent_msg',
+                            content=json.dumps({
+                                '__agent': {'name': _ag_name, 'id': _ag_id_c, 'avatar_url': _ag_avatar_c},
+                                'text': _err_text,
+                                '__anchor_type': 'coordinator_result',
+                                '__to_agent': _ag_name,
+                            }, ensure_ascii=False),
+                        ))
+                        session.commit()
+                    except Exception as _err_save_err:
+                        logger.debug("[COORD] error interaction save failed: %s", _err_save_err)
+                        try:
+                            session.rollback()
+                        except Exception:
+                            pass
                     continue
 
                 _result = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
