@@ -10,13 +10,13 @@
     <title>{{ post.title }} — Блог ASI Biont</title>
     <meta name="description" content="{{ post.excerpt }}">
     <meta property="og:type" content="article">
-    <meta property="og:url" content="https://asibiont.com/blog/{{ post.id }}">
+    <meta property="og:url" content="https://asibiont.com/blog/{{ post.slug }}">
     <meta property="og:title" content="{{ post.title }} — Блог ASI Biont">
     <meta property="og:description" content="{{ post.excerpt }}">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-preview.png">
     <meta property="article:published_time" content="{{ post.created_at }}">
     <meta property="article:author" content="{{ post.author }}">
-    <link rel="canonical" href="https://asibiont.com/blog/{{ post.id }}">
+    <link rel="canonical" href="https://asibiont.com/blog/{{ post.slug }}">
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -26,8 +26,8 @@
         "datePublished": "{{ post.created_at }}",
         "author": {"@type": "Person", "name": {{ post.author | tojson }}},
         "publisher": {"@type": "Organization", "name": "ASI Biont", "url": "https://asibiont.com"},
-        "url": "https://asibiont.com/blog/{{ post.id }}",
-        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://asibiont.com/blog/{{ post.id }}"},
+        "url": "https://asibiont.com/blog/{{ post.slug }}",
+        "mainEntityOfPage": {"@type": "WebPage", "@id": "https://asibiont.com/blog/{{ post.slug }}"},
         "articleBody": {{ post.content | tojson }}
     }
     </script>
@@ -355,10 +355,11 @@
             card.className = 'post-card';
             card.setAttribute('itemscope', '');
             card.setAttribute('itemtype', 'https://schema.org/BlogPosting');
+            var postSlug = p.slug || p.id;
             card.innerHTML =
-                '<meta itemprop="url" content="https://asibiont.com/blog/' + p.id + '">' +
+                '<meta itemprop="url" content="https://asibiont.com/blog/' + postSlug + '">' +
                 '<div class="post-header" onclick="togglePost(this)">' +
-                    '<h2 class="post-title" itemprop="headline"><a href="/blog/' + p.id + '" style="color:inherit;text-decoration:none;" onclick="event.preventDefault();togglePost(this.closest(\'.post-header\'))">' + escHtml(p.title || 'Без заголовка') + '</a></h2>' +
+                    '<h2 class="post-title" itemprop="headline"><a href="/blog/' + postSlug + '" style="color:inherit;text-decoration:none;" onclick="event.preventDefault();togglePost(this.closest(\'.post-header\'))">' + escHtml(p.title || 'Без заголовка') + '</a></h2>' +
                     '<div class="post-meta">' +
                         '<time itemprop="datePublished" datetime="' + escHtml(p.created_at || '') + '">' + formatDate(p.created_at) + '</time>' +
                         '<meta itemprop="author" content="' + escHtml(p.author || 'AI-агент') + '">' +

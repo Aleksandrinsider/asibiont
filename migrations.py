@@ -357,7 +357,43 @@ def _migrate_notes(session, inspector):
         cols = [col['name'] for col in inspector.get_columns('notes')]
         _add_columns(session, 'notes', cols, {
             'title': 'ALTER TABLE notes ADD COLUMN title VARCHAR(200)',
+            'slug': 'ALTER TABLE notes ADD COLUMN slug VARCHAR(300)',
         })
+        # Index on slug for fast lookups
+        if 'slug' not in cols:
+            try:
+                session.execute(text('CREATE INDEX IF NOT EXISTS ix_notes_slug ON notes(slug)'))
+                session.commit()
+            except Exception:
+                session.rollback()
+        # Backfill slug for existing blog posts that don't have one
+        try:
+            rows = session.execute(text(
+                "SELECT id, title FROM notes WHERE source='blog' AND (slug IS NULL OR slug='')"
+            )).fetchall()
+            if rows:
+                import re as _re_mig
+                _TRANSLIT = {
+                    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z',
+                    'и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r',
+                    'с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh',
+                    'щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
+                }
+                for row_id, row_title in rows:
+                    s = (row_title or 'post').lower().strip()
+                    r = ''
+                    for ch in s:
+                        r += _TRANSLIT.get(ch, ch)
+                    r = _re_mig.sub(r'[^a-z0-9]+', '-', r).strip('-')[:60].rstrip('-') or 'post'
+                    new_slug = f"{row_id}-{r}"
+                    session.execute(text(
+                        "UPDATE notes SET slug=:slug WHERE id=:id"
+                    ), {'slug': new_slug, 'id': row_id})
+                session.commit()
+                logger.info(f"Migration: backfilled slug for {len(rows)} blog posts")
+        except Exception as _e:
+            logger.warning(f"Migration: slug backfill failed: {_e}")
+            session.rollback()
 
 
 def _migrate_email_campaigns(session, inspector):

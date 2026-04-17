@@ -855,6 +855,26 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
 
 # set_recurring_task removed - feature not critical, required subscription
 
+def _make_blog_slug(title: str, note_id: int) -> str:
+    """Генерирует SEO-slug из заголовка: «Падение найма Junior» → '882-padenie-nayma-junior'"""
+    import re as _re
+    _TRANSLIT = {
+        'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'zh','з':'z',
+        'и':'i','й':'y','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r',
+        'с':'s','т':'t','у':'u','ф':'f','х':'kh','ц':'ts','ч':'ch','ш':'sh',
+        'щ':'sch','ъ':'','ы':'y','ь':'','э':'e','ю':'yu','я':'ya',
+    }
+    s = title.lower().strip()
+    result = ''
+    for ch in s:
+        result += _TRANSLIT.get(ch, ch)
+    result = _re.sub(r'[^a-z0-9]+', '-', result)
+    result = result.strip('-')[:60].rstrip('-')
+    if not result:
+        result = 'post'
+    return f"{note_id}-{result}"
+
+
 async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
     """Сохранить заметку (без напоминания/дедлайна).
 
@@ -971,8 +991,10 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         session.add(note)
         session.commit()
         if _source_val == 'blog':
-            logger.info(f"[SAVE_NOTE] Blog post published: id={note.id}, title={_note_title[:60]!r}")
-            return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.id})"
+            note.slug = _make_blog_slug(_note_title, note.id)
+            session.commit()
+            logger.info(f"[SAVE_NOTE] Blog post published: id={note.id}, slug={note.slug!r}, title={_note_title[:60]!r}")
+            return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.slug})"
         # === Векторная память (fire-and-forget, не блокирует event loop) ===
         try:
             import asyncio as _aio_sn

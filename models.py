@@ -154,7 +154,8 @@ class Note(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
     title = Column(String(200), nullable=True)
     content = Column(Text, nullable=False)
-    source = Column(String(20), default='manual')  # 'manual' or 'chat'
+    source = Column(String(20), default='manual')  # 'manual', 'chat', or 'blog'
+    slug = Column(String(300), nullable=True, index=True)  # SEO-friendly URL slug for blog posts
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 
     user = relationship("User", backref="notes")

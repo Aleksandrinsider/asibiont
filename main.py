@@ -10352,26 +10352,52 @@ async def blog_handler(request):
 
 
 async def blog_post_handler(request):
-    """Отдельная страница поста блога (SSR для SEO)"""
-    post_id = request.match_info.get('post_id')
-    try:
-        post_id = int(post_id)
-    except (TypeError, ValueError):
+    """Отдельная страница поста блога (SSR для SEO).
+    Принимает: /blog/882-moya-statya  (slug) или /blog/882  (legacy ID → redirect).
+    """
+    raw = request.match_info.get('post_id', '')
+
+    # Если чисто числовой ID — lookup и redirect на slug URL
+    if raw.isdigit():
+        post_id = int(raw)
+        with Session() as session_db:
+            from models import Note
+            note = session_db.query(Note).filter_by(id=post_id, source='blog').first()
+            if not note:
+                raise web.HTTPNotFound()
+            if note.slug:
+                raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
+            # slug ещё не сгенерирован — генерируем и сохраняем
+            from ai_integration.handlers import _make_blog_slug
+            note.slug = _make_blog_slug(note.title or 'post', note.id)
+            session_db.commit()
+            raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
+
+    # Slug-формат: «882-moya-statya» — извлекаем ID из начала
+    import re as _re_bp
+    m = _re_bp.match(r'^(\d+)-', raw)
+    if not m:
         raise web.HTTPNotFound()
+    post_id = int(m.group(1))
 
     with Session() as session_db:
         from models import Note, User
         note = session_db.query(Note).filter_by(id=post_id, source='blog').first()
         if not note:
             raise web.HTTPNotFound()
+        # Если slug изменился или не совпадает — canonical redirect
+        if note.slug and note.slug != raw:
+            raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
         user = session_db.query(User).filter_by(id=note.user_id).first()
         author = f"@{user.username}" if user and user.username else "AI-агент"
         excerpt = (note.content or '').replace('#', '').replace('*', '').replace('_', '')
         excerpt = ' '.join(excerpt.split())[:200]
         if len((note.content or '').split()) * 5 > 200:
             excerpt += '…'
+        slug = note.slug or str(note.id)
         post_data = {
             'id': note.id,
+            'slug': slug,
             'title': note.title or 'Без заголовка',
             'content': note.content or '',
             'excerpt': excerpt,
@@ -10402,6 +10428,7 @@ async def api_blog_handler(request):
             author = f"@{user.username}" if user and user.username else "AI-агент"
             posts.append({
                 'id': n.id,
+                'slug': n.slug or str(n.id),
                 'title': n.title or 'Без заголовка',
                 'content': n.content or '',
                 'author': author,
@@ -13194,10 +13221,14 @@ async def _static_sitemap(request):
     try:
         from models import Note
         with Session() as _s:
-            posts = _s.query(Note.id, Note.created_at).filter_by(source='blog').order_by(Note.created_at.desc()).all()
-        for post_id, created_at in posts:
+            posts = _s.query(Note.id, Note.slug, Note.title, Note.created_at).filter_by(source='blog').order_by(Note.created_at.desc()).all()
+        for post_id, post_slug, post_title, created_at in posts:
             lastmod = created_at.date().isoformat() if created_at else today
-            loc = f'https://asibiont.com/blog/{post_id}'
+            # Генерируем slug на лету если не сохранён
+            if not post_slug:
+                from ai_integration.handlers import _make_blog_slug
+                post_slug = _make_blog_slug(post_title or 'post', post_id)
+            loc = f'https://asibiont.com/blog/{post_slug}'
             lines.append(f'  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>')
     except Exception as _e:
         logger.warning(f'[SITEMAP] blog posts error: {_e}')
