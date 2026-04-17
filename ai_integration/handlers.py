@@ -18510,11 +18510,18 @@ async def start_delegation_campaign(
         if len(existing) >= 5:
             return " Максимум 5 активных кампаний делегирования. Заверши или отмени старые."
 
+        # Очищаем название от служебных префиксов, которые агент иногда добавляет
+        _clean_name = name
+        for _pfx in ('Цель: ', 'Цель:', 'Goal: ', 'Goal:', 'Название: ', 'Name: '):
+            if _clean_name.startswith(_pfx):
+                _clean_name = _clean_name[len(_pfx):].strip()
+                break
+
         campaign = DelegationCampaign(
             user_id=user.id,
-            name=name[:300],
+            name=_clean_name[:300],
             goal=goal[:2000],
-            target_audience=target_audience[:1000],
+            target_audience=target_audience[:3000],
             task_template=(task_template or '')[:1000],
             offer=(offer or '')[:500],
             tone=tone or 'professional',
@@ -18643,13 +18650,18 @@ async def manage_delegation_campaign(
 
             changed = []
             if 'name' in updates:
-                campaign.name = str(updates['name'])[:300]
+                _upd_name = str(updates['name'])
+                for _pfx in ('Цель: ', 'Цель:', 'Goal: ', 'Goal:', 'Название: ', 'Name: '):
+                    if _upd_name.startswith(_pfx):
+                        _upd_name = _upd_name[len(_pfx):].strip()
+                        break
+                campaign.name = _upd_name[:300]
                 changed.append(f"название → {campaign.name}")
             if 'goal' in updates:
                 campaign.goal = str(updates['goal'])[:2000]
                 changed.append("цель обновлена")
             if 'target_audience' in updates:
-                campaign.target_audience = str(updates['target_audience'])[:1000]
+                campaign.target_audience = str(updates['target_audience'])[:3000]
                 changed.append(f"аудитория → {campaign.target_audience[:100]}")
             if 'task_template' in updates:
                 campaign.task_template = str(updates['task_template'])[:1000]
