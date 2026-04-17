@@ -7201,7 +7201,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "     ✅ ХОРОШО: DELEGATE[Кристина]: найди email Андрея Ерёменка (Хабр: https://habr.com/..., CTO, СПб).\n"
             "        Попробуй его GitHub (run_agent_action search_github_users) или личный сайт, сохрани через save_email_contact.\n\n"
 
-            "ШАГ 3 — ОТЧИТАЙСЯ: только то что уже сделал, 120-250 символов.\n"
+            "ШАГ 3 — ОТЧИТАЙСЯ: только то что уже сделал.\n"
+            "  Длина: 120-250 символов — если действие одно (создал задачу, опубликовал пост).\n"
+            "  Длина: до 800 символов — если нашёл конкретные данные (контакты, email, имена, ссылки, цифры): перечисли ВСЕ найденные данные, не обрезай.\n"
             "  Сплошной текст, одинарный перенос. Без маркеров, списков, заголовков, **жирного**.\n"
             f"  Перечисляй через запятую: «{_ex_found.lower()} X, {'отправила' if _is_fem else 'отправил'} Y, {'опубликовала' if _is_fem else 'опубликовал'} Z».\n"
             f"  Пиши от первого лица: «Я {_ex_found.lower()}», не «{agent['name']} {_ex_found.lower()}».\n"
@@ -9434,7 +9436,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     )},
                 ]
                 _fb_resp = await asyncio.wait_for(
-                    _agent_inst.call_ai(_fb_messages, use_tools=False, max_tokens=250, api_timeout=25),
+                    _agent_inst.call_ai(_fb_messages, use_tools=False, max_tokens=600, api_timeout=25),
                     timeout=30,
                 )
                 if _fb_resp:
