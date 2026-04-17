@@ -1417,13 +1417,15 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
 
     Не блокирует действие жёстко, а напоминает модели: если паттерн уже звучал
     сегодня, возвращаться к нему можно только при наличии нового факта.
+    Дополнительно: детектирует конкретные повторяющиеся инструменты и подходы.
     """
+    import re as _re_sg
     _entries: list[str] = []
-    for _item in (agent_history or [])[:10]:
+    for _item in (agent_history or [])[:20]:
         if _item:
             _entries.append(str(_item))
     for _agent_name, _hist in (team_history or {}).items():
-        for _item in (_hist or [])[:6]:
+        for _item in (_hist or [])[:8]:
             if _item:
                 _entries.append(f"{_agent_name}: {_item}")
 
@@ -1437,6 +1439,10 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
         'Письма / outreach': ('email', 'письм', 'outreach', 'reply', 'follow-up', 'check_emails'),
         'Смена тактики': ('сменим тактику', 'смени тактику', 'другой подход', 'сменить подход'),
         'Поиск новых контактов': ('новых контактов', 'новых предпринимател', 'новых людей', 'новый сегмент'),
+        'Публикация / контент': ('create_post', 'publish', 'пост', 'статья', 'контент', 'опубликовал'),
+        'Исследование / поиск': ('web_search', 'research_topic', 'поиск', 'нашёл', 'исследовал'),
+        'Аналитика': ('проанализировал', 'отчёт', 'метрик', 'аналитика'),
+        'Делегирование': ('делегировал', 'delegate', 'поручил'),
     }
 
     _counts: dict[str, int] = {}
@@ -1446,6 +1452,20 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
             if any(_kw in _txt for _kw in _keywords):
                 _counts[_label] = _counts.get(_label, 0) + 1
 
+    # ── Гранулярный детектор: конкретные инструменты + повторения ──
+    _tool_counts: dict = {}
+    _query_counts: dict = {}
+    for _entry in _entries[:25]:
+        _txt = str(_entry)
+        _tm = _re_sg.search(r'\[([a-z_]{4,30})\]', _txt)
+        if _tm:
+            _tn = _tm.group(1)
+            _tool_counts[_tn] = _tool_counts.get(_tn, 0) + 1
+        for _qm in _re_sg.findall(r"'([^']{5,35})'|\"([^\"]{5,35})\"", _txt):
+            _q = (_qm[0] or _qm[1]).lower().strip()
+            if _q and len(_q) > 4:
+                _query_counts[_q] = _query_counts.get(_q, 0) + 1
+
     _lines = [
         "\n🧠 АНТИ-ПОВТОР ИДЕЙ:",
         "  Если ту же идею уже предлагали сегодня — не повторяй её автоматически.",
@@ -1454,8 +1474,20 @@ def _build_recent_suggestion_guard(agent_history: list | None = None,
     ]
     if _counts:
         _lines.append("  Недавние паттерны команды:")
-        for _label, _count in sorted(_counts.items(), key=lambda x: (-x[1], x[0]))[:5]:
-            _lines.append(f"    • {_label}: {_count}")
+        for _label, _count in sorted(_counts.items(), key=lambda x: (-x[1], x[0]))[:6]:
+            _lines.append(f"    • {_label}: {_count}×")
+    # Инструменты с высокой частотой — конкретное предупреждение
+    _heavy_tools = [(t, c) for t, c in _tool_counts.items() if c >= 3]
+    if _heavy_tools:
+        _lines.append("  ⚠️ Инструменты использованные 3+ раз подряд (смени параметры или подход):")
+        for _tn, _cnt in sorted(_heavy_tools, key=lambda x: -x[1])[:4]:
+            _lines.append(f"    🔁 [{_tn}]: {_cnt}× — если без новых результатов, попробуй ДРУГОЙ инструмент")
+    # Повторяющиеся запросы/контексты
+    _heavy_q = [(q, c) for q, c in _query_counts.items() if c >= 2]
+    if _heavy_q:
+        _lines.append("  🔁 Повторяющиеся запросы/контексты (уже использовались):")
+        for _q, _c in sorted(_heavy_q, key=lambda x: -x[1])[:4]:
+            _lines.append(f"    '{_q}': {_c}× — используй другой query/тему")
     _lines.append("  Перед новой рекомендацией ответь себе: что здесь реально нового по сравнению с прошлым разом?")
     return '\n'.join(_lines) + '\n'
 
@@ -2937,7 +2969,46 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # ── Блок памяти ──
     _memory_block = ''
     if agent_history:
-        _mem_lines = [f"  {i+1}. {h}" for i, h in enumerate(agent_history[:10])]
+        # ── Группируем по "сегодня" vs "ранее" для чёткой картины ──
+        import re as _re_mem
+        _today_str = datetime.now().strftime('%d.%m')
+        _today_items = [h for h in agent_history if h.startswith(_today_str)]
+        _older_items = [h for h in agent_history if not h.startswith(_today_str)]
+        _mem_lines = []
+        if _today_items:
+            _mem_lines.append("  📅 СЕГОДНЯ:")
+            for i, h in enumerate(_today_items[:15]):
+                _mem_lines.append(f"    {i+1}. {h}")
+        if _older_items:
+            _mem_lines.append("  🗓 РАНЕЕ (последние):")
+            for i, h in enumerate(_older_items[:8]):
+                _mem_lines.append(f"    {i+1}. {h}")
+
+        # ── Детектируем конкретные повторяющиеся тактики ──
+        _tool_seq: dict = {}  # tool_name -> count
+        _approach_seq: dict = {}  # (tool, keyword) -> count
+        for _h in agent_history[:30]:
+            _tool_m = _re_mem.search(r'\[([a-z_]+)\]', _h)
+            if _tool_m:
+                _tn = _tool_m.group(1)
+                _tool_seq[_tn] = _tool_seq.get(_tn, 0) + 1
+                # Ищем ключевые слова подхода: query, тема письма, платформа
+                for _kw in _re_mem.findall(r"'([^']{3,40})'|\"([^\"]{3,40})\"", _h):
+                    _kw_s = (_kw[0] or _kw[1]).lower().strip()
+                    if _kw_s:
+                        _key = (_tn, _kw_s[:30])
+                        _approach_seq[_key] = _approach_seq.get(_key, 0) + 1
+        _repeat_warnings = []
+        for _tn, _cnt in sorted(_tool_seq.items(), key=lambda x: -x[1]):
+            if _cnt >= 3:
+                _repeat_warnings.append(f"    ⚠️ [{_tn}] использован {_cnt} раз — смени подход или параметры!")
+        for (_tn, _kw), _cnt in sorted(_approach_seq.items(), key=lambda x: -x[1]):
+            if _cnt >= 2:
+                _repeat_warnings.append(f"    🔁 [{_tn}] с '{_kw}' — уже {_cnt} раза. Другой query/подход!")
+        if _repeat_warnings:
+            _mem_lines.append("\n  🔴 ПОВТОРЯЮЩИЕСЯ ПОДХОДЫ (обязательно измени):")
+            _mem_lines.extend(_repeat_warnings[:6])
+
         _memory_block = (
             "\nТВОЯ ИСТОРИЯ (последние действия — используй как основу, развивай дальше):\n"
             + '\n'.join(_mem_lines) + '\n'
