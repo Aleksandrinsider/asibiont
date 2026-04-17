@@ -72,38 +72,50 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
      "💡 GITHUB_TOKEN не настроен. github.com/settings/tokens → Generate (repo, read:user) → добавь в настройки агента"),
     # NewsAPI
     ("newsapi исчерпала",
-     "💡 NewsAPI исчерпал дневной лимит. Получи бесплатный ключ: newsapi.org → добавь NEWSAPI_KEY в настройках агента"),
+     "💡 NewsAPI исчерпал дневной лимит. newsapi.org → бесплатный ключ → добавь NEWSAPI_KEY в настройки агента"),
     ("newsapi_key не",
-     "💡 NewsAPI не настроен. newsapi.org → бесплатно 100 запросов/день → добавь NEWSAPI_KEY в настройках агента"),
-    # Email / Gmail / IMAP
+     "💡 NewsAPI не настроен. newsapi.org → бесплатно 100 запросов/день → добавь NEWSAPI_KEY в настройки агента"),
+    # Email / Gmail / IMAP / Яндекс / Mail.ru
     ("gmail не настроен",
      "💡 Gmail не настроен. Добавь GMAIL_USER + GMAIL_PASS (пароль приложения: myaccount.google.com → Безопасность → Пароли приложений) в настройки агента"),
     ("imap не настроен",
      "💡 IMAP не настроен — агент не может читать входящие. Добавь IMAP_HOST + IMAP_USER + IMAP_PASS в настройки агента"),
+    ("yandex_user не",
+     "💡 Яндекс.Почта не настроена. Добавь YANDEX_USER=you@yandex.ru + YANDEX_PASS=... в настройки агента"),
+    ("mailru_user не",
+     "💡 Mail.ru не настроен. Добавь MAILRU_USER=you@mail.ru + MAILRU_PASS=... в настройки агента"),
+    ("resend_api_key не",
+     "💡 Resend не настроен. resend.com → получи ключ → добавь RESEND_API_KEY + RESEND_FROM в настройки агента"),
     # OpenWeatherMap
     ("openweathermap_api_key не",
-     "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в настройках агента"),
+     "💡 OpenWeatherMap не подключён. openweathermap.org/api → бесплатный ключ → добавь OPENWEATHERMAP_API_KEY в настройки агента"),
     ("openweathermap_api_key not",
-     "💡 OpenWeatherMap не подключён. Получи бесплатный ключ: openweathermap.org/api → добавь OPENWEATHERMAP_API_KEY в настройках агента"),
+     "💡 OpenWeatherMap не подключён. openweathermap.org/api → бесплатный ключ → добавь OPENWEATHERMAP_API_KEY в настройки агента"),
     # Alpha Vantage
     ("alphavantage_api_key не",
-     "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 500 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     ("alphavantage_api_key not",
-     "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 500 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     ("alphavantage_api_key: none",
-     "💡 Alpha Vantage не подключён. Получи API ключ: alphavantage.co (бесплатно, 500 req/день) → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 500 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     # Notion
     ("notion_token не настроен",
+     "💡 Notion не подключён. notion.so/my-integrations → создай интеграцию → добавь NOTION_TOKEN в настройки агента"),
+    ("notion_token не",
      "💡 Notion не подключён. notion.so/my-integrations → создай интеграцию → добавь NOTION_TOKEN в настройки агента"),
     # Google Sheets
     ("google_sheets_credentials",
      "💡 Google Sheets не подключён. Google Cloud Console → Service Account → credentials.json → добавь в настройки агента"),
+    ("gspread не",
+     "💡 Google Sheets не подключён. Google Cloud Console → Service Account → credentials.json → добавь GOOGLE_SHEETS_CREDENTIALS в настройки агента"),
     # Slack
     ("slack_bot_token не",
      "💡 Slack не подключён. api.slack.com/apps → Create App → Bot Token → добавь SLACK_BOT_TOKEN в настройки агента"),
-    # Stripe
+    # Stripe / YooKassa
     ("stripe_secret_key не",
-     "💡 Stripe не подключён. Добавь STRIPE_SECRET_KEY в настройки агента для мониторинга платежей"),
+     "💡 Stripe не подключён. dashboard.stripe.com/apikeys → добавь STRIPE_SECRET_KEY в настройки агента"),
+    ("yookassa не",
+     "💡 ЮKassa не подключён. yookassa.ru → настройки → добавь YOOKASSA_SHOP_ID + YOOKASSA_SECRET_KEY в настройки агента"),
     # Twitter / X
     ("x_api_key не",
      "💡 Twitter/X не подключён. developer.twitter.com → добавь X_API_KEY + X_API_SECRET в настройки агента"),
@@ -116,16 +128,104 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
     # Jira
     ("jira_email не",
      "💡 Jira не подключён. Добавь JIRA_URL + JIRA_EMAIL + JIRA_TOKEN в настройки агента"),
+    ("jira_url не",
+     "💡 Jira не подключён. Добавь JIRA_URL + JIRA_EMAIL + JIRA_TOKEN в настройки агента"),
     # HH.ru
     ("hh_api_token не",
      "💡 HH.ru не подключён. hh.ru/oauth/authorize → добавь HH_API_TOKEN в настройки агента"),
     # LinkedIn
     ("linkedin access token",
-     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента в дашборде: https://asibiont.com/dashboard"),
+     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента"),
     ("linkedin_api_key не",
-     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента в дашборде: https://asibiont.com/dashboard"),
+     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента"),
     ("linkedin не настроен",
-     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента в дашборде: https://asibiont.com/dashboard"),
+     "💡 LinkedIn не подключён. Добавь LINKEDIN_ACCESS_TOKEN в настройки агента"),
+    # AmoCRM / Bitrix24 / HubSpot / Salesforce / Pipedrive / Zoho
+    ("amocrm не",
+     "💡 AmoCRM не подключён. Добавь AMOCRM_DOMAIN + AMOCRM_ACCESS_TOKEN в настройки агента"),
+    ("bitrix не",
+     "💡 Bitrix24 не подключён. Добавь BITRIX_WEBHOOK_URL в настройки агента"),
+    ("hubspot_api_key не",
+     "💡 HubSpot не подключён. app.hubspot.com → Private App → добавь HUBSPOT_API_KEY в настройки агента"),
+    ("salesforce не",
+     "💡 Salesforce не подключён. Добавь SALESFORCE_INSTANCE_URL + SALESFORCE_ACCESS_TOKEN в настройки агента"),
+    ("pipedrive_api_key не",
+     "💡 Pipedrive не подключён. pipedrive.com → Настройки → API → добавь PIPEDRIVE_API_KEY в настройки агента"),
+    ("zoho_access_token не",
+     "💡 Zoho CRM не подключён. Добавь ZOHO_ACCESS_TOKEN в настройки агента"),
+    # Маркетплейсы
+    ("ozon_api_key не",
+     "💡 Ozon не подключён. seller.ozon.ru → Настройки → API → добавь OZON_CLIENT_ID + OZON_API_KEY в настройки агента"),
+    ("wb_api_key не",
+     "💡 Wildberries не подключён. seller.wildberries.ru → Настройки → API → добавь WB_API_KEY в настройки агента"),
+    ("shopify не",
+     "💡 Shopify не подключён. Добавь SHOPIFY_STORE_URL + SHOPIFY_ACCESS_TOKEN в настройки агента"),
+    ("avito_client_id не",
+     "💡 Avito не подключён. developers.avito.ru → добавь AVITO_CLIENT_ID + AVITO_CLIENT_SECRET в настройки агента"),
+    # Криптобиржи
+    ("binance_api_key не",
+     "💡 Binance не подключён. binance.com → API Management → добавь BINANCE_API_KEY + BINANCE_API_SECRET в настройки агента"),
+    ("bybit_api_key не",
+     "💡 Bybit не подключён. bybit.com → API → добавь BYBIT_API_KEY + BYBIT_API_SECRET в настройки агента"),
+    ("coinbase_api_key не",
+     "💡 Coinbase не подключён. Добавь COINBASE_API_KEY + COINBASE_API_SECRET в настройки агента"),
+    # Задачники
+    ("asana_access_token не",
+     "💡 Asana не подключён. app.asana.com/0/developer-console → добавь ASANA_ACCESS_TOKEN в настройки агента"),
+    ("clickup_api_key не",
+     "💡 ClickUp не подключён. app.clickup.com → Настройки → Apps → добавь CLICKUP_API_KEY в настройки агента"),
+    ("linear_api_key не",
+     "💡 Linear не подключён. linear.app → Settings → API → добавь LINEAR_API_KEY в настройки агента"),
+    ("todoist_api_token не",
+     "💡 Todoist не подключён. todoist.com → Settings → Integrations → добавь TODOIST_API_TOKEN в настройки агента"),
+    # Реклама
+    ("yandex_direct не",
+     "💡 Яндекс.Директ не подключён. Добавь YANDEX_DIRECT_TOKEN в настройки агента"),
+    ("google_ads не",
+     "💡 Google Ads не подключён. Добавь GOOGLE_ADS_DEVELOPER_TOKEN + GOOGLE_ADS_CUSTOMER_ID в настройки агента"),
+    # Calendars
+    ("google_calendar не",
+     "💡 Google Calendar не подключён. Google Cloud Console → Calendar API → добавь GOOGLE_CALENDAR_CREDENTIALS в настройки агента"),
+    # VK
+    ("vk_token не",
+     "💡 VK не подключён. vk.com/dev → Standalone app → добавь VK_TOKEN в настройки агента"),
+    ("vk_api_key не",
+     "💡 VK не подключён. vk.com/dev → Standalone app → добавь VK_TOKEN в настройки агента"),
+    # YouTube
+    ("youtube_api_key не",
+     "💡 YouTube Data API не подключён. console.cloud.google.com → YouTube Data API v3 → добавь YOUTUBE_API_KEY в настройки агента"),
+    # Twilio
+    ("twilio_account_sid не",
+     "💡 Twilio не подключён. twilio.com/console → добавь TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN в настройки агента"),
+    # Figma
+    ("figma_access_token не",
+     "💡 Figma не подключён. figma.com → Settings → Personal Access Token → добавь FIGMA_ACCESS_TOKEN в настройки агента"),
+    # Zoom
+    ("zoom_api_key не",
+     "💡 Zoom не подключён. marketplace.zoom.us → добавь ZOOM_API_KEY + ZOOM_API_SECRET в настройки агента"),
+    # Microsoft
+    ("ms_graph_token не",
+     "💡 Microsoft 365 не подключён. portal.azure.com → App registration → добавь MS_GRAPH_TOKEN в настройки агента"),
+    # Аналитика
+    ("ga4_api_secret не",
+     "💡 Google Analytics 4 не подключён. Добавь GA4_PROPERTY_ID + GA4_API_SECRET в настройки агента"),
+    ("yandex_metrika не",
+     "💡 Яндекс.Метрика не подключена. oauth.yandex.ru → добавь YANDEX_METRIKA_TOKEN + YANDEX_METRIKA_COUNTER_ID в настройки агента"),
+    # OpenAI / Anthropic / другие LLM
+    ("openai_api_key не",
+     "💡 OpenAI не подключён. platform.openai.com/api-keys → добавь OPENAI_API_KEY в настройки агента"),
+    ("anthropic_api_key не",
+     "💡 Anthropic Claude не подключён. console.anthropic.com → добавь ANTHROPIC_API_KEY в настройки агента"),
+    # Finnhub / TwelveData / Polygon
+    ("finnhub_api_key не",
+     "💡 Finnhub не подключён. finnhub.io → бесплатный ключ → добавь FINNHUB_API_KEY в настройки агента"),
+    ("twelvedata_api_key не",
+     "💡 Twelve Data не подключён. twelvedata.com → бесплатный ключ → добавь TWELVEDATA_API_KEY в настройки агента"),
+    ("polygon_api_key не",
+     "💡 Polygon.io не подключён. polygon.io → бесплатный ключ → добавь POLYGON_API_KEY в настройки агента"),
+    # Webhook n8n/Zapier/Make
+    ("webhook_url не",
+     "💡 Webhook не настроен. Добавь WEBHOOK_URL в настройки агента (URL из n8n/Zapier/Make)"),
 ]
 
 
