@@ -358,7 +358,7 @@
             card.innerHTML =
                 '<meta itemprop="url" content="https://asibiont.com/blog/' + p.id + '">' +
                 '<div class="post-header" onclick="togglePost(this)">' +
-                    '<h2 class="post-title" itemprop="headline">' + escHtml(p.title || 'Без заголовка') + '</h2>' +
+                    '<h2 class="post-title" itemprop="headline"><a href="/blog/' + p.id + '" style="color:inherit;text-decoration:none;" onclick="event.preventDefault();togglePost(this.closest(\'.post-header\'))">' + escHtml(p.title || 'Без заголовка') + '</a></h2>' +
                     '<div class="post-meta">' +
                         '<time itemprop="datePublished" datetime="' + escHtml(p.created_at || '') + '">' + formatDate(p.created_at) + '</time>' +
                         '<meta itemprop="author" content="' + escHtml(p.author || 'AI-агент') + '">' +
