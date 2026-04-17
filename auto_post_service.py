@@ -19,6 +19,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _detect_gender(first_name: str) -> str:
+    """Определяет пол по имени: 'female' или 'male'.
+    Русские женские имена как правило заканчиваются на 'а' или 'я'.
+    """
+    if not first_name:
+        return 'male'
+    name = first_name.strip().split()[0].lower()
+    if name.endswith(('а', 'я', 'a', 'ya')):
+        return 'female'
+    return 'male'
+
+
 async def _generate_text_with_ai(prompt: str) -> str:
     """Прямой вызов AI API для генерации текста (без агентского пайплайна).
     
@@ -223,6 +235,7 @@ async def generate_progress_post(user_id, session):
 
         # Profile info
         user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
+        user_gender = _detect_gender(user.first_name or '')
         user_city = profile.city or ''
         user_interests = profile.interests or ''
         user_skills = profile.skills or ''
@@ -301,6 +314,7 @@ async def generate_progress_post(user_id, session):
 — от первого лица, 2-4 предложения, максимум 400 символов
 — живой разговорный текст, как запись в личном блоге — не пресс-релиз
 — БЕЗ буллетов, нумерации, хештегов, CTA
+— {'женский род: «выбрала», «сделала», «заметила», «решила»' if user_gender == 'female' else 'мужской род: «выбрал», «сделал», «заметил», «решил»'}
 — {"основывайся ТОЛЬКО на реально закрытых задачах выше" if completed_today else "задач не было — напиши что-то личное: настроение, наблюдение, мысль дня"}
 — НЕ пиши про профессиональные навыки и сферу деятельности (это уже было в предыдущих постах)
 — НЕ начинай со слов «Сегодня», «Только что», «Интересно»
@@ -319,26 +333,29 @@ async def generate_progress_post(user_id, session):
                 return post_content
             else:
                 logger.warning(f"AI response too short for {user_id}, using fallback")
-                return generate_simple_fallback(completed_today, active_tasks, overdue_tasks)
+                return generate_simple_fallback(completed_today, active_tasks, overdue_tasks, user.first_name or '')
 
         except Exception as ai_error:
             logger.error(f"AI generation failed for {user_id}: {ai_error}")
-            return generate_simple_fallback(completed_today, active_tasks, overdue_tasks)
+            return generate_simple_fallback(completed_today, active_tasks, overdue_tasks, user.first_name or '')
 
     except Exception as e:
         logger.error(f"Error generating progress post for user {user_id}: {e}")
         return None
 
 
-def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks):
+def generate_simple_fallback(completed_tasks, pending_tasks, overdue_tasks, first_name=''):
     """Generate simple fallback message when AI fails"""
+    is_female = _detect_gender(first_name) == 'female'
     if completed_tasks:
         if len(completed_tasks) >= 3:
-            return f"Сегодня закрыл {len(completed_tasks)} задач — день прошёл не зря"
+            verb = 'закрыла' if is_female else 'закрыл'
+            return f"Сегодня {verb} {len(completed_tasks)} задач — день прошёл не зря"
         else:
             raw_desc = decrypt_data(completed_tasks[0].description) if completed_tasks[0].description else (completed_tasks[0].title or '')
             task_desc = (raw_desc[:50] + "...") if raw_desc and len(raw_desc) > 50 else (raw_desc or 'задачу')
-            return f"Разобрался с '{task_desc}' — ещё одно дело с плеч"
+            verb = 'Разобралась' if is_female else 'Разобрался'
+            return f"{verb} с '{task_desc}' — ещё одно дело с плеч"
     elif pending_tasks:
         return f"В работе {len(pending_tasks)} задач — копаю дальше"
     else:
@@ -375,8 +392,15 @@ async def generate_research_post(user_id, query, analysis, session):
         
         # Build AI prompt
         user_name = user.first_name if user.first_name else (user.username or 'Пользователь')
+        user_gender = _detect_gender(user.first_name or '')
+        _gender_note = (
+            'Автор — женщина, используй женский род: «изучила», «обнаружила», «нашла», «решила».'
+            if user_gender == 'female' else
+            'Автор — мужчина, используй мужской род: «изучил», «обнаружил», «нашёл», «решил».'
+        )
         
         context = f"""Создай живой, естественный пост от лица пользователя {user_name}, который только что провел исследование рынка/темы.
+{_gender_note}
 
 Тема исследования: {query}
 
@@ -403,7 +427,7 @@ async def generate_research_post(user_id, query, analysis, session):
         
         context += """
 Требования к посту:
-1. Пиши от первого лица: "Изучал тему...", "Обнаружил интересное...", "Оказывается..."
+1. Пиши от первого лица с правильным родом глаголов ({_gender_note})
 2. Упомяни 1-2 самых интересных находки, но естественно
 3. Покажи своё отношение - удивление, энтузиазм, или скептицизм
 4. Добавь личный контекст: зачем изучал, что планируешь с этим делать
