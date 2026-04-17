@@ -15398,10 +15398,16 @@ class AnchorEngine:
                             session.rollback()
                         except Exception:
                             pass
-                    # Заголовок = первое предложение/строка задания (до 200 сим — полный текст)
-                    _task_title_short = (_ag_task.split('\n')[0])[:200].strip()
+                    # Заголовок: то же что в delegate_task (live-режим) — normalize_task_title
+                    try:
+                        from ai_integration.utils import normalize_task_title as _ntt
+                        _task_title_short, _title_overflow = _ntt(_ag_task, agent_name=_ag_name, max_len=200)
+                    except Exception:
+                        _task_title_short = (_ag_task.split('\n')[0])[:200].strip()
+                        _title_overflow = ''
                     if len(_task_title_short) < 15:
                         _task_title_short = ' '.join(_ag_task.split()[:20])
+                        _title_overflow = ''
                     _kpi_health = self._recent_task_kpi_health(session, user.id, _task_title_short, lookback_hours=72)
                     _kpi_warn_step = bool(_kpi_health.get('block'))
                     _tech_health = self._recent_tech_failure_health(session, user.id, _ag_name, _task_title_short, lookback_hours=24)
@@ -15470,8 +15476,19 @@ class AnchorEngine:
                         # (LLM каждый раз генерирует похожие формулировки → dedup не должен
                         #  блокировать выполнение, только предотвращать спам задач в UI)
                     else:
-                        # Описание = полный текст только если отличается от заголовка
-                        _task_desc = _ag_task[:2000] if _ag_task[:100].strip() != _task_title_short else ''
+                        # Описание: overflow из normalize_task_title + полный текст задания
+                        # Как в delegate_task: description = encrypt_data(overflow или полный текст)
+                        if _title_overflow:
+                            _task_desc_raw = _title_overflow[:2000]
+                        elif _ag_task[:100].strip() != _task_title_short:
+                            _task_desc_raw = _ag_task[:2000]
+                        else:
+                            _task_desc_raw = ''
+                        try:
+                            from ai_integration.handlers import encrypt_data as _enc_data
+                            _task_desc = _enc_data(_task_desc_raw) if _task_desc_raw else None
+                        except Exception:
+                            _task_desc = _task_desc_raw or None
                         # Резолвим goal_id по названию цели из плана координатора
                         _resolved_goal_id = None
                         if _ag_goal_title:
