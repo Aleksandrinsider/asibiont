@@ -469,7 +469,7 @@
         _currentPage = page;
         const container = document.getElementById('blog-posts-list');
         container.innerHTML = '<div class="loader"><div class="loader-dot"></div><div class="loader-dot"></div><div class="loader-dot"></div></div>';
-        fetch('/api/blog?page=' + page + '&per_page=' + PER_PAGE)
+        fetch('/api/blog?page=' + page + '&per_page=' + PER_PAGE + '&lang=' + LANG)
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 renderPosts(data.posts || []);

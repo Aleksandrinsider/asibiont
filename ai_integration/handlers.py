@@ -888,6 +888,60 @@ def _make_blog_slug(title: str, note_id: int) -> str:
     return f"{note_id}-{result}"
 
 
+async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> None:
+    """Переводит заголовок и контент блог-поста на английский и сохраняет в title_en/content_en."""
+    try:
+        from ai_integration.api_client import api_client
+        from models import Session, Note
+
+        # Limit content passed to API to avoid huge token cost
+        content_truncated = content[:4000] if len(content) > 4000 else content
+
+        prompt = (
+            f"Translate the following blog post from Russian to English.\n"
+            f"Return ONLY a JSON object with two keys: \"title\" and \"content\".\n"
+            f"Preserve markdown formatting.\n\n"
+            f"TITLE: {title}\n\n"
+            f"CONTENT:\n{content_truncated}"
+        )
+        result = await api_client.deepseek_analyze(
+            prompt=prompt,
+            system_prompt="You are a professional translator. Return only valid JSON with keys 'title' and 'content'.",
+            temperature=0.3,
+            max_tokens=3000,
+            parse_json=True,
+            timeout=90,
+        )
+        if not result or not isinstance(result, dict):
+            # Try extracting JSON from string response
+            import json as _json, re as _re_tr
+            if isinstance(result, str):
+                m = _re_tr.search(r'\{.*\}', result, _re_tr.DOTALL)
+                if m:
+                    result = _json.loads(m.group(0))
+        if not result or not isinstance(result, dict):
+            import logging as _log
+            _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Failed to parse EN translation for note_id={note_id}")
+            return
+
+        title_en = result.get('title', '').strip()
+        content_en = result.get('content', '').strip()
+        if not title_en or not content_en:
+            return
+
+        with Session() as db:
+            note = db.query(Note).filter_by(id=note_id).first()
+            if note:
+                note.title_en = title_en
+                note.content_en = content_en
+                db.commit()
+                import logging as _log
+                _log.getLogger(__name__).info(f"[BLOG_TRANSLATE] EN translation saved for note_id={note_id}: «{title_en[:60]}»")
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Error translating note_id={note_id}: {e}")
+
+
 async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
     """Сохранить заметку (без напоминания/дедлайна).
 
@@ -1007,6 +1061,14 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             note.slug = _make_blog_slug(_note_title, note.id)
             session.commit()
             logger.info(f"[SAVE_NOTE] Blog post published: id={note.id}, slug={note.slug!r}, title={_note_title[:60]!r}")
+            # Fire-and-forget EN translation
+            try:
+                import asyncio as _aio_blog
+                _aio_blog.get_running_loop().create_task(
+                    _translate_blog_post_to_en(note.id, _note_title, content.strip())
+                )
+            except Exception as _te:
+                logger.debug(f"[SAVE_NOTE] EN translation task skipped: {_te}")
             return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.slug})"
         # === Векторная память (fire-and-forget, не блокирует event loop) ===
         try:

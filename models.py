@@ -154,6 +154,8 @@ class Note(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
     title = Column(String(200), nullable=True)
     content = Column(Text, nullable=False)
+    title_en = Column(String(500), nullable=True)   # EN translation of title
+    content_en = Column(Text, nullable=True)         # EN translation of content
     source = Column(String(20), default='manual')  # 'manual', 'chat', or 'blog'
     slug = Column(String(300), nullable=True, index=True)  # SEO-friendly URL slug for blog posts
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)

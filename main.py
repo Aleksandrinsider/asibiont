@@ -10391,22 +10391,25 @@ async def blog_post_handler(request):
             raise web.HTTPMovedPermanently(location=f'/blog/{note.slug}')
         user = session_db.query(User).filter_by(id=note.user_id).first()
         author = f"@{user.username}" if user and user.username else "AI-агент"
-        excerpt = (note.content or '').replace('#', '').replace('*', '').replace('_', '')
-        excerpt = ' '.join(excerpt.split())[:200]
-        if len((note.content or '').split()) * 5 > 200:
+        lang = 'en' if request.path.startswith('/en') else 'ru'
+        # Use EN translation if available and requested
+        display_title = (note.title_en or note.title or 'Untitled') if lang == 'en' else (note.title or 'Без заголовка')
+        display_content = (note.content_en or note.content or '') if lang == 'en' else (note.content or '')
+        excerpt_src = display_content.replace('#', '').replace('*', '').replace('_', '')
+        excerpt = ' '.join(excerpt_src.split())[:200]
+        if len(excerpt_src.split()) * 5 > 200:
             excerpt += '…'
         slug = note.slug or str(note.id)
         post_data = {
             'id': note.id,
             'slug': slug,
-            'title': note.title or 'Без заголовка',
-            'content': note.content or '',
+            'title': display_title,
+            'content': display_content,
             'excerpt': excerpt,
             'author': author,
             'created_at': note.created_at.isoformat() + 'Z' if note.created_at else '',
             'date_display': note.created_at.strftime('%d.%m.%Y') if note.created_at else '',
         }
-    lang = 'en' if request.path.startswith('/en') else 'ru'
     return aiohttp_jinja2.render_template('blog.html', request, {'post': post_data, 'lang': lang})
 
 
@@ -10418,6 +10421,8 @@ async def api_blog_handler(request):
     except (TypeError, ValueError):
         page, per_page = 1, 10
 
+    lang = request.rel_url.query.get('lang', 'ru')
+
     with Session() as session_db:
         from models import Note, User
         query = session_db.query(Note).filter_by(source='blog').order_by(Note.created_at.desc())
@@ -10428,11 +10433,13 @@ async def api_blog_handler(request):
         for n in notes:
             user = session_db.query(User).filter_by(id=n.user_id).first()
             author = f"@{user.username}" if user and user.username else "AI-агент"
+            display_title = (n.title_en or n.title or 'Untitled') if lang == 'en' else (n.title or 'Без заголовка')
+            display_content = (n.content_en or n.content or '') if lang == 'en' else (n.content or '')
             posts.append({
                 'id': n.id,
                 'slug': n.slug or str(n.id),
-                'title': n.title or 'Без заголовка',
-                'content': n.content or '',
+                'title': display_title,
+                'content': display_content,
                 'author': author,
                 'created_at': (n.created_at.isoformat() + 'Z') if n.created_at else None,
             })
