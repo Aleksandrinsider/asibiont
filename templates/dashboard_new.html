@@ -8141,9 +8141,13 @@ except Exception as e:
                 if (sysMsg) topicEl.textContent = sysMsg.text.replace(/^Новая тема:\s*/,'').replace(/^Добро пожаловать.*Тема:\s*/,'');
             }
 
-            // Заполняем карту аватаров (независимо от наличия row-элемента)
+            // Заполняем карты аватаров, имён, специализаций (независимо от наличия row-элемента)
             if (state.agents) {
-                state.agents.forEach(a => { if (a.avatar_url) _arenaAgentAvatarMap[a.id] = a.avatar_url; if (a.title) _arenaAgentTitleMap[a.id] = a.title; });
+                state.agents.forEach(a => {
+                    if (a.avatar_url) _arenaAgentAvatarMap[a.id] = a.avatar_url;
+                    if (a.title) _arenaAgentTitleMap[a.id] = a.title;
+                    if (a.name) _arenaAgentNameMap[a.id] = a.name;
+                });
             }
 
             // Агенты-участники
@@ -8266,6 +8270,7 @@ except Exception as e:
         const _arenaRenderedIds = new Set(); // чтобы не дублировать при reconnect
         let _arenaAgentAvatarMap = {};       // agent_id → avatar URL
         let _arenaAgentTitleMap = {};       // agent_id → current specialization
+        let _arenaAgentNameMap = {};        // agent_id → current name (обновляется при изменении агента)
         let _arenaAllTopPosts = [];
         let _arenaAllCommentsMap = {};
         let _arenaCurrentPage = 1;
@@ -8295,7 +8300,10 @@ except Exception as e:
                         cDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
                         const cColor = escapeHtml(msg.color || '#F6F8FA');
                         const cInitials = escapeHtml(msg.initials || '?');
-                        const cAvatarUrl = msg.avatar_url || _arenaAgentAvatarMap[msg.agent_id] || '';
+                        // Приоритет: актуальный аватар из карты (обновляется при изменении агента) > из поста
+                        const cAvatarUrl = _arenaAgentAvatarMap[msg.agent_id] || msg.avatar_url || '';
+                        // Актуальное имя из карты (если агент переименован)
+                        const cAgentName = _arenaAgentNameMap[msg.agent_id] || msg.agent_name || '';
                         const _cAgentIdParts = (msg.agent_id || '').split('_');
                         const cAgentNumId = (_cAgentIdParts.length > 1 && _cAgentIdParts[1]) ? parseInt(_cAgentIdParts[1]) : 0;
                         const cAvatarHtml = cAvatarUrl
@@ -8308,7 +8316,7 @@ except Exception as e:
                         const _cCmtDomId = 'sse-cmt-' + (msg.id || Date.now());
                         const _cUsername = _isUserCmt ? (msg.author_username || (window.currentUserProfile && window.currentUserProfile.username) || '') : '';
                         if (_isUserCmt) cDiv.id = _cCmtDomId;
-                        cDiv.innerHTML = `${_cUsername ? `<span onclick="openContactProfileModal('${_cUsername}')" style="cursor:pointer;display:contents;">${cAvatarHtml}</span>` : cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:600;color:#1F2328;${cAgentNumId || _cUsername ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : _cUsername ? `onclick="openContactProfileModal('${_cUsername}')"` : ''}>${escapeHtml(msg.agent_name||'')}</span>${(_arenaAgentTitleMap[msg.agent_id] || msg.agent_title) ? `<span style="font-size:12px;color:#068487;">${escapeHtml(_arenaAgentTitleMap[msg.agent_id] || msg.agent_title)}</span>` : ''}<span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p id="arena-cmt-p-${_cCmtDomId}" style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div><div style="display:flex;gap:4px;align-items:flex-start;">${_isUserCmt ? `<button onclick="arenaDeleteUserCmt('${_cCmtDomId}')" class="delete-btn" title="Удалить" style="margin-top:3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` : ''}</div>`;
+                        cDiv.innerHTML = `${_cUsername ? `<span onclick="openContactProfileModal('${_cUsername}')" style="cursor:pointer;display:contents;">${cAvatarHtml}</span>` : cAvatarHtml}<div style="flex:1;min-width:0;"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;"><span style="font-size:12px;font-weight:600;color:#1F2328;${cAgentNumId || _cUsername ? 'cursor:pointer;' : ''}" ${cAgentNumId ? `onclick="openAgentProfileModal(${cAgentNumId})"` : _cUsername ? `onclick="openContactProfileModal('${_cUsername}')"` : ''}>${escapeHtml(cAgentName)}</span>${(_arenaAgentTitleMap[msg.agent_id] || msg.agent_title) ? `<span style="font-size:12px;color:#068487;">${escapeHtml(_arenaAgentTitleMap[msg.agent_id] || msg.agent_title)}</span>` : ''}<span style="font-size:12px;color:#8C959F;opacity:0.7;">${cDate} ${cTime}</span></div><p id="arena-cmt-p-${_cCmtDomId}" style="margin:0;font-size:13px;line-height:1.4;color:#374151;white-space:pre-wrap;word-wrap:break-word;">${escapeHtml(msg.text||'')}</p></div><div style="display:flex;gap:4px;align-items:flex-start;">${_isUserCmt ? `<button onclick="arenaDeleteUserCmt('${_cCmtDomId}')" class="delete-btn" title="Удалить" style="margin-top:3px;"><svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM4.496 6.675l.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 0 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Z"></path></svg></button>` : ''}</div>`;
                         acmts.prepend(cDiv);
                         return; // успешно вставили комментарий — выходим
                     }
@@ -8334,7 +8342,8 @@ except Exception as e:
                     : '';
                 const color = escapeHtml(msg.color || '#F6F8FA');
                 const initials = escapeHtml(msg.initials || '?');
-                const agentName = escapeHtml(msg.agent_name || '');
+                // Актуальное имя и специализация из карт (обновляются при изменении агента)
+                const agentName = escapeHtml(_arenaAgentNameMap[msg.agent_id] || msg.agent_name || '');
                 const agentTitle = escapeHtml(_arenaAgentTitleMap[msg.agent_id] || msg.agent_title || '');
                 const authorUsername = escapeHtml(msg.author_username || '');
                 const text = escapeHtml(msg.text || '');
@@ -8344,7 +8353,8 @@ except Exception as e:
                 const _curUsername = window.currentUserProfile && window.currentUserProfile.username;
                 const isOwnAgentPost = !isUserPost && agentNumId && _curUsername && msg.author_username && msg.author_username === _curUsername;
                 const canManagePost = isUserPost || isOwnAgentPost;
-                const avatarUrl = msg.avatar_url || _arenaAgentAvatarMap[msg.agent_id] || '';
+                // Актуальный аватар из карты с timestamp для cache busting
+                const avatarUrl = _arenaAgentAvatarMap[msg.agent_id] || msg.avatar_url || '';
                 const _pOnClick = isUserPost && authorUsername ? `onclick="openContactProfileModal('${authorUsername}')"` : (agentNumId ? `onclick="openAgentProfileModal(${agentNumId})"` : '');
                 const _pCursorCss = _pOnClick ? 'cursor:pointer;' : '';
                 const avatarHtml = avatarUrl
@@ -8635,7 +8645,7 @@ except Exception as e:
                     ${rAvatarHtml}
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-                            <span style="font-size:12px;font-weight:400;color:#374151;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}>${escapeHtml(reply.agent_name||'')}</span>
+                            <span style="font-size:12px;font-weight:400;color:#374151;${rAgentNumId ? 'cursor:pointer;' : ''}" ${rAgentNumId ? `onclick="openAgentProfileModal(${rAgentNumId})"` : ''}>${escapeHtml(_arenaAgentNameMap[reply.agent_id] || reply.agent_name||'')}</span>
                             <span style="font-size:12px;color:#068487;">${escapeHtml(_arenaAgentTitleMap[reply.agent_id] || reply.agent_title||'')}</span>
                             <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_rDate} ${_rTime}</span>
                         </div>

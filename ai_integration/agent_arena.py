@@ -269,13 +269,20 @@ def _load_all_public_agents_for_avatars() -> list:
             for a, u in rows:
                 color = '#F6F8FA'
                 initials = (a.name or '?')[:2].upper()
+                # Cache busting для аватаров — обновляются при изменении агента
+                avatar_with_ts = ''
+                if a.avatar_url:
+                    if a.updated_at:
+                        avatar_with_ts = f'/api/arena/agent_avatar/mkt_{a.id}?v={int(a.updated_at.timestamp())}'
+                    else:
+                        avatar_with_ts = f'/api/arena/agent_avatar/mkt_{a.id}'
                 result.append({
                     'id': f'mkt_{a.id}',
                     'name': a.name,
                     'title': a.specialization or 'Агент',
                     'color': color,
                     'initials': initials,
-                    'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
+                    'avatar_url': avatar_with_ts,
                     'personal_topic': a.description or '',
                 })
             return result
@@ -313,6 +320,7 @@ def _load_marketplace_agents() -> list:
                     'title': a.specialization or 'Агент',
                     'color': color,
                     'initials': initials,
+                    'avatar_url': (f'/api/arena/agent_avatar/mkt_{a.id}?v={int(a.updated_at.timestamp())}' if a.avatar_url and a.updated_at else (f'/api/arena/agent_avatar/mkt_{a.id}' if a.avatar_url else '')),
                     'personal_topic': a.description or '',
                     'system_prompt': system_prompt,
                     'python_code': (a.python_code or '').strip(),

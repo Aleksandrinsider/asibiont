@@ -225,6 +225,7 @@
     let _pubLikes = {};
     let _pubAgentAvatarMap = {};
     let _pubAgentTitleMap = {};
+    let _pubAgentNameMap = {};
     const _pubEditOriginals = {};
     let _pubAllTopPosts = [];
     let _pubAllComments = {};
@@ -285,13 +286,15 @@
         _pubSSE.addEventListener('init', function(e) {
             try {
                 const state = JSON.parse(e.data);
-                // Строим карту аватаров один раз из списка агентов
+                // Строим карты аватаров, имён и специализаций один раз из списка агентов
                 _pubAgentAvatarMap = {};
                 _pubAgentTitleMap = {};
+                _pubAgentNameMap = {};
                 if (state.agents) {
                     state.agents.forEach(a => {
                         if (a.id && a.avatar_url) _pubAgentAvatarMap[a.id] = a.avatar_url;
                         if (a.id && a.title) _pubAgentTitleMap[a.id] = a.title;
+                        if (a.id && a.name) _pubAgentNameMap[a.id] = a.name;
                     });
                 }
                 pubRenderState(state);
@@ -415,10 +418,10 @@
                 if (cmtContainer) {
                     const color = escapeHtml(msg.color || '#F6F8FA');
                     const initials = escapeHtml(msg.initials || '?');
-                    const agentName = escapeHtml(msg.agent_name || '');
+                    const agentName = escapeHtml(_pubAgentNameMap[msg.agent_id] || msg.agent_name || '');
                     const agentTitle = escapeHtml(_pubAgentTitleMap[msg.agent_id] || msg.agent_title || '');
                     const text = escapeHtml(msg.text || '');
-                    const avatarUrl = msg.avatar_url || _pubAgentAvatarMap[msg.agent_id] || '';
+                    const avatarUrl = _pubAgentAvatarMap[msg.agent_id] || msg.avatar_url || '';
                     const timeStr = msg.ts
                         ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
                               .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
@@ -471,11 +474,11 @@
                 : '';
             const color = escapeHtml(msg.color || '#F6F8FA');
             const initials = escapeHtml(msg.initials || '?');
-            const agentName = escapeHtml(msg.agent_name || '');
+            const agentName = escapeHtml(_pubAgentNameMap[msg.agent_id] || msg.agent_name || '');
             const agentTitle = escapeHtml(_pubAgentTitleMap[msg.agent_id] || msg.agent_title || '');
             const authorUsername = escapeHtml(msg.author_username || '');
             const text = escapeHtml(msg.text || '');
-            const avatarUrl = msg.avatar_url || _pubAgentAvatarMap[msg.agent_id] || '';
+            const avatarUrl = _pubAgentAvatarMap[msg.agent_id] || msg.avatar_url || '';
             const _pubAgentIdParts = (msg.agent_id || '').split('_');
             const pubAgentNumId = (_pubAgentIdParts.length > 1 && _pubAgentIdParts[1]) ? parseInt(_pubAgentIdParts[1]) : 0;
             const isPubUserPost = (msg.agent_id === 'user');
@@ -692,7 +695,7 @@
                 <div style="width:24px;height:24px;border-radius:50%;background:${rc};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#8C959F;border:2px solid #E8ECEF;flex-shrink:0;">${ri}</div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
-                        <span style="font-size:12px;font-weight:600;color:#1F2328;">${escapeHtml(reply.agent_name||'')}</span>
+                        <span style="font-size:12px;font-weight:600;color:#1F2328;">${escapeHtml(_pubAgentNameMap[reply.agent_id] || reply.agent_name||'')}</span>
                         ${(_pubAgentTitleMap[reply.agent_id] || reply.agent_title) ? `<span style="font-size:12px;color:#068487;">${escapeHtml(_pubAgentTitleMap[reply.agent_id] || reply.agent_title)}</span>` : ''}
                         <span style="font-size:12px;color:#8C959F;opacity:0.7;">${_rDate} ${_rTime}</span>
                     </div>
