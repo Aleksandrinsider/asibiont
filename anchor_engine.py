@@ -25054,32 +25054,11 @@ class AnchorEngine:
             # Отправляем через бот ПЕРЕД commit — если отправка не удалась, откатываем
             if self.bot:
                 try:
-                    # Гарантируем кликабельность URL через HTML parse_mode
-                    import html as html_mod
-                    url_re = re.compile(r'(https?://\S+)')
-                    spaced = re.sub(r'(?<=[^\s\n])(https?://)', r' \1', message)
-                    parts = url_re.split(spaced)
-                    html_parts = []
-                    for idx, part in enumerate(parts):
-                        if idx % 2 == 0:
-                            html_parts.append(html_mod.escape(part))
-                        else:
-                            clean = part.rstrip('.,;:!?)—»')
-                            trailing = part[len(clean):]
-                            html_parts.append(f'<a href="{html_mod.escape(clean)}">{html_mod.escape(clean)}</a>{html_mod.escape(trailing)}')
-                    send_html = ''.join(html_parts)
-                    try:
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=send_html,
-                            parse_mode='HTML'
-                        )
-                    except Exception:
-                        # Fallback без HTML
-                        await self.bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=message
-                        )
+                    # Plain text: Telegram сам распознаёт URL и @mentions без parse_mode
+                    await self.bot.send_message(
+                        chat_id=user.telegram_id,
+                        text=message
+                    )
                     # Синхронизация: сохраняем в историю чата
                     try:
                         from ai_integration.conversation_history import save_message_to_history as _smh

@@ -1179,26 +1179,14 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             if _agent_handled:
                 logger.info(f"[PTM] Agent handled for user {user_id}, skipping ASI response")
             else:
-                # Гарантируем кликабельность ссылок в Telegram (HTML parse_mode)
-                response_html = _format_html(response_text)
-
+                # Plain text: Telegram сам распознаёт URL и @mentions
                 # Разбиваем длинный ответ на части (Telegram лимит 4096)
-                if len(response_html) > 4000:
-                    # Умная разбивка: не ломаем HTML-теги и URL
-                    chunks = _smart_split_html(response_html, 4000)
+                if len(response_text) > 4000:
+                    chunks = [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]
                     for chunk in chunks:
-                        try:
-                            await message.bot.send_message(message.chat.id, chunk, parse_mode='HTML')
-                        except Exception:
-                            # Fallback: отправляем plain text кусок соответствующей длины
-                            await message.bot.send_message(message.chat.id, chunk[:4000])
+                        await message.bot.send_message(message.chat.id, chunk)
                 else:
-                    try:
-                        await message.bot.send_message(message.chat.id, response_html, parse_mode='HTML')
-                    except Exception as html_err:
-                        # Fallback without HTML if formatting breaks
-                        logger.warning(f"[PTM] HTML send failed, falling back to plain text: {html_err}")
-                        await message.bot.send_message(message.chat.id, response_text)
+                    await message.bot.send_message(message.chat.id, response_text)
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:
