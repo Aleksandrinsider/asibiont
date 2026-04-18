@@ -15723,6 +15723,35 @@ class AnchorEngine:
                     if _last_dot > len(_asi_assign_text) * 0.3:
                         _asi_assign_text = _asi_assign_text[:_last_dot + 1]
                         logger.info("[COORD] stripped list: %s", _asi_assign_text[:80])
+                # ── VAGUE-GUARD для координаторских поручений ──
+                # Ловим незаконченные/бессмысленные задачи перед сохранением
+                if _asi_assign_text and len(_asi_assign_text.strip()) >= 15:
+                    import re as _re_vg_coord
+                    _vg_text = _asi_assign_text.strip()
+                    _vg_lower = _vg_text.lower()
+                    _COORD_IMP_VERBS = (
+                        'найди', 'проверь', 'создай', 'отправь', 'напиши', 'сделай',
+                        'запусти', 'используй', 'подготовь', 'проведи', 'собери',
+                        'изучи', 'добавь', 'сохрани', 'составь', 'поищи', 'выбери',
+                        'свяжись', 'открой', 'обнови', 'проанализируй', 'исследуй',
+                        'опубликуй', 'адаптируй', 'протестируй', 'оцени', 'сравни',
+                        'разошли', 'подбери', 'настрой', 'переведи', 'переключи',
+                    )
+                    _has_imp = any(v in _vg_lower for v in _COORD_IMP_VERBS)
+                    # Обрывается на переходном глаголе без дополнения
+                    _incomplete = bool(_re_vg_coord.search(
+                        r'(?:не\s+)?(?:получил[иа]?|отправил[иа]?|написал[иа]?|сделал[иа]?|нашл[иа]?|собрал[иа]?)\s*[.!?]?\s*$',
+                        _vg_text
+                    ))
+                    _is_vague_coord = (
+                        not _has_imp
+                        or _incomplete
+                        or len(_vg_text) < 30
+                        or any(v in _vg_lower for v in ('посмотри что можно', 'поработай над', 'продолжай работу'))
+                    )
+                    if _is_vague_coord:
+                        logger.info("[COORD] ⛔ vague-guard: skipping vague assignment to %s: %r", _ag_name, _vg_text[:80])
+                        continue
                 # Гард: пустой/слишком короткий текст — не сохраняем
                 # Примечание: stall-guard убран из coordinator dispatch — здесь LLM видит всю историю
                 # и сам разнообразит задания. Stall-reroute остался в round-robin (линия ~6400).
