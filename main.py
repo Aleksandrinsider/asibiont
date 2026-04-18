@@ -176,6 +176,19 @@ for _db_attempt in range(1, _db_max_retries + 1):
 if os.getenv('CLEAR_DB') == '1':
     if LOCAL:
         logger.warning("CLEAR_DB=1 detected (LOCAL mode), clearing all database data...")
+        # Preserve blog posts
+        _blog_backup_startup = []
+        try:
+            from models import Note as _NoteStartup
+            with Session() as _bs:
+                for bp in _bs.query(_NoteStartup).filter_by(source='blog').all():
+                    _blog_backup_startup.append({
+                        'user_id': bp.user_id, 'title': bp.title, 'content': bp.content,
+                        'title_en': bp.title_en, 'content_en': bp.content_en,
+                        'source': 'blog', 'slug': bp.slug, 'created_at': bp.created_at,
+                    })
+        except Exception:
+            pass
         try:
             Base.metadata.drop_all(engine)
             logger.warning("All tables dropped successfully")
@@ -190,6 +203,19 @@ init_db()
 # Run database migrations (extracted to migrations.py)
 from migrations import run_migrations
 run_migrations()
+
+# Restore blog posts after CLEAR_DB
+if os.getenv('CLEAR_DB') == '1' and LOCAL:
+    try:
+        if _blog_backup_startup:
+            from models import Note as _NoteRestore
+            with Session() as _bs:
+                for bd in _blog_backup_startup:
+                    _bs.add(_NoteRestore(**bd))
+                _bs.commit()
+            logger.info("Restored %d blog posts after CLEAR_DB", len(_blog_backup_startup))
+    except Exception as _re:
+        logger.error("Failed to restore blog posts: %s", _re)
 
 # Seed arena test agents
 try:
@@ -7936,6 +7962,8 @@ async def api_note_delete_handler(request):
             note = session_db.query(Note).filter_by(id=note_id, user_id=user.id).first()
             if not note:
                 return web.json_response({'error': 'Note not found'}, status=404)
+            if note.source == 'blog':
+                return web.json_response({'error': 'Blog posts cannot be deleted'}, status=403)
             session_db.delete(note)
             session_db.commit()
             return web.json_response({'success': True})
@@ -10719,13 +10747,36 @@ async def clear_database_handler(request):
         
         logger.warning("Database clear requested by admin")
         
-        # Clear all data by dropping and recreating tables
-        from models import Base
+        # Preserve blog posts before clearing
+        from models import Base, Note
+        _blog_backup = []
+        try:
+            with Session() as _bs:
+                for bp in _bs.query(Note).filter_by(source='blog').all():
+                    _blog_backup.append({
+                        'user_id': bp.user_id, 'title': bp.title, 'content': bp.content,
+                        'title_en': bp.title_en, 'content_en': bp.content_en,
+                        'source': 'blog', 'slug': bp.slug, 'created_at': bp.created_at,
+                    })
+        except Exception:
+            pass
+
         Base.metadata.drop_all(engine)
         Base.metadata.create_all(engine)
+
+        # Restore blog posts
+        if _blog_backup:
+            try:
+                with Session() as _bs:
+                    for bd in _blog_backup:
+                        _bs.add(Note(**bd))
+                    _bs.commit()
+                logger.info("Restored %d blog posts after DB clear", len(_blog_backup))
+            except Exception as _re:
+                logger.error("Failed to restore blog posts: %s", _re)
         
-        logger.warning("Database cleared successfully")
-        return web.json_response({'message': 'Database cleared successfully'})
+        logger.warning("Database cleared successfully (blog posts preserved)")
+        return web.json_response({'message': 'Database cleared successfully', 'blog_posts_preserved': len(_blog_backup)})
         
     except Exception as e:
         logger.error(f"Error clearing database: {e}")
