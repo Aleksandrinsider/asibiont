@@ -845,17 +845,14 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
         context.update(action="add_task", task=task, result=result_msg)
         logger.info(f"[ADD_TASK] Updated dialog context with task '{task.title}'")
 
-    # === Векторная память (fire-and-forget, не блокирует event loop) ===
+    # === Векторная память (best-effort, не блокирует event loop) ===
     try:
-        import asyncio as _aio_at
-        from ai_integration.vector_memory import store_memory as _vmem_at
+        from ai_integration.vector_memory import store_memory_background as _vmem_at
         _desc_at = f" {description.strip()[:100]}" if description and description.strip() else ""
         _meta_at = {'type': 'task', 'task_id': str(task_id)}
         if task.goal_id:
             _meta_at['goal_id'] = str(task.goal_id)
-        _aio_at.get_running_loop().create_task(
-            _vmem_at(user_id, f"Задача создана: «{title}».{_desc_at}".strip(), _meta_at)
-        )
+        _vmem_at(user_id, f"Задача создана: «{title}».{_desc_at}".strip(), _meta_at)
     except Exception as _e:
         logger.debug(f"[ADD_TASK] Vector memory skipped: {_e}")
 
@@ -1071,13 +1068,10 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             except Exception as _te:
                 logger.debug(f"[SAVE_NOTE] EN translation task skipped: {_te}")
             return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.slug})"
-        # === Векторная память (fire-and-forget, не блокирует event loop) ===
+        # === Векторная память (best-effort, не блокирует event loop) ===
         try:
-            import asyncio as _aio_sn
-            from ai_integration.vector_memory import store_memory as _vmem_sn
-            _aio_sn.get_running_loop().create_task(
-                _vmem_sn(user_id, f"Заметка: «{note.title}». {content[:200]}", {'type': 'note', 'note_id': str(note.id)})
-            )
+            from ai_integration.vector_memory import store_memory_background as _vmem_sn
+            _vmem_sn(user_id, f"Заметка: «{note.title}». {content[:200]}", {'type': 'note', 'note_id': str(note.id)})
         except Exception as _e:
             logger.debug(f"[SAVE_NOTE] Vector memory skipped: {_e}")
         _preview = content.strip()[:300]
@@ -1343,7 +1337,7 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
         except Exception as e:
             logger.warning(f"[COMPLETE_TASK] Could not cancel scheduled jobs for task {task.id}: {e}")
 
-        # === Векторная память: фиксируем завершение задачи (fire-and-forget) ===
+        # === Векторная память: фиксируем завершение задачи без висящих фоновых task ===
         try:
             _task_mem_text = f"Завершена задача: '{task.title}'"
             if completion_note:
@@ -1353,12 +1347,11 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
                 _g_vm = session.query(_GoalVM).filter_by(id=task.goal_id, user_id=user.id).first()
                 if _g_vm:
                     _task_mem_text += f". Цель: {_g_vm.title}"
-            import asyncio as _aio_vm
-            _aio_vm.get_running_loop().create_task(
-                __import__('ai_integration.vector_memory', fromlist=['store_memory']).store_memory(
-                    user.telegram_id, _task_mem_text,
-                    {'type': 'achievement', 'task_id': str(task.id)}
-                )
+            from ai_integration.vector_memory import store_memory as _store_memory_vm
+            await _store_memory_vm(
+                user.telegram_id,
+                _task_mem_text,
+                {'type': 'achievement', 'task_id': str(task.id)}
             )
         except Exception as _vm_task_err:
             logger.debug(f"[COMPLETE_TASK] Vector memory store skipped: {_vm_task_err}")

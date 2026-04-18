@@ -1175,7 +1175,7 @@ connect_args = {}
 if db_url and db_url.startswith('postgresql'):
     connect_args = {
         "connect_timeout": 10,
-        "options": "-c statement_timeout=30000",  # 30 seconds
+        "options": "-c statement_timeout=60000",  # 60 seconds for heavier coordinator/autopilot queries
         "keepalives": 1,
         "keepalives_idle": 30,
         "keepalives_interval": 10,
@@ -1238,4 +1238,6 @@ def init_db():
         raise
 
 # Create sessionmaker
-Session = sessionmaker(bind=engine)
+# expire_on_commit=False keeps already-loaded fields readable after commit,
+# which is safer for async/background flows and prevents DetachedInstanceError.
+Session = sessionmaker(bind=engine, expire_on_commit=False)

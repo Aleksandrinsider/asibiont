@@ -12567,9 +12567,11 @@ class AnchorEngine:
                     "2) Modes должны различаться по типу результата (данные, контакты, контент, обучение, конверсия, ретеншн и т.п.).\n"
                     "3) Не предлагай действия, которых агент технически не может выполнить."
                 )
-                _ih_raw = await asyncio.wait_for(
-                    _quick_ai_call_raw([{"role": "user", "content": _ih_prompt}], max_tokens=850),
-                    timeout=16,
+                _ih_raw = await _quick_ai_call_raw(
+                    [{"role": "user", "content": _ih_prompt}],
+                    max_tokens=850,
+                    _caller='integration_hypothesis',
+                    _timeouts=[35, 60],
                 )
                 import re as _re_ih
                 _ih_lines = []
@@ -14673,13 +14675,18 @@ class AnchorEngine:
                         f'{s.get("agent")}: {(s.get("task") or "")[:80]}'
                         for s in _plan[:6]
                     )
+                    _failed_tasks_note_fb = (
+                        f"Недавние timeout/failed/cancelled — НЕ повторяй тем же инструментом или на той же площадке:\n{_failed_tasks_str[:1200]}\n\n"
+                        if _failed_tasks_str else ''
+                    )
 
                     _fb_prompt = (
                         f"Ты — операционный директор команды ИИ-агентов.\n"
                         f"В этом цикле СЛЕДУЮЩИЕ АГЕНТЫ не получили задачу — исправь это:\n\n"
                         + '\n\n'.join(_fb_agent_blocks)
                         + f"\n\nУже назначено другим агентам (не дублируй): {_plan_summary_fb}\n\n"
-                        f"⚠️ КЛЮЧЕВОЕ ПРАВИЛО: для каждого пропущенного агента задача ОБЯЗАНА:\n"
+                        + _failed_tasks_note_fb
+                        + f"⚠️ КЛЮЧЕВОЕ ПРАВИЛО: для каждого пропущенного агента задача ОБЯЗАНА:\n"
                         f"  1. Использовать КОНКРЕТНУЮ интеграцию из его профиля 'Интеграции' выше\n"
                         f"  2. Быть ДРУГИМ ШАГОМ в цепочке, а не вариацией уже назначенного\n"
                         f"  3. Дополнять команду: смотри ЧТО УЖЕ ДЕЛАЮТ ДРУГИЕ → найди следующий шаг по цепочке\n"
@@ -15016,9 +15023,15 @@ class AnchorEngine:
                             "Уже использованные инструменты в этом цикле (не повторяй для того же агента):\n"
                             + '\n'.join(_used_run_lines) + "\n\n"
                         ) if _used_run_lines else ''
+                        _recent_fail_note = (
+                            "Что уже не сработало в последних циклах — не повторяй тем же инструментом, на той же площадке и с той же аудиторией:\n"
+                            + (_failed_tasks_str[:1200] if _failed_tasks_str else '') + "\n"
+                            + "Если шаг недавно завершился timeout/failed/cancelled — выбери другой инструмент, другой канал или следующий этап цепочки.\n\n"
+                        ) if _failed_tasks_str else ''
                         _next_prompt = (
                             f"Ты — координатор ASI (МУЖСКОЙ род: я нашёл, я проверил, я сделал). Команда только что сделала:\n{_done_str}\n\n"
                             f"{_used_run_note}"
+                            f"{_recent_fail_note}"
                             f"{_email_limit_note}"
                             f"{_uncovered_note}"
                             f"Активные цели:\n{_goals_remain_str}\n\n"
@@ -15043,9 +15056,11 @@ class AnchorEngine:
                             f'"tool": "инструмент", "goal": "точное название цели"}}]\n'
                             f'Точные названия целей: {"; ".join(repr(g["title"]) for g in _goals[:5])}'
                         )
-                        _next_raw = await asyncio.wait_for(
-                            _quick_ai_call_raw([{"role": "user", "content": _next_prompt}], max_tokens=400),
-                            timeout=15,
+                        _next_raw = await _quick_ai_call_raw(
+                            [{"role": "user", "content": _next_prompt}],
+                            max_tokens=400,
+                            _caller='coordinator_next_step',
+                            _timeouts=[35, 60],
                         )
                         _next_raw = _next_raw or ''
                         if '"done"' in _next_raw.lower() and 'true' in _next_raw.lower():
@@ -16426,7 +16441,9 @@ class AnchorEngine:
                             f"{_agent_prompt}\n\n"
                             f"{_first_attempt_note}"
                             f"Используй свои инструменты (run_agent_action, web_search, check_emails и т.д.) "
-                            f"для получения КОНКРЕТНЫХ данных. Если задача невыполнима — объясни почему."
+                            f"для получения КОНКРЕТНЫХ данных. Если первая попытка упёрлась в пустой поиск, timeout "
+                            f"или недоступную площадку — НЕ повторяй тот же путь, а смени инструмент, площадку или тип действия. "
+                            f"Если задача невыполнима — объясни почему."
                         )
                         try:
                             _raw_retry = await asyncio.wait_for(
@@ -16523,7 +16540,8 @@ class AnchorEngine:
                     _value_retry_prompt = (
                         f"{_agent_prompt}\n\n"
                         "⚠️ Сейчас ты описал исследование, но не завершил цепочку ценности. "
-                        "Сделай 1 конкретное действие через инструмент и верни факт результата.\n"
+                        "Сделай 1 конкретное действие через инструмент и верни факт результата. Не повторяй тот же web_search "
+                        "по тем же людям или той же площадке, если он уже не дал результата.\n"
                         "Формат самопроверки перед ответом:\n"
                         "1) Какой инструмент я вызвал сейчас?\n"
                         "2) Какой новый факт/результат он вернул?\n"
@@ -16622,9 +16640,11 @@ class AnchorEngine:
                             f" НЕ задавай вопросов типа 'Нужно ли ему продолжать?' — ДЕЙСТВУЙ."
                             f" Напиши 1-2 предложения. Разговорно, без markdown."
                         )
-                        _relay_txt = await asyncio.wait_for(
-                            _quick_ai_call_raw([{'role': 'user', 'content': _relay_p}], max_tokens=200),
-                            timeout=8,
+                        _relay_txt = await _quick_ai_call_raw(
+                            [{'role': 'user', 'content': _relay_p}],
+                            max_tokens=200,
+                            _caller='agent_request_relay',
+                            _timeouts=[20, 35],
                         )
                         if _relay_txt and len(_relay_txt.strip()) > 15:
                             try:
@@ -17465,9 +17485,11 @@ class AnchorEngine:
                         f"- 1-3 предложения. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
                     )
-                    _report_gen = await asyncio.wait_for(
-                        _quick_ai_call_raw([{"role": "user", "content": _report_prompt}], max_tokens=280),
-                        timeout=12,
+                    _report_gen = await _quick_ai_call_raw(
+                        [{"role": "user", "content": _report_prompt}],
+                        max_tokens=280,
+                        _caller='coordinator_report',
+                        _timeouts=[25, 45],
                     )
                     if _report_gen and len(_report_gen.strip()) > 20:
                         _report_text = _report_gen.strip()

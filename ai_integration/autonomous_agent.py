@@ -36,7 +36,7 @@ from models import Session, User, Task, UserProfile, Goal
 from .prompts import get_extended_system_prompt
 from .dynamic_tools import tool_discovery
 from .tools import get_available_tools
-from .vector_memory import store_conversation_turn, build_memory_context, search_memory
+from .vector_memory import store_conversation_turn_background, build_memory_context, search_memory
 from .multi_agent import get_orchestrator
 from .self_learning import get_learner
 
@@ -1053,10 +1053,10 @@ async def _get_quick_ai_session() -> aiohttp.ClientSession:
                     await _QUICK_AI_SESSION.close()
                 except Exception:
                     pass
-            _connector = aiohttp.TCPConnector(limit=5)
+            _connector = aiohttp.TCPConnector(limit=5, enable_cleanup_closed=True)
             _QUICK_AI_SESSION = aiohttp.ClientSession(
                 connector=_connector,
-                timeout=aiohttp.ClientTimeout(total=120, connect=10)
+                timeout=aiohttp.ClientTimeout(total=180, connect=15, sock_read=170)
             )
             _QUICK_AI_SESSION_CREATED = _now
             logger.debug("[AI] Created new quick (background) AI session")
@@ -1080,8 +1080,10 @@ async def _get_shared_ai_session() -> aiohttp.ClientSession:
                     await _SHARED_AI_SESSION.close()
                 except Exception:
                     pass
+            _shared_connector = aiohttp.TCPConnector(limit=max(_MAX_CONCURRENT_AI, 20), enable_cleanup_closed=True)
             _SHARED_AI_SESSION = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=120, connect=10)
+                connector=_shared_connector,
+                timeout=aiohttp.ClientTimeout(total=180, connect=15, sock_read=170)
             )
             _SHARED_AI_SESSION_CREATED = _now
             logger.debug("[AI] Created new shared AI session")
@@ -5023,19 +5025,17 @@ class HybridAutonomousAgent:
             if len(self.context_memory) > 100:
                 self.context_memory = self.context_memory[-100:]
 
-        # === Семантическая память (Pinecone) — fire-and-forget ===
+        # === Семантическая память (Pinecone) — fire-and-forget без asyncio Task-leaks ===
         try:
             from .cognitive import CognitiveEngine as _VecCE
             _vec_emotion = _VecCE.detect_emotion(user_message)
             _vec_intent = _VecCE.classify_intent(user_message)
-            asyncio.get_running_loop().create_task(
-                store_conversation_turn(
-                    user_id=user_id,
-                    user_message=user_message,
-                    bot_response=response,
-                    emotion=_vec_emotion,
-                    intent=_vec_intent
-                )
+            store_conversation_turn_background(
+                user_id=user_id,
+                user_message=user_message,
+                bot_response=response,
+                emotion=_vec_emotion,
+                intent=_vec_intent
             )
         except Exception as e:
             logger.warning(f"[VECTOR] Store failed: {e}")
@@ -5582,15 +5582,20 @@ def _is_question_message(msg: str) -> bool:
 async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str = '', temperature: float = 0.7, _timeouts: list = None) -> str:
     """Прямой вызов DeepSeek без tool calling — для фоновых задач (координатор, инсайты).
     Использует отдельную сессию (_QUICK_AI_SESSION) чтобы не блокировать чат пользователей.
-    _timeouts: список таймаутов (сек) для каждой попытки. По умолчанию [40, 70].
-    Для больших промптов (координатор) передавай [90, 150]."""
+    _timeouts: список таймаутов (сек) для каждой попытки. По умолчанию [60, 95].
+    Для больших промптов координатора можно передавать [90, 150].
+    Важно: не оборачивай вызов сверху в слишком короткий asyncio.wait_for —
+    это преждевременно рубит запрос и провоцирует каскад таймаутов."""
     global _QUICK_AI_SESSION
-    _max_attempts = 2
-    _timeouts = _timeouts if _timeouts else [40, 70]
+    _timeouts = _timeouts if _timeouts else [60, 95]
+    _max_attempts = max(2, len(_timeouts))
+    _session_total_timeout = max(_timeouts) + 15
     for _att in range(_max_attempts):
       try:
         if os.getenv('PYTEST_CURRENT_TEST'):
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60, connect=10)) as _tmp:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=_session_total_timeout, connect=15, sock_read=max(_timeouts) + 10)
+            ) as _tmp:
                 async with _tmp.post(
                         "https://api.deepseek.com/chat/completions",
                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},

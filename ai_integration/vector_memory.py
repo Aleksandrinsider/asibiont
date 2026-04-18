@@ -442,6 +442,20 @@ async def store_conversation_turn(user_id, user_message, bot_response, emotion=N
         return False
 
 
+def store_conversation_turn_background(user_id, user_message, bot_response, emotion=None, intent=None) -> None:
+    """Неблокирующий best-effort запуск сохранения диалога без asyncio Task-leaks."""
+    try:
+        import threading
+        threading.Thread(
+            target=_store_conversation_turn_sync,
+            args=(user_id, user_message, bot_response, emotion, intent),
+            daemon=True,
+            name="vector-turn-store",
+        ).start()
+    except Exception as e:
+        logger.warning(f"[VECTOR] Background store turn failed: {e}")
+
+
 def store_memory_sync(user_id, text: str, metadata: dict = None) -> bool:
     """Публичная sync-функция — сохраняет произвольный факт в Pinecone.
 
@@ -462,3 +476,17 @@ async def store_memory(user_id, text: str, metadata: dict = None) -> bool:
     except Exception as e:
         logger.debug(f"[VECTOR] store_memory async failed: {e}")
         return False
+
+
+def store_memory_background(user_id, text: str, metadata: dict = None) -> None:
+    """Неблокирующий best-effort запуск сохранения факта без висящих asyncio-задач."""
+    try:
+        import threading
+        threading.Thread(
+            target=store_memory_sync,
+            args=(user_id, text, metadata),
+            daemon=True,
+            name="vector-memory-store",
+        ).start()
+    except Exception as e:
+        logger.debug(f"[VECTOR] store_memory background failed: {e}")
