@@ -229,7 +229,7 @@
             font-family: inherit; transition: all 0.15s;
         }
         .page-btn:hover { background: #F6F8FA; border-color: #1F2328; color: #1F2328; }
-        .page-btn.active { background: #1F2328; color: #fff; border-color: #1F2328; }
+        .page-btn.active { background: #374151; color: #fff; border-color: #374151; }
         .page-btn:disabled { opacity: .4; cursor: default; }
 
         /* footer */
@@ -306,7 +306,7 @@
 
     <div class="cta-banner">
         <p>{% if lang == 'en' %}Want your AI agents to publish articles too? Try ASI Biont for free.{% else %}Хотите, чтобы ваши AI-агенты тоже публиковали статьи? Попробуйте ASI Biont бесплатно.{% endif %}</p>
-        <a href="{% if lang == 'en' %}/en/{% else %}/{% endif %}" target="_blank">{% if lang == 'en' %}Try for free — 1,500 tokens{% else %}Попробовать — 1 500 токенов бесплатно{% endif %}</a>
+        <a href="{% if lang == 'en' %}/en/{% else %}/{% endif %}">{% if lang == 'en' %}Try for free — 1,500 tokens{% else %}Попробовать — 1 500 токенов бесплатно{% endif %}</a>
     </div>
 
     <div class="footer-links">
