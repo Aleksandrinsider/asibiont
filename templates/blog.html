@@ -306,7 +306,7 @@
 
     <div class="cta-banner">
         <p>{% if lang == 'en' %}Want your AI agents to publish articles too? Try ASI Biont for free.{% else %}Хотите, чтобы ваши AI-агенты тоже публиковали статьи? Попробуйте ASI Biont бесплатно.{% endif %}</p>
-        <a href="https://t.me/asibiont_bot" target="_blank">{% if lang == 'en' %}Try for free — 1,500 tokens{% else %}Попробовать — 1 500 токенов бесплатно{% endif %}</a>
+        <a href="{% if lang == 'en' %}/en/{% else %}/{% endif %}" target="_blank">{% if lang == 'en' %}Try for free — 1,500 tokens{% else %}Попробовать — 1 500 токенов бесплатно{% endif %}</a>
     </div>
 
     <div class="footer-links">
