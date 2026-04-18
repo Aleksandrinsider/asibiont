@@ -11953,6 +11953,9 @@ class AnchorEngine:
             # Количество шагов которые просим у LLM-планировщика.
             # Гарантируем минимум 1 шаг на каждого реального агента + 1 на каждую цель.
             _n_real_agents = len([a for a in real_agents if getattr(a, 'id', 0) != 0])
+            # Diagnostic: логируем какие агенты переданы в координатор
+            _agent_names_list = [p.get('name', '') for p in _profiles if p.get('name', '').strip()]
+            logger.info("[COORD] Starting with %d agent profiles: %s", len(_agent_names_list), _agent_names_list)
             # Динамическая формула: каждый агент + каждая цель получают шаг, но не более 20
             _n_plan_steps = max(_n_real_agents + len(_goals[:5]), _n_real_agents, min(_n_agents * 2, 20))
 
@@ -14871,6 +14874,14 @@ class AnchorEngine:
                 logger.debug("[COORD] fairness backfill skipped: %s", _fa_err)
 
             logger.info("[COORD] plan accepted: %s", [(p.get('agent'), p.get('tool')) for p in _plan])
+            # Diagnostic: какие агенты в итоговом плане
+            _agents_in_plan = {p.get('agent', '').strip() for p in _plan if p.get('agent', '').strip()}
+            _all_agent_names = {p.get('name', '').strip() for p in _profiles if p.get('name', '').strip()}
+            _missing_from_plan = _all_agent_names - _agents_in_plan
+            if _missing_from_plan:
+                logger.warning("[COORD] 🚨 AGENTS MISSING FROM PLAN: %s (present: %s)", list(_missing_from_plan), list(_agents_in_plan))
+            else:
+                logger.info("[COORD] ✅ All agents present in plan: %s", list(_agents_in_plan))
 
             # ── Критический застой: принудительное уведомление пользователя ──
             # Если цель не движется 5+ дней — AI-подсказки не работают. Форсируем реальную отправку.
@@ -15757,6 +15768,7 @@ class AnchorEngine:
                     ))
                     if not _has_imp or _incomplete:
                         logger.warning("[COORD] TEACH-MISS: prompt self-check didn't help for %s: %r", _ag_name, _tm_text[:100])
+                        # Не блокируем (учим, не запрещаем), но логируем для анализа
                 # Гард: пустой/слишком короткий текст — не сохраняем
                 # Примечание: stall-guard убран из coordinator dispatch — здесь LLM видит всю историю
                 # и сам разнообразит задания. Stall-reroute остался в round-robin (линия ~6400).
@@ -15816,6 +15828,7 @@ class AnchorEngine:
                         }, ensure_ascii=False),
                     ))
                     session.commit()
+                    logger.info("[COORD] 📋 Assignment delivered to %s: tool=%s, goal=%r", _ag_name, _tool_hint, (_ag_goal_title or '')[:50])
                 except Exception as _aas_err:
                     logger.debug("[COORD] asi assign save error: %s", _aas_err)
                     try:
