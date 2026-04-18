@@ -7237,21 +7237,38 @@ class AnchorEngine:
                                         _blocked_themes: list[str] = []
                                         for _oa_nm, _oa_txt in _other_assigns:
                                             _oa_l = _oa_txt.lower()
-                                            if 'github' in _oa_l and any(w in _oa_l for w in ('найди', 'поищи', 'собери', 'search')):
+                                            if 'github' in _oa_l and any(w in _oa_l for w in ('найди', 'поищи', 'собери', 'search', 'проанализируй')):
                                                 _blocked_themes.append(f'поиск на GitHub ({_oa_nm})')
-                                            if any(w in _oa_l for w in ('dev.to', 'hacker news', 'product hunt', 'medium', 'хабр')) and any(w in _oa_l for w in ('найди', 'поищи')):
+                                            if any(w in _oa_l for w in ('dev.to', 'hacker news', 'product hunt', 'medium', 'хабр')) and any(w in _oa_l for w in ('найди', 'поищи', 'проанализируй', 'собери')):
                                                 _blocked_themes.append(f'поиск на {"dev.to/Habr" if "dev.to" in _oa_l or "хабр" in _oa_l else "ProductHunt"} ({_oa_nm})')
-                                            if any(w in _oa_l for w in ('web_search', 'research_topic', 'поиск в интернете')) and any(w in _oa_l for w in ('найди 5', 'найди 3', 'найди 10')):
-                                                _blocked_themes.append(f'веб-поиск контактов ({_oa_nm})')
+                                            if any(w in _oa_l for w in ('web_search', 'research_topic', 'поиск в интернете')) and any(w in _oa_l for w in ('найди', 'поищи', 'собери', 'авторов', 'контакт')):
+                                                _blocked_themes.append(f'веб-поиск контактов/авторов ({_oa_nm})')
                                             if any(w in _oa_l for w in ('send_outreach_email', 'save_email_contact', 'найди email', 'найди e-mail')):
                                                 _blocked_themes.append(f'поиск email-контактов ({_oa_nm})')
                                             if any(w in _oa_l for w in ('create_post', 'создай пост', 'напиши пост')):
                                                 _blocked_themes.append(f'создание поста ({_oa_nm})')
+                                            # Широкое обнаружение: поиск людей/лидов/авторов без привязки к платформе
+                                            if any(w in _oa_l for w in ('найди', 'поищи', 'собери список', 'проанализируй активных')) and any(w in _oa_l for w in ('авторов', 'лидов', 'контактов', 'разработчиков', 'специалистов', 'founders', 'creators')):
+                                                _theme_lbl = next((w for w in ('авторов', 'лидов', 'контактов', 'разработчиков', 'специалистов') if w in _oa_l), 'людей')
+                                                _theme_str = f'поиск {_theme_lbl} ({_oa_nm})'
+                                                if _theme_str not in _blocked_themes:
+                                                    _blocked_themes.append(_theme_str)
                                         if _blocked_themes:
+                                            # Подсказываем: какие уникальные интеграции у текущего агента
+                                            _unique_intg_hint = ''
+                                            if _cats_c:
+                                                _unique_names = [_CAP_CATEGORY_NAMES.get(c, c) for c in sorted(_cats_c) if c not in ('script',)][:4]
+                                                if _unique_names:
+                                                    _unique_intg_hint = (
+                                                        f'\n→ У {_chosen_name} есть уникальные интеграции: {", ".join(_unique_names)}.\n'
+                                                        f'   Используй одну из них — это то, чем {_chosen_name} отличается от других агентов команды.\n'
+                                                        f'   Не дублируй поиск/outreach который уже ведут другие — дай ДРУГОЙ тип задачи через ДРУГОЙ инструмент.\n'
+                                                    )
                                             _other_assigns_ctx = (
                                                 f'\n💡 {_chosen_name}: сейчас другие агенты уже занимаются:\n'
                                                 + '\n'.join(f'  • {t}' for t in _blocked_themes)
-                                                + f'\n→ Если {_chosen_name} сделает то же самое — команда топчется на месте. Используй свои интеграции для другого типа действия.\n'
+                                                + _unique_intg_hint
+                                                + f'→ Если {_chosen_name} сделает то же самое — команда топчется на месте. Используй свои интеграции для другого типа действия.\n'
                                                 + 'Поручения другим агентам (8ч):\n'
                                                 + '\n'.join(_oa_lines)
                                                 + '\n'
@@ -7847,6 +7864,17 @@ class AnchorEngine:
                             f"  ❌ Выдумывать email из GitHub-username — ЗАПРЕЩЕНО (user@gmail.com, firstname.lastname@domain — фантазия). Алгоритм: web_search \"name site:github.com OR dev.to email contact\" → если нашёл реальный адрес → save_email_contact. Не нашёл → пропусти этого человека, ищи следующего.\n"
                             f"  ❌ ДУБЛИРОВАНИЕ ЗАДАЧ: если другому агенту уже поручено искать email/контакт ОДНОГО И ТОГО ЖЕ человека в этом цикле — НЕ повторяй. Вместо этого: поручи ПРИМЕНИТЬ уже найденное ИЛИ работай с другим человеком/сегментом.\n"
                             f"  ❌ ЗАСТРЯВШАЯ СТРАТЕГИЯ: если один подход (только email-outreach / только поиск одного контакта / только RSS-посты) не даёт роста цели 2+ цикла — СМЕНИ подход. Другой канал, другой сегмент аудитории, другое действие.\n\n"
+                            + f"🎯 УНИКАЛЬНОСТЬ ЗАДАНИЯ ДЛЯ {_chosen_name.upper()} — КРИТИЧЕСКИ ВАЖНО:\n"
+                            + f"  Каждый агент должен получать РАЗНОЕ задание под СВОИ интеграции.\n"
+                            + f"  У {_chosen_name} подключено: {_caps_c['categories_str'] or 'web_search'}.\n"
+                            + (
+                                f"  Другие агенты уже занимаются web-поиском/outreach. {_chosen_name} должен использовать\n"
+                                f"  СВОИ УНИКАЛЬНЫЕ интеграции: {_caps_c['categories_str']}.\n"
+                                f"  Если у {_chosen_name} нет специализированных интеграций кроме web_search — дай\n"
+                                f"  задачу на ДРУГУЮ ПЛАТФОРМУ или ДРУГОЙ ТИП ДАННЫХ чем уже ищут коллеги.\n"
+                                if _other_assigns else ''
+                            )
+                            + f"  Запрещено: давать {_chosen_name} то же самое что делают другие агенты командой прямо сейчас.\n\n"
                             # Email-специфичные факты — только для агентов с email И целями outreach
                             + (
                                 f"📌 ФАКТЫ О ПЛАТФОРМЕ (используй ТОЛЬКО эти числа, НЕ придумывай другие):\n"
