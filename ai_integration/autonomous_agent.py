@@ -1051,6 +1051,7 @@ async def _get_quick_ai_session() -> aiohttp.ClientSession:
             if _QUICK_AI_SESSION is not None and not _QUICK_AI_SESSION.closed:
                 try:
                     await _QUICK_AI_SESSION.close()
+                    await asyncio.sleep(0.25)
                 except Exception:
                     pass
             _connector = aiohttp.TCPConnector(limit=5, enable_cleanup_closed=True)
@@ -1078,6 +1079,7 @@ async def _get_shared_ai_session() -> aiohttp.ClientSession:
             if _SHARED_AI_SESSION is not None and not _SHARED_AI_SESSION.closed:
                 try:
                     await _SHARED_AI_SESSION.close()
+                    await asyncio.sleep(0.25)
                 except Exception:
                     pass
             _shared_connector = aiohttp.TCPConnector(limit=max(_MAX_CONCURRENT_AI, 20), enable_cleanup_closed=True)
@@ -1234,6 +1236,7 @@ class HybridAutonomousAgent:
             if _SHARED_AI_SESSION and not os.getenv('PYTEST_CURRENT_TEST'):
                 try:
                     await _SHARED_AI_SESSION.close()
+                    await asyncio.sleep(0.25)
                 except Exception:
                     pass
                 _SHARED_AI_SESSION = None
@@ -5685,6 +5688,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
             if _sess_to_close is not None and not _sess_to_close.closed:
                 try:
                     await asyncio.shield(_sess_to_close.close())
+                    await asyncio.sleep(0.25)
                 except Exception:
                     pass
         raise  # CancelledError обязательно перебросить

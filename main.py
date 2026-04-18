@@ -7145,12 +7145,14 @@ async def on_shutdown(app):
     except Exception as e:
         logger.error(f"❌ Failed to close API client: {e}")
 
-    # Закрываем shared AI session
+    # Закрываем shared AI sessions
     try:
-        from ai_integration.autonomous_agent import _SHARED_AI_SESSION
-        if _SHARED_AI_SESSION and not _SHARED_AI_SESSION.closed:
-            await _SHARED_AI_SESSION.close()
-            logger.info("✅ Shared AI session closed")
+        from ai_integration.autonomous_agent import _SHARED_AI_SESSION, _QUICK_AI_SESSION
+        for _sname, _sess in [("shared", _SHARED_AI_SESSION), ("quick", _QUICK_AI_SESSION)]:
+            if _sess and not _sess.closed:
+                await _sess.close()
+                await asyncio.sleep(0.25)
+                logger.info(f"✅ {_sname} AI session closed")
     except Exception as e:
         logger.debug(f"suppressed: {e}")
 
