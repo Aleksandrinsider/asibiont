@@ -9302,7 +9302,7 @@ class AnchorEngine:
                                 if not _has_delegate:
                                     await _safe_send(
                                         self.bot, user.telegram_id,
-                                        f"{_chosen_name} — отчёт:\n{_cleaned_result}",
+                                        f"{_chosen_name}:\n{_cleaned_result}",
                                     )
                                 else:
                                     logger.info("[ANCHOR-AUTOPILOT] main result send skipped (chain_transfer will handle): %s", _chosen_name)
@@ -16865,7 +16865,7 @@ class AnchorEngine:
                         )
                         if _cleaned_tg and _cleaned_tg[0].islower():
                             _cleaned_tg = _cleaned_tg[0].upper() + _cleaned_tg[1:]
-                        await _safe_send(self.bot, user.telegram_id, f"{_ag_name} — отчёт:\n{_cleaned_tg}")
+                        await _safe_send(self.bot, user.telegram_id, f"{_ag_name}:\n{_cleaned_tg}")
                     except Exception:
                         pass
 
