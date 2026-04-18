@@ -2252,7 +2252,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     if any(w in _goals_text_all for w in _fin_kw):
         if 'finance' not in _caps_cats:
-            _intg_missing.append('⚡ Alpha Vantage — котировки нефти/акций/металлов (ALPHAVANTAGE_API_KEY в настройках агента)')
+            _intg_missing.append('⚡ Alpha Vantage — котировки нефти/акций/металлов (ALPHAVANTAGE_API_KEY в настройках агента, 25 req/день бесплатно)')
         if 'news' not in _caps_cats and not _os_bap.getenv('NEWSAPI_KEY'):
             _intg_missing.append('⚡ NewsAPI — поток финансовых новостей (NEWSAPI_KEY в настройках агента)')
     if any(w in _goals_text_all for w in _news_kw):

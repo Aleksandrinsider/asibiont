@@ -91,13 +91,16 @@ _INTG_HINT_PATTERNS: list[tuple[str, str]] = [
      "💡 OpenWeatherMap не подключён. openweathermap.org/api → бесплатный ключ → добавь OPENWEATHERMAP_API_KEY в настройки агента"),
     ("openweathermap_api_key not",
      "💡 OpenWeatherMap не подключён. openweathermap.org/api → бесплатный ключ → добавь OPENWEATHERMAP_API_KEY в настройки агента"),
-    # Alpha Vantage
+    # Alpha Vantage — rate limit (ключ есть, но исчерпан лимит)
+    ("лимит запросов alpha vantage исчерпан",
+     "⏳ Лимит Alpha Vantage исчерпан на сегодня (25 запросов/день бесплатно). Можно обновить до платного тарифа на alphavantage.co или подождать до 00:00 UTC."),
+    # Alpha Vantage — ключ не найден
     ("alphavantage_api_key не",
-     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 500 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 25 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     ("alphavantage_api_key not",
-     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 500 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 25 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     ("alphavantage_api_key: none",
-     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 500 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
+     "💡 Alpha Vantage не подключён. alphavantage.co → бесплатно 25 req/день → добавь ALPHAVANTAGE_API_KEY в настройки агента"),
     # Notion
     ("notion_token не настроен",
      "💡 Notion не подключён. notion.so/my-integrations → создай интеграцию → добавь NOTION_TOKEN в настройки агента"),

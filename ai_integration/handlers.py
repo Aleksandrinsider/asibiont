@@ -9364,17 +9364,21 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
             _db_user = _db_sess.query(_User_av).filter_by(telegram_id=user_id).first()
             _db_user_id = _db_user.id if _db_user else None
             if _db_user_id:
-                _agents = _db_sess.query(_UA_av).filter(
+                # Загружаем ВСЕ агенты с непустыми ключами, декриптим на Python-стороне
+                # (DB-фильтр .contains() не работает если ключи зашифрованы Fernet/obf)
+                from ai_integration.autonomous_agent import _decrypt_keys as _dk_av
+                _all_agents = _db_sess.query(_UA_av).filter(
                     _UA_av.author_id == _db_user_id,
                     _UA_av.user_api_keys.isnot(None),
-                    _UA_av.user_api_keys.contains('ALPHAVANTAGE_API_KEY='),
                 ).all()
-                for _ag in _agents:
-                    for _line in (_ag.user_api_keys or '').splitlines():
+                for _ag in _all_agents:
+                    _raw_keys = _ag.user_api_keys or ''
+                    _decrypted = _dk_av(_raw_keys)
+                    for _line in _decrypted.splitlines():
                         _line = _line.strip()
-                        if _line.startswith('ALPHAVANTAGE_API_KEY='):
+                        if _line.startswith('ALPHAVANTAGE_API_KEY=') or _line.startswith('ALPHA_VANTAGE_API_KEY='):
                             _val = _line.split('=', 1)[1].strip()
-                            if _val and len(_val) > 4:
+                            if _val and len(_val) > 4 and _val.lower() not in ('none', 'null', 'your_key_here', 'xxx', '...'):
                                 _api_key = _val
                                 break
                     if _api_key:
@@ -9387,10 +9391,22 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
 
     if not _api_key:
         return (
-            "💡 Котировки недоступны: ALPHAVANTAGE_API_KEY не настроен.\n"
+            "⚠️ Котировки недоступны: ALPHAVANTAGE_API_KEY не настроен.\n"
             "Получи бесплатный ключ на alphavantage.co → добавь в настройки агента → API-ключи:\n"
             "ALPHAVANTAGE_API_KEY=твой_ключ"
         )
+
+    def _check_av_ratelimit(d: dict) -> str | None:
+        """Возвращает сообщение если Alpha Vantage вернул ошибку лимита/ключа."""
+        info = d.get("Information") or d.get("Note") or d.get("Error Message")
+        if not info:
+            return None
+        info_lc = info.lower()
+        if "rate limit" in info_lc or "per day" in info_lc or "standard api" in info_lc or "per minute" in info_lc:
+            return "⏳ Лимит запросов Alpha Vantage исчерпан на сегодня (25 запросов/день бесплатно). Лимит сбрасывается в 00:00 UTC."
+        if "invalid api key" in info_lc or "invalid" in info_lc:
+            return "❌ Неверный ALPHAVANTAGE_API_KEY. Проверь ключ на alphavantage.co"
+        return f"⚠️ Alpha Vantage API: {info[:200]}"
 
     symbol = symbol.strip().upper()
     # Auto-detect oil by symbol name
@@ -9407,6 +9423,9 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
             with _urllib_req.urlopen(req, timeout=15) as r:
                 d = _json.loads(r.read().decode())
             _data_points = d.get("data", [])
+            _rl = _check_av_ratelimit(d)
+            if _rl:
+                return _rl
             if not _data_points:
                 return f"❌ Данные по {_func} не получены (проверьте ключ)"
             _latest = _data_points[0]
@@ -9439,6 +9458,9 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
             with _urllib_req.urlopen(req, timeout=15) as r:
                 d = _json.loads(r.read().decode())
             info = d.get("Realtime Currency Exchange Rate", {})
+            _rl = _check_av_ratelimit(d)
+            if _rl:
+                return _rl
             if not info:
                 return f"❌ Данные по паре {from_c}/{to_c} не получены (проверьте ключ или тикер)"
             rate = info.get("5. Exchange Rate", "?")
@@ -9461,6 +9483,9 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
             with _urllib_req.urlopen(req, timeout=15) as r:
                 d = _json.loads(r.read().decode())
             info = d.get("Realtime Currency Exchange Rate", {})
+            _rl2 = _check_av_ratelimit(d)
+            if _rl2:
+                return _rl2
             if not info:
                 return f"❌ Данные по {symbol} не получены"
             rate = info.get("5. Exchange Rate", "?")
@@ -9476,6 +9501,9 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
             with _urllib_req.urlopen(req, timeout=15) as r:
                 d = _json.loads(r.read().decode())
             q = d.get("Global Quote", {})
+            _rl3 = _check_av_ratelimit(d)
+            if _rl3:
+                return _rl3
             if not q or not q.get("05. price"):
                 return f"❌ Котировка {symbol} не найдена (проверьте тикер или ключ)"
             price = q.get("05. price", "?")
