@@ -4974,6 +4974,8 @@ class AnchorEngine:
 
     async def _process_user_inner(self, user_id: int, session):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
+        # Lazy import for gender detection
+        from ai_integration.autonomous_agent import _detect_agent_is_female
         # ── DEADLINE TRACKING ──
         # Внешний _process_user_safe имеет timeout=180s.
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
@@ -5740,6 +5742,20 @@ class AnchorEngine:
                     logger.error(f"[ANCHOR] User {user_id}: email anchor #{_ea_idx} error: {type(_ea_err).__name__}: {_ea_err!r}")
                     try:
                         session.rollback()
+                    except Exception:
+                        pass
+                    # CRITICAL: помечаем anchor delivered чтобы не было бесконечного retry
+                    try:
+                        from models import Session as _S_ea_fix
+                        _s_ea_fix = _S_ea_fix()
+                        try:
+                            _a_fix = _s_ea_fix.query(Anchor).filter_by(id=ea.id).first()
+                            if _a_fix and not _a_fix.delivered_at:
+                                _a_fix.delivered_at = datetime.now(timezone.utc)
+                                _s_ea_fix.commit()
+                                logger.info(f"[ANCHOR] User {user_id}: marked email anchor #{ea.id} delivered after error")
+                        finally:
+                            _s_ea_fix.close()
                     except Exception:
                         pass
 
@@ -7912,7 +7928,7 @@ class AnchorEngine:
                                   f"     Спроси себя: что даст БОЛЬШИЙ результат — ещё одно письмо или, например, синхронизация данных в CRM?\n"
                                   if _intg_usage_str else '')
                                if len(_cats_c) > 1 else '')
-                            + f"  1) Что {_chosen_name} делал{'а' if _chosen_name and _chosen_name[-1] in 'аяАЯ' else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
+                            + f"  1) Что {_chosen_name} делал{'а' if _detect_agent_is_female(_chosen_name) else ''} в прошлый раз и КАКОЙ БЫЛ РЕЗУЛЬТАТ?\n"
                             f"  2) Если поиск вернул 0 или агент сообщил 'не нашёл' — это сигнал к диагнозу, а не к повтору:\n"
                             f"     • ЧТО именно я пытаюсь найти? (контакты, статьи, данные?)\n"
                             f"     • ПОЧЕМУ этот источник не дал результат? (публичные репозитории скрывают email, PDF — общие адреса, а не личные)\n"
@@ -8483,7 +8499,7 @@ class AnchorEngine:
                         except Exception:
                             pass
                         if _ack_ok:
-                            _is_ack_fem = (_chosen_name or '')[-1:] in 'аяАЯ'
+                            _is_ack_fem = _detect_agent_is_female(_chosen_name)
                             _ack_role = (agent_data.get('job_title') or agent_data.get('specialization') or 'специалист')[:60]
                             # Вырезаем имя агента из начала coord_text — иначе AI пишет "Кристина, привет!" себе
                             import re as _re_ack_strip
@@ -8567,7 +8583,8 @@ class AnchorEngine:
                                         try:
                                             _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
                                             if not _skip_ack_cap:
-                                                _is_fem_ack = _chosen_name and _chosen_name[-1] in 'аяАЯ' and _chosen_name[-2:].lower() not in ('ша', 'жа')
+                                                from ai_integration.autonomous_agent import _detect_agent_is_female
+                                                _is_fem_ack = _detect_agent_is_female(_chosen_name)
                                                 _ack_text = _sanitize_proactive_text(_ack_text, is_fem=_is_fem_ack)
                                                 _ack_sv.add(Interaction(
                                                     user_id=user.id,
@@ -9245,7 +9262,8 @@ class AnchorEngine:
                             flags=re.IGNORECASE,
                         )
                         # Sanitize tool names from user-facing text
-                        _is_fem_agent = _chosen_name and _chosen_name[-1] in 'аяАЯ' and _chosen_name[-2:].lower() not in ('ша', 'жа')
+                        from ai_integration.autonomous_agent import _detect_agent_is_female
+                        _is_fem_agent = _detect_agent_is_female(_chosen_name)
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result, is_fem=_is_fem_agent)
 
                         # ── HALLUCINATION GUARD: агент ЗАЯВЛЯЕТ действие, но инструмент НЕ вызван ──
@@ -9635,6 +9653,7 @@ class AnchorEngine:
         или устаревший формат (user_orm, new_anchors).
         new_anchors: список dict с ключами anchor_type/source/topic/data
         """
+        from ai_integration.autonomous_agent import _detect_agent_is_female
         # Backward-compat: старый вызов передавал ORM-объект + list
         if new_anchors is None:
             # Старый формат: (user_orm, new_anchors_list)
@@ -10129,7 +10148,7 @@ class AnchorEngine:
                                 prev_agent.name, _inbox_count)
                 except Exception as _e_ibox:
                     logger.debug('[ANCHOR-CHAIN] inbox_reply log error: %s', _e_ibox)
-                _inbox_verb = 'проверила' if (prev_agent.name and prev_agent.name[-1] in 'аяАЯ') else 'проверил'
+                _inbox_verb = 'проверила' if _detect_agent_is_female(prev_agent.name) else 'проверил'
                 _decision = {
                     'continue': True,
                     'agent_name': 'ASI',
@@ -10384,7 +10403,8 @@ class AnchorEngine:
                 or _is_delegation_message(_chain_clean, _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
-                _is_fem_chain = _next_ag.name and _next_ag.name[-1] in 'аяАЯ' and _next_ag.name[-2:].lower() not in ('ша', 'жа')
+                from ai_integration.autonomous_agent import _detect_agent_is_female
+                _is_fem_chain = _detect_agent_is_female(_next_ag.name)
                 _chain_sanitized = _sanitize_proactive_text(_chain_clean, is_fem=_is_fem_chain)
                 try:
                     await self.bot.send_message(
@@ -15382,7 +15402,7 @@ class AnchorEngine:
                     # НЕ стрипим ведущий глагол — он нужен для естественного обращения
                     _task_body = _task_short
                     # Формируем естественное обращение вместо тикета
-                    _ag_is_fem_c = (_ag_name or '')[-1:] in 'аяАЯ'
+                    _ag_is_fem_c = _detect_agent_is_female(_ag_name)
                     _t = _task_body.lower() if _task_body and _task_body[0].isupper() and not _task_body[:3].isupper() else _task_body
                     # Определяем: задача начинается с глагола (по окончаниям) или нет
                     import re as _re_vcheck
@@ -16000,7 +16020,7 @@ class AnchorEngine:
                             f"     → НИКОГДА не называй нерелевантные данные 'аналитикой по [теме задачи]'!\n"
                             f"     → НЕ обновляй update_goal_progress если данные нерелевантны теме цели!\n"
                         )
-                _ag_is_fem = _ag_name and _ag_name[-1] in 'аяАЯ' and _ag_name[-2:].lower() not in ('ша', 'жа')
+                _ag_is_fem = _detect_agent_is_female(_ag_name)
                 _ag_role_str = (
                     f"{_ag_data.get('job_title', '') or _ag_data.get('specialization', 'специалист')}"
                 ).strip()
@@ -16964,7 +16984,7 @@ class AnchorEngine:
                         _inject_goal = _ag_goal_title or (_goals[0]['title'] if _goals else '')
                         # Извлекаем контакты из результата предыдущего агента для явной передачи
                         _contact_context = _cleaned[:400] if _cleaned else ''
-                        _ag_is_fem_pipe = (_ag_name or '')[-1:] in 'аяАЯ'
+                        _ag_is_fem_pipe = _detect_agent_is_female(_ag_name)
                         _ag_nsh = 'нашла' if _ag_is_fem_pipe else 'нашёл'
                         _inject_step = {
                             'agent': _email_sender_name,
@@ -17439,7 +17459,7 @@ class AnchorEngine:
                     _gender_hints_parts = []
                     _gender_block_lines = []
                     for _ag_n in _current_run_agent_tools:
-                        _is_fem_ag = _ag_n and _ag_n[-1] in 'аяАЯ' and _ag_n[-2:].lower() not in ('ша', 'жа')
+                        _is_fem_ag = _detect_agent_is_female(_ag_n)
                         if _is_fem_ag:
                             _gender_hints_parts.append(f"{_ag_n} — ж (сделала, нашла, проверила)")
                             _gender_block_lines.append(
@@ -17590,7 +17610,7 @@ class AnchorEngine:
                                             _strip_md(_report_text),
                                             fem_names={
                                                 n for n in (_current_run_agent_tools or [])
-                                                if n and len(n) >= 2 and n[-1] in 'аяАЯ' and n[-2:].lower() not in ('ша', 'жа')
+                                                if _detect_agent_is_female(n)
                                             } or None,
                                         ),
                                         '__anchor_type': 'coordinator_summary',
@@ -22866,11 +22886,8 @@ class AnchorEngine:
                     )
 
                     # ── Определяем гендер отправителя ──
-                    _sender_fem = (
-                        sender_name and len(sender_name) >= 2
-                        and sender_name.strip()[-1] in 'аяАЯ'
-                        and sender_name.strip()[-2:].lower() not in ('ша', 'жа')
-                    )
+                    from ai_integration.autonomous_agent import _detect_agent_is_female as _daf_sender
+                    _sender_fem = _daf_sender(sender_name)
                     _gender_hint = ""
                     if _sender_fem:
                         _gender_hint = (

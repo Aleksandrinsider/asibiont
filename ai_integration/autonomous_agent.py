@@ -6759,15 +6759,16 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         f"Описание: {_agent.get('description', '')}{_integrations_hint}\n\n"
     )
     _agent_name_str = (_agent.get('name') or '').strip()
-    _agent_fem = (
-        _agent_name_str and len(_agent_name_str) >= 2
-        and _agent_name_str[-1] in 'аяАЯ'
-        and _agent_name_str[-2:].lower() not in ('ша', 'жа')
-    )
+    _agent_fem = _detect_agent_is_female(_agent_name_str)
     if _agent_fem:
         _system += (
             f"ГЕНДЕР: {_agent_name_str} — женское имя. Используй женский род: "
             "прочитала, заметила, нашла, подготовила, сделала.\n\n"
+        )
+    else:
+        _system += (
+            f"ГЕНДЕР: {_agent_name_str} — мужское имя. Используй мужской род: "
+            "прочитал, заметил, нашёл, подготовил, сделал.\n\n"
         )
     if _has_delegation_evidence:
         _system += (
@@ -6872,6 +6873,34 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
         logger.debug("[CHIME] save error: %s", _e)
 
 
+# ── Универсальная детекция рода агента по имени ──────────────────────────────
+_MALE_NAMES_ENDING_AYA = {
+    'илья', 'никита', 'лука', 'кузьма', 'фома', 'акила', 'зосима', 'сила',
+    'митя', 'ваня', 'коля', 'паша', 'гоша', 'дима', 'тёма', 'тема',
+    'вася', 'сеня', 'лёша', 'леша', 'рома', 'миша', 'витя', 'петя', 'федя',
+    'алёша', 'алеша', 'яша', 'кирюша', 'серёжа', 'сережа',
+    'жора', 'сева', 'стёпа', 'степа', 'вова', 'юра', 'лёва', 'лева',
+    'тоша', 'андрюша', 'гриша', 'никоша', 'тимоша', 'даня', 'костя', 'лёня', 'леня',
+    'саша', 'женя', 'валя', 'слава',  # ambiguous, но чаще мужские в контексте агентов
+}
+
+def _detect_agent_is_female(name: str) -> bool:
+    """Определяет женский ли род агента по имени. Универсальная функция."""
+    name = (name or '').strip()
+    if not name:
+        return False
+    # Берём первое слово (имя без фамилии)
+    first = name.split()[0]
+    first_lower = first.lower()
+    # Явно мужские имена на а/я
+    if first_lower in _MALE_NAMES_ENDING_AYA:
+        return False
+    # Женские имена обычно заканчиваются на а/я
+    if first_lower[-1] in 'ая' and first_lower[-2:] not in ('ша', 'жа'):
+        return True
+    return False
+
+
 async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_context: str = "", _depth: int = 0) -> tuple:
     """Запускает агента с полноценным tool-calling циклом (по tools_allowed).
     1. Выполняет python_code (внешние данные: IMAP, RSS, HTTP)
@@ -6886,7 +6915,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     # Определяем род агента по имени для правильных fallback-фраз
     _aname_fb = (agent.get('name') or '').strip()
-    _is_fem = _aname_fb and _aname_fb[-1] in 'аяАЯ' and _aname_fb[-2:].lower() not in ('ша', 'жа')
+    _is_fem = _detect_agent_is_female(_aname_fb)
     _done_fb = 'Задачу выполнила.' if _is_fem else 'Задачу выполнил.'
 
     import subprocess as _sp2, sys as _sys2, os as _os2
@@ -7533,6 +7562,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "\n\nВАЖНО: Ты ЖЕНЩИНА. Используй женский род во всех формах: "
             "сделала, нашла, подготовила, согласна, готова, проанализировала. "
             "НИКОГДА не пиши 'сделал', 'нашёл', 'согласен', 'готов' и т.п."
+        )
+    else:
+        system_prompt += (
+            "\n\nВАЖНО: Ты МУЖЧИНА. Используй мужской род во всех формах: "
+            "сделал, нашёл, подготовил, согласен, готов, проанализировал. "
+            "НИКОГДА не пиши 'сделала', 'нашла', 'согласна', 'готова' и т.п."
         )
     if dialog_context:
         system_prompt += (
@@ -9568,8 +9603,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         _tool_data_fb.append(_td_fb)
             _tool_data_fb_str = '\n'.join(_tool_data_fb[-3:]) if _tool_data_fb else ''
             if _tool_data_fb_str:
-                _aname_fb2 = (agent.get('name') or '').strip()
-                _is_fem_fb = bool(_aname_fb2 and _aname_fb2[-1] in 'аяАЯ' and _aname_fb2[-2:].lower() not in ('ша', 'жа', 'ца', 'ча'))
+                _is_fem_fb = _detect_agent_is_female(agent.get('name') or '')
                 _gender_fb = (
                     "Ты женского рода — пиши: нашла, обнаружила, проверила, отправила, сделала.\n"
                     if _is_fem_fb else
