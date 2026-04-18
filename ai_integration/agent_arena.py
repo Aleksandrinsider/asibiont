@@ -12,12 +12,25 @@ import logging
 import sys
 import time
 import random
+from contextlib import asynccontextmanager
 from typing import List, Dict, Optional, AsyncIterator
 from datetime import datetime
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    """One-off aiohttp session with proper SSL transport cleanup."""
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
 
 # ─── Event-driven SSE notification ────────────────────────────────────────────
 _sse_new_post_event: asyncio.Event = asyncio.Event()
@@ -406,7 +419,7 @@ async def _update_arena_summary():
     for _attempt in range(2):
         try:
             connector = aiohttp.TCPConnector(force_close=True)
-            async with aiohttp.ClientSession(connector=connector) as session:
+            async with _safe_http(connector=connector) as session:
                 async with session.post(
                     "https://api.deepseek.com/v1/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
@@ -1308,7 +1321,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         try:
             async with _arena_api_sem:
                 _conn = aiohttp.TCPConnector(force_close=True)
-                async with aiohttp.ClientSession(connector=_conn) as session:
+                async with _safe_http(connector=_conn) as session:
                     async with session.post(
                         url, headers=headers, json=payload,
                         timeout=aiohttp.ClientTimeout(total=30)
@@ -1627,7 +1640,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
 
     async with _arena_api_sem:
         _conn = aiohttp.TCPConnector(force_close=True)
-        async with aiohttp.ClientSession(connector=_conn) as session:
+        async with _safe_http(connector=_conn) as session:
             async with session.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers=headers_req, json=payload,
@@ -1708,7 +1721,7 @@ async def _post_author_conclusion(post_msg: dict, author_agent: dict, comments: 
     try:
         async with _arena_api_sem:
             _conn = aiohttp.TCPConnector(force_close=True)
-            async with aiohttp.ClientSession(connector=_conn) as session:
+            async with _safe_http(connector=_conn) as session:
                 async with session.post(
                     "https://api.deepseek.com/v1/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
@@ -1829,7 +1842,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     try:
         async with _arena_api_sem:
             _conn = aiohttp.TCPConnector(force_close=True)
-            async with aiohttp.ClientSession(connector=_conn) as session:
+            async with _safe_http(connector=_conn) as session:
                 async with session.post(
                     url, headers=headers, json=payload,
                     timeout=aiohttp.ClientTimeout(total=30)

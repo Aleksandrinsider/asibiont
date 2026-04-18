@@ -36,7 +36,19 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    """One-off aiohttp session with proper SSL transport cleanup."""
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
 
 @contextmanager
 def get_db_session_context():
@@ -369,7 +381,7 @@ async def get_timezone_from_ip(ip_address):
         if ip_address.startswith(('127.', '192.168.', '10.', '172.')):
             return 'Europe/Moscow', 'Москва'  # По умолчанию для локальных
 
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             async with session.get(f'https://ipapi.co/{ip_address}/json/', timeout=aiohttp.ClientTimeout(total=3)) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -648,7 +660,7 @@ async def _refresh_one_avatar(bot, tg_id):
                     file = await asyncio.wait_for(bot.get_file(_file_id), timeout=8.0)
                     file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
                     _conn = aiohttp.TCPConnector(force_close=True)
-                    async with aiohttp.ClientSession(connector=_conn) as _sess:
+                    async with _safe_http(connector=_conn) as _sess:
                         async with _sess.get(file_url, timeout=aiohttp.ClientTimeout(total=12)) as _resp:
                             if _resp.status == 200:
                                 _bytes = await _resp.read()
@@ -767,7 +779,7 @@ async def send_email(to: str, subject: str, body: str):
     if RESEND_API_KEY:
         try:
             logger.info(f"Sending email via Resend API to {to}")
-            async with aiohttp.ClientSession() as session:
+            async with _safe_http() as session:
                 resp = await session.post(
                     'https://api.resend.com/emails',
                     headers={
@@ -894,7 +906,7 @@ async def notify_indexnow(urls: list):
             "keyLocation": f"https://asibiont.com/{INDEXNOW_KEY}.txt",
             "urlList": urls
         }
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             # Bing/Yandex оба поддерживают IndexNow
             for endpoint in ['https://api.indexnow.org/indexnow',
                              'https://yandex.com/indexnow']:
@@ -2464,7 +2476,7 @@ async def transcribe_handler(request):
             form.add_field('model', 'whisper-large-v3')
             form.add_field('language', 'ru')
             form.add_field('response_format', 'json')
-            async with aiohttp.ClientSession() as s:
+            async with _safe_http() as s:
                 async with s.post(
                     'https://api.groq.com/openai/v1/audio/transcriptions',
                     headers={'Authorization': f'Bearer {GROQ_API_KEY}'},
@@ -6560,7 +6572,7 @@ async def translate_post_handler(request):
         }
         lang_name = lang_names.get(target_lang, target_lang)
 
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             resp = await session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={
@@ -6609,7 +6621,7 @@ async def translate_text_handler(request):
             'tr': 'Turkish', 'pl': 'Polish', 'uk': 'Ukrainian',
         }
         lang_name = lang_names.get(target_lang, target_lang)
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             resp = await session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
@@ -6664,7 +6676,7 @@ async def translate_comment_handler(request):
         }
         lang_name = lang_names.get(target_lang, target_lang)
 
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             resp = await session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={
@@ -6798,7 +6810,7 @@ async def api_avatar_handler(request):
                     try:
                         _file = await asyncio.wait_for(_bot.get_file(_file_id), timeout=5.0)
                         _file_url = f"https://api.telegram.org/file/bot{_bot.token}/{_file.file_path}"
-                        async with aiohttp.ClientSession() as _sess:
+                        async with _safe_http() as _sess:
                             async with _sess.get(_file_url, timeout=aiohttp.ClientTimeout(total=8)) as _resp:
                                 if _resp.status == 200:
                                     import base64 as _b64i
@@ -8199,7 +8211,7 @@ async def api_messages_reply_handler(request):
                     reply_user = user.first_name or user.username or 'Пользователь'
                     tg_text = f"💬 Ответ от @{user.username or reply_user}:\n\n{reply_text}"
                     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-                    async with aiohttp.ClientSession() as http_session:
+                    async with _safe_http() as http_session:
                         async with http_session.post(url, json={"chat_id": sender.telegram_id, "text": tg_text}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                             pass
                 except Exception as e:
@@ -8264,7 +8276,7 @@ async def api_messages_send_handler(request):
                     sender_uname = user.username or user.first_name or 'Пользователь'
                     tg_text = f"📩 Сообщение от @{sender_uname}:\n\n{message_text}\n\n💬 Чтобы ответить, напиши: «ответь @{sender_uname} [твой ответ]»"
                     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-                    async with aiohttp.ClientSession() as http_session:
+                    async with _safe_http() as http_session:
                         async with http_session.post(url, json={"chat_id": recipient.telegram_id, "text": tg_text}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                             if resp.status == 200:
                                 msg.status = 'delivered'
@@ -9424,7 +9436,7 @@ async def api_outreach_load_reply_handler(request):
                     nonlocal access_token
                     if not refresh_token or not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
                         return False
-                    async with aiohttp.ClientSession() as h:
+                    async with _safe_http() as h:
                         r = await h.post('https://oauth2.googleapis.com/token', data={
                             'client_id': GOOGLE_CLIENT_ID, 'client_secret': GOOGLE_CLIENT_SECRET,
                             'refresh_token': refresh_token, 'grant_type': 'refresh_token',
@@ -9470,7 +9482,7 @@ async def api_outreach_load_reply_handler(request):
                     return ''
 
                 async def _fetch_reply():
-                    async with aiohttp.ClientSession() as h:
+                    async with _safe_http() as h:
                         r = await h.get(
                             'https://gmail.googleapis.com/gmail/v1/users/me/messages',
                             headers={'Authorization': f'Bearer {access_token}'},
@@ -9611,7 +9623,7 @@ async def translate_note_handler(request):
         }
         lang_name = lang_names.get(target_lang, target_lang)
 
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             resp = await session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={
@@ -10201,7 +10213,7 @@ async def gmail_oauth_callback(request):
         from config import GOOGLE_CLIENT_ID as _GCI, GOOGLE_CLIENT_SECRET as _GCS, WEB_APP_URL as _WAU
         import json as _jsn
 
-        async with aiohttp.ClientSession() as http:
+        async with _safe_http() as http:
             # Обмен code → tokens
             token_resp = await http.post(
                 'https://oauth2.googleapis.com/token',
@@ -10303,7 +10315,7 @@ async def get_country_by_ip(ip: str) -> str:
     if ip in _geo_cache:
         return _geo_cache[ip]
     try:
-        async with aiohttp.ClientSession() as s:
+        async with _safe_http() as s:
             async with s.get(
                 f"http://ip-api.com/json/{ip}?fields=countryCode",
                 timeout=aiohttp.ClientTimeout(total=2)

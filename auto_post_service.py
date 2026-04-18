@@ -6,6 +6,7 @@ Automatic post generation service - creates daily progress posts and birthday po
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 import pytz
 import random
@@ -13,6 +14,17 @@ import aiohttp
 
 from models import Session, User, UserProfile, Task, Post
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL, REPLICATE_API_TOKEN
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    """One-off aiohttp session with proper SSL transport cleanup."""
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
 from ai_integration.memory import decrypt_data
 
 logging.basicConfig(level=logging.INFO)
@@ -68,7 +80,7 @@ async def _generate_text_with_ai(prompt: str) -> str:
         "max_tokens": 400
     }
 
-    async with aiohttp.ClientSession() as session:
+    async with _safe_http() as session:
         async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=60, sock_read=50)) as response:
             if response.status == 200:
                 result = await response.json()
@@ -113,7 +125,7 @@ async def _generate_image_for_post(post_text: str) -> str:
             "output_format": "png",
             "output_quality": 80,
         }
-        async with aiohttp.ClientSession() as http:
+        async with _safe_http() as http:
             resp = await http.post(
                 f"https://api.replicate.com/v1/models/{model}/predictions",
                 headers=headers,
@@ -573,7 +585,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         # === Отправка в Discord webhook (если настроен) ===
         try:
             if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
-                async with aiohttp.ClientSession() as dc_session:
+                async with _safe_http() as dc_session:
                     dc_payload = {"content": content}
                     if image_url:
                         dc_payload["embeds"] = [{"image": {"url": image_url}}]
@@ -651,7 +663,7 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                     if TELEGRAM_TOKEN:
                         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
                         data = {"chat_id": user_id, "text": notification}
-                        async with aiohttp.ClientSession() as aio_session:
+                        async with _safe_http() as aio_session:
                             async with aio_session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=15)) as response:
                                 if response.status == 200:
                                     logger.info(f"AI notification sent to user {user_id} about auto-post")

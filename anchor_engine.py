@@ -34,6 +34,7 @@ import logging
 import re
 import traceback
 from collections import Counter, defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 import pytz
@@ -53,6 +54,23 @@ logger = logging.getLogger(__name__)
 
 # Telegram message limit
 _TG_MAX_LEN = 4096
+
+
+# ═══════════════════════════════════════════════════════
+# SAFE HTTP SESSION — prevents "Unclosed connection" warnings
+# ═══════════════════════════════════════════════════════
+# aiohttp SSL transports need one event-loop tick after session.close()
+# to fully release. Without it, GC triggers "Unclosed connection".
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    """One-off aiohttp session with proper SSL transport cleanup."""
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
 
 
 # ═══════════════════════════════════════════════════════
@@ -21827,8 +21845,7 @@ class AnchorEngine:
                 # Авто-публикация в Discord (если webhook настроен)
                 try:
                     if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
-                        import aiohttp as _aiohttp_dc
-                        async with _aiohttp_dc.ClientSession() as http:
+                        async with _safe_http() as http:
                             resp = await http.post(
                                 user.discord_webhook,
                                 json={"content": post_text},
@@ -21957,12 +21974,11 @@ class AnchorEngine:
                 # Публикуем в Discord
                 dc_ok = False
                 try:
-                    import aiohttp as _aiohttp_dp
-                    async with _aiohttp_dp.ClientSession() as http_dc:
+                    async with _safe_http() as http_dc:
                         resp = await http_dc.post(
                             discord_wh,
                             json={"content": post_text},
-                            timeout=_aiohttp_dp.ClientTimeout(total=15),
+                            timeout=aiohttp.ClientTimeout(total=15),
                         )
                         dc_ok = resp.status in (200, 204)
                 except Exception as dc_err:
@@ -22121,9 +22137,8 @@ class AnchorEngine:
             if 'discord' in platforms and user.discord_webhook:
                 dc_ok = False
                 try:
-                    import aiohttp as _aiohttp_cc
                     if user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
-                        async with _aiohttp_cc.ClientSession() as http:
+                        async with _safe_http() as http:
                             resp = await http.post(
                                 user.discord_webhook,
                                 json={"content": post_text},
@@ -22319,7 +22334,7 @@ class AnchorEngine:
                 "max_tokens": 600
             }
 
-            async with aiohttp.ClientSession() as http:
+            async with _safe_http() as http:
                 async with http.post(url, json=data, headers=headers,
                                      timeout=aiohttp.ClientTimeout(total=60)) as resp:
                     if resp.status != 200:
@@ -22560,8 +22575,7 @@ class AnchorEngine:
                 f"Создай ЗАДАЧУ и СООБЩЕНИЕ ИСПОЛНИТЕЛЮ."
             )
 
-            import aiohttp
-            async with aiohttp.ClientSession() as http:
+            async with _safe_http() as http:
                 resp = await http.post(
                     'https://api.deepseek.com/chat/completions',
                     headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
@@ -23889,7 +23903,7 @@ class AnchorEngine:
                 "max_tokens": 600
             }
 
-            async with aiohttp.ClientSession() as aio_session:
+            async with _safe_http() as aio_session:
                 _compose_result = None
                 for _compose_attempt in range(2):
                     try:
@@ -25944,7 +25958,7 @@ class AnchorEngine:
                 url = (f'https://api.openweathermap.org/data/2.5/weather'
                        f'?q={city}&appid={OPENWEATHERMAP_API_KEY}&units=metric&lang=ru')
                 try:
-                    async with aiohttp.ClientSession() as sess:
+                    async with _safe_http() as sess:
                         async with sess.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                             if resp.status != 200:
                                 return anchors

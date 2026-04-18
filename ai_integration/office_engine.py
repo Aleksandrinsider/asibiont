@@ -23,6 +23,7 @@ import os
 import random
 import subprocess
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 
 try:
@@ -32,6 +33,19 @@ except Exception:  # циклический импорт или ещё не за
     _parse_agent_integrations = None  # type: ignore
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    """One-off aiohttp session with proper SSL transport cleanup."""
+    import aiohttp
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
 
 # ── Интервалы ────────────────────────────────────────────────────────────────
 MONITOR_INTERVAL_SEC = (25 * 60, 45 * 60)   # legacy, сохранён для совместимости
@@ -643,11 +657,10 @@ async def _autonomous_analyze_result(
 
     try:
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-        import aiohttp as _aio
         _answer = None
         for _att in range(2):
             try:
-                async with _aio.ClientSession() as sess:
+                async with _safe_http() as sess:
                     async with sess.post(
                         'https://api.deepseek.com/chat/completions',
                         headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
@@ -1254,7 +1267,7 @@ class OfficeEngine:
         try:
             for _att_r in range(2):
                 try:
-                    async with aiohttp.ClientSession() as session:
+                    async with _safe_http() as session:
                         async with session.post(
                             "https://api.deepseek.com/chat/completions",
                             headers={
@@ -1779,7 +1792,7 @@ class OfficeEngine:
         answer = None
         for _attempt in range(2):
             try:
-                async with aiohttp.ClientSession() as session:
+                async with _safe_http() as session:
                     async with session.post(
                         "https://api.deepseek.com/chat/completions",
                         headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
