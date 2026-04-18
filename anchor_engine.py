@@ -4877,17 +4877,38 @@ class AnchorEngine:
             if tasks:
                 await asyncio.gather(*tasks)
 
+    # Circuit breaker: пропускаем пользователей которые постоянно таймаутятся
+    _timeout_counts: dict  # user_id -> consecutive timeout count
+    _timeout_backoff_until: dict  # user_id -> monotonic time until which to skip
+
     async def _process_user_safe(self, user_id: int, lock: asyncio.Lock):
         """Обёртка с lock для безопасной параллельной обработки"""
+        # Circuit breaker: если пользователь таймаутился 3+ раз подряд, пропускаем на 30мин
+        import time as _time_cb
+        if not hasattr(self, '_timeout_counts'):
+            self._timeout_counts = {}
+            self._timeout_backoff_until = {}
+        _backoff_until = self._timeout_backoff_until.get(user_id, 0)
+        if _time_cb.monotonic() < _backoff_until:
+            logger.info(f"[ANCHOR] User {user_id}: ⏸ circuit breaker active, skipping ({self._timeout_counts.get(user_id, 0)} consecutive timeouts)")
+            return
+
         async with lock:
             try:
-                # Внешний таймаут: должен вмещать AI-координатор (до 120s) + tool calls.
-                # 180s = достаточно для полного цикла, но не даёт зависнуть навечно.
                 await asyncio.wait_for(self._process_user(user_id), timeout=180)
+                # Успешное завершение — сбрасываем счётчик
+                self._timeout_counts.pop(user_id, None)
+                self._timeout_backoff_until.pop(user_id, None)
             except asyncio.TimeoutError:
-                logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 180s — lock released")
-                # Timeout оставляет подвешенные TCP-соединения в AI-сессиях.
-                # Закрываем их — следующий вызов пересоздаст сессии с чистым пулом.
+                _cnt = self._timeout_counts.get(user_id, 0) + 1
+                self._timeout_counts[user_id] = _cnt
+                if _cnt >= 3:
+                    # Backoff: 30 минут после 3+ таймаутов
+                    self._timeout_backoff_until[user_id] = _time_cb.monotonic() + 1800
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 180s ({_cnt}x) — circuit breaker ON for 30min")
+                else:
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 180s ({_cnt}/3) — lock released")
+                # Закрываем подвешенные AI-сессии
                 try:
                     from ai_integration.autonomous_agent import (
                         _QUICK_AI_SESSION, _SHARED_AI_SESSION,
@@ -4953,6 +4974,16 @@ class AnchorEngine:
 
     async def _process_user_inner(self, user_id: int, session):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
+        # ── DEADLINE TRACKING ──
+        # Внешний _process_user_safe имеет timeout=180s.
+        # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
+        # чтобы НЕ допускать CancelledError от asyncio.wait_for.
+        import time as _time_inner
+        _deadline = _time_inner.monotonic() + 160  # 160s — 20s запас до внешнего 180s
+
+        def _time_left():
+            return _deadline - _time_inner.monotonic()
+
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             logger.debug(f"[ANCHOR] User {user_id}: не найден в БД, пропуск")
@@ -5560,7 +5591,7 @@ class AnchorEngine:
         # Автопилот — наиболее ценный pipeline: работает 24/7 автономно,
         # не должен блокироваться медленными AI-вызовами для dialog-якорей.
         # Перемещён ПЕРЕД _deliver_batch чтобы гарантировать своевременный dispatch.
-        if autopilot_anchors:
+        if autopilot_anchors and _time_left() > 30:
             _goal_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'goal_autopilot_review']
             _chat_review_anchors = [a for a in autopilot_anchors if a.anchor_type == 'chat_ai_review']
             _ap_gap_ok = True
@@ -5626,21 +5657,24 @@ class AnchorEngine:
         # ── 3a. DIALOG DELIVERY — после автопилота, до posts/email ──
         # Перемещён после автопилота: медленные AI-вызовы для dialog-якорей
         # не должны блокировать более ценный autopilot pipeline.
-        await _deliver_batch(system_dialog_anchors, 'system')
-        if agent_dialog_anchors:
-            await asyncio.sleep(2)
-            await _deliver_batch(agent_dialog_anchors, 'agent')
+        if _time_left() > 20:
+            await _deliver_batch(system_dialog_anchors, 'system')
+            if agent_dialog_anchors and _time_left() > 20:
+                await asyncio.sleep(2)
+                await _deliver_batch(agent_dialog_anchors, 'agent')
+        else:
+            logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping dialog delivery (only {_time_left():.0f}s left)")
 
         # ── 3b2. CUSTOM AGENT ANCHORS — агент пишет первым с инструментами ──
         # custom_anchor создаёт якорь для конкретного агента (из UserAgent.custom_anchors).
         # Маршрутизируем через _dispatch_agent_for_anchor → агент получает tools.
-        if custom_agent_anchors and has_proactive_tokens:
+        if custom_agent_anchors and has_proactive_tokens and _time_left() > 30:
             for _ca in custom_agent_anchors[:1]:
                 async with self._ai_semaphore:
                     await self._dispatch_agent_for_anchor(user, _ca, session)
 
         # ── 3c. FEED POSTS — отдельный лимит (не ночью, нужны токены) ──
-        if not is_night and has_proactive_tokens:
+        if not is_night and has_proactive_tokens and _time_left() > 20:
           try:
             feed_posts = [a for a in post_anchors if a.anchor_type == 'post_opportunity']
             if feed_posts and post_count < MAX_FEED_PER_DAY:
@@ -5691,6 +5725,9 @@ class AnchorEngine:
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             for _ea_idx, ea in enumerate(email_silent_anchors[:12]):  # макс 12 за цикл
+                if _time_left() < 15:
+                    logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping remaining email anchors (only {_time_left():.0f}s left)")
+                    break
                 try:
                     if _ea_idx > 0:
                         await asyncio.sleep(5)  # Краткая задержка между email-якорями
@@ -5707,7 +5744,7 @@ class AnchorEngine:
                         pass
 
         # ── 3f. CONTENT CAMPAIGNS — автономная публикация по расписанию (не ночью) ──
-        if content_silent_anchors and not is_night:
+        if content_silent_anchors and not is_night and _time_left() > 15:
             logger.info(f"[ANCHOR] User {user_id}: 📝 Processing {len(content_silent_anchors)} content campaign anchors...")
             for _cc_idx, cc in enumerate(content_silent_anchors[:2]):  # макс 2 за цикл
                 try:
@@ -5728,7 +5765,7 @@ class AnchorEngine:
             logger.info(f"[ANCHOR] User {user_id}: ⛔ content campaigns blocked (night hours)")
 
         # ── 3g. DELEGATION CAMPAIGNS — автономное делегирование (не ночью) ──
-        if delegation_silent_anchors and not is_night:
+        if delegation_silent_anchors and not is_night and _time_left() > 15:
             logger.info(f"[ANCHOR] User {user_id}: 🤝 Processing {len(delegation_silent_anchors)} delegation campaign anchors...")
             for _dc_idx, dc in enumerate(delegation_silent_anchors[:3]):  # макс 3 за цикл
                 try:
