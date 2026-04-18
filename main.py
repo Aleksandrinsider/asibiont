@@ -1402,7 +1402,7 @@ async def delete_account_handler(request):
             session_db.query(Goal).filter_by(user_id=uid).delete(synchronize_session=False)
             session_db.query(Task).filter_by(user_id=uid).delete(synchronize_session=False)
             session_db.query(Interaction).filter_by(user_id=uid).delete(synchronize_session=False)
-            session_db.query(Note).filter_by(user_id=uid).delete(synchronize_session=False)
+            session_db.query(Note).filter(Note.user_id == uid, Note.source != 'blog').delete(synchronize_session=False)
             session_db.query(UserProfile).filter_by(user_id=uid).delete(synchronize_session=False)
             if has_user_message:
                 session_db.query(UserMessage).filter(
@@ -7962,8 +7962,6 @@ async def api_note_delete_handler(request):
             note = session_db.query(Note).filter_by(id=note_id, user_id=user.id).first()
             if not note:
                 return web.json_response({'error': 'Note not found'}, status=404)
-            if note.source == 'blog':
-                return web.json_response({'error': 'Blog posts cannot be deleted'}, status=403)
             session_db.delete(note)
             session_db.commit()
             return web.json_response({'success': True})
