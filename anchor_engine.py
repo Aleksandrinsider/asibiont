@@ -7990,11 +7990,13 @@ class AnchorEngine:
                             "   Сразу давай СЛЕДУЮЩЕЕ задание. Агент не нуждается в похвале — ему нужна чёткая задача.\n\n"
                             "🔍 САМОПРОВЕРКА перед ответом: "
                             "✅ первое предложение содержит КОНКРЕТНЫЙ ФАКТ из ситуации (число, результат, статус)? "
-                            "✅ каждое предложение закончено с точкой? "
+                            "✅ каждое предложение ЗАКОНЧЕННОЕ? Перечитай последнее предложение: оно содержит подлежащее + сказуемое + дополнение? "
+                            "   Если предложение обрывается ('контакты, которые ещё не получили' — не получили ЧЕГО?) — ДОПИШИ до конца. "
                             "✅ нет нумерованных списков (1, 2, 3) и маркеров (•, -)? "
                             "✅ глаголы в императиве (найди/создай/отправь, не найти/создать/отправить)? "
                             "✅ нет мета-комментариев и оценок ('ты правильно', 'хорошая работа', 'молодец')? "
-                            "✅ каждый шаг через реальный tool из карточки (не «HTTP-запрос», не «запусти скрипт»)?   "
+                            "✅ tool-имена упоминаешь ТОЛЬКО коротко (web_search, send_outreach_email), "
+                            "   БЕЗ параметров и вызовов: ❌ 'run_agent_action(action=\"get_news_trends\")' → ✅ 'проанализируй тренды через get_news_trends'? "
                             "ФОРМУЛА ПОРУЧЕНИЯ: [Имя], [ФАКТ из ситуации → ЗАЧЕМ]. [Глагол] через [TOOL из карточки] [ЧТО/ГДЕ]. [Ожидаемый результат]."
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=900)
@@ -8025,6 +8027,13 @@ class AnchorEngine:
                                 _last_period = max(_gen.rfind('.'), _gen.rfind('!'), _gen.rfind('?'))
                                 if _last_period > len(_gen) * 0.4:  # at least 40% of text preserved
                                     _gen = _gen[:_last_period + 1]
+                            # Clean raw tool calls with params: run_agent_action(action="get_news_trends") → get_news_trends
+                            _gen = _re_post.sub(
+                                r'run_agent_action\s*\(\s*action\s*=\s*["\']([^"\']+)["\']\s*\)',
+                                r'\1', _gen
+                            )
+                            # Clean other tool calls with parenthesized params: tool_name(param="val") → tool_name
+                            _gen = _re_post.sub(r'(\b\w+_\w+)\s*\([^)]{5,}\)', r'\1', _gen)
                             _gen = ' '.join(_gen.split())  # normalize whitespace
                         _VAGUE_COORD_PATTERNS = (
                             'посмотри что можно', 'поработай над', 'займись',
@@ -8091,6 +8100,15 @@ class AnchorEngine:
                                 # Слишком короткое без инструмента и без цепочки действий (просто "найди" без "сохрани/отправь")
                                 or (len(_gen_s) < 100 and not _has_tool_name and not _has_action_chain_verb)
                                 or (len(_gen_s) < 120 and not _has_tool_name and not _has_action_chain_verb)
+                                # Незавершённые предложения: "контакты, которые ещё не получили" — не получили ЧЕГО?
+                                # Последнее предложение обрывается на переходном глаголе без дополнения
+                                or bool(_re_sent_c.search(
+                                    r'(?:не\s+)?(?:получил[иа]?|отправил[иа]?|написал[иа]?|сделал[иа]?|нашл[иа]?|собрал[иа]?)\s*[.!?]?\s*$',
+                                    _gen_s
+                                ) and not _re_sent_c.search(
+                                    r'(?:получил[иа]?|отправил[иа]?|написал[иа]?|сделал[иа]?|нашл[иа]?|собрал[иа]?)\s+\S',
+                                    _gen_s.rsplit('.', 1)[-1] if '.' in _gen_s else _gen_s
+                                ))
                                 # Бессмысленные задания про "альтернативные методы" / "для Telegram пользователей"
                                 or ('альтернативн' in _gen_lower and ('метод' in _gen_lower or 'способ' in _gen_lower or 'канал' in _gen_lower))
                                 # Задания про пользователей платформ без конкретики
@@ -8403,18 +8421,19 @@ class AnchorEngine:
 
                             if not _skip_coord:
                                 # Coordinator assignment — сохраняем в хронологию чтобы пользователь видел поручения
+                                # Агент получает _coord_text (с tool-именами), пользователь — очищенную версию
                                 from ai_integration.utils import sanitize_live_team_chat_text as _sltt_coord
+                                from ai_integration.utils import clean_technical_details as _ctd_coord
                                 _coord_text_clean_save = _sltt_coord(
                                     _coord_text,
                                     anchor_type='goal_autopilot_assignment',
                                     speaker_name='ASI',
                                     target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
-                                # ⚠️ НЕ применяем _sanitize_proactive_text к поручениям координатора!
-                                # Эта функция убирает имена инструментов (web_search, save_email_contact и т.д.)
-                                # из текста — для agentResult-сообщений это правильно, но поручение
-                                # ДОЛЖНО содержать конкретный инструмент — иначе агент не знает что делать.
-                                # Только sanitize_token_hallucinations — безопасно.
+                                # Для пользователя: заменяем tool-имена на человеко-понятные описания
+                                # run_agent_action(action="get_news_trends") → "анализ новостей"
+                                if _coord_text_clean_save:
+                                    _coord_text_clean_save = _ctd_coord(_coord_text_clean_save, preserve_tool_names=False)
                                 if _coord_text_clean_save:
                                     try:
                                         from ai_integration.conversation_history import sanitize_token_hallucinations as _sth_coord
