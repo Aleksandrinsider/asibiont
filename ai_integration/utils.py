@@ -1,10 +1,12 @@
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 import logging
 import re
 from datetime import datetime, timedelta, timezone
 import pytz
+import aiohttp
 from models import Session, User, UserProfile, Task, Interaction
 from config import (
     DEEPSEEK_API_KEY,
@@ -23,6 +25,19 @@ import hashlib
 import time
 import redis
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    """One-off aiohttp session with proper SSL transport cleanup."""
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
+
 # Redis client initialization
 redis_client = None
 if REDIS_ENABLED:

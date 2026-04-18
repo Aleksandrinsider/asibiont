@@ -6804,8 +6804,8 @@ async def _agent_chimes_in(user_message: str, asi_response: str, user_id: int):
 
     try:
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
-        import aiohttp
-        async with aiohttp.ClientSession() as _sess:
+        from ai_integration.utils import _safe_http
+        async with _safe_http() as _sess:
             async with _sess.post(
                 "https://api.deepseek.com/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},

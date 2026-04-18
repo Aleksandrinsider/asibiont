@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytz
 import requests
 import aiohttp
+from ai_integration.utils import _safe_http
 from models import Session, Task, User, UserProfile, Subscription, Goal, Post, PostLike, PostView, Comment, UserMessage, EmailCampaign, EmailOutreach, EmailContact, Anchor, AnchorPriority
 from sqlalchemy import or_, and_, func
 
@@ -6687,7 +6688,7 @@ Return only the notification text, without additional comments."""
 
         data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.8, "max_tokens": 200}
 
-        async with aiohttp.ClientSession() as aio_session:
+        async with _safe_http() as aio_session:
             async with aio_session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
@@ -6740,7 +6741,7 @@ async def generate_progress_request(task_title, delegator_username, time_remaini
 
         data = {"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.7, "max_tokens": 150}
 
-        async with aiohttp.ClientSession() as aio_session:
+        async with _safe_http() as aio_session:
             async with aio_session.post(
                 url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=15)
             ) as response:
@@ -10559,7 +10560,7 @@ async def _generate_user_message_async(sender_name, sender_username, recipient_n
 — НЕ пиши от первого лица AI, пиши от имени отправителя
 — НЕ используй скобки, маркеры списка, звёздочки"""
 
-        async with aiohttp.ClientSession() as http_session:
+        async with _safe_http() as http_session:
             async with http_session.post(
                 "https://api.deepseek.com/chat/completions",
                 headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
@@ -10603,7 +10604,7 @@ async def _send_telegram_message_async(chat_id, text):
     import aiohttp
     
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    async with aiohttp.ClientSession() as http_session:
+    async with _safe_http() as http_session:
         async with http_session.post(url, json={"chat_id": chat_id, "text": text}, 
                                       timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status != 200:
@@ -16153,7 +16154,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
         if not refresh_token or not _GCI_r or not _GCS_r:
             return False
         try:
-            async with aiohttp.ClientSession() as _h:
+            async with _safe_http() as _h:
                 _r = await _h.post(
                     'https://oauth2.googleapis.com/token',
                     data={
@@ -16182,7 +16183,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
         return False
 
     async def _fetch(tok):
-        async with aiohttp.ClientSession() as _h:
+        async with _safe_http() as _h:
             # Список последних писем
             _resp = await _h.get(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages',
@@ -19401,7 +19402,7 @@ async def http_api_request(user_id: int, url: str, method: str = 'GET',
 
     try:
         timeout = aiohttp.ClientTimeout(total=15)
-        async with aiohttp.ClientSession(timeout=timeout) as http_session:
+        async with _safe_http(timeout=timeout) as http_session:
             kwargs = {'headers': req_headers}
             if body and method in ('POST', 'PUT', 'PATCH'):
                 kwargs['json'] = body

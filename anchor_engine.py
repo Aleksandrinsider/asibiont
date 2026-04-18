@@ -5754,10 +5754,10 @@ class AnchorEngine:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
                             self._process_email_silent_anchor(user, ea, session),
-                            timeout=90,  # 3 черновика × ~30s = 90s макс
+                            timeout=180,  # 3 drafts × (compose ~30s + retry ~30s) = 180s
                         )
                 except Exception as _ea_err:
-                    logger.error(f"[ANCHOR] User {user_id}: email anchor #{_ea_idx} error: {type(_ea_err).__name__}: {_ea_err!r}")
+                    logger.error(f"[ANCHOR] User {user_id}: email anchor #{ea.id} (idx={_ea_idx}) error: {type(_ea_err).__name__}: {_ea_err!r}")
                     try:
                         session.rollback()
                     except Exception:

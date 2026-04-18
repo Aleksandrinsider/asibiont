@@ -14,10 +14,22 @@ Discord users are stored in the DB with:
 import logging
 import asyncio
 import aiohttp
+from contextlib import asynccontextmanager
 from typing import Optional
 from config import normalize_name
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
 
 _discord_bot = None
 _discord_task: Optional[asyncio.Task] = None
@@ -176,7 +188,7 @@ async def discord_oauth_callback(request):
         redirect_uri = f"{WEB_APP_URL}/auth/discord"
 
         # Exchange code for token
-        async with aiohttp.ClientSession() as http:
+        async with _safe_http() as http:
             token_resp = await http.post(
                 "https://discord.com/api/oauth2/token",
                 data={

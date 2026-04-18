@@ -8,6 +8,7 @@ import json
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 import aiohttp
 import asyncio
+from ai_integration.utils import _safe_http
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ EDGE CASES (особые случаи):
             "temperature": 0.0
         }
         
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             async with session.post(url, headers=headers, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status != 200:
                     logger.error(f"DeepSeek API error: {response.status}")

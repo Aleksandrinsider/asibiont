@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 import aiohttp
+from ai_integration.utils import _safe_http
 from models import Session, User
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ async def generate_marketing_content(product_name, target_audience, platform, go
 Пиши на русском, используй эмодзи умеренно."""
 
     try:
-        async with aiohttp.ClientSession() as http_session:
+        async with _safe_http() as http_session:
             async with http_session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={
@@ -414,7 +415,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         if not channel.startswith('-') and not channel.startswith('@'):
             channel = f"@{channel}"
 
-        async with aiohttp.ClientSession() as http_session:
+        async with _safe_http() as http_session:
             if image_url:
                 # Публикуем фото с подписью
                 tg_method = 'sendPhoto'

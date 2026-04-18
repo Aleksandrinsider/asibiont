@@ -4,8 +4,21 @@ import json
 import uuid
 import logging
 import aiohttp
+from contextlib import asynccontextmanager
+import asyncio
 
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
 
 NOWPAYMENTS_API_URL = "https://api.nowpayments.io/v1"
 
@@ -33,7 +46,7 @@ async def create_crypto_payment(pack: str, user_id: int, api_key: str, web_app_u
         "cancel_url": f"{web_app_url}/subscription-tiers",
     }
 
-    async with aiohttp.ClientSession() as session:
+    async with _safe_http() as session:
         async with session.post(
             f"{NOWPAYMENTS_API_URL}/invoice",
             json=payload,

@@ -7,10 +7,23 @@ import tempfile
 import json
 import traceback
 import time as time_module
+import aiohttp
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+
+
+@asynccontextmanager
+async def _safe_http(**kwargs):
+    session = aiohttp.ClientSession(**kwargs)
+    try:
+        yield session
+    finally:
+        await session.close()
+        await asyncio.sleep(0)
+
 
 # Per-user Telegram message rate limiting (in-memory)
 _tg_rate_store: dict[int, list[float]] = {}
@@ -175,7 +188,7 @@ async def send_delegation_notification_async(chat_id, message_text):
             "text": message_text
         }
 
-        async with aiohttp.ClientSession() as session:
+        async with _safe_http() as session:
             async with session.post(url, json=data, timeout=aiohttp.ClientTimeout(total=10)) as response:
                 if response.status != 200:
                     logger.warning(f"Failed to send delegation notification: {response.status}")
@@ -677,7 +690,7 @@ async def chat_handler(message: Message):
             bot_token = message.bot.token
             file_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
 
-            async with aiohttp.ClientSession() as session_http:
+            async with _safe_http() as session_http:
                 async with session_http.get(file_url) as resp:
                     if resp.status == 200:
                         # Сохраняем во временный файл
@@ -758,7 +771,7 @@ async def chat_handler(message: Message):
                 file = await message.bot.get_file(message.document.file_id)
                 import aiohttp
                 file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
-                async with aiohttp.ClientSession() as session_http:
+                async with _safe_http() as session_http:
                     async with session_http.get(file_url) as resp:
                         if resp.status == 200:
                             raw = await resp.read()
@@ -776,7 +789,7 @@ async def chat_handler(message: Message):
                 file = await message.bot.get_file(message.document.file_id)
                 import aiohttp
                 file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
-                async with aiohttp.ClientSession() as session_http:
+                async with _safe_http() as session_http:
                     async with session_http.get(file_url) as resp:
                         if resp.status == 200:
                             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
@@ -804,7 +817,7 @@ async def chat_handler(message: Message):
                 file = await message.bot.get_file(message.document.file_id)
                 import aiohttp
                 file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
-                async with aiohttp.ClientSession() as session_http:
+                async with _safe_http() as session_http:
                     async with session_http.get(file_url) as resp:
                         if resp.status == 200:
                             with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp:
@@ -1274,7 +1287,7 @@ async def process_other_message(user_id, message, state):
         city_name = None
         try:
             import aiohttp
-            async with aiohttp.ClientSession() as geo_session:
+            async with _safe_http() as geo_session:
                 url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&accept-language=ru"
                 headers = {"User-Agent": "ASIBiont/1.0"}
                 async with geo_session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
