@@ -2357,9 +2357,13 @@
                                 // Постоянное сообщение (директор → агент, ответ агента)
                                 hideTypingIndicator();
                                 addMessage(data.text, 'ai');
-                                // Запоминаем текст чтобы _afterChatDone не показал снова при DB-синке
+                                // Запоминаем текст чтобы _afterChatDone и checkForNewMessages не показали снова
                                 if (!window._sseShownTexts) window._sseShownTexts = new Set();
-                                window._sseShownTexts.add((data.text || '').trim().replace(/\s+/g, ' '));
+                                let _sseCmpText = (data.text || '').trim();
+                                if (_sseCmpText.startsWith('{')) {
+                                    try { const _sp = JSON.parse(_sseCmpText); if (_sp.__agent && _sp.text) _sseCmpText = _sp.text; } catch(e) {}
+                                }
+                                window._sseShownTexts.add(_sseCmpText.replace(/\s+/g, ' ').trim());
                             } else {
                                 showTypingIndicator(data.text);
                             }
@@ -2371,8 +2375,34 @@
                             // done без final = агент ответил через persist (agent_handled), нет синтеза
                             if (evtSource) { evtSource.close(); evtSource = null; }
                             hideTypingIndicator();
-                            // Синкаем DB чтобы обновить таски/профиль
+                            // Синкаем DB чтобы получить interaction IDs (предотвращает дубли при polling)
                             setTimeout(async () => {
+                                try {
+                                    const _doneResp = await fetch('/api/interactions', { credentials: 'include', cache: 'no-store' });
+                                    if (_doneResp.ok) {
+                                        const _doneData = await _doneResp.json();
+                                        if (_doneData.interactions) {
+                                            const _sseShown = window._sseShownTexts || new Set();
+                                            const _norm = s => (s || '').trim().replace(/\s+/g, ' ');
+                                            _doneData.interactions.forEach(i => {
+                                                if (!displayedMessageIds.has(i.id)) {
+                                                    // Проверяем не нужно ли показать пропущенное сообщение
+                                                    let _cmpT = _norm(i.content || '');
+                                                    if ((i.content || '').trim().startsWith('{')) {
+                                                        try { const _p = JSON.parse(i.content); if (_p.__agent && _p.text) _cmpT = _norm(_p.text); } catch(e) {}
+                                                    }
+                                                    if (!_sseShown.has(_cmpT) && (i.message_type === 'ai' || i.message_type === 'agent_msg' || i.message_type === 'proactive')) {
+                                                        addMessage(i.content, i.message_type, i.created_at, i.id);
+                                                    }
+                                                    displayedMessageIds.add(i.id);
+                                                }
+                                            });
+                                            window._sseShownTexts = new Set();
+                                            window._pendingUserMsgText = null;
+                                            lastMessageCount = _doneData.interactions.length;
+                                        }
+                                    }
+                                } catch(e) {}
                                 try { await updateTasks(); await updateProfile(); await updatePeople(); await loadGoalsProgress(); } catch(e) {}
                             }, 500);
                             window.sendingMessage = false;

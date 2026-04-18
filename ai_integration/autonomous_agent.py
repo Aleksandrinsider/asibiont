@@ -10653,8 +10653,15 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _md_resp_text = _md_resp_text.strip()
                 if _md_resp_text and _md_resp_text[0].islower():
                     _md_resp_text = _md_resp_text[0].upper() + _md_resp_text[1:]
-                await _send_visible(_md_resp_text)
-                _save_interaction_for_director(user_id, _md_resp_text, message_type='ai')
+                # Оборачиваем ответ агента в __agent JSON (аналогично single-delegate)
+                _md_ag_id = _md_ag.get('id')
+                _md_av_url = f'/api/arena/agent_avatar/{_md_ag_id}' if _md_ag_id else ''
+                _md_ac = _json.dumps({
+                    '__agent': {'name': _md_ag.get('name'), 'id': _md_ag_id, 'avatar_url': _md_av_url},
+                    'text': _md_resp_text,
+                }, ensure_ascii=False)
+                await _send_visible(_md_ac)
+                _save_interaction_for_director(user_id, _md_ac)
         return '__agent_handled__'
 
     # ── self: возвращаем None → управление идёт в process_request с tool-calling ──
@@ -10836,8 +10843,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     if _fu_final_text:
                         if _fu_final_text[0].islower():
                             _fu_final_text = _fu_final_text[0].upper() + _fu_final_text[1:]
-                        await _send_visible(_fu_final_text)
-                        _save_interaction_for_director(user_id, _fu_final_text, message_type='ai')
+                        _fu_ac = _json.dumps({
+                            '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                            'text': _fu_final_text,
+                        }, ensure_ascii=False)
+                        await _send_visible(_fu_ac)
+                        _save_interaction_for_director(user_id, _fu_ac)
             except Exception as _fu_err:
                 logger.warning("[DIRECTOR] followup error: %s", _fu_err)
 
@@ -10866,8 +10877,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             _final_report = _final_report.strip()
             if _final_report[0].islower():
                 _final_report = _final_report[0].upper() + _final_report[1:]
-            await _send_visible(_final_report)
-            _save_interaction_for_director(user_id, _final_report, message_type='ai')
+            _fr_ac = _json.dumps({
+                '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
+                'text': _final_report,
+            }, ensure_ascii=False)
+            await _send_visible(_fr_ac)
+            _save_interaction_for_director(user_id, _fr_ac)
 
     # Сохраняем контекст всех раундов делегирования
     _all_results = ' | '.join(r['result'][:200] for r in _round_history)
