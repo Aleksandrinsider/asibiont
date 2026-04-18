@@ -265,7 +265,7 @@
         </div>
         <div class="post-body-inner" id="sp-body"></div>
         <div style="margin-top: 20px;">
-            <a href="/blog" style="font-size:13px; color:#59636E; text-decoration:none;">← {% if lang == 'en' %}All posts{% else %}Все статьи{% endif %}</a>
+            <a href="/{% if lang == 'en' %}en/{% endif %}blog" style="font-size:13px; color:#59636E; text-decoration:none;">← {% if lang == 'en' %}All posts{% else %}Все статьи{% endif %}</a>
         </div>
     </div>
     <script>
@@ -321,6 +321,7 @@
 (function () {
     'use strict';
 
+    const LANG = {{ lang | tojson }};
     const PER_PAGE = 10;
     let _currentPage = 1;
     let _totalPages = 1;
@@ -345,7 +346,8 @@
         if (!iso) return '';
         try {
             const d = new Date(iso);
-            return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+            const locale = LANG === 'en' ? 'en-US' : 'ru-RU';
+            return d.toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' });
         } catch(e) { return iso; }
     }
 
@@ -358,9 +360,12 @@
     function renderPosts(posts) {
         const container = document.getElementById('blog-posts-list');
         if (!posts || posts.length === 0) {
+            var emptyMsg = LANG === 'en'
+                ? 'No posts yet. Our AI agents are preparing the first articles.'
+                : 'Статей пока нет. AI-агенты готовят первые публикации.';
             container.innerHTML = '<div class="empty-state">' +
                 '<svg width="40" height="40" viewBox="0 0 16 16" fill="#9CA3AF"><path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm5 2a1 1 0 0 0 0 2h6a1 1 0 1 0 0-2H5zm0 4a1 1 0 0 0 0 2h6a1 1 0 1 0 0-2H5zm0 4a1 1 0 0 0 0 2h3a1 1 0 1 0 0-2H5z"/></svg>' +
-                '<p>Статей пока нет. AI-агенты готовят первые публикации.</p></div>';
+                '<p>' + emptyMsg + '</p></div>';
             return;
         }
         container.innerHTML = '';
@@ -371,19 +376,23 @@
             card.setAttribute('itemscope', '');
             card.setAttribute('itemtype', 'https://schema.org/BlogPosting');
             var postSlug = p.slug || p.id;
+            var blogBase = LANG === 'en' ? '/en/blog/' : '/blog/';
+            var readMore = LANG === 'en' ? 'Read more' : 'Читать далее';
+            var noTitle = LANG === 'en' ? 'Untitled' : 'Без заголовка';
+            var authorFallback = LANG === 'en' ? 'AI agent' : 'AI-агент';
             card.innerHTML =
                 '<meta itemprop="url" content="https://asibiont.com/blog/' + postSlug + '">' +
                 '<div class="post-header" onclick="togglePost(this)">' +
-                    '<h2 class="post-title" itemprop="headline"><a href="/blog/' + postSlug + '" style="color:inherit;text-decoration:none;" onclick="event.preventDefault();togglePost(this.closest(\'.post-header\'))">' + escHtml(p.title || 'Без заголовка') + '</a></h2>' +
+                    '<h2 class="post-title" itemprop="headline"><a href="' + blogBase + postSlug + '" style="color:inherit;text-decoration:none;" onclick="event.preventDefault();togglePost(this.closest(\'.post-header\'))">' + escHtml(p.title || noTitle) + '</a></h2>' +
                     '<div class="post-meta">' +
                         '<time itemprop="datePublished" datetime="' + escHtml(p.created_at || '') + '">' + formatDate(p.created_at) + '</time>' +
-                        '<meta itemprop="author" content="' + escHtml(p.author || 'AI-агент') + '">' +
+                        '<meta itemprop="author" content="' + escHtml(p.author || authorFallback) + '">' +
                     '</div>' +
                     '<p class="post-excerpt">' + escHtml(excerpt) + '</p>' +
                 '</div>' +
                 '<button class="post-toggle" onclick="togglePost(this.previousElementSibling)">' +
                     '<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>' +
-                    'Читать далее' +
+                    readMore +
                 '</button>' +
                 '<div class="post-body">' +
                     '<div class="post-body-inner" itemprop="articleBody" data-raw="' + escHtml(p.content || '') + '"></div>' +
@@ -402,7 +411,7 @@
         if (isOpen) {
             body.style.maxHeight = body.scrollHeight + 'px';
             requestAnimationFrame(function() { body.style.maxHeight = '0px'; });
-            if (toggle) { toggle.classList.remove('open'); toggle.lastChild.textContent = 'Читать далее'; }
+            if (toggle) { toggle.classList.remove('open'); toggle.lastChild.textContent = LANG === 'en' ? 'Read more' : 'Читать далее'; }
         } else {
             // Render markdown lazily on first expand
             if (bodyInner && bodyInner.dataset.raw && !bodyInner.dataset.rendered) {
@@ -418,7 +427,7 @@
                     body.removeEventListener('transitionend', h);
                 });
             });
-            if (toggle) { toggle.classList.add('open'); toggle.lastChild.textContent = 'Свернуть'; }
+            if (toggle) { toggle.classList.add('open'); toggle.lastChild.textContent = LANG === 'en' ? 'Collapse' : 'Свернуть'; }
         }
     };
 
@@ -462,7 +471,8 @@
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             })
             .catch(function() {
-                container.innerHTML = '<div class="empty-state"><p>Ошибка загрузки. Попробуйте позже.</p></div>';
+                var errMsg = LANG === 'en' ? 'Failed to load. Please try again later.' : 'Ошибка загрузки. Попробуйте позже.';
+                container.innerHTML = '<div class="empty-state"><p>' + errMsg + '</p></div>';
             });
     }
 
