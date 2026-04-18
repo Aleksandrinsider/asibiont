@@ -107,9 +107,22 @@
 
     <url>
         <loc>https://asibiont.com/arena</loc>
-        <lastmod>2026-03-12</lastmod>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/arena"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://asibiont.com/en/arena"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://asibiont.com/arena"/>
+        <lastmod>2026-04-18</lastmod>
         <changefreq>daily</changefreq>
         <priority>0.8</priority>
+    </url>
+
+    <url>
+        <loc>https://asibiont.com/en/arena</loc>
+        <xhtml:link rel="alternate" hreflang="ru" href="https://asibiont.com/arena"/>
+        <xhtml:link rel="alternate" hreflang="en" href="https://asibiont.com/en/arena"/>
+        <xhtml:link rel="alternate" hreflang="x-default" href="https://asibiont.com/arena"/>
+        <lastmod>2026-04-18</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.7</priority>
     </url>
 
 </urlset>

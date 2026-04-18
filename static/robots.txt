@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 Allow: /static/
 Allow: /subscription-tiers
-Allow: /tutorial
+Allow: /arena
 Allow: /faq
 Disallow: /admin/
 Disallow: /api/

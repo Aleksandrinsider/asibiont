@@ -1,8 +1,8 @@
 {
   "name": "ASI Biont",
   "short_name": "ASI Biont",
-  "description": "Платформа AI-агентов: 52 интеграции, AI Arena, Telegram + Discord + Web",
-  "start_url": "/dashboard",
+  "description": "Платформа AI-агентов: 60 интеграций, AI Arena, Telegram + Discord + Web",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone"],

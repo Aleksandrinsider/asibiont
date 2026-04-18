@@ -13311,6 +13311,9 @@ async def login_handler_en(request):
 async def faq_handler_en(request):
     return aiohttp_jinja2.render_template('faq.html', request, {'lang': 'en'})
 
+async def arena_public_handler_en(request):
+    return aiohttp_jinja2.render_template('arena_public.html', request, {'lang': 'en'})
+
 async def subscription_tiers_handler_en(request):
     # EN = только USDT (крипто)
     flags = {
@@ -13322,6 +13325,7 @@ async def subscription_tiers_handler_en(request):
 app.router.add_get('/en', login_handler_en)
 app.router.add_get('/en/', login_handler_en)
 app.router.add_get('/en/faq', faq_handler_en)
+app.router.add_get('/en/arena', arena_public_handler_en)
 app.router.add_get('/en/subscription-tiers', subscription_tiers_handler_en)
 app.router.add_get('/en/subscription_tiers', subscription_tiers_handler_en)
 app.router.add_static('/static', 'static')

@@ -14,7 +14,7 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://asibiont.com/subscription-tiers">
+    <meta property="og:url" content="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/subscription-tiers">
     <meta property="og:title" content="{% if lang == 'en' %}ASI Biont Tokens — AI Partner That Never Sleeps{% else %}Токены ASI Biont — AI-партнёр, который не спит{% endif %}">
     <meta property="og:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).{% endif %}">
     <meta property="og:image" content="https://asibiont.com/static/asibiont-pricing.png">
@@ -25,7 +25,11 @@
     <meta name="twitter:description" content="{% if lang == 'en' %}All features unlocked. Pay only for what you use. 1 token = $0.01 USDT. Packages: $15, $50 (+10%), $500 (+20%).{% else %}Все функции открыты. Платите только за использование. 1 токен = 1₽. Пакеты: 1 500₽, 5 000₽ (+10%), 50 000₽ (+20%).{% endif %}">
     <meta name="twitter:image" content="https://asibiont.com/static/asibiont-pricing.png">
 
+    <link rel="icon" type="image/svg+xml" href="/static/asibiont.svg">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#ffffff">
     <link rel="canonical" href="https://asibiont.com{% if lang == 'en' %}/en{% endif %}/subscription-tiers">
     <link rel="alternate" hreflang="ru" href="https://asibiont.com/subscription-tiers">
     <link rel="alternate" hreflang="en" href="https://asibiont.com/en/subscription-tiers">
@@ -116,10 +120,10 @@
 </head>
 <body class="subscription-page">
     <div class="pricing-container">
-        <a href="/dashboard" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">← На главную</a>
+        <a href="/dashboard" style="display: inline-block; color: #59636E; text-decoration: none; font-size: 13px; margin-bottom: 24px;" onmouseover="this.style.color='#1F2328'" onmouseout="this.style.color='#59636E'">{% if lang == 'en' %}← Back{% else %}← На главную{% endif %}</a>
         <div class="pricing-card">
             <div style="text-align: center; margin-bottom: 24px;">
-                <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">Пополните баланс токенов</h1>
+                <h1 style="margin: 0 0 12px 0; font-size: 24px; font-weight: 600; color: #374151;">{% if lang == 'en' %}Top Up Token Balance{% else %}Пополните баланс токенов{% endif %}</h1>
                 <div style="font-size: 13px; color: #6C727F; line-height: 1.6; max-width: 720px; margin: 0 auto 8px auto;">
                     {% if show_yookassa %}Все функции открыты для всех. Платите только за использование. 1 токен = 1 рубль.{% else %}All features unlocked from the start. Pay only for what you use. 1 token = $0.01 USDT.{% endif %}
                 </div>
