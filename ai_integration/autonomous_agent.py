@@ -10877,7 +10877,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         f"Использованные инструменты: {_agent_did}\n"
                         f"Результат агента (уже видим пользователю): {_round_history[-1]['result'][:300] if _round_history else ''}\n\n"
                         f"Напиши 1-2 предложения от лица директора — что ты делаешь ДАЛЬШЕ. "
-                        f"НЕ пересказывай что делал агент. Без markdown, без списков."
+                        f"НЕ пересказывай что делал агент. Без markdown, без списков.\n"
+                        f"⚠️ ЗАПРЕЩЕНО: НЕ выдумывай 'отдел продаж', 'аналитиков', 'команду разработчиков', "
+                        f"'внутреннюю команду' или других людей которых НЕТ. "
+                        f"Есть только ТЫ (ASI) и АГЕНТЫ из списка выше. Все действия делаешь сам или через агентов."
                     ),
                 }], max_tokens=150, _caller='director_followup')
                 if _fu_final_text and len(_fu_final_text.strip()) > 10:
@@ -10916,7 +10919,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f"по задаче: {user_message[:200]}\n\n"
                 f"Результаты:\n{_rounds_summary_final}\n\n"
                 f"Напиши краткий итоговый доклад пользователю (3-4 предложения): "
-                f"что сделано, какие результаты, что дальше. Без markdown."
+                f"что сделано, какие результаты, что дальше. Без markdown.\n"
+                f"⚠️ ЗАПРЕЩЕНО: НЕ выдумывай 'отдел продаж', 'аналитиков', 'внутреннюю команду'. "
+                f"Есть только ты (ASI) и агенты."
             ),
         }], max_tokens=250)
         if _final_report and len(_final_report.strip()) > 10:
