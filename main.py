@@ -13206,6 +13206,7 @@ async def _static_sitemap(request):
         ('https://asibiont.com/faq', '0.8', 'monthly'),
         ('https://asibiont.com/en/faq', '0.7', 'monthly'),
         ('https://asibiont.com/blog', '0.8', 'daily'),
+        ('https://asibiont.com/en/blog', '0.8', 'daily'),
         ('https://asibiont.com/arena', '0.7', 'daily'),
         ('https://asibiont.com/privacy', '0.5', 'monthly'),
         ('https://asibiont.com/terms', '0.5', 'monthly'),
@@ -13226,12 +13227,15 @@ async def _static_sitemap(request):
             posts = _s.query(Note.id, Note.slug, Note.title, Note.created_at).filter_by(source='blog').order_by(Note.created_at.desc()).all()
         for post_id, post_slug, post_title, created_at in posts:
             lastmod = created_at.date().isoformat() if created_at else today
-            # Генерируем slug на лету если не сохранён
             if not post_slug:
                 from ai_integration.handlers import _make_blog_slug
                 post_slug = _make_blog_slug(post_title or 'post', post_id)
             loc = f'https://asibiont.com/blog/{post_slug}'
-            lines.append(f'  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>')
+            loc_en = f'https://asibiont.com/en/blog/{post_slug}'
+            lines.append(f'  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority>'
+                         f'<xhtml:link rel="alternate" hreflang="ru" href="{loc}"/>'
+                         f'<xhtml:link rel="alternate" hreflang="en" href="{loc_en}"/>'
+                         f'<xhtml:link rel="alternate" hreflang="x-default" href="{loc}"/></url>')
     except Exception as _e:
         logger.warning(f'[SITEMAP] blog posts error: {_e}')
 
