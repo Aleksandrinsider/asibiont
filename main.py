@@ -9714,18 +9714,28 @@ async def api_profile_handler(request):
                         profile.city_normalized_ru = None
                 if 'country' in data:
                     profile.country = data['country'].strip() if data['country'] and data['country'].strip() else None
+                    profile.country_normalized = None
+                    profile.country_normalized_ru = None
                 if 'birthdate' in data:
                     profile.birthdate = data['birthdate'].strip() if data['birthdate'] and data['birthdate'].strip() else None
                 if 'zodiac_sign' in data:
                     profile.zodiac_sign = data['zodiac_sign'].strip() if data['zodiac_sign'] and data['zodiac_sign'].strip() else None
                 if 'company' in data:
                     profile.company = data['company'].strip() if data['company'] and data['company'].strip() else None
+                    profile.company_normalized = None
+                    profile.company_normalized_ru = None
                 if 'position' in data:
                     profile.position = data['position'].strip() if data['position'] and data['position'].strip() else None
+                    profile.position_normalized = None
+                    profile.position_normalized_ru = None
                 if 'interests' in data:
                     profile.interests = data['interests'].strip() if data['interests'] and data['interests'].strip() else None
+                    profile.interests_normalized = None
+                    profile.interests_normalized_ru = None
                 if 'skills' in data:
                     profile.skills = data['skills'].strip() if data['skills'] and data['skills'].strip() else None
+                    profile.skills_normalized = None
+                    profile.skills_normalized_ru = None
                 if 'goals' in data:
                     import re as _re
                     new_goals_text = data['goals'].strip() if data['goals'] and data['goals'].strip() else None
@@ -9735,6 +9745,8 @@ async def api_profile_handler(request):
                     _new_parts = [g.strip() for g in _re.split(r'[;,]', new_goals_text or '') if g.strip() and len(g.strip()) > 2]
                     _new_parts_lower = {g.lower() for g in _new_parts}
                     profile.goals = new_goals_text
+                    profile.goals_normalized = None
+                    profile.goals_normalized_ru = None
                     # Sync goals text → Goal objects (create missing, delete removed)
                     _existing_goals = session_db.query(Goal).filter(
                         Goal.user_id == user.id,
@@ -9762,10 +9774,14 @@ async def api_profile_handler(request):
                             logger.info(f"[API PROFILE] Auto-created goal '{_gtitle}' for user {user_id}")
                 if 'status_text' in data:
                     profile.status_text = data['status_text'].strip()[:100] if data['status_text'] and data['status_text'].strip() else None
+                    profile.status_text_normalized = None
+                    profile.status_text_normalized_ru = None
                 if 'website' in data:
                     profile.website = data['website'].strip()[:500] if data['website'] and data['website'].strip() else None
                 if 'bio' in data:
                     profile.bio = data['bio'].strip() if data['bio'] and data['bio'].strip() else None
+                    profile.bio_normalized = None
+                    profile.bio_normalized_ru = None
                 if 'content_strategy' in data:
                     profile.content_strategy = data['content_strategy'].strip() if data['content_strategy'] and data['content_strategy'].strip() else None
                 if 'gender' in data:
