@@ -5646,21 +5646,24 @@ class AnchorEngine:
             if feed_posts and post_count < MAX_FEED_PER_DAY:
                 for pa in feed_posts[:1]:
                     async with self._ai_semaphore:
-                        await self._process_post_anchor(user, pa, session)
+                        await asyncio.wait_for(
+                            self._process_post_anchor(user, pa, session), timeout=60)
 
             # ── 3d. CHANNEL POSTS — отдельный лимит ──
             channel_posts = [a for a in post_anchors if a.anchor_type == 'channel_post']
             if channel_posts and channel_count < MAX_CHANNEL_PER_DAY:
                 for pa in channel_posts[:1]:
                     async with self._ai_semaphore:
-                        await self._process_post_anchor(user, pa, session)
+                        await asyncio.wait_for(
+                            self._process_post_anchor(user, pa, session), timeout=60)
 
             # ── 3e. DISCORD POSTS — автономный постинг в Discord-канал ──
             discord_posts = [a for a in post_anchors if a.anchor_type == 'discord_post']
             if discord_posts and discord_count < MAX_CHANNEL_PER_DAY:
                 for pa in discord_posts[:1]:
                     async with self._ai_semaphore:
-                        await self._process_post_anchor(user, pa, session)
+                        await asyncio.wait_for(
+                            self._process_post_anchor(user, pa, session), timeout=60)
           except Exception as _post_err:
             logger.error(f"[ANCHOR] User {user_id}: post processing error: {_post_err}")
             try:
@@ -5692,7 +5695,10 @@ class AnchorEngine:
                     if _ea_idx > 0:
                         await asyncio.sleep(5)  # Краткая задержка между email-якорями
                     async with self._ai_semaphore:
-                        await self._process_email_silent_anchor(user, ea, session)
+                        await asyncio.wait_for(
+                            self._process_email_silent_anchor(user, ea, session),
+                            timeout=60,
+                        )
                 except Exception as _ea_err:
                     logger.error(f"[ANCHOR] User {user_id}: email anchor #{_ea_idx} error: {_ea_err}")
                     try:
@@ -5708,7 +5714,10 @@ class AnchorEngine:
                     if _cc_idx > 0:
                         await asyncio.sleep(3)
                     async with self._ai_semaphore:
-                        await self._process_content_campaign_anchor(user, cc, session)
+                        await asyncio.wait_for(
+                            self._process_content_campaign_anchor(user, cc, session),
+                            timeout=60,
+                        )
                 except Exception as _cc_err:
                     logger.error(f"[ANCHOR] User {user_id}: content anchor #{_cc_idx} error: {_cc_err}")
                     try:
@@ -5726,7 +5735,10 @@ class AnchorEngine:
                     if _dc_idx > 0:
                         await asyncio.sleep(5)
                     async with self._ai_semaphore:
-                        await self._process_delegation_campaign_anchor(user, dc, session)
+                        await asyncio.wait_for(
+                            self._process_delegation_campaign_anchor(user, dc, session),
+                            timeout=60,
+                        )
                 except Exception as _dc_err:
                     logger.error(f"[ANCHOR] User {user_id}: delegation anchor #{_dc_idx} error: {_dc_err}")
                     try:
@@ -8570,7 +8582,7 @@ class AnchorEngine:
                         _exec_agent_for_director(
                             agent_data, _task_trimmed, user.telegram_id,
                         ),
-                        timeout=450,
+                        timeout=120,
                     )
                 except (asyncio.TimeoutError, Exception) as _ai_err:
                     logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
@@ -10272,7 +10284,7 @@ class AnchorEngine:
                 _exec_agent_for_director(
                     _next_data, _next_task, user.telegram_id, dialog_context=_ctx,
                 ),
-                timeout=450,
+                timeout=120,
             )
             _next_result = _next_raw[0] if isinstance(_next_raw, (tuple, list)) else _next_raw
             _next_result = re.sub(r'\n{2,}', '\n', (_next_result or '')).strip()
@@ -16282,15 +16294,15 @@ class AnchorEngine:
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=450,
+                        timeout=120,
                     )
                 except asyncio.TimeoutError:
-                    _ae_msg = f'Таймаут 450с — агент не завершил цикл, но выполненные действия сохранены'
-                    logger.warning("[COORD] agent %s timeout after 450s", _ag_name)
+                    _ae_msg = f'Таймаут 120с — агент не завершил цикл, но выполненные действия сохранены'
+                    logger.warning("[COORD] agent %s timeout after 120s", _ag_name)
                     self._cancel_agent_task(
                         session,
                         _step_task_id,
-                        'timeout_300s',
+                        'timeout_120s',
                         _ae_msg,
                         ['Сократить задачу до 1 конкретного действия', 'Сменить инструмент или канал'],
                     )
@@ -16402,7 +16414,7 @@ class AnchorEngine:
                         try:
                             _raw_retry = await asyncio.wait_for(
                                 _exec_agent_for_director(_ag_data, _retry_prompt, user.telegram_id),
-                                timeout=450,
+                                timeout=120,
                             )
                             _result_retry = _raw_retry[0] if isinstance(_raw_retry, (tuple, list)) else _raw_retry
                             _retry_tools = list(_raw_retry[1]) if isinstance(_raw_retry, (tuple, list)) and len(_raw_retry) > 1 else []
@@ -16506,7 +16518,7 @@ class AnchorEngine:
                     try:
                         _raw_value_retry = await asyncio.wait_for(
                             _exec_agent_for_director(_ag_data, _value_retry_prompt, user.telegram_id),
-                            timeout=450,
+                            timeout=120,
                         )
                         _value_result = _raw_value_retry[0] if isinstance(_raw_value_retry, (tuple, list)) else _raw_value_retry
                         _value_tools = list(_raw_value_retry[1]) if isinstance(_raw_value_retry, (tuple, list)) and len(_raw_value_retry) > 1 else []

@@ -1056,7 +1056,7 @@ async def _get_quick_ai_session() -> aiohttp.ClientSession:
             _connector = aiohttp.TCPConnector(limit=5, enable_cleanup_closed=True)
             _QUICK_AI_SESSION = aiohttp.ClientSession(
                 connector=_connector,
-                timeout=aiohttp.ClientTimeout(total=180, connect=15, sock_read=170)
+                timeout=aiohttp.ClientTimeout(total=90, connect=15, sock_read=80)
             )
             _QUICK_AI_SESSION_CREATED = _now
             logger.debug("[AI] Created new quick (background) AI session")
@@ -1083,7 +1083,7 @@ async def _get_shared_ai_session() -> aiohttp.ClientSession:
             _shared_connector = aiohttp.TCPConnector(limit=max(_MAX_CONCURRENT_AI, 20), enable_cleanup_closed=True)
             _SHARED_AI_SESSION = aiohttp.ClientSession(
                 connector=_shared_connector,
-                timeout=aiohttp.ClientTimeout(total=180, connect=15, sock_read=170)
+                timeout=aiohttp.ClientTimeout(total=90, connect=15, sock_read=80)
             )
             _SHARED_AI_SESSION_CREATED = _now
             logger.debug("[AI] Created new shared AI session")
