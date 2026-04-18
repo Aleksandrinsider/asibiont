@@ -11577,13 +11577,30 @@ class AnchorEngine:
             try:
                 _chat_ints = session.query(Interaction).filter(
                     Interaction.user_id == user.id,
-                    Interaction.message_type.in_(['user', 'ai']),
-                ).order_by(Interaction.id.desc()).limit(6).all()
+                    Interaction.message_type.in_(['user', 'ai', 'proactive', 'agent_msg']),
+                ).order_by(Interaction.id.desc()).limit(10).all()
                 if _chat_ints:
                     _chat_lines = []
                     for _ci in reversed(_chat_ints):
-                        _role = 'Пользователь' if _ci.message_type == 'user' else 'ASI'
-                        _txt = (_ci.content or '')[:200].strip()
+                        if _ci.message_type == 'user':
+                            _role = 'Пользователь'
+                            _txt = (_ci.content or '')[:200].strip()
+                        elif _ci.message_type == 'ai':
+                            _role = 'ASI'
+                            _txt = (_ci.content or '')[:200].strip()
+                        elif _ci.message_type in ('proactive', 'agent_msg'):
+                            # Extract agent name and text from JSON
+                            try:
+                                import json as _jchat
+                                _jc = _jchat.loads(_ci.content or '{}')
+                                _agent_name = (_jc.get('__agent') or {}).get('name', 'Агент')
+                                _txt = (_jc.get('text') or '')[:200].strip()
+                                _role = _agent_name
+                            except Exception:
+                                _txt = (_ci.content or '')[:200].strip()
+                                _role = 'Агент'
+                        else:
+                            continue
                         if _txt:
                             _chat_lines.append(f"  {_role}: {_txt}")
                     _recent_chat_str = '\n'.join(_chat_lines)
