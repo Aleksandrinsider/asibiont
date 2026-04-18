@@ -8563,9 +8563,40 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             logger.warning(f"[CREATE_POST] Discord cross-post error: {_dce}")
 
         cross_line = (" + " + " + ".join(cross_notes)) if cross_notes else ""
+
+        # Создаём блог-пост (Note source='blog') с прямой ссылкой /blog/{slug}
+        _blog_url = 'https://asibiont.com/dashboard'
+        try:
+            from models import Note as _NoteCP
+            _blog_title = content.strip().split('\n')[0][:120].strip()
+            if not _blog_title or len(_blog_title) < 5:
+                _blog_title = post_preview
+            _blog_note = _NoteCP(
+                user_id=user.id,
+                title=_blog_title,
+                content=content.strip(),
+                source='blog',
+            )
+            session.add(_blog_note)
+            session.commit()
+            _blog_note.slug = _make_blog_slug(_blog_title, _blog_note.id)
+            session.commit()
+            _blog_url = f'https://asibiont.com/blog/{_blog_note.slug}'
+            logger.info(f"[CREATE_POST] Blog note created: id={_blog_note.id}, slug={_blog_note.slug!r}")
+            # Fire-and-forget EN translation
+            try:
+                import asyncio as _aio_cp
+                _aio_cp.get_running_loop().create_task(
+                    _translate_blog_post_to_en(_blog_note.id, _blog_title, content.strip())
+                )
+            except Exception:
+                pass
+        except Exception as _bn_err:
+            logger.warning(f"[CREATE_POST] Blog note creation failed: {_bn_err}")
+
         return (
             f" Пост #{_post_id} опубликован в блог{cross_line}!{' ' if has_img else ''}\n\n"
-            f"«{post_preview}»\n\nСсылка на блог: https://asibiont.com/dashboard"
+            f"«{post_preview}»\n\nСсылка на блог: {_blog_url}"
         )
         
     except Exception as e:
@@ -8617,7 +8648,7 @@ async def edit_post(new_content: str, user_id: int, post_id: int = None, session
         
         new_preview = new_content[:80] + '...' if len(new_content) > 80 else new_content
         logger.info(f"[EDIT_POST] User {user_id} edited post #{post.id}")
-        return f" Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»\n\nСсылка на ленту: https://asibiont.com/dashboard"
+        return f" Пост #{post.id} обновлён!\n\nБыло: «{old_preview}»\nСтало: «{new_preview}»\n\nСсылка на ленту: https://asibiont.com/dashboard#feed"
         
     except Exception as e:
         logger.error(f"[EDIT_POST] Error: {e}", exc_info=True)
@@ -17426,6 +17457,10 @@ async def publish_to_discord(
         # Sanitize token hallucinations
         from ai_integration.conversation_history import sanitize_token_hallucinations
         content = sanitize_token_hallucinations(content)
+
+        # Discord лимит 2000 символов в content — обрезаем с многоточием
+        if len(content) > 2000:
+            content = content[:1997] + '…'
 
         # Если есть картинка — публикуем через embed
         if image_url:
