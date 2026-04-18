@@ -13223,6 +13223,11 @@ async def send_outreach_email(
                 except Exception:
                     pass
                 _msg_out.attach(_MimeOut(_body_smtp, 'plain', 'utf-8'))
+                try:
+                    _html_smtp_out = _build_email_html(_text_to_email_html(_body_smtp), sender_name=campaign.sender_name)
+                    _msg_out.attach(_MimeOut(_html_smtp_out, 'html', 'utf-8'))
+                except Exception:
+                    pass
                 _ctx_out = _ssl_out.create_default_context()
                 with _smtplib_out.SMTP(_smtp_creds_out['host'], _smtp_creds_out['port'], timeout=30) as _srv:
                     _srv.ehlo(); _srv.starttls(context=_ctx_out); _srv.ehlo()
@@ -13237,6 +13242,10 @@ async def send_outreach_email(
                     f"[EMAIL_OUTREACH] Sent via SMTP ({_smtp_creds_out['label']}) to {redact_email(recipient_email)}"
                 )
                 _smtp_sent_out = True
+                # Rate limit: Яндекс/Mail.ru ограничивают ~100 писем/час.
+                # 5с задержка предотвращает burst-блокировку аккаунта.
+                import asyncio as _aio_delay
+                await _aio_delay.sleep(5)
             except Exception as _smtp_out_err:
                 logger.warning(
                     f"[EMAIL_OUTREACH] SMTP ({_smtp_creds_out['label']}) failed: {_smtp_out_err} — falling back to Resend"
@@ -16345,13 +16354,13 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
         return ' '.join(result)
 
     def _imap_fetch():
+        mail = None
         try:
             mail = imaplib.IMAP4_SSL(imap_host, 993, timeout=15)
             mail.login(email_user, email_pass)
             mail.select('INBOX', readonly=True)
             _status, _nums = mail.search(None, 'ALL')
             if _status != 'OK' or not _nums[0]:
-                mail.logout()
                 return "Входящих писем нет."
             ids = _nums[0].split()
             ids = ids[-limit:]  # последние N
@@ -16449,7 +16458,6 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                     f"Дата: {date}\n"
                     f"Превью: {snippet}{_im_outreach_ctx}\n"
                 )
-            mail.logout()
             if not results:
                 return "Входящих писем нет."
             _known_cnt = len(skipped_known)
@@ -16462,8 +16470,17 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
             return f"Ошибка IMAP ({label}): {e}. Проверь пароль приложения."
         except Exception as e:
             return f"Ошибка при чтении почты ({label}): {e}"
+        finally:
+            if mail is not None:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
 
-    return await asyncio.get_running_loop().run_in_executor(None, _imap_fetch)
+    return await asyncio.wait_for(
+        asyncio.get_running_loop().run_in_executor(None, _imap_fetch),
+        timeout=60.0,
+    )
 
 
 async def send_email(

@@ -4333,9 +4333,8 @@ class AnchorEngine:
         self.running = False
         self._scan_locks = defaultdict(asyncio.Lock)
         # Семафор для AI-вызовов — ограничивает параллельные запросы к DeepSeek
-        # 12 = баланс между скоростью обработки 1000 юзеров и лимитами DeepSeek API
-        # (autonomous_agent использует 20, anchor engine — фоновый, поэтому чуть меньше)
-        self._ai_semaphore = asyncio.Semaphore(12)
+        # 20 = баланс между скоростью (15 юзеров в батче × 2-5 AI) и лимитами DeepSeek API
+        self._ai_semaphore = asyncio.Semaphore(20)
         logger.info("[ANCHOR] AnchorEngine initialized")
 
     # ═══════════════════════════════════════════════════════
@@ -4866,7 +4865,7 @@ class AnchorEngine:
 
         # ── PHASE 1+2: Параллельная обработка eligible пользователей ──
         # DB-scan безопасен при высоком параллелизме, AI ограничен семафором
-        BATCH_CONCURRENCY = 25
+        BATCH_CONCURRENCY = 15  # ≤ DB pool total (30) — each user needs 1-2 connections
         for i in range(0, len(eligible), BATCH_CONCURRENCY):
             batch = eligible[i:i + BATCH_CONCURRENCY]
             tasks = []
@@ -4882,12 +4881,22 @@ class AnchorEngine:
         """Обёртка с lock для безопасной параллельной обработки"""
         async with lock:
             try:
-                # Внешний таймаут: если _process_user завис (из-за orphaned aiohttp-соединений
-                # или LLM API не вернул ответ), принудительно завершаем через 60s.
-                # PostgreSQL statement_timeout должен быть >= 60s для долгих AI-запросов.
-                await asyncio.wait_for(self._process_user(user_id), timeout=60)
+                # Внешний таймаут: должен вмещать AI-координатор (до 120s) + tool calls.
+                # 180s = достаточно для полного цикла, но не даёт зависнуть навечно.
+                await asyncio.wait_for(self._process_user(user_id), timeout=180)
             except asyncio.TimeoutError:
-                logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 60s — lock released")
+                logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 180s — lock released")
+                # Timeout оставляет подвешенные TCP-соединения в AI-сессиях.
+                # Закрываем их — следующий вызов пересоздаст сессии с чистым пулом.
+                try:
+                    from ai_integration.autonomous_agent import (
+                        _QUICK_AI_SESSION, _SHARED_AI_SESSION,
+                    )
+                    for _s in (_QUICK_AI_SESSION, _SHARED_AI_SESSION):
+                        if _s is not None and not _s.closed:
+                            await _s.close()
+                except Exception:
+                    pass
             except Exception as e:
                 logger.error(f"[ANCHOR] Error processing user {user_id}: {e}")
 
