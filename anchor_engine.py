@@ -4913,7 +4913,7 @@ class AnchorEngine:
 
         async with lock:
             try:
-                await asyncio.wait_for(self._process_user(user_id), timeout=180)
+                await asyncio.wait_for(self._process_user(user_id), timeout=300)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
                 self._timeout_backoff_until.pop(user_id, None)
@@ -4923,9 +4923,9 @@ class AnchorEngine:
                 if _cnt >= 3:
                     # Backoff: 30 минут после 3+ таймаутов
                     self._timeout_backoff_until[user_id] = _time_cb.monotonic() + 1800
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 180s ({_cnt}x) — circuit breaker ON for 30min")
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 300s ({_cnt}x) — circuit breaker ON for 30min")
                 else:
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 180s ({_cnt}/3) — lock released")
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 300s ({_cnt}/3) — lock released")
                 # Закрываем подвешенные AI-сессии
                 try:
                     from ai_integration.autonomous_agent import (
@@ -4999,7 +4999,7 @@ class AnchorEngine:
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
         # чтобы НЕ допускать CancelledError от asyncio.wait_for.
         import time as _time_inner
-        _deadline = _time_inner.monotonic() + 160  # 160s — 20s запас до внешнего 180s
+        _deadline = _time_inner.monotonic() + 270  # 270s — 30s запас до внешнего 300s
 
         def _time_left():
             return _deadline - _time_inner.monotonic()
@@ -5752,9 +5752,10 @@ class AnchorEngine:
                     if _ea_idx > 0:
                         await asyncio.sleep(5)  # Краткая задержка между email-якорями
                     async with self._ai_semaphore:
+                        _ea_timeout = min(150, max(60, _time_left() - 20))
                         await asyncio.wait_for(
                             self._process_email_silent_anchor(user, ea, session),
-                            timeout=180,  # 3 drafts × (compose ~30s + retry ~30s) = 180s
+                            timeout=_ea_timeout,
                         )
                 except Exception as _ea_err:
                     logger.error(f"[ANCHOR] User {user_id}: email anchor #{ea.id} (idx={_ea_idx}) error: {type(_ea_err).__name__}: {_ea_err!r}")

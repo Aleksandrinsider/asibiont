@@ -212,6 +212,7 @@ class ExternalAPIClient:
         """Закрыть сессию (вызвать при завершении приложения)"""
         if self._session and not self._session.closed:
             await self._session.close()
+            await asyncio.sleep(0)  # SSL transport cleanup
             self._session = None
     
     def _track_call(self, api_name: str):

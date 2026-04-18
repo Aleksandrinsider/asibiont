@@ -1623,7 +1623,7 @@ async def _translate_fields(fields: dict, target_lang: str) -> dict | None:
     try:
         timeout = _aio_tr.ClientTimeout(total=70, connect=10)
         connector = _aio_tr.TCPConnector(force_close=True)
-        async with _aio_tr.ClientSession(timeout=timeout, connector=connector) as session_tr:
+        async with _safe_http(timeout=timeout, connector=connector) as session_tr:
             async with session_tr.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={

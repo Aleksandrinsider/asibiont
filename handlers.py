@@ -313,7 +313,7 @@ async def transcribe_audio(audio_file_path: str) -> str | None:
     if _WHISPER_BACKEND == "groq":
         try:
             url = "https://api.groq.com/openai/v1/audio/transcriptions"
-            async with _aiohttp.ClientSession() as sess:
+            async with __safe_http() as sess:
                 with open(audio_file_path, "rb") as f:
                     form = _aiohttp.FormData()
                     form.add_field("file", f, filename="voice.ogg", content_type="audio/ogg")
@@ -339,7 +339,7 @@ async def transcribe_audio(audio_file_path: str) -> str | None:
     if _WHISPER_BACKEND == "openai" or (_WHISPER_BACKEND == "groq" and _WHISPER_OPENAI_KEY):
         try:
             url = "https://api.openai.com/v1/audio/transcriptions"
-            async with _aiohttp.ClientSession() as sess:
+            async with __safe_http() as sess:
                 with open(audio_file_path, "rb") as f:
                     form = _aiohttp.FormData()
                     form.add_field("file", f, filename="voice.ogg", content_type="audio/ogg")
