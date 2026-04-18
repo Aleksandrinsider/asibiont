@@ -13232,10 +13232,11 @@ async def _static_sitemap(request):
                 post_slug = _make_blog_slug(post_title or 'post', post_id)
             loc = f'https://asibiont.com/blog/{post_slug}'
             loc_en = f'https://asibiont.com/en/blog/{post_slug}'
-            lines.append(f'  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority>'
-                         f'<xhtml:link rel="alternate" hreflang="ru" href="{loc}"/>'
-                         f'<xhtml:link rel="alternate" hreflang="en" href="{loc_en}"/>'
-                         f'<xhtml:link rel="alternate" hreflang="x-default" href="{loc}"/></url>')
+            hreflang = (f'<xhtml:link rel="alternate" hreflang="ru" href="{loc}"/>'
+                        f'<xhtml:link rel="alternate" hreflang="en" href="{loc_en}"/>'
+                        f'<xhtml:link rel="alternate" hreflang="x-default" href="{loc}"/>')
+            lines.append(f'  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority>{hreflang}</url>')
+            lines.append(f'  <url><loc>{loc_en}</loc><lastmod>{lastmod}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority>{hreflang}</url>')
     except Exception as _e:
         logger.warning(f'[SITEMAP] blog posts error: {_e}')
 
