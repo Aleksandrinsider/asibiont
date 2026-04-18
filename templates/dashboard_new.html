@@ -2013,6 +2013,11 @@
                     renderer.html = function(rawHtml) {
                         return escapeHtml(rawHtml);
                     };
+                    renderer.link = function(href, title, text) {
+                        const safeHref = (typeof href === 'string' ? href : (href && href.href) || '').replace(/^javascript:/i, '');
+                        const safeTitle = title ? ` title="${escapeHtml(title)}"` : '';
+                        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="color: #068487; text-decoration: underline;"${safeTitle}>${text}</a>`;
+                    };
                     let html = marked.parse(text, { renderer });
                     // Убираем пустые <p> (marked создаёт их при лишних пустых строках)
                     html = html.replace(/<p>\s*<\/p>/gi, '');
