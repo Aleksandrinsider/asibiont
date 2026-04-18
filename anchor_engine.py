@@ -5734,10 +5734,10 @@ class AnchorEngine:
                     async with self._ai_semaphore:
                         await asyncio.wait_for(
                             self._process_email_silent_anchor(user, ea, session),
-                            timeout=60,
+                            timeout=90,  # 3 черновика × ~30s = 90s макс
                         )
                 except Exception as _ea_err:
-                    logger.error(f"[ANCHOR] User {user_id}: email anchor #{_ea_idx} error: {_ea_err}")
+                    logger.error(f"[ANCHOR] User {user_id}: email anchor #{_ea_idx} error: {type(_ea_err).__name__}: {_ea_err!r}")
                     try:
                         session.rollback()
                     except Exception:
@@ -22685,7 +22685,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(25).all()
+                ).limit(3).all()  # макс 3 за один вызов: 3 × ~30s = 90s < outer wait_for(90s)
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
