@@ -13744,12 +13744,14 @@ class AnchorEngine:
                 "   'обработка платежей', 'сканирование кода' или другие features которых нет в контексте.\n"
                 "   Боль клиента = конкретная проблема ЦА (AI-разработчики, стартапы, автоматизация).\n"
                 "   Опирайся ТОЛЬКО на данные постов команды, описание цели и правила пользователя.\n"
-                "   🚫 ИСПОЛЬЗУЙ ТОЛЬКО АГЕНТОВ ИЗ ПРОФИЛЕЙ: прочитай блок ℹ️ ВОЗМОЖНОСТИ АГЕНТОВ выше.\n"
-                "   Там видны ВСЕ агенты: имена, специализации, интеграции. Есть только ОНИ — других людей НЕТ.\n"
-                "   НЕ выдумывай 'отдел продаж', 'команду разработчиков', 'менеджеров', 'техподдержку',\n"
-                "   если нет агента с такой специализацией в профилях выше.\n"
-                "   ✅ ПРАВИЛЬНО: 'поручение агенту Кристина (аналитик): метрики кампании' — читаешь специализацию из профиля.\n"
-                "   ❌ НЕПРАВИЛЬНО: 'коммуникация с отделом продаж' — нет агента 'отдел продаж' в профилях.\n"
+                f"   🚫 КРИТИЧНО — СУЩЕСТВУЮЩИЕ АГЕНТЫ (назначай задачи ТОЛЬКО им, ЗАПРЕЩЕНО выдумывать других):\n"
+                f"      {', '.join(p['name'] for p in _profiles)}\n"
+                f"   ⛔ В команде ТОЛЬКО эти {len(_profiles)} человек(а). НЕТ других агентов, менеджеров, отделов!\n"
+                f"   ❌ НЕ ВЫДУМЫВАЙ: 'Victoria', 'отдел продаж', 'команду разработчиков', 'техподдержку', 'дизайнеров'.\n"
+                f"   ✅ ИСПОЛЬЗУЙ ТОЛЬКО: {' ИЛИ '.join(p['name'] for p in _profiles)}.\n"
+                "   Прочитай блок ℹ️ ВОЗМОЖНОСТИ АГЕНТОВ выше — там видны ВСЕ агенты: имена, специализации, интеграции.\n"
+                "   ✅ ПРАВИЛЬНО: 'agent=\"Кристина\"' (читаешь имя из профиля выше).\n"
+                "   ❌ НЕПРАВИЛЬНО: 'agent=\"Victoria\"' (нет такого агента в профилях — это галлюцинация!).\n"
                 "1. ОЦЕНИ РЕЗУЛЬТАТЫ: что РЕАЛЬНО сделано? Конкретные действия: отправлено, опубликовано, создано, сохранено?\n"
                 "   Если за 2+ цикла нет КОНКРЕТНЫХ результатов (только 'исследовал', 'нашёл информацию') — это провал.\n"
                 "   Прочитай блок 🎯 КПД ТАКТИК — если completion rate тактики < 20% → НЕ ПОВТОРЯЙ её, дай ДРУГОЙ подход.\n"
@@ -13863,8 +13865,10 @@ class AnchorEngine:
                     for g in _goals[:5]
                 )
                 + "\n"
-                f"\nВерни JSON-массив из {_n_plan_steps} шагов — МИНИМУМ 1 шаг на каждого агента "
+                f"\nВерни JSON-массив из {_n_plan_steps} шагов — ОБЯЗАТЕЛЬНО МИНИМУМ 1 шаг на каждого агента "
                 f"({', '.join(p['name'] for p in _profiles)}).\n"
+                f"⚠️ КРИТИЧНО: массив ОБЯЗАН содержать {_n_plan_steps} элементов. Если меньше — план отклонён.\n"
+                f"⚠️ КАЖДОЕ имя из списка ({', '.join(p['name'] for p in _profiles)}) ОБЯЗАНО появиться в поле 'agent' хотя бы 1 раз.\n"
                 "Формат каждого шага: agent=имя, tool=snake_case, goal=точное_название, "
                 "reason=почему именно этот подход (объяснение стратегического выбора, 1-2 предложения), "
                 "task=ПОЛНОЕ задание (≥50 слов) для агента: 1) ЗАЧЕМ — факт из ситуации/истории (что произошло → почему этот шаг сейчас), "
@@ -14011,6 +14015,13 @@ class AnchorEngine:
                     _dedup_reason = 'cross-agent dup search' if _is_cross_dup else 'dup agent+tool+goal'
                     logger.info("[COORD] dedup (%s): skip %s/%s (goal=%s)", _dedup_reason, _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
+
+            # Diagnostic: проверяем что план достаточно большой после дедупликации
+            if len(_plan) < _n_real_agents:
+                logger.warning(
+                    "[COORD] ⚠️ Plan too small after dedup: %d steps for %d agents (requested %d) — backfill will activate",
+                    len(_plan), _n_real_agents, _n_plan_steps
+                )
 
             # ── Cross-agent task-text dedup: ловим семантически одинаковые задания даже при разных tool/goal ──
             # Пример: Марк→web_search "найди авторов dev.to" и Кристина→research_topic "найди авторов dev.to"
@@ -14542,6 +14553,9 @@ class AnchorEngine:
             # 1) Предупреждаем о рисках по агенту, но не выкидываем шаги без крайней причины
             # 2) Корректируем явно зацикленные инструменты, если их эмпирика слабая
             # 3) Валидируем action-имена run_agent_action по скрипту агента
+            # 4) CRITICAL: отбрасываем задачи для НЕСУЩЕСТВУЮЩИХ агентов (галлюцинации LLM)
+            _valid_agent_names = {p.get('name', '').strip() for p in _profiles if p.get('name', '').strip()}
+            _valid_agent_names_lower = {n.lower() for n in _valid_agent_names}
             _plan_normalized = []
             import re as _re_norm_plan
             for _p_norm in _plan:
@@ -14549,6 +14563,14 @@ class AnchorEngine:
                 _ag_norm_l = _ag_norm.lower()
                 _tool_norm = (_p_norm.get('tool') or '').strip().lower()
                 _task_norm = (_p_norm.get('task') or '').strip()
+
+                # GUARD: агент не существует → skip (LLM hallucination)
+                if _ag_norm_l not in _valid_agent_names_lower:
+                    logger.warning(
+                        "[COORD] ⛔ HALLUCINATED AGENT '%s' not in team (%s) — skipping step: %s",
+                        _ag_norm, list(_valid_agent_names), _task_norm[:100]
+                    )
+                    continue
 
                 if _ag_norm in _fully_blocked_agents:
                     logger.info("[COORD] normalize: fully-blocked warning for %s (step kept)", _ag_norm)
