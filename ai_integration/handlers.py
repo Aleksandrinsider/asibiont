@@ -891,7 +891,8 @@ def _make_blog_slug(title: str, note_id: int) -> str:
 async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> None:
     """Переводит заголовок и контент блог-поста на английский и сохраняет в title_en/content_en."""
     try:
-        from ai_integration.api_client import api_client
+        from ai_integration.api_client import get_api_client
+        _api_client = get_api_client()
         from models import Session, Note
 
         # Limit content passed to API to avoid huge token cost
@@ -904,7 +905,7 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
             f"TITLE: {title}\n\n"
             f"CONTENT:\n{content_truncated}"
         )
-        result = await api_client.deepseek_analyze(
+        result = await _api_client.deepseek_analyze(
             prompt=prompt,
             system_prompt="You are a professional translator. Return only valid JSON with keys 'title' and 'content'.",
             temperature=0.3,
