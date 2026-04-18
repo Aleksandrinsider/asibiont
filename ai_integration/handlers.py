@@ -13275,7 +13275,7 @@ async def send_outreach_email(
             if not RESEND_API_KEY:
                 return " SMTP/Gmail отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
             try:
-                async with __safe_http() as http:
+                async with _safe_http() as http:
                     # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
                     # _personal_resend_from: из user_api_keys агента (RESEND_FROM/SENDER_EMAIL/FROM_EMAIL)
                     from config import RESEND_FROM as _resend_from_cfg
@@ -13805,7 +13805,7 @@ async def reply_to_outreach_email(
             if _rt_gm_r and '@' in _rt_gm_r:
                 _gm_r_json['reply_to'] = [_rt_gm_r]
             try:
-                async with __safe_http() as _hgr:
+                async with _safe_http() as _hgr:
                     _rgr = await _hgr.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_rk_gm_r}', 'Content-Type': 'application/json'},
                         json=_gm_r_json, timeout=_aiohttp.ClientTimeout(total=15))
@@ -13859,7 +13859,7 @@ async def reply_to_outreach_email(
             _urk = _matched['resend_key']
             _uf = _matched.get('email_user') or sender_addr
             try:
-                async with __safe_http() as http:
+                async with _safe_http() as http:
                     resp = await http.post(
                         'https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk}', 'Content-Type': 'application/json'},
@@ -13882,7 +13882,7 @@ async def reply_to_outreach_email(
             if not RESEND_API_KEY:
                 return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
             try:
-                async with __safe_http() as http:
+                async with _safe_http() as http:
                     _fb_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
                                   'to': [to_clean], 'subject': subject, 'text': reply_body}
                     try:
@@ -14582,7 +14582,7 @@ async def send_follow_up_email(
             if _rt_gm_f and '@' in _rt_gm_f:
                 _gm_f_json['reply_to'] = [_rt_gm_f]
             try:
-                async with __safe_http() as _hgf:
+                async with _safe_http() as _hgf:
                     _rgf = await _hgf.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_rk_gm_f}', 'Content-Type': 'application/json'},
                         json=_gm_f_json, timeout=_aiohttp.ClientTimeout(total=15))
@@ -14629,7 +14629,7 @@ async def send_follow_up_email(
             _urk2 = _matched['resend_key']
             _uf2 = _matched.get('email_user') or sender_addr
             try:
-                async with __safe_http() as http2:
+                async with _safe_http() as http2:
                     resp2 = await http2.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk2}', 'Content-Type': 'application/json'},
                         json={'from': f"{sender_name} <{_uf2}>", 'to': [to_clean], 'subject': subject,
@@ -14649,7 +14649,7 @@ async def send_follow_up_email(
             if not RESEND_API_KEY:
                 return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
             try:
-                async with __safe_http() as http:
+                async with _safe_http() as http:
                     _fbu_json = {'from': f"{sender_name} <outreach@asibiont.com>",
                                  'to': [to_clean], 'subject': subject, 'text': body,
                                  'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}}
@@ -16708,7 +16708,7 @@ async def send_email(
             if _gmail_reply_to and '@' in _gmail_reply_to:
                 _gmail_json['reply_to'] = [_gmail_reply_to]
             try:
-                async with __safe_http() as _gm_http:
+                async with _safe_http() as _gm_http:
                     _gm_resp = await _gm_http.post(
                         'https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_srv_rk}', 'Content-Type': 'application/json'},
@@ -16875,7 +16875,7 @@ async def send_email(
                             break
                     if _resend_fallback_key and _resend_fallback_from:
                         try:
-                            async with __safe_http() as _fb_http:
+                            async with _safe_http() as _fb_http:
                                 _fb_resp = await _fb_http.post(
                                     'https://api.resend.com/emails',
                                     headers={
@@ -16915,7 +16915,7 @@ async def send_email(
             elif _chosen_integration.get('type') == 'resend':
                 # ── Отправка через личный Resend ключ пользователя ────────
                 _user_resend_key = _chosen_integration['resend_key']
-                async with __safe_http() as http:
+                async with _safe_http() as http:
                     from_header = f"{sender_name} <{sender_email}>"
                     resp = await http.post(
                         'https://api.resend.com/emails',
@@ -17436,7 +17436,7 @@ async def publish_to_discord(
         else:
             payload = {"content": content}
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             resp = await http.post(
                 user.discord_webhook,
                 json=payload,
@@ -17527,7 +17527,7 @@ async def publish_to_vk(
         if image_url:
             url += f"&attachments={urllib.parse.quote(image_url)}"
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
                 data = await resp.json()
 
@@ -17639,7 +17639,7 @@ async def publish_to_twitter(
             {**oauth_params, 'oauth_signature': signature}.items()
         )
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             async with http.post(
                 url,
                 json={"text": content},
@@ -17723,7 +17723,7 @@ async def publish_to_linkedin(
         import json as _json
 
         # Get user profile URN
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             async with http.get(
                 'https://api.linkedin.com/v2/userinfo',
                 headers={'Authorization': f'Bearer {li_token}'},
@@ -17749,7 +17749,7 @@ async def publish_to_linkedin(
             "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
         }
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             async with http.post(
                 'https://api.linkedin.com/v2/ugcPosts',
                 json=post_body,
@@ -17852,7 +17852,7 @@ async def publish_to_notion(
             "children": children[:100],
         }
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             async with http.post(
                 'https://api.notion.com/v1/pages',
                 json=page_data,
@@ -17942,7 +17942,7 @@ async def publish_to_youtube(
         if action == 'analytics':
             if not yt_channel:
                 return "YOUTUBE_CHANNEL_ID не указан. Добавьте в API-ключи агента."
-            async with __safe_http() as http:
+            async with _safe_http() as http:
                 async with http.get(
                     f'https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id={yt_channel}&key={yt_key}',
                     timeout=_aiohttp.ClientTimeout(total=10),
@@ -18034,7 +18034,7 @@ async def initiate_phone_call(
         auth = base64.b64encode(f"{twilio_sid}:{twilio_token}".encode()).decode()
         url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Calls.json"
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             async with http.post(
                 url,
                 data=urllib.parse.urlencode({
@@ -18146,7 +18146,7 @@ async def generate_image(
             "Prefer": "wait",  # ждём результат синхронно (до 60с)
         }
 
-        async with __safe_http() as http:
+        async with _safe_http() as http:
             # Запускаем генерацию
             resp = await http.post(
                 f"https://api.replicate.com/v1/models/{model}/predictions",

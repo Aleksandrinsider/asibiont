@@ -9007,7 +9007,7 @@ async def api_reports_handler(request):
                                 outreach_obj = session_db.query(EmailOutreach).filter_by(id=o_data['id']).first()
                                 if outreach_obj and outreach_obj.resend_id:
                                     try:
-                                        async with __safe_http() as http:
+                                        async with _safe_http() as http:
                                             resp = await http.get(
                                                 f'https://api.resend.com/emails/{outreach_obj.resend_id}',
                                                 headers={'Authorization': f'Bearer {RESEND_API_KEY}'},
@@ -9826,7 +9826,7 @@ async def api_profile_handler(request):
                     if webhook:
                         try:
                             import aiohttp as _aiohttp
-                            async with __safe_http() as _ws:
+                            async with _safe_http() as _ws:
                                 async with _ws.get(webhook) as _wr:
                                     if _wr.status == 200:
                                         _wd = await _wr.json()
@@ -11129,7 +11129,7 @@ async def resend_webhook_handler(request):
                         from config import RESEND_RECEIVING_API_KEY
                         if RESEND_RECEIVING_API_KEY:
                             import aiohttp as _aiohttp
-                            async with __safe_http() as http:
+                            async with _safe_http() as http:
                                 r = await http.get(
                                     f'https://api.resend.com/emails/receiving/{email_id}',
                                     headers={'Authorization': f'Bearer {RESEND_RECEIVING_API_KEY}'},
@@ -11347,7 +11347,7 @@ async def resend_webhook_handler(request):
                                 from config import BOT_TOKEN
                                 if BOT_TOKEN:
                                     import aiohttp as _aiohttp
-                                    async with __safe_http() as http:
+                                    async with _safe_http() as http:
                                         await http.post(
                                             f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage',
                                             json={'chat_id': _reply_user.telegram_id, 'text': tg_text, 'parse_mode': 'HTML'},
