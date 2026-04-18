@@ -1179,14 +1179,76 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
             if _agent_handled:
                 logger.info(f"[PTM] Agent handled for user {user_id}, skipping ASI response")
             else:
-                # Plain text: Telegram сам распознаёт URL и @mentions
-                # Разбиваем длинный ответ на части (Telegram лимит 4096)
-                if len(response_text) > 4000:
-                    chunks = [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]
-                    for chunk in chunks:
-                        await message.bot.send_message(message.chat.id, chunk)
+                # ── Обработка markdown изображений: ![текст](url) → send_photo(url, caption=текст) ──
+                # Markdown изображения не поддерживаются в Telegram напрямую — извлекаем URL и отправляем через send_photo
+                import re as _re_img
+                _img_pattern = r'!\[([^\]]*)\]\(([^\)]+)\)'
+                _img_matches = list(_re_img.finditer(_img_pattern, response_text))
+                
+                if _img_matches:
+                    # Есть изображения — отправляем их отдельно
+                    _text_without_images = _re_img.sub(_img_pattern, '', response_text).strip()
+                    
+                    # Отправляем текст если есть (без markdown изображений)
+                    if _text_without_images and len(_text_without_images) > 10:
+                        if len(_text_without_images) > 4000:
+                            chunks = [_text_without_images[i:i+4000] for i in range(0, len(_text_without_images), 4000)]
+                            for chunk in chunks:
+                                await message.bot.send_message(message.chat.id, chunk)
+                        else:
+                            await message.bot.send_message(message.chat.id, _text_without_images)
+                    
+                    # Отправляем каждое изображение
+                    # Replicate URL временные → скачиваем и отправляем как файл
+                    for _img_match in _img_matches:
+                        _img_alt = _img_match.group(1) or 'изображение'
+                        _img_url = _img_match.group(2).strip()
+                        try:
+                            # Скачиваем изображение
+                            import aiohttp
+                            async with aiohttp.ClientSession() as _img_session:
+                                async with _img_session.get(_img_url, timeout=aiohttp.ClientTimeout(total=30)) as _img_resp:
+                                    if _img_resp.status == 200:
+                                        _img_bytes = await _img_resp.read()
+                                        
+                                        # Определяем тип файла по URL или content-type
+                                        _content_type = _img_resp.headers.get('content-type', 'image/png')
+                                        _filename = 'image.png'
+                                        if 'jpeg' in _content_type or _img_url.endswith(('.jpg', '.jpeg')):
+                                            _filename = 'image.jpg'
+                                        elif 'webp' in _content_type or _img_url.endswith('.webp'):
+                                            _filename = 'image.webp'
+                                        
+                                        # Отправляем как InputFile
+                                        from aiogram.types import BufferedInputFile
+                                        _photo_file = BufferedInputFile(_img_bytes, filename=_filename)
+                                        await message.bot.send_photo(
+                                            message.chat.id,
+                                            photo=_photo_file,
+                                            caption=_img_alt[:1024] if _img_alt else None
+                                        )
+                                        logger.info(f"[IMAGE] Sent downloaded photo to user {user_id}: {_img_url[:80]}")
+                                    else:
+                                        logger.warning(f"[IMAGE] Failed to download image HTTP {_img_resp.status}: {_img_url[:80]}")
+                                        # Fallback: отправляем URL как текст
+                                        await message.bot.send_message(message.chat.id, f"{_img_alt}: {_img_url}")
+                        except Exception as _img_err:
+                            logger.error(f"[IMAGE] Failed to send photo {_img_url[:80]}: {_img_err}", exc_info=True)
+                            # Fallback: отправляем URL как текст
+                            try:
+                                await message.bot.send_message(message.chat.id, f"{_img_alt}: {_img_url}")
+                            except Exception:
+                                pass
                 else:
-                    await message.bot.send_message(message.chat.id, response_text)
+                    # Нет изображений — обычная отправка
+                    # Plain text: Telegram сам распознаёт URL и @mentions
+                    # Разбиваем длинный ответ на части (Telegram лимит 4096)
+                    if len(response_text) > 4000:
+                        chunks = [response_text[i:i+4000] for i in range(0, len(response_text), 4000)]
+                        for chunk in chunks:
+                            await message.bot.send_message(message.chat.id, chunk)
+                    else:
+                        await message.bot.send_message(message.chat.id, response_text)
             
             # Списываем токены за сообщение
             if not FREE_ACCESS_MODE:

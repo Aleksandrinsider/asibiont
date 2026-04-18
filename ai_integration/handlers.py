@@ -18223,15 +18223,33 @@ async def generate_image(
             image_url = output[0] if isinstance(output, list) else output
 
             # Отправляем фото в Telegram (только если send_to_telegram=True)
+            # Replicate URL временные → скачиваем изображение и отправляем как файл
             send_data = {"ok": False}
             if send_to_telegram:
-                _photo_payload = {"chat_id": user.telegram_id, "photo": image_url}
-                send_resp = await http.post(
-                    f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-                    json=_photo_payload,
-                    timeout=_aiohttp.ClientTimeout(total=30),
-                )
-                send_data = await send_resp.json()
+                try:
+                    # Скачиваем изображение с Replicate
+                    _img_resp = await http.get(image_url, timeout=_aiohttp.ClientTimeout(total=30))
+                    if _img_resp.status == 200:
+                        _img_bytes = await _img_resp.read()
+                        
+                        # Отправляем как multipart/form-data с файлом
+                        import aiohttp as _aiohttp_form
+                        _form = _aiohttp_form.FormData()
+                        _form.add_field('chat_id', str(user.telegram_id))
+                        _form.add_field('photo', _img_bytes, filename='generated.png', content_type='image/png')
+                        
+                        send_resp = await http.post(
+                            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                            data=_form,
+                            timeout=_aiohttp.ClientTimeout(total=40),
+                        )
+                        send_data = await send_resp.json()
+                        logger.info(f"[GENERATE_IMAGE] Photo sent to TG user {user_id}: ok={send_data.get('ok')}")
+                    else:
+                        logger.warning(f"[GENERATE_IMAGE] Failed to download image: HTTP {_img_resp.status}")
+                except Exception as _send_err:
+                    logger.error(f"[GENERATE_IMAGE] Error sending to Telegram: {_send_err}")
+                    send_data = {"ok": False, "error": str(_send_err)}
 
         if send_to_telegram and send_data.get("ok"):
             # Telegram получил фото — возвращаем без URL чтобы не было дублирования
