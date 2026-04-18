@@ -1204,6 +1204,9 @@
         'WhatsApp Business — агент отправляет сообщения клиентам и ведёт переписку в WhatsApp.',
         '1С — агент обменивается данными с 1С через REST API: документы, остатки, отчёты.'
       ],
+      autopilotTitle: 'Автопилот целей — ваши агенты это команда, а не просто чат-бот',
+      autopilotDesc: 'Поставьте цель — агенты сами разберутся. Email-агент связывается с лидами, GitHub-агент разбирает задачи, аналитик следит за рынком. Они координируются автономно, передают результаты друг другу и отчитываются. Одна цель — целая команда работает на неё 24/7.',
+      autopilotPoints: ['Продажи и лиды','Маркетинг','Клиентский сервис','E-commerce','Недвижимость','Рекрутинг','Разработка','Аналитика','Финансы','Стартапы','Контент и блог','Личный ассистент','Образование','Спорт и фитнес','Здоровье и медицина','Путешествия'],
       stepsLabel: 'Старт', stepsTitle: 'Как начать за 4 шага',
       steps: [
         ['Добавьте агента', 'Создайте AI-агента с именем, ролью и специализацией. Дайте ему характер: аналитик, маркетолог, менеджер. Один агент или целая команда — вы решаете.'],
@@ -1290,6 +1293,9 @@
         'WhatsApp Business — the agent sends messages to clients and manages WhatsApp conversations.',
         '1C — the agent exchanges data with 1C via REST API: documents, stock, reports.'
       ],
+      autopilotTitle: 'Goal Autopilot — your agents are a team, not just a chatbot',
+      autopilotDesc: 'Set a goal — your agents figure out the rest. Email agent reaches out to leads, GitHub agent triages developer issues, analyst tracks market shifts. They coordinate autonomously, hand off results to each other, and report back. One goal — a whole team working on it 24/7.',
+      autopilotPoints: ['Sales & leads','Marketing','Customer service','E-commerce','Real estate','Recruiting','Development','Analytics','Finance','Startups','Content & blog','Personal assistant','Education','Sport & fitness','Health & medicine','Travel'],
       stepsLabel: 'Get started', stepsTitle: 'Get started in 4 steps',
       steps: [
         ['Add an agent', 'Create an AI agent with a name, role, and specialization. Give it a persona: analyst, marketer, manager. One agent or a whole team — you decide.'],
@@ -1387,6 +1393,14 @@
     // Open Beta label
     var obEl = document.querySelector('[data-i18n="openBeta"]');
     if (obEl) obEl.textContent = t.openBeta;
+    // Autopilot section
+    var apTitle = document.querySelector('.autopilot-body h2');
+    if (apTitle) apTitle.textContent = t.autopilotTitle;
+    var apDesc = document.querySelector('.autopilot-body .feature-description');
+    if (apDesc) apDesc.textContent = t.autopilotDesc;
+    document.querySelectorAll('.autopilot-points li').forEach(function(el, i) {
+      if (t.autopilotPoints[i]) el.textContent = t.autopilotPoints[i];
+    });
     // Steps section
     var stepsLabelEl = document.querySelector('.steps-section-label');
     if (stepsLabelEl) stepsLabelEl.textContent = t.stepsLabel;
