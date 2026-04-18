@@ -13853,7 +13853,8 @@ class AnchorEngine:
                 "  3. task_brief — ЗАКОНЧЕННОЕ предложение с объектом действия? ('отправь письмо' ✓, 'отправь' ✗, 'факт: в базе...' ✗)\n"
                 "  4. task_brief отвечает на ЧТО + КОМУ/ГДЕ? — если нет, дополни.\n"
                 "  5. task_brief ≠ пересказ, ≠ оценка, ≠ описание факта. task_brief = ПРЯМОЕ ДЕЙСТВИЕ.\n"
-                "  6. task_brief ≤ 120 символов? — если больше, сократи до ключевой связки глагол+объект+tool.\n\n"
+                "  6. task_brief ≤ 120 символов? — если больше, сократи до ключевой связки глагол+объект+tool.\n"
+                "  7. task_brief НЕ начинается с имени агента? — если начинается, убери имя (мы добавим программно).\n\n"
 
                 f"Цели: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"АУДИТОРИЯ ЦЕЛЕЙ (учитывай при подборе платформ и инструментов):\n"
@@ -13878,6 +13879,7 @@ class AnchorEngine:
                 "  ❌ ПЛОХО task_brief: 'факт: в базе контактов 20 человек' — нет глагола действия.\n"
                 "  ❌ ПЛОХО task_brief: 'вчера мы запустили реферальную программу — нужно проинформировать' — вводная без действия.\n"
                 "  ❌ ПЛОХО task_brief: 'работать через публичные площадки' — абстракция без инструмента.\n"
+                "  ❌ ПЛОХО task_brief: 'Кристина, найди стартапы' — не добавляй имя агента, мы добавим программно.\n"
                 "  ✅ ХОРОШО task_brief: 'найди 5 стартапов через web_search, сохрани через save_email_contact'\n"
                 "  ✅ ХОРОШО task_brief: 'создай анонс реферальной программы через create_post, опубликуй в Discord'\n"
                 "  ✅ ХОРОШО task_brief: 'отправь письма 20 неактивным контактам через send_outreach_email'\n"
@@ -15542,6 +15544,20 @@ class AnchorEngine:
                     # Формируем обращение: "{Имя}, {task_brief}"
                     _ag_is_fem_c = _detect_agent_is_female(_ag_name)
                     _task_brief_lower = _task_brief_raw.lower() if _task_brief_raw and _task_brief_raw[0].isupper() and not _task_brief_raw[:3].isupper() else _task_brief_raw
+                    
+                    # Проверка: LLM иногда добавляет имя агента в task_brief, хотя промпт этого не просит.
+                    # Если task_brief уже начинается с имени агента — не дублируем.
+                    import re as _re_dup_name
+                    _starts_with_name = _re_dup_name.match(
+                        r'^' + _re_dup_name.escape(_ag_name.lower()) + r',\s*',
+                        (_task_brief_lower or '').lower()  # case-insensitive проверка
+                    )
+                    if _starts_with_name:
+                        # task_brief уже содержит "{Имя}, ..." — убираем имя, оставляем действие
+                        _task_brief_clean = (_task_brief_lower or '')[_starts_with_name.end():].strip()
+                        if _task_brief_clean:
+                            _task_brief_lower = _task_brief_clean
+                        logger.info("[COORD] task_brief had duplicate name, stripped: %s → %s", _task_brief_raw[:60], _task_brief_lower[:60])
                     
                     # Строим финальное обращение
                     import re as _re_tool_san
