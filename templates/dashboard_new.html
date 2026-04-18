@@ -1206,7 +1206,7 @@
                         <div id="reports-view" class="view-panel active">
                             <div id="reports-list" class="chat-messages" style="display: flex; flex-direction: column; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 12px 20px;">
                                 <div id="reports-empty" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; text-align: center; flex: 1;">
-                                    <p style="margin: 0 auto; font-size: 13px; color: #9CA3AF; max-width: 340px; line-height: 1.5;" data-i18n="reports-empty">Действий агента пока нет</p>
+                                    <p id="reports-empty-text" style="margin: 0 auto; font-size: 13px; color: #9CA3AF; max-width: 340px; line-height: 1.5;">Загрузка данных...</p>
                                 </div>
                             </div>
                         </div>
@@ -9046,7 +9046,11 @@ except Exception as e:
                 const agentActivities = data.agent_activities || [];
                 const userRules = data.user_rules || [];
                 const hasListItems = campaigns.length > 0 || emails.length > 0 || agentActivities.length > 0 || userRules.length > 0;
-                if (emptyEl) emptyEl.style.display = hasListItems ? 'none' : '';
+                if (emptyEl) {
+                    emptyEl.style.display = hasListItems ? 'none' : '';
+                    const emptyText = document.getElementById('reports-empty-text');
+                    if (emptyText) emptyText.textContent = 'Действий агентов пока нет';
+                }
 
                 // === 7-day filter ===
                 const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
