@@ -6077,10 +6077,44 @@ class AnchorEngine:
                     _text = (_item.get('text') or '').strip()[:240]
                     if _text:
                         _chat_lines.append(f"{_role}: {_text}")
+
+                # ── Детектируем прямой вопрос пользователя без ответа ──
+                _last_user_q = ''
+                _is_unanswered_question = False
+                _q_indicators = ('?', 'же', 'разве', 'правда', 'неужели', 'можем', 'можно',
+                                  'почему', 'зачем', 'когда', 'как', 'что если', 'а что',
+                                  'или нет', 'или да', 'так ведь', 'верно', 'правильно')
+                if _recent_chat:
+                    # Смотрим последние 3 сообщения — если последнее от пользователя и без ответа
+                    _msgs_rev = list(reversed(_recent_chat[:6]))
+                    for _idx, _m in enumerate(_msgs_rev):
+                        if (_m.get('role', '').lower() in ('пользователь', 'user') and
+                                (_idx == 0 or _msgs_rev[_idx - 1].get('role', '').lower() in ('пользователь', 'user'))):
+                            _qt = (_m.get('text') or '').strip()
+                            _qt_low = _qt.lower()
+                            if any(ind in _qt_low for ind in _q_indicators) or _qt.endswith('?'):
+                                _last_user_q = _qt
+                                _is_unanswered_question = True
+                            break
+
+                _question_block = ''
+                if _is_unanswered_question and _last_user_q:
+                    _question_block = (
+                        f"\n⚠️ ПОЛЬЗОВАТЕЛЬ ЗАДАЛ ПРЯМОЙ ВОПРОС — ОТВЕТЬ НА НЕГО В ПЕРВУЮ ОЧЕРЕДЬ:\n"
+                        f"  «{_last_user_q[:300]}»\n\n"
+                        "  Правила ответа на вопрос:\n"
+                        "  1. Сначала дай прямой ответ ДА/НЕТ или чёткую позицию (1-2 предложения)\n"
+                        "  2. Затем — 1-2 конкретных примера или аргумента\n"
+                        "  3. Если вопрос меняет стратегию — перестрой план под новый контекст\n"
+                        "  ❌ НЕ игнорируй вопрос и не продолжай старую задачу как будто его не было\n"
+                        "  ❌ НЕ отвечай о своих действиях вместо ответа на суть вопроса\n\n"
+                    )
+
                 task_text = (
                     "[АВТОПИЛОТ ЧАТА]\n"
                     f"Последняя чат-активность: {data.get('minutes_since', '?')} минут назад.\n"
                     + ("Недавний диалог:\n" + "\n".join(_chat_lines) + "\n\n" if _chat_lines else "")
+                    + _question_block
                     + "Задача: осмысли ситуацию и найди действительно полезный следующий шаг.\n\n"
                       "ПРОЧИТАЙ диалог и ответь себе:\n"
                       "  1. Что пользователь хочет достичь? (цель, результат, не процесс)\n"
@@ -18471,7 +18505,18 @@ class AnchorEngine:
             lc_time = lc_time.replace(tzinfo=timezone.utc)
 
         minutes_since = (now_utc - lc_time).total_seconds() / 60
-        if minutes_since < MIN_AUTOPILOT_GAP_MINUTES or minutes_since > 12 * 60:
+
+        # Если последнее сообщение — вопрос пользователя без ответа, реагируем быстрее
+        _is_user_question = False
+        if last_chat_msg.message_type == 'user':
+            _lc_txt = (last_chat_msg.content or '').lower()
+            _q_words = ('?', ' же ', ' можем ', ' можно ', ' почему ', ' зачем ',
+                        ' как ', ' разве ', ' правда ', ' неужели ', ' или нет')
+            if any(w in _lc_txt for w in _q_words) or _lc_txt.rstrip().endswith('?'):
+                _is_user_question = True
+
+        _min_gap = max(2, MIN_AUTOPILOT_GAP_MINUTES // 3) if _is_user_question else MIN_AUTOPILOT_GAP_MINUTES
+        if minutes_since < _min_gap or minutes_since > 12 * 60:
             return anchors
 
         try:
