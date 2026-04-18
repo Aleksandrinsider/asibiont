@@ -4883,10 +4883,11 @@ class AnchorEngine:
         async with lock:
             try:
                 # Внешний таймаут: если _process_user завис (из-за orphaned aiohttp-соединений
-                # или другой причины), lock должен освободиться максимум через 10 минут.
-                await asyncio.wait_for(self._process_user(user_id), timeout=600)
+                # или LLM API не вернул ответ), принудительно завершаем через 60s.
+                # PostgreSQL statement_timeout должен быть >= 60s для долгих AI-запросов.
+                await asyncio.wait_for(self._process_user(user_id), timeout=60)
             except asyncio.TimeoutError:
-                logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 600s — lock released")
+                logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 60s — lock released")
             except Exception as e:
                 logger.error(f"[ANCHOR] Error processing user {user_id}: {e}")
 
@@ -4895,46 +4896,37 @@ class AnchorEngine:
         session = Session()
         try:
             # ── DB-LEVEL ADVISORY LOCK — атомарная защита от параллельных процессов ──
-            # Используем pg_try_advisory_xact_lock — lock автоматически освобождается
-            # при commit/rollback транзакции (не зависит от session.close).
+            # Используем pg_try_advisory_xact_lock — TRANSACTION-LEVEL lock
+            # автоматически освобождается при commit/rollback (даже при timeout/crash).
             # Это предотвращает утечку lock'ов при ошибках/таймаутах.
             lock_id = abs(user_id) % 2147483647
-            use_advisory_lock = False
+            use_xact_lock = False
             try:
                 lock_result = session.execute(
-                    text("SELECT pg_try_advisory_lock(:lock_id)"),
+                    text("SELECT pg_try_advisory_xact_lock(:lock_id)"),
                     {"lock_id": lock_id}
                 ).scalar()
                 if not lock_result:
                     logger.debug(f"[ANCHOR] User {user_id}: ⛔ advisory lock busy (another process), skip")
                     return
-                use_advisory_lock = True
+                use_xact_lock = True
             except Exception as _lock_err:
                 # SQLite или другая БД без advisory locks — продолжаем без них
                 logger.debug(f"[ANCHOR] User {user_id}: advisory lock unavailable ({_lock_err}), proceeding without lock")
 
             try:
                 await self._process_user_inner(user_id, session)
-            finally:
-                # Пробуем явно снять lock (best-effort).
-                # Даже если не получится — pool checkin event в models.py
-                # вызовет pg_advisory_unlock_all() при возврате соединения в пул.
-                if use_advisory_lock:
-                    try:
-                        # ВСЕГДА rollback перед unlock — транзакция может быть в failed state
-                        # после ошибки в _process_user_inner (InFailedSqlTransaction prevention)
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
-                        session.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": lock_id})
-                        session.commit()
-                    except Exception as _unlock_err:
-                        logger.warning(f"[ANCHOR] User {user_id}: advisory unlock failed ({_unlock_err}), will release on pool checkin")
-                        try:
-                            session.rollback()
-                        except Exception:
-                            pass
+                # Commit освобождает xact_lock автоматически
+                if use_xact_lock:
+                    session.commit()
+            except Exception as _inner_err:
+                # Rollback освобождает xact_lock автоматически
+                logger.error(f"[ANCHOR] User {user_id}: _process_user_inner error: {_inner_err}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                raise
 
         except Exception as e:
             logger.error(f"[ANCHOR] _process_user({user_id}) error: {e}\n{traceback.format_exc()}")
