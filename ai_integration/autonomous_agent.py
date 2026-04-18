@@ -1167,7 +1167,7 @@ class HybridAutonomousAgent:
         logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
 
         async with _get_ai_semaphore():
-         _max_retries = 2 if (api_timeout and api_timeout < 40) else 3
+         _max_retries = 2 if (api_timeout and api_timeout < 40) else 2
          for _attempt in range(_max_retries):
           try:
             # В тестах используем временную сессию, чтобы не оставлять shared session
@@ -1175,7 +1175,7 @@ class HybridAutonomousAgent:
             if os.getenv('PYTEST_CURRENT_TEST'):
                 async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120, connect=10)) as _tmp_session:
                     async with _tmp_session.post(url, headers=headers, json=data,
-                                                 timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
+                                                 timeout=aiohttp.ClientTimeout(total=api_timeout or 60)) as resp:
                         if resp.status == 200:
                             result = await resp.json()
                             _usage = result.get('usage', {})
@@ -1200,7 +1200,7 @@ class HybridAutonomousAgent:
             else:
                 session = await _get_shared_ai_session()
                 async with session.post(url, headers=headers, json=data,
-                                        timeout=aiohttp.ClientTimeout(total=api_timeout or 90)) as resp:
+                                        timeout=aiohttp.ClientTimeout(total=api_timeout or 60)) as resp:
                     if resp.status == 200:
                         result = await resp.json()
                         _usage = result.get('usage', {})
@@ -8230,9 +8230,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive iterations: больше интеграций = больше цепочек = больше итераций
     _intg_count = len(_intg_hint)
     if _is_autopilot_task:
-        _max_iters = min(5 + _intg_count, 10)  # 5 базовых + 1 за интеграцию, макс 10
+        _max_iters = min(3 + _intg_count, 5)  # макс 5: 5 интеграций уже = 8 → cap 5
     else:
-        _max_iters = 5
+        _max_iters = 4
     _ACTION_EVIDENCE_TOOLS = {
         'send_outreach_email', 'reply_to_outreach_email', 'send_follow_up_email',
         'negotiate_by_email', 'save_email_contact', 'publish_to_telegram',
