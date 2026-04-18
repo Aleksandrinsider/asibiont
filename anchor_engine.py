@@ -869,10 +869,18 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
         return _rep
 
     if fem_names:
-        # Multi-agent text (coordinator summary): промпт уже содержит явный _gender_block
-        # с правильным родом для каждого агента. Пост-обработка скорее сломает правильный
-        # вывод LLM, чем исправит. Пропускаем гендерную коррекцию — доверяем промпту.
-        pass
+        # Per-name gender safety net: "Кристина подготовил" → "Кристина подготовила"
+        # Промпт содержит _gender_block, но LLM иногда ошибается — подстраховка
+        _fem_lower = {n.lower() for n in fem_names}
+        for _pat, _repl in _masc_to_fem_pairs:
+            def _ctx_fem(m, _fl=_fem_lower, _r=_repl, _txt=t):
+                start = max(0, m.start() - 50)
+                prefix = _txt[start:m.start()].lower()
+                if any(fn in prefix for fn in _fl):
+                    w = m.group(0)
+                    return (_r[0].upper() + _r[1:]) if w[0].isupper() else _r
+                return m.group(0)
+            t = _re_san.sub(_pat, _ctx_fem, t, flags=_re_san.IGNORECASE)
     elif is_fem:
         # Single female agent: все мужские → женские
         for _pat, _repl in _masc_to_fem_pairs:

@@ -3476,6 +3476,52 @@ class HybridAutonomousAgent:
             from .conversation_history import get_conversation_history
             full_history = get_conversation_history(user_id, session=None, limit=20)
 
+            # ═══ КОНТЕКСТ АГЕНТОВ — проактивные сообщения за последние 2ч ═══
+            # Без этого AI не понимает ответы пользователя на вопросы агентов
+            try:
+                from models import Interaction as _Intr_ctx, User as _U_ctx, Session as _S_ctx
+                from datetime import datetime as _dt_ctx, timezone as _tz_ctx, timedelta as _td_ctx
+                import json as _json_ctx
+                _s_ctx = _S_ctx()
+                try:
+                    _u_ctx = _s_ctx.query(_U_ctx).filter_by(telegram_id=user_id).first()
+                    if _u_ctx:
+                        _since_ctx = _dt_ctx.now(_tz_ctx.utc) - _td_ctx(hours=2)
+                        _recent_agent = (
+                            _s_ctx.query(_Intr_ctx)
+                            .filter(
+                                _Intr_ctx.user_id == _u_ctx.id,
+                                _Intr_ctx.message_type.in_(['proactive', 'agent_msg']),
+                                _Intr_ctx.created_at >= _since_ctx,
+                            )
+                            .order_by(_Intr_ctx.created_at.desc())
+                            .limit(5)
+                            .all()
+                        )
+                        if _recent_agent:
+                            _agent_ctx_lines = []
+                            for _ra in reversed(_recent_agent):
+                                _ra_txt = str(_ra.content or '').strip()
+                                _ra_name = 'Агент'
+                                try:
+                                    _ra_j = _json_ctx.loads(_ra_txt)
+                                    if isinstance(_ra_j, dict):
+                                        _ra_name = str((_ra_j.get('__agent') or {}).get('name') or 'Агент')
+                                        _ra_txt = str(_ra_j.get('text') or _ra_txt)
+                                except Exception:
+                                    pass
+                                _agent_ctx_lines.append(f"  [{_ra_name}]: {_ra_txt[:300]}")
+                            if _agent_ctx_lines:
+                                dynamic_context += (
+                                    "\n\n[НЕДАВНИЕ СООБЩЕНИЯ АГЕНТОВ]\n"
+                                    + '\n'.join(_agent_ctx_lines)
+                                    + "\n→ Если пользователь отвечает на вопрос/сообщение агента — продолжай в контексте, не проси уточнить."
+                                )
+                finally:
+                    _s_ctx.close()
+            except Exception as _e_ctx:
+                logger.debug("[AGENT_CTX] failed: %s", _e_ctx)
+
             # ═══ КОГНИТИВНОЕ ОБОГАЩЕНИЕ ═══
             # ВАЖНО: все дополнения идут в dynamic_context, НЕ в base_prompt!
             # base_prompt (53K) должен остаться СТАБИЛЬНЫМ для DeepSeek prefix cache.
