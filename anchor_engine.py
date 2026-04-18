@@ -13847,12 +13847,13 @@ class AnchorEngine:
                 + "• Агент без интеграций: web_search, research_topic, create_post, save_note, DELEGATE[].\n"
                 "• Многошаговые цепочки: агент A → данные → агент B → действие.\n\n"
 
-                "🔍 САМОПРОВЕРКА ПЕРЕД ОТПРАВКОЙ (проверь КАЖДЫЙ task):\n"
-                "  1. task начинается с глагола в повелительном наклонении? (найди/отправь/создай/проверь) — если нет, перепиши.\n"
-                "  2. task содержит КОНКРЕТНЫЙ инструмент (tool name)? — если нет, добавь.\n"
-                "  3. task — ЗАКОНЧЕННОЕ предложение с объектом действия? ('отправь письмо' ✓, 'отправь' ✗, 'факт: в базе...' ✗)\n"
-                "  4. task отвечает на ЧТО + КОМУ/ГДЕ + СКОЛЬКО? — если нет, дополни.\n"
-                "  5. task ≠ пересказ, ≠ оценка, ≠ описание факта. Task = ПРЯМОЕ ДЕЙСТВИЕ.\n\n"
+                "🔍 САМОПРОВЕРКА ПЕРЕД ОТПРАВКОЙ (проверь КАЖДЫЙ task_brief):\n"
+                "  1. task_brief начинается с глагола в повелительном наклонении? (найди/отправь/создай/проверь) — если нет, перепиши.\n"
+                "  2. task_brief содержит КОНКРЕТНЫЙ инструмент (tool name)? — если нет, добавь.\n"
+                "  3. task_brief — ЗАКОНЧЕННОЕ предложение с объектом действия? ('отправь письмо' ✓, 'отправь' ✗, 'факт: в базе...' ✗)\n"
+                "  4. task_brief отвечает на ЧТО + КОМУ/ГДЕ? — если нет, дополни.\n"
+                "  5. task_brief ≠ пересказ, ≠ оценка, ≠ описание факта. task_brief = ПРЯМОЕ ДЕЙСТВИЕ.\n"
+                "  6. task_brief ≤ 120 символов? — если больше, сократи до ключевой связки глагол+объект+tool.\n\n"
 
                 f"Цели: {'; '.join(repr(g['title']) for g in _goals[:5])}\n"
                 f"АУДИТОРИЯ ЦЕЛЕЙ (учитывай при подборе платформ и инструментов):\n"
@@ -13865,21 +13866,25 @@ class AnchorEngine:
                 f"({', '.join(p['name'] for p in _profiles)}).\n"
                 "Формат каждого шага: agent=имя, tool=snake_case, goal=точное_название, "
                 "reason=почему именно этот подход (объяснение стратегического выбора, 1-2 предложения), "
-                "task=ПОЛНОЕ конкретное задание (≥50 слов): 1) ЗАЧЕМ — факт из ситуации/истории (что произошло → почему этот шаг сейчас), "
-                "2) ЧТО сделать через КАКОЙ инструмент, 3) ГДЕ/С КЕМ/критерии, 4) ожидаемый результат.\n"
-                "⚠️ КРИТИЧНО: task и reason — ЭТО РАЗНЫЕ поля!\n"
+                "task=ПОЛНОЕ задание (≥50 слов) для агента: 1) ЗАЧЕМ — факт из ситуации/истории (что произошло → почему этот шаг сейчас), "
+                "2) ЧТО сделать через КАКОЙ инструмент, 3) ГДЕ/С КЕМ/критерии, 4) ожидаемый результат, "
+                "task_brief=КРАТКОЕ обращение к агенту (≤120 символов, ОБЯЗАТЕЛЬНО глагол в повелительном наклонении + объект + инструмент): "
+                "'найди 5 стартапов через web_search' | 'отправь письма новым контактам через send_outreach_email' | "
+                "'создай анонс через create_post, опубликуй в Discord через publish_to_discord'.\n"
+                "⚠️ КРИТИЧНО: task и reason И task_brief — ЭТО ТРИ РАЗНЫХ поля!\n"
                 "  reason = ПОЧЕМУ выбран этот путь: 'емайл шел 3 цикла, нужен другой канал' — объяснение стратегии.\n"
-                "  task = ЧТО сделать: 'Создай create_post про [X], опубликуй publish_to_telegram' — только действие.\n"
-                "  ❌ ПЛОХО task: 'конверсия email низкая, поэтому нужно сменить подход' — это reason, не task.\n"
-                "  ❌ ПЛОХО task: 'работать через публичные площадки' — абстракция без инструмента.\n"
-                "  ❌ ПЛОХО task: 'протестируй новые аудитории: предприниматели и фрилансеры' — пересказ слов пользователя без конкретного шага.\n"
-                "  ✅ ХОРОШО task: '[ФАКТ из контекста/истории → ВЫВОД]. [Глагол] через [TOOL] [ЧТО/ГДЕ]. Жду [РЕЗУЛЬТАТ с критерием].'\n"
-                "  Факт бери из контекста ЭТОГО пользователя. НЕ выдумывай цифры, НЕ пересказывай слова пользователя.\n"
-                "  Если пользователь дал стратегическое направление — декомпозируй в КОНКРЕТНЫЙ ПЕРВЫЙ ШАГ с tool.\n"
+                "  task = ПОЛНОЕ задание для агента (контекст + действие + результат, ≥50 слов).\n"
+                "  task_brief = КРАТКОЕ обращение к агенту для показа пользователю (глагол + объект + tool, ≤120 символов).\n"
+                "  ❌ ПЛОХО task_brief: 'факт: в базе контактов 20 человек' — нет глагола действия.\n"
+                "  ❌ ПЛОХО task_brief: 'вчера мы запустили реферальную программу — нужно проинформировать' — вводная без действия.\n"
+                "  ❌ ПЛОХО task_brief: 'работать через публичные площадки' — абстракция без инструмента.\n"
+                "  ✅ ХОРОШО task_brief: 'найди 5 стартапов через web_search, сохрани через save_email_contact'\n"
+                "  ✅ ХОРОШО task_brief: 'создай анонс реферальной программы через create_post, опубликуй в Discord'\n"
+                "  ✅ ХОРОШО task_brief: 'отправь письма 20 неактивным контактам через send_outreach_email'\n"
                 "⚠️ КАЖДЫЙ АГЕНТ = УНИКАЛЬНЫЙ ШАГ КОНВЕЙЕРА (исследование → действие → публикация → анализ → ...).\n"
                 "  Несколько агентов с ОДИНАКОВЫМ tool для ОДНОЙ цели = дублирование: результат НЕ удваивается.\n"
-                "⛔ НЕ ПЕРЕСКАЗЫВАЙ СЛОВА ПОЛЬЗОВАТЕЛЯ в task. Стратегия → КОНКРЕТНЫЙ ПЕРВЫЙ ШАГ.\n"
-                "⛔ НЕ ОЦЕНИВАЙ агента в task: 'ты правильно начала', 'хорошая работа' — трата токенов.\n"
+                "⛔ НЕ ПЕРЕСКАЗЫВАЙ СЛОВА ПОЛЬЗОВАТЕЛЯ в task_brief. Стратегия → КОНКРЕТНЫЙ ПЕРВЫЙ ШАГ.\n"
+                "⛔ НЕ ОЦЕНИВАЙ агента в task_brief: 'ты правильно начала', 'хорошая работа' — трата токенов.\n"
                 + (
                     # Динамический пример на основе первой цели И реальных имён агентов
                     (
@@ -13897,10 +13902,12 @@ class AnchorEngine:
                     f'"task": "Найди 5 контактов целевой аудитории для цели «{_goals[0]["title"][:40] if _goals else "..."}»: '
                     f'используй web_search с конкретными запросами (имя площадки, тип аудитории, ключевые слова), '
                     f'сохрани каждого через save_email_contact(name=..., email=..., source=...) с реальным email.", '
+                    f'"task_brief": "найди 5 контактов через web_search, сохрани через save_email_contact", '
                     f'"tool": "web_search", "goal": "{_goals[0]["title"][:40] if _goals else "..."}", '
                     f'"reason": "Нужны новые контакты именно этой аудитории — поиск через web_search с конкретными критериями даст email"}}]'
                     if _goals and _profiles else
-                    '[{"agent": "имя", "task": "Найди 5 контактов целевой аудитории через web_search, сохрани через save_email_contact.", "tool": "web_search", "goal": "точное_название", "reason": "нужны новые контакты"}]'
+                    '[{"agent": "имя", "task": "Найди 5 контактов целевой аудитории через web_search, сохрани через save_email_contact.", '
+                    '"task_brief": "найди 5 контактов через web_search", "tool": "web_search", "goal": "точное_название", "reason": "нужны новые контакты"}]'
                 )
             )
 
@@ -14821,13 +14828,16 @@ class AnchorEngine:
                         f"     Какой шаг цепочки ЕЩЁ НЕ ЗАНЯТ и у этого агента есть нужная интеграция?\n"
                         f"  ❌ НЕ: давать ту же задачу с минимальными отличиями\n"
                         f"  ✅ ДА: определить НЕЗАНЯТЫЙ шаг цепочки → назначить агенту у которого есть интеграция для этого шага\n\n"
-                        f"Формат task: ГЛАГОЛ в повелительном наклонении + ЧТО + ГДЕ/КОМУ + критерии.\n"
-                        f"  ✓ 'Найди 3 DevOps-инженера через web_search site:habr.com, сохрани через save_email_contact'\n"
-                        f"  ✗ 'факт: в базе данных есть контакты' (это описание, не задача)\n"
-                        f"  ✗ 'работай над контактами' (нет конкретного действия)\n"
-                        f"Перед отправкой проверь: каждый task начинается с глагола и содержит законченное действие?\n\n"
+                        f"Формат КАЖДОГО шага: agent=имя, tool=snake_case, goal=точное_название, "
+                        f"task=ПОЛНОЕ задание для агента (с контекстом цели, ≥40 слов), "
+                        f"task_brief=КРАТКОЕ обращение к агенту (глагол + объект + tool, ≤120 символов): "
+                        f"'найди 3 DevOps через web_search на habr.com, сохрани через save_email_contact' | "
+                        f"'создай анонс через create_post, опубликуй в Telegram'.\n"
+                        f"  ✗ task_brief='факт: в базе данных есть контакты' (это описание, не задача)\n"
+                        f"  ✗ task_brief='работай над контактами' (нет конкретного действия)\n"
+                        f"Перед отправкой проверь task_brief: начинается с глагола в императиве и содержит законченное действие?\n\n"
                         f"Верни JSON-массив: "
-                        f'[{{"agent":"имя","task":"задача на рус. языке","tool":"snake_case_tool","goal":"точное название цели"}}]\n'
+                        f'[{{"agent":"имя","task":"полное задание","task_brief":"краткое обращение","tool":"snake_case_tool","goal":"точное название цели"}}]\n'
                         f"Только JSON, без пояснений."
                     )
 
@@ -15510,78 +15520,61 @@ class AnchorEngine:
                                 _step_reason = 'переключаемся на рабочий сценарий, чтобы сохранить темп'
                     except Exception:
                         pass
-                    # Короткая версия задачи для живого обращения (по слову, до 900 сим)
-                    _task_short = _task_clean
-                    if len(_task_short) > 900:
-                        _task_short = _task_short[:900].rsplit(' ', 1)[0].rstrip('.,;:')
-                    # НЕ стрипим ведущий глагол — он нужен для естественного обращения
-                    _task_body = _task_short
-                    # Формируем естественное обращение вместо тикета
+
+                    # ── ИСПОЛЬЗУЕМ task_brief из плана координатора (учит LLM, а не обрезаем механически) ──
+                    # Координатор теперь генерирует TWO поля:
+                    #   task = ПОЛНОЕ задание для агента (с контекстом, facts, ≥50 слов)
+                    #   task_brief = КРАТКОЕ обращение к агенту (глагол + объект + tool, ≤120 символов)
+                    # Используем task_brief для user-facing assignment, task — для agent execution payload.
+                    _task_brief_raw = (_step.get('task_brief') or '').strip()
+                    
+                    # Fallback: если координатор пропустил task_brief — берём первое предложение task
+                    if not _task_brief_raw or len(_task_brief_raw) < 10:
+                        import re as _re_fb_brief
+                        # Берём первое предложение из _task_clean (до точки/восклицательного/вопроса)
+                        _first_sent_match = _re_fb_brief.match(r'^([^.!?]+[.!?])', _task_clean)
+                        if _first_sent_match:
+                            _task_brief_raw = _first_sent_match.group(1).strip()
+                        else:
+                            # Или до 120 символов по слову
+                            _task_brief_raw = _task_clean[:120].rsplit(' ', 1)[0].rstrip('.,;:') if len(_task_clean) > 120 else _task_clean
+                    
+                    # Формируем обращение: "{Имя}, {task_brief}"
                     _ag_is_fem_c = _detect_agent_is_female(_ag_name)
-                    _t = _task_body.lower() if _task_body and _task_body[0].isupper() and not _task_body[:3].isupper() else _task_body
-                    # Определяем: задача начинается с глагола (по окончаниям) или нет
-                    import re as _re_vcheck
-                    _fw = (_t.split()[0] if _t else '').lower().rstrip('.,;:')
-                    _is_verb_start = bool(_re_vcheck.match(
-                        r'.+(ть|ться|чь|чься)$|.+(ай|ей|уй|ой|и|й|ись|йся|йте|ьте|ьтесь)$', _fw
-                    )) and not _re_vcheck.match(r'.+(ость|ение|ание|ция|ство|ок|ка|ие|тель)$', _fw)
-                    # Конвертируем инфинитив → императив для естественного обращения
-                    _INF_TO_IMP = {
-                        'найти': 'найди', 'проверить': 'проверь', 'отправить': 'отправь',
-                        'создать': 'создай', 'написать': 'напиши', 'собрать': 'собери',
-                        'подготовить': 'подготовь', 'исследовать': 'исследуй',
-                        'поискать': 'поищи', 'сделать': 'сделай',
-                        'проанализировать': 'проанализируй', 'запустить': 'запусти',
-                        'использовать': 'используй', 'связаться': 'свяжись',
-                        'обновить': 'обнови', 'опубликовать': 'опубликуй',
-                        'разослать': 'разошли', 'переслать': 'перешли',
-                        'составить': 'составь', 'настроить': 'настрой',
-                        'добавить': 'добавь', 'удалить': 'удали',
-                        'скачать': 'скачай', 'загрузить': 'загрузи',
-                        'выбрать': 'выбери', 'провести': 'проведи',
-                        'оценить': 'оцени', 'определить': 'определи',
-                        'изучить': 'изучи', 'узнать': 'узнай',
-                        'показать': 'покажи', 'рассказать': 'расскажи',
-                        'описать': 'опиши', 'подобрать': 'подбери',
-                        'договориться': 'договорись', 'подключить': 'подключи',
-                        'включить': 'включи', 'выключить': 'выключи',
-                        'перевести': 'переведи', 'отправить': 'отправь',
-                        'разработать': 'разработай', 'протестировать': 'протестируй',
-                    }
-                    _t_imp = _t
-                    if _is_verb_start:
-                        _first_word = _t.split()[0].lower().rstrip('.,;:') if _t else ''
-                        if _first_word in _INF_TO_IMP:
-                            _t_imp = _INF_TO_IMP[_first_word] + _t[len(_first_word):]
-                        elif _first_word.endswith(('ать', 'ять', 'еть', 'ить', 'оть', 'уть', 'ыть', 'ться')):
-                            # Автоконвертация неизвестных инфинитивов → простая форма
-                            if _first_word.endswith('ться'):
-                                _t_imp = _first_word[:-4] + 'йся' + _t[len(_first_word):]
-                            elif _first_word.endswith('ить'):
-                                _t_imp = _first_word[:-2] + _t[len(_first_word):]
-                            elif _first_word.endswith(('ать', 'ять')):
-                                _t_imp = _first_word[:-2] + 'й' + _t[len(_first_word):]
-                    # ── Noun→verb: существительное-действие → императив ──
-                    _NOUN_TO_IMP = {
-                        'поиск': 'поищи', 'анализ': 'проанализируй', 'отправка': 'отправь',
-                        'проверка': 'проверь', 'создание': 'создай', 'подготовка': 'подготовь',
-                        'исследование': 'исследуй', 'публикация': 'опубликуй',
-                        'обновление': 'обнови', 'написание': 'напиши', 'составление': 'составь',
-                        'настройка': 'настрой', 'разработка': 'разработай', 'сбор': 'собери',
-                        'обзор': 'сделай обзор', 'подбор': 'подбери', 'оценка': 'оцени',
-                    }
-                    if not _is_verb_start and _fw in _NOUN_TO_IMP:
-                        _noun_imp = _NOUN_TO_IMP[_fw]
-                        _rest = _t[len(_fw):].lstrip()
-                        _t = f'{_noun_imp} {_rest}' if _rest else _noun_imp
-                        _t_imp = _t
-                        _is_verb_start = True
-                    # Также ловим уже готовые императивы (отправь, проверь, ...)
-                    if not _is_verb_start:
-                        _known_imp_set = set(_INF_TO_IMP.values())
-                        if _fw in _known_imp_set:
-                            _t_imp = _t
-                            _is_verb_start = True
+                    _task_brief_lower = _task_brief_raw.lower() if _task_brief_raw and _task_brief_raw[0].isupper() and not _task_brief_raw[:3].isupper() else _task_brief_raw
+                    
+                    # Строим финальное обращение
+                    import re as _re_tool_san
+                    if _tool_hint and not _re_tool_san.match(r'^[a-z_][a-z0-9_]*$', _tool_hint.strip()):
+                        _tool_hint = ''
+                    
+                    # Если task_brief не начинается с глагола — добавляем контекст цели
+                    _eff_goal_title = _ag_goal_title
+                    if not _eff_goal_title or len(_eff_goal_title.strip()) < 5:
+                        try:
+                            _eff_goal_title = next(
+                                (g.get('title', '') for g in _goals[:1] if g.get('title', '').strip()),
+                                '',
+                            )
+                        except Exception:
+                            pass
+                    
+                    # Специальный шаблон для send_message_to_user
+                    if _tool_hint == 'send_message_to_user':
+                        _smu_goal_ref = (
+                            f' по цели «{_eff_goal_title.strip()[:50].rstrip(".,;")}»'
+                            if _eff_goal_title and len(_eff_goal_title.strip()) > 5 else ''
+                        )
+                        _asi_assign_text = (
+                            f'{_ag_name}, сообщи пользователю о статусе{_smu_goal_ref}. '
+                            f'{_task_brief_lower[0].upper() + _task_brief_lower[1:] if _task_brief_lower else ""}.'
+                        )
+                    elif _eff_goal_title and len(_eff_goal_title.strip()) > 5:
+                        _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
+                        _asi_assign_text = f'{_ag_name}, по цели «{_gt}» — {_task_brief_lower}.'
+                    else:
+                        _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
+                    
                     # Фильтруем технические reason-коды
                     _INTERNAL_REASON_CODES = frozenset({
                         'fair_assignment diversification', 'fairness backfill',
@@ -15595,118 +15588,19 @@ class AnchorEngine:
                         )
                         else _step_reason
                     )
-                    _reason_suffix = ''
-                    if _step_reason_show and len(_step_reason_show) > 10:
-                        _reason_suffix = f' {_step_reason_show[0].upper()}{_step_reason_show[1:].rstrip(".")}.'
-                    if _task_short and len(_task_short) > 15:
-                        _task_str = _t_imp if _is_verb_start else _t
-                        # Инферируем РЕЗУЛЬТАТ из tool_hint если reason не задан (часто reason — внутренний код)
-                        _result_hint = _reason_suffix
-                        if not _result_hint:
-                            if _tool_hint in ('web_search', 'find_relevant_contacts_for_task',
-                                              'quick_topic_search', 'research_topic'):
-                                _result_hint = ' Сохрани найденные email через save_email_contact, инсайты — через save_note.'
-                            elif _tool_hint == 'save_email_contact':
-                                _result_hint = ' Сохрани каждый контакт с именем, email и источником.'
-                            elif _tool_hint in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
-                                _result_hint = ' Опубликуй или передай пользователю через send_message_to_user.'
-                        # ── ЗАЧЕМ: берём goal из плана или «тянем» из первой активной цели ──
-                        # Координатор иногда не заполняет поле goal → фолбэк к целям из контекста
-                        _eff_goal_title = _ag_goal_title
-                        if not _eff_goal_title or len(_eff_goal_title.strip()) < 5:
-                            try:
-                                _eff_goal_title = next(
-                                    (g.get('title', '') for g in _goals[:1] if g.get('title', '').strip()),
-                                    '',
-                                )
-                            except Exception:
-                                pass
-                        # Шаг цепочки — обогащаем reason коротким контекстом где мы в воронке
-                        _chain_pos_hint = ''
-                        # Sanitize: LLM иногда возвращает "()" или "None" как tool — игнорируем
-                        import re as _re_tool_san
-                        if _tool_hint and not _re_tool_san.match(r'^[a-z_][a-z0-9_]*$', _tool_hint.strip()):
-                            _tool_hint = ''
-                        _tl_lower = (_tool_hint or '').lower()
-                        if _tl_lower in ('web_search', 'find_relevant_contacts_for_task', 'research_topic'):
-                            _chain_pos_hint = ' (поиск)'
-                        elif _tl_lower in ('save_email_contact',):
-                            _chain_pos_hint = ' (сохранение контакта)'
-                        elif _tl_lower in ('send_outreach_email', 'send_follow_up_email'):
-                            _chain_pos_hint = ' (отправка письма)'
-                        elif _tl_lower in ('reply_to_outreach_email',):
-                            _chain_pos_hint = ' (ответ на письмо)'
-                        elif _tl_lower in ('check_emails',):
-                            _chain_pos_hint = ' (проверка входящих)'
-                        elif _tl_lower in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
-                            _chain_pos_hint = ' (публикация)'
-                        # ЗАЧЕМ: добавляем контекст цели чтобы поручение было 2 предложения, а не 1
-                        # Для send_message_to_user — строим конкретный шаблон с названием цели и причиной
-                        if _tool_hint == 'send_message_to_user':
-                            _smu_goal_ref = (
-                                f' по цели «{_eff_goal_title.strip()[:50].rstrip(".,;")}»'
-                                if _eff_goal_title and len(_eff_goal_title.strip()) > 5 else ''
-                            )
-                            _smu_reason = (
-                                f' — {_step_reason_show[:70].rstrip(".")}' if _step_reason_show and len(_step_reason_show) > 10 else ''
-                            )
-                            _smu_done_ref = (
-                                f': {_task_str[:80].rstrip(".")}' if _task_str and len(_task_str.strip()) > 10 else ''
-                            )
-                            _asi_assign_text = (
-                                f'{_ag_name}, сообщи пользователю о статусе{_smu_goal_ref}{_smu_reason}. '
-                                f'Кратко: что уже сделано{_smu_done_ref}, где сейчас застряли, '
-                                f'и предложи 2–3 конкретных варианта дальнейших действий через send_message_to_user.'
-                            )
-                        elif _eff_goal_title and len(_eff_goal_title.strip()) > 5:
-                            _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
-                            _asi_assign_text = f'{_ag_name}, следующий шаг{_chain_pos_hint} по цели «{_gt}» — {_task_str}.{_result_hint}'
-                        else:
-                            _asi_assign_text = f'{_ag_name}, {_task_str}.{_result_hint}'
-                    elif _step_reason:
-                        _r = _step_reason[:90].rsplit(' ', 1)[0] if len(_step_reason) > 90 else _step_reason
-                        _r_l = _r.lower() if _r[0].isupper() else _r
-                        _asi_assign_text = f'{_ag_name}, {_r_l}.'
-                    else:
-                        _tfl_short = _task_first_line[:90].rsplit(' ', 1)[0] if len(_task_first_line) > 90 else _task_first_line
-                        _tfl_l = _tfl_short.lower() if _tfl_short and _tfl_short[0].isupper() else _tfl_short
-                        _asi_assign_text = f'{_ag_name}, {_tfl_l}.'
+                    # УДАЛЕНА: вся логика инфинитив→императив трансформации (L15523-15660)
+                    # Теперь LLM генерирует task_brief уже в правильной форме через self-check в промпте.
                 except Exception as _aac_err:
-                    _aac_raw = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:80]
-                    _aac_t = _aac_raw.lower() if _aac_raw[:1].isupper() else _aac_raw
-                    _asi_assign_text = f'{_ag_name}, {_aac_t}.'
-                    logger.debug("[COORD] asi assign text failed: %s", _aac_err)
-                # ── POST-PROCESS: INF→IMP для первого инфинитива в обращении ──
+                    _task_brief_fallback = (_ag_task.split(chr(10))[0] or 'текущие задачи')[:120]
+                    _task_brief_lower = _task_brief_fallback.lower() if _task_brief_fallback[:1].isupper() else _task_brief_fallback
+                    _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
+                    logger.debug("[COORD] asi assign text fallback: %s", _aac_err)
+
+                # ── POST-PROCESS: минимальная очистка (narrator voice, evaluation) ──
+                # LLM редко выдаёт "Поручаю агенту X сделать Y" или "X, ты правильно начала..."
+                # Промпт учит через self-check, но если промпт не сработал — чистим вручную как safety net.
                 import re as _re_post_inf
-                _INF_IMP_FIRST = {
-                    'найти': 'найди', 'проверить': 'проверь', 'отправить': 'отправь',
-                    'создать': 'создай', 'написать': 'напиши', 'собрать': 'собери',
-                    'подготовить': 'подготовь', 'исследовать': 'исследуй',
-                    'поискать': 'поищи', 'сделать': 'сделай',
-                    'проанализировать': 'проанализируй', 'запустить': 'запусти',
-                    'использовать': 'используй', 'опубликовать': 'опубликуй',
-                    'обновить': 'обнови', 'связаться': 'свяжись',
-                    'разослать': 'разошли', 'составить': 'составь',
-                    'настроить': 'настрой', 'добавить': 'добавь',
-                    'изучить': 'изучи', 'узнать': 'узнай',
-                    'подобрать': 'подбери', 'описать': 'опиши',
-                    'подключить': 'подключи', 'разработать': 'разработай',
-                    'протестировать': 'протестируй', 'выбрать': 'выбери',
-                }
-                # Ловим инфинитив после "Имя," или "Имя, пожалуйста," или "— "
-                def _fix_first_inf(m):
-                    return m.group(1) + _INF_IMP_FIRST.get(m.group(2).lower(), m.group(2))
-                _inf_alts = '|'.join(_re_post_inf.escape(k) for k in _INF_IMP_FIRST)
-                # Шаблон: после разделителя (запятая, тире, двоеточие) + необязательный "пожалуйста"
-                _asi_assign_text = _re_post_inf.sub(
-                    rf'((?:^[^,]+,\s*(?:пожалуйста[,]?\s*)?|—\s*|:\s*))({_inf_alts})\b',
-                    _fix_first_inf,
-                    _asi_assign_text,
-                    count=1,
-                    flags=_re_post_inf.IGNORECASE,
-                )
-                # ── POST-PROCESS: strip 3rd-person narrator phrases ──
-                # LLM sometimes generates "Поручаю агенту X сделать Y" instead of "X, сделай Y"
+                # Strip 3rd-person narrator: "Поручаю агенту X сделать Y" → "X, сделать Y"
                 _narrator_pat = _re_post_inf.compile(
                     r'^(?:поручаю|прошу|назначаю|даю задание|направляю)\s+'
                     r'(?:агенту?\s+)?'
@@ -15720,8 +15614,8 @@ class AnchorEngine:
                     if _rest:
                         _asi_assign_text = f'{_ag_name}, {_rest}'
                         logger.info("[COORD] fixed narrator voice: %s", _asi_assign_text[:80])
-                # ── POST-PROCESS: strip evaluation phrases ──
-                # "Кристина, ты правильно начала, но..." → "Кристина, ..."
+                
+                # Strip evaluation: "Кристина, ты правильно начала, но..." → "Кристина, ..."
                 _eval_pat = _re_post_inf.compile(
                     r'^(' + _re_post_inf.escape(_ag_name) + r',\s*)'
                     r'(?:ты правильно|хорошая работа|молодец|отлично|верно|ты всё правильно)[^.]*\.\s*',
@@ -15733,17 +15627,12 @@ class AnchorEngine:
                     if _rest_eval and len(_rest_eval) > 15:
                         _asi_assign_text = _eval_m.group(1) + _rest_eval
                         logger.info("[COORD] stripped evaluation: %s", _asi_assign_text[:80])
-                # ── POST-PROCESS: strip numbered lists → keep only first item ──
-                _list_match = _re_post_inf.search(r'\s+\d+[.)]\s', _asi_assign_text)
-                if _list_match:
-                    # Truncate to last sentence before the list
-                    _pre_list = _asi_assign_text[:_list_match.start()]
-                    _last_dot = max(_pre_list.rfind('.'), _pre_list.rfind('!'), _pre_list.rfind('?'))
-                    if _last_dot > len(_asi_assign_text) * 0.3:
-                        _asi_assign_text = _asi_assign_text[:_last_dot + 1]
-                        logger.info("[COORD] stripped list: %s", _asi_assign_text[:80])
+                
+                # УДАЛЕНА: POST-PROCESS инфинитив→императив замена — учим LLM, не фиксим руками.
+                # УДАЛЕНА: Numbered list stripping — task_brief не должен содержать списки (промпт self-check).
+
                 # ── TEACH-MISS safety net: логируем если промпт не сработал ──
-                # Промпт учит LLM генерировать правильные task (самопроверка).
+                # Промпт учит LLM генерировать правильный task_brief (самопроверка).
                 # Здесь только ЛОГИРУЕМ случаи где обучение не помогло — для анализа.
                 if _asi_assign_text and len(_asi_assign_text.strip()) >= 15:
                     import re as _re_tm_coord
