@@ -1204,6 +1204,13 @@
         'WhatsApp Business — агент отправляет сообщения клиентам и ведёт переписку в WhatsApp.',
         '1С — агент обменивается данными с 1С через REST API: документы, остатки, отчёты.'
       ],
+      stepsLabel: 'Старт', stepsTitle: 'Как начать за 4 шага',
+      steps: [
+        ['Добавьте агента', 'Создайте AI-агента с именем, ролью и специализацией. Дайте ему характер: аналитик, маркетолог, менеджер. Один агент или целая команда — вы решаете.'],
+        ['Подключите интеграции', 'Привяжите нужные сервисы: Gmail, GitHub, AmoCRM, RSS, Telegram-канал. Агент увидит ваши данные и начнёт с ними работать сразу.'],
+        ['Задайте правила', 'Напишите что важно: тон общения, фокус на новых контактах, что не делать. Правила соблюдаются при каждом поручении автоматически.'],
+        ['Включите автопилот', 'Агенты работают 24/7 сами: ищут контакты, пишут письма, публикуют посты, следят за ответами и продвигают ваши цели без команд.'],
+      ],
       cta: 'Все функции доступны сразу.',
       btnTop: 'Попробовать бесплатно — 1 500 токенов', btnInstall: 'Установить приложение',
       fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка', fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI',
@@ -1282,6 +1289,13 @@
         'Tinkoff Investments — the agent shows your portfolio, tracks quotes and notifies about changes.',
         'WhatsApp Business — the agent sends messages to clients and manages WhatsApp conversations.',
         '1C — the agent exchanges data with 1C via REST API: documents, stock, reports.'
+      ],
+      stepsLabel: 'Get started', stepsTitle: 'Get started in 4 steps',
+      steps: [
+        ['Add an agent', 'Create an AI agent with a name, role, and specialization. Give it a persona: analyst, marketer, manager. One agent or a whole team — you decide.'],
+        ['Connect integrations', 'Link the services you need: Gmail, GitHub, AmoCRM, RSS, Telegram channel. The agent will see your data and start working with it right away.'],
+        ['Set your rules', 'Write what matters: tone of communication, focus on new contacts, what not to do. Rules are followed on every task automatically.'],
+        ['Enable autopilot', 'Agents work 24/7 on their own: find contacts, write emails, publish posts, track replies, and push your goals forward — no commands needed.'],
       ],
       cta: 'All features available immediately.',
       btnTop: 'Try for free — 1,500 tokens', btnInstall: 'Install App',
@@ -1373,6 +1387,18 @@
     // Open Beta label
     var obEl = document.querySelector('[data-i18n="openBeta"]');
     if (obEl) obEl.textContent = t.openBeta;
+    // Steps section
+    var stepsLabelEl = document.querySelector('.steps-section-label');
+    if (stepsLabelEl) stepsLabelEl.textContent = t.stepsLabel;
+    var stepsTitleEl = document.querySelector('.steps-section-title');
+    if (stepsTitleEl) stepsTitleEl.textContent = t.stepsTitle;
+    document.querySelectorAll('.steps-grid .bonus-card').forEach(function(c, i) {
+      if (!t.steps || !t.steps[i]) return;
+      var h2 = c.querySelector('h2');
+      if (h2) h2.textContent = t.steps[i][0];
+      var d = c.querySelector('.feature-description');
+      if (d) d.textContent = t.steps[i][1];
+    });
   }
   window.applyLang = apply;
   window.switchLang = function(lang) {

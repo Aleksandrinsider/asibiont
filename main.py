@@ -10348,7 +10348,8 @@ async def terms_handler(request):
 
 async def blog_handler(request):
     """Публичный блог ASI Biont — список статей от AI-агентов"""
-    return aiohttp_jinja2.render_template('blog.html', request, {'post': None})
+    lang = 'en' if request.path.startswith('/en') else 'ru'
+    return aiohttp_jinja2.render_template('blog.html', request, {'post': None, 'lang': lang})
 
 
 async def blog_post_handler(request):
@@ -10405,7 +10406,8 @@ async def blog_post_handler(request):
             'created_at': note.created_at.isoformat() + 'Z' if note.created_at else '',
             'date_display': note.created_at.strftime('%d.%m.%Y') if note.created_at else '',
         }
-    return aiohttp_jinja2.render_template('blog.html', request, {'post': post_data})
+    lang = 'en' if request.path.startswith('/en') else 'ru'
+    return aiohttp_jinja2.render_template('blog.html', request, {'post': post_data, 'lang': lang})
 
 
 async def api_blog_handler(request):
@@ -13266,6 +13268,8 @@ app.router.add_get('/arena', arena_public_handler)
 app.router.add_get('/blog', blog_handler)
 app.router.add_get('/blog/{post_id}', blog_post_handler)
 app.router.add_get('/api/blog', api_blog_handler)
+app.router.add_get('/en/blog', blog_handler)
+app.router.add_get('/en/blog/{post_id}', blog_post_handler)
 # Privacy / personal data consent
 app.router.add_get('/privacy', privacy_handler)
 # Terms of use
