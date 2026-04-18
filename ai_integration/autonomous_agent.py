@@ -5450,8 +5450,9 @@ class HybridAutonomousAgent:
                         f"How's it going — done, in progress, or need to reschedule? "
                         f"I can help if needed.")
             else:
-                task_name = match.group(1) if match else "задача"
-                return (f"Время задачи «{task_name}» пришло. "
+                task_name = match.group(1) if match else ""
+                name_part = f"«{task_name}» " if task_name else ""
+                return (f"Время задачи {name_part}пришло. "
                         f"Расскажи, как продвигается — сделал, в процессе или нужно перенести? "
                         f"Если нужна помощь, могу подключиться.")
         elif mode == 'result_check':

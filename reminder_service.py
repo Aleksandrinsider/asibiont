@@ -31,6 +31,11 @@ async def _send_reminder_job(task_id: int):
             logger.warning(f"_send_reminder_job: task {task_id} not found")
             return
         
+        # Не отправляем напоминания для задач созданных агентами — они для агентов, не для пользователя
+        if getattr(task, 'created_by_agent_id', None):
+            logger.info(f"_send_reminder_job: task {task_id} is agent-created, skipping reminder")
+            return
+
         # Проверяем статус задачи - не отправляем напоминание для завершенных задач
         if task.status == 'completed':
             logger.info(f"_send_reminder_job: task {task_id} is already completed, skipping reminder")
@@ -72,6 +77,11 @@ async def _send_followup_reminder_job(task_id: int):
             logger.warning(f"_send_followup_reminder_job: task {task_id} not found")
             return
         
+        # Не отправляем напоминания для задач созданных агентами
+        if getattr(task, 'created_by_agent_id', None):
+            logger.info(f"_send_followup_reminder_job: task {task_id} is agent-created, skipping")
+            return
+
         # Проверяем статус задачи - отправляем только для невыполненных
         if task.status in ['completed', 'deleted']:
             logger.info(f"_send_followup_reminder_job: task {task_id} status {task.status}, skipping")
@@ -134,6 +144,11 @@ async def _send_result_check_job(task_id: int):
             logger.warning(f"_send_result_check_job: task {task_id} not found")
             return
         
+        # Не отправляем проверку результата для задач созданных агентами
+        if getattr(task, 'created_by_agent_id', None):
+            logger.info(f"_send_result_check_job: task {task_id} is agent-created, skipping result check")
+            return
+
         # Проверяем статус задачи - не отправляем проверку результата для завершенных задач
         if task.status == 'completed':
             logger.info(f"_send_result_check_job: task {task_id} is already completed, skipping result check")
