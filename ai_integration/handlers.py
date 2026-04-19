@@ -12927,7 +12927,7 @@ async def send_outreach_email(
             # а не одна накапливает все письма пока остальные стоят
             campaign = session.query(EmailCampaign).filter(
                 EmailCampaign.user_id == user.id,
-                EmailCampaign.status == 'active',
+                EmailCampaign.status.in_(['active', 'running']),
             ).order_by(EmailCampaign.emails_sent.asc()).first()
 
         if not campaign:

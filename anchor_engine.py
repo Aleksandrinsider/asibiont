@@ -7533,7 +7533,7 @@ class AnchorEngine:
                                 from sqlalchemy import func as _fn_camp
                                 _active_camps = session.query(_EC_camp_ctx).filter(
                                     _EC_camp_ctx.user_id == user.id,
-                                    _EC_camp_ctx.status == 'active',
+                                    _EC_camp_ctx.status.in_(['active', 'running']),
                                 ).all()
                                 if _active_camps:
                                     _camp_parts = []
@@ -11145,6 +11145,8 @@ class AnchorEngine:
                     Anchor.anchor_type == 'email_outreach_send',
                     Anchor.delivered_at.is_(None),
                     Anchor.suppress_until.is_(None) | (Anchor.suppress_until <= datetime.now(timezone.utc)),
+                    # Не блокируем агентов если anchor старше 2ч (завис)
+                    Anchor.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
                 ).first() is not None
             except Exception:
                 pass
@@ -20813,6 +20815,8 @@ class AnchorEngine:
                     Anchor.anchor_type == 'email_outreach_send',
                     Anchor.delivered_at.is_(None),
                     Anchor.source.like(f'email_campaign:{campaign.id}:send:%'),
+                    # Не считаем stuck anchors (старше 2ч) — они зависли из-за ошибки/нет токенов
+                    Anchor.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
                 ).count()
                 if _pending_send_count >= 3:
                     logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
@@ -22674,6 +22678,12 @@ class AnchorEngine:
             if not FREE_ACCESS_MODE:
                 if not has_enough_tokens(user.telegram_id, action, session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск email — нет токенов")
+                    # Снузим anchor на 1ч чтобы не завис вечно (иначе flood guard заблокирует новые anchors)
+                    try:
+                        anchor.suppress_until = datetime.now(timezone.utc) + timedelta(hours=1)
+                        session.commit()
+                    except Exception:
+                        pass
                     return
 
             anchor_data = json.loads(anchor.data) if anchor.data else {}
