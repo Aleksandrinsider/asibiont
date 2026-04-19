@@ -10884,62 +10884,32 @@ def get_message_status(
 # EMAIL OUTREACH — Автономное привлечение клиентов через Resend API
 # ═══════════════════════════════════════════════════════════════════
 
-# Generic email prefixes — фильтруем при автопоиске
+# Generic email prefixes — только реально недоставляемые/системные адреса
+# B2B-адреса (sales@, info@, ceo@, contact@ и т.п.) НЕ блокируем — это валидные outreach-цели
 _GENERIC_PREFIXES = {
-    'info', 'contact', 'contacts', 'hello', 'hi', 'support', 'sales', 'sale',
-    'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
-    'hr', 'billing', 'press', 'media', 'marketing', 'general',
-    'enquiries', 'feedback', 'service', 'webmaster', 'subscribe',
-    'tos', 'legal', 'privacy', 'security', 'abuse', 'postmaster', 'dmca',
-    'jobs', 'careers', 'newsletter', 'notifications', 'alerts',
-    'unsubscribe', 'mailer-daemon', 'reply', 'do-not-reply', 'copyright',
-    # Корп/партнёрские
-    'partners', 'partnership', 'partner', 'business', 'biz',
-    'cooperation', 'collab', 'collaborate', 'pr', 'invest',
-    'investor', 'investors', 'ceo', 'cto', 'cfo', 'coo',
-    'editor', 'editorial', 'news', 'newsroom', 'events', 'event',
-    'community', 'social', 'director', 'manager', 'commercial', 'komm',
-    'advertising', 'ads', 'advert', 'adv', 'ad', 'reklama',
-    'booking', 'reservations',
-    'customerservice', 'cs', 'tech', 'technical', 'ops', 'operations',
-    'compliance', 'procurement', 'reception', 'frontdesk', 'helpdesk',
-    'itsupport', 'it', 'devops', 'sysadmin', 'accounts', 'accounting',
-    'buhgalter', 'bukhgalter', 'buh',
-    'finance', 'payroll', 'hq', 'headquarters', 'main', 'central',
-    'web', 'website', 'webteam', 'digital', 'online',
-    'noc', 'network', 'infra', 'infrastructure', 'platform',
-    'dev', 'development', 'design', 'creative', 'ux', 'ui', 'product',
-    # AI/ML/Data generic
-    'ai', 'ml', 'data', 'research', 'engineering', 'science',
-    'decision-makers', 'inquiries', 'apply', 'demo', 'trial',
-    # Academic / department / lab generics
-    'bioinformatics', 'genomics', 'proteomics', 'neuroscience',
-    'microbiology', 'immunology', 'biochemistry', 'computational',
-    'informatics', 'biotech', 'laboratory', 'lab', 'dept', 'department',
-    'faculty', 'admissions', 'registrar', 'library', 'provost',
-    'chancellor', 'dean', 'graduate', 'undergraduate', 'postdoc',
-    'grants', 'fellowship', 'scholarship', 'alumni', 'bursar',
-    'clinic', 'pharmacy', 'radiology', 'pathology', 'oncology',
-    'cardiology', 'pediatrics', 'surgery', 'nursing', 'emergency',
-    # Корп/инфраструктурные (часто пропускались)
-    'corporate', 'corp', 'contactinfo', 'contact-info',
-    # Русские институциональные (приёмка, абитуриенты, отдел)
-    'priem', 'priemnaya', 'abit', 'abiturient', 'otdel', 'otdeleniye',
-    'dekanat', 'rektorat', 'sekretariat', 'kanselyariya',
-    'ucheba', 'nauka', 'biblioteka', 'buhgalteriya',
+    # Системные no-reply — письмо никто не читает
+    'noreply', 'no-reply', 'donotreply', 'do-not-reply',
+    # Инфраструктурные — уйдёт в /dev/null
+    'mailer-daemon', 'postmaster', 'bounce', 'bounces', 'mailerdaemon',
+    # Spam-endpoints
+    'abuse', 'spam',
+    # Массовые рассылки — не личный ящик
+    'newsletter', 'notifications', 'alerts', 'unsubscribe', 'no_reply',
+    # Юридические/compliance — не люди
+    'dmca', 'tos', 'privacy', 'legal', 'copyright', 'gdpr',
 }
 
-# Паттерны в email-prefix которые указывают на корпоративный/generic email
-_GENERIC_PATTERNS = {'contact', 'support', 'info', 'admin', 'sales', 'help',
-                     'press', 'media', 'billing', 'noreply', 'service',
-                     'newsletter', 'unsubscribe', 'notification',
-                     'partner', 'business', 'marketing', 'event',
-                     'booking', 'advertis', 'commercial', 'investor',
-                     'decision-maker', 'enquir', 'inquir', 'demo', 'trial'}
+# Паттерны — только реально системные
+_GENERIC_PATTERNS = {
+    'noreply', 'no-reply', 'mailer', 'bounce', 'unsubscribe',
+    'notification', 'newsletter', 'do-not-reply', 'donotreply',
+}
 
 
 def _is_generic_email(email: str) -> bool:
-    """Проверяет, является ли email корпоративным/generic/фейковым/мусорным."""
+    """Проверяет, является ли email системным/недоставляемым/фейковым.
+    B2B-адреса (sales@, info@, ceo@, contact@, hr@ и т.п.) пропускаем — это валидные outreach-цели.
+    """
     import re as _re_ge
     prefix = email.split('@')[0].lower()
     domain = email.split('@')[1].lower() if '@' in email else ''
