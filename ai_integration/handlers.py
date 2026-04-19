@@ -13979,8 +13979,9 @@ async def add_email_leads(
                 id=campaign_id, user_id=user.id
             ).first()
         else:
-            campaign = session.query(EmailCampaign).filter_by(
-                user_id=user.id, status='active'
+            campaign = session.query(EmailCampaign).filter(
+                EmailCampaign.user_id == user.id,
+                EmailCampaign.status.in_(['active', 'running']),
             ).order_by(EmailCampaign.created_at.desc()).first()
         if not campaign:
             return " Нет активной кампании."

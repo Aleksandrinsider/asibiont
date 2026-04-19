@@ -13273,8 +13273,9 @@ class AnchorEngine:
                         if _email_sent == 0 and _known_contacts == 0:
                             _gp_lines.append(
                                 f'  🔍 «{_gt_pc}» [ФАЗА 0 – ПОИСК]:\n'
-                                f'    → ОБЯЗАТЕЛЬНО: web_search/search_users → save_email_contact\n'
-                                f'    → send_outreach_email пока некому (нет контактов), check_emails бессмысленно (нет писем) — сначала найди людей через web_search'
+                                f'    → ОБЯЗАТЕЛЬНО: web_search → add_email_leads([{{"email":"...", "name":"...", "company":"..."}}])\n'
+                                f'    → add_email_leads создаст черновики писем — после этого отправка запустится автоматически\n'
+                                f'    → НЕ нужно: send_outreach_email (некому), check_emails (0 писем) — сначала найди людей'
                             )
                             _any_constraint = True
                         elif _email_sent == 0 and _known_contacts > 0:
@@ -20817,6 +20818,8 @@ class AnchorEngine:
                     Anchor.source.like(f'email_campaign:{campaign.id}:send:%'),
                     # Не считаем stuck anchors (старше 2ч) — они зависли из-за ошибки/нет токенов
                     Anchor.created_at >= datetime.now(timezone.utc) - timedelta(hours=2),
+                    # Не считаем snoozed anchors (suppress_until в будущем) — они ждут, не активные
+                    Anchor.suppress_until.is_(None) | (Anchor.suppress_until <= datetime.now(timezone.utc)),
                 ).count()
                 if _pending_send_count >= 3:
                     logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
