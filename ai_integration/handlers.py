@@ -13334,7 +13334,7 @@ async def send_outreach_email(
         if existing and existing.status == 'draft':
             outreach = existing
             outreach.subject = subject
-            outreach.body = body
+            outreach.body = _body_signed
             outreach.status = 'sent'
             outreach.resend_id = resend_id
             outreach.sent_at = dt.now(tz.utc)
@@ -13347,7 +13347,7 @@ async def send_outreach_email(
                 recipient_company=recipient_company,
                 recipient_context=recipient_context,
                 subject=subject,
-                body=body,
+                body=_body_signed,
                 status='sent',
                 resend_id=resend_id,
                 sent_at=dt.now(tz.utc),
@@ -13407,7 +13407,7 @@ async def send_outreach_email(
                 user_id=user.id,
                 activity_type='email',
                 title=f"{_sndr_name + ' → ' if _sndr_name else ''}{recipient_email}{_name_part}",
-                content=f"Тема: {subject}\n{_from_line}\n{body}",
+                content=f"Тема: {subject}\n{_from_line}\n{_body_signed}",
                 target=recipient_email,
                 status='sent',
                 ref_id=outreach.id if hasattr(outreach, 'id') else None,
@@ -14537,6 +14537,12 @@ async def send_follow_up_email(
         from config import WEB_APP_URL
         _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
 
+        # Подпись отправителя (если ИИ не добавил сам)
+        _sig_name_fu = sender_name.strip()
+        _body_signed_fu = body
+        if _sig_name_fu and _sig_name_fu.lower() not in body.lower()[-200:]:
+            _body_signed_fu = body.rstrip() + f"\n\n— {_sig_name_fu}"
+
         _integrations = _get_user_email_integrations(user, session)
         _matched = None
         for _intg in _integrations:
@@ -14551,7 +14557,7 @@ async def send_follow_up_email(
         if _matched and _matched.get('type') == 'gmail_oauth':
             # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
             _ok_f, _res_f = await _send_via_gmail_api(
-                _matched['token_data'], to_clean, subject, body,
+                _matched['token_data'], to_clean, subject, _body_signed_fu,
                 sender_name, user, session,
             )
             if _ok_f:
@@ -14564,9 +14570,9 @@ async def send_follow_up_email(
             from config import RESEND_API_KEY as _rk_gm_f
             _rt_gm_f = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
             _gm_f_json = {'from': f"{sender_name} <outreach@asibiont.com>",
-                          'to': [to_clean], 'subject': subject, 'text': body}
+                          'to': [to_clean], 'subject': subject, 'text': _body_signed_fu}
             try:
-                _gm_f_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                _gm_f_json['html'] = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
             if _rt_gm_f and '@' in _rt_gm_f:
@@ -14597,9 +14603,9 @@ async def send_follow_up_email(
                 msg2 = _MMsmtp2('alternative')
                 msg2['From'] = f"{sender_name} <{_su2}>"
                 msg2['To'] = to_clean; msg2['Subject'] = subject
-                msg2.attach(_MimeSmtp2(body, 'plain', 'utf-8'))
+                msg2.attach(_MimeSmtp2(_body_signed_fu, 'plain', 'utf-8'))
                 try:
-                    _fu_html = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                    _fu_html = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
                     msg2.attach(_MimeSmtp2(_fu_html, 'html', 'utf-8'))
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
@@ -14623,8 +14629,8 @@ async def send_follow_up_email(
                     resp2 = await http2.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk2}', 'Content-Type': 'application/json'},
                         json={'from': f"{sender_name} <{_uf2}>", 'to': [to_clean], 'subject': subject,
-                              'text': body,
-                              'html': _build_email_html(_text_to_email_html(body), sender_name=sender_name),
+                              'text': _body_signed_fu,
+                              'html': _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name),
                               'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
                         timeout=_aiohttp.ClientTimeout(total=15))
                     rd2 = await resp2.json()
@@ -14641,10 +14647,10 @@ async def send_follow_up_email(
             try:
                 async with _safe_http() as http:
                     _fbu_json = {'from': f"{sender_name} <outreach@asibiont.com>",
-                                 'to': [to_clean], 'subject': subject, 'text': body,
+                                 'to': [to_clean], 'subject': subject, 'text': _body_signed_fu,
                                  'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}}
                     try:
-                        _fbu_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                        _fbu_json['html'] = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
                     except Exception as _e:
                         logger.debug("suppressed: %s", _e)
                     if sender_addr and '@' in sender_addr:
