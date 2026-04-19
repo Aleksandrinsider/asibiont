@@ -9610,7 +9610,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Очищаем DSML-теги и технические артефакты перед возвратом
     try:
         from .utils import clean_technical_details as _ctd_exec
-        _final_text = _ctd_exec(_final_text or '').strip() or _done_fb
+        _final_text = _ctd_exec(_final_text or '', preserve_tool_names=True).strip() or _done_fb
     except Exception as _e:
         logger.debug("suppressed: %s", _e)
 
@@ -10462,7 +10462,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         resp = _strip_agent_html(str(resp))
         try:
             from .utils import clean_technical_details as _ctd_ag
-            _cleaned_ag = _ctd_ag(resp)
+            # preserve_tool_names=True — не вырезаем упоминания инструментов из текста агента,
+            # иначе удаление "используй research_topic" оставляет дыры ". , чтобы..."
+            _cleaned_ag = _ctd_ag(resp, preserve_tool_names=True)
             if _cleaned_ag and _cleaned_ag.strip():
                 resp = _cleaned_ag
         except Exception as _e:
