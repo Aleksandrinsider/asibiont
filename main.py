@@ -11592,7 +11592,7 @@ except Exception as e:
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
         import aiohttp as _aio_h
         import json as _json_g
-        async with _aio_h.ClientSession() as _sess:
+        async with _safe_http() as _sess:
             async with _sess.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
@@ -12244,7 +12244,7 @@ async def api_agent_chat_handler(request):
                 messages.append({'role': m['role'], 'content': str(m['content'])})
         messages.append({'role': 'user', 'content': user_message})
 
-        async with _aio.ClientSession() as sess:
+        async with _safe_http() as sess:
             resp = await sess.post(
                 'https://api.deepseek.com/v1/chat/completions',
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},

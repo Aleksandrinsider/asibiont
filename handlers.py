@@ -1205,8 +1205,7 @@ async def _process_text_message_inner(user_id, text, message, state, user_lock):
                         _img_url = _img_match.group(2).strip()
                         try:
                             # Скачиваем изображение
-                            import aiohttp
-                            async with aiohttp.ClientSession() as _img_session:
+                            async with _safe_http() as _img_session:
                                 async with _img_session.get(_img_url, timeout=aiohttp.ClientTimeout(total=30)) as _img_resp:
                                     if _img_resp.status == 200:
                                         _img_bytes = await _img_resp.read()

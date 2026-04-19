@@ -11596,7 +11596,7 @@ async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
                 except Exception:
                     return None
 
-            async with _aiohttp_hh.ClientSession() as _hh_sess:
+            async with _safe_http() as _hh_sess:
                 # Собираем ID вакансий по всем запросам
                 _vacancy_ids = []
                 for _hh_q in _hh_queries:
@@ -15001,7 +15001,7 @@ async def _send_via_gmail_oauth(
     _raw_go = _b64_go.urlsafe_b64encode(msg_go.as_bytes()).decode()
 
     async def _gmail_post(token):
-        async with _ah_go.ClientSession() as _hh:
+        async with _safe_http() as _hh:
             _rr = await _hh.post(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
                 headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
@@ -15018,7 +15018,7 @@ async def _send_via_gmail_oauth(
         # Обновляем access_token
         try:
             from config import GOOGLE_CLIENT_ID as _GCI_r, GOOGLE_CLIENT_SECRET as _GCS_r
-            async with _ah_go.ClientSession() as _hh2:
+            async with _safe_http() as _hh2:
                 _tr = await _hh2.post(
                     'https://oauth2.googleapis.com/token',
                     data={
@@ -15188,7 +15188,7 @@ async def _send_via_gmail_api(
         if not refresh_token or not _GCI_gapi or not _GCS_gapi:
             return False
         try:
-            async with _ah_gapi.ClientSession() as _hrf:
+            async with _safe_http() as _hrf:
                 _r = await _hrf.post(
                     'https://oauth2.googleapis.com/token',
                     data={
@@ -15231,7 +15231,7 @@ async def _send_via_gmail_api(
         except Exception:
             pass  # plain-text fallback
         raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
-        async with _ah_gapi.ClientSession() as _hgm:
+        async with _safe_http() as _hgm:
             _resp = await _hgm.post(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
                 headers={
