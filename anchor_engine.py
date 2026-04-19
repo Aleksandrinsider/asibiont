@@ -8453,14 +8453,16 @@ class AnchorEngine:
                                         r'\s+по\s+(?:\w+\s+)?«[^»]{15,}»', '', _coord_text_clean_save
                                     ).strip()
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
-                                    _ap_assign_goals = [g.get('title', '')[:120] for g in data.get('goals', [])[:2]]
-                                    _ap_assign_gstr = ', '.join(t for t in _ap_assign_goals if t)
+                                    # Выбираем одну основную цель (первую в списке = самая приоритетная)
+                                    # Не склеиваем через запятую — это путает агентов
+                                    _ap_assign_goals = data.get('goals', [])
+                                    _ap_primary_goal = _ap_assign_goals[0].get('title', '')[:120] if _ap_assign_goals else ''
                                     _coord_content = json.dumps({
                                         '__agent': {'name': 'ASI', 'id': 0, 'avatar_url': ''},
                                         'text': _coord_text_clean_save,
                                         '__to_agent': _chosen_name,
                                         '__anchor_type': 'goal_autopilot_assignment',
-                                        '__goal_title': _ap_assign_gstr[:200],
+                                        '__goal_title': _ap_primary_goal,
                                     }, ensure_ascii=False)
                                     _cs.add(Interaction(
                                         user_id=user.id,
