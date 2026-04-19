@@ -8295,6 +8295,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _action_evidence: list[str] = []  # короткие доказательства из результатов инструментов
     _goal_progress_blocked = False  # True если update_goal_progress был отклонён guard'ом
     _save_note_count = 0  # ограничение: не более 1 save_note за цикл автопилота
+    _email_ok_count = 0   # реально отправленные письма (без ⛔-блокировок)
     _total_ap_tokens = 0  # суммарный расход DeepSeek-токенов за все AI-вызовы в этом цикле
     # Adaptive dispatch: action chain per cycle, round-robin чередует агентов
     # autopilot: search → save → send → progress (3 итерации)
@@ -8542,20 +8543,23 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _was_save_contact = _last_tool_local == 'save_email_contact'
             _was_send = 'send_outreach_email' in _tools_used
             _was_save = 'save_email_contact' in _tools_used
-            _send_count = _tools_used.count('send_outreach_email')
+            _send_attempts = _tools_used.count('send_outreach_email')
             # Адаптивный порог: больше интеграций = больше действий за сессию
             _min_sends_before_update = min(2 + _intg_count, 6) if _has_outreach_intg else 2
 
-            if _was_send and _send_count >= _min_sends_before_update and 'update_goal_progress' not in _tools_used:
-                # Достаточно писем отправлено → финализируй
+            if _was_send and _email_ok_count >= _min_sends_before_update and 'update_goal_progress' not in _tools_used:
+                # Достаточно писем РЕАЛЬНО отправлено → финализируй
                 _messages.append({"role": "user", "content": (
-                    f"Отправлено {_send_count} писем (использовал: {_used_str}). "
+                    f"Успешно отправлено {_email_ok_count} писем (использовал: {_used_str}). "
                     "ФИНАЛЬНЫЙ ШАГ — update_goal_progress: обнови прогресс цели с кратким итогом."
                 )})
-            elif _was_send and _send_count < _min_sends_before_update and 'update_goal_progress' not in _tools_used:
+            elif _was_send and _email_ok_count < _min_sends_before_update and 'update_goal_progress' not in _tools_used:
                 # Ещё есть контакты для отправки
+                _fail_note = ''
+                if _send_attempts > _email_ok_count:
+                    _fail_note = f' ({_send_attempts - _email_ok_count} писем заблокировано — исправь ошибки или найди другие контакты.)'
                 _messages.append({"role": "user", "content": (
-                    f"Отправлено {_send_count}/{_min_sends_before_update} (использовал: {_used_str}). "
+                    f"Реально отправлено {_email_ok_count}/{_min_sends_before_update} (использовал: {_used_str}).{_fail_note} "
                     "Если есть ещё найденные контакты с email — отправь следующее письмо. "
                     "Если все обработаны — вызови update_goal_progress."
                 )})
@@ -9099,6 +9103,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                 _goal_progress_blocked = False
                         if _tname == 'save_note':
                             _save_note_count += 1
+                        # Трекинг реально успешных email-отправок (без ⛔-блокировок)
+                        if _tname == 'send_outreach_email' and _tc_result:
+                            _tc_str = str(_tc_result)
+                            if '⛔' not in _tc_str and '⚠' not in _tc_str and 'ошибка' not in _tc_str.lower() and 'error' not in _tc_str.lower():
+                                _email_ok_count += 1
                         if _tname in _ACTION_EVIDENCE_TOOLS:
                             import re as _re_ev
                             _email_ev = ''
@@ -9136,6 +9145,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     except Exception as _lr: logger.debug("suppressed learner: %s", _lr)
 
             _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+            # ── Retry-hint: если send_outreach_email заблокирован исправимой ошибкой ──
+            if _tname == 'send_outreach_email' and _tc_result and _is_autopilot_task:
+                _tc_str_rh = str(_tc_result)
+                _FIXABLE_MARKERS = ('ПЕРЕПИШИ', 'перепиши', 'на английском', 'на English',
+                                    'не упоминается в теле', 'плейсхолдер', 'placeholder')
+                if any(m in _tc_str_rh for m in _FIXABLE_MARKERS):
+                    _messages.append({"role": "user", "content": (
+                        "Письмо заблокировано исправимой ошибкой. "
+                        "ИСПРАВЬ параметры и вызови send_outreach_email повторно. "
+                        "НЕ пиши текст — вызови инструмент!"
+                    )})
         _tool_call_count += 1
         # Добавляем фиктивные результаты для пропущенных tool_calls (OpenAI/DeepSeek требует все)
         for _tc_skip in _tool_calls[_tc_limit:]:
