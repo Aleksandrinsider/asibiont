@@ -551,15 +551,17 @@ def clean_technical_details(text, preserve_tool_names: bool = False):
         # НЕ трогаем обычный текст вроде "Python (язык)" или "AI (artificial intelligence)"
         text = re.sub(r'\b[a-z]+_[a-z_]+\([^)]*\)', '', text)
         # Удаляем фразы о вызове функций (только когда tool names НЕ сохраняются)
+        # ВАЖНО: \w+ заменён на [a-z_]+ чтобы не захватывать кириллические слова
+        # (после замены tool names на русские аналоги выше, "используй проверка" ловил "проверка")
         _call_patterns = [
-            r"вызываю\s+\w+(\(\))?",
-            r"вызову\s+\w+(\(\))?",
-            r"вызови\s+(инструмент\s+)?\w+(\(\))?",
-            r"используй\s+(инструмент\s+)?\w+(\(\))?",
+            r"вызываю\s+[a-z_]+(\(\))?",
+            r"вызову\s+[a-z_]+(\(\))?",
+            r"вызови\s+(инструмент\s+)?[a-z_]+(\(\))?",
+            r"используй\s+(инструмент\s+)?[a-z_]+(\(\))?",
             r"сейчас\s+вызову",
             r"буду\s+вызывать",
-            r"нужно\s+вызвать\s+\w+",
-            r"можно\s+вызвать\s+\w+",
+            r"нужно\s+вызвать\s+[a-z_]+",
+            r"можно\s+вызвать\s+[a-z_]+",
         ]
         for pattern in _call_patterns:
             text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
@@ -745,9 +747,12 @@ def sanitize_live_team_chat_text(
 
     import re
 
-    # Для поручений координатора сохраняем имена инструментов — агент ДОЛЖЕН видеть точный tool (web_search, save_email_contact и т.д.)
+    # Для поручений координатора сохраняем имена инструментов — они будут удалены
+    # позднее в _sanitize_proactive_text вместе с предлогом (используя/через + tool_name).
+    # clean_technical_details заменяет tool names на русский ("check_emails" → "проверка почты"),
+    # но это ломает падежи ("используй проверка почты") и конфликтует с _call_patterns.
     _anchor = (anchor_type or '').lower().strip()
-    _preserve_tools = _anchor == 'goal_autopilot_assignment'
+    _preserve_tools = _anchor in ('goal_autopilot_assignment', 'coordinator_assignment')
     cleaned = clean_technical_details(text, preserve_tool_names=_preserve_tools).strip()
     if not cleaned:
         return ''

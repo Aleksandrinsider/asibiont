@@ -1531,15 +1531,35 @@ class HybridAutonomousAgent:
                     f"({prompt_chars} prompt + {history_chars} history chars)")
         
         # 1. Обрезаем историю — оставляем последние 4 сообщения
+        # Потерянные сообщения (-5..-14) превращаем в краткий дайджест,
+        # чтобы контекст предыдущих реплик не пропадал.
         if len(history) > 4 and history_chars > _max_history:
             old_len = len(history)
-            # Сжимаем старые сообщения: оставляем последние 4
+            dropped = history[:-4]
             keep = history[-4:]
-            removed_chars = sum(len(m.get('content', '')) for m in history[:-4])
+            removed_chars = sum(len(m.get('content', '')) for m in dropped)
+            # Формируем дайджест потерянных сообщений (≤1200 символов)
+            _gap_lines = []
+            _gap_budget = 1200
+            for _gm in dropped:
+                _gr = _gm.get('role', '')
+                _gc = (_gm.get('content', '') or '').strip()
+                if not _gc:
+                    continue
+                _icon = '👤' if _gr == 'user' else '🤖'
+                _line = f'  {_icon} {_gc[:150]}'
+                if sum(len(l) for l in _gap_lines) + len(_line) > _gap_budget:
+                    break
+                _gap_lines.append(_line)
+            if _gap_lines:
+                _gap_digest = '\n[ПРОПУЩЕННЫЕ РЕПЛИКИ (контекст)]\n' + '\n'.join(_gap_lines) + '\n'
+                base_prompt += _gap_digest
+                # Не считаем как freed — это добавлено обратно
+                removed_chars -= len(_gap_digest)
             history = keep
-            trimmed += removed_chars
+            trimmed += max(removed_chars, 0)
             logger.info(f"[TOKEN_BUDGET] Trimmed history: {old_len} → {len(history)} msgs, "
-                       f"freed ~{removed_chars // 3} tokens")
+                       f"gap digest {len(_gap_lines)} lines, freed ~{max(removed_chars, 0) // 3} tokens")
         
         if trimmed >= overflow:
             return base_prompt, history

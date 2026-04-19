@@ -790,7 +790,9 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
             'get_news_trends', 'get_rss_feed', 'delegate_to_agent',
             'get_metrics', 'search_contacts', 'get_funnel_data',
         ]
-        _pattern = r'\b(?:(?:через|с помощью|используя|действие)\s+)?(?:' + '|'.join(_re_san.escape(t) for t in _tool_names) + r')\b'
+        _tool_alt = '|'.join(_re_san.escape(t) for t in _tool_names)
+        # Основной паттерн: предлог? + tool_name + опциональная запятая/точка
+        _pattern = r'\b(?:(?:через|с помощью|используя|действие)\s+)?(?:инструмент\s+)?(?:' + _tool_alt + r')\b[,;]?\s*'
         _TOOL_NAMES_RE = _re_san.compile(_pattern, _re_san.IGNORECASE)
     t = _TOOL_NAMES_RE.sub('', text)
     # Strip report-style section headers (e.g. "Что обнаружил:", "Дальше думаю так:", "Итог:")
@@ -835,13 +837,17 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     # Clean up dangling prepositions/words left after tool name removal
     t = _re_san.sub(r'\b(?:через|с помощью|используя|действие)\s*[.,;!?]', '.', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\b(?:через|с помощью|используя|действие)\s*$', '', t, flags=_re_san.IGNORECASE)
+    # "используй чтобы" / "вызови для" — dangling verb after tool name removal
+    t = _re_san.sub(r'\b(?:используй|используя|вызови|вызову|через|с помощью)\s+(?:инструмент\s+)?(?=чтобы|для|и |$)', '', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\bРезультат\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
     t = _re_san.sub(r'\bЗафикси\s*[.,;!?]?\s*$', '', t, flags=_re_san.IGNORECASE)
     # Strip empty parentheses artifacts "()" left by LLM coordinator template placeholders
     # e.g. "следующий шаг () по цели" → "следующий шаг по цели"
     t = _re_san.sub(r'\s*\(\s*\)\s*', ' ', t)
-    # Clean up leftover artifacts: double spaces, dangling dashes/commas
+    # Clean up leftover artifacts: double spaces, dangling dashes/commas, double punctuation
     t = _re_san.sub(r'\s+—\s+—', ' —', t)
+    t = _re_san.sub(r',{2,}', ',', t)
+    t = _re_san.sub(r',\.', '.', t)
     t = _re_san.sub(r'\s{2,}', ' ', t)
     t = _re_san.sub(r'\s+([.,;!?])', r'\1', t)
     # Sanitize hallucinated token amounts ("1000+500", "бесплатных токенов" etc.)
