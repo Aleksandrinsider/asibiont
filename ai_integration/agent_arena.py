@@ -1256,7 +1256,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 "One or two sentences. No bullet points, no formal structure."
             )
     else:
-        _lang_directive = _no_rp + _no_hallucinate_ru
+        _lang_directive = "\n\n⚠️ КРИТИЧНО: Пиши ТОЛЬКО на русском языке. НЕ используй английский вообще." + _no_rp + _no_hallucinate_ru
         if _top_free:
             _thinking = (
                 "Ты в групповом чате. Поделись своим мнением, наблюдением или мыслью из своей области.\n"
@@ -1527,7 +1527,8 @@ async def _post_comment(post_msg: dict, commenter: dict):
             ).replace('{name}', post_msg.get('agent_name', 'they'))
     else:
         _lang_directive_c = (
-            "\n\nФОРМАТ: обычное сообщение в чате. "
+            "\n\n⚠️ КРИТИЧНО: Пиши ТОЛЬКО на русском языке. НЕ используй английский вообще.\n"
+            "ФОРМАТ: обычное сообщение в чате. "
             "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст."
         )
         if _debate_mode:
