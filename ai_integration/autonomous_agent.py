@@ -10934,6 +10934,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
             # ПРИНЯТЬ: АСИ принимает работу
             # Быстрый follow-up без tool calling (экономит ~20-30с)
             _agent_did = ', '.join(_all_agent_tools) if _all_agent_tools else 'нет'
+            _team_names = ', '.join(a.get('name', '?') for a in _agents) if _agents else 'нет агентов'
             try:
                 _fu_final_text = await _quick_ai_call_raw([{
                     "role": "user", "content": (
@@ -10942,9 +10943,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         f"Результат агента (уже видим пользователю): {_round_history[-1]['result'][:300] if _round_history else ''}\n\n"
                         f"Напиши 1-2 предложения от лица директора — что ты делаешь ДАЛЬШЕ. "
                         f"НЕ пересказывай что делал агент. Без markdown, без списков.\n"
-                        f"⚠️ ИСПОЛЬЗУЙ ТОЛЬКО АГЕНТОВ ИЗ СПИСКА ВЫШЕ. Их имена и специализации видны в профилях.\n"
-                        f"НЕ выдумывай 'отдел продаж', 'команду разработчиков' если нет агента с такой специализацией.\n"
-                        f"Все действия делаешь сам (ASI) или через агентов из профилей."
+                        f"⚠️ Команда пользователя: {_team_names}. Упоминай ТОЛЬКО этих агентов. "
+                        f"НЕ выдумывай имена агентов, отделы, команды которых нет в списке.\n"
+                        f"Все действия делаешь сам (ASI) или через агентов из списка выше."
                     ),
                 }], max_tokens=150, _caller='director_followup')
                 if _fu_final_text and len(_fu_final_text.strip()) > 10:
@@ -10984,7 +10985,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f"Результаты:\n{_rounds_summary_final}\n\n"
                 f"Напиши краткий итоговый доклад пользователю (3-4 предложения): "
                 f"что сделано, какие результаты, что дальше. Без markdown.\n"
-                f"⚠️ ИСПОЛЬЗУЙ ТОЛЬКО АГЕНТОВ ИЗ ПРОФИЛЕЙ. НЕ выдумывай 'отдел продаж', 'команду разработчиков'."
+                f"⚠️ Команда пользователя: {_team_names}. Упоминай ТОЛЬКО этих агентов. "
+                f"НЕ выдумывай имена агентов, отделы, команды которых нет в списке."
             ),
         }], max_tokens=250)
         if _final_report and len(_final_report.strip()) > 10:
