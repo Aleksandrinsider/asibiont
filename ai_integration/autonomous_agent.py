@@ -8600,9 +8600,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Подумай: что НОВОГО я могу сделать с результатами? Другая аудитория? Другой канал?"
                 )})
         # Adaptive tokens: tool-calling iterations need room for both JSON tool-calls
-        # AND occasional text responses (summary/report). 1200 prevents mid-sentence truncation.
-        # Text-only final summary iterations need full response space (1600).
-        _iter_max_tokens = 1200 if _use_tools_now else 1600
+        # AND occasional text responses (summary/report). 1600 prevents mid-sentence truncation.
+        # Text-only final summary iterations need full response space (2500 for autopilot analysis).
+        if _is_autopilot_task:
+            _iter_max_tokens = 1600 if _use_tools_now else 2500  # autopilot: аналитика требует больше места
+        else:
+            _iter_max_tokens = 1200 if _use_tools_now else 1600  # обычный чат
         try:
             _resp = await _agent_inst.call_ai(
                 _messages,
@@ -9373,8 +9376,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     "Пиши как сообщение коллеге в чате — живо, со своим характером."
                 )})
             _summary_resp = await asyncio.wait_for(
-                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=1200, api_timeout=30),
-                timeout=35,
+                _agent_inst.call_ai(_messages, use_tools=False, max_tokens=2500, api_timeout=40),
+                timeout=45,
             )
             if _summary_resp and _summary_resp.get('choices'):
                 _summary_text = (_summary_resp['choices'][0]['message'].get('content') or '').strip()
@@ -9385,12 +9388,15 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _sum_err:
             logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
 
-    if _final_text and len(_final_text) > 3500 and _final_text != _done_fb:
-        # Обрезаем до последнего завершённого предложения в пределах 3500 символов
-        _cut = _final_text[:3500]
+    # ── Мягкий лимит для экстремально длинных ответов (избегаем проблем с UI) ──
+    # Если ответ >10k символов — обрезаем до последнего завершённого предложения в пределах 10k.
+    # Это защита от UI-багов, но даёт агенту свободу для нормальных аналитических ответов 3-8k.
+    if _final_text and len(_final_text) > 10000 and _final_text != _done_fb:
+        _cut = _final_text[:10000]
         _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
         if _last_dot > 200:
             _final_text = _cut[:_last_dot + 1]
+            logger.info("[DIRECTOR-EXEC] trimmed extreme length: %d → %d chars", len(_final_text), _last_dot + 1)
 
     # ── Пост-гард: прогресс был отклонён, но агент мог соврать в тексте ──
     if _goal_progress_blocked and _final_text and _final_text != _done_fb:
