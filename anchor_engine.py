@@ -8025,7 +8025,8 @@ class AnchorEngine:
                             # If truncated (doesn't end with sentence-ending punctuation), trim to last complete sentence
                             _gen = _gen.strip()
                             if _gen and _gen[-1] not in '.!?»':
-                                _last_period = max(_gen.rfind('.'), _gen.rfind('!'), _gen.rfind('?'))
+                                from ai_integration.utils import _rfind_sentence_end as _rfse
+                                _last_period = _rfse(_gen)
                                 if _last_period > len(_gen) * 0.4:  # at least 40% of text preserved
                                     _gen = _gen[:_last_period + 1]
                             # Clean raw tool calls with params: run_agent_action(action="get_news_trends") → get_news_trends
@@ -8196,11 +8197,8 @@ class AnchorEngine:
                                 _coord_text = _gen_s
                                 # ── Truncation guard: если LLM обрезал на середине предложения ──
                                 if _coord_text and not _coord_text[-1] in '.!?»")\n':
-                                    _last_sentence_end = max(
-                                        _coord_text.rfind('.'),
-                                        _coord_text.rfind('!'),
-                                        _coord_text.rfind('?'),
-                                    )
+                                    from ai_integration.utils import _rfind_sentence_end as _rfse2
+                                    _last_sentence_end = _rfse2(_coord_text)
                                     if _last_sentence_end > len(_coord_text) * 0.4:
                                         _coord_text = _coord_text[:_last_sentence_end + 1].strip()
                                         logger.info("[COORD] truncation-guard: trimmed to last complete sentence")
@@ -8480,7 +8478,13 @@ class AnchorEngine:
                         if self.bot and _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                             try:
                                 # Убираем дублирование имени: тело уже начинается с "Имя, ...", заголовок его показывает
-                                _tg_body = _coord_text_clean_save.strip()[:800]
+                                from ai_integration.utils import _rfind_sentence_end as _rfse3
+                                _tg_raw = _coord_text_clean_save.strip()
+                                if len(_tg_raw) > 800:
+                                    _tg_cut = _rfse3(_tg_raw, 800)
+                                    _tg_body = _tg_raw[:_tg_cut + 1] if _tg_cut > 300 else _tg_raw[:800]
+                                else:
+                                    _tg_body = _tg_raw
                                 import re as _re_tg_dup
                                 _tg_body = _re_tg_dup.sub(
                                     r'^' + _re_tg_dup.escape(_chosen_name) + r'\s*,\s*',
@@ -8721,7 +8725,7 @@ class AnchorEngine:
                     if _coord_text and not _skip_coord and len(_coord_text.strip()) > 15:
                         _coord_inject = (
                             f"🎯 ПОРУЧЕНИЕ КООРДИНАТОРА (выполни это ПЕРВЫМ ДЕЛОМ):\n"
-                            f"{_coord_text.strip()[:800]}\n\n"
+                            f"{_coord_text.strip()[:1200]}\n\n"
                             "Сначала выполни это поручение своими инструментами — потом контекст целей.\n\n"
                         )
                         task_text = _coord_inject + task_text

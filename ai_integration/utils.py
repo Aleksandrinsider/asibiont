@@ -676,6 +676,54 @@ def clean_technical_details(text, preserve_tool_names: bool = False):
 clean_content = clean_technical_details
 
 
+def _rfind_sentence_end(text: str, end: int | None = None) -> int:
+    """Find the last REAL sentence-ending period/!/?  in text[:end].
+
+    Skips dots inside URLs (dev.to, apollo.io), abbreviations (т.е., т.д., т.п.),
+    version numbers (v2.0), email-like patterns (user@x.com), and other non-sentence dots.
+    Returns index of the punctuation character, or -1 if not found.
+    """
+    if not text:
+        return -1
+    s = text if end is None else text[:end]
+    # Walk backwards to find a real sentence-ending punctuation
+    i = len(s) - 1
+    while i >= 0:
+        ch = s[i]
+        if ch in '!?':
+            return i
+        if ch == '.':
+            # Check if this dot is a real sentence end
+            # 1) Dot at very end with nothing after (or whitespace/quote) — likely real
+            after = s[i + 1] if i + 1 < len(s) else ''
+            before_word = ''
+            j = i - 1
+            while j >= 0 and (s[j].isalnum() or s[j] in '_-'):
+                j -= 1
+            before_word = s[j + 1:i].lower()
+
+            # Skip: URL-like (dev.to, apollo.io, vc.ru, hh.ru, etc.)
+            if after and after.isalpha() and len(before_word) >= 1:
+                i -= 1
+                continue
+            # Skip: abbreviations т.е., т.д., т.п., т.к., и.т.д, и.т.п
+            if before_word in ('т', 'и', 'н', 'г', 'д', 'п', 'к', 'е', 'л', 'ч'):
+                i -= 1
+                continue
+            # Skip: number.number (v2.0, 3.5, 1.2)
+            if before_word and before_word[-1:].isdigit() and after and after.isdigit():
+                i -= 1
+                continue
+            # Skip: domain-like pattern (word.word without space before next word)
+            if after and after.isalpha() and before_word and before_word.isalpha():
+                i -= 1
+                continue
+            # This looks like a real sentence end
+            return i
+        i -= 1
+    return -1
+
+
 def sanitize_live_team_chat_text(
     text,
     *,
@@ -773,7 +821,7 @@ def sanitize_live_team_chat_text(
             # Для поручений: режем по последнему полному предложению, а не по символу.
             # Это гарантирует что сообщение не обрывается на «…на.»
             _tail = cleaned[:max_chars]
-            _last_sent = max(_tail.rfind('.'), _tail.rfind('!'), _tail.rfind('?'))
+            _last_sent = _rfind_sentence_end(_tail)
             if _last_sent >= max_chars // 3:
                 cleaned = cleaned[:_last_sent + 1].strip()
             else:
@@ -792,27 +840,26 @@ def sanitize_live_team_chat_text(
         # Если текст обрезан без финальной пунктуации — режем до последней завершённой мысли.
         # НЕ добавляем фиктивную точку — это создаёт артефакты вида «...на.»
         if cleaned and cleaned[-1] not in '.!?':
-            _last_punc = max(cleaned.rfind('.'), cleaned.rfind('!'), cleaned.rfind('?'))
+            _last_punc = _rfind_sentence_end(cleaned)
             if _last_punc >= 40:
                 # есть хотя бы одно завершённое предложение — обрезаем до него
                 cleaned = cleaned[:_last_punc + 1].strip()
             # else: текст короткий/без знаков — оставляем как есть (честный обрыв лучше «...на.»)
 
-        # Detect trailing fragment-sentences: last sentence ends with a preposition
-        # (≤3 letters like «с», «и», «в») or starts with a subordinate conjunction
-        # («которые», «если», «что» etc.) — these are dangling clauses.
+        # Detect trailing fragment-sentences that start with subordinate conjunctions
+        # — these are dangling clauses from truncation.
         if cleaned:
-            _lp = max(cleaned.rfind('.'), cleaned.rfind('!'), cleaned.rfind('?'))
+            _lp = _rfind_sentence_end(cleaned)
             if _lp > 0:
-                _prev_p = max(cleaned.rfind('.', 0, _lp), cleaned.rfind('!', 0, _lp), cleaned.rfind('?', 0, _lp))
+                _prev_p = _rfind_sentence_end(cleaned, _lp)
                 _last_sent_text = cleaned[_prev_p + 1:_lp].strip() if _prev_p >= 0 else cleaned[:_lp].strip()
                 _lw = _last_sent_text.split()
-                _last_word = _lw[-1].lower().rstrip('.')  if _lw else ''
                 _first_word = _lw[0].lower() if _lw else ''
+                # Only remove if last sentence is a dangling subordinate clause
                 _is_frag = (
-                    len(_last_word) <= 3  # trailing preposition: «с», «и», «в», «на»
-                    or _first_word in ('которые', 'который', 'которой', 'которых', 'которого',
-                                       'если', 'хотя', 'пока', 'когда')
+                    _first_word in ('которые', 'который', 'которой', 'которых', 'которого',
+                                    'которую', 'которая', 'которому',
+                                    'если', 'хотя', 'пока', 'когда')
                     or len(_last_sent_text) < 8  # very short last sentence
                 )
                 if _is_frag and _prev_p >= 30:
