@@ -4280,12 +4280,11 @@ class HybridAutonomousAgent:
                 )
                 _ml_lower = (user_message or '').lower()
                 _is_analysis_q = any(kw in _ml_lower for kw in _ANALYSIS_KWORDS)
-                # Аналитические/стратегические вопросы требуют развёрнутых ответов
-                # Длинный ответ (про рынки, риски, стратегию) — норма для консультанта, не шум.
+                # Сократили лимиты для живого диалога: краткие ответы
                 if _is_last_iter and all_execution_results:
-                    _max_tok = 2500 if _is_analysis_q else 800
+                    _max_tok = 800 if _is_analysis_q else 500
                 else:
-                    _max_tok = 3000 if _is_analysis_q else 800
+                    _max_tok = 1000 if _is_analysis_q else 600
                 response = await self.call_ai(
                     messages,
                     use_tools=_allow_tools,
@@ -4791,52 +4790,6 @@ class HybridAutonomousAgent:
         final, issues = CognitiveEngine.validate_response(final, user_message)
         if issues:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
-
-        # Подсказка: если пользователь прямо просит сервис, которого нет — одно упоминание.
-        # Если агент уже сам написал про это — не дублируем.
-        try:
-            _missing_hint = _build_missing_integration_hint(user_id, user_message or '', final or '')
-            if _missing_hint and (user_message or '').strip():
-                # Добавляем если пользователь явно упомянул сервис ИЛИ подразумевает задачу под него
-                _msg_l = (user_message or '').lower()
-                _msg_has_service = any(
-                    kw in _msg_l
-                    for rule in _INTEGRATION_REQUEST_RULES
-                    for kw in rule['keywords']
-                )
-                # Семантические паттерны: задача без явного названия интеграции
-                if not _msg_has_service:
-                    _SEMANTIC_INTENTS = [
-                        (['отследи посылк', 'где посылк', 'статус посылк', 'трекинг посылк', 'посылка не пришл', 'найди посылк'],
-                         ['cdek', 'cdek_client', 'pochta', 'pochta_access']),
-                        (['где судно', 'статус судна', 'отследи судн', 'морской груз', 'судно в порт', 'флот на карт'],
-                         ['marinetraffic', 'marinetraffic_api']),
-                        (['котировки нефт', 'цена нефт', 'данные биржи', 'цена акц', 'стоимость активов', 'курс нефт'],
-                         ['alphavantage', 'alpha_vantage', 'finnhub', 'tinkoff']),
-                        (['оптимизируй рекламу', 'рекламный бюджет', 'кампания директ', 'управляй объявлен'],
-                         ['yandex_direct', 'yadirect', 'direct_token']),
-                        (['воронка продаж', 'новые лиды', 'добавь лид', 'обнови сделк', 'статус сделк'],
-                         ['amocrm', 'bitrix', 'hubspot']),
-                        (['остатки на складе', 'обнови цены', 'карточка товара', 'статистика продаж маркет'],
-                         ['wildberries', 'wb_token', 'ozon', 'moysklad']),
-                        (['опубликуй пост', 'запости в телеграм', 'отправь в канал'],
-                         ['telegram_bot_token', 'tg_bot']),
-                    ]
-                    try:
-                        _snap = _get_active_agent_integration_snapshot(user_id)
-                        _snap_keys = (_snap.get('keys_text') or '').lower()
-                        _snap_caps = (_snap.get('caps_text') or '').lower()
-                        for _intent_kws, _presence_kws in _SEMANTIC_INTENTS:
-                            if any(kw in _msg_l for kw in _intent_kws):
-                                if not any(p in _snap_keys or p in _snap_caps for p in _presence_kws):
-                                    _msg_has_service = True
-                                    break
-                    except Exception:
-                        pass
-                if _msg_has_service:
-                    final = f"{final}\n\n{_missing_hint}".strip()
-        except Exception as _lh_err:
-            logger.debug("[INTG HINT] proactive missing-integration hint skipped: %s", _lh_err)
 
         # Встраиваем картинку в ответ если generate_image отработал успешно
         import re as _re
