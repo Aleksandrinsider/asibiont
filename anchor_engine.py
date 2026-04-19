@@ -8430,10 +8430,10 @@ class AnchorEngine:
                                     speaker_name='ASI',
                                     target_name=_chosen_name,
                                 ) if _coord_text else _coord_text
-                                # Для пользователя: заменяем tool-имена на человеко-понятные описания
-                                # run_agent_action(action="get_news_trends") → "анализ новостей"
+                                # Для пользователя: сохраняем tool-имена как есть (research_topic, create_post и т.д.)
+                                # Пользователь должен видеть точные названия инструментов
                                 if _coord_text_clean_save:
-                                    _coord_text_clean_save = _ctd_coord(_coord_text_clean_save, preserve_tool_names=False)
+                                    _coord_text_clean_save = _ctd_coord(_coord_text_clean_save, preserve_tool_names=True)
                                 if _coord_text_clean_save:
                                     try:
                                         from ai_integration.conversation_history import sanitize_token_hallucinations as _sth_coord
