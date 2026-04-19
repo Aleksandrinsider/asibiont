@@ -6455,6 +6455,53 @@ def _build_user_context_sync(user_db_id: int) -> str:
                 + '\n→ Не дублируй действия коллег. Координируй со всеми.'
             )
 
+    # --- История диалога с пользователем (последние 8-10 сообщений) ---
+    # КРИТИЧНО ДЛЯ АВТОПИЛОТА: агенты должны учитывать комментарии/корректировки владельца
+    try:
+        from models import Session as _Db_hist, Interaction as _Int_hist
+        import datetime as _dt_hist
+        _s_hist = _Db_hist()
+        try:
+            _hist_cutoff = _dt_hist.datetime.now(_dt_hist.timezone.utc) - _dt_hist.timedelta(hours=12)
+            _hist_rows = (
+                _s_hist.query(_Int_hist)
+                .filter(
+                    _Int_hist.user_id == user_db_id,
+                    _Int_hist.message_type.in_(['user', 'assistant', 'agent_msg', 'proactive']),
+                    _Int_hist.created_at >= _hist_cutoff,
+                )
+                .order_by(_Int_hist.created_at.desc())
+                .limit(10)
+                .all()
+            )
+            if _hist_rows:
+                _hist_lines = []
+                for _h in reversed(_hist_rows):  # От старых к новым
+                    _role = 'Владелец' if _h.message_type == 'user' else 'ASI/Агент'
+                    _ts = _h.created_at.strftime('%d.%m %H:%M') if _h.created_at else ''
+                    try:
+                        import json as _json_hist
+                        _cnt = _json_hist.loads(_h.content) if isinstance(_h.content, str) else (_h.content or {})
+                        _text = (_cnt.get('text') or _cnt.get('message', ''))[:200]
+                        _agent_name = (_cnt.get('__agent', {}) or {}).get('name', '')
+                        if _agent_name and _h.message_type in ('agent_msg', 'proactive'):
+                            _role = _agent_name
+                    except Exception:
+                        _text = str(_h.content or '')[:200]
+                    if _text and _text.strip():
+                        _hist_lines.append(f'[{_ts}] {_role}: {_text.strip()}')
+                if _hist_lines:
+                    parts.append(
+                        '💬 ИСТОРИЯ ДИАЛОГА (12ч) — ВЛАДЕЛЕЦ МОЖЕТ КОРРЕКТИРОВАТЬ СТРАТЕГИЮ В РЕАЛЬНОМ ВРЕМЕНИ:\n'
+                        + '\n'.join(_hist_lines)
+                        + '\n→ Если владелец дал указание/комментарий — учитывай его в следующих действиях.'
+                        + '\n→ Последнее слово владельца = актуальная стратегия, даже если противоречит старым целям.'
+                    )
+        finally:
+            _s_hist.close()
+    except Exception as _hist_err:
+        logger.debug('[CONTEXT] dialog history load failed: %s', _hist_err)
+
     # --- Правила пользователя (из user.memory) ---
     try:
         if user and user.memory:
