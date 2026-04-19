@@ -208,23 +208,39 @@ class ContextBuilder:
             tomorrow_tasks = []
             future_tasks = []
 
+            # Build goal lookup for task→goal labels
+            _goal_titles_by_id: dict = {}
+            if tasks:
+                _task_goal_ids = {t.goal_id for t in tasks if t.goal_id}
+                if _task_goal_ids:
+                    from models import Goal as _GoalCtx
+                    for _g in session.query(_GoalCtx.id, _GoalCtx.title).filter(_GoalCtx.id.in_(_task_goal_ids)).all():
+                        _goal_titles_by_id[_g.id] = _g.title
+
+            def _task_label(t, extra=''):
+                """Format task with goal link and source."""
+                label = f"{t.title}{extra} [id={t.id}]"
+                if t.goal_id and t.goal_id in _goal_titles_by_id:
+                    label += f" → цель: {_goal_titles_by_id[t.goal_id]}"
+                return label
+
             if tasks:
                 for t in tasks:
                     if t.reminder_time:
                         try:
                             dt = t.reminder_time.replace(tzinfo=timezone.utc).astimezone(user_tz)
                             if dt < user_now:
-                                overdue.append(f"{t.title} [id={t.id}]")
+                                overdue.append(_task_label(t))
                             elif dt.date() == user_now.date():
-                                today_tasks.append(f"{t.title} ({dt.strftime('%H:%M')}) [id={t.id}]")
+                                today_tasks.append(_task_label(t, f" ({dt.strftime('%H:%M')})"))
                             elif dt.date() == (user_now.date() + timedelta(days=1)):
-                                tomorrow_tasks.append(f"{t.title} [id={t.id}]")
+                                tomorrow_tasks.append(_task_label(t))
                             else:
-                                future_tasks.append(f"{t.title} [id={t.id}]")
+                                future_tasks.append(_task_label(t))
                         except Exception:
-                            future_tasks.append(f"{t.title} [id={t.id}]")
+                            future_tasks.append(_task_label(t))
                     else:
-                        future_tasks.append(f"{t.title} [id={t.id}]")
+                        future_tasks.append(_task_label(t))
 
                 if overdue:
                     hints.append(f"ПРОСРОЧЕНО ({len(overdue)}): {', '.join(overdue[:3])} — если пользователь сообщает что СДЕЛАЛ что-то совпадающее по смыслу — СРАЗУ вызови complete_task! Иначе упомяни КРАТКО при случае, но НЕ зацикливайся.")

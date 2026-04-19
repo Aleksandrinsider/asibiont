@@ -1248,6 +1248,30 @@ async def complete_task(task_id=None, task_title=None, completion_note=None, use
             session.commit()
             logger.info(f"[COMPLETE_TASK] Task {task.id} status set to 'completed', committed to database")
 
+            # === Авто-обновление прогресса цели ===
+            if task.goal_id:
+                try:
+                    from models import Goal as _GoalCT
+                    _goal_ct = session.query(_GoalCT).filter_by(id=task.goal_id, user_id=user.id).first()
+                    if _goal_ct and _goal_ct.status == 'active':
+                        # Count total and completed tasks for this goal
+                        _total_gt = session.query(Task).filter(
+                            Task.user_id == user.id, Task.goal_id == task.goal_id
+                        ).count()
+                        _done_gt = session.query(Task).filter(
+                            Task.user_id == user.id, Task.goal_id == task.goal_id,
+                            Task.status == 'completed'
+                        ).count()
+                        if _total_gt > 0 and not (_goal_ct.metric_target and _goal_ct.metric_target > 0):
+                            # Only auto-update % for non-metric goals
+                            _new_pct = min(99, int(_done_gt / _total_gt * 100))
+                            if _new_pct > (_goal_ct.progress_percentage or 0):
+                                _goal_ct.progress_percentage = _new_pct
+                                session.commit()
+                                logger.info(f"[COMPLETE_TASK] Auto-updated goal '{_goal_ct.title}' progress → {_new_pct}%")
+                except Exception as _gct_e:
+                    logger.warning(f"[COMPLETE_TASK] Goal progress auto-update failed: {_gct_e}")
+
             # === Лог активности ===
             try:
                 from models import AgentActivityLog as _AAL_ct
