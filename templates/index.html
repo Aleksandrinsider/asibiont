@@ -625,6 +625,67 @@
             .steps-grid {
                 grid-template-columns: 1fr;
             }
+            .blog-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        /* ── Блог — последние посты ── */
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+        .blog-card {
+            background: #FFFFFF;
+            border: 1px solid #D1D9E0;
+            border-radius: 10px;
+            padding: 20px;
+            transition: border-color 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+        .blog-card:hover {
+            border-color: #1F2328;
+        }
+        .blog-card-date {
+            font-size: 11px;
+            color: #9CA3AF;
+            margin: 0 0 8px 0;
+            letter-spacing: 0.02em;
+        }
+        .blog-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1F2328;
+            margin: 0 0 8px 0;
+            line-height: 1.4;
+        }
+        .blog-card-title a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .blog-card-title a:hover {
+            color: #374151;
+        }
+        .blog-card-excerpt {
+            font-size: 13px;
+            color: #59636E;
+            line-height: 1.55;
+            flex: 1;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .blog-card-more {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #374151;
+            font-weight: 500;
+            text-decoration: none;
+        }
+        .blog-card-more:hover {
+            color: #1F2328;
         }
         /* ── Интеграции — бегущая строка ── */
         .integrations-section {
@@ -1102,6 +1163,18 @@
                 </div>
             </div>
 
+            <!-- Последние посты из блога -->
+            <div class="steps-section" id="blog-latest-section" style="display: none;">
+                <div class="steps-section-header">
+                    <p class="steps-section-label" id="blog-label">Блог</p>
+                    <h2 class="steps-section-title" id="blog-title">Последние публикации</h2>
+                </div>
+                <div class="blog-grid" id="blog-grid"></div>
+                <div style="text-align: center; margin-top: 16px;">
+                    <a href="/blog" id="blog-all-link" style="font-size: 13px; color: #374151; font-weight: 500; text-decoration: none; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 20px; display: inline-block; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">Все публикации →</a>
+                </div>
+            </div>
+
         </div>
 
         <!-- Call to Action -->
@@ -1512,6 +1585,46 @@ if (pwaBtn) {
     }
   });
 }
+
+// ── Blog: загрузка последних 3 постов ──
+(function() {
+  var lang = (document.documentElement.lang || 'ru').substring(0, 2);
+  fetch('/api/blog?per_page=3&lang=' + lang)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var posts = data.posts || [];
+      if (!posts.length) return;
+      var grid = document.getElementById('blog-grid');
+      var section = document.getElementById('blog-latest-section');
+      if (!grid || !section) return;
+      // i18n
+      var lbl = document.getElementById('blog-label');
+      var ttl = document.getElementById('blog-title');
+      var lnk = document.getElementById('blog-all-link');
+      if (lang === 'en') {
+        if (lbl) lbl.textContent = 'Blog';
+        if (ttl) ttl.textContent = 'Latest posts';
+        if (lnk) lnk.textContent = 'All posts →';
+      }
+      posts.forEach(function(p) {
+        var d = p.created_at ? new Date(p.created_at) : null;
+        var dateStr = d ? d.toLocaleDateString(lang === 'en' ? 'en-US' : 'ru-RU', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
+        var excerpt = (p.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
+        if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
+        var readMore = lang === 'en' ? 'Read →' : 'Читать →';
+        var card = document.createElement('div');
+        card.className = 'blog-card';
+        card.innerHTML =
+          '<div class="blog-card-date">' + dateStr + '</div>' +
+          '<div class="blog-card-title"><a href="/blog/' + (p.slug || p.id) + '">' + (p.title || '') + '</a></div>' +
+          '<div class="blog-card-excerpt">' + excerpt + '</div>' +
+          '<a href="/blog/' + (p.slug || p.id) + '" class="blog-card-more">' + readMore + '</a>';
+        grid.appendChild(card);
+      });
+      section.style.display = '';
+    })
+    .catch(function() {});
+})();
 </script>
 </body>
 </html>
