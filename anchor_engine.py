@@ -21831,7 +21831,7 @@ class AnchorEngine:
                 if not has_enough_tokens(user.telegram_id, action, session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск поста — нет токенов")
                     return
-                _sp_res_post = spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}', session=session, auto_commit=False)
+                _sp_res_post = spend_tokens(user.telegram_id, action, description=f'anchor_{anchor.anchor_type}')
                 if not _sp_res_post.get('success'):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: spend race — {_sp_res_post.get('error', '')}")
                     return
@@ -22101,7 +22101,7 @@ class AnchorEngine:
                 if not has_enough_tokens(user.telegram_id, 'proactive_post', session=session):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: пропуск контент-кампании — нет токенов")
                     return
-                _sp_res_camp = spend_tokens(user.telegram_id, 'proactive_post', description='content_campaign_publish', session=session, auto_commit=False)
+                _sp_res_camp = spend_tokens(user.telegram_id, 'proactive_post', description='content_campaign_publish')
                 if not _sp_res_camp.get('success'):
                     logger.info(f"[ANCHOR] User {user.telegram_id}: spend race campaign — {_sp_res_camp.get('error', '')}")
                     return
@@ -23213,7 +23213,7 @@ class AnchorEngine:
                 if not FREE_ACCESS_MODE and sent_count > 0:
                     from token_service import spend_tokens as _sp_bulk
                     for _i_sent in range(sent_count):
-                        _sp_res_bulk = _sp_bulk(user.telegram_id, action, description=f'anchor_email_outreach_send {_i_sent+1}/{sent_count}', session=session, auto_commit=False)
+                        _sp_res_bulk = _sp_bulk(user.telegram_id, action, description=f'anchor_email_outreach_send {_i_sent+1}/{sent_count}')
                         if not _sp_res_bulk.get('success'):
                             logger.info("[ANCHOR] User %d: email billing stopped at %d/%d — %s", user.telegram_id, _i_sent+1, sent_count, _sp_res_bulk.get('error', ''))
                             break
@@ -23327,7 +23327,7 @@ class AnchorEngine:
 
                 # Списываем токены за follow-up
                 if not FREE_ACCESS_MODE:
-                    _fu_spend = spend_tokens(user.telegram_id, action, description=f'anchor_email_follow_up', session=session, auto_commit=False)
+                    _fu_spend = spend_tokens(user.telegram_id, action, description=f'anchor_email_follow_up')
                     if not _fu_spend.get('success'):
                         logger.info("[ANCHOR] User %d: skip follow-up billing — %s", user.telegram_id, _fu_spend.get('error', ''))
 
@@ -23784,8 +23784,7 @@ class AnchorEngine:
                 # Списываем токены
                 if not FREE_ACCESS_MODE and _reply_body:
                     spend_tokens(user.telegram_id, 'email_send',
-                                 description=f'anchor_email_reply to {recipient_email}',
-                                 session=session, auto_commit=False)
+                                 description=f'anchor_email_reply to {recipient_email}')
 
                 # Помечаем якорь как доставленный
                 _ai_result_short = repr((ai_result or '')[:60])
@@ -24821,7 +24820,7 @@ class AnchorEngine:
                         return
                     logger.info(f"[ANCHOR] User {user.telegram_id}: ALWAYS_DELIVER — доставка без токенов")
                 else:
-                    _sp_res_proa = spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor', session=session, auto_commit=False)
+                    _sp_res_proa = spend_tokens(user.telegram_id, 'proactive_message', description='proactive anchor')
                     if not _sp_res_proa.get('success'):
                         if not _has_always_deliver:
                             logger.info(f"[ANCHOR] User {user.telegram_id}: spend race proactive — {_sp_res_proa.get('error', '')}")

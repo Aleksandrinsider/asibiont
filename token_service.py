@@ -245,6 +245,13 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
             db_user_id = user.id
             new_balance = user.token_balance
         else:
+            # Короткий lock_timeout: если строка заблокирована другой транзакцией,
+            # не ждём 60с (statement_timeout) — фейлим за 5с и возвращаем ошибку.
+            # Вызывающий код (якорь) продолжит без биллинга, а следующий цикл спишет.
+            try:
+                session.execute(sa_text("SET LOCAL lock_timeout = '5s'"))
+            except Exception:
+                pass  # SQLite / старый PG — игнорируем
             result = session.execute(
                 sa_text(
                     "UPDATE users SET token_balance = token_balance - :cost, "
@@ -325,6 +332,10 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
             new_balance = user.token_balance
             db_user_id = user.id
         else:
+            try:
+                session.execute(sa_text("SET LOCAL lock_timeout = '5s'"))
+            except Exception:
+                pass
             result = session.execute(
                 sa_text(
                     "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amount "
@@ -425,7 +436,7 @@ async def check_and_deduct(user_id: int, action: str, session=None) -> bool:
     """
     if not has_enough_tokens(user_id, action, session):
         return False
-    result = spend_tokens(user_id, action, description=f'anchor_{action}', session=session, auto_commit=False)
+    result = spend_tokens(user_id, action, description=f'anchor_{action}')
     return result.get('success', False)
 
 
