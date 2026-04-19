@@ -2987,7 +2987,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if agent_history:
         # ── Группируем по "сегодня" vs "ранее" для чёткой картины ──
         import re as _re_mem
-        _today_str = datetime.now().strftime('%d.%m')
+        _today_str = datetime.now(AnchorEngine._get_user_tz(user) if user else pytz.timezone('Europe/Moscow')).strftime('%d.%m')
         _today_items = [h for h in agent_history if h.startswith(_today_str)]
         _older_items = [h for h in agent_history if not h.startswith(_today_str)]
         _mem_lines = []
@@ -3732,7 +3732,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             logger.debug("suppressed campaign_directive: %s", _e_cap)
 
     from datetime import datetime as _dt_ap
-    _today_str = _dt_ap.now().strftime('%d.%m.%Y')
+    _today_str = _dt_ap.now(AnchorEngine._get_user_tz(user) if user else pytz.timezone('Europe/Moscow')).strftime('%d.%m.%Y')
 
     # ── GUARD: личные/обучающие цели — запрет на mass outreach + направление ──
     _personal_guard = ''
@@ -3852,6 +3852,10 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
 
     # ── Decision History Block (#6): последние решения AI и их результаты ──
     _decision_history_block = ''
+    # Timezone для форматирования времён в промпте
+    _utz_prompt = AnchorEngine._get_user_tz(user) if user else pytz.timezone('Europe/Moscow')
+    _fmt_t_p = lambda dt: AnchorEngine._fmt_user_time(dt, _utz_prompt, '%H:%M')
+    _fmt_dt_p = lambda dt: AnchorEngine._fmt_user_time(dt, _utz_prompt, '%d.%m %H:%M')
     if user:
         try:
             from models import Session as _Sess_dh, DecisionLog as _DL_dh
@@ -3868,7 +3872,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                     _dl_lines = []
                     for _d in _decisions:
                         _score_icon = '✅' if (_d.outcome_score or 0) >= 0.6 else '❌'
-                        _created = _d.created_at.strftime('%d.%m %H:%M') if _d.created_at else '?'
+                        _created = _fmt_dt_p(_d.created_at)
                         _outcome_short = (_d.actual_outcome or '')[:100].replace('\n', ' ')
                         _dl_lines.append(f"  {_score_icon} [{_created}] {_d.chosen_action}: {(_d.rationale or '')[:80]} → {_outcome_short}")
                     _decision_history_block = (
@@ -3933,7 +3937,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 if _user_msgs:
                     _rd_lines = []
                     for _m in reversed(_user_msgs):
-                        _ts = _m.created_at.strftime('%H:%M') if _m.created_at else '?'
+                        _ts = _fmt_t_p(_m.created_at)
                         _msg_text = (_m.content or '').strip()[:200]
                         if _msg_text:
                             _rd_lines.append(f"  [{_ts}] {_msg_text}")
@@ -4511,12 +4515,26 @@ class AnchorEngine:
         self.running = False
         logger.info("[ANCHOR] Stopped")
 
+    @staticmethod
+    def _get_user_tz(user) -> 'pytz.BaseTzInfo':
+        """Timezone пользователя (fallback Europe/Moscow)."""
+        try:
+            return pytz.timezone(user.timezone or 'Europe/Moscow')
+        except Exception:
+            return pytz.timezone('Europe/Moscow')
+
+    @staticmethod
+    def _fmt_user_time(dt_utc, user_tz, fmt: str = '%H:%M') -> str:
+        """Форматирует UTC datetime в локальное время пользователя."""
+        if dt_utc is None:
+            return '?'
+        if dt_utc.tzinfo is None:
+            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+        return dt_utc.astimezone(user_tz).strftime(fmt)
+
     def _user_day_start_utc(self, user) -> datetime:
         """Начало текущего дня пользователя в UTC."""
-        try:
-            _tz = pytz.timezone(user.timezone or 'Europe/Moscow')
-        except Exception:
-            _tz = pytz.timezone('Europe/Moscow')
+        _tz = self._get_user_tz(user)
         _local_now = datetime.now(_tz)
         return _local_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
 
@@ -7139,7 +7157,7 @@ class AnchorEngine:
                                         _lar_txt = (_lar_d.get('text', '') or '').strip()[:800]
                                         if _lar_txt and len(_lar_txt) > 20:
                                             _lar_tools = _lar_d.get('__tools_used', [])
-                                            _lar_ts = _lar.created_at.strftime('%H:%M') if _lar.created_at else ''
+                                            _lar_ts = _fmt_t_p(_lar.created_at)
                                             _last_agent_reply_c = (
                                                 f"[{_lar_ts}] {_chosen_name}: {_lar_txt[:800]}"
                                                 + (f" [инструменты: {', '.join(_lar_tools[:6])}]" if _lar_tools else '')
@@ -19230,6 +19248,10 @@ class AnchorEngine:
 
         # Собираем задачи к целям — не только count, а полный список
         goal_ids = [g.id for g in active_goals]
+        # Timezone пользователя для отображения времён в контексте
+        _utz = self._get_user_tz(user)
+        _fmt_t = lambda dt: self._fmt_user_time(dt, _utz, '%H:%M')
+        _fmt_dt = lambda dt: self._fmt_user_time(dt, _utz, '%d.%m %H:%M')
         all_tasks = session.query(Task).filter(
             Task.goal_id.in_(goal_ids),
             Task.status.notin_(['cancelled', 'deleted']),
@@ -19260,7 +19282,7 @@ class AnchorEngine:
             if a.activity_type == 'run_agent_action':
                 _action_name = (a.title or '').replace(' — обзор целей', '')
                 actions_history.append(
-                    f"[{a.created_at.strftime('%H:%M')}] [run_agent_action] {_action_name}: {_res[:800]}"
+                    f"[{_fmt_t(a.created_at)}] [run_agent_action] {_action_name}: {_res[:800]}"
                 )
                 # Считаем partial failure для run_agent_action
                 if _res and (
@@ -19305,7 +19327,7 @@ class AnchorEngine:
             _agent = (a.title or '').replace(' — обзор целей', '')
             _tools_info = f" [инструменты: {_tools_tag}]" if _tools_tag else ''
             actions_history.append(
-                f"[{a.created_at.strftime('%H:%M')}] {_agent}{_tools_info}: {_res[:1200]}"
+                f"[{_fmt_t(a.created_at)}] {_agent}{_tools_info}: {_res[:1200]}"
             )
 
         # Fallback: если AAL пуст, берём историю из interactions (proactive сообщения за 24ч)
@@ -19323,7 +19345,7 @@ class AnchorEngine:
                     _tl = _j.get('__tools_used', [])
                     _tl_str = f" [инструменты: {', '.join(_tl)}]" if _tl else ''
                     actions_history.append(
-                        f"[{_fb.created_at.strftime('%H:%M')}] {_ag}{_tl_str}: {_txt}"
+                        f"[{_fmt_t(_fb.created_at)}] {_ag}{_tl_str}: {_txt}"
                     )
                     # Учитываем частоту для anti-loop
                     for _tn in _tl:
@@ -19352,7 +19374,7 @@ class AnchorEngine:
                 except Exception:
                     _txt = _txt[:200]
             recent_messages.append(
-                f"[{m.created_at.strftime('%H:%M')}] {m.message_type}: {_txt}"
+                f"[{_fmt_t(m.created_at)}] {m.message_type}: {_txt}"
             )
 
         # Email outreach статус по активным кампаниям
@@ -19495,7 +19517,7 @@ class AnchorEngine:
                     else:
                         _outcome_tag = ''
                     _outcome_s = f" {_outcome_tag}" if _outcome_tag else ''
-                    _entry = f"{_ai_item.created_at.strftime('%d.%m %H:%M')} {_tl_s}{_txt[:300]}{_outcome_s}"
+                    _entry = f"{_fmt_dt(_ai_item.created_at)} {_tl_s}{_txt[:300]}{_outcome_s}"
                     _per_agent_history.setdefault(_ag_nm, [])
                     if len(_per_agent_history[_ag_nm]) < 60:
                         _per_agent_history[_ag_nm].append(_entry)
@@ -19519,7 +19541,7 @@ class AnchorEngine:
                     continue
                 _aal_title = (_api.title or '')[:100]
                 _aal_content = (_api.content or '')[:200]
-                _aal_ts = _api.created_at.strftime('%d.%m %H:%M')
+                _aal_ts = _fmt_dt(_api.created_at)
                 # Угадываем инструмент по содержимому — для совместимости с anti-loop парсером
                 _tl_lower = (_aal_title + ' ' + _aal_content).lower()
                 if any(w in _tl_lower for w in ('почт', 'imap', 'email', 'ответ', 'inbox')):
@@ -19572,7 +19594,7 @@ class AnchorEngine:
                 _to_name = _dt.delegated_to_username or ''
                 _dt_title = (_dt.title or '')[:80]
                 _dt_status = _dt.status or 'pending'
-                _dt_ts = _dt.created_at.strftime('%d.%m %H:%M') if _dt.created_at else ''
+                _dt_ts = _fmt_dt(_dt.created_at) if _dt.created_at else ''
                 _deleg_entry = f"{_dt_ts} [ДЕЛЕГИРОВАЛ→{_to_name}] {_dt_title} ({_dt_status})"
                 _per_agent_history.setdefault(_from_name, [])
                 if len(_per_agent_history[_from_name]) < 12:
@@ -20213,7 +20235,7 @@ class AnchorEngine:
             _ch = 'TG' if _rp.activity_type == 'post_telegram' else 'Discord'
             _posted_channels.add(_rp.activity_type)
             _rp_title = ((_rp.title or '')[:80])
-            _recent_posts.append(f"[{_rp.created_at.strftime('%d.%m %H:%M')}] {_ch}: {_rp_title}")
+            _recent_posts.append(f"[{_fmt_dt(_rp.created_at)}] {_ch}: {_rp_title}")
         # Определяем, в какие каналы НЕ были сделаны кросс-посты
         if _recent_posts_raw:
             if 'post_telegram' in _posted_channels and 'post_discord' not in _posted_channels:
@@ -24576,7 +24598,8 @@ class AnchorEngine:
                 if _recent_actions:
                     _act_lines = []
                     for _ra in _recent_actions:
-                        _ts = _ra.created_at.strftime('%H:%M') if _ra.created_at else ''
+                        _utz_ra = self._get_user_tz(user)
+                        _ts = self._fmt_user_time(_ra.created_at, _utz_ra, '%H:%M')
                         _line = f"• [{_ts}] {_ra.activity_type}: {_ra.title[:80]} — {_ra.status}"
                         if _ra.target:
                             _line += f" → {_ra.target[:60]}"
