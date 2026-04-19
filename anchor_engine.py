@@ -13892,9 +13892,9 @@ class AnchorEngine:
             )
 
             try:
-                # Больше токенов когда шагов больше (350 на шаг, минимум 900, максимум 3200)
-                # Увеличен минимум: task должен быть ≥50 слов с деталями — нужно место
-                _plan_max_tokens = min(max(900, _n_plan_steps * 350), 3200)
+                # Больше токенов когда шагов больше (450 на шаг, минимум 1200, максимум 4000)
+                # task ≥50 слов (~200 tok) + task_brief (~40 tok) + JSON overhead (~80 tok) ≈ 320 tok/шаг + запас
+                _plan_max_tokens = min(max(1200, _n_plan_steps * 450), 4000)
                 # Логируем размер промпта координатора для мониторинга latency
                 _prompt_chars = len(_plan_prompt)
                 if _prompt_chars > 20000:
@@ -14839,7 +14839,7 @@ class AnchorEngine:
                     # _quick_ai_call_raw имеет встроенные таймауты 40s/70s.
                     _fb_json = await _quick_ai_call_raw(
                         [{"role": "user", "content": _fb_prompt}],
-                        max_tokens=min(300 * len(_missing_to_fill), 900),
+                        max_tokens=min(450 * len(_missing_to_fill), 1400),
                         temperature=0.35,
                         _caller='backfill_plan',
                     )
@@ -15519,6 +15519,18 @@ class AnchorEngine:
                     #   task_brief = КРАТКОЕ обращение к агенту (глагол + объект + tool, ≤120 символов)
                     # Используем task_brief для user-facing assignment, task — для agent execution payload.
                     _task_brief_raw = (_step.get('task_brief') or '').strip()
+                    
+                    # Защита от обрезанного task_brief (LLM max_tokens → JSON обрезается на середине)
+                    # Признак: текст не заканчивается пунктуацией и содержит неполное слово
+                    if _task_brief_raw and _task_brief_raw[-1] not in '.!?»")\u2019':
+                        import re as _re_trunc_tb
+                        # Есть ли хотя бы одно завершённое предложение?
+                        _last_punc_tb = max(_task_brief_raw.rfind('.'), _task_brief_raw.rfind('!'), _task_brief_raw.rfind('?'))
+                        if _last_punc_tb >= 20:
+                            _task_brief_raw = _task_brief_raw[:_last_punc_tb + 1].strip()
+                        else:
+                            # Нет завершённых предложений — обрезаем по последнему полному слову
+                            _task_brief_raw = _task_brief_raw.rsplit(' ', 1)[0].rstrip('.,;:-') if ' ' in _task_brief_raw else _task_brief_raw
                     
                     # Fallback: если координатор пропустил task_brief — берём первое предложение task
                     if not _task_brief_raw or len(_task_brief_raw) < 10:
