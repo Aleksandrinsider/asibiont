@@ -5497,6 +5497,8 @@ class AnchorEngine:
                             and a.anchor_type not in EMAIL_SILENT_TYPES]
         post_anchors = [a for a in ready if a.anchor_type in ('post_opportunity', 'channel_post', 'discord_post')]
         email_silent_anchors = [a for a in ready if a.anchor_type in EMAIL_SILENT_TYPES]
+        # email_need_leads первыми — они самые долгие (web search), нужно больше времени
+        email_silent_anchors.sort(key=lambda a: (0 if a.anchor_type == 'email_need_leads' else 1))
         content_silent_anchors = [a for a in ready if a.anchor_type in CONTENT_SILENT_TYPES]
         delegation_silent_anchors = [a for a in ready if a.anchor_type in DELEGATION_SILENT_TYPES]
         autopilot_anchors = [a for a in ready if a.anchor_type in AUTOPILOT_SILENT_TYPES]
@@ -5746,14 +5748,17 @@ class AnchorEngine:
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
             for _ea_idx, ea in enumerate(email_silent_anchors[:12]):  # макс 12 за цикл
-                if _time_left() < 15:
-                    logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping remaining email anchors (only {_time_left():.0f}s left)")
+                _min_time_needed = 120 if ea.anchor_type == 'email_need_leads' else 15
+                if _time_left() < _min_time_needed:
+                    logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping {ea.anchor_type} #{ea.id} (only {_time_left():.0f}s left, need {_min_time_needed})")
                     break
                 try:
                     if _ea_idx > 0:
                         await asyncio.sleep(5)  # Краткая задержка между email-якорями
                     async with self._ai_semaphore:
-                        _ea_timeout = min(150, max(60, _time_left() - 20))
+                        # email_need_leads вызывает _auto_find_leads с 5+ web passes — нужно 300+ сек
+                        _is_need_leads = ea.anchor_type == 'email_need_leads'
+                        _ea_timeout = min(360 if _is_need_leads else 150, max(60, _time_left() - 20))
                         await asyncio.wait_for(
                             self._process_email_silent_anchor(user, ea, session),
                             timeout=_ea_timeout,
@@ -22782,7 +22787,7 @@ class AnchorEngine:
                 # ── ПЕРЕЧИТЫВАЕМ draft'ы из БД (а не из JSON-снимка) чтобы не обработать уже отправленные ──
                 live_drafts = session.query(EmailOutreach).filter_by(
                     campaign_id=campaign_id, status='draft'
-                ).limit(3).all()  # макс 3 за один вызов: 3 × ~30s = 90s < outer wait_for(90s)
+                ).limit(2).all()  # макс 2 за один вызов: 2 × (compose ~40s + possible retry ~40s) ≈ 160s < outer wait_for
                 if not live_drafts:
                     logger.info(f"[ANCHOR] Email anchor #{anchor.id}: no live drafts in DB, marking delivered")
                     anchor.delivered_at = datetime.now(timezone.utc)
@@ -23025,11 +23030,14 @@ class AnchorEngine:
                     )
 
                     try:
-                        ai_result = await api.deepseek_analyze(
-                            prompt=compose_prompt,
-                            system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields.",
-                            max_tokens=500,
-                            temperature=0.7,
+                        ai_result = await asyncio.wait_for(
+                            api.deepseek_analyze(
+                                prompt=compose_prompt,
+                                system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields.",
+                                max_tokens=500,
+                                temperature=0.7,
+                            ),
+                            timeout=60,
                         )
                         if not ai_result:
                             logger.warning(f"[ANCHOR] AI compose failed for {redact_email(email)}: empty result")
@@ -23089,11 +23097,14 @@ class AnchorEngine:
                                         f"FIX the issue and rewrite. Make subject SPECIFIC to recipient, "
                                         f"do NOT use generic words. Include recipient name in body."
                                     )
-                                    _retry_result = await api.deepseek_analyze(
-                                        prompt=_retry_prompt,
-                                        system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields.",
-                                        max_tokens=500,
-                                        temperature=0.8,
+                                    _retry_result = await asyncio.wait_for(
+                                        api.deepseek_analyze(
+                                            prompt=_retry_prompt,
+                                            system_prompt="You write cold outreach emails. Return ONLY valid JSON with subject and body fields.",
+                                            max_tokens=500,
+                                            temperature=0.8,
+                                        ),
+                                        timeout=60,
                                     )
                                     if _retry_result:
                                         _rt = _retry_result.strip()
