@@ -7938,6 +7938,15 @@ class AnchorEngine:
                             + (_pending_tasks_ctx if _pending_tasks_ctx else '')
                             + (_active_campaigns_ctx if _active_campaigns_ctx else '')
                             + (_pending_followup_ctx if _pending_followup_ctx else '')
+                            + (
+                                f"\n🔍 EMAIL ФАЗА 0 — В БАЗЕ 0 КОНТАКТОВ И 0 ПИСЕМ:\n"
+                                f"  → ОБЯЗАТЕЛЬНОЕ ПОРУЧЕНИЕ: web_search → add_email_leads([{{\"email\":\"...\", \"name\":\"...\", \"company\":\"...\"}}])\n"
+                                f"  → add_email_leads создаст черновики — отправка запустится автоматически\n"
+                                f"  → НЕ поручай: 'настрой аналитику', 'проверь метрики', 'получи статистику' — данных ещё НЕТ, анализировать НЕЧЕГО\n"
+                                f"  → НЕ поручай: check_emails (0 писем в ящике), send_outreach_email без контактов\n"
+                                if 'email' in _cats_c and _has_email_fb and _active_camps and all((_ac.emails_sent or 0) == 0 for _ac in _active_camps)
+                                else ''
+                            )
 
                             + f"\n🧠 ПОДУМАЙ ПЕРЕД ПОРУЧЕНИЕМ (это обязательный шаг, не пропускай):\n"
                             f"  -1) ФАКТ-ОСНОВА: найди в контексте КОНКРЕТНЫЙ факт, который обосновывает твоё поручение.\n"
@@ -8451,6 +8460,20 @@ class AnchorEngine:
                                     _coord_text_clean_save = _re_ct_conv.sub(
                                         r'\s+по\s+(?:\w+\s+)?«[^»]{15,}»', '', _coord_text_clean_save
                                     ).strip()
+                                if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
+                                    # ── META-TASK GUARD (Path 2): блокируем диагностические/метрические пустышки ──
+                                    _ctcs_lower = _coord_text_clean_save.lower()
+                                    _has_real_email_tool = any(kw in _ctcs_lower for kw in ('web_search', 'add_email_leads', 'send_outreach_email', 'save_email_contact'))
+                                    _is_meta_task_p2 = not _has_real_email_tool and (
+                                        ('метрик' in _ctcs_lower and ('кампани' in _ctcs_lower or 'рассылк' in _ctcs_lower or 'писем' in _ctcs_lower or 'канал' in _ctcs_lower))
+                                        or ('статистик' in _ctcs_lower and ('кампани' in _ctcs_lower or 'рассылк' in _ctcs_lower))
+                                        or ('аналитик' in _ctcs_lower and ('кампани' in _ctcs_lower or 'канал' in _ctcs_lower) and ('получ' in _ctcs_lower or 'настрой' in _ctcs_lower))
+                                        or ('реальн' in _ctcs_lower and 'метрик' in _ctcs_lower)
+                                        or ('open rate' in _ctcs_lower or 'ctr' in _ctcs_lower or 'conversion rate' in _ctcs_lower)
+                                    )
+                                    if _is_meta_task_p2:
+                                        logger.info("[ANCHOR-AUTOPILOT] ⛔ meta-task blocked (Path 2) for %s: %r", _chosen_name, _coord_text_clean_save[:80])
+                                        _coord_text_clean_save = ''
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                                     # Выбираем одну основную цель (первую в списке = самая приоритетная)
                                     # Не склеиваем через запятую — это путает агентов
@@ -20690,7 +20713,7 @@ class AnchorEngine:
         # Активные + paused + personal кампании (personal для обработки reply на одинарные письма)
         campaigns = session.query(EmailCampaign).filter(
             EmailCampaign.user_id == user.id,
-            EmailCampaign.status.in_(['active', 'paused', 'personal'])
+            EmailCampaign.status.in_(['active', 'running', 'paused', 'personal'])
         ).all()
 
         if not campaigns:
@@ -23317,8 +23340,8 @@ class AnchorEngine:
                     return
 
                 campaign = session.query(EmailCampaign).filter_by(id=campaign_id).first()
-                if not campaign or campaign.status != 'active':
-                    logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: campaign not found or not active — marking delivered to prevent re-queue")
+                if not campaign or campaign.status not in ('active', 'running'):
+                    logger.info(f"[ANCHOR] email_need_leads #{anchor.id}: campaign not found or not active/running — marking delivered to prevent re-queue")
                     anchor.delivered_at = datetime.now(timezone.utc)
                     session.commit()
                     return
