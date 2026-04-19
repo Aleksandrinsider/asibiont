@@ -8142,6 +8142,7 @@ except Exception as e:
             }
 
             // Заполняем карты аватаров, имён, специализаций (независимо от наличия row-элемента)
+            const hadExistingMaps = Object.keys(_arenaAgentNameMap).length > 0;
             if (state.agents) {
                 state.agents.forEach(a => {
                     if (a.avatar_url) _arenaAgentAvatarMap[a.id] = a.avatar_url;
@@ -8197,6 +8198,9 @@ except Exception as e:
                     });
                     arenaRenderPage();
                 }
+            } else if (hadExistingMaps) {
+                // Карты обновились (агент переименован/аватар изменён) — перерисовываем текущую страницу
+                arenaRenderPage();
             }
         }
 
