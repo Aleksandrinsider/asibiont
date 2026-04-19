@@ -8456,6 +8456,21 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         from ai_integration.conversation_history import sanitize_token_hallucinations
         content = sanitize_token_hallucinations(content)
 
+        # Очистка от markdown-звёздочек и эмодзи для публичного блога
+        import re
+        # Убираем **жирный текст** и *курсив*
+        content = re.sub(r'\*\*([^\*]+)\*\*', r'\1', content)  # **текст** → текст
+        content = re.sub(r'\*([^\*]+)\*', r'\1', content)      # *текст* → текст
+        # Убираем эмодзи (Unicode диапазоны)
+        content = re.sub(
+            r'[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0001F1E0-\U0001F1FF\U0001FA70-\U0001FAFF]+',
+            '', content
+        )
+        content = content.strip()
+        
+        if not content:
+            return "Текст поста не может быть пустым после очистки."
+
         # Лимит: 1 пост в ленту в день (можно обойти force=True если пользователь явно просит)
         import datetime as dt
         import pytz as _pytz_cp
