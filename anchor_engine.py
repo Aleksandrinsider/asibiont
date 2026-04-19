@@ -9278,22 +9278,26 @@ class AnchorEngine:
                                     _stag_body_parts.append("Продолжаю пробовать другие каналы.")
                                 _esc_lines.append(_stag_header + ('\n' + '\n'.join(_stag_body_parts) if _stag_body_parts else ''))
 
+                            # stage >= 2 без реальных фактов — не отправляем, чтобы не шуметь
+                            if _esc_stage >= 2 and not _stag_body_parts:
+                                _esc_lines = []
+
                             if _esc_lines:
                                 # Автокоординация: autopilot сам меняет стратегию — коротко
                                 _auto_actions = []
-                                if _stag_warn:
-                                    if _esc_stage == 0:
-                                        if _total_sent >= 20 and _total_replied == 0:
-                                            _auto_actions.append("Пересматриваю тему и текст писем.")
-                                        elif _ex_strats:
-                                            _auto_actions.append("Переключаюсь на другие стратегии.")
-                                        else:
-                                            _auto_actions.append("Корректирую подход.")
-                                    elif _esc_stage >= 2:
-                                        _auto_actions.append("Следующий отчёт — при изменении прогресса.")
+                                if _stag_warn and _esc_stage == 0:
+                                    if _total_sent >= 20 and _total_replied == 0:
+                                        _auto_actions.append("Пересматриваю тему и текст писем.")
+                                    elif _ex_strats:
+                                        _auto_actions.append("Переключаюсь на другие стратегии.")
+                                    else:
+                                        _auto_actions.append("Корректирую подход.")
                                 if _auto_actions:
                                     _esc_lines.append('\n'.join(_auto_actions))
                             _esc_text = '\n'.join(_esc_lines)
+                            if not _esc_text.strip():
+                                logger.info("[ANCHOR-AUTOPILOT] escalation suppressed (no facts, stage=%d)", _esc_stage)
+                                raise Exception("suppressed")
                             await _safe_send(self.bot, user.telegram_id, _esc_text)
                             session.add(Interaction(
                                 user_id=user.id,
