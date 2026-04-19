@@ -7993,6 +7993,8 @@ class AnchorEngine:
                             "✅ первое предложение содержит КОНКРЕТНЫЙ ФАКТ из ситуации (число, результат, статус)? "
                             "✅ каждое предложение ЗАКОНЧЕННОЕ? Перечитай последнее предложение: оно содержит подлежащее + сказуемое + дополнение? "
                             "   Если предложение обрывается ('контакты, которые ещё не получили' — не получили ЧЕГО?) — ДОПИШИ до конца. "
+                            "   ⛔ ОСОБАЯ ОШИБКА: предложение заканчивается на 'которые.' / 'которых.' / 'чтобы.' — это ОБРЫВ с точкой, он так же недопустим. "
+                            "   'Beatrice, отправь письма контактам из базы, которые.' — это не предложение. Допиши: '...которые ещё не получили письма.' "
                             "✅ нет нумерованных списков (1, 2, 3) и маркеров (•, -)? "
                             "✅ глаголы в императиве (найди/создай/отправь, не найти/создать/отправить)? "
                             "✅ нет мета-комментариев и оценок ('ты правильно', 'хорошая работа', 'молодец')? "
@@ -8028,6 +8030,20 @@ class AnchorEngine:
                                 _last_period = max(_gen.rfind('.'), _gen.rfind('!'), _gen.rfind('?'))
                                 if _last_period > len(_gen) * 0.4:  # at least 40% of text preserved
                                     _gen = _gen[:_last_period + 1]
+                            # Guard: sentence ending with relative pronoun = semantically truncated even if period present
+                            # Example: "которые." / "чтобы." / "потому что." — LLM appended period to unfinished clause
+                            _gen = _gen.strip()
+                            if _gen:
+                                _rel_end = _re_post.search(
+                                    r'(?:которы[ехйм]?|которо[йму]|которую|который|которая|что|чтобы|чем|если|хотя|'
+                                    r'несмотря\s+на|потому\s+что|так\s+как|где|куда|откуда|когда|пока|пока\s+не)\s*[.!?]\s*$',
+                                    _gen, _re_post.IGNORECASE,
+                                )
+                                if _rel_end:
+                                    _lp2 = max(_gen[:_rel_end.start()].rfind('.'), _gen[:_rel_end.start()].rfind('!'), _gen[:_rel_end.start()].rfind('?'))
+                                    if _lp2 > len(_gen) * 0.2:
+                                        _gen = _gen[:_lp2 + 1]
+                                        logger.info("[ANCHOR-AUTOPILOT] trimmed relative-clause tail: %r", _rel_end.group())
                             # Clean raw tool calls with params: run_agent_action(action="get_news_trends") → get_news_trends
                             _gen = _re_post.sub(
                                 r'run_agent_action\s*\(\s*action\s*=\s*["\']([^"\']+)["\']\s*\)',
@@ -8479,7 +8495,14 @@ class AnchorEngine:
                         # Отправляем поручение координатора в Telegram — пользователь видит делегирование
                         if self.bot and _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                             try:
-                                _tg_assign = f"[ASI → {_chosen_name}]\n{_coord_text_clean_save[:800]}"
+                                # Убираем дублирование имени: тело уже начинается с "Имя, ...", заголовок его показывает
+                                _tg_body = _coord_text_clean_save.strip()[:800]
+                                import re as _re_tg_dup
+                                _tg_body = _re_tg_dup.sub(
+                                    r'^' + _re_tg_dup.escape(_chosen_name) + r'\s*,\s*',
+                                    '', _tg_body, flags=_re_tg_dup.IGNORECASE
+                                ).strip()
+                                _tg_assign = f"[ASI → {_chosen_name}]\n{_tg_body}"
                                 await _safe_send(self.bot, user.telegram_id, _tg_assign)
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign sent to TG for %s", _chosen_name)
                             except Exception as _tg_assign_err:
