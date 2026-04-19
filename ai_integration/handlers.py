@@ -9434,72 +9434,20 @@ async def get_stock_price(symbol: str, data_type: str = "quote", user_id: int = 
         return f"⚠️ Alpha Vantage API: {info[:200]}"
 
     symbol = symbol.strip().upper()
-    # Auto-detect oil by symbol name
-    if symbol in ('BRENT', 'WTI') and data_type == 'quote':
-        data_type = 'oil'
+    
     try:
+        # Alpha Vantage убрал commodity эндпоинты (BRENT/WTI) из бесплатного API
         if data_type == "oil" or symbol in ("BRENT", "WTI"):
-            _func = symbol if symbol in ("BRENT", "WTI") else "WTI"
-            url = (
-                f"https://www.alphavantage.co/query?function={_func}"
-                f"&interval=daily&apikey={_api_key}"
+            return (
+                f"⚠️ Alpha Vantage не поддерживает прямые котировки нефти ({symbol}) в бесплатном API.\n\n"
+                "Альтернативы:\n"
+                "1️⃣ web_search(query='цена нефти Brent сегодня') — актуальная цена из новостей\n"
+                "2️⃣ get_stock_price(symbol='BNO', data_type='quote') — ETF следующий за Brent\n"
+                "3️⃣ get_stock_price(symbol='USO', data_type='quote') — ETF следующий за WTI\n"
+                "4️⃣ http_api_request к другим API: oilpriceapi.com, tradingeconomics.com"
             )
-            req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with _urllib_req.urlopen(req, timeout=15) as r:
-                d = _json.loads(r.read().decode())
-            _data_points = d.get("data", [])
-            _rl = _check_av_ratelimit(d)
-            if _rl:
-                return _rl
-            if not _data_points:
-                return f"❌ Данные по {_func} не получены (проверьте ключ)"
-            _latest = _data_points[0]
-            _prev = _data_points[1] if len(_data_points) > 1 else None
-            _price = _latest.get("value", "?")
-            _date = _latest.get("date", "?")
-            result = f"🛢 **{_func}**: ${_price} ({_date})"
-            if _prev:
-                try:
-                    _p_now = float(_price)
-                    _p_prev = float(_prev.get("value", 0))
-                    _chg = _p_now - _p_prev
-                    _chg_pct = (_chg / _p_prev * 100) if _p_prev else 0
-                    _dir = "▲" if _chg >= 0 else "▼"
-                    result += f"  {_dir} {_chg:+.2f} ({_chg_pct:+.2f}%)"
-                    result += f"\n  Предыдущая: ${_prev.get('value')} ({_prev.get('date')})"
-                except (ValueError, ZeroDivisionError):
-                    pass
-            return result
-
-        elif data_type == "forex" or "/" in symbol:
-            from_c, _, to_c = symbol.partition("/")
-            if not to_c:
-                to_c = "USD"
-            url = (
-                f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE"
-                f"&from_currency={from_c}&to_currency={to_c}&apikey={_api_key}"
-            )
-            req = _urllib_req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with _urllib_req.urlopen(req, timeout=15) as r:
-                d = _json.loads(r.read().decode())
-            info = d.get("Realtime Currency Exchange Rate", {})
-            _rl = _check_av_ratelimit(d)
-            if _rl:
-                return _rl
-            if not info:
-                return f"❌ Данные по паре {from_c}/{to_c} не получены (проверьте ключ или тикер)"
-            rate = info.get("5. Exchange Rate", "?")
-            refreshed = info.get("6. Last Refreshed", "")[:16]
-            bid = info.get("8. Bid Price", "")
-            ask = info.get("9. Ask Price", "")
-            result = f"💱 **{from_c}/{to_c}**: {rate}"
-            if bid and ask:
-                result += f"  (bid: {bid}, ask: {ask})"
-            if refreshed:
-                result += f"\n  Обновлено: {refreshed} UTC"
-            return result
-
-        elif data_type == "crypto":
+        
+        if data_type == "forex" or "/" in symbol:
             url = (
                 f"https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE"
                 f"&from_currency={symbol}&to_currency=USD&apikey={_api_key}"
