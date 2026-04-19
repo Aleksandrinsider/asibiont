@@ -4251,20 +4251,20 @@ class HybridAutonomousAgent:
                         )
                     if user_lang == 'en':
                         messages.append({"role": "system", "content": (
-                            "Summarize results for the user (up to 6000 chars for analysis/strategy, up to 1500 for others). "
+                            "Reply like a real chat conversation — brief and to the point (up to 400 chars, max 600 for complex tasks). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses.\n"
-                            "Explain: WHAT you did → WHAT result you got → WHAT it means for the user's goal. "
-                            "If an action produced no result — say so honestly and suggest a concrete next step. "
-                            "Never write 'Done' without explanation."
+                            "Structure: WHAT you did (1 phrase) → RESULT (facts/numbers/links) → what it gives (1 phrase). "
+                            "If failed — say honestly + suggest alternative. "
+                            "No corporate speak: remove 'Great', 'Here's what we have', emoji lists. Just facts and actions."
                             + _note_hint_en
                         )})
                     else:
                         messages.append({"role": "system", "content": (
-                            "Подытожь результаты для пользователя (для анализа/стратегии — до 6000 символов, для остального — до 1500). "
+                            "Ответь пользователю как в живом диалоге — кратко и по делу (до 400 символов, макс 600 для сложных задач). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task.\n"
-                            "Расскажи: ЧТО именно сделал → КАКОЙ результат получил → ЧТО это означает для цели пользователя. "
-                            "Если действие не принесло результата — скажи честно и предложи конкретный следующий шаг. "
-                            "Не пиши 'Готово' без объяснения — объясни суть."
+                            "Структура: ЧТО сделал (1 фраза) → РЕЗУЛЬТАТ (факты/цифры/ссылки) → что это даёт (1 фраза). "
+                            "Если провал — скажи честно + предложи альтернативу. "
+                            "Без канцелярита: убери 'Отлично', 'Вот что у нас', эмодзи-списки. Просто факты и действия."
                             + _note_hint_ru
                         )})
 
