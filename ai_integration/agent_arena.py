@@ -105,15 +105,9 @@ def _detect_lang(text: str) -> str:
 
 
 def _detect_lang_agent(agent: dict) -> str:
-    """Определяет язык агента: сначала по имени (приоритет), затем по тексту промпта.
-    Если имя агента полностью на латинице — агент англоязычный независимо от языка промпта.
+    """Определяет язык агента по тексту промпта.
+    Имя (Beatrice, Elizabeth) не влияет — агент пишет на языке своего промпта.
     """
-    name = agent.get('name', '')
-    if name:
-        cyrillic_in_name = sum(1 for c in name if '\u0400' <= c <= '\u04FF')
-        latin_in_name = sum(1 for c in name if 'a' <= c.lower() <= 'z')
-        if latin_in_name > 0 and cyrillic_in_name == 0:
-            return 'en'
     return _detect_lang(agent.get('system_prompt', ''))
 
 
