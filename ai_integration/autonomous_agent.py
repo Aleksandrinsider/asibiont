@@ -4829,7 +4829,7 @@ class HybridAutonomousAgent:
                 _synth_data = "\n---\n".join(_synth_parts[:4])
                 try:
                     _synth_msgs = [
-                        {'role': 'system', 'content': 'Ты ассистент. Перескажи результаты действий для пользователя в 2-4 предложения. Пиши на русском, естественным языком. Не используй JSON, не повторяй названия инструментов. Предложи следующий шаг.'},
+                        {'role': 'system', 'content': 'Ты ассистент. Перескажи результаты действий для пользователя в 2-4 предложения. Пиши на русском, естественным языком. Не используй JSON, не повторяй названия инструментов. Не придумывай имена агентов или следующие шаги — только опиши что сделано.'},
                         {'role': 'user', 'content': f'Запрос: {user_message}\n\nРезультаты:\n{_synth_data[:2000]}'},
                     ]
                     _synth_resp = await self.call_ai(
@@ -8303,7 +8303,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     # Adaptive iterations: больше интеграций = больше цепочек = больше итераций
     _intg_count = len(_intg_hint)
     if _is_autopilot_task:
-        _max_iters = min(3 + _intg_count, 5)  # макс 5: 5 интеграций уже = 8 → cap 5
+        if _is_outreach_goal:
+            _max_iters = min(5 + _intg_count, 8)  # outreach: больше итераций для нескольких писем
+        else:
+            _max_iters = min(3 + _intg_count, 5)  # макс 5: 5 интеграций уже = 8 → cap 5
     else:
         _max_iters = 4
     _ACTION_EVIDENCE_TOOLS = {
