@@ -9151,9 +9151,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             # ── Retry-hint: если send_outreach_email заблокирован исправимой ошибкой ──
             if _tname == 'send_outreach_email' and _tc_result and _is_autopilot_task:
                 _tc_str_rh = str(_tc_result)
-                _FIXABLE_MARKERS = ('ПЕРЕПИШИ', 'перепиши', 'на английском', 'на English',
-                                    'не упоминается в теле', 'плейсхолдер', 'placeholder')
-                if any(m in _tc_str_rh for m in _FIXABLE_MARKERS):
+                if 'не упоминается в теле' in _tc_str_rh:
+                    # Извлекаем имя из ошибки: «Михаил» не упоминается...
+                    import re as _re_nm_rh
+                    _nm_m_rh = _re_nm_rh.search(r'«([^»]+)»', _tc_str_rh)
+                    _missed_name_rh = _nm_m_rh.group(1) if _nm_m_rh else 'получателя'
+                    _messages.append({"role": "user", "content": (
+                        f"Письмо отклонено: имя «{_missed_name_rh}» не упоминается в теле. "
+                        f"ПЕРЕПИШИ параметр body: добавь «Здравствуйте, {_missed_name_rh}!» или «Привет, {_missed_name_rh}!» в самое начало. "
+                        f"Остальное содержание письма сохрани. Вызови send_outreach_email сразу. НЕ пиши текст — вызови инструмент!"
+                    )})
+                elif any(m in _tc_str_rh for m in ('ПЕРЕПИШИ', 'перепиши', 'на английском', 'на English', 'плейсхолдер', 'placeholder')):
                     _messages.append({"role": "user", "content": (
                         "Письмо заблокировано исправимой ошибкой. "
                         "ИСПРАВЬ параметры и вызови send_outreach_email повторно. "
