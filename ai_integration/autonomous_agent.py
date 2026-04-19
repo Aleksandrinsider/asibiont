@@ -1291,7 +1291,7 @@ class HybridAutonomousAgent:
                          'outreach', 'аутрич', 'холодн'],
             'tools': {'send_email', 'negotiate_by_email', 'list_email_contacts',
                       'save_email_contact', 'send_outreach_email', 'reply_to_outreach_email',
-                      'send_follow_up_email'},
+                      'send_follow_up_email', 'start_email_campaign', 'add_email_leads'},
         },
         'delegation': {
             'keywords': ['делегир', 'delegat', 'поруч', 'назнач', 'аутсорс',

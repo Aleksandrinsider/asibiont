@@ -18137,11 +18137,13 @@ class AnchorEngine:
                 # Нижний порог 15 мин — ближе этого task_reminder сам справится
                 elif 15 <= minutes_diff <= 24 * 60:
                     hours_left = minutes_diff / 60
+                    _dl_str = (f'{int(minutes_diff)} мин' if hours_left < 1 else f'{int(hours_left)}ч')
+                    _dl_str_en = (f'{int(minutes_diff)} min' if hours_left < 1 else f'{int(hours_left)}h')
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_deadline_soon',
                         source=f'task:{task.id}',
-                        topic=_t(user, f'Задача «{task.title}» — дедлайн через {int(hours_left)}ч', f'Task «{task.title}» — deadline in {int(hours_left)}h'),
+                        topic=_t(user, f'Задача «{task.title}» — дедлайн через {_dl_str}', f'Task «{task.title}» — deadline in {_dl_str_en}'),
                         priority=AnchorPriority.HIGH,
                         data=json.dumps({'task_id': task.id, 'title': task.title,
                                         'hours_left': round(hours_left, 1)}),
@@ -18175,11 +18177,13 @@ class AnchorEngine:
                     ))
                 elif 15 <= minutes_diff_dd <= 24 * 60:
                     hours_left = minutes_diff_dd / 60
+                    _dl_str = (f'{int(minutes_diff_dd)} мин' if hours_left < 1 else f'{int(hours_left)}ч')
+                    _dl_str_en = (f'{int(minutes_diff_dd)} min' if hours_left < 1 else f'{int(hours_left)}h')
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_deadline_soon',
                         source=f'task:{task.id}',
-                        topic=_t(user, f'Задача «{task.title}» — дедлайн через {int(hours_left)}ч', f'Task «{task.title}» — deadline in {int(hours_left)}h'),
+                        topic=_t(user, f'Задача «{task.title}» — дедлайн через {_dl_str}', f'Task «{task.title}» — deadline in {_dl_str_en}'),
                         priority=AnchorPriority.HIGH,
                         data=json.dumps({'task_id': task.id, 'title': task.title,
                                         'hours_left': round(hours_left, 1)}),
