@@ -6964,6 +6964,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _is_fem = _detect_agent_is_female(_aname_fb)
     _done_fb = 'Задачу выполнила.' if _is_fem else 'Задачу выполнил.'
 
+    # Язык пользователя — для условных директив
+    try:
+        from i18n import get_user_lang as _gul_exec
+        _user_lang = _gul_exec(user_id)
+    except Exception:
+        _user_lang = 'ru'
+    _lang_line = (
+        "\n🗣️ LANGUAGE: Write ONLY in English. Even if your name is in Cyrillic — respond in English.\n"
+        if _user_lang == 'en' else
+        "\n🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском. Даже если твоё имя латиницей — отвечай на русском. Английский запрещён.\n"
+    )
+
     import subprocess as _sp2, sys as _sys2, os as _os2
 
     _persona = (
@@ -7499,8 +7511,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             f"Не упоминай tool-имена в отчёте. «{'Поискала' if _is_fem else 'Поискал'} на Хабре» вместо «{'Запустила' if _is_fem else 'Запустил'} web_search».\n"
             "Не изобретай данные и email. Используй РЕАЛЬНЫЕ данные из базы знаний.\n"
             "Отвечать на email ДОЛЖЕН тот агент, который отправлял исходное письмо.\n"
-            "🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском. Даже если твоё имя латиницей — отвечай на русском. Английский запрещён.\n"
-            + (f"Формат делегирования: {_delegate_example}\n" if _delegate_example else
+            + _lang_line +
+            (f"Формат делегирования: {_delegate_example}\n" if _delegate_example else
                "Формат: DELEGATE[Имя]: подробное поручение (2-3 предложения): инструмент + данные (email/имена/ссылки) + ожидаемый результат.\n")
         )
     else:
@@ -7538,7 +7550,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         f"📅 ВРЕМЯ: сейчас {_now_str}. Если упоминаешь событие/мероприятие/статью — сверяй дату.\n"
         "Прошедшее событие ≠ возможность. Материалы старше 6 мес — помечай год.\n\n"
 
-        "🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском. Даже если твоё имя латиницей (Leonardo, Beatrice и т.п.) — отвечай на русском. Английский запрещён.\n"
+        + _lang_line +
         "ФОРМАТ ОТВЕТА: сплошной текст как в мессенджере, абзацами. 120-300 символов.\n"
         "Ответ короче 120 символов = ОШИБКА (кроме да/нет на закрытый вопрос). Длиннее 300 = ОШИБКА.\n"
         "НЕ упоминай названия инструментов (web_search, save_note, research_topic и т.д.) — пользователь не знает про них.\n"
@@ -10614,6 +10626,17 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         _agent_caps_lines.append(_line)
     _caps_block = "\n".join(_agent_caps_lines)
 
+    try:
+        from i18n import get_user_lang as _gul_dir
+        _dir_lang = _gul_dir(user_id)
+    except Exception:
+        _dir_lang = 'ru'
+    _dir_lang_line = (
+        "🗣️ LANGUAGE: director_message MUST be in English. Even if agent name is Cyrillic — write in English.\n"
+        if _dir_lang == 'en' else
+        "🗣️ ЯЗЫК: director_message ВСЕГДА на русском языке. Даже если имя агента латиницей (Leonardo, Beatrice) — пиши поручение НА РУССКОМ.\n"
+    )
+
     _decision_prompt = (
         f"Запрос: «{user_message}»\n\n"
         f"Агенты пользователя:\n{_caps_block}\n"
@@ -10662,8 +10685,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "Пример ХОРОШО ✅ (контент): 'Марк, для цели «рост аудитории» нужен свежий контент — последний пост был 3 дня назад. Проверь RSS-ленту через run_agent_action на тренды этой недели, выбери 1 инсайт с данными и создай пост через create_post для Telegram — тон: практичный, 1-2 цифры, вопрос в конце. Жду: 1 готовый пост с оценкой аудитории.'\n"
         "ВАЖНО: director_message должен точно отражать аудиторию из ЦЕЛИ — не придумывай 'разработчиков' если цель про предпринимателей, трейдеров, врачей и т.д.\n"
         "ПРАВИЛО: глаголы в повелительном наклонении: найди, подготовь, напиши, исследуй, отправь.\n"
-        "🗣️ ЯЗЫК: director_message ВСЕГДА на русском языке. Даже если имя агента латиницей (Leonardo, Beatrice) — пиши поручение НА РУССКОМ.\n"
-        "САМОПРОВЕРКА перед генерацией JSON: 1) director_message длиннее 60 символов? 2) Назван инструмент (web_search/send_outreach_email/create_post/save_note/...)? 3) Есть ожидаемый результат с критерием (число/тип)? 4) Текст на РУССКОМ? Если нет — переписать.\n\n"
+        + _dir_lang_line +
+        "САМОПРОВЕРКА перед генерацией JSON: 1) director_message длиннее 60 символов? 2) Назван инструмент (web_search/send_outreach_email/create_post/save_note/...)? 3) Есть ожидаемый результат с критерием (число/тип)? 4) Текст на ПРАВИЛЬНОМ языке? Если нет — переписать.\n\n"
         "JSON без ```:\n"
         '{"action":"self"}\n'
         "или\n"
@@ -10780,8 +10803,8 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "Структура: Имя + ЗАЧЕМ (1 фраза из контекста миссии) + КАК (конкретный инструмент) + РЕЗУЛЬТАТ (критерий).\n"
                 "❌ ПЛОХО: 'Кристина, продолжай email-кампанию.' — нет инструмента, нет критерия, нет контекста.\n"
                 "✅ ХОРОШО: 'Кристина, из миссии: нашли 3 контакта но письма не отправлены. Отправь персональное письмо через send_outreach_email каждому из списка (используй save_note с именами которые ты уже нашла). Упомяни их конкретный проект. Жду: 3 отправленных письма.'\n"
-                "САМОПРОВЕРКА: 1) Назван инструмент? 2) Есть критерий результата (число/тип)? 3) Использован контекст из МИССИИ? 4) Текст на РУССКОМ? Если нет — переписать.\n"
-                "🗣️ ЯЗЫК: director_message ВСЕГДА на русском. Даже если имя агента латиницей — пиши НА РУССКОМ.\n\n"
+                "САМОПРОВЕРКА: 1) Назван инструмент? 2) Есть критерий результата (число/тип)? 3) Использован контекст из МИССИИ? 4) Текст на ПРАВИЛЬНОМ языке? Если нет — переписать.\n"
+                + _dir_lang_line + "\n"
                 "Ответь ТОЛЬКО JSON без ```:\n"
                 '{"action": "delegate", "agent_name": "точное имя агента", '
                 '"agent_task": "задача", '
