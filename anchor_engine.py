@@ -16568,7 +16568,12 @@ class AnchorEngine:
                     + f"→ Поиск → сразу ACTION (send/save/post/publish). Поиск без действия = 0.\n"
                     + f"→ Если 0 результатов — попробуй другой источник прямо сейчас, не останавливайся.\n"
                     + f"→ asibiont.com — это НАША платформа. Не представляй её как внешнее 'открытие', контакт или лид.\n"
-                    + f"→ КРАТКОСТЬ: ≤600 символов, 2-3 абзаца мессенджер-стилем. Перед отправкой — убери всё, без чего смысл не теряется.\n"
+                    + f"\n📐 САМОПРОВЕРКА ДЛИНЫ (перед финальным ответом):\n"
+                    + f"  1. Пользователь читает в Telegram с телефона. Ему нужно: что сделал, какой результат, что дальше.\n"
+                    + f"  2. Перечитай свой ответ: каждое предложение несёт НОВЫЙ факт? Если нет — удали.\n"
+                    + f"  3. Вводные фразы ('Вот что у нас есть', 'По итогам работы', 'Считаю что') — удали, начни с сути.\n"
+                    + f"  4. Повторение задания своими словами — удали. Пользователь и так знает задачу.\n"
+                    + f"  5. Ориентир: 2-3 абзаца, каждый 1-2 предложения. Если получилось >4 абзацев — сожми.\n"
                     + (f"→ Сверь с блоком '🚫 НЕЛЬЗЯ повторять' — ответ обязан содержать новый факт.\n" if _no_repeat_block else '')
                     + _lang_directive(user)
                 )
@@ -17172,11 +17177,6 @@ class AnchorEngine:
                         )
                         if _cleaned_tg and _cleaned_tg[0].islower():
                             _cleaned_tg = _cleaned_tg[0].upper() + _cleaned_tg[1:]
-                        # Safety net: cap agent TG output to ~800 chars (teach-first + hard limit)
-                        if len(_cleaned_tg) > 800:
-                            _cut_tg = _cleaned_tg[:800]
-                            _last_punc_tg = max(_cut_tg.rfind('.'), _cut_tg.rfind('!'), _cut_tg.rfind('?'))
-                            _cleaned_tg = _cut_tg[:_last_punc_tg + 1] if _last_punc_tg > 200 else _cut_tg.rsplit('\n', 1)[0]
                         await _safe_send(self.bot, user.telegram_id, f"{_ag_name}:\n{_cleaned_tg}")
                     except Exception:
                         pass
