@@ -5386,8 +5386,8 @@ class AnchorEngine:
             Anchor.created_at.asc()
         ).limit(20).all()
 
-        # ── STUCK ANCHOR RECOVERY: если autopilot-якорь висит >60 мин без delivered_at ──
-        _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=60)
+        # ── STUCK ANCHOR RECOVERY: если autopilot-якорь висит >35 мин без delivered_at ──
+        _stuck_threshold = datetime.now(timezone.utc) - timedelta(minutes=35)
         _stuck_cleared = 0
         for _sa in deliverable:
             if _sa.anchor_type in REVIEW_SILENT_TYPES:
@@ -5408,7 +5408,7 @@ class AnchorEngine:
                 except Exception:
                     pass
             deliverable = [a for a in deliverable if a.delivered_at is None]
-            logger.warning("[ANCHOR] User %d: cleared %d stuck autopilot anchors (>60min)", user_id, _stuck_cleared)
+            logger.warning("[ANCHOR] User %d: cleared %d stuck autopilot anchors (>35min)", user_id, _stuck_cleared)
 
         # ── 0. BACKGROUND RESEARCH — выполнить отложенные исследования ──
         _bg_now = datetime.utcnow()  # naive UTC для сравнения с triggered_at из PostgreSQL (naive)
@@ -6036,16 +6036,32 @@ class AnchorEngine:
                 logger.debug("[DISPATCH-THROTTLE] throttle check failed: %s", _throttle_err)
 
             # ── Помечаем якорь доставленным СРАЗУ — защита от бесконечных retry при crash/restart ──
+            _early_del_ok = False
             try:
                 from sqlalchemy import text as _del_text
                 session.execute(_del_text("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': anchor.id})
                 session.commit()
+                _early_del_ok = True
             except Exception as _del_err:
-                logger.debug("[DISPATCH] delivered_at early-set failed: %s", _del_err)
+                logger.warning("[DISPATCH] delivered_at early-set failed (main session): %s — retrying with fresh session", _del_err)
                 try:
                     session.rollback()
                 except Exception:
                     pass
+                try:
+                    from models import Session as _DelSess
+                    from sqlalchemy import text as _del_text2
+                    _s_del = _DelSess()
+                    try:
+                        _s_del.execute(_del_text2("UPDATE anchors SET delivered_at=NOW() WHERE id=:aid"), {'aid': anchor.id})
+                        _s_del.commit()
+                        _early_del_ok = True
+                    finally:
+                        _s_del.close()
+                except Exception as _del_err2:
+                    logger.warning("[DISPATCH] delivered_at retry also failed: %s — skipping dispatch to prevent stuck anchor", _del_err2)
+            if not _early_del_ok:
+                return  # anchor stays pending, next scan will retry
 
             # Используем только агентов с AgentSubscription — те что пользователь активировал в чате
             from models import AgentSubscription as _AS_ap
