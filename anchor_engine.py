@@ -4483,7 +4483,7 @@ class AnchorEngine:
                             .filter(
                                 _RecAAL2.activity_type.in_(['goal_autopilot_dispatch', 'agent_event_dispatch', 'agent_chain_continue']),
                                 _RecAAL2.status == 'in_progress',
-                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=10),
+                                _RecAAL2.created_at < datetime.now(timezone.utc) - timedelta(minutes=20),
                             )
                             .all()
                         )
@@ -14179,14 +14179,17 @@ class AnchorEngine:
                 _ak_cross = (_ak_tool, _ak_goal)  # ключ для кросс-агентного дедупа
                 _agent_steps = _agent_step_count.get(_ak_agent, 0)
                 _is_cross_dup = (_ak_tool in _SEARCH_DEDUP_TOOLS and _ak_cross in _seen_search_tool_goal)
-                if _ak_agent and _ak not in _seen_agent_tool_goal and not _is_cross_dup:
+                # Ограничение: не более 1 задания на одного агента за цикл — иначе задачи
+                # накапливаются последовательно и суммарное время (6 мин x N) превышает cleanup timeout
+                _agent_already_in_plan = _agent_step_count.get(_ak_agent, 0) >= 1
+                if _ak_agent and _ak not in _seen_agent_tool_goal and not _is_cross_dup and not _agent_already_in_plan:
                     _seen_agent_tool_goal.add(_ak)
                     if _ak_tool in _SEARCH_DEDUP_TOOLS:
                         _seen_search_tool_goal.add(_ak_cross)
                     _agent_step_count[_ak_agent] = _agent_steps + 1
                     _plan_deduped.append(_p)
                 else:
-                    _dedup_reason = 'cross-agent dup search' if _is_cross_dup else 'dup agent+tool+goal'
+                    _dedup_reason = 'cross-agent dup search' if _is_cross_dup else ('agent already has 1 task' if _agent_already_in_plan else 'dup agent+tool+goal')
                     logger.info("[COORD] dedup (%s): skip %s/%s (goal=%s)", _dedup_reason, _p.get('agent'), _p.get('tool'), _ak_goal[:30])
             _plan = _plan_deduped if _plan_deduped else _plan
 
