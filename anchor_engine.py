@@ -8870,7 +8870,9 @@ class AnchorEngine:
                     )
                 except asyncio.TimeoutError as _ai_err:
                     logger.warning("[ANCHOR-AUTOPILOT] AI call TIMEOUT (>180s) for user %d agent=%s", user.id, agent_name)
+                    _raw = None  # FIX: define _raw to prevent UnboundLocalError
                 except Exception as _ai_err:
+                    _raw = None  # FIX: define _raw to prevent UnboundLocalError
                     logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
                     # Вместо полной тишины — отправляем краткий статус-отчёт
                     _goals_summary = data.get('goals', [])
@@ -16695,6 +16697,7 @@ class AnchorEngine:
                         timeout=150,  # Увеличен с 120s до 150s — даём больше времени, но просим partial results
                     )
                 except asyncio.TimeoutError:
+                    _raw = None  # FIX: define _raw to prevent UnboundLocalError
                     _ae_msg = f'Превысил лимит 150с — задача слишком сложная для одного цикла, нужно разбить на шаги'
                     logger.warning("[COORD] agent %s timeout after 150s: %s", _ag_name, _ag_task[:100])
                     self._cancel_agent_task(
@@ -16737,6 +16740,7 @@ class AnchorEngine:
                             pass
                     continue
                 except Exception as _ae:
+                    _raw = None  # FIX: define _raw to prevent UnboundLocalError
                     logger.warning("[COORD] agent %s exec failed: %s", _ag_name, _ae)
                     _ae_detail = str(_ae)[:200].strip() or type(_ae).__name__
                     self._cancel_agent_task(
