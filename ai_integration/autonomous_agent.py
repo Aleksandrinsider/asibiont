@@ -1227,6 +1227,11 @@ class HybridAutonomousAgent:
           except asyncio.TimeoutError:
             if _attempt >= _max_retries - 1:
                 raise
+            # Не ретраим с тем же таймаутом если он уже большой (>=60s) —
+            # DIRECTOR-EXEC сам повторит с 2x таймаутом, иначе тратим лишние 60-90с впустую
+            _current_timeout = api_timeout or 60
+            if _current_timeout >= 60:
+                raise
             logger.warning(f"[AI] Timeout on attempt {_attempt+1}/{_max_retries}, retrying...")
             await asyncio.sleep(3 * (_attempt + 1))
           except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as _conn_err:
