@@ -14001,7 +14001,7 @@ class AnchorEngine:
             try:
                 # Больше токенов когда шагов больше (450 на шаг, минимум 1200, максимум 4000)
                 # task ≥50 слов (~200 tok) + task_brief (~40 tok) + JSON overhead (~80 tok) ≈ 320 tok/шаг + запас
-                _plan_max_tokens = min(max(1200, _n_plan_steps * 450), 4000)
+                _plan_max_tokens = min(max(1500, _n_plan_steps * 550), 5000)
                 # Логируем размер промпта координатора для мониторинга latency
                 _prompt_chars = len(_plan_prompt)
                 if _prompt_chars > 20000:
@@ -15656,6 +15656,15 @@ class AnchorEngine:
                         else:
                             # Нет завершённых предложений — обрезаем по последнему полному слову
                             _task_brief_raw = _task_brief_raw.rsplit(' ', 1)[0].rstrip('.,;:-') if ' ' in _task_brief_raw else _task_brief_raw
+                    # Orphaned preposition at end = sign of truncated JSON output
+                    import re as _re_orphan_tb
+                    _task_brief_raw = _re_orphan_tb.sub(
+                        r'\s+(?:в|на|по|за|к|о|во|до|от|из|для|при|без|под|над|об|у|с|со|ко|что|как|но|и|а)\s*$',
+                        '', _task_brief_raw, flags=_re_orphan_tb.IGNORECASE,
+                    ).rstrip()
+                    # Unclosed quote = definitely truncated mid-topic → fallback to task
+                    if _task_brief_raw.count('«') > _task_brief_raw.count('»') or _task_brief_raw.count("'") % 2 == 1:
+                        _task_brief_raw = ''
                     
                     # Fallback: если координатор пропустил task_brief — берём первое предложение task
                     if not _task_brief_raw or len(_task_brief_raw) < 10:
@@ -16558,6 +16567,8 @@ class AnchorEngine:
                     + f"\n→ Честный факт из tool-ответа > красивая общая фраза.\n"
                     + f"→ Поиск → сразу ACTION (send/save/post/publish). Поиск без действия = 0.\n"
                     + f"→ Если 0 результатов — попробуй другой источник прямо сейчас, не останавливайся.\n"
+                    + f"→ asibiont.com — это НАША платформа. Не представляй её как внешнее 'открытие', контакт или лид.\n"
+                    + f"→ КРАТКОСТЬ: ≤600 символов, 2-3 абзаца мессенджер-стилем. Перед отправкой — убери всё, без чего смысл не теряется.\n"
                     + (f"→ Сверь с блоком '🚫 НЕЛЬЗЯ повторять' — ответ обязан содержать новый факт.\n" if _no_repeat_block else '')
                     + _lang_directive(user)
                 )
@@ -17161,6 +17172,11 @@ class AnchorEngine:
                         )
                         if _cleaned_tg and _cleaned_tg[0].islower():
                             _cleaned_tg = _cleaned_tg[0].upper() + _cleaned_tg[1:]
+                        # Safety net: cap agent TG output to ~800 chars (teach-first + hard limit)
+                        if len(_cleaned_tg) > 800:
+                            _cut_tg = _cleaned_tg[:800]
+                            _last_punc_tg = max(_cut_tg.rfind('.'), _cut_tg.rfind('!'), _cut_tg.rfind('?'))
+                            _cleaned_tg = _cut_tg[:_last_punc_tg + 1] if _last_punc_tg > 200 else _cut_tg.rsplit('\n', 1)[0]
                         await _safe_send(self.bot, user.telegram_id, f"{_ag_name}:\n{_cleaned_tg}")
                     except Exception:
                         pass
