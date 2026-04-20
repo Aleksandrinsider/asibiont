@@ -75,6 +75,43 @@ async def _safe_http(**kwargs):
 
 
 # ═══════════════════════════════════════════════════════
+# GENDER DETECTION — local copy to avoid fragile cross-module import
+# ═══════════════════════════════════════════════════════
+_MALE_NAMES_ENDING_AYA = {
+    'илья', 'никита', 'лука', 'кузьма', 'фома', 'акила', 'зосима', 'сила',
+    'митя', 'ваня', 'коля', 'паша', 'гоша', 'дима', 'тёма', 'тема',
+    'вася', 'сеня', 'лёша', 'леша', 'рома', 'миша', 'витя', 'петя', 'федя',
+    'алёша', 'алеша', 'яша', 'кирюша', 'серёжа', 'сережа',
+    'жора', 'сева', 'стёпа', 'степа', 'вова', 'юра', 'лёва', 'лева',
+    'тоша', 'андрюша', 'гриша', 'никоша', 'тимоша', 'даня', 'костя', 'лёня', 'леня',
+    'саша', 'женя', 'валя', 'слава',
+}
+_FEMALE_NAMES_NO_AYA = {
+    'beatrice', 'бэатрис', 'беатрис', 'элизабет', 'elizabeth', 'мэри', 'mary',
+    'кэтрин', 'catherine', 'маргарет', 'margaret', 'джейн', 'jane', 'хелен', 'helen',
+    'эдит', 'edith', 'джудит', 'judith', 'рут', 'ruth', 'эстер', 'esther',
+    'кармен', 'carmen', 'долорес', 'dolores', 'мерседес', 'mercedes', 'инес', 'ines',
+    'беатрис', 'кэрол', 'carol', 'шарлотт', 'charlotte', 'скарлетт', 'scarlett',
+    'элис', 'alice', 'агнес', 'agnes', 'ингрид', 'ingrid', 'астрид', 'astrid',
+    'изабель', 'isabel', 'мишель', 'michelle', 'рейчел', 'rachel', 'дебора', 'deborah',
+}
+
+def _detect_agent_is_female(name: str) -> bool:
+    """Определяет женский ли род агента по имени."""
+    name = (name or '').strip()
+    if not name:
+        return False
+    first = name.split()[0].lower()
+    if first in _FEMALE_NAMES_NO_AYA:
+        return True
+    if first in _MALE_NAMES_ENDING_AYA:
+        return False
+    if first[-1:] in 'ая' and first[-2:] not in ('ша', 'жа'):
+        return True
+    return False
+
+
+# ═══════════════════════════════════════════════════════
 # USER-LEVEL CHANNEL ENRICHMENT
 # ═══════════════════════════════════════════════════════
 # Добавляет каналы пользователя (Discord, Telegram) к agent_caps.
@@ -5017,8 +5054,6 @@ class AnchorEngine:
 
     async def _process_user_inner(self, user_id: int, session):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
-        # Lazy import for gender detection
-        from ai_integration.autonomous_agent import _detect_agent_is_female
         # ── DEADLINE TRACKING ──
         # Внешний _process_user_safe имеет timeout=180s.
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
@@ -8735,7 +8770,6 @@ class AnchorEngine:
                                         try:
                                             _skip_ack_cap = self._agent_persona_daily_cap_reached(_ack_sv, user, _chosen_name)
                                             if not _skip_ack_cap:
-                                                from ai_integration.autonomous_agent import _detect_agent_is_female
                                                 _is_fem_ack = _detect_agent_is_female(_chosen_name)
                                                 _ack_text = _sanitize_proactive_text(_ack_text, is_fem=_is_fem_ack)
                                                 _ack_sv.add(Interaction(
@@ -9418,7 +9452,6 @@ class AnchorEngine:
                             flags=re.IGNORECASE,
                         )
                         # Sanitize tool names from user-facing text
-                        from ai_integration.autonomous_agent import _detect_agent_is_female
                         _is_fem_agent = _detect_agent_is_female(_chosen_name)
                         _cleaned_result = _sanitize_proactive_text(_cleaned_result, is_fem=_is_fem_agent)
 
@@ -9809,7 +9842,6 @@ class AnchorEngine:
         или устаревший формат (user_orm, new_anchors).
         new_anchors: список dict с ключами anchor_type/source/topic/data
         """
-        from ai_integration.autonomous_agent import _detect_agent_is_female
         # Backward-compat: старый вызов передавал ORM-объект + list
         if new_anchors is None:
             # Старый формат: (user_orm, new_anchors_list)
@@ -10559,7 +10591,6 @@ class AnchorEngine:
                 or _is_delegation_message(_chain_clean, _chain_agent_names)
             )
             if _next_result and _chain_clean and self.bot and not _chain_is_noise:
-                from ai_integration.autonomous_agent import _detect_agent_is_female
                 _is_fem_chain = _detect_agent_is_female(_next_ag.name)
                 _chain_sanitized = _sanitize_proactive_text(_chain_clean, is_fem=_is_fem_chain)
                 try:
@@ -23008,8 +23039,7 @@ class AnchorEngine:
                     )
 
                     # ── Определяем гендер отправителя ──
-                    from ai_integration.autonomous_agent import _detect_agent_is_female as _daf_sender
-                    _sender_fem = _daf_sender(sender_name)
+                    _sender_fem = _detect_agent_is_female(sender_name)
                     _gender_hint = ""
                     if _sender_fem:
                         _gender_hint = (
