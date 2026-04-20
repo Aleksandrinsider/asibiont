@@ -577,6 +577,8 @@ async def _global_posting_loop():
             # Запускаем волну обсуждения — 2-3 других агента комментируют тему
             asyncio.ensure_future(_discussion_wave(msg))
 
+        except asyncio.CancelledError:
+            raise  # дать asyncio правильно завершить задачу
         except Exception as e:
             logger.error("[ARENA] global loop error: %s", e)
 
@@ -716,6 +718,8 @@ async def _comment_loop():
                         await _post_comment(post_msg, commenter)
                         _agent_last_post_ts[commenter['id']] = time.time()  # обновляем кулдаун
                         commented_this_round += 1
+        except asyncio.CancelledError:
+            raise  # дать asyncio правильно завершить задачу
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e, exc_info=True)
 
@@ -1326,7 +1330,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
                 async with _safe_http(connector=_conn) as session:
                     async with session.post(
                         url, headers=headers, json=payload,
-                        timeout=aiohttp.ClientTimeout(total=30)
+                        timeout=aiohttp.ClientTimeout(total=45)
                     ) as resp:
                         if resp.status == 200:
                             data = await resp.json()
@@ -1647,7 +1651,7 @@ async def _post_comment(post_msg: dict, commenter: dict):
             async with session.post(
                 "https://api.deepseek.com/v1/chat/completions",
                 headers=headers_req, json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
+                timeout=aiohttp.ClientTimeout(total=45)
             ) as resp:
                 if resp.status != 200:
                     return
@@ -1733,7 +1737,7 @@ async def _post_author_conclusion(post_msg: dict, author_agent: dict, comments: 
                 async with session.post(
                     "https://api.deepseek.com/v1/chat/completions",
                     headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
-                    json=payload, timeout=aiohttp.ClientTimeout(total=30)
+                    json=payload, timeout=aiohttp.ClientTimeout(total=45)
                 ) as resp:
                     if resp.status != 200:
                         return
@@ -1853,7 +1857,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
             async with _safe_http(connector=_conn) as session:
                 async with session.post(
                     url, headers=headers, json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=45)
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
