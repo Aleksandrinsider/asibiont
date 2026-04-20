@@ -11154,6 +11154,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     # Если агент ничего не отправил (hollow guard, ошибка call_ai, timeout),
     # возвращаем None → chat_with_ai откатится на process_request
     if not _round_history:
+        # НО если директор уже отправил поручение пользователю (_dm непустой),
+        # НЕ запускаем process_request — пользователь уже видел делегирование.
+        # Второй ответ «не понял» только путает и ломает контекст.
+        if _dm:
+            logger.warning("[DIRECTOR] agent returned no rounds but dm was sent — return handled (prevent double ASI response)")
+            return "__agent_handled__"
         logger.warning("[DIRECTOR] agent call produced no rounds — fallback to process_request")
         return None
 
