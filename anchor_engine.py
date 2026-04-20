@@ -1048,6 +1048,8 @@ _AGENT_PERSONA_CAP_EXCLUDE_ANCHOR_TYPES = {
     # Реальные отчёты агентов (result) НЕ считаются — пользователь должен видеть каждый результат.
     'goal_autopilot_result',
     'coordinator_result',
+    'coordinator_assignment',   # ASI→агент поручение — служебное, не съедает cap
+    'coordinator_summary',      # итог цикла координатора — служебное
     'agent_delegation',
     'agent_chain_continue',
     'agent_chain_transfer',
