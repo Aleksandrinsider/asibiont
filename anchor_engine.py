@@ -12105,8 +12105,10 @@ class AnchorEngine:
             # Diagnostic: логируем какие агенты переданы в координатор
             _agent_names_list = [p.get('name', '') for p in _profiles if p.get('name', '').strip()]
             logger.info("[COORD] Starting with %d agent profiles: %s", len(_agent_names_list), _agent_names_list)
-            # Динамическая формула: каждый агент + каждая цель получают шаг, но не более 20
-            _n_plan_steps = max(_n_real_agents + len(_goals[:5]), _n_real_agents, min(_n_agents * 2, 20))
+            # 1 шаг на агента — гарантирует что ВСЕ агенты получат задание.
+            # Раньше: agents+goals → 8+ шагов → LLM не хватало токенов → JSON обрезался → 2 из 4 агентов без работы.
+            # Координатор сам распределит цели между агентами (в промпте: «каждая цель получает шаг»).
+            _n_plan_steps = max(_n_real_agents, 2)
 
             # ── Детектор деградированных агентов (только 2 последних) ──
             import re as _re_deg
@@ -14001,9 +14003,9 @@ class AnchorEngine:
             )
 
             try:
-                # Больше токенов когда шагов больше (450 на шаг, минимум 1200, максимум 4000)
-                # task ≥50 слов (~200 tok) + task_brief (~40 tok) + JSON overhead (~80 tok) ≈ 320 tok/шаг + запас
-                _plan_max_tokens = min(max(1500, _n_plan_steps * 550), 5000)
+                # 700 tok/шаг: task ≥50 слов (~200 tok) + task_brief (~40 tok) + reason (~40 tok) + JSON overhead (~80 tok) + запас
+                # Cap 8000 — достаточно для 4-6 развёрнутых шагов без обрезки
+                _plan_max_tokens = min(max(2000, _n_plan_steps * 700), 8000)
                 # Логируем размер промпта координатора для мониторинга latency
                 _prompt_chars = len(_plan_prompt)
                 if _prompt_chars > 20000:
@@ -14059,11 +14061,22 @@ class AnchorEngine:
             import re as _re_coord
             _plan = []
             try:
-                _m = _re_coord.search(r'\[[\s\S]*?\]', _plan_json or '')
+                _m = _re_coord.search(r'\[[\s\S]*\]', _plan_json or '')
                 if _m:
                     _plan = json.loads(_m.group())
+                else:
+                    # JSON обрезан (нет закрывающей ]) — пробуем repair
+                    _m2 = _re_coord.search(r'\[[\s\S]+', _plan_json or '')
+                    if _m2:
+                        _raw_arr = _m2.group().rstrip().rstrip(',')
+                        # Обрезаем до последнего полного объекта (заканчивается на })
+                        _last_brace = _raw_arr.rfind('}')
+                        if _last_brace > 0:
+                            _repaired = _raw_arr[:_last_brace + 1] + ']'
+                            _plan = json.loads(_repaired)
+                            logger.info("[COORD] JSON repaired: truncated output → recovered %d steps", len(_plan))
             except Exception as _je:
-                logger.warning("[COORD] JSON parse: %s — raw: %s", _je, (_plan_json or '')[:200])
+                logger.warning("[COORD] JSON parse: %s — raw: %s", _je, (_plan_json or '')[:300])
                 return False
 
             if not _plan:
@@ -15658,12 +15671,21 @@ class AnchorEngine:
                         else:
                             # Нет завершённых предложений — обрезаем по последнему полному слову
                             _task_brief_raw = _task_brief_raw.rsplit(' ', 1)[0].rstrip('.,;:-') if ' ' in _task_brief_raw else _task_brief_raw
-                    # Orphaned preposition at end = sign of truncated JSON output
+                    # Orphaned preposition or truncated word at end = sign of truncated JSON output
                     import re as _re_orphan_tb
                     _task_brief_raw = _re_orphan_tb.sub(
-                        r'\s+(?:в|на|по|за|к|о|во|до|от|из|для|при|без|под|над|об|у|с|со|ко|что|как|но|и|а)\s*$',
+                        r'\s+(?:в|на|по|за|к|о|во|до|от|из|для|при|без|под|над|об|у|с|со|ко|что|как|но|и|а)\s*[.!?]?\s*$',
                         '', _task_brief_raw, flags=_re_orphan_tb.IGNORECASE,
                     ).rstrip()
+                    # Truncated word before period: "...на dev.to, ха." → "ха" is not a word
+                    _last_word_tb = _task_brief_raw.rstrip('.!?, ').rsplit(None, 1)[-1] if _task_brief_raw.strip() else ''
+                    if _last_word_tb and len(_last_word_tb) <= 3 and not _last_word_tb[-1:].isdigit() and _last_word_tb.lower() not in ('api', 'crm', 'smm', 'seo', 'pr', 'hr', 'it', 'ai', 'ml'):
+                        # Likely truncated — cut to previous sentence or comma
+                        _cut_pos = max(_task_brief_raw.rfind('.', 0, -len(_last_word_tb)-2), _task_brief_raw.rfind(',', 0, -len(_last_word_tb)-2))
+                        if _cut_pos > 20:
+                            _task_brief_raw = _task_brief_raw[:_cut_pos].rstrip()
+                        else:
+                            _task_brief_raw = ''  # too short after cut → fallback
                     # Unclosed quote = definitely truncated mid-topic → fallback to task
                     if _task_brief_raw.count('«') > _task_brief_raw.count('»') or _task_brief_raw.count("'") % 2 == 1:
                         _task_brief_raw = ''
