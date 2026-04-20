@@ -15151,6 +15151,26 @@ class AnchorEngine:
                         'goal': _sd_goal_fb,
                     })
 
+            # ── Hard cap: не более 3 уникальных агентов за цикл ──
+            # 3 агента × ~6 мин каждый = 18 мин < 20 мин cleanup → ни один не таймаутится.
+            # Если dedup или backfill добавили дубли — убираем здесь в последний раз.
+            _plan_seen_agents: set = set()
+            _plan_capped: list = []
+            for _cp in _plan:
+                _cp_ag = (_cp.get('agent') or '').strip()
+                if not _cp_ag:
+                    continue
+                if _cp_ag not in _plan_seen_agents:
+                    _plan_capped.append(_cp)
+                    _plan_seen_agents.add(_cp_ag)
+                    if len(_plan_capped) >= 3:
+                        break
+            if _plan_capped:
+                if len(_plan_capped) < len(_plan):
+                    logger.info("[COORD] plan capped %d→%d agents: %s",
+                                len(_plan), len(_plan_capped), [p.get('agent') for p in _plan_capped])
+                _plan = _plan_capped
+
             logger.info("[COORD] user %d: plan=%s (sm_directives=%s)", user.id,
                         [(p.get('agent'), p.get('tool')) for p in _plan],
                         [(d.get('goal', '')[:30], d.get('tool')) for d in _sm_directives])
