@@ -6537,8 +6537,10 @@ class AnchorEngine:
                             )
                             if _coord_ok:
                                 return
-                        except (asyncio.TimeoutError, Exception) as _coord_exc:
-                            logger.warning("[COORD] failed/timeout, fallback to round-robin: %s", _coord_exc)
+                        except asyncio.TimeoutError:
+                            logger.warning("[COORD] TIMEOUT (>600s) for user %d, fallback to round-robin", user.id)
+                        except Exception as _coord_exc:
+                            logger.warning("[COORD] failed, fallback to round-robin: %s", _coord_exc, exc_info=True)
                     # ── FALLBACK / SINGLE-AGENT: оригинальный round-robin ──
                     _real_ags = sorted([a for a in agents if getattr(a, 'id', 0) != 0], key=lambda a: a.id)
                     _asi_ag = next((a for a in agents if getattr(a, 'id', 0) == 0), None)
@@ -8862,9 +8864,11 @@ class AnchorEngine:
                         _exec_agent_for_director(
                             agent_data, _task_trimmed, user.telegram_id,
                         ),
-                        timeout=120,
+                        timeout=180,
                     )
-                except (asyncio.TimeoutError, Exception) as _ai_err:
+                except asyncio.TimeoutError as _ai_err:
+                    logger.warning("[ANCHOR-AUTOPILOT] AI call TIMEOUT (>180s) for user %d agent=%s", user.id, agent_name)
+                except Exception as _ai_err:
                     logger.warning("[ANCHOR-AUTOPILOT] AI call failed for user %d: %s", user.id, _ai_err)
                     # Вместо полной тишины — отправляем краткий статус-отчёт
                     _goals_summary = data.get('goals', [])
