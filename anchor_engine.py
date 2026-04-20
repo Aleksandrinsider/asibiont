@@ -5000,7 +5000,7 @@ class AnchorEngine:
 
         async with lock:
             try:
-                await asyncio.wait_for(self._process_user(user_id), timeout=300)
+                await asyncio.wait_for(self._process_user(user_id), timeout=600)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
                 self._timeout_backoff_until.pop(user_id, None)
@@ -5010,9 +5010,9 @@ class AnchorEngine:
                 if _cnt >= 3:
                     # Backoff: 30 минут после 3+ таймаутов
                     self._timeout_backoff_until[user_id] = _time_cb.monotonic() + 1800
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 300s ({_cnt}x) — circuit breaker ON for 30min")
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 600s ({_cnt}x) — circuit breaker ON for 30min")
                 else:
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 300s ({_cnt}/3) — lock released")
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 600s ({_cnt}/3) — lock released")
                 # Закрываем подвешенные AI-сессии
                 try:
                     from ai_integration.autonomous_agent import (
@@ -6528,9 +6528,9 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
-                            # timeout = max 600s (10 min) — coordinator + agents должны уложиться
-                            # per-agent inner timeout 300s, но обычно 30-60s достаточно
-                            _coord_timeout = 600
+                            # timeout = max 480s — coordinator plan (~60s) + 4 agents × 90-120s
+                            # Должен быть МЕНЬШЕ _process_user wrapper (600s)
+                            _coord_timeout = 480
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
@@ -6540,7 +6540,7 @@ class AnchorEngine:
                             if _coord_ok:
                                 return
                         except asyncio.TimeoutError:
-                            logger.warning("[COORD] TIMEOUT (>600s) for user %d, fallback to round-robin", user.id)
+                            logger.warning("[COORD] TIMEOUT (>480s) for user %d, fallback to round-robin", user.id)
                         except Exception as _coord_exc:
                             logger.warning("[COORD] failed, fallback to round-robin: %s", _coord_exc, exc_info=True)
                     # ── FALLBACK / SINGLE-AGENT: оригинальный round-robin ──
