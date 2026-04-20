@@ -16484,34 +16484,23 @@ class AnchorEngine:
                 _has_github_live = any(
                     k in _ag_api_keys_raw.upper() for k in ('GITHUB_TOKEN=', 'GITHUB_ACCESS_TOKEN=')
                 )
+                _is_github_task = any(w in _ag_task_lower for w in ('github', 'разработчик', 'developer', 'repo', 'commit', 'код', 'code'))
                 if _has_github_live:
                     _gh_actions = _re_live.findall(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _ag_py_code_raw)
                     if _gh_actions:
                         _intg_live_lines.append(
-                            f"💻 GitHub-интеграция активна. "
-                            f"run_agent_action поддерживает action: {', '.join(list(dict.fromkeys(_gh_actions))[:4])}"
+                            f"💻 GitHub активна. action: {', '.join(list(dict.fromkeys(_gh_actions))[:4])}"
                         )
-                    _intg_live_lines.append(
-                        "⚡ КАК РАБОТАЕТ GitHub-поиск email:\n"
-                        "  GitHub НЕ показывает email на веб-странице/профиле — это нормально.\n"
-                        "  НО run_agent_action(action='search_users') извлекает email из COMMIT-ИСТОРИИ\n"
-                        "  (PushEvent → author.email) — это работает для ~40% разработчиков.\n"
-                        "  → НЕ делай web_search по GitHub — это бесполезно для email.\n"
-                        "  → ВСЕГДА используй run_agent_action(action='search_users') — он сам найдёт email.\n"
-                        "  → Результат: список {name, email, bio} — сразу save_email_contact → send_outreach_email.\n"
-                    )
-                    _intg_live_lines.append(
-                        "⚠️ КРИТИЧНО — правила GitHub search query:\n"
-                        "  ✅ ПРАВИЛЬНО: 'language:python autonomous agent repos:>10'\n"
-                        "  ✅ ПРАВИЛЬНО: 'machine learning language:python followers:>15'\n"
-                        "  ✅ ПРАВИЛЬНО: 'indie hacker saas repos:>20 followers:>30'\n"
-                        "  ❌ НЕ РАБОТАЕТ: email-адреса ('user@gmail.com') → вернёт 0 результатов\n"
-                        "  ❌ НЕ РАБОТАЕТ: имена из переписки ('Georgiou Feng repos:>5') → вернёт 0\n"
-                        "  ❌ НЕ РАБОТАЕТ: название задачи ('email_analysis repos:>5') → вернёт 0\n"
-                        "  Допустимые квалификаторы: language:, repos:, followers:, location:, type:user\n"
-                        "  ПОСЛЕ поиска → для КАЖДОГО с email: save_email_contact → send_outreach_email\n"
-                        "  📊 Меняй query каждый цикл! Примеры: 'ai agent language:python', 'llm framework followers:>20', 'chatbot language:typescript'"
-                    )
+                    if _is_github_task or _is_email_task:
+                        # Полные инструкции только когда задача реально про GitHub или email-поиск
+                        _intg_live_lines.append(
+                            "⚡ GitHub email: run_agent_action(action='search_users') извлекает email из commit-истории (~40% разработчиков). "
+                            "НЕ делай web_search по GitHub. query примеры: 'language:python autonomous agent repos:>10', "
+                            "'indie hacker saas repos:>20'. Квалификаторы: language:, repos:, followers:, location:, type:user. "
+                            "❌ НЕ РАБОТАЕТ: email-адреса, имена, название задачи в query."
+                        )
+                    else:
+                        _intg_live_lines.append("💻 GitHub: run_agent_action(action='search_users'/'create_issue'/...)")
 
                 # ── Универсальный детектор остальных интеграций из api_keys ──
                 _ak_upper = _ag_api_keys_raw.upper()
@@ -16583,10 +16572,14 @@ class AnchorEngine:
                             f"→ используй run_agent_action(action='...')"
                         )
 
-                _intg_live_block = (
-                    "\n\n🔌 ТВОИ ИНТЕГРАЦИИ (конкретно):\n" + '\n'.join(_intg_live_lines) + '\n'
-                    if _intg_live_lines else ''
-                )
+                _intg_live_block = ''
+                if _intg_live_lines:
+                    # Показываем только первые 5 — остальные перечислением без деталей
+                    _shown = _intg_live_lines[:5]
+                    _rest = _intg_live_lines[5:]
+                    _rest_labels = [l.split('→')[0].strip()[:30] for l in _rest if l.strip()]
+                    _rest_str = (f"\n  + ещё: {', '.join(_rest_labels)}" if _rest_labels else '')
+                    _intg_live_block = "\n\n🔌 ТВОИ ИНТЕГРАЦИИ:\n" + '\n'.join(_shown) + _rest_str + '\n'
 
                 # Полный список интеграций для краткой строки в промпте
                 _ag_caps_for_prompt_parts = []
