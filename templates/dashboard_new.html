@@ -7588,7 +7588,7 @@ except Exception as e:
             set('mpa-slug', agent.slug);
             set('mpa-spec', agent.specialization);
             const genderEl = document.getElementById('mpa-gender');
-            if (genderEl) genderEl.value = agent.gender || 'neutral';
+            if (genderEl) genderEl.value = agent.gender || 'male';
             set('mpa-desc', agent.description);
             set('mpa-personality', agent.personality);
             set('mpa-search-scope', agent.search_scope);
@@ -7752,7 +7752,6 @@ except Exception as e:
                     <input id="mpa-slug" type="text" placeholder="${t('mpa-slug-ph')}" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <input id="mpa-spec" type="text" placeholder="${t('mpa-spec-ph')}" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;">
                     <select id="mpa-gender" style="padding:8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;background:white;">
-                        <option value="neutral">${t('mpa-gender-neutral')}</option>
                         <option value="male">${t('mpa-gender-male')}</option>
                         <option value="female">${t('mpa-gender-female')}</option>
                     </select>
@@ -18117,7 +18116,7 @@ except Exception as e:
       'mpa-title':'Новый агент','mpa-upload-photo':'Загрузить фото',
       'mpa-name-ph':'Имя агента','mpa-jobtitle-ph':'Должность / роль (например: Финансовый аналитик, Юрист-консультант)',
       'mpa-slug-ph':'slug (латиница: my-agent)','mpa-spec-ph':'Специализация (например: финансы, маркетинг, разработка)',
-      'mpa-gender-neutral':'Пол: нейтральный (род: работал)','mpa-gender-male':'Пол: мужской (род: работал)','mpa-gender-female':'Пол: женский (род: работала)',
+      'mpa-gender-male':'Мужской','mpa-gender-female':'Женский',
       'mpa-desc-ph':'Короткое описание для карточки (2-3 предложения)','mpa-personality-ph':'Личность агента — характер, стиль, как он общается, о чём любит говорить...',
       'mpa-search-scope-title':'Область поиска в интернете',
       'mpa-search-scope-desc':'Что агент должен искать приоритетно при DDG-поиске. Оставьте пустым — агент будет искать по любой теме.',
@@ -18416,7 +18415,7 @@ except Exception as e:
       'mpa-title':'New agent','mpa-upload-photo':'Upload photo',
       'mpa-name-ph':'Agent name','mpa-jobtitle-ph':'Job title / role (e.g. Financial analyst, Legal advisor)',
       'mpa-slug-ph':'slug (latin: my-agent)','mpa-spec-ph':'Specialization (e.g. finance, marketing, development)',
-      'mpa-gender-neutral':'Gender: neutral (he/she)','mpa-gender-male':'Gender: male (he)','mpa-gender-female':'Gender: female (she)',
+      'mpa-gender-male':'Male','mpa-gender-female':'Female',
       'mpa-desc-ph':'Short description for the card (2-3 sentences)','mpa-personality-ph':'Agent personality — character, style, communication, favorite topics...',
       'mpa-search-scope-title':'Internet search scope',
       'mpa-search-scope-desc':'Topics the agent should prioritise when searching. Leave empty to search any topic.',

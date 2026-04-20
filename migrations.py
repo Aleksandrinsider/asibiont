@@ -565,7 +565,7 @@ def _migrate_marketplace(session, inspector):
                 logger.debug(f"[MIGRATION] run_interval_minutes add skipped: {e}")
         if 'gender' not in cols:
             try:
-                session.execute(text("ALTER TABLE user_agents ADD COLUMN gender VARCHAR(10) DEFAULT 'neutral'"))
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN gender VARCHAR(10) DEFAULT 'male'"))
                 session.commit()
                 logger.info("[MIGRATION] Added user_agents.gender")
             except Exception as e:

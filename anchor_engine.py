@@ -16236,7 +16236,7 @@ class AnchorEngine:
                         'avatar_url': _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _target_ag.id),
                         'search_scope': getattr(_target_ag, 'search_scope', '') or '',
                         'knowledge_base': getattr(_target_ag, 'knowledge_base', '') or '',
-                        'gender': getattr(_target_ag, 'gender', 'neutral') or 'neutral',
+                        'gender': getattr(_target_ag, 'gender', 'male') or 'male',
                         'company': _coord_company,
                     }
 
