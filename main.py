@@ -10418,15 +10418,13 @@ async def blog_post_handler(request):
         else:
             display_title = note.title or 'Без заголовка'
             display_content = note.content or ''
-            # Lazy retranslation: if title looks like English
-            _t = note.title or ''
-            _alpha = [c for c in _t if c.isalpha()]
-            if _alpha and sum(1 for c in _alpha if ord(c) < 128) / len(_alpha) > 0.6:
+            # Lazy retranslation: post not yet translated — same trigger as save_note
+            if note.title_en is None:
                 try:
                     import asyncio as _aio_lazy_bp
                     from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr_bp
                     _aio_lazy_bp.get_running_loop().create_task(
-                        _lazy_tr_bp(note.id, _t, note.content or '')
+                        _lazy_tr_bp(note.id, note.title or '', note.content or '')
                     )
                 except Exception:
                     pass
@@ -10474,17 +10472,13 @@ async def api_blog_handler(request):
             else:
                 display_title = n.title or 'Без заголовка'
                 display_content = n.content or ''
-                # Lazy retranslation: if title looks like English (no RU translation stored yet)
-                _t = n.title or ''
-                _alpha = [c for c in _t if c.isalpha()]
-                if _alpha and sum(1 for c in _alpha if ord(c) < 128) / len(_alpha) > 0.6:
-                    # title is English — trigger background EN→RU translation
-                    _retranslate_src = n.content or ''
+                # Lazy retranslation: post not yet translated — same trigger as save_note
+                if n.title_en is None:
                     try:
                         import asyncio as _aio_lazy
                         from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr
                         _aio_lazy.get_running_loop().create_task(
-                            _lazy_tr(n.id, _t, _retranslate_src)
+                            _lazy_tr(n.id, n.title or '', n.content or '')
                         )
                     except Exception:
                         pass
