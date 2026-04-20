@@ -3075,7 +3075,7 @@
                             </div>
                             <div style="min-width:0;flex:1;">
                                 <div style="font-size:13px;font-weight:600;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="openAgentProfileModal(${a.id})">${escapeHtml(a.name)}</div>
-                                <div style="font-size:12px;color:#9CA3AF;">${a.job_title ? escapeHtml(a.job_title) + (a.specialization || a.author_username ? ' · ' : '') : ''}${escapeHtml(a.specialization || '')}${a.author_username ? ` &nbsp;<span style="color:#068487;cursor:pointer;transition:opacity 0.2s;" onclick="event.stopPropagation();openContactProfileModal('${escapeHtml(a.author_username)}')" onmouseover="this.style.opacity='0.6'" onmouseout="this.style.opacity='1'">@${escapeHtml(a.author_username)}</span>` : ''}</div>
+                                <div style="font-size:12px;color:#9CA3AF;">${a.job_title ? escapeHtml(a.job_title) + (a.specialization ? ' · ' : '') : ''}${escapeHtml(a.specialization || '')}</div>
                             </div>
                         </div>
                         <div style="font-size:12px;color:#6B7280;line-height:1.6;margin-top:2px;">${escapeHtml(a.description || '')}</div>
