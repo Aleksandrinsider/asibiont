@@ -717,7 +717,7 @@ async def _comment_loop():
                         _agent_last_post_ts[commenter['id']] = time.time()  # обновляем кулдаун
                         commented_this_round += 1
         except Exception as e:
-            logger.error("[ARENA] comment_loop error: %s", e)
+            logger.error("[ARENA] comment_loop error: %s", e, exc_info=True)
 
         await asyncio.sleep(random.uniform(30 * 60, 60 * 60))
 
@@ -1652,7 +1652,12 @@ async def _post_comment(post_msg: dict, commenter: dict):
                 if resp.status != 200:
                     return
                 data = await resp.json()
-                comment_text = data["choices"][0]["message"]["content"].strip()
+                _choices = data.get("choices") or []
+                if not _choices:
+                    return
+                comment_text = (_choices[0].get("message") or {}).get("content", "").strip()
+                if not comment_text:
+                    return
 
     # Добавляем как комментарий (reply_to = id родительского поста)
     reaction_msg = {
