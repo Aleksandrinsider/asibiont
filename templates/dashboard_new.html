@@ -1710,6 +1710,13 @@
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Сайт</label>
                         <input type="url" id="quick-website" placeholder="https://ваш-сайт.com" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
+                    <div>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Язык общения</label>
+                        <select id="quick-language" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #374151; cursor: pointer;">
+                            <option value="ru" {% if lang == 'ru' %}selected{% endif %}>🇷🇺 Русский</option>
+                            <option value="en" {% if lang == 'en' %}selected{% endif %}>🇬🇧 English</option>
+                        </select>
+                    </div>
                     <!-- Password change section -->
                     <div style="grid-column: 1 / -1; border-top: 1px solid #E5E7EB; padding-top: 10px; margin-top: 2px;">
                         <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 6px; font-weight: 500;" data-i18n="change-password-title">Сменить пароль</label>
@@ -15037,6 +15044,13 @@ except Exception as e:
                 profileData.discord_webhook = discordWebhook;
                 profileData.email = emailVal;
                 profileData.phone = phoneVal;
+
+                // Сохраняем язык
+                const selectedLang = document.getElementById('quick-language')?.value || 'ru';
+                if (selectedLang) {
+                    fetch('/api/set_language', {method:'POST', credentials:'include', headers:{'Content-Type':'application/json'}, body:JSON.stringify({lang: selectedLang})}).catch(function(){});
+                    if (typeof window.applyLang === 'function') window.applyLang(selectedLang);
+                }
                 
                 if (birthdate) {
                     profileData.birthdate = birthdate;
