@@ -10687,11 +10687,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "ПРАВИЛО: глаголы в повелительном наклонении: найди, подготовь, напиши, исследуй, отправь.\n"
         + _dir_lang_line +
         "САМОПРОВЕРКА перед генерацией JSON: 1) director_message длиннее 60 символов? 2) Назван инструмент (web_search/send_outreach_email/create_post/save_note/...)? 3) Есть ожидаемый результат с критерием (число/тип)? 4) Текст на ПРАВИЛЬНОМ языке? Если нет — переписать.\n\n"
+        "❗ agent_task и director_message пиши НА ТОМ ЖЕ ЯЗЫКЕ что и весь этот промпт. НЕ переключайся на английский.\n\n"
         "JSON без ```:\n"
         '{"action":"self"}\n'
         "или\n"
-        '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи без имени",'
-        '"director_message":"Имя, ЗАЧЕМ. Глагол через TOOL ЧТО/ГДЕ. Жду: результат с критерием."}'
+        '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи на русском",'
+        '"director_message":"Имя, ЗАЧЕМ. Глагол через ИНСТРУМЕНТ ЧТО/ГДЕ. Жду: результат с критерием."}'
     )
 
     # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
@@ -10808,11 +10809,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "Ответь ТОЛЬКО JSON без ```:\n"
                 '{"action": "delegate", "agent_name": "точное имя агента", '
                 '"agent_task": "задача", '
-                '"director_message": "Имя, ЗАЧЕМ (из миссии). Глагол через TOOL ЧТО. Жду: результат."}\n'
+                '"director_message": "Имя, ЗАЧЕМ (из миссии). Глагол через ИНСТРУМЕНТ ЧТО. Жду: результат."}\n'
                 "или\n"
                 '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
                 '"first_agent_name": "имя", "first_agent_task": "задача", '
-                '"director_message": "Имя, ЗАЧЕМ. Глагол через TOOL. Жду: результат."}'
+                '"director_message": "Имя, ЗАЧЕМ. Глагол через ИНСТРУМЕНТ. Жду: результат."}'
             )
         elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
             return None  # Отмена — сброс миссии
@@ -11034,8 +11035,9 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f"Агент дал только текст. РЕШИ:\n"
                 f"- next_task — дать агенту СЛЕДУЮЩЕЕ поручение (если нужен ещё шаг)\n"
                 f"- accept_and_act — принять и САМОМУ выполнить следующий шаг\n\n"
+                f"❗ agent_task и director_message пиши на русском языке. НЕ на английском.\n"
                 f"Ответ СТРОГО JSON:\n"
-                f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "..."}}\n'
+                f'{{"action": "next_task", "director_message": "Агент, теперь ...", "agent_task": "задача на русском"}}\n'
                 f'или\n'
                 f'{{"action": "accept_and_act", "summary": "кратко что сделано", '
                 f'"my_action": "конкретное действие"}}\n'
@@ -11069,6 +11071,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                         f"Результат агента (уже видим пользователю): {_round_history[-1]['result'][:300] if _round_history else ''}\n\n"
                         f"Напиши 1-2 предложения от лица директора — что ты делаешь ДАЛЬШЕ. "
                         f"НЕ пересказывай что делал агент. Без markdown, без списков.\n"
+                        f"Пиши ТОЛЬКО на русском языке.\n"
                         f"⚠️ Команда пользователя: {_team_names}. Упоминай ТОЛЬКО этих агентов. "
                         f"НЕ выдумывай имена агентов, отделы, команды которых нет в списке.\n"
                         f"Все действия делаешь сам (ASI) или через агентов из списка выше."
