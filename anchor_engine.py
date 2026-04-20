@@ -13992,9 +13992,12 @@ class AnchorEngine:
                 "  task — полное задание агенту: что делать + через какой инструмент + с кем/где/критерии + ожидаемый результат.\n"
                 "    ⚠️ task пишется от прямого лица ('найди', 'отправь'), без имени агента, ≥50 слов.\n"
                 "    ⚠️ task НЕ содержит выдуманных событий — только то, что реально есть в истории выше или прямо вытекает из цели.\n"
+                "    ⚠️ Будь КОНКРЕТЕН: не 'контакты из базы', а КАКИЕ (отрасль, роль, площадка). Не 'письма', а О ЧЁМ (предложение, follow-up, партнёрство).\n"
                 "  task_brief — краткое действие для показа пользователю, ≤120 символов, без имени агента.\n"
                 "    ⚠️ task_brief ОБЯЗАТЕЛЬНО в повелительном наклонении: 'отправь', 'найди', 'создай' (НЕ инфинитив 'отправить', 'найти', 'создать').\n"
-                "    ⚠️ task_brief = глагол + кому/что + через какой инструмент. Пример: 'отправь 5 персонализированных писем через send_outreach_email контактам из IT-стартапов'.\n"
+                "    ⚠️ task_brief = глагол + КОМУ КОНКРЕТНО + ЧТО ИМЕННО + через инструмент.\n"
+                "    ✅ Хорошо: 'найди 5 авторов технических блогов на dev.to через web_search для партнёрства по контенту'\n"
+                "    ❌ Плохо: 'отправь письма контактам из базы' (нет конкретики — КАКИМ контактам? О ЧЁМ письма? Для какой цели?)\n"
                 + (
                     "\n🗣️ LANGUAGE: user speaks English. Write ALL user-visible text (task_brief, reason) in English. "
                     "Internal field names stay as-is.\n"
@@ -15745,30 +15748,31 @@ class AnchorEngine:
                             f'{_ag_name}, сообщи пользователю о статусе{_smu_goal_ref}. '
                             f'{_task_brief_lower[0].upper() + _task_brief_lower[1:] if _task_brief_lower else ""}.'
                         )
-                    elif _eff_goal_title and len(_eff_goal_title.strip()) > 5:
-                        _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
-                        # Include reason if available — user wants to see WHY, not just WHAT
-                        if _step_reason_show and len(_step_reason_show.strip()) > 15:
-                            _reason_clean = _step_reason_show.strip().rstrip('.')
-                            _asi_assign_text = f'{_ag_name}, {_reason_clean}. По цели «{_gt}» — {_task_brief_lower}.'
-                        else:
-                            _asi_assign_text = f'{_ag_name}, по цели «{_gt}» — {_task_brief_lower}.'
                     else:
-                        _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
-                    
-                    # Фильтруем технические reason-коды
-                    _INTERNAL_REASON_CODES = frozenset({
-                        'fair_assignment diversification', 'fairness backfill',
-                        'backfill', 'diversification', 'fallback',
-                    })
-                    _INTERNAL_REASON_PREFIXES = ('critical_stuck', 'stuck_', 'stall_', 'loop_', 'dedup_')
-                    _step_reason_show = (
-                        '' if (
-                            _step_reason.lower().strip() in _INTERNAL_REASON_CODES
-                            or any(_step_reason.lower().strip().startswith(p) for p in _INTERNAL_REASON_PREFIXES)
+                        # Фильтруем технические reason-коды ПЕРЕД использованием в шаблоне
+                        _INTERNAL_REASON_CODES = frozenset({
+                            'fair_assignment diversification', 'fairness backfill',
+                            'backfill', 'diversification', 'fallback',
+                        })
+                        _INTERNAL_REASON_PREFIXES = ('critical_stuck', 'stuck_', 'stall_', 'loop_', 'dedup_')
+                        _step_reason_show = (
+                            '' if (
+                                _step_reason.lower().strip() in _INTERNAL_REASON_CODES
+                                or any(_step_reason.lower().strip().startswith(p) for p in _INTERNAL_REASON_PREFIXES)
+                            )
+                            else _step_reason
                         )
-                        else _step_reason
-                    )
+
+                        if _eff_goal_title and len(_eff_goal_title.strip()) > 5:
+                            _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
+                            # Include reason if available — user wants to see WHY, not just WHAT
+                            if _step_reason_show and len(_step_reason_show.strip()) > 15:
+                                _reason_clean = _step_reason_show.strip().rstrip('.')
+                                _asi_assign_text = f'{_ag_name}, {_reason_clean}. По цели «{_gt}» — {_task_brief_lower}.'
+                            else:
+                                _asi_assign_text = f'{_ag_name}, по цели «{_gt}» — {_task_brief_lower}.'
+                        else:
+                            _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
                     # УДАЛЕНА: вся логика инфинитив→императив трансформации (L15523-15660)
                     # Теперь LLM генерирует task_brief уже в правильной форме через self-check в промпте.
                 except Exception as _aac_err:
