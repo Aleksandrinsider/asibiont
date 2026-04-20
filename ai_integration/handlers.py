@@ -1012,13 +1012,14 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             logger.info(f"[SAVE_NOTE] Rate limit: {_recent_notes_1h} notes in last hour for user {user.id}")
             return "[INTERNAL] Лимит заметок: уже создано 12+ за последний час. Сохраняй только финальные выводы с конкретными данными — не промежуточные шаги."
 
-        # --- Дедуп: проверяем похожий заголовок за последние 24ч ---
+        # --- Дедуп: проверяем похожий заголовок за последние 4ч (было 24ч — слишком агрессивно) ---
+        _since_dedup = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=4)
         _recent_notes = session.query(Note).filter(
             Note.user_id == user.id,
-            Note.created_at >= _since_24h,
+            Note.created_at >= _since_dedup,
         ).all()
 
-        # Сравнение по заголовку (>60% слов) + по содержимому (>50% слов в 1-м предложении)
+        # Сравнение по заголовку (>70% слов) + по содержимому (>70% слов в 1-м предложении)
         _title_words = set(w for w in _note_title.lower().split() if len(w) > 2)
         _content_first = content.strip().split('.')[0].lower()
         _content_head_words = set(w for w in _content_first.split() if len(w) > 3)
@@ -1026,7 +1027,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             _rn_words = set(w for w in (_rn.title or '').lower().split() if len(w) > 2)
             if _title_words and _rn_words:
                 _overlap = len(_title_words & _rn_words) / max(len(_title_words), len(_rn_words))
-                if _overlap > 0.55:
+                if _overlap > 0.70:
                     logger.info(f"[SAVE_NOTE] Dedup title: similar note exists (id={_rn.id}, overlap={_overlap:.0%}): «{_rn.title}»")
                     return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
             # Дополнительно: совпадение по началу контента
@@ -1034,7 +1035,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 _rn_content_head = set(w for w in (_rn.content or '').split('.')[0].lower().split() if len(w) > 3)
                 if _rn_content_head:
                     _c_overlap = len(_content_head_words & _rn_content_head) / max(len(_content_head_words), len(_rn_content_head))
-                    if _c_overlap > 0.55:
+                    if _c_overlap > 0.70:
                         logger.info(f"[SAVE_NOTE] Dedup content: similar note exists (id={_rn.id}, c_overlap={_c_overlap:.0%})")
                         return f"Похожая заметка уже есть: «{_rn.title}» — новая не создана."
 
@@ -12972,7 +12973,33 @@ async def send_outreach_email(
             ).order_by(EmailCampaign.emails_sent.asc()).first()
 
         if not campaign:
-            return " Нет активной email-кампании. Сначала создай кампанию."
+            # Авто-создаём дефолтную кампанию — агент уже знает цель из контекста,
+            # не заставляем его делать лишний шаг start_email_campaign
+            try:
+                _auto_name = f"Outreach {user.first_name or user.username or 'Agent'}"[:60]
+                campaign = EmailCampaign(
+                    user_id=user.id,
+                    name=_auto_name,
+                    goal='Привлечение новых пользователей и партнёров',
+                    target_audience='AI-разработчики, стартапы, технологические компании',
+                    offer='Платформа ASI Biont — AI-агенты для автоматизации задач',
+                    tone='professional',
+                    sender_name=user.first_name or 'ASI Biont Team',
+                    sender_email='outreach@asibiont.com',
+                    max_emails=0,
+                    daily_limit=100,
+                    status='active',
+                )
+                session.add(campaign)
+                session.commit()
+                logger.info(f"[EMAIL_OUTREACH] Auto-created default campaign #{campaign.id} for user {user.id}")
+            except Exception as _ace:
+                logger.warning(f"[EMAIL_OUTREACH] Failed to auto-create campaign: {_ace}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                return "⚠️ Нет активной email-кампании. Вызови start_email_campaign чтобы создать её, затем повтори отправку."
 
         # Проверка лимитов (max_emails=0 означает безлимитно)
         if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
