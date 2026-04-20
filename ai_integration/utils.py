@@ -1631,8 +1631,10 @@ async def normalize_profile_fields(profile) -> bool:
             for field, translated in ru_result.items():
                 setattr(profile, f'{field}_normalized_ru', str(translated).strip())
         else:
-            for field, value in to_translate_ru.items():
-                setattr(profile, f'{field}_normalized_ru', value)
+            # Перевод провалился — не сохраняем чужой язык, оставляем None
+            # (fallback в _pick_own/pick вернёт оригинальное поле)
+            for field in to_translate_ru:
+                setattr(profile, f'{field}_normalized_ru', None)
 
     # Clear fields that are None in original
     for field in _NORMALIZE_FIELDS:
