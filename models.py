@@ -899,6 +899,7 @@ class UserAgent(Base):
     avatar_url = Column(Text)                              # URL или base64 аватарки
     description = Column(Text)                            # Публичное описание (2-4 предложения)
     specialization = Column(String(100))                  # marketing/legal/finance/dev/lifestyle/other
+    gender = Column(String(10), default='neutral')        # male/female/neutral — для правильного рода в ответах
 
     # Характер и поведение
     job_title = Column(String(200))                       # Должность / роль агента (напр. «Финансовый аналитик»)

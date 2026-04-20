@@ -16236,6 +16236,7 @@ class AnchorEngine:
                         'avatar_url': _safe_avatar(getattr(_target_ag, 'avatar_url', ''), _target_ag.id),
                         'search_scope': getattr(_target_ag, 'search_scope', '') or '',
                         'knowledge_base': getattr(_target_ag, 'knowledge_base', '') or '',
+                        'gender': getattr(_target_ag, 'gender', 'neutral') or 'neutral',
                         'company': _coord_company,
                     }
 
@@ -16731,10 +16732,14 @@ class AnchorEngine:
                     # Сохраняем видимое сообщение в чат — пользователь должен видеть что агент работал
                     try:
                         _tmo_task_oneline = (_ag_task.split('\n')[0])[:100].strip()
+                        _ag_gender = _ag_data.get('gender', 'neutral')
+                        _verb_work = 'Работала' if _ag_gender == 'female' else 'Работал'
+                        _verb_fit = 'уложилась' if _ag_gender == 'female' else 'уложился'
+                        _verb_split = 'разобью' if _ag_gender == 'female' else 'разобью'
                         _tmo_text = (
-                            f"Работал над задачей «{_tmo_task_oneline}», "
-                            f"но не уложился в лимит времени 150с. "
-                            f"Задача, видимо, слишком большая — разобью на меньшие шаги в следующем цикле."
+                            f"{_verb_work} над задачей «{_tmo_task_oneline}», "
+                            f"но не {_verb_fit} в лимит времени 150с. "
+                            f"Задача, видимо, слишком большая — {_verb_split} на меньшие шаги в следующем цикле."
                         )
                         session.add(Interaction(
                             user_id=user.id,

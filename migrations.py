@@ -563,6 +563,14 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] run_interval_minutes add skipped: {e}")
+        if 'gender' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN gender VARCHAR(10) DEFAULT 'neutral'"))
+                session.commit()
+                logger.info("[MIGRATION] Added user_agents.gender")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] gender add skipped: {e}")
 
 
 def _migrate_activity_log_updated_at_index(session, inspector):

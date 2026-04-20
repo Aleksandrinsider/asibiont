@@ -11675,6 +11675,7 @@ async def api_marketplace_publish_agent_handler(request):
             agent.trial_messages = 0  # пробные сообщения отключены
             agent.is_adult = bool(data.get('is_adult', False))
             agent.is_private = bool(data.get('is_private', False))
+            agent.gender = (data.get('gender') or 'neutral').strip()[:10]
             agent.search_scope = (data.get('search_scope') or '').strip()[:500]
             # Новый агент создаётся в статусе 'paused' — активирует пользователь кнопкой «Запустить в чат»
             # При редактировании существующего агента статус не меняем
