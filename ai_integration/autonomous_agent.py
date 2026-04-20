@@ -8302,6 +8302,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "progress — АБСОЛЮТНОЕ значение % (0-100), не дельта.\n"
             "Не пиши о намерениях. Не спрашивай пользователя. Действуй.\n"
             "Инструмент заблокирован → вызови другой. check_emails пусто → send_outreach_email или start_email_campaign.\n"
+            "📧 EMAIL БЕЗ КАМПАНИИ: если есть контакты (list_email_contacts) → send_outreach_email СРАЗУ, кампанию создавать НЕ НУЖНО.\n"
             + (_intg_action_hint or '')
         )
 
@@ -8459,9 +8460,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         )
                     if _sb_channels_used <= 1 and (_sb_search + _sb_actions) > 3:
                         _email_hint = (
-                            "  💡 send_outreach_email = персональное письмо контакту (кампания уже создана)\n"
+                            "  💡 send_outreach_email = персональное письмо контакту прямо сейчас\n"
                             if _sb_campaign > 0 else
-                            "  💡 start_email_campaign = создай кампанию, потом send_outreach_email для отправки\n"
+                            "  💡 send_outreach_email = пиши письма ПРЯМО (кампания НЕ нужна если есть контакты: list_email_contacts → выбери → send_outreach_email)\n"
+                            "  💡 start_email_campaign = только если нет контактов совсем и нужна автоматическая рассылка\n"
                         )
                         system_prompt += (
                             "🤔 Ты используешь только 1 канал. Какой ДРУГОЙ канал дополнит стратегию?\n"

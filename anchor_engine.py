@@ -15707,6 +15707,22 @@ class AnchorEngine:
                     _step_reason = (_step.get('reason') or '').strip()
                     if _step_reason and len(_step_reason) > 150:
                         _step_reason = _step_reason[:150].rsplit(' ', 1)[0]
+                    # Удаляем оборванный предлог/союз на конце (артефакт обрезки JSON/текста)
+                    import re as _re_orphan_reason
+                    _step_reason = _re_orphan_reason.sub(
+                        r'\s+(?:в|на|по|за|к|о|во|до|от|из|для|при|без|под|над|об|у|с|со|ко|что|как|но|и|а)[.,!?]?\s*$',
+                        '', _step_reason, flags=_re_orphan_reason.IGNORECASE,
+                    ).strip()
+                    # Короткий "хвост" (≤3 символа не является аббревиатурой) — признак обрыва
+                    if _step_reason:
+                        _sr_last_word = _step_reason.rstrip('.!?,; ').rsplit(None, 1)[-1]
+                        if (len(_sr_last_word) <= 3 and not _sr_last_word[-1:].isdigit()
+                                and _sr_last_word.lower() not in ('api', 'crm', 'smm', 'seo', 'pr', 'hr', 'it', 'ai', 'ml')):
+                            _sr_cut = max(_step_reason.rfind('.'), _step_reason.rfind(','), _step_reason.rfind('—'))
+                            if _sr_cut > 20:
+                                _step_reason = _step_reason[:_sr_cut].rstrip(' ,—')
+                            else:
+                                _step_reason = ''
                     # Анти-повтор техпричин: не дублировать "таймаут/сбой" в каждом поручении.
                     try:
                         _reason_l = _step_reason.lower()
