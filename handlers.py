@@ -757,7 +757,9 @@ async def chat_handler(message: Message):
 
             # Ограничение: файлы до 5 МБ
             if file_size > 5 * 1024 * 1024:
-                await message.bot.send_message(message.chat.id, " Файл слишком большой (макс 5 МБ). Отправь файл поменьше.")
+                _fl_lang = get_user_lang(user_id)
+                _fl_msg = "File is too large (max 5 MB). Please send a smaller file." if _fl_lang == 'en' else "Файл слишком большой (макс 5 МБ). Отправь файл поменьше."
+                await message.bot.send_message(message.chat.id, _fl_msg)
                 return
 
             # Поддерживаемые форматы для извлечения текста
