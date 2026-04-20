@@ -4314,6 +4314,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         + _github_rules + _rss_rules + _imap_rules + _no_imap_block
         + _publish_hint + _escalation_block
         + _adaptive_block
+        + _lang_directive(user)
         + "\n"
     )
 
@@ -4385,6 +4386,28 @@ BATCH_GROUPS = {
 
 def _t(user, ru: str, en: str) -> str:
     """Pick anchor topic string based on user language."""
+    lang = getattr(user, 'language', 'ru') or 'ru'
+    return en if lang == 'en' else ru
+
+
+def _lang_directive(user) -> str:
+    """Return LLM language directive based on user.language.
+
+    Appended at the END of any prompt that produces user-visible text.
+    Internal instructions stay in Russian (DeepSeek understands them fine),
+    but the OUTPUT must match the user's language.
+    """
+    lang = getattr(user, 'language', 'ru') or 'ru'
+    if lang == 'en':
+        return (
+            "\n\n🗣️ LANGUAGE: Write your ENTIRE response in English. "
+            "Even if instructions or data above are in Russian, your output to the user MUST be in English only."
+        )
+    return ''
+
+
+def _tg_prefix(user, ru: str, en: str) -> str:
+    """Pick static TG message prefix based on user language."""
     lang = getattr(user, 'language', 'ru') or 'ru'
     return en if lang == 'en' else ru
 
@@ -8072,6 +8095,7 @@ class AnchorEngine:
                             "  3) ФОРМАТ: нет списков (1/2/3, •, -), глаголы в императиве (найди, не найти), нет похвалы/оценки.\n"
                             "  4) TOOLS: упоминаешь коротко (web_search), без параметров и вызовов.\n"
                             "ФОРМУЛА: [Имя], [ФАКТ → ЗАЧЕМ]. [Глагол через TOOL + что/где]. [Ожидаемый результат]."
+                            + _lang_directive(user)
                         )
                         _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=900)
                         # ── Post-generation: strip lists, evaluation phrases, truncated endings ──
@@ -9681,7 +9705,7 @@ class AnchorEngine:
                         from ai_integration.autonomous_agent import _quick_ai_call_raw as _qar_d
                         _dir_resp = await _qar_d(
                             [
-                                {'role': 'system', 'content': 'Ты — ASI, координатор команды ASI Biont. Пишешь краткие статус-апдейты для пользователя. Отвечай только текстом на русском языке.'},
+                                {'role': 'system', 'content': 'Ты — ASI, координатор команды ASI Biont. Пишешь краткие статус-апдейты для пользователя.' + (' Отвечай только текстом на английском языке.' if (getattr(user, 'language', 'ru') or 'ru') == 'en' else ' Отвечай только текстом на русском языке.')},
                                 {'role': 'user', 'content': _dir_user_content},
                             ],
                             max_tokens=150, _caller='asi_dir',
@@ -13944,7 +13968,14 @@ class AnchorEngine:
                 "  task — полное задание агенту: что делать + через какой инструмент + с кем/где/критерии + ожидаемый результат.\n"
                 "    ⚠️ task пишется от прямого лица ('найди', 'отправь'), без имени агента, ≥50 слов.\n"
                 "    ⚠️ task НЕ содержит выдуманных событий — только то, что реально есть в истории выше или прямо вытекает из цели.\n"
-                "  task_brief — краткое действие для показа пользователю: глагол + объект + инструмент, ≤120 символов, без имени агента.\n"
+                "  task_brief — краткое действие для показа пользователю, ≤120 символов, без имени агента.\n"
+                "    ⚠️ task_brief ОБЯЗАТЕЛЬНО в повелительном наклонении: 'отправь', 'найди', 'создай' (НЕ инфинитив 'отправить', 'найти', 'создать').\n"
+                "    ⚠️ task_brief = глагол + кому/что + через какой инструмент. Пример: 'отправь 5 персонализированных писем через send_outreach_email контактам из IT-стартапов'.\n"
+                + (
+                    "\n🗣️ LANGUAGE: user speaks English. Write ALL user-visible text (task_brief, reason) in English. "
+                    "Internal field names stay as-is.\n"
+                    if (getattr(user, 'language', 'ru') or 'ru') == 'en' else ''
+                )
             )
 
             try:
@@ -14883,7 +14914,7 @@ class AnchorEngine:
                         f"  Задача ОБЯЗАНА использовать интеграцию из профиля агента и быть ДРУГИМ шагом цепочки.\n"
                         f"  Смотри что делают другие → найди НЕЗАНЯТЫЙ шаг → назначь агенту с нужной интеграцией.\n\n"
                         f"Формат: agent=имя, tool=snake_case, goal=точное_название, "
-                        f"task=полное задание (≥40 слов), task_brief=краткое (глагол + объект + tool, ≤120 символов).\n\n"
+                        f"task=полное задание (≥40 слов), task_brief=краткое (повелит. наклонение: 'найди'/'отправь'/'создай', ≤120 символов).\n\n"
                         f"Верни JSON-массив: "
                         f'[{{"agent":"имя","task":"полное задание","task_brief":"краткое обращение","tool":"snake_case_tool","goal":"точное название цели"}}]\n'
                         f"Только JSON, без пояснений."
@@ -15285,6 +15316,9 @@ class AnchorEngine:
                 _ag_task = (_step.get('task') or '').strip()
                 _tool_hint = (_step.get('tool') or '').strip()
                 _ag_goal_title = (_step.get('goal') or '').strip()   # привязка к цели из плана координатора
+                # Fallback: если LLM не указал goal — берём первую активную цель
+                if not _ag_goal_title and _goals:
+                    _ag_goal_title = (_goals[0].get('title') or '').strip()
                 if not _ag_name or not _ag_task:
                     continue
 
@@ -15645,7 +15679,12 @@ class AnchorEngine:
                         )
                     elif _eff_goal_title and len(_eff_goal_title.strip()) > 5:
                         _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
-                        _asi_assign_text = f'{_ag_name}, по цели «{_gt}» — {_task_brief_lower}.'
+                        # Include reason if available — user wants to see WHY, not just WHAT
+                        if _step_reason_show and len(_step_reason_show.strip()) > 15:
+                            _reason_clean = _step_reason_show.strip().rstrip('.')
+                            _asi_assign_text = f'{_ag_name}, {_reason_clean}. По цели «{_gt}» — {_task_brief_lower}.'
+                        else:
+                            _asi_assign_text = f'{_ag_name}, по цели «{_gt}» — {_task_brief_lower}.'
                     else:
                         _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
                     
@@ -16455,6 +16494,7 @@ class AnchorEngine:
                     + (f"→ Цель: «{_ag_goal_title}»\n"
                        f"   update_goal_progress — ТОЛЬКО goal_title='{_ag_goal_title}', только при реальном внешнем результате.\n"
                        f"   НЕ обновляй за: поиск, RSS, find_contacts из базы, check_emails «авто».\n"
+                       f"   ⚠️ Название цели УЖЕ УКАЗАНО — НЕ спрашивай пользователя 'какую цель обновить?'. Используй ТОЧНО: '{_ag_goal_title}'.\n"
                        if _ag_goal_title else '')
                     + (f"→ Рекомендованный инструмент: {_tool_hint} — реши сам, подходит ли.\n" if _tool_hint else '')
                     # ── 3. РАБОТА КОМАНДЫ — реагируй ──
@@ -16484,6 +16524,7 @@ class AnchorEngine:
                     + f"→ Поиск → сразу ACTION (send/save/post/publish). Поиск без действия = 0.\n"
                     + f"→ Если 0 результатов — попробуй другой источник прямо сейчас, не останавливайся.\n"
                     + (f"→ Сверь с блоком '🚫 НЕЛЬЗЯ повторять' — ответ обязан содержать новый факт.\n" if _no_repeat_block else '')
+                    + _lang_directive(user)
                 )
 
                 # Кросс-агентное общение: если предыдущие агенты уже выполнили шаги,
@@ -17649,6 +17690,7 @@ class AnchorEngine:
                         f"Никаких обрезанных слов ('нашл', 'сдела', 'отправи'). Слова пишутся целиком.\n"
                         f"- 1-3 предложения. Без markdown. Начни сразу с конкретики.\n"
                         f"- ❌ Если конкретных результатов НЕТ (только обзоры/поиски без находок) — НЕ ПИШИ отчёт, верни пустую строку."
+                        + _lang_directive(user)
                     )
                     _report_gen = await _quick_ai_call_raw(
                         [{"role": "user", "content": _report_prompt}],
@@ -17790,7 +17832,7 @@ class AnchorEngine:
                             try:
                                 await self.bot.send_message(
                                     chat_id=user.telegram_id,
-                                    text=f"ASI (итог):\n\n{_report_text}",
+                                    text=f"{_tg_prefix(user, 'ASI (итог)', 'ASI (summary)')}:\n\n{_report_text}",
                                 )
                             except Exception as _e:
                                 logger.debug("suppressed: %s", _e)
@@ -24661,7 +24703,7 @@ class AnchorEngine:
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
 
-            full_prompt = "\n".join(prompt_parts)
+            full_prompt = "\n".join(prompt_parts) + _lang_directive(user)
 
             # Вызываем AI через агента (с tool calling — может использовать research_topic, etc.)
             from ai_integration.autonomous_agent import get_autonomous_agent
