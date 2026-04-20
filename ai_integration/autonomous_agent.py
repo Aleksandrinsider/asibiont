@@ -8694,25 +8694,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _err_msg = str(_ai_err) or type(_ai_err).__name__
             logger.warning("[DIRECTOR-EXEC-DIAG] agent %s call_ai EXCEPTION iter=%d tc_mode=%s: %s",
                            agent.get('name'), _iter, _tc_mode, _err_msg)
-            # Retry once on TimeoutError with doubled timeout
-            if isinstance(_ai_err, (TimeoutError, asyncio.TimeoutError)) and _iter == 0:
-                logger.info("[DIRECTOR-EXEC] TimeoutError on iter 0, retrying with capped timeout...")
-                try:
-                    await asyncio.sleep(2)
-                    # Cap retry at 80s so total fits within coordinator's 150s timeout
-                    _director_retry_timeout = min(API_TIMEOUT_LONG, 80)
-                    _resp = await _agent_inst.call_ai(
-                        _messages,
-                        use_tools=_use_tools_now,
-                        tool_choice=_tc_mode,
-                        exclude_tools=_exclude_for_agent if _use_tools_now else None,
-                        max_tokens=_iter_max_tokens,
-                        api_timeout=_director_retry_timeout,
-                    )
-                except Exception:
-                    break
-            else:
-                break
+            # Нет смысла ретраить внутри DIRECTOR: coordinator.wait_for(200s) сам даёт время
+            # Простой выход — break; следующий iter в DIRECTOR-EXEC loop подхватит если нужно
+            break
         if _resp:
             _u_ap = _resp.get('usage') or {}
             _total_ap_tokens += _u_ap.get('prompt_tokens', 0) + _u_ap.get('completion_tokens', 0)

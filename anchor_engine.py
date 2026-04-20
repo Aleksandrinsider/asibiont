@@ -16726,7 +16726,7 @@ class AnchorEngine:
                 try:
                     _raw = await asyncio.wait_for(
                         _exec_agent_for_director(_ag_data, _agent_prompt, user.telegram_id),
-                        timeout=150,  # Увеличен с 120s до 150s — даём больше времени, но просим partial results
+                        timeout=200,  # 200s: первый вызов до 90s + retry до 80s + буфер
                     )
                 except asyncio.TimeoutError:
                     _raw = None  # FIX: define _raw to prevent UnboundLocalError
