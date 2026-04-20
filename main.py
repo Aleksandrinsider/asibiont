@@ -9623,31 +9623,20 @@ async def translate_note_handler(request):
         }
         lang_name = lang_names.get(target_lang, target_lang)
 
-        async with _safe_http() as session:
-            resp = await session.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                    'Content-Type': 'application/json',
-                },
-                json={
-                    'model': DEEPSEEK_MODEL,
-                    'messages': [
-                        {'role': 'system', 'content': f'Translate the following text to {lang_name}. Return ONLY the translated text, nothing else. Preserve formatting and line breaks.'},
-                        {'role': 'user', 'content': content},
-                    ],
-                    'max_tokens': 2000,
-                    'temperature': 0.3,
-                },
-                timeout=aiohttp.ClientTimeout(total=30),
-            )
-            result = await resp.json()
-
-        translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-        if not translated:
+        from ai_integration.api_client import get_api_client
+        _api = get_api_client()
+        translated = await _api.deepseek_analyze(
+            prompt=content,
+            system_prompt=f'Translate the following text to {lang_name}. Return ONLY the translated text, nothing else. Preserve formatting and line breaks.',
+            temperature=0.3,
+            max_tokens=2000,
+            timeout=60,
+        )
+        if not translated or not isinstance(translated, str) or len(translated.strip()) < 2:
+            logger.warning(f"[NOTE_TRANSLATE] Empty result for note_id={note_id}, lang={target_lang}")
             return web.json_response({'error': 'Translation failed'}, status=500)
 
-        return web.json_response({'success': True, 'translated': translated, 'lang': target_lang})
+        return web.json_response({'success': True, 'translated': translated.strip(), 'lang': target_lang})
 
     except Exception as e:
         logger.error(f"Error translating note: {e}", exc_info=True)
