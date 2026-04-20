@@ -16271,12 +16271,17 @@ class AnchorEngine:
                     + (f", {int(g.get('metric_current', 0))}/{int(g.get('metric_target', 0))}" if g.get('metric_target') else '')
                     + ')' for g in _goals[:5]
                 )
+                # Динамически: контакты нужны только email/outreach агентам
+                _ag_task_lower = (_ag_task or '').lower()
+                _is_email_task = any(w in _ag_task_lower for w in ('email', 'письм', 'outreach', 'контакт', 'contact', 'кампани'))
+                _contacts_limit = 8 if _is_email_task else 3
                 _agent_contacts_block = '\n'.join(
-                    f"  {c}" for c in data.get('known_contacts', [])[:8]
+                    f"  {c}" for c in data.get('known_contacts', [])[:_contacts_limit]
                 )
-                # Личная история этого агента (не глобальная) — что он сам уже делал
+                # Личная история этого агента: больше для email (деdup), меньше для поиска/постов
                 _this_agent_hist = _per_agent_history.get(_ag_name, [])
-                _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:8])
+                _hist_limit = 8 if _is_email_task else 4
+                _agent_memory_block = '\n'.join(f"  {h}" for h in _this_agent_hist[:_hist_limit])
 
                 # Последние текстовые ответы пользователю — строгий запрет на повтор сути
                 _last_result_texts = [h for h in _this_agent_hist[:12] if '→ РЕЗУЛЬТАТ' in h][:3]
