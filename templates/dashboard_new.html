@@ -1667,11 +1667,11 @@
                         <input type="text" id="quick-first-name" placeholder="Ваше имя" data-i18n-ph="name-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Пол</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="gender-label">Пол</label>
                         <select id="quick-gender" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #374151; cursor: pointer;">
-                            <option value="">Не указан</option>
-                            <option value="female">Женский</option>
-                            <option value="male">Мужской</option>
+                            <option value="" data-i18n="gender-none">Не указан</option>
+                            <option value="female" data-i18n="gender-female">Женский</option>
+                            <option value="male" data-i18n="gender-male">Мужской</option>
                         </select>
                     </div>
                     <div>
@@ -1707,11 +1707,11 @@
                         <input type="text" id="quick-position" placeholder="Ваша должность" data-i18n-ph="position-ph" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Сайт</label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n="website-label">Сайт</label>
                         <input type="url" id="quick-website" placeholder="https://ваш-сайт.com" style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit;" />
                     </div>
                     <div>
-                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;">Язык общения AI <span style="color: #DC2626; font-weight: 500;">*</span></label>
+                        <label style="display: block; font-size: 13px; color: #374151; margin-bottom: 4px; font-weight: 500;" data-i18n-html="ai-lang-req">Язык общения AI <span style="color: #DC2626; font-weight: 500;">*</span></label>
                         <select id="quick-language" required style="width: 100%; padding: 7px 10px; border: 1px solid #D1D9E0; border-radius: 6px; font-size: 13px; font-family: inherit; background: #fff; color: #374151; cursor: pointer;">
                             <option value="ru" {% if lang == 'ru' %}selected{% endif %}>🇷🇺 Русский</option>
                             <option value="en" {% if lang == 'en' %}selected{% endif %}>🇬🇧 English</option>
@@ -17971,11 +17971,14 @@ except Exception as e:
       'quick-setup':'Быстрая настройка профиля','quick-setup-desc':'ИИ-агент может использовать предоставленную информацию в соответствии с <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Правилами</a>',
       'city-req':'Город <span style="color:#DC2626;font-weight:500;">*</span>','city-ph':'Например: Москва',
       'interests-req':'Интересы <span style="color:#DC2626;font-weight:500;">*</span>','interests-ph':'Например: спорт, программирование, путешествия',
+      'ai-lang-req':'Язык общения AI <span style="color:#DC2626;font-weight:500;">*</span>',
       'dob':'Дата рождения','dob-ph':'ДД.ММ.ГГГГ (например: 15.03.1990)',
       'skills':'Навыки','skills-ph':'Например: Python, менеджмент, дизайн',
       'company':'Компания','company-ph':'Название компании',
       'goals':'Цели','goals-ph':'Чего вы хотите достичь?',
       'position':'Должность','position-ph':'Ваша должность',
+      'website-label':'Сайт',
+      'gender-label':'Пол','gender-none':'Не указан','gender-female':'Женский','gender-male':'Мужской',
       'tg-channel':'@ вашего канала для автопубликации постов (бот @asibiont_bot должен быть админом канала)',
       'discord-webhook':'Webhook вашего канала для автопубликации постов',
       'status':'Статус',
@@ -18266,11 +18269,14 @@ except Exception as e:
       'quick-setup':'Quick profile setup','quick-setup-desc':'The AI agent may use the provided information in accordance with the <a href="https://asibiont.com/terms" target="_blank" style="color: #9CA3AF; text-decoration: underline;">Terms</a>',
       'city-req':'City <span style="color:#DC2626;font-weight:500;">*</span>','city-ph':'e.g., New York',
       'interests-req':'Interests <span style="color:#DC2626;font-weight:500;">*</span>','interests-ph':'e.g., sports, coding, travel',
+      'ai-lang-req':'AI communication language <span style="color:#DC2626;font-weight:500;">*</span>',
       'dob':'Date of birth','dob-ph':'DD.MM.YYYY (e.g., 15.03.1990)',
       'skills':'Skills','skills-ph':'e.g., Python, management, design',
       'company':'Company','company-ph':'Company name',
       'goals':'Goals','goals-ph':'What do you want to achieve?',
       'position':'Position','position-ph':'Your position',
+      'website-label':'Website',
+      'gender-label':'Gender','gender-none':'Not specified','gender-female':'Female','gender-male':'Male',
       'tg-channel':'Your channel @ for auto-publishing posts (bot @asibiont_bot must be channel admin)',
       'discord-webhook':'Your channel webhook for auto-publishing posts',
       'status':'Status',
