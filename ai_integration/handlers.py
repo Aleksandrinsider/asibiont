@@ -12268,6 +12268,10 @@ async def start_email_campaign(
     3. Отправлять через Resend API
     4. Отвечать на replies в рамках заданной цели
 
+    name: короткое название кампании (2-5 слов). Пример: 'Outreach AI-стартапы', 'Привлечение инвесторов'. НЕ копируй сюда цель или длинное описание.
+    goal: цель кампании — что хотим получить от рассылки.
+    target_audience: кто получатели писем (ниша, роль, индустрия).
+    offer: что предлагаем в письме (продукт, сервис, идея).
     max_emails: 0 = безлимитно (рекомендуется). Кампания работает пока AI видит отдачу.
         НЕ ставь произвольные числа вроде 100 — автопилот сам решает когда остановиться.
     daily_limit: макс. писем в день (обычно 100).
@@ -12347,9 +12351,20 @@ async def start_email_campaign(
                     f"Для отправки писем используй send_outreach_email(recipient_email, subject, body) — по одному письму на контакт."
                 )
 
+        # Нормализация name — не более 60 символов, убираем мусор
+        _clean_name = (name or '').strip()
+        # Удаляем типичные мусорные префиксы от LLM
+        for _pfx in ('Цель:', 'цель:', 'Goal:', 'goal:', 'Название:', 'Campaign:', 'Name:'):
+            if _clean_name.startswith(_pfx):
+                _clean_name = _clean_name[len(_pfx):].strip()
+        # Обрезаем до первого предложения и 60 символов
+        _clean_name = _clean_name.split('.')[0].split(',')[0].strip()[:60]
+        if not _clean_name:
+            _clean_name = f"Email-кампания #{user.id}"
+
         campaign = EmailCampaign(
             user_id=user.id,
-            name=name[:300],
+            name=_clean_name,
             goal=goal[:2000],
             target_audience=target_audience[:1000],
             offer=offer[:2000],
