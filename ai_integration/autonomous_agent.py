@@ -10618,16 +10618,23 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         f"{_ctx_hint}{_history_block}\n\n"
         "Решение: self или поручить агенту?\n\n"
         "self — ASI выполняет НАПРЯМУЮ своими инструментами:\n"
-        "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder)\n"
-        "  • цели (create_goal, update_goal, complete_goal, list_goals)\n"
+        "  • задачи (add_task, complete_task, edit_task, delete_task, list_tasks, set_reminder, reschedule_task)\n"
+        "  • цели (create_goal, update_goal, update_goal_progress, complete_goal, list_goals, delete_goal)\n"
+        "  • заметки/правила (save_note, save_user_rule)\n"
         "  • generate_image — генерация картинок/изображений\n"
-        "  • контент (create_post, publish_to_telegram, publish_to_discord)\n"
-        "  • email (send_email, send_outreach_email, negotiate_by_email)\n"
-        "  • research_topic, get_news_trends — исследования/аналитика\n"
-        "  • делегирование задач другим пользователям (delegate_task)\n"
-        "  • коммуникации (send_message_to_user, find_and_message_relevant_users)\n"
+        "  • контент (create_post, edit_post, get_posts, delete_post)\n"
+        "  • публикация (publish_to_telegram, publish_to_discord, publish_to_vk, publish_to_twitter, publish_to_linkedin, publish_to_notion)\n"
+        "  • кампании контента (start_content_campaign, manage_content_campaign)\n"
+        "  • email (send_email, send_outreach_email, reply_to_outreach_email, send_follow_up_email, negotiate_by_email, check_emails)\n"
+        "  • email-контакты (save_email_contact, update_email_contact_status, list_email_contacts)\n"
+        "  • кампании делегирования (start_delegation_campaign, manage_delegation_campaign)\n"
+        "  • исследования (web_search, research_topic, get_news_trends, get_weather_info, get_stock_price)\n"
+        "  • делегирование задач (delegate_task, get_delegation_progress, accept_delegated_task, reject_delegated_task)\n"
+        "  • коммуникации (send_message_to_user, find_and_message_relevant_users, reply_to_user_message, get_incoming_messages, broadcast_message_to_all_users)\n"
         "  • контакты (find_relevant_contacts_for_task, set_contact_alert)\n"
-        "  • update_profile, schedule_background_task, get_system_status\n"
+        "  • интеграции (run_agent_action, http_api_request)\n"
+        "  • агенты (list_marketplace, switch_agent)\n"
+        "  • прочее (update_profile, schedule_background_task, get_system_status, initiate_phone_call)\n"
         "  • привет/пока, вопрос-ответ, советы, разговоры (НО НЕ директивы/команды — они идут агентам)\n\n"
         "поручить агенту — ТОЛЬКО если:\n"
         "  1) задача требует СПЕЦИФИЧЕСКОЙ экспертизы конкретного агента\n"
@@ -10697,6 +10704,44 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _is_goal_crud = any(p in _ml_lower for p in _goal_crud_phrases)
     if _is_goal_crud:
         return None  # process_request вызовет create_goal / delete_goal / complete_goal
+
+    # Пре-фильтр: задачи/заметки/напоминания → только ASI имеет add_task/save_note/complete_task
+    _task_crud_phrases = (
+        'добавь задачу', 'создай задачу', 'новая задача', 'напомни ',
+        'напомни мне', 'поставь напоминание', 'удали задачу', 'убери задачу',
+        'покажи задачи', 'мои задачи', 'список задач',
+        'запиши в заметки', 'запиши заметку', 'сохрани заметку', 'save note',
+        'add task', 'delete task', 'remove task', 'show tasks', 'my tasks',
+        'перенеси задачу', 'измени задачу', 'отметь задачу',
+    )
+    if any(p in _ml_lower for p in _task_crud_phrases):
+        return None  # process_request вызовет add_task / save_note / complete_task / etc.
+
+    # Пре-фильтр: информационные запросы → ASI имеет get_weather_info/get_stock_price/web_search
+    _info_phrases = (
+        'погода ', 'какая погода', 'прогноз погоды',
+        'курс доллар', 'курс евро', 'курс биткоин', 'курс рубл', 'котировк',
+        'нарисуй', 'сгенерируй картинк', 'сгенерируй изображен',
+        'draw ', 'generate image',
+    )
+    if any(p in _ml_lower for p in _info_phrases):
+        return None  # process_request вызовет get_weather_info / get_stock_price / generate_image
+
+    # Пре-фильтр: контент/публикация без имени агента → ASI имеет create_post/publish_to_*
+    _content_phrases = (
+        'создай пост', 'напиши пост', 'новый пост', 'опубликуй пост',
+        'опубликуй в телеграм', 'опубликуй в вк', 'запланируй пост',
+        'create post', 'publish post', 'write post',
+    )
+    if any(p in _ml_lower for p in _content_phrases):
+        _has_agent_name = False
+        for _ag in (agents or []):
+            _aname = (_ag.get('name') or '').strip().lower()
+            if _aname and len(_aname) > 2 and _aname in _ml_lower:
+                _has_agent_name = True
+                break
+        if not _has_agent_name:
+            return None  # process_request вызовет create_post / publish_to_telegram / etc.
 
     if _is_trivial:
         _has_active_mission = False
