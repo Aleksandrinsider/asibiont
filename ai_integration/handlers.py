@@ -887,22 +887,39 @@ def _make_blog_slug(title: str, note_id: int) -> str:
 
 
 async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> None:
-    """Переводит заголовок и контент блог-поста на английский и сохраняет в title_en/content_en."""
+    """Переводит блог-пост: RU→EN или EN→RU (автоопределение языка оригинала)."""
     try:
         from ai_integration.api_client import get_api_client
         _api_client = get_api_client()
         from models import Session, Note
 
+        # Определяем язык оригинала — если >60% ASCII букв → английский
+        _alpha_chars = [c for c in (title + ' ' + content[:500]) if c.isalpha()]
+        _ascii_ratio = sum(1 for c in _alpha_chars if ord(c) < 128) / max(len(_alpha_chars), 1)
+        _is_en_original = _ascii_ratio > 0.6
+
         # Limit content passed to API to avoid huge token cost
         content_truncated = content[:4000] if len(content) > 4000 else content
 
-        prompt = (
-            f"Translate the following blog post from Russian to English.\n"
-            f"Return ONLY a JSON object with two keys: \"title\" and \"content\".\n"
-            f"Preserve markdown formatting.\n\n"
-            f"TITLE: {title}\n\n"
-            f"CONTENT:\n{content_truncated}"
-        )
+        if _is_en_original:
+            # EN→RU: оригинал на английском — переводим на русский
+            prompt = (
+                f"Translate the following blog post from English to Russian.\n"
+                f"Return ONLY a JSON object with two keys: \"title\" and \"content\".\n"
+                f"Preserve markdown formatting.\n\n"
+                f"TITLE: {title}\n\n"
+                f"CONTENT:\n{content_truncated}"
+            )
+        else:
+            # RU→EN: оригинал на русском — переводим на английский
+            prompt = (
+                f"Translate the following blog post from Russian to English.\n"
+                f"Return ONLY a JSON object with two keys: \"title\" and \"content\".\n"
+                f"Preserve markdown formatting.\n\n"
+                f"TITLE: {title}\n\n"
+                f"CONTENT:\n{content_truncated}"
+            )
+
         result = await _api_client.deepseek_analyze(
             prompt=prompt,
             system_prompt="You are a professional translator. Return only valid JSON with keys 'title' and 'content'.",
@@ -920,22 +937,31 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
                     result = _json.loads(m.group(0))
         if not result or not isinstance(result, dict):
             import logging as _log
-            _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Failed to parse EN translation for note_id={note_id}")
+            _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Failed to parse translation for note_id={note_id}")
             return
 
-        title_en = result.get('title', '').strip()
-        content_en = result.get('content', '').strip()
-        if not title_en or not content_en:
+        translated_title = result.get('title', '').strip()
+        translated_content = result.get('content', '').strip()
+        if not translated_title or not translated_content:
             return
 
         with Session() as db:
             note = db.query(Note).filter_by(id=note_id).first()
             if note:
-                note.title_en = title_en
-                note.content_en = content_en
+                if _is_en_original:
+                    # Оригинал EN → сохраняем EN в title_en/content_en, перевод RU в title/content
+                    note.title_en = title
+                    note.content_en = content
+                    note.title = translated_title
+                    note.content = translated_content
+                else:
+                    # Оригинал RU → перевод EN в title_en/content_en
+                    note.title_en = translated_title
+                    note.content_en = translated_content
                 db.commit()
+                _dir = 'EN→RU' if _is_en_original else 'RU→EN'
                 import logging as _log
-                _log.getLogger(__name__).info(f"[BLOG_TRANSLATE] EN translation saved for note_id={note_id}: «{title_en[:60]}»")
+                _log.getLogger(__name__).info(f"[BLOG_TRANSLATE] {_dir} saved for note_id={note_id}: «{translated_title[:60]}»")
     except Exception as e:
         import logging as _log
         _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Error translating note_id={note_id}: {e}")

@@ -9883,6 +9883,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         f"Вот данные которые ты получил из своих интеграций:\n{_rework_ctx}\n\n"
                         f"Ответь на запрос пользователя используя ЭТИ данные. "
                         f"Пиши от первого лица, живо, как человек. 2-5 предложений."
+                        + _lang_line
                     ),
                 }], max_tokens=400, _caller='exec_hollow_rework')
                 if _rw_resp and len(_rw_resp.strip()) > 40:
@@ -9906,6 +9907,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     f"— Какие данные найдёшь\n— Где будешь искать\n— Какой первый результат ожидаешь\n"
                     f"Пиши от первого лица, уверенно, без слов 'начинаю', 'приступаю', 'планирую'.\n"
                     f"Пример: 'Исследую тему задачи, найду нужные данные и сделаю конкретный следующий шаг.'"
+                    + _lang_line
                 ),
             }], max_tokens=300, _caller='exec_rescue_fallback')
             if _rescue_text and len(_rescue_text.strip()) > 30:
@@ -10462,6 +10464,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     f"СРАЗУ дай готовый результат — конкретные идеи, данные, план, рекомендации. "
                     f"НЕ пиши 'сейчас сделаю', 'начну с', 'понял' — ПИШИ САМ ОТВЕТ. "
                     f"Минимум 180 символов, 2-4 предложения в ОДНОМ абзаце, без markdown, без списков и нумерации."
+                    + _dir_lang_resp
                 ),
             }], max_tokens=300)
             if _fallback_resp and len(_fallback_resp) > 50:
@@ -10496,6 +10499,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     f"Сразу дай фактический ответ на вопрос (если есть данные — с цифрами). "
                     f"НЕ пиши 'Задачу выполнила' — это не ответ на вопрос. "
                     f"Пиши живо, как человек в чате. 2-4 предложения."
+                    + _dir_lang_resp
                 ),
             }], max_tokens=300)
             if _q_rework and len(_q_rework) > 30:
@@ -10635,6 +10639,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "🗣️ LANGUAGE: director_message MUST be in English. Even if agent name is Cyrillic — write in English.\n"
         if _dir_lang == 'en' else
         "🗣️ ЯЗЫК: director_message ВСЕГДА на русском языке. Даже если имя агента латиницей (Leonardo, Beatrice) — пиши поручение НА РУССКОМ.\n"
+    )
+    _dir_lang_resp = (
+        "\n🗣️ LANGUAGE: Write ONLY in English.\n"
+        if _dir_lang == 'en' else
+        "\n🗣️ ЯЗЫК: Пиши ТОЛЬКО на русском языке. Даже если данные на английском — ответ на русском.\n"
     )
 
     _decision_prompt = (
@@ -11116,6 +11125,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 f"что сделано, какие результаты, что дальше. Без markdown.\n"
                 f"⚠️ Команда пользователя: {_team_names}. Упоминай ТОЛЬКО этих агентов. "
                 f"НЕ выдумывай имена агентов, отделы, команды которых нет в списке."
+                + _dir_lang_resp
             ),
         }], max_tokens=250)
         if _final_report and len(_final_report.strip()) > 10:
