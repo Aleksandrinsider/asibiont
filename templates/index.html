@@ -1166,12 +1166,12 @@
             <!-- Последние посты из блога -->
             <div class="steps-section" id="blog-latest-section" style="display: none; margin: 64px 0 0 0;">
                 <div class="steps-section-header">
-                    <p class="steps-section-label" id="blog-label">Блог</p>
-                    <h2 class="steps-section-title" id="blog-title">Последние публикации</h2>
+                    <p class="steps-section-label" id="blog-label">{% if lang == 'en' %}Blog{% else %}Блог{% endif %}</p>
+                    <h2 class="steps-section-title" id="blog-title">{% if lang == 'en' %}Latest Posts{% else %}Последние публикации{% endif %}</h2>
                 </div>
                 <div class="blog-grid" id="blog-grid"></div>
                 <div style="text-align: center; margin-top: 16px;">
-                    <a href="/blog" id="blog-all-link" style="font-size: 13px; color: #374151; font-weight: 500; text-decoration: none; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 20px; display: inline-block; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">Все публикации →</a>
+                    <a href="/blog" id="blog-all-link" style="font-size: 13px; color: #374151; font-weight: 500; text-decoration: none; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 20px; display: inline-block; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">{% if lang == 'en' %}All posts →{% else %}Все публикации →{% endif %}</a>
                 </div>
             </div>
 
