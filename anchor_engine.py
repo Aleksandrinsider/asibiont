@@ -14263,6 +14263,21 @@ class AnchorEngine:
             if _plan_goal_filtered:
                 _plan = _plan_goal_filtered
 
+            # ── Singleton campaign guard: только один start_email/content/delegation_campaign в плане ──
+            _SINGLETON_CAMPAIGN_TOOLS = frozenset({'start_email_campaign', 'start_content_campaign', 'start_delegation_campaign'})
+            _seen_campaign_tools: set = set()
+            _plan_campaign_deduped = []
+            for _pcd in _plan:
+                _pcd_tool = (_pcd.get('tool') or '').strip().lower()
+                if _pcd_tool in _SINGLETON_CAMPAIGN_TOOLS:
+                    if _pcd_tool in _seen_campaign_tools:
+                        logger.info("[COORD] campaign-singleton: drop duplicate %s for %s", _pcd_tool, (_pcd.get('agent') or '?'))
+                        continue
+                    _seen_campaign_tools.add(_pcd_tool)
+                _plan_campaign_deduped.append(_pcd)
+            if _plan_campaign_deduped:
+                _plan = _plan_campaign_deduped
+
             # ── Deleted goal guard: drop plan steps referencing non-active goals ──
             if _plan and _goal_titles_lower:
                 _plan_active_goals = []

@@ -4160,7 +4160,7 @@ class HybridAutonomousAgent:
             seen_tools = set()  # Для предотвращения дублей
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
-            once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз
+            once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign', 'start_email_campaign'}  # строго 1 раз
             multi_limit_tools = {'add_task': 5, 'update_profile': 2, 'create_goal': 3, 'run_agent_action': 8, 'send_email': 5, 'delegate_task': 5}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
