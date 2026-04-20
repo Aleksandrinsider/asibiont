@@ -6966,8 +6966,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
 
     # Язык пользователя — для условных директив
     try:
-        from i18n import get_user_lang as _gul_exec
+        from i18n import get_user_lang as _gul_exec, detect_lang_from_text as _dlt_exec
         _user_lang = _gul_exec(user_id)
+        # Если задача/поручение содержит кириллицу — отвечаем по-русски
+        _task_detected = _dlt_exec((task or '') + ' ' + (dialog_context or '')[:200])
+        if _task_detected == 'ru':
+            _user_lang = 'ru'
     except Exception:
         _user_lang = 'ru'
     _lang_line = (
@@ -10631,8 +10635,12 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _caps_block = "\n".join(_agent_caps_lines)
 
     try:
-        from i18n import get_user_lang as _gul_dir
+        from i18n import get_user_lang as _gul_dir, detect_lang_from_text as _dlt_dir
         _dir_lang = _gul_dir(user_id)
+        # Если сообщение содержит кириллицу — пользователь пишет по-русски, независимо от настройки в БД
+        _msg_detected = _dlt_dir(user_message or '')
+        if _msg_detected == 'ru':
+            _dir_lang = 'ru'
     except Exception:
         _dir_lang = 'ru'
     _dir_lang_line = (
