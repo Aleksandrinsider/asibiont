@@ -1405,11 +1405,12 @@ class HybridAutonomousAgent:
 
         # ── ЦЕЛИ: create / delete / update ─────────────────────────────────────
         _goal_action_patterns = (
-            'создай цель', 'добавь цель', 'новая цель',
+            'создай цель', 'добавь цель', 'добавим цель', 'новая цель',
+            'ещё одну цель', 'еще одну цель', 'поставь цель',
             'удали цель', 'убери цель', 'удали цели', 'убери цели',
             'удали все цел',
             'обнови цель', 'прогресс цели',
-            'create goal', 'add goal', 'delete goal', 'remove goal',
+            'create goal', 'add goal', 'new goal', 'delete goal', 'remove goal',
         )
         if any(p in m for p in _goal_action_patterns):
             return "required"
@@ -10684,6 +10685,18 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
     _is_achievement = any(_ml_lower.startswith(p) or f' {p} ' in _ml_lower for p in _achievement_words)
     if _is_achievement:
         return None  # process_request вызовет complete_task
+
+    # Пре-фильтр: создание/удаление цели → только ASI имеет create_goal/delete_goal
+    _goal_crud_phrases = (
+        'добавь цель', 'добавим цель', 'новая цель', 'создай цель',
+        'поставь цель', 'добавь мне цель', 'хочу цель', 'ещё одну цель',
+        'еще одну цель', 'удали цель', 'убери цель', 'отмени цель',
+        'завершить цель', 'закрой цель', 'закончи цель',
+        'add goal', 'new goal', 'create goal', 'delete goal',
+    )
+    _is_goal_crud = any(p in _ml_lower for p in _goal_crud_phrases)
+    if _is_goal_crud:
+        return None  # process_request вызовет create_goal / delete_goal / complete_goal
 
     if _is_trivial:
         _has_active_mission = False
