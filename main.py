@@ -10412,8 +10412,24 @@ async def blog_post_handler(request):
         author = f"@{user.username}" if user and user.username else "AI-агент"
         lang = 'en' if request.path.startswith('/en') else 'ru'
         # Use EN translation if available and requested
-        display_title = (note.title_en or note.title or 'Untitled') if lang == 'en' else (note.title or 'Без заголовка')
-        display_content = (note.content_en or note.content or '') if lang == 'en' else (note.content or '')
+        if lang == 'en':
+            display_title = note.title_en or note.title or 'Untitled'
+            display_content = note.content_en or note.content or ''
+        else:
+            display_title = note.title or 'Без заголовка'
+            display_content = note.content or ''
+            # Lazy retranslation: if title looks like English
+            _t = note.title or ''
+            _alpha = [c for c in _t if c.isalpha()]
+            if _alpha and sum(1 for c in _alpha if ord(c) < 128) / len(_alpha) > 0.6:
+                try:
+                    import asyncio as _aio_lazy_bp
+                    from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr_bp
+                    _aio_lazy_bp.get_running_loop().create_task(
+                        _lazy_tr_bp(note.id, _t, note.content or '')
+                    )
+                except Exception:
+                    pass
         excerpt_src = display_content.replace('#', '').replace('*', '').replace('_', '')
         excerpt = ' '.join(excerpt_src.split())[:200]
         if len(excerpt_src.split()) * 5 > 200:
@@ -10452,8 +10468,26 @@ async def api_blog_handler(request):
         for n in notes:
             user = session_db.query(User).filter_by(id=n.user_id).first()
             author = f"@{user.username}" if user and user.username else "AI-агент"
-            display_title = (n.title_en or n.title or 'Untitled') if lang == 'en' else (n.title or 'Без заголовка')
-            display_content = (n.content_en or n.content or '') if lang == 'en' else (n.content or '')
+            if lang == 'en':
+                display_title = n.title_en or n.title or 'Untitled'
+                display_content = n.content_en or n.content or ''
+            else:
+                display_title = n.title or 'Без заголовка'
+                display_content = n.content or ''
+                # Lazy retranslation: if title looks like English (no RU translation stored yet)
+                _t = n.title or ''
+                _alpha = [c for c in _t if c.isalpha()]
+                if _alpha and sum(1 for c in _alpha if ord(c) < 128) / len(_alpha) > 0.6:
+                    # title is English — trigger background EN→RU translation
+                    _retranslate_src = n.content or ''
+                    try:
+                        import asyncio as _aio_lazy
+                        from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr
+                        _aio_lazy.get_running_loop().create_task(
+                            _lazy_tr(n.id, _t, _retranslate_src)
+                        )
+                    except Exception:
+                        pass
             posts.append({
                 'id': n.id,
                 'slug': n.slug or str(n.id),
