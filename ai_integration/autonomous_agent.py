@@ -1227,10 +1227,10 @@ class HybridAutonomousAgent:
           except asyncio.TimeoutError:
             if _attempt >= _max_retries - 1:
                 raise
-            # Не ретраим с тем же таймаутом если он уже большой (>=60s) —
-            # DIRECTOR-EXEC сам повторит с 2x таймаутом, иначе тратим лишние 60-90с впустую
-            _current_timeout = api_timeout or 60
-            if _current_timeout >= 60:
+            # Не ретраим внутренне если уже используем максимальный сконфигурированный таймаут —
+            # DIRECTOR-EXEC сам повторит, а дублировать retries не нужно
+            _api_timeout_long = int(os.getenv('API_TIMEOUT_LONG', '90'))
+            if (api_timeout or 0) >= _api_timeout_long:
                 raise
             logger.warning(f"[AI] Timeout on attempt {_attempt+1}/{_max_retries}, retrying...")
             await asyncio.sleep(3 * (_attempt + 1))
@@ -4165,7 +4165,7 @@ class HybridAutonomousAgent:
             seen_tools = set()  # Для предотвращения дублей
             _seen_research_kws = []  # Нормализованные keyword-sets для fuzzy dedup research/web_search
             # Критичные инструменты — лимит вызовов за сессию
-            once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign', 'start_email_campaign'}  # строго 1 раз
+            once_only_tools = {'create_post', 'delete_post', 'publish_to_telegram', 'publish_to_discord', 'start_content_campaign', 'start_delegation_campaign'}  # строго 1 раз; start_email_campaign разрешён повторно
             multi_limit_tools = {'add_task': 5, 'update_profile': 2, 'create_goal': 3, 'run_agent_action': 8, 'send_email': 5, 'delegate_task': 5}  # лимиты per turn
             used_once_only = set()
             multi_limit_counts = {}
@@ -8696,16 +8696,18 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                            agent.get('name'), _iter, _tc_mode, _err_msg)
             # Retry once on TimeoutError with doubled timeout
             if isinstance(_ai_err, (TimeoutError, asyncio.TimeoutError)) and _iter == 0:
-                logger.info("[DIRECTOR-EXEC] TimeoutError on iter 0, retrying with 2x timeout...")
+                logger.info("[DIRECTOR-EXEC] TimeoutError on iter 0, retrying with capped timeout...")
                 try:
                     await asyncio.sleep(2)
+                    # Cap retry at 80s so total fits within coordinator's 150s timeout
+                    _director_retry_timeout = min(API_TIMEOUT_LONG, 80)
                     _resp = await _agent_inst.call_ai(
                         _messages,
                         use_tools=_use_tools_now,
                         tool_choice=_tc_mode,
                         exclude_tools=_exclude_for_agent if _use_tools_now else None,
                         max_tokens=_iter_max_tokens,
-                        api_timeout=API_TIMEOUT_LONG * 2,
+                        api_timeout=_director_retry_timeout,
                     )
                 except Exception:
                     break
