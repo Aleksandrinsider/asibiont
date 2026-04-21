@@ -3133,6 +3133,13 @@ class HybridAutonomousAgent:
             else:
                 params['topic'] = 'общая информация'
 
+        elif tool_name == 'start_email_campaign':
+            # Автозапись кто создаёт кампанию — чтобы sender_name fallback использовал имя агента
+            if not params.get('sent_by_agent'):
+                _ag_sba_c = self._active_agent_data.get(params.get('user_id'))
+                if _ag_sba_c and _ag_sba_c.get('name'):
+                    params['sent_by_agent'] = _ag_sba_c['name']
+
         elif tool_name in ('publish_to_telegram', 'publish_to_discord', 'create_post'):
             if 'content' not in params or not params.get('content'):
                 # DeepSeek вызвал без content — извлекаем только из явных полей ответа AI

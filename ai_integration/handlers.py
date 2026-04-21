@@ -12258,6 +12258,7 @@ async def start_email_campaign(
     daily_limit: int = 100,
     landing_url: str = None,
     user_id: int = None,
+    sent_by_agent: str = None,
     session=None,
     close_session: bool = True,
 ):
@@ -12273,6 +12274,7 @@ async def start_email_campaign(
     goal: цель кампании — что хотим получить от рассылки.
     target_audience: кто получатели писем (ниша, роль, индустрия).
     offer: что предлагаем в письме (продукт, сервис, идея).
+    sender_name: имя отправителя в письме — ИСПОЛЬЗУЙ СВОЁ ИМЯ АГЕНТА (например 'Beatrice', 'Mark'). Не оставляй пустым.
     max_emails: 0 = безлимитно (рекомендуется). Кампания работает пока AI видит отдачу.
         НЕ ставь произвольные числа вроде 100 — автопилот сам решает когда остановиться.
     daily_limit: макс. писем в день (обычно 100).
@@ -12289,9 +12291,9 @@ async def start_email_campaign(
 
         profile = session.query(UserProfile).filter_by(user_id=user.id).first()
 
-        # Fallback sender info
+        # Fallback sender info — приоритет: явный sender_name → имя агента → нейтральное 'Team'
         if not sender_name:
-            sender_name = 'ASI Biont Team'
+            sender_name = (sent_by_agent or '').strip() or 'Team'
         if not sender_email:
             sender_email = 'outreach@asibiont.com'
 
