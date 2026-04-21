@@ -18490,6 +18490,8 @@ class AnchorEngine:
                 # Доставляем ВСЕГДА — reminder_sent ставим при реальной доставке, не здесь
                 elif minutes_diff < -30:
                     hours_overdue = abs(minutes_diff) / 60
+                    # Адаптивный cooldown: чем старее просрочка — тем реже напоминаем
+                    _ov_cooldown = 2 if hours_overdue < 24 else (12 if hours_overdue < 72 else 24)
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_overdue',
@@ -18501,7 +18503,7 @@ class AnchorEngine:
                                         'description': (task.description or '')[:200]}),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(hours=24),
-                        cooldown_hours=2,
+                        cooldown_hours=_ov_cooldown,
                         batch_group='tasks',
                     ))
 
@@ -18533,6 +18535,8 @@ class AnchorEngine:
                 minutes_diff_dd = (dd - now_utc).total_seconds() / 60
                 if minutes_diff_dd < -30:
                     hours_overdue = abs(minutes_diff_dd) / 60
+                    # Адаптивный cooldown: чем старее просрочка — тем реже напоминаем
+                    _ov_cooldown = 2 if hours_overdue < 24 else (12 if hours_overdue < 72 else 24)
                     anchors.append(Anchor(
                         user_id=user.id,
                         anchor_type='task_overdue',
@@ -18544,7 +18548,7 @@ class AnchorEngine:
                                         'description': (task.description or '')[:200]}),
                         triggered_at=now_utc,
                         expires_at=now_utc + timedelta(hours=24),
-                        cooldown_hours=2,
+                        cooldown_hours=_ov_cooldown,
                         batch_group='tasks',
                     ))
                 elif 15 <= minutes_diff_dd <= 24 * 60:

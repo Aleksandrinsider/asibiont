@@ -874,8 +874,8 @@ def _detect_integration_signal(service_label: str, text_lc: str, text_raw: str):
     if not text_clean or len(text_clean) < 20:
         return (None, None)
     import re as _re_signals
-    # Пропускаем строки-заголовки секций вида '# === ... ===' или '=== ... ==='
-    _header_pat = _re_signals.compile(r'^#?\s*={2,}.*={2,}\s*$')
+    # Пропускаем строки-заголовки секций: '=== ... ===', '[=== ... ===]', '# === ... ==='
+    _header_pat = _re_signals.compile(r'^[\[#\s]*={2,}.*={2,}[\]\s]*$')
     reason = next(
         (l.strip() for l in text_clean.splitlines()
          if l.strip() and not _header_pat.match(l.strip())),
