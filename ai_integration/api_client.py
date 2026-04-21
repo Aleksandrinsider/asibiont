@@ -1295,16 +1295,47 @@ class ExternalAPIClient:
             }
         
         # 3. AI-анализ
-        context = "\n\n".join([
-            f"**{r['title']}**\n{r['snippet']}\nИсточник: {r['link']}"
-            for r in results
-        ])
+        import re as _re_date_ext
+        def _extract_date_from_snippet(snippet: str, link: str) -> str:
+            """Извлекает год/дату публикации из сниппета или URL."""
+            # Ищем дату в начале сниппета (DDG часто ставит "14 нояб. 2023 г. —")
+            m = _re_date_ext.search(
+                r'\b(\d{1,2}\s+(?:янв|фев|мар|апр|май|июн|июл|авг|сен|окт|ноя|дек|'
+                r'Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[а-яёa-z.]*\.?\s+\d{4})\b',
+                snippet[:120], _re_date_ext.IGNORECASE
+            )
+            if m:
+                return m.group(1)
+            # Просто год в начале сниппета
+            m2 = _re_date_ext.match(r'^\s*(\d{4})\s*[г.—\-]', snippet)
+            if m2:
+                return m2.group(1)
+            # Год в URL (e.g. /2016/09/)
+            m3 = _re_date_ext.search(r'/(\d{4})/\d{2}/', link)
+            if m3:
+                return m3.group(1)
+            return ''
+
+        context_parts = []
+        for r in results:
+            date_str = _extract_date_from_snippet(r.get('snippet', ''), r.get('link', ''))
+            date_note = f"\nДата публикации: {date_str}" if date_str else "\nДата публикации: неизвестна"
+            context_parts.append(
+                f"**{r['title']}**\n{r['snippet']}{date_note}\nИсточник: {r['link']}"
+            )
+        context = "\n\n".join(context_parts)
+
         
         full_prompt = analysis_prompt.replace("{context}", context).replace("{query}", query)
         
         analysis = await self.deepseek_analyze(
             prompt=full_prompt,
-            system_prompt="Ты эксперт-аналитик. Извлекай конкретику, цифры и практические выводы.",
+            system_prompt=(
+                "Ты эксперт-аналитик. Извлекай конкретику, цифры и практические выводы. "
+                "КРИТИЧЕСКИ ВАЖНО: НЕ выдумывай даты публикаций статей. "
+                "Если дата не указана явно в тексте сниппета/источника — НЕ пиши никакую дату. "
+                "Никогда не называй статью 'свежей' или датируй её текущим годом без явного подтверждения в тексте."
+            ),
             max_tokens=max_tokens,
             parse_json=True
         )
