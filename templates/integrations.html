@@ -268,20 +268,68 @@
 
 <script>
 (function() {
+  var SETUP_PRE = 'GET https://asibiont.com/api/agent-webhook-token/{agent_id}?action=regenerate';
+  var SETUP_RES = '{"token": "abc123...", "url": "https://asibiont.com/api/agent-webhook/42/abc123..."}';
+  var SETUP_POST = 'POST https://asibiont.com/api/agent-webhook/{agent_id}/{token}';
+  var SETUP_BODY = '{\n  "event": "new_order",\n  "order_id": 12345,\n  "amount": 9900,\n  "customer": "\u0418\u0432\u0430\u043d \u041f\u0435\u0442\u0440\u043e\u0432"\n}';
   var T = {
     ru: {
-      title: 'Входящие вебхуки — ASI Biont | Подключите любой сервис к AI-агенту',
-      back: '← На главную', h1: 'Входящие вебхуки',
-      subtitle: 'Подключите любой внешний сервис к AI-агенту — CRM, GitHub, платёжные системы, ваш сервер',
-      fHome: 'Главная', fBlog: 'Блог', fFaq: 'FAQ', fPrice: 'Тарифы', fSupport: 'Поддержка',
-      fPrivacy: 'Соглашение', fTerms: 'Правила', fArena: 'Арена AI', fFeatures: 'Вебхуки'
+      title: '\u0412\u0445\u043e\u0434\u044f\u0449\u0438\u0435 \u0432\u0435\u0431\u0445\u0443\u043a\u0438 \u2014 ASI Biont | \u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u043b\u044e\u0431\u043e\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u043a AI-\u0430\u0433\u0435\u043d\u0442\u0443',
+      back: '\u2190 \u041d\u0430 \u0433\u043b\u0430\u0432\u043d\u0443\u044e', h1: '\u0412\u0445\u043e\u0434\u044f\u0449\u0438\u0435 \u0432\u0435\u0431\u0445\u0443\u043a\u0438',
+      subtitle: '\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u0435 \u043b\u044e\u0431\u043e\u0439 \u0432\u043d\u0435\u0448\u043d\u0438\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u043a AI-\u0430\u0433\u0435\u043d\u0442\u0443 \u2014 CRM, GitHub, \u043f\u043b\u0430\u0442\u0451\u0436\u043d\u044b\u0435 \u0441\u0438\u0441\u0442\u0435\u043c\u044b, \u0432\u0430\u0448 \u0441\u0435\u0440\u0432\u0435\u0440',
+      cta: '\u0413\u043e\u0442\u043e\u0432\u044b \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0441\u0432\u043e\u0438 \u0441\u0435\u0440\u0432\u0438\u0441\u044b?', ctaSecondary: '\u0414\u0430\u0448\u0431\u043e\u0440\u0434',
+      fHome: '\u0413\u043b\u0430\u0432\u043d\u0430\u044f', fBlog: '\u0411\u043b\u043e\u0433', fFaq: 'FAQ', fPrice: '\u0422\u0430\u0440\u0438\u0444\u044b', fSupport: '\u041f\u043e\u0434\u0434\u0435\u0440\u0436\u043a\u0430',
+      fPrivacy: '\u0421\u043e\u0433\u043b\u0430\u0448\u0435\u043d\u0438\u0435', fTerms: '\u041f\u0440\u0430\u0432\u0438\u043b\u0430', fArena: '\u0410\u0440\u0435\u043d\u0430 AI', fFeatures: '\u0412\u0435\u0431\u0445\u0443\u043a\u0438',
+      questions: [
+        '\u0427\u0442\u043e \u0442\u0430\u043a\u043e\u0435 \u0432\u0445\u043e\u0434\u044f\u0449\u0438\u0435 \u0432\u0435\u0431\u0445\u0443\u043a\u0438?',
+        '\u041a\u0430\u043a \u043d\u0430\u0441\u0442\u0440\u043e\u0438\u0442\u044c \u0432\u0435\u0431\u0445\u0443\u043a?',
+        '\u041d\u0430\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u044d\u0442\u043e \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e?',
+        '\u041a\u0430\u043a\u0438\u0435 \u0441\u0435\u0440\u0432\u0438\u0441\u044b \u043c\u043e\u0436\u043d\u043e \u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c?',
+        '\u041a\u0430\u043a\u043e\u0439 \u0444\u043e\u0440\u043c\u0430\u0442 \u0442\u0435\u043b\u0430 \u0437\u0430\u043f\u0440\u043e\u0441\u0430 \u043d\u0443\u0436\u0435\u043d?'
+      ],
+      answers: [
+        '\u041b\u044e\u0431\u043e\u0439 \u0432\u043d\u0435\u0448\u043d\u0438\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u043c\u043e\u0436\u0435\u0442 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u0441\u043e\u0431\u044b\u0442\u0438\u044f \u0432\u0430\u0448\u0435\u043c\u0443 AI-\u0430\u0433\u0435\u043d\u0442\u0443. \u0410\u0433\u0435\u043d\u0442 \u043f\u043e\u043b\u0443\u0447\u0430\u0435\u0442 \u0434\u0430\u043d\u043d\u044b\u0435 \u0438 \u043f\u0440\u0438\u0441\u044b\u043b\u0430\u0435\u0442 \u0432\u0430\u043c \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435 \u0432 Telegram. GitHub \u0441\u043e\u043e\u0431\u0449\u0438\u0442 \u043e \u043d\u043e\u0432\u043e\u043c pull request, CRM \u2014 \u043e \u043d\u043e\u0432\u043e\u043c \u043b\u0438\u0434\u0435, \u043f\u043b\u0430\u0442\u0451\u0436\u043d\u0430\u044f \u0441\u0438\u0441\u0442\u0435\u043c\u0430 \u2014 \u043e\u0431 \u0443\u0441\u043f\u0435\u0448\u043d\u043e\u0439 \u043e\u043f\u043b\u0430\u0442\u0435, \u0438 \u0430\u0433\u0435\u043d\u0442 \u0442\u0443\u0442 \u0436\u0435 \u0441\u043e\u0437\u0434\u0430\u0441\u0442 \u0437\u0430\u0434\u0430\u0447\u0443 \u0438\u043b\u0438 \u043e\u0442\u043f\u0440\u0430\u0432\u0438\u0442 \u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435.',
+        null,
+        '\u0422\u043e\u043a\u0435\u043d \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442\u0441\u044f \u0447\u0435\u0440\u0435\u0437 \u0437\u0430\u0449\u0438\u0449\u0451\u043d\u043d\u043e\u0435 \u0441\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u0435 (timing-safe) \u2014 \u044d\u0442\u043e \u0438\u0441\u043a\u043b\u044e\u0447\u0430\u0435\u0442 timing-\u0430\u0442\u0430\u043a\u0438. \u0412\u044b \u043c\u043e\u0436\u0435\u0442\u0435 \u043f\u0435\u0440\u0435\u0433\u0435\u043d\u0435\u0440\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0442\u043e\u043a\u0435\u043d \u0432 \u043b\u044e\u0431\u043e\u0439 \u043c\u043e\u043c\u0435\u043d\u0442, \u0441\u043d\u043e\u0432\u0430 \u0432\u044b\u0437\u0432\u0430\u0432 endpoint \u0441 <code>?action=regenerate</code>. \u0421\u0442\u0430\u0440\u044b\u0439 \u0442\u043e\u043a\u0435\u043d \u0441\u0440\u0430\u0437\u0443 \u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0441\u044f \u043d\u0435\u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u043c.',
+        '\u041b\u044e\u0431\u043e\u0439 \u0441\u0435\u0440\u0432\u0438\u0441, \u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u044e\u0449\u0438\u0439 \u0438\u0441\u0445\u043e\u0434\u044f\u0449\u0438\u0435 \u0432\u0435\u0431\u0445\u0443\u043a\u0438 (POST-\u0437\u0430\u043f\u0440\u043e\u0441\u044b):<ul style="padding-left:20px;margin:8px 0"><li>GitHub / GitLab \u2014 pull requests, issues, \u0434\u0435\u043f\u043b\u043e\u0438</li><li>\u041f\u043b\u0430\u0442\u0451\u0436\u043d\u044b\u0435 \u0441\u0438\u0441\u0442\u0435\u043c\u044b (Stripe, \u042e\u041a\u0430\u0441\u0441\u0430, Robokassa)</li><li>CRM-\u0441\u0438\u0441\u0442\u0435\u043c\u044b (AmoCRM, Bitrix24, HubSpot)</li><li>\u0412\u0430\u0448 \u0441\u043e\u0431\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0439 \u0441\u0435\u0440\u0432\u0435\u0440 \u0438\u043b\u0438 \u0441\u043a\u0440\u0438\u043f\u0442</li><li>Zapier, Make (Integromat), n8n</li><li>\u041b\u044e\u0431\u0430\u044f \u0441\u0438\u0441\u0442\u0435\u043c\u0430 \u043c\u043e\u043d\u0438\u0442\u043e\u0440\u0438\u043d\u0433\u0430 \u0438\u043b\u0438 \u0430\u043b\u0435\u0440\u0442\u043e\u0432</li></ul>',
+        'JSON \u0441 \u043b\u044e\u0431\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438. \u0410\u0433\u0435\u043d\u0442 \u043f\u043e\u043b\u0443\u0447\u0438\u0442 \u0432\u0435\u0441\u044c payload \u0438 \u043f\u0440\u0435\u043e\u0431\u0440\u0430\u0437\u0443\u0435\u0442 \u0435\u0433\u043e \u0432 \u0447\u0438\u0442\u0430\u0435\u043c\u043e\u0435 \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435. \u041e\u0431\u044f\u0437\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0445 \u043f\u043e\u043b\u0435\u0439 \u043d\u0435\u0442 \u2014 \u043c\u043e\u0436\u043d\u043e \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c \u0442\u043e, \u0447\u0442\u043e \u043f\u0440\u0435\u0434\u043e\u0441\u0442\u0430\u0432\u043b\u044f\u0435\u0442 \u0432\u0430\u0448 \u0441\u0435\u0440\u0432\u0438\u0441. \u0417\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a <code>Content-Type</code> \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c <code>application/json</code>.'
+      ],
+      setupSteps: [
+        '\u041d\u0430\u0439\u0434\u0438\u0442\u0435 ID \u0432\u0430\u0448\u0435\u0433\u043e \u0430\u0433\u0435\u043d\u0442\u0430 \u0432 \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0430\u0445 \u0430\u0433\u0435\u043d\u0442\u0430 \u0432 \u0434\u0430\u0448\u0431\u043e\u0440\u0434\u0435.',
+        '\u041f\u043e\u043b\u0443\u0447\u0438\u0442\u0435 \u0442\u043e\u043a\u0435\u043d \u0432\u0435\u0431\u0445\u0443\u043a\u0430 \u0447\u0435\u0440\u0435\u0437 API:',
+        '\u041e\u0442\u0432\u0435\u0442:', '\u041d\u0430\u0441\u0442\u0440\u043e\u0439\u0442\u0435 \u0432\u043d\u0435\u0448\u043d\u0438\u0439 \u0441\u0435\u0440\u0432\u0438\u0441 \u043e\u0442\u043f\u0440\u0430\u0432\u043b\u044f\u0442\u044c POST-\u0437\u0430\u043f\u0440\u043e\u0441\u044b \u043d\u0430:',
+        '\u0422\u0435\u043b\u043e \u0437\u0430\u043f\u0440\u043e\u0441\u0430 (JSON, \u043b\u044e\u0431\u044b\u0435 \u043f\u043e\u043b\u044f):',
+        '\u0410\u0433\u0435\u043d\u0442 \u043f\u043e\u043b\u0443\u0447\u0438\u0442 \u0441\u043e\u0431\u044b\u0442\u0438\u0435, \u0441\u043e\u0437\u0434\u0430\u0441\u0442 \u0437\u0430\u0434\u0430\u0447\u0443 \u0438 \u043f\u0440\u0438\u0448\u043b\u0451\u0442 \u0432\u0430\u043c \u0443\u0432\u0435\u0434\u043e\u043c\u043b\u0435\u043d\u0438\u0435 \u0432 Telegram.'
+      ]
     },
     en: {
-      title: 'Incoming Webhooks — ASI Biont | Connect any service to your AI agent',
-      back: '← Back', h1: 'Incoming Webhooks',
-      subtitle: 'Connect any external service to your AI agent — CRM, GitHub, payment systems, your own server',
+      title: 'Incoming Webhooks \u2014 ASI Biont | Connect any service to your AI agent',
+      back: '\u2190 Back', h1: 'Incoming Webhooks',
+      subtitle: 'Connect any external service to your AI agent \u2014 CRM, GitHub, payment systems, your own server',
+      cta: 'Ready to connect your services?', ctaSecondary: 'Dashboard',
       fHome: 'Home', fBlog: 'Blog', fFaq: 'FAQ', fPrice: 'Pricing', fSupport: 'Support',
-      fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI', fFeatures: 'Webhooks'
+      fPrivacy: 'Agreement', fTerms: 'Terms', fArena: 'Arena AI', fFeatures: 'Webhooks',
+      questions: [
+        'What are incoming webhooks?',
+        'How to set up a webhook?',
+        'Is the webhook secure?',
+        'Which services can send webhooks?',
+        'What format does the request body need to be?'
+      ],
+      answers: [
+        'Any external service can send events to your AI agent. The agent receives the payload and sends you a notification in Telegram. GitHub can notify about a new pull request, your CRM about a new lead, your payment system about a successful payment \u2014 and the agent immediately creates a task or sends a message.',
+        null,
+        'The token is verified via constant-time comparison (timing-safe) \u2014 this prevents timing attacks. You can regenerate the token at any time by calling the same endpoint with <code>?action=regenerate</code>. The old token becomes invalid immediately.',
+        'Any service that supports outgoing webhooks (POST requests):<ul style="padding-left:20px;margin:8px 0"><li>GitHub / GitLab \u2014 pull requests, issues, deployments</li><li>Payment systems (Stripe, YooKassa, Robokassa)</li><li>CRM systems (AmoCRM, Bitrix24, HubSpot)</li><li>Your own server or script</li><li>Zapier, Make (Integromat), n8n</li><li>Any monitoring or alert system</li></ul>',
+        'JSON with any fields. The agent receives the entire payload and converts it into a readable notification. There are no required fields \u2014 send whatever your service provides. The <code>Content-Type</code> header should be <code>application/json</code>.'
+      ],
+      setupSteps: [
+        'Find your agent ID in the agent settings in the dashboard.',
+        'Get a webhook token via API:',
+        'Response:', 'Configure the external service to send POST requests to:',
+        'Request body (JSON, any fields):',
+        'The agent receives the event, creates a task, and sends you a notification in Telegram.'
+      ]
     }
   };
   var SERVER_LANG = '{{ lang|default("ru") }}';
@@ -291,12 +339,38 @@
     localStorage.setItem('asibiont_lang', lang);
     document.documentElement.lang = lang;
     document.title = t.title;
-    var back = document.querySelector('a[href="/dashboard"]');
+    var back = document.querySelector('a[href="/dashboard"]:not(.faq-cta a)');
     if (back) back.textContent = t.back;
     var h1 = document.querySelector('h1');
     if (h1) h1.textContent = t.h1;
     var sub = document.querySelector('.faq-subtitle');
     if (sub) sub.textContent = t.subtitle;
+    // CTA
+    var ctaP = document.querySelector('.faq-cta p');
+    if (ctaP) ctaP.textContent = t.cta;
+    var ctaLinks = document.querySelectorAll('.faq-cta a');
+    if (ctaLinks[1]) ctaLinks[1].textContent = t.ctaSecondary;
+    // Accordion questions and answers
+    var items = document.querySelectorAll('.faq-item');
+    items.forEach(function(item, i) {
+      var q = item.querySelector('.faq-question');
+      if (q && t.questions[i]) q.textContent = t.questions[i];
+      var a = item.querySelector('.faq-answer-inner');
+      if (!a) return;
+      if (i === 1) {
+        // Setup steps — rebuild HTML
+        var s = t.setupSteps;
+        a.innerHTML = '<ol class="steps">'
+          + '<li>' + s[0] + '</li>'
+          + '<li>' + s[1] + '<pre>' + SETUP_PRE + '</pre>' + s[2] + '<pre>' + SETUP_RES + '</pre></li>'
+          + '<li>' + s[3] + '<pre>' + SETUP_POST + '</pre>' + s[4] + '<pre>' + SETUP_BODY + '</pre></li>'
+          + '<li>' + s[5] + '</li>'
+          + '</ol>';
+      } else if (t.answers[i]) {
+        a.innerHTML = t.answers[i];
+      }
+    });
+    // Footer
     var fl = document.querySelectorAll('.footer-links a');
     if (fl[0]) fl[0].textContent = t.fHome;
     if (fl[1]) fl[1].textContent = t.fBlog;
