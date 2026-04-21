@@ -12976,12 +12976,27 @@ async def send_outreach_email(
             # Авто-создаём дефолтную кампанию — агент уже знает цель из контекста,
             # не заставляем его делать лишний шаг start_email_campaign
             try:
-                _auto_name = f"Outreach {user.first_name or user.username or 'Agent'}"[:60]
+                # Берём название из активной цели пользователя → кампания называется по ЦА/задаче
+                _auto_goal_title = ''
+                _auto_audience = ''
+                try:
+                    _ag = session.query(Goal).filter_by(user_id=user.id, status='active').order_by(Goal.updated_at.desc()).first()
+                    if _ag:
+                        _auto_goal_title = (_ag.title or '').strip()
+                        _auto_audience = (_ag.target_audience or '').strip()
+                except Exception:
+                    pass
+                if _auto_goal_title:
+                    _auto_name = _auto_goal_title[:60]
+                elif _auto_audience:
+                    _auto_name = f"Outreach: {_auto_audience[:55]}"
+                else:
+                    _auto_name = "Email Outreach"
                 campaign = EmailCampaign(
                     user_id=user.id,
                     name=_auto_name,
-                    goal='Привлечение новых пользователей и партнёров',
-                    target_audience='AI-разработчики, стартапы, технологические компании',
+                    goal=_auto_goal_title or 'Привлечение новых пользователей и партнёров',
+                    target_audience=_auto_audience or 'AI-разработчики, стартапы, технологические компании',
                     offer='Платформа ASI Biont — AI-агенты для автоматизации задач',
                     tone='professional',
                     sender_name=user.first_name or 'ASI Biont Team',
