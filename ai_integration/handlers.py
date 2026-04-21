@@ -13080,6 +13080,21 @@ async def send_outreach_email(
                     pass
                 return "⚠️ Нет активной email-кампании. Вызови start_email_campaign чтобы создать её, затем повтори отправку."
 
+        # Проверка квоты Resend: если вернул 429 ранее — ждём до полуночи UTC
+        try:
+            from .service_health import get_status as _svc_status
+            _svc_st = _svc_status()
+            _resend_st = _svc_st.get('resend', {})
+            if _resend_st.get('code') == 429:
+                import time as _t429
+                _bu = _resend_st.get('blocked_until')
+                if _bu and _t429.time() < _bu:
+                    import math as _math
+                    _mins_left = int((_bu - _t429.time()) / 60)
+                    return f"[INTERNAL] Resend исчерпал дневную квоту. Отправка заблокирована на {_mins_left} мин (до полуночи UTC). Переключись на другую задачу."
+        except Exception as _svc_chk:
+            logger.debug("resend quota check skipped: %s", _svc_chk)
+
         # Проверка лимитов (max_emails=0 означает безлимитно)
         if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
             campaign.status = 'completed'
@@ -13465,9 +13480,22 @@ async def send_outreach_email(
                         logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
                         try:
                             from .service_health import record_error as _rec_svc
-                            _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300])
+                            import time as _t_rec
+                            from datetime import datetime as _dt_rec, timezone as _tz_rec
+                            _blocked_until = None
+                            if resp.status == 429:
+                                # Блокируем до полуночи UTC — Resend сбрасывает квоту ежедневно
+                                _now_utc = _dt_rec.now(_tz_rec.utc)
+                                _midnight_utc = _now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+                                import math as _math_rec
+                                from datetime import timedelta as _td_rec
+                                _next_midnight = _midnight_utc + _td_rec(days=1)
+                                _blocked_until = _t_rec.time() + (_next_midnight - _now_utc).total_seconds()
+                            _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300], blocked_until=_blocked_until)
                         except Exception as _e:
                             logger.debug("suppressed: %s", _e)
+                        if resp.status == 429:
+                            return f"[INTERNAL] Resend исчерпал дневную квоту (429). Отправка заблокирована до полуночи UTC. Переключись на другую задачу."
                         return f" Ошибка Resend API: {err}"
             except Exception as e:
                 logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
