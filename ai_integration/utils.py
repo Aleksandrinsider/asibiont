@@ -795,11 +795,9 @@ def sanitize_live_team_chat_text(
         if not s:
             continue
         if s.endswith(':') and len(s) <= 70 and not re.search(r'[.!?]', s[:-1]):
-            if _preserve_tools:
-                # Для поручений координатора: пропускаем заголовок "Инструмент:/Цель:/...",
-                # но продолжаем — контентные строки после него должны остаться.
-                continue
-            break
+            # Пропускаем строки-заголовки ("Результат:", "Итог:", "Вывод:") для всех типов.
+            # Раньше был break — это обрывало текст агента на первом двоеточии.
+            continue
         lines.append(s)
     cleaned = ' '.join(lines).strip()
     cleaned = re.sub(r'\s{2,}', ' ', cleaned)
@@ -817,7 +815,7 @@ def sanitize_live_team_chat_text(
         if _a in ('agent_delegation', 'coordinator_assignment', 'goal_autopilot_assignment'):
             max_chars = 1800
         elif _a == 'coordinator_result':
-            max_chars = 1500
+            max_chars = 4000  # результаты агентов не урезаем — пользователь видит полный ответ
         else:
             max_chars = 1600
 
