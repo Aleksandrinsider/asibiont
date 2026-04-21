@@ -4293,7 +4293,8 @@ class HybridAutonomousAgent:
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses.\n"
                             "Structure: WHAT you did (1 phrase) → RESULT (facts/numbers/links). "
                             "If failed — say so honestly in one sentence. "
-                            "Answer ONLY what was asked. Don't offer alternatives or next steps unless asked. "
+                            "Answer what was asked first. You may add 1 short relevant context sentence if it directly explains the result (e.g. why it failed). "
+                            "Do NOT introduce unrelated topics, offer alternatives, or suggest next steps unless asked. "
                             "No corporate speak: remove 'Great', 'Here's what we have', emoji lists. Just facts and actions."
                             + _note_hint_en
                         )})
@@ -4303,7 +4304,7 @@ class HybridAutonomousAgent:
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task.\n"
                             "Структура: ЧТО сделал (1 фраза) → РЕЗУЛЬТАТ (факты/цифры/ссылки). "
                             "Если провал — скажи честно одним предложением. "
-                            "Отвечай ТОЛЬКО на то что спросили. Не предлагай варианты, альтернативы, следующие шаги если не просили. "
+                            "Сначала отвечай на то что спросили. Можно добавить 1 короткую фразу уместного контекста если она прямо объясняет результат (например почему не получилось или что произошло). Не уводи в новые темы, не предлагай варианты и следующие шаги если не просили. "
                             "Без канцелярита: убери 'Отлично', 'Вот что у нас', эмодзи-списки. Просто факты и действия."
                             + _note_hint_ru
                         )})
