@@ -12852,6 +12852,25 @@ class AnchorEngine:
             except Exception as _sc_err:
                 logger.debug("[COORD] strategy scorecard: %s", _sc_err)
 
+            # ── Email channel availability: Resend 429 quota exhausted today ──
+            _email_unavailable_str = ''
+            try:
+                from ai_integration.service_health import get_status as _svc_st_coord
+                _resend_coord = _svc_st_coord().get('resend', {})
+                if _resend_coord.get('code') == 429:
+                    import time as _t_coord
+                    _bu_coord = _resend_coord.get('blocked_until')
+                    if _bu_coord and _t_coord.time() < _bu_coord:
+                        _mins_coord = int((_bu_coord - _t_coord.time()) / 60)
+                        _email_unavailable_str = (
+                            f'\n⛔ EMAIL НЕДОСТУПЕН СЕГОДНЯ: Resend исчерпал дневную квоту, '
+                            f'отправка возобновится через ~{_mins_coord} мин (полночь UTC).\n'
+                            f'   НЕ назначай задачи email_outreach/send_outreach_email сегодня.\n'
+                            f'   Используй этот цикл для: контент, исследование, GitHub-поиск, Discord, задачи.\n\n'
+                        )
+            except Exception as _ec_coord:
+                logger.debug("[COORD] email availability check: %s", _ec_coord)
+
             # ── Channel stagnation detector: email dominant + near-zero results → force switch ──
             _channel_stagnation_str = ''
             try:
@@ -13887,6 +13906,7 @@ class AnchorEngine:
                 + _effectiveness_str
                 + _strategy_scorecard_str
                 + _channel_stagnation_str
+                + _email_unavailable_str
                 + _tool_outcome_str
                 + _email_analytics_str
                 + _subj_reply_str

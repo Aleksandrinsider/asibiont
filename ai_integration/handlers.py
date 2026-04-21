@@ -13080,21 +13080,6 @@ async def send_outreach_email(
                     pass
                 return "⚠️ Нет активной email-кампании. Вызови start_email_campaign чтобы создать её, затем повтори отправку."
 
-        # Проверка квоты Resend: если вернул 429 ранее — ждём до полуночи UTC
-        try:
-            from .service_health import get_status as _svc_status
-            _svc_st = _svc_status()
-            _resend_st = _svc_st.get('resend', {})
-            if _resend_st.get('code') == 429:
-                import time as _t429
-                _bu = _resend_st.get('blocked_until')
-                if _bu and _t429.time() < _bu:
-                    import math as _math
-                    _mins_left = int((_bu - _t429.time()) / 60)
-                    return f"[INTERNAL] Resend исчерпал дневную квоту. Отправка заблокирована на {_mins_left} мин (до полуночи UTC). Переключись на другую задачу."
-        except Exception as _svc_chk:
-            logger.debug("resend quota check skipped: %s", _svc_chk)
-
         # Проверка лимитов (max_emails=0 означает безлимитно)
         if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
             campaign.status = 'completed'
@@ -13423,6 +13408,21 @@ async def send_outreach_email(
                 logger.warning('[EMAIL_OUTREACH] Gmail API failed: %s — falling back to Resend', _res_goa)
 
         if not _smtp_sent_out and not _gmail_oauth_sent:
+            # Проверка квоты Resend: если вернул 429 ранее — ждём до полуночи UTC
+            # Делаем ЗДЕСЬ а не раньше: SMTP/Gmail должны работать даже когда Resend заблокирован
+            try:
+                from .service_health import get_status as _svc_status_resend
+                _svc_st_r = _svc_status_resend()
+                _resend_st_r = _svc_st_r.get('resend', {})
+                if _resend_st_r.get('code') == 429:
+                    import time as _t429_r
+                    _bu_r = _resend_st_r.get('blocked_until')
+                    if _bu_r and _t429_r.time() < _bu_r:
+                        _mins_left_r = int((_bu_r - _t429_r.time()) / 60)
+                        return f"[INTERNAL] Resend исчерпал дневную квоту. Отправка заблокирована на {_mins_left_r} мин (до полуночи UTC). Переключись на другую задачу."
+            except Exception as _svc_chk_r:
+                logger.debug("resend quota check skipped: %s", _svc_chk_r)
+
             if not RESEND_API_KEY:
                 return " SMTP/Gmail отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
             try:
@@ -13530,8 +13530,10 @@ async def send_outreach_email(
             )
             session.add(outreach)
         campaign.emails_sent = (campaign.emails_sent or 0) + 1
-        # Ставим follow-up через 3 дня
-        outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
+        # Адаптивный follow-up: если предыдущее письмо этому адресу было открыто — follow-up через 24ч (горячий лид), иначе 3 дня
+        _was_opened = existing and existing.status == 'opened'
+        _follow_up_delay = timedelta(hours=24) if _was_opened else timedelta(days=3)
+        outreach.next_follow_up_at = dt.now(tz.utc) + _follow_up_delay
 
         # ── Авто-обновление прогресса цели при отправке письма ──
         # Ищем активную цель, которая отслеживает отправку писем по этой кампании
