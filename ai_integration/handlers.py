@@ -13649,7 +13649,7 @@ async def reply_to_outreach_email(
         _original_agent = (outreach.sent_by_agent or '').strip()
         _current_agent = (sent_by_agent or '').strip()
         if _original_agent and _current_agent and _original_agent.lower() != _current_agent.lower():
-            # Проверяем пользовательское правило о продолжении переписки тем же агентом
+            # Сначала проверяем сохранённые правила пользователя
             _has_ownership_rule = False
             try:
                 import json as _j_own
@@ -13657,9 +13657,15 @@ async def reply_to_outreach_email(
                 if _u_mem.startswith('{'):
                     _mem_j = _j_own.loads(_u_mem)
                     _rules = _mem_j.get('rules', [])
+                    _OWNERSHIP_KEYWORDS = (
+                        ('от имени', 'агент'), ('перв', 'писал'), ('перв', 'писала'),
+                        ('перв', 'отправил'), ('перв', 'отправила'),
+                        ('тот', 'начал'), ('та', 'начала'), ('начал', 'диалог'),
+                        ('ведёт', 'тот'), ('ведёт', 'та'), ('переписку', 'агент'),
+                    )
                     for _r in _rules:
                         _rl = str(_r).lower()
-                        if ('от имени' in _rl and 'агент' in _rl) or ('перв' in _rl and 'писал' in _rl):
+                        if any(k1 in _rl and k2 in _rl for k1, k2 in _OWNERSHIP_KEYWORDS):
                             _has_ownership_rule = True
                             break
             except Exception:
@@ -13669,7 +13675,12 @@ async def reply_to_outreach_email(
                         f"По правилам пользователя переписку ведёт тот агент, кто первый писал. "
                         f"Передай задачу {_original_agent} через DELEGATE[{_original_agent}].")
             else:
+                # Даже без явного правила — логируем и показываем предупреждение в ответе
                 logger.info(f"[EMAIL_REPLY] agent mismatch: original={_original_agent}, current={_current_agent}")
+                return (f"⚠️ Это письмо отправлял(а) {_original_agent}, а отвечает {_current_agent}. "
+                        f"Переписку должен вести тот же агент. "
+                        f"Передай задачу {_original_agent} через DELEGATE[{_original_agent}].")
+                # (принудительная блокировка — агент увидит и перенаправит)
 
         # ── GUARD: не отвечать отписавшимся контактам ──
         _reply_rcpt = (recipient_email or outreach.recipient_email or '').strip().lower()
@@ -14805,6 +14816,7 @@ async def negotiate_by_email(
     sender_name: str = None,
     from_account: str = None,
     user_id: int = None,
+    sent_by_agent: str = None,
     session=None,
     close_session: bool = True,
 ):
@@ -14938,7 +14950,7 @@ async def negotiate_by_email(
             )
 
         _sender_addr = _chosen['email_user']
-        _sender_name = sender_name or user.first_name or user.username or 'Team'
+        _sender_name = sender_name or (sent_by_agent or '').strip() or 'Team'
         _subject = subject or f"Regarding: {goal[:60]}"
 
         # ── Создаём мини-кампанию для отслеживания переговоров ──────────────
@@ -14968,6 +14980,7 @@ async def negotiate_by_email(
             subject=_subject,
             body=opening_message,
             status='draft',
+            sent_by_agent=(sent_by_agent or '').strip() or None,
         )
         session.add(outreach)
         session.flush()

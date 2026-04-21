@@ -3044,6 +3044,11 @@ class HybridAutonomousAgent:
             params.pop('sender_name', None)
             params.pop('from_name', None)
             params.pop('from_email', None)   # не часть send_outreach_email
+            # Автозапись кто выполняет — чтобы ownership guard знал кто отвечает/пишет
+            if not params.get('sent_by_agent'):
+                _ag_sba2 = self._active_agent_data.get(params.get('user_id'))
+                if _ag_sba2 and _ag_sba2.get('name'):
+                    params['sent_by_agent'] = _ag_sba2['name']
             # GUARD: блокируем отправку письма без темы или тела
             _missing_fields = []
             if not params.get('subject'):
