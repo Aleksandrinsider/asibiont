@@ -4291,8 +4291,9 @@ class HybridAutonomousAgent:
                         messages.append({"role": "system", "content": (
                             "Reply like a real chat conversation — brief and to the point (up to 400 chars, max 600 for complex tasks). "
                             "Rephrase in your own words. Preserve URLs. Don't repeat delegate_task responses.\n"
-                            "Structure: WHAT you did (1 phrase) → RESULT (facts/numbers/links) → what it gives (1 phrase). "
-                            "If failed — say honestly + suggest alternative. "
+                            "Structure: WHAT you did (1 phrase) → RESULT (facts/numbers/links). "
+                            "If failed — say so honestly in one sentence. "
+                            "Answer ONLY what was asked. Don't offer alternatives or next steps unless asked. "
                             "No corporate speak: remove 'Great', 'Here's what we have', emoji lists. Just facts and actions."
                             + _note_hint_en
                         )})
@@ -4300,8 +4301,9 @@ class HybridAutonomousAgent:
                         messages.append({"role": "system", "content": (
                             "Ответь пользователю как в живом диалоге — кратко и по делу (до 400 символов, макс 600 для сложных задач). "
                             "Своими словами. Сохраняй URL. Не повторяй ответы delegate_task.\n"
-                            "Структура: ЧТО сделал (1 фраза) → РЕЗУЛЬТАТ (факты/цифры/ссылки) → что это даёт (1 фраза). "
-                            "Если провал — скажи честно + предложи альтернативу. "
+                            "Структура: ЧТО сделал (1 фраза) → РЕЗУЛЬТАТ (факты/цифры/ссылки). "
+                            "Если провал — скажи честно одним предложением. "
+                            "Отвечай ТОЛЬКО на то что спросили. Не предлагай варианты, альтернативы, следующие шаги если не просили. "
                             "Без канцелярита: убери 'Отлично', 'Вот что у нас', эмодзи-списки. Просто факты и действия."
                             + _note_hint_ru
                         )})
