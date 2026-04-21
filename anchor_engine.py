@@ -17258,6 +17258,7 @@ class AnchorEngine:
                             anchor_type='coordinator_result',
                             speaker_name=_ag_name,
                         )
+                        _cleaned_chat_m = _sanitize_proactive_text(_cleaned_chat_m, is_fem=_detect_agent_is_female(_ag_name))
                         _msg_type_m = 'agent_msg' if _ag_id != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,
@@ -17278,6 +17279,7 @@ class AnchorEngine:
                             anchor_type='coordinator_result',
                             speaker_name=_ag_name,
                         )
+                        _cleaned_chat = _sanitize_proactive_text(_cleaned_chat, is_fem=_detect_agent_is_female(_ag_name))
                         _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,
@@ -17323,6 +17325,7 @@ class AnchorEngine:
                         _cleaned_tg = __import__('ai_integration.utils', fromlist=['sanitize_live_team_chat_text']).sanitize_live_team_chat_text(
                             _cleaned, anchor_type='coordinator_result', speaker_name=_ag_name,
                         )
+                        _cleaned_tg = _sanitize_proactive_text(_cleaned_tg, is_fem=_detect_agent_is_female(_ag_name))
                         if _cleaned_tg and _cleaned_tg[0].islower():
                             _cleaned_tg = _cleaned_tg[0].upper() + _cleaned_tg[1:]
                         await _safe_send(self.bot, user.telegram_id, f"{_ag_name}:\n{_cleaned_tg}")

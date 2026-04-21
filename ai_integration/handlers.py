@@ -12291,7 +12291,7 @@ async def start_email_campaign(
 
         # Fallback sender info
         if not sender_name:
-            sender_name = user.first_name or user.username or 'Team'
+            sender_name = 'ASI Biont Team'
         if not sender_email:
             sender_email = 'outreach@asibiont.com'
 
