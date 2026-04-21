@@ -294,7 +294,7 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
         }
         
     except Exception as e:
-        logger.error(f"[TOKEN] spend_tokens error: {e}")
+        logger.warning(f"[TOKEN] spend_tokens skipped (lock contention or transient error): {e}")
         session.rollback()
         return {'success': False, 'balance': 0, 'spent': 0, 'error': str(e)}
     finally:

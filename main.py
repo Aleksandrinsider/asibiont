@@ -1749,7 +1749,7 @@ async def dashboard_handler(request):
                         # Проерить, были ли у этого контакта задачи (ключая отклоые)
                         all_tasks_from_favorite = session_db.query(Task).filter(
                             Task.user_id == favorite_user.id,
-                            Task.delegated_to_username.ilike(user.username.replace('@', ''))
+                            Task.delegated_to_username.ilike((user.username or '').replace('@', ''))
                         ).all()
                         
                         if all_tasks_from_favorite:
@@ -11815,7 +11815,10 @@ async def api_agent_test_code_handler(request):
         user_id = session_web.get('user_id') if session_web else None
         if not user_id:
             return web.json_response({'error': 'Not authenticated'}, status=401)
-        data = await request.json()
+        try:
+            data = await request.json()
+        except Exception:
+            return web.json_response({'error': 'Invalid JSON in request body'}, status=400)
 
         # Режим 1: код и ключи переданы напрямую (новый агент не сохранён)
         if 'python_code' in data:
