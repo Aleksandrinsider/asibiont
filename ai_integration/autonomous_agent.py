@@ -8407,7 +8407,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         'publish_to_discord', 'create_post', 'send_email', 'add_email_leads',
         'check_emails',
         # Универсальные действия (обучение, здоровье, финансы, творчество)
-        'save_note', 'add_task', 'set_reminder', 'run_agent_action',
+        'save_note', 'search_notes', 'add_task', 'set_reminder', 'run_agent_action',
         'update_goal_progress', 'generate_image', 'delegate_task',
     }
 
