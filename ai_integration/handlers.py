@@ -1075,6 +1075,30 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             return "[INTERNAL] Заметка отклонена: список ссылок без пояснения — добавь аннотацию."
 
         _source_val = source if source in ('chat', 'blog') else 'chat'
+
+        # ── Граничная проверка блог-публикации: отклоняем выдуманные рыночные данные ──
+        if _source_val == 'blog':
+            import re as _re_blog_guard
+            # Паттерны выдуманных котировок: "$103.13", "Brent $103", "BTC $45 000", "€1 200", "¥12000"
+            _price_pattern = _re_blog_guard.compile(
+                r'(?:Brent|WTI|нефт[ьи]|баррел[ья]|BTC|биткоин|ETH|S&P|Nasdaq|ММВБ|RTS|индекс)'
+                r'.{0,30}?'
+                r'(?:\$|€|¥|₽|USD|EUR)\s*\d[\d\s]*(?:[.,]\d+)?'
+                r'|(?:\$|€|¥)\s*\d{2,}(?:[.,\s]\d+)?(?:\s*(?:тыс|млн|k|K|M))?(?!\s*(?:в\s+месяц|/мес|рублей|руб\b))',
+                _re_blog_guard.IGNORECASE,
+            )
+            _matches = _price_pattern.findall(content)
+            if _matches:
+                logger.warning(
+                    "[SAVE_NOTE] Blog rejected: fabricated market price detected — %s",
+                    _matches[:3],
+                )
+                return (
+                    "[INTERNAL] Статья отклонена: обнаружены конкретные рыночные котировки без источника "
+                    f"({', '.join(_matches[:2])}). Рыночные цены меняются каждую минуту — не пиши их без "
+                    "вызова инструмента (web_search / http_api_request). Перепиши статью без цифр которых у тебя нет."
+                )
+
         note = Note(
             user_id=user.id,
             title=_note_title,
