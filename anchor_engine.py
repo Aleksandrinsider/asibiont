@@ -20933,7 +20933,8 @@ class AnchorEngine:
                     ).first()
                     if not _existing_email_camp:
                         # Создаём email-кампанию из параметров delegation-кампании
-                        _sender_name = user.first_name or user.username or 'Team'
+                        # Используем нейтральный 'Team' — конкретный агент будет назначен позже через sent_by_agent
+                        _sender_name = 'Team'
                         _ext_camp = EmailCampaign(
                             user_id=user.id,
                             name=f"{campaign.name} (внешний поиск)",
@@ -23140,6 +23141,10 @@ class AnchorEngine:
                     anchor.delivered_at = datetime.now(timezone.utc)
                     session.flush()
                     return
+                # ВАЖНО: берём sender_name из живой кампании (не из кешированного anchor_data)
+                # anchor_data может содержать старое имя пользователя вместо имени агента
+                if live_campaign.sender_name:
+                    sender_name = live_campaign.sender_name
                 _sent_today_live = session.query(EmailOutreach).filter(
                     EmailOutreach.campaign_id == campaign_id,
                     EmailOutreach.sent_at >= _today_start_rem,
@@ -23318,6 +23323,9 @@ class AnchorEngine:
                         f"Campaign: {campaign_name}\nGoal: {campaign_goal}\n"
                         f"Offer: {offer}\nTone: {tone}\nSender: {sender_name}\n"
                         f"{_gender_hint}\n"
+                        f"⚠️ SENDER NAME RULE: The sender name '{sender_name}' appears ONLY in the email signature (added automatically). "
+                        f"Do NOT write 'My name is {sender_name}', 'I'm {sender_name}', 'Меня зовут {sender_name}' "
+                        f"or any other self-introduction with this name in the body. The body starts directly with the research hook.\n"
                         f"Recipient: {email}\nName: {name}\n"
                         f"{'Company/project: ' + company if company else ''}\n"
                         f"Research context about recipient: {context or 'none'}\n"
