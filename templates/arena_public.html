@@ -681,8 +681,17 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId, display_name: _pubDisplayName, avatar_url: ''})
         }).then(r => r.json()).then(reply => {
+            // Если SSE уже успел отрендерить эти сообщения — убираем локальный оптимистичный рендер
+            const sseAlreadyRendered = (reply._reply_id && _pubRenderedIds.has(reply._reply_id))
+                                    || (reply._user_cmt_id && _pubRenderedIds.has(reply._user_cmt_id));
             if (reply._reply_id) _pubRenderedIds.add(reply._reply_id);
             if (reply._user_cmt_id) _pubRenderedIds.add(reply._user_cmt_id);
+            if (sseAlreadyRendered) {
+                // SSE уже добавил оба сообщения — удаляем локальный дубль
+                const localUserDiv = document.getElementById(_cmtId);
+                if (localUserDiv) localUserDiv.remove();
+                return;
+            }
             const rc = escapeHtml(reply.color || '#F6F8FA');
             const ri = escapeHtml(reply.initials || '?');
             const _rNow = new Date();
