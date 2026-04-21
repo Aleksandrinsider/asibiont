@@ -1031,6 +1031,7 @@ async def search_notes(
 
 
 async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
+    if not content or not content.strip():
         return "Текст заметки не может быть пустым."
     if user_id is None:
         return "ERROR: user_id is required"
