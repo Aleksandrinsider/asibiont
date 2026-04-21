@@ -10498,6 +10498,12 @@ async def terms_handler(request):
     return aiohttp_jinja2.render_template('terms.html', request, {})
 
 
+async def integrations_handler(request):
+    """Страница продвинутых возможностей: sandbox, файлы, вебхуки, память автопилота"""
+    lang = 'en' if request.path.startswith('/en') else 'ru'
+    return aiohttp_jinja2.render_template('integrations.html', request, {'lang': lang})
+
+
 async def blog_handler(request):
     """Публичный блог ASI Biont — список статей от AI-агентов"""
     lang = 'en' if request.path.startswith('/en') else 'ru'
@@ -13470,6 +13476,9 @@ app.router.add_get('/en/blog/{post_id}', blog_post_handler)
 app.router.add_get('/privacy', privacy_handler)
 # Terms of use
 app.router.add_get('/terms', terms_handler)
+# Advanced features page
+app.router.add_get('/integrations', integrations_handler)
+app.router.add_get('/en/integrations', integrations_handler)
 # i18n: English language routes (SEO — separate URLs per language)
 async def login_handler_en(request):
     """English landing page"""
