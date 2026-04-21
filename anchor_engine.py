@@ -21213,6 +21213,18 @@ class AnchorEngine:
                 if _pending_send_count >= 3:
                     logger.info(f"[ANCHOR] email_outreach_send flood guard: {_pending_send_count} pending for campaign #{campaign.id}, skip new")
                     continue
+                # Дополнительная защита: не создаём новый anchor если есть quota-snoozed anchor
+                # (suppress_until далеко в будущем — признак того что Resend отклонил с 429)
+                _quota_snoozed = session.query(Anchor).filter(
+                    Anchor.user_id == user.id,
+                    Anchor.anchor_type == 'email_outreach_send',
+                    Anchor.delivered_at.is_(None),
+                    Anchor.source.like(f'email_campaign:{campaign.id}:send:%'),
+                    Anchor.suppress_until > datetime.now(timezone.utc) + timedelta(hours=4),
+                ).count()
+                if _quota_snoozed >= 1:
+                    logger.info(f"[ANCHOR] email_outreach_send quota-snoozed guard: anchor for campaign #{campaign.id} is waiting for quota reset, skip new")
+                    continue
                 batch_size = min(len(drafts), remaining_daily, 25)
                 anchors.append(Anchor(
                     user_id=user.id,
@@ -23514,20 +23526,43 @@ class AnchorEngine:
                             logger.info(f"[ANCHOR] Draft #{d_obj.id} soft guard: {(result or '')[:120]}")
                             continue
                         elif result and ('resend api' in result.lower() or 'не настроен' in result.lower() or 'domain' in result.lower()):
-                            # Постоянная ошибка конфигурации — прекращаем всю партию,
-                            # уведомляем пользователя один раз
-                            logger.error(f"[ANCHOR] Permanent send error for campaign #{campaign_id}: {result[:200]}")
-                            # Уведомляем пользователя о проблеме
-                            try:
-                                _notify_text = (
-                                    f"⚠️ Не удаётся отправить письма по кампании «{campaign_name}».\n"
-                                    f"Причина: {result.strip()[:200]}\n"
-                                    f"\nПроверь настройки Resend (RESEND_FROM должен быть верифицированным доменом — resend.com → Domains).\n"
-                                    f"Письма ждут в черновиках — как только исправишь, отправятся автоматически."
+                            _is_quota_429 = 'quota' in result.lower() or '429' in result
+                            if _is_quota_429:
+                                # Дневной лимит Resend исчерпан — откладываем до следующего дня
+                                logger.warning(f"[ANCHOR] Resend daily quota exceeded for campaign #{campaign_id} — snoozing until tomorrow")
+                                _tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+                                    hour=1, minute=0, second=0, microsecond=0
                                 )
-                                await self._send_telegram_message(user.telegram_id, _notify_text)
-                            except Exception as _ntf_err:
-                                logger.warning(f"[ANCHOR] Failed to notify user about send error: {_ntf_err}")
+                                anchor.suppress_until = _tomorrow
+                                # НЕ ставим delivered_at — anchor остаётся живым, просто отложен
+                                try:
+                                    session.commit()
+                                except Exception:
+                                    pass
+                                try:
+                                    _notify_text = (
+                                        f"⚠️ Дневной лимит Resend исчерпан для кампании «{campaign_name}».\n"
+                                        f"Письма будут отправлены автоматически завтра после 01:00 UTC.\n"
+                                        f"Черновики сохранены и никуда не делись."
+                                    )
+                                    if self.bot:
+                                        await _safe_send(self.bot, user.telegram_id, _notify_text)
+                                except Exception as _ntf_err:
+                                    logger.warning(f"[ANCHOR] Failed to notify user about quota: {_ntf_err}")
+                            else:
+                                # Постоянная ошибка конфигурации (домен, ключ) — прекращаем всю партию
+                                logger.error(f"[ANCHOR] Permanent send error for campaign #{campaign_id}: {result[:200]}")
+                                try:
+                                    _notify_text = (
+                                        f"⚠️ Не удаётся отправить письма по кампании «{campaign_name}».\n"
+                                        f"Причина: {result.strip()[:200]}\n"
+                                        f"\nПроверь настройки Resend (RESEND_FROM должен быть верифицированным доменом — resend.com → Domains).\n"
+                                        f"Письма ждут в черновиках — как только исправишь, отправятся автоматически."
+                                    )
+                                    if self.bot:
+                                        await _safe_send(self.bot, user.telegram_id, _notify_text)
+                                except Exception as _ntf_err:
+                                    logger.warning(f"[ANCHOR] Failed to notify user about send error: {_ntf_err}")
                             break  # не пытаемся остальных — та же ошибка будет
 
                     except Exception as _compose_err:
