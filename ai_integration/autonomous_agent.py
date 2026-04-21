@@ -10389,23 +10389,6 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 _dm_display = director_message
             else:
                 _dm_display = f"{_ag_n}, {director_message}"
-            # Если director_message слишком короткий (< 80 символов) — обогащаем из task
-            # чтобы пользователь видел конкретику, а не расплывчатое "найди 2-3 контакта"
-            if len(_dm_display.strip()) < 80 and task and len(task.strip()) > 80:
-                _task_snippet = task.split('\n')[0].strip()[:250]
-                if _task_snippet and _task_snippet.lower() not in _dm_display.lower():
-                    _dm_display = _dm_display.rstrip(' .,') + '. ' + _task_snippet
-            # Если и задача короткая — ищем контекст в extra_context (история, проактив)
-            if len(_dm_display.strip()) < 80 and extra_context and len(extra_context.strip()) > 100:
-                import re as _re_ctx_enrich
-                # Ищем предложение из context, которое упоминает ключевые слова задачи
-                _task_words_ec = set(w.lower() for w in (_dm_display + ' ' + (task or '')).split() if len(w) > 4)
-                _ctx_sents = _re_ctx_enrich.split(r'(?<=[.!?\n])\s+', extra_context[:2000])
-                for _cs in _ctx_sents:
-                    _cs_clean = _cs.strip()[:200]
-                    if len(_cs_clean) > 30 and sum(1 for w in _task_words_ec if w in _cs_clean.lower()) >= 2:
-                        _dm_display = _dm_display.rstrip(' .,') + '. ' + _cs_clean
-                        break
             # Нормализуем: после "Имя, " первая буква должна быть строчной
             import re as _re_dm
             _dm_display = _re_dm.sub(
@@ -10722,9 +10705,10 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         "⚠️ 'Займитесь сами', 'работайте без меня', 'занимайтесь', 'действуйте' без конкретного имени агента — ВСЕГДА self (автопилот уже активен, подтверди коротко).\n"
         "⚠️ СТРАТЕГИЧЕСКИЕ ДИРЕКТИВЫ ('пробуйте', 'попробуй', 'протестируй', 'работайте с', 'смените аудиторию', 'измени подход', 'начни с', 'займись') + тема (аудитория/рынок/контент/email) — это ЗАДАЧА для агента, НЕ разговор. Делегируй агенту с нужным инструментом.\n"
         "Если пользователь ЯВНО обращается к агенту по имени — поручить.\n"
-        "director_message: конкретное поручение как в рабочем чате. 2-3 предложения, 40-100 слов.\n"
-        "Структура: Имя + ЗАЧЕМ (1 фраза — почему сейчас, что буксует) + КАК (инструмент из карточки) + РЕЗУЛЬТАТ (критерий готовности).\n"
-        "⚠️ director_message НЕ повторяет запрос пользователя дословно — агент уже видит запрос. Твоя задача: ОБОГАТИТЬ его: добавить контекст из цели, конкретный инструмент, критерий успеха.\n"
+        "director_message: конкретное поручение, 1 предложение, 15-40 слов.\n"
+        "Структура: Глагол (повелит.) + ИНСТРУМЕНТ + ЧТО/ГДЕ + критерий готовности. Никакой аналитики и объяснений — только действие.\n"
+        "⚠️ НЕ пиши 'нужно', 'необходимо', 'это критический сигнал', 'по цели ...'. НЕ используй 3-е лицо ('проверяет', 'ищет') — только повелительное наклонение ('найди', 'проверь').\n"
+        "⚠️ director_message НЕ повторяет agent_task дословно — это ЖИВОЕ обращение директора, короткое и конкретное.\n"
         "Примеры ПЛОХО ❌ — всё это варианты одной ошибки (эхо запроса пользователя без конкретики):\n"
         "  'Кристина, подготовь email-кампанию для предпринимателей.' — это дословный запрос, нет инструмента, нет числа контактов, нет критерия готовности.\n"
         "  'Кристина, найди 2-3 новых контакта.' — нет источника, нет типа контактов, нет следующего шага.\n"
@@ -10740,7 +10724,7 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
         '{"action":"self"}\n'
         "или\n"
         '{"action":"delegate","agent_name":"имя","agent_task":"суть задачи на русском",'
-        '"director_message":"Имя, ЗАЧЕМ. Глагол через ИНСТРУМЕНТ ЧТО/ГДЕ. Жду: результат с критерием."}'
+        '"director_message":"Глагол ИНСТРУМЕНТ ЧТО. Жду: конкретный результат."}'
     )
 
     # Быстрый пре-фильтр: короткие бытовые реплики → ASI отвечает сам через process_request
@@ -10857,11 +10841,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                 "Ответь ТОЛЬКО JSON без ```:\n"
                 '{"action": "delegate", "agent_name": "точное имя агента", '
                 '"agent_task": "задача", '
-                '"director_message": "Имя, ЗАЧЕМ (из миссии). Глагол через ИНСТРУМЕНТ ЧТО. Жду: результат."}\n'
+                '"director_message": "Глагол ИНСТРУМЕНТ ЧТО. Жду: результат."}\n'
                 "или\n"
                 '{"action": "adaptive", "director_intro": "план", "mission_brief": "цель миссии", '
                 '"first_agent_name": "имя", "first_agent_task": "задача", '
-                '"director_message": "Имя, ЗАЧЕМ. Глагол через ИНСТРУМЕНТ. Жду: результат."}'
+                '"director_message": "Глагол ИНСТРУМЕНТ ЧТО. Жду: результат."}'
             )
         elif _ml_lower.rstrip('!., ') in ('нет', 'стоп', 'отмена'):
             return None  # Отмена — сброс миссии
