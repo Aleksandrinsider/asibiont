@@ -19862,8 +19862,8 @@ class AnchorEngine:
             _agent_interactions = session.query(Interaction).filter(
                 Interaction.user_id == user.id,
                 Interaction.message_type.in_(['proactive', 'agent_msg']),
-                Interaction.created_at >= now_utc - timedelta(hours=168),
-            ).order_by(Interaction.created_at.desc()).limit(200).all()
+                Interaction.created_at >= now_utc - timedelta(days=14),
+            ).order_by(Interaction.created_at.desc()).limit(300).all()
             for _ai_item in _agent_interactions:
                 try:
                     _j = json.loads(_ai_item.content or '{}')
@@ -19884,7 +19884,7 @@ class AnchorEngine:
                     _outcome_s = f" {_outcome_tag}" if _outcome_tag else ''
                     _entry = f"{_fmt_dt(_ai_item.created_at)} {_tl_s}{_txt[:300]}{_outcome_s}"
                     _per_agent_history.setdefault(_ag_nm, [])
-                    if len(_per_agent_history[_ag_nm]) < 60:
+                    if len(_per_agent_history[_ag_nm]) < 80:
                         _per_agent_history[_ag_nm].append(_entry)
                 except Exception as _e:
                     logger.debug("suppressed: %s", _e)
@@ -19898,8 +19898,8 @@ class AnchorEngine:
                 _AAL_pah.user_id == user.id,
                 _AAL_pah.activity_type == 'agent_task',
                 _AAL_pah.status == 'completed',
-                _AAL_pah.created_at >= now_utc - timedelta(hours=168),
-            ).order_by(_AAL_pah.created_at.desc()).limit(200).all()
+                _AAL_pah.created_at >= now_utc - timedelta(days=14),
+            ).order_by(_AAL_pah.created_at.desc()).limit(300).all()
             for _api in _aal_pah_items:
                 _ag_nm_aal = (_api.target or '').replace('agent:', '').strip()
                 if not _ag_nm_aal:
@@ -19934,7 +19934,7 @@ class AnchorEngine:
                     _aal_res_short = _aal_result[:120].rsplit(' ', 1)[0] if len(_aal_result) > 120 else _aal_result
                     _entry_aal += f" → {_aal_res_short}"
                 _per_agent_history.setdefault(_ag_nm_aal, [])
-                if len(_per_agent_history[_ag_nm_aal]) < 60:
+                if len(_per_agent_history[_ag_nm_aal]) < 80:
                     _per_agent_history[_ag_nm_aal].append(_entry_aal)
         except Exception as _aal_pah_err:
             logger.debug("[AUTOPILOT] per_agent_history from AAL: %s", _aal_pah_err)

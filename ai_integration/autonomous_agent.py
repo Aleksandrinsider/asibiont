@@ -3519,7 +3519,7 @@ class HybridAutonomousAgent:
 
             # ═══ ИСТОРИЯ ДИАЛОГА (загружаем рано — нужна для anti-repetition) ═══
             from .conversation_history import get_conversation_history
-            full_history = get_conversation_history(user_id, session=None, limit=20)
+            full_history = get_conversation_history(user_id, session=None, limit=50)
 
             # ═══ КОНТЕКСТ АГЕНТОВ — проактивные сообщения за последние 2ч ═══
             # Без этого AI не понимает ответы пользователя на вопросы агентов

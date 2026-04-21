@@ -10,7 +10,7 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
-MAX_HISTORY_MESSAGES = 40  # Keep last 40 messages (20 exchanges) for cross-session continuity
+MAX_HISTORY_MESSAGES = 10000  # Храним всю историю без ограничений (БД хранит всё, AI получает последние N через limit=)
 
 
 def _smart_truncate(content: str, role: str) -> str:
@@ -127,10 +127,10 @@ def save_message_to_history(user_id, role, content, session=None):
                 logger.error(f"[HISTORY] Failed to parse conversation_context for user {user_id}")
                 history = []
         
-        # Add new message
+        # Add new message — храним полный контент (не обрезаем при сохранении)
         message = {
             "role": role,
-            "content": _smart_truncate(content, role),
+            "content": content,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         history.append(message)
@@ -194,6 +194,7 @@ def get_conversation_history(user_id, session=None, limit=None):
                 history = history[-limit:]
             
             # Return only role and content for AI (with sanitization)
+            # Обрезаем каждое сообщение только здесь (при отдаче в LLM), не при сохранении
             result = []
             for msg in history:
                 content = msg["content"]
@@ -201,6 +202,8 @@ def get_conversation_history(user_id, session=None, limit=None):
                 # Санитизируем ответы ассистента — убираем галлюцинации о задачах
                 if role == "assistant":
                     content = _sanitize_assistant_message(content)
+                # Обрезка для LLM-контекста: храним полное, отдаём разумное
+                content = _smart_truncate(content, role)
                 result.append({"role": role, "content": content})
             return result
             

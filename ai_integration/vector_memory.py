@@ -358,9 +358,9 @@ async def search_memory(user_id, query, top_k=5):
         return []
 
 
-def _build_memory_context_sync(user_id, current_message, max_chars=800):
+def _build_memory_context_sync(user_id, current_message, max_chars=2500):
     """Синхронный поиск памяти и формирование текстового контекста."""
-    memories = _search_memory_sync(user_id, current_message, top_k=8)
+    memories = _search_memory_sync(user_id, current_message, top_k=15)
     if not memories:
         return ""
     # Порог зависит от типа embedding: настоящие OpenAI-векторы точнее pseudo
@@ -385,7 +385,7 @@ def _build_memory_context_sync(user_id, current_message, max_chars=800):
     return "Из памяти:\n" + "\n".join(parts)
 
 
-async def build_memory_context(user_id, current_message, max_chars=800):
+async def build_memory_context(user_id, current_message, max_chars=2500):
     """Async-обёртка: строит контекст памяти без блокировки event loop."""
     try:
         return await asyncio.to_thread(_build_memory_context_sync, user_id, current_message, max_chars)

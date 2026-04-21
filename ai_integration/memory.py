@@ -47,11 +47,11 @@ def update_user_memory(info, user_id=None):
                         if isinstance(notes, str):
                             notes = [notes] if notes else []
                         notes.append(info)
-                        # Keep last 30 notes to avoid bloat
-                        mem_dict['notes'] = notes[-30:]
+                        # Keep all notes — no artificial limit on stored knowledge
+                        mem_dict['notes'] = notes
                         serialized = json.dumps(mem_dict, ensure_ascii=False)
-                        if len(serialized) > 5000:
-                            mem_dict['notes'] = mem_dict['notes'][-15:]
+                        if len(serialized) > 20000:
+                            mem_dict['notes'] = mem_dict['notes'][-100:]
                             serialized = json.dumps(mem_dict, ensure_ascii=False)
                         user.memory = encrypt_data(serialized)
                         session.commit()
@@ -64,13 +64,13 @@ def update_user_memory(info, user_id=None):
                 existing_decrypted += "\n" + info
             else:
                 existing_decrypted = info
-            # Ограничиваем размер памяти (максимум 5000 символов)
-            if len(existing_decrypted) > 5000:
+            # Ограничиваем размер памяти (максимум 20000 символов)
+            if len(existing_decrypted) > 20000:
                 lines = existing_decrypted.split('\n')
                 trimmed = []
                 total = 0
                 for line in reversed(lines):
-                    if total + len(line) + 1 > 4000:
+                    if total + len(line) + 1 > 18000:
                         break
                     trimmed.insert(0, line)
                     total += len(line) + 1
