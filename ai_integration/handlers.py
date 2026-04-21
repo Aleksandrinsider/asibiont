@@ -967,17 +967,70 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
         _log.getLogger(__name__).warning(f"[BLOG_TRANSLATE] Error translating note_id={note_id}: {e}")
 
 
-async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
-    """Сохранить заметку (без напоминания/дедлайна).
+async def search_notes(
+    query: str = None,
+    limit: int = 3,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+) -> str:
+    """Поиск и чтение заметок команды. Возвращает полный контент совпадающих заметок."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
 
-    Args:
-        content: Текст заметки
-        title: Заголовок заметки (опционально)
-        user_id: Telegram ID пользователя
-        session: SQLAlchemy session
-        source: 'chat' (личная заметка) или 'blog' (публичная статья в блог ASI Biont)
-    """
-    if not content or not content.strip():
+        from models import Note as _Note_sr
+        from datetime import datetime as _dt_sr, timezone as _tz_sr, timedelta as _td_sr
+        import re as _re_sr
+
+        notes_q = session.query(_Note_sr).filter(
+            _Note_sr.user_id == user.id,
+            _Note_sr.source == 'chat',
+        )
+
+        # Фильтр по запросу — ищем в заголовке и контенте
+        if query and query.strip():
+            _kws = [w.lower() for w in query.strip().split() if len(w) > 2]
+            if _kws:
+                from sqlalchemy import or_, func as _func_sr
+                _conditions = []
+                for _kw in _kws[:5]:
+                    _conditions.append(_Note_sr.title.ilike(f'%{_kw}%'))
+                    _conditions.append(_Note_sr.content.ilike(f'%{_kw}%'))
+                notes_q = notes_q.filter(or_(*_conditions))
+
+        notes = notes_q.order_by(_Note_sr.created_at.desc()).limit(max(1, min(limit, 20))).all()
+
+        if not notes:
+            _hint = f" по запросу «{query}»" if query else ""
+            return f"Заметок{_hint} не найдено."
+
+        lines = [f"📝 Найдено заметок: {len(notes)}\n"]
+        for n in notes:
+            _ts = n.created_at.strftime('%d.%m.%Y %H:%M') if n.created_at else '?'
+            _title = (n.title or '').strip()
+            _content = (n.content or '').strip()
+            lines.append(f"──────────────────")
+            if _title:
+                lines.append(f"📌 {_title}")
+            lines.append(f"🕐 {_ts}")
+            lines.append(_content[:1500] + ('…' if len(_content) > 1500 else ''))
+            lines.append('')
+
+        return '\n'.join(lines)
+    except Exception as e:
+        logger.error(f"[SEARCH_NOTES] Error: {e}")
+        return f"Ошибка чтения заметок: {e}"
+    finally:
+        if close_session and session:
+            session.close()
+
+
+async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
         return "Текст заметки не может быть пустым."
     if user_id is None:
         return "ERROR: user_id is required"

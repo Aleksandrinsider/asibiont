@@ -8026,7 +8026,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 # Планирование — полезно для любого автопилота
                 'schedule_background_task', 'set_reminder',
                 # Заметки и контакты — базовые возможности, нужны всем
-                'save_note', 'find_relevant_contacts_for_task', 'save_email_contact',
+                'save_note', 'search_notes', 'find_relevant_contacts_for_task', 'save_email_contact',
             }
             # Smart extend: добавляем инструменты по специализации и интеграциям агента.
             # Используем _intg_hint (лейблы из _parse_agent_integrations) — универсально
@@ -8379,7 +8379,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         'schedule_background_task': 45,
         'add_task': 15, 'complete_task': 15, 'edit_task': 15, 'delete_task': 15,
         'list_tasks': 15, 'list_goals': 15, 'create_goal': 15, 'update_goal_progress': 15,
-        'save_note': 10, 'update_profile': 10, 'send_message_to_user': 15, 'send_email': 20,
+        'save_note': 10, 'search_notes': 10, 'update_profile': 10, 'send_message_to_user': 15, 'send_email': 20,
     }
 
     _tool_call_count = 0
