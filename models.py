@@ -953,6 +953,10 @@ class UserAgent(Base):
     # MD5-хеш последнего stdout скрипта — для дедупликации между рестартами
     last_stdout_hash = Column(String(32), nullable=True)
 
+    # Входящие вебхуки — уникальный токен для приёма событий от внешних сервисов
+    # URL формат: POST /api/agent-webhook/{id}/{webhook_token}
+    webhook_token = Column(String(64), nullable=True, unique=True, index=True)
+
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc),
                         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))

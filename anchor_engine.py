@@ -1766,7 +1766,7 @@ def _build_reasoning_scaffold(goals_summary: list, caps_lower: list[str],
 
 
 
-def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None, vector_memory: str = '', integration_snapshots: list = None) -> str:
+def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, agent_name=None, team_profiles=None, agent_history=None, team_history=None, python_code=None, vector_memory: str = '', integration_snapshots: list = None, coordinator_insights: str = '') -> str:
     """Строит адаптивный промпт автопилота.
     Вместо жёстких A/B/C планов — показывает полный каталог инструментов платформы
     и предоставляет AI свободу выбора лучшей цепочки под цель и интеграции агента.
@@ -4247,6 +4247,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
             + vector_memory + "\n"
             "→ Учитывай эти инсайты при принятии решений — пользователь однажды уже решил или узнал это.\n"
             if vector_memory else ""
+        )
+        + (
+            "\n📊 ВЫВОДЫ ИЗ ПРЕДЫДУЩИХ АВТОПИЛОТ-ЦИКЛОВ:\n"
+            + coordinator_insights + "\n"
+            "→ Это паттерны, выявленные по итогам прошлых запусков. Учитывай при выборе стратегии.\n"
+            if coordinator_insights else ""
         )
         + "АВТОПИЛОТ — ПРОТОКОЛ МЫШЛЕНИЯ:\n"
         "Ты — опытный специалист, а не скрипт. Перед каждым действием ДУМАЙ.\n\n"
@@ -6773,6 +6779,25 @@ class AnchorEngine:
                         ) or ''
                     except Exception as _vme:
                         logger.debug("[DISPATCH] vector memory skip: %s", _vme)
+                    # ── Долгосрочные выводы координатора (CoordinatorInsight) ──
+                    _coord_insights_str = ''
+                    try:
+                        from models import CoordinatorInsight as _CI_disp, Session as _CI_disp_sess
+                        _ci_s = _CI_disp_sess()
+                        try:
+                            _ci_rows = _ci_s.query(_CI_disp).filter(
+                                _CI_disp.user_id == user.id
+                            ).order_by(_CI_disp.updated_at.desc()).limit(8).all()
+                            if _ci_rows:
+                                _coord_insights_str = '\n'.join(
+                                    f'  [{r.insight_type}] {r.summary} (×{r.confirmation_count or 1})'
+                                    for r in _ci_rows
+                                )
+                        finally:
+                            try: _ci_s.close()
+                            except Exception: pass
+                    except Exception as _ci_disp_err:
+                        logger.debug("[DISPATCH] coordinator_insights load: %s", _ci_disp_err)
                     _autopilot_prompt = _build_autopilot_prompt(
                         _goals_for_prompt, user=user,
                         agent_caps=_detected, agent_name=chosen.name,
@@ -6782,6 +6807,7 @@ class AnchorEngine:
                         python_code=getattr(chosen, 'python_code', '') or '',
                         vector_memory=_vector_mem_str,
                         integration_snapshots=data.get('integration_snapshots', []),
+                        coordinator_insights=_coord_insights_str,
                     )
                     _placeholder = "[АВТОПИЛОТ ЦЕЛЕЙ]\n"
                     if _placeholder in task_text:

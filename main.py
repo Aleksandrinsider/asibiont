@@ -3543,6 +3543,139 @@ def is_yookassa_ip(ip_str):
         return False
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# AGENT WEBHOOK — входящие события от внешних сервисов
+# POST /api/agent-webhook/{agent_id}/{token}
+# ═══════════════════════════════════════════════════════════════════════
+
+async def agent_webhook_handler(request):
+    """Принимает POST от внешних сервисов (Shopify, GitHub, Stripe, etc.) → создаёт задачу агенту."""
+    import secrets
+    agent_id_str = request.match_info.get('agent_id', '')
+    token = request.match_info.get('token', '')
+
+    try:
+        agent_id = int(agent_id_str)
+    except ValueError:
+        return web.json_response({'error': 'invalid agent_id'}, status=400)
+
+    db_s = Session()
+    try:
+        from models import UserAgent, Task
+        agent = db_s.query(UserAgent).filter_by(id=agent_id).first()
+        if not agent:
+            return web.json_response({'error': 'agent not found'}, status=404)
+        if not agent.webhook_token or not secrets.compare_digest(agent.webhook_token, token):
+            return web.json_response({'error': 'invalid token'}, status=403)
+
+        # Читаем payload
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {'raw': await request.text()}
+
+        # Определяем источник по заголовкам
+        source = 'webhook'
+        ua_header = request.headers.get('User-Agent', '')
+        if 'GitHub' in ua_header:
+            source = 'GitHub'
+        elif 'Shopify' in ua_header:
+            source = 'Shopify'
+        elif 'Stripe' in ua_header:
+            source = 'Stripe'
+        elif 'Zapier' in ua_header:
+            source = 'Zapier'
+        event_type = (
+            request.headers.get('X-GitHub-Event') or
+            request.headers.get('X-Shopify-Topic') or
+            request.headers.get('Stripe-Signature', '')[:20] or
+            payload.get('event') or payload.get('type') or 'event'
+        )
+
+        import json as _json
+        payload_str = _json.dumps(payload, ensure_ascii=False, indent=2)
+        if len(payload_str) > 2000:
+            payload_str = payload_str[:2000] + '\n...(обрезано)'
+
+        title = f"[{source}] {event_type}"
+        description = f"Входящий вебхук от {source}\nСобытие: {event_type}\n\nPayload:\n{payload_str}"
+
+        # Создаём задачу от имени агента для владельца агента
+        import datetime as _dt
+        task = Task(
+            title=title,
+            description=description,
+            user_id=agent.author_id,
+            created_by_agent_id=agent.id,
+            status='pending',
+            created_at=_dt.datetime.now(_dt.timezone.utc),
+        )
+        db_s.add(task)
+        db_s.commit()
+
+        # Уведомляем владельца в Telegram
+        try:
+            from models import User as _User
+            owner = db_s.query(_User).filter_by(id=agent.author_id).first()
+            if owner and owner.telegram_id:
+                msg = (
+                    f"📡 <b>Вебхук от {source}</b>\n"
+                    f"Агент: {agent.name}\n"
+                    f"Событие: <code>{event_type}</code>\n"
+                    f"Задача создана автоматически."
+                )
+                try:
+                    from aiogram import Bot
+                    _bot = Bot(token=TELEGRAM_TOKEN)
+                    await _bot.send_message(owner.telegram_id, msg, parse_mode='HTML')
+                    await _bot.session.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        logger.info(f"[AGENT-WEBHOOK] agent={agent_id} source={source} event={event_type} task_created")
+        return web.json_response({'ok': True, 'task_id': task.id})
+
+    except Exception as e:
+        logger.error(f"[AGENT-WEBHOOK] Error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+    finally:
+        db_s.close()
+
+
+async def api_agent_webhook_token_handler(request):
+    """GET /api/agent-webhook-token/{agent_id} — возвращает или генерирует webhook_token агента."""
+    import secrets
+    user = await _get_session_user(request)
+    if not user:
+        return web.json_response({'error': 'unauthorized'}, status=401)
+
+    agent_id_str = request.match_info.get('agent_id', '')
+    try:
+        agent_id = int(agent_id_str)
+    except ValueError:
+        return web.json_response({'error': 'invalid agent_id'}, status=400)
+
+    db_s = Session()
+    try:
+        from models import UserAgent
+        agent = db_s.query(UserAgent).filter_by(id=agent_id, author_id=user.id).first()
+        if not agent:
+            return web.json_response({'error': 'agent not found or access denied'}, status=404)
+
+        action = request.rel_url.query.get('action', 'get')
+        if action == 'regenerate' or not agent.webhook_token:
+            agent.webhook_token = secrets.token_urlsafe(32)
+            db_s.commit()
+
+        base_url = 'https://asibiont.com'
+        webhook_url = f"{base_url}/api/agent-webhook/{agent.id}/{agent.webhook_token}"
+        return web.json_response({'webhook_url': webhook_url, 'token': agent.webhook_token})
+    finally:
+        db_s.close()
+
+
 async def yookassa_webhook(request):
     # Верификация IP-адреса отправителя
     if not LOCAL:
@@ -13384,6 +13517,9 @@ app.router.add_post('/webhook/yookassa', yookassa_webhook)
 app.router.add_get('/create_crypto_payment', create_crypto_payment_handler)
 app.router.add_post('/webhook/nowpayments', nowpayments_webhook)
 app.router.add_post('/webhook/resend', resend_webhook_handler)
+# Agent incoming webhooks (Shopify, GitHub, Stripe, Zapier, etc.)
+app.router.add_post('/api/agent-webhook/{agent_id}/{token}', agent_webhook_handler)
+app.router.add_get('/api/agent-webhook-token/{agent_id}', api_agent_webhook_token_handler)
 # Gmail OAuth2
 app.router.add_get('/oauth/gmail', gmail_oauth_redirect)
 app.router.add_get('/oauth/gmail/callback', gmail_oauth_callback)

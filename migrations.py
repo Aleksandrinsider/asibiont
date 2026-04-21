@@ -571,6 +571,20 @@ def _migrate_marketplace(session, inspector):
             except Exception as e:
                 session.rollback()
                 logger.debug(f"[MIGRATION] gender add skipped: {e}")
+        if 'webhook_token' not in cols:
+            try:
+                session.execute(text("ALTER TABLE user_agents ADD COLUMN webhook_token VARCHAR(64)"))
+                session.commit()
+                # Уникальный индекс
+                try:
+                    session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_user_agents_webhook_token ON user_agents (webhook_token) WHERE webhook_token IS NOT NULL"))
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                logger.info("[MIGRATION] Added user_agents.webhook_token")
+            except Exception as e:
+                session.rollback()
+                logger.debug(f"[MIGRATION] webhook_token add skipped: {e}")
 
 
 def _migrate_activity_log_updated_at_index(session, inspector):

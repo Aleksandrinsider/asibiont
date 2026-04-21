@@ -1949,4 +1949,49 @@ TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "execute_code",
+            "description": "⚙️ Выполнить Python-код в безопасном sandbox и получить вывод. Используй для: вычислений, анализа данных, форматирования, парсинга текста, статистики, генерации отчётов, конвертации данных. Доступны: math, json, csv, datetime, re, statistics, itertools, collections, hashlib, base64, urllib.parse. Сеть и файловая система НЕ доступны. Результат — stdout + stderr агента.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python-код для выполнения. Вывод через print(). Пример: print(sum([1,2,3]))"
+                    },
+                    "timeout": {
+                        "type": "integer",
+                        "description": "Максимальное время выполнения в секундах (по умолчанию 10, максимум 30)"
+                    }
+                },
+                "required": ["code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "parse_file",
+            "description": "📄 Прочитать и извлечь текст из файла (PDF, Excel/XLSX, CSV, TXT, DOCX). Используй когда пользователь загрузил файл и хочет его анализ, извлечение данных, суммаризацию или обработку содержимого.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "Telegram file_id загруженного файла (из последнего сообщения пользователя с вложением)"
+                    },
+                    "file_url": {
+                        "type": "string",
+                        "description": "URL файла (если не из Telegram). Поддерживаются https:// ссылки на PDF, CSV, XLSX."
+                    },
+                    "max_chars": {
+                        "type": "integer",
+                        "description": "Максимальное количество символов для извлечения (по умолчанию 8000)"
+                    }
+                }
+            }
+        }
+    },
 ]

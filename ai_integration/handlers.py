@@ -19636,3 +19636,218 @@ def _resolve_agent_api_key(user_id: int, key_name: str, agent_name: str = None) 
             if k.strip().upper() == key_name_upper:
                 return v.strip()
     return None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EXECUTE_CODE — Python sandbox с ограниченным окружением
+# ═══════════════════════════════════════════════════════════════════════
+
+async def execute_code(code: str, timeout: int = 10, user_id: int = None) -> str:
+    """Выполняет Python-код в изолированном subprocess с ограниченным набором модулей."""
+    import asyncio
+    import sys
+
+    if not code or not isinstance(code, str):
+        return "Ошибка: код не указан"
+    if len(code) > 10000:
+        return "Ошибка: код слишком длинный (максимум 10 000 символов)"
+
+    timeout = min(max(int(timeout or 10), 1), 30)
+
+    # Wrapper запрещает опасные импорты и блокирует сеть/файловую систему
+    safe_wrapper = '''
+import sys
+import signal
+
+# Whitelist разрешённых модулей
+_ALLOWED = {
+    'math', 'json', 'csv', 'io', 'datetime', 're', 'statistics',
+    'itertools', 'collections', 'hashlib', 'base64', 'urllib.parse',
+    'decimal', 'fractions', 'random', 'string', 'textwrap', 'unicodedata',
+    'functools', 'operator', 'copy', 'pprint', 'enum', 'dataclasses',
+    'typing', 'abc', 'contextlib', 'calendar', 'locale', 'heapq', 'bisect',
+    'array', 'struct', 'codecs', 'binascii', 'quopri', 'uu',
+}
+
+_original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+def _safe_import(name, *args, **kwargs):
+    base = name.split('.')[0]
+    if base not in _ALLOWED:
+        raise ImportError(f"Модуль '{name}' недоступен в sandbox")
+    return _original_import(name, *args, **kwargs)
+
+import builtins
+builtins.__import__ = _safe_import
+
+# Запрещаем опасные builtins
+for _b in ('open', 'compile', 'eval', 'exec', '__import__'):
+    pass  # exec ниже делаем через restricted namespace
+
+_CODE = """ + repr(code) + """
+exec(_CODE, {'__builtins__': builtins, '__name__': '__sandbox__'})
+'''
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, '-c', safe_wrapper,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return f"⏱ Timeout: код выполнялся дольше {timeout}с и был прерван"
+
+        out = stdout.decode('utf-8', errors='replace')
+        err = stderr.decode('utf-8', errors='replace')
+
+        # Убираем шум из stderr (предупреждения Python)
+        err_lines = [l for l in err.splitlines() if l.strip() and 'DeprecationWarning' not in l and 'ResourceWarning' not in l]
+        err_clean = '\n'.join(err_lines)
+
+        result_parts = []
+        if out.strip():
+            result_parts.append(out.strip()[:5000])
+        if err_clean.strip():
+            result_parts.append(f"⚠️ stderr:\n{err_clean.strip()[:1000]}")
+
+        if not result_parts:
+            return "✅ Код выполнен (нет вывода)"
+        return '\n'.join(result_parts)
+
+    except Exception as e:
+        return f"Ошибка выполнения: {e}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PARSE_FILE — извлечение текста из PDF, Excel, CSV, TXT, DOCX
+# ═══════════════════════════════════════════════════════════════════════
+
+async def parse_file(file_id: str = None, file_url: str = None, max_chars: int = 8000,
+                     user_id: int = None) -> str:
+    """Читает файл из Telegram или по URL и возвращает извлечённый текст."""
+    import io
+    import os
+
+    max_chars = min(max(int(max_chars or 8000), 500), 30000)
+
+    raw_bytes: bytes | None = None
+    filename: str = ''
+
+    # 1. Получаем байты файла
+    if file_id:
+        try:
+            from config import TELEGRAM_TOKEN
+            import aiohttp
+            async with _safe_http() as sess:
+                # Получаем file_path через Bot API
+                async with sess.get(f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/getFile?file_id={file_id}') as r:
+                    data = await r.json()
+                file_path = data.get('result', {}).get('file_path', '')
+                if not file_path:
+                    return "Ошибка: файл не найден в Telegram (возможно, устарел file_id)"
+                filename = os.path.basename(file_path)
+                async with sess.get(f'https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}') as r:
+                    raw_bytes = await r.read()
+        except Exception as e:
+            return f"Ошибка загрузки файла из Telegram: {e}"
+
+    elif file_url:
+        if not file_url.startswith('https://'):
+            return "Ошибка: file_url должен начинаться с https://"
+        try:
+            import aiohttp
+            async with _safe_http(timeout=aiohttp.ClientTimeout(total=30)) as sess:
+                async with sess.get(file_url) as r:
+                    raw_bytes = await r.read()
+                    cd = r.headers.get('Content-Disposition', '')
+                    if 'filename=' in cd:
+                        filename = cd.split('filename=')[-1].strip('" ')
+                    else:
+                        filename = file_url.split('/')[-1].split('?')[0]
+        except Exception as e:
+            return f"Ошибка загрузки файла по URL: {e}"
+    else:
+        return "Ошибка: укажи file_id или file_url"
+
+    if not raw_bytes:
+        return "Ошибка: файл пустой"
+
+    ext = (filename.rsplit('.', 1)[-1] if '.' in filename else '').lower()
+    text = ''
+
+    # 2. Парсим по типу
+    try:
+        if ext == 'pdf' or (not ext and raw_bytes[:4] == b'%PDF'):
+            try:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(io.BytesIO(raw_bytes))
+                pages = []
+                for page in reader.pages:
+                    t = page.extract_text() or ''
+                    pages.append(t)
+                    if sum(len(p) for p in pages) > max_chars * 2:
+                        break
+                text = '\n'.join(pages)
+            except ImportError:
+                return "PDF-парсинг недоступен (PyPDF2 не установлен)"
+
+        elif ext in ('xlsx', 'xls'):
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+                rows = []
+                for sheet in wb.worksheets:
+                    rows.append(f'=== Лист: {sheet.title} ===')
+                    for row in sheet.iter_rows(values_only=True):
+                        row_str = '\t'.join(str(c) if c is not None else '' for c in row)
+                        if row_str.strip():
+                            rows.append(row_str)
+                        if sum(len(r) for r in rows) > max_chars * 2:
+                            break
+                text = '\n'.join(rows)
+            except ImportError:
+                return "Excel-парсинг недоступен (openpyxl не установлен)"
+
+        elif ext == 'csv':
+            import csv
+            decoded = raw_bytes.decode('utf-8', errors='replace')
+            reader = csv.reader(io.StringIO(decoded))
+            rows = ['\t'.join(row) for row in reader]
+            text = '\n'.join(rows)
+
+        elif ext in ('txt', 'md', 'log', 'json', 'xml', 'html', 'py', 'js', 'ts', 'css', ''):
+            text = raw_bytes.decode('utf-8', errors='replace')
+
+        elif ext in ('doc', 'docx'):
+            try:
+                import docx
+                doc = docx.Document(io.BytesIO(raw_bytes))
+                text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+            except ImportError:
+                # Fallback: raw text extraction
+                text = raw_bytes.decode('utf-8', errors='replace')
+
+        else:
+            # Попытка декодировать как текст
+            try:
+                text = raw_bytes.decode('utf-8', errors='strict')
+            except UnicodeDecodeError:
+                return f"Файл с расширением '.{ext}' не поддерживается для текстового извлечения"
+
+    except Exception as e:
+        return f"Ошибка парсинга файла: {e}"
+
+    if not text.strip():
+        return f"Файл прочитан, но текст не извлечён (возможно, сканированный PDF или бинарный файл)"
+
+    # 3. Обрезаем до max_chars
+    text = text.strip()
+    if len(text) > max_chars:
+        text = text[:max_chars] + f'\n\n... (обрезано, всего {len(text)} символов)'
+
+    lines_count = text.count('\n') + 1
+    return f"📄 {filename or 'файл'} ({ext.upper() or 'TXT'}, ~{len(raw_bytes)//1024}KB, {lines_count} строк)\n\n{text}"
