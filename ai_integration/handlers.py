@@ -122,14 +122,18 @@ def _get_email_tg_link(user) -> str:
     return f't.me/{tg}' if tg else ''
 
 
-def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '') -> str:
+def _build_email_html(body_html: str, unsub_email: str = 'outreach@asibiont.com', sender_name: str = '', unsub_url: str = '') -> str:
     """Общий HTML-шаблон для email с unsubscribe footer.
 
     Чистый текстовый стиль — без баннеров, кнопок, логотипов.
     Как личное письмо.
     """
-    unsub_line_ru = f'Если вы не хотите получать подобные письма, просто ответьте "отписаться" на это сообщение или напишите на {unsub_email}'
-    unsub_line_en = f'If you don\'t want to receive such emails, simply reply "unsubscribe" to this message or write to {unsub_email}'
+    if unsub_url:
+        unsub_line_ru = f'Если вы не хотите получать подобные письма — <a href="{unsub_url}" style="color:#9CA3AF;">отписаться</a> или ответьте «отписаться» на это письмо.'
+        unsub_line_en = f'To stop receiving these emails — <a href="{unsub_url}" style="color:#9CA3AF;">unsubscribe</a> or reply "unsubscribe".'
+    else:
+        unsub_line_ru = f'Если вы не хотите получать подобные письма, просто ответьте "отписаться" на это сообщение или напишите на {unsub_email}'
+        unsub_line_en = f'If you don\'t want to receive such emails, simply reply "unsubscribe" to this message or write to {unsub_email}'
     sender_sig = f'— {sender_name}' if sender_name else ''
 
     sig_block = f'<p style="margin-top: 20px; color: #374151;">{sender_sig}</p>' if sender_sig else ''
@@ -1173,7 +1177,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 )
             except Exception as _te:
                 logger.debug(f"[SAVE_NOTE] EN translation task skipped: {_te}")
-            return f"Статья опубликована в блог ASI Biont: «{_note_title}» — прямая ссылка: https://asibiont.com/blog/{note.slug} (используй эту ссылку в Telegram-посте, НЕ https://asibiont.com/blog/)"
+            return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.slug})"
         # === Векторная память (best-effort, не блокирует event loop) ===
         try:
             from ai_integration.vector_memory import store_memory_background as _vmem_sn
@@ -13369,8 +13373,15 @@ async def send_outreach_email(
 
         # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
         import aiohttp as _aiohttp
-        from config import WEB_APP_URL
-        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
+        from config import WEB_APP_URL, generate_unsubscribe_token
+        _unsub_token = generate_unsubscribe_token(_rcpt, user.id)
+        import urllib.parse as _up
+        _unsub_url = (
+            f"{WEB_APP_URL}/unsubscribe"
+            f"?token={_unsub_token}"
+            f"&email={_up.quote(_rcpt)}"
+            f"&uid={user.id}"
+        )
         resend_id = None
 
         # Подпись отправителя в теле (если ИИ не добавил сам)
@@ -14776,8 +14787,15 @@ async def send_follow_up_email(
         sender_name = campaign.sender_name or ''
         sender_addr = campaign.sender_email or ''
         to_clean = outreach.recipient_email.strip().lower()
-        from config import WEB_APP_URL
-        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
+        from config import WEB_APP_URL, generate_unsubscribe_token
+        _unsub_token_fu = generate_unsubscribe_token(to_clean, user.id)
+        import urllib.parse as _up_fu
+        _unsub_url = (
+            f"{WEB_APP_URL}/unsubscribe"
+            f"?token={_unsub_token_fu}"
+            f"&email={_up_fu.quote(to_clean)}"
+            f"&uid={user.id}"
+        )
 
         # Подпись отправителя (если ИИ не добавил сам)
         _sig_name_fu = sender_name.strip()

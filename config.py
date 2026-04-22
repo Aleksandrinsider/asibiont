@@ -197,6 +197,25 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 # ═══════════════════════════════════════════════════════
+# Unsubscribe token (HMAC-signed, email+user_id)
+# ═══════════════════════════════════════════════════════
+import hmac as _cfg_hmac
+
+def generate_unsubscribe_token(email: str, user_id: int) -> str:
+    """Возвращает HMAC-подписанный токен для ссылки отписки.
+
+    Формат: <hex-digest> (32 байта SHA-256).
+    URL: /unsubscribe?token=TOKEN&email=EMAIL&uid=USER_ID
+    """
+    msg = f"{email}:{user_id}".encode("utf-8")
+    return _cfg_hmac.new(SESSION_SECRET.encode("utf-8"), msg, "sha256").hexdigest()
+
+def verify_unsubscribe_token(token: str, email: str, user_id: int) -> bool:
+    """Проверяет HMAC-токен отписки без timing-attack уязвимости."""
+    expected = generate_unsubscribe_token(email, user_id)
+    return _cfg_hmac.compare_digest(expected, token)
+
+# ═══════════════════════════════════════════════════════
 # Утилиты
 # ═══════════════════════════════════════════════════════
 def normalize_name(name: str) -> str:

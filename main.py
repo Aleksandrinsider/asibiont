@@ -882,13 +882,55 @@ async def smtp_check_handler(request):
     from config import SMTP_HOST, SMTP_USER, SMTP_FROM, SMTP_PASSWORD, RESEND_API_KEY
     return web.json_response({
         'resend_configured': bool(RESEND_API_KEY),
-        'resend_key_prefix': RESEND_API_KEY[:8] + '...' if RESEND_API_KEY else None,
         'smtp_host': SMTP_HOST,
         'smtp_user': SMTP_USER,
         'smtp_from': SMTP_FROM,
         'smtp_password_set': bool(SMTP_PASSWORD),
         'note': 'Railway blocks SMTP ports, use RESEND_API_KEY for email delivery'
     })
+
+
+async def unsubscribe_handler(request):
+    """GET /unsubscribe?token=TOKEN&email=EMAIL&uid=USER_ID
+
+    HMAC-защищённая ссылка отписки — пользователь нажимает из письма,
+    мы ставим статус unsubscribed в EmailContact и показываем страницу.
+    """
+    from config import verify_unsubscribe_token
+    email = (request.query.get('email') or '').strip().lower()
+    token = (request.query.get('token') or '').strip()
+    uid_raw = request.query.get('uid') or ''
+    try:
+        uid = int(uid_raw)
+    except (ValueError, TypeError):
+        return web.Response(text='Недействительная ссылка отписки.', status=400, content_type='text/plain')
+    if not email or not token:
+        return web.Response(text='Недействительная ссылка отписки.', status=400, content_type='text/plain')
+    if not verify_unsubscribe_token(token, email, uid):
+        return web.Response(text='Недействительная или устаревшая ссылка.', status=403, content_type='text/plain')
+    # Mark as unsubscribed in DB
+    try:
+        with Session() as _db:
+            from models import EmailContact
+            ec = _db.query(EmailContact).filter_by(user_id=uid, email=email).first()
+            if ec:
+                ec.status = 'unsubscribed'
+            else:
+                ec = EmailContact(user_id=uid, email=email, status='unsubscribed')
+                _db.add(ec)
+            _db.commit()
+    except Exception as _e_unsub:
+        logger.warning('unsubscribe_handler DB error: %s', _e_unsub)
+    html = (
+        '<html><head><meta charset="utf-8"><title>Отписка</title></head>'
+        '<body style="font-family:sans-serif;max-width:480px;margin:60px auto;text-align:center;">'
+        '<h2>Вы отписаны</h2>'
+        '<p>Адрес <b>{email}</b> больше не будет получать письма от этого отправителя.</p>'
+        '<p style="font-size:12px;color:#9CA3AF;">Если письма продолжают приходить — напишите на '
+        '<a href="mailto:support@asibiont.com">support@asibiont.com</a></p>'
+        '</body></html>'
+    ).format(email=html_module.escape(email))
+    return web.Response(text=html, content_type='text/html')
 
 
 # ═══ IndexNow: мгновенное уведомление поисковиков ═══
@@ -13036,6 +13078,7 @@ app.router.add_get('/api/autopilot-status', api_autopilot_status_handler)
 
 # Routes
 app.router.add_get('/health', health_handler)
+app.router.add_get('/unsubscribe', unsubscribe_handler)
 app.router.add_get('/api/smtp-check', smtp_check_handler)
 app.router.add_get('/', login_handler)
 async def _redirect_admin_index(r): return web.HTTPFound('/dashboard')
