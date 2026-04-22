@@ -5019,21 +5019,6 @@ class AnchorEngine:
 
     async def _process_user_safe(self, user_id: int, lock: asyncio.Lock):
         """Обёртка с lock для безопасной параллельной обработки"""
-        _started = datetime.now(timezone.utc)
-        try:
-            from ai_integration.runtime_metrics import record_counter as _m_count, record_timing as _m_timing
-        except Exception:
-            def _m_count(*a, **kw):
-                pass
-            def _m_timing(*a, **kw):
-                pass
-
-        _metric_tags = {
-            'component': 'anchor',
-            'flow': 'process_user_safe',
-        }
-        _m_count('autopilot.execution.started', tags=_metric_tags)
-
         # Circuit breaker: если пользователь таймаутился 3+ раз подряд, пропускаем на 30мин
         import time as _time_cb
         if not hasattr(self, '_timeout_counts'):
@@ -5042,7 +5027,6 @@ class AnchorEngine:
         _backoff_until = self._timeout_backoff_until.get(user_id, 0)
         if _time_cb.monotonic() < _backoff_until:
             logger.info(f"[ANCHOR] User {user_id}: ⏸ circuit breaker active, skipping ({self._timeout_counts.get(user_id, 0)} consecutive timeouts)")
-            _m_count('autopilot.execution.skipped', tags={**_metric_tags, 'reason': 'circuit_breaker'})
             return
 
         async with lock:
@@ -5052,12 +5036,9 @@ class AnchorEngine:
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
                 self._timeout_backoff_until.pop(user_id, None)
-                _m_count('autopilot.execution.success', tags=_metric_tags)
-                _m_timing('autopilot.execution.latency_sec', (datetime.now(timezone.utc) - _started).total_seconds(), tags=_metric_tags)
             except asyncio.TimeoutError:
                 _cnt = self._timeout_counts.get(user_id, 0) + 1
                 self._timeout_counts[user_id] = _cnt
-                _m_count('autopilot.execution.error', tags={**_metric_tags, 'reason': 'timeout'})
                 if _cnt >= 3:
                     # Backoff: 30 минут после 3+ таймаутов
                     self._timeout_backoff_until[user_id] = _time_cb.monotonic() + 1800
@@ -5075,7 +5056,6 @@ class AnchorEngine:
                 except Exception:
                     pass
             except Exception as e:
-                _m_count('autopilot.execution.error', tags={**_metric_tags, 'reason': type(e).__name__.lower()})
                 logger.error(f"[ANCHOR] Error processing user {user_id}: {e}")
 
     async def _process_user(self, user_id: int):

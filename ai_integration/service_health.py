@@ -78,24 +78,6 @@ _RECOVERY_HINTS = {
 }
 
 
-def _humanize_service_name(service: str) -> str:
-    s = (service or 'service').strip().replace('_', ' ').replace('-', ' ')
-    if not s:
-        return 'Service'
-    return ' '.join(p.capitalize() for p in s.split())
-
-
-def _generic_recovery_hint(service: str, code: Optional[int] = None) -> str:
-    if code == 429:
-        return f"{_humanize_service_name(service)} временно ограничил запросы (rate limit). Обычно помогает короткая пауза и повтор."
-    if code and int(code) >= 500:
-        return f"{_humanize_service_name(service)} вернул серверную ошибку. Рекомендуется повторить позже или временно использовать альтернативную интеграцию."
-    return (
-        f"Интеграция {_humanize_service_name(service)} временно недоступна. "
-        "Проверь ключи API, сетевой доступ и лимиты запросов."
-    )
-
-
 def record_error(
     service: str,
     message: str,
@@ -113,13 +95,6 @@ def record_error(
         blocked_until: Unix-timestamp до которого сервис заблокирован
     """
     prev = _registry.get(service, {})
-
-    # Авто-регистрация неизвестных интеграций (масштабируется на 60+ сервисов без хардкода)
-    if service not in _SERVICE_LABELS:
-        _SERVICE_LABELS[service] = _humanize_service_name(service)
-    if service not in _RECOVERY_HINTS:
-        _RECOVERY_HINTS[service] = _generic_recovery_hint(service, code)
-
     _registry[service] = {
         'status': 'error',
         'code': code,
@@ -180,8 +155,8 @@ def format_for_agent(user_id: int = None) -> str:
             # Backoff истёк — больше не блокируем
             continue
 
-        label = _SERVICE_LABELS.get(svc, _humanize_service_name(svc))
-        hint = _RECOVERY_HINTS.get(svc, _generic_recovery_hint(svc, info.get('code')))
+        label = _SERVICE_LABELS.get(svc, svc)
+        hint = _RECOVERY_HINTS.get(svc, '')
         code_str = f" (код {info['code']})" if info.get('code') else ''
         msg = info.get('message', 'неизвестная ошибка')
 
@@ -222,7 +197,7 @@ def get_all_services_report(user_id: int = None) -> dict:
         if bu and now >= bu:
             status = 'ok'
 
-        label = _SERVICE_LABELS.get(svc, _humanize_service_name(svc))
+        label = _SERVICE_LABELS.get(svc, svc)
         entry = {
             'label': label,
             'status': status,
@@ -231,7 +206,7 @@ def get_all_services_report(user_id: int = None) -> dict:
         if status != 'ok':
             entry['message'] = info.get('message', '')
             entry['code'] = info.get('code')
-            entry['hint'] = _RECOVERY_HINTS.get(svc, _generic_recovery_hint(svc, info.get('code')))
+            entry['hint'] = _RECOVERY_HINTS.get(svc, '')
             if bu and now < bu:
                 entry['blocked_for_min'] = max(1, int((bu - now) / 60))
             entry['error_count'] = info.get('error_count', 1)
@@ -243,19 +218,10 @@ def get_all_services_report(user_id: int = None) -> dict:
 
     has_issues = any(s.get('status') != 'ok' for s in services.values())
 
-    # Универсальный runtime snapshot (агенты/цели/интеграции без фиксированного списка)
-    runtime_metrics = None
-    try:
-        from .runtime_metrics import get_runtime_metrics_snapshot
-        runtime_metrics = get_runtime_metrics_snapshot(top_n=80)
-    except Exception:
-        runtime_metrics = None
-
     return {
         'overall': 'degraded' if has_issues else 'ok',
         'services': services,
         'email_quota': email_quota,
-        'runtime_metrics': runtime_metrics,
         'summary': format_for_agent() or 'Все сервисы работают нормально ✅',
     }
 
