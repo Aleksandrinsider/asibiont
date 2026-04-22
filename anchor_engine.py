@@ -8525,13 +8525,14 @@ class AnchorEngine:
                         # Шаг 2: универсальный шаблон (LLM тоже недоступен)
                         import random as _rnd_fb
                         _fb_choice = _rnd_fb.choice(_fb_strategies_ref)
-                        # Структурируем как живое поручение: передвигаем название и вставляем ЗАЧЕМ
-                        # Шаблон: "{name}, {действие}" → "{name}, следующий шаг по цели «{goal}» — {действие}"
+                        # Структурируем как живое поручение без канцеляризмов
                         _fb_name_prefix = f'{_chosen_name},'
                         if _g_label and _fb_choice.startswith(_fb_name_prefix):
                             _fb_body = _fb_choice[len(_fb_name_prefix):].strip()
-                            # Сохраняем целевой контекст внутри шаблона — делает текст понятнее
-                            _coord_text = f'{_chosen_name}, следующий шаг по цели «{_g_label[:55].rstrip(".")}» — {_fb_body}'
+                            _coord_text = (
+                                f'{_chosen_name}, давай сменим подход: {_fb_body}. '
+                                f'Это поможет продвинуть цель «{_g_label[:55].rstrip(".")}».'
+                            )
                         else:
                             _coord_text = _fb_choice
                         # Если есть свежий результат агента — дополняем контекстом вместо абстрактного шаблона
@@ -15883,11 +15884,11 @@ class AnchorEngine:
                     
                     # Fallback: если координатор пропустил task_brief — берём первое предложение task
                     if not _task_brief_raw or len(_task_brief_raw) < 10:
-                        import re as _re_fb_brief
-                        # Берём первое предложение из _task_clean (до точки/восклицательного/вопроса)
-                        _first_sent_match = _re_fb_brief.match(r'^([^.!?]+[.!?])', _task_clean)
-                        if _first_sent_match:
-                            _task_brief_raw = _first_sent_match.group(1).strip()
+                        from ai_integration.utils import _rfind_sentence_end as _find_sentence_end_fb
+                        # Берём первое предложение из _task_clean, но игнорируем точки внутри доменов/email
+                        _first_sent_end = _find_sentence_end_fb(_task_clean)
+                        if _first_sent_end >= 0:
+                            _task_brief_raw = _task_clean[:_first_sent_end + 1].strip()
                         else:
                             # Или до 120 символов по слову
                             _task_brief_raw = _task_clean[:120].rsplit(' ', 1)[0].rstrip('.,;:') if len(_task_clean) > 120 else _task_clean
@@ -15933,7 +15934,7 @@ class AnchorEngine:
                             if _eff_goal_title and len(_eff_goal_title.strip()) > 5 else ''
                         )
                         _asi_assign_text = (
-                            f'{_ag_name}, сообщи пользователю о статусе{_smu_goal_ref}. '
+                            f'{_ag_name}, напиши пользователю живым языком о текущем статусе{_smu_goal_ref}. '
                             f'{_task_brief_lower[0].upper() + _task_brief_lower[1:] if _task_brief_lower else ""}.'
                         )
                     else:
@@ -15953,14 +15954,21 @@ class AnchorEngine:
 
                         if _eff_goal_title and len(_eff_goal_title.strip()) > 5:
                             _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
-                            # Include reason if available — user wants to see WHY, not just WHAT
+                            # Разговорная формулировка поручения: без канцелярского "По цели —"
                             if _step_reason_show and len(_step_reason_show.strip()) > 15:
                                 _reason_clean = _step_reason_show.strip().rstrip('.')
-                                _asi_assign_text = f'{_ag_name}, {_reason_clean}. По цели «{_gt}» — {_task_brief_lower}.'
+                                _asi_assign_text = (
+                                    f'{_ag_name}, {_reason_clean}. '
+                                    f'Давай так: {_task_brief_lower}. '
+                                    f'Это продвинет цель «{_gt}».'
+                                )
                             else:
-                                _asi_assign_text = f'{_ag_name}, по цели «{_gt}» — {_task_brief_lower}.'
+                                _asi_assign_text = (
+                                    f'{_ag_name}, давай так: {_task_brief_lower}. '
+                                    f'Это продвинет цель «{_gt}».'
+                                )
                         else:
-                            _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
+                            _asi_assign_text = f'{_ag_name}, давай так: {_task_brief_lower}.'
                     # УДАЛЕНА: вся логика инфинитив→императив трансформации (L15523-15660)
                     # Теперь LLM генерирует task_brief уже в правильной форме через self-check в промпте.
                 except Exception as _aac_err:
