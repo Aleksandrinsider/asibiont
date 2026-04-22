@@ -13514,7 +13514,7 @@ async def send_outreach_email(
                     )
                     # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
                     _body_with_footer = _body_signed + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
-                    resp = await http.post(
+                    async with http.post(
                         'https://api.resend.com/emails',
                         headers={
                             'Authorization': f'Bearer {RESEND_API_KEY}',
@@ -13529,8 +13529,8 @@ async def send_outreach_email(
                             'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
                         }.items() if v is not None},
                         timeout=_aiohttp.ClientTimeout(total=15),
-                    )
-                    resp_data = await resp.json()
+                    ) as resp:
+                        resp_data = await resp.json()
                     if resp.status in (200, 201):
                         resend_id = resp_data.get('id')
                         logger.info(f"[EMAIL_OUTREACH] Sent to {redact_email(recipient_email)}: {resend_id}")
@@ -14055,10 +14055,10 @@ async def reply_to_outreach_email(
                 _gm_r_json['reply_to'] = [_rt_gm_r]
             try:
                 async with _safe_http() as _hgr:
-                    _rgr = await _hgr.post('https://api.resend.com/emails',
+                    async with _hgr.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_rk_gm_r}', 'Content-Type': 'application/json'},
-                        json=_gm_r_json, timeout=_aiohttp.ClientTimeout(total=15))
-                    _dgr = await _rgr.json()
+                        json=_gm_r_json, timeout=_aiohttp.ClientTimeout(total=15)) as _rgr:
+                        _dgr = await _rgr.json()
                     if _rgr.status not in (200, 201):
                         _send_error = _dgr.get('message', str(_dgr))
                     else:
@@ -14109,15 +14109,15 @@ async def reply_to_outreach_email(
             _uf = _matched.get('email_user') or sender_addr
             try:
                 async with _safe_http() as http:
-                    resp = await http.post(
+                    async with http.post(
                         'https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk}', 'Content-Type': 'application/json'},
                         json={'from': f"{sender_name} <{_uf}>", 'to': [to_clean],
                               'subject': subject, 'text': reply_body,
                               'html': _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)},
                         timeout=_aiohttp.ClientTimeout(total=15),
-                    )
-                    rd = await resp.json()
+                    ) as resp:
+                        rd = await resp.json()
                     if resp.status not in (200, 201):
                         _send_error = rd.get('message', str(rd))
                     else:
@@ -14140,13 +14140,13 @@ async def reply_to_outreach_email(
                         logger.debug("suppressed: %s", _e)
                     if sender_addr and '@' in sender_addr:
                         _fb_r_json['reply_to'] = [sender_addr]
-                    resp = await http.post(
+                    async with http.post(
                         'https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
                         json=_fb_r_json,
                         timeout=_aiohttp.ClientTimeout(total=15),
-                    )
-                    resp_data = await resp.json()
+                    ) as resp:
+                        resp_data = await resp.json()
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
                         prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
@@ -14846,10 +14846,10 @@ async def send_follow_up_email(
                 _gm_f_json['reply_to'] = [_rt_gm_f]
             try:
                 async with _safe_http() as _hgf:
-                    _rgf = await _hgf.post('https://api.resend.com/emails',
+                    async with _hgf.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_rk_gm_f}', 'Content-Type': 'application/json'},
-                        json=_gm_f_json, timeout=_aiohttp.ClientTimeout(total=15))
-                    _dgf = await _rgf.json()
+                        json=_gm_f_json, timeout=_aiohttp.ClientTimeout(total=15)) as _rgf:
+                        _dgf = await _rgf.json()
                     if _rgf.status not in (200, 201):
                         _send_error = _dgf.get('message', str(_dgf))
                     else:
@@ -14893,14 +14893,14 @@ async def send_follow_up_email(
             _uf2 = _matched.get('email_user') or sender_addr
             try:
                 async with _safe_http() as http2:
-                    resp2 = await http2.post('https://api.resend.com/emails',
+                    async with http2.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_urk2}', 'Content-Type': 'application/json'},
                         json={'from': f"{sender_name} <{_uf2}>", 'to': [to_clean], 'subject': subject,
                               'text': _body_signed_fu,
                               'html': _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name),
                               'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
-                        timeout=_aiohttp.ClientTimeout(total=15))
-                    rd2 = await resp2.json()
+                        timeout=_aiohttp.ClientTimeout(total=15)) as resp2:
+                        rd2 = await resp2.json()
                     if resp2.status not in (200, 201):
                         _send_error = rd2.get('message', str(rd2))
             except Exception as _re2:
@@ -14922,11 +14922,11 @@ async def send_follow_up_email(
                         logger.debug("suppressed: %s", _e)
                     if sender_addr and '@' in sender_addr:
                         _fbu_json['reply_to'] = [sender_addr]
-                    resp = await http.post('https://api.resend.com/emails',
+                    async with http.post('https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
                         json=_fbu_json,
-                        timeout=_aiohttp.ClientTimeout(total=15))
-                    resp_data = await resp.json()
+                        timeout=_aiohttp.ClientTimeout(total=15)) as resp:
+                        resp_data = await resp.json()
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
                         prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
@@ -15271,13 +15271,13 @@ async def _send_via_gmail_oauth(
 
     async def _gmail_post(token):
         async with _safe_http() as _hh:
-            _rr = await _hh.post(
+            async with _hh.post(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
                 headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
                 json={'raw': _raw_go},
                 timeout=_ah_go.ClientTimeout(total=20),
-            )
-            return _rr.status, await _rr.json()
+            ) as _rr:
+                return _rr.status, await _rr.json()
 
     _gs, _gd = await _gmail_post(_go_access)
     if _gs in (200, 201):
@@ -15288,15 +15288,15 @@ async def _send_via_gmail_oauth(
         try:
             from config import GOOGLE_CLIENT_ID as _GCI_r, GOOGLE_CLIENT_SECRET as _GCS_r
             async with _safe_http() as _hh2:
-                _tr = await _hh2.post(
+                async with _hh2.post(
                     'https://oauth2.googleapis.com/token',
                     data={
                         'client_id': _GCI_r, 'client_secret': _GCS_r,
                         'refresh_token': _go_refresh, 'grant_type': 'refresh_token',
                     },
                     timeout=_ah_go.ClientTimeout(total=10),
-                )
-                _td = await _tr.json()
+                ) as _tr:
+                    _td = await _tr.json()
             if 'error' in _td:
                 return False, f"Gmail токен истёк, переподключи Gmail в профиле: {_td.get('error_description', _td.get('error'))}"
             _new_access = _td['access_token']
@@ -15458,7 +15458,7 @@ async def _send_via_gmail_api(
             return False
         try:
             async with _safe_http() as _hrf:
-                _r = await _hrf.post(
+                async with _hrf.post(
                     'https://oauth2.googleapis.com/token',
                     data={
                         'client_id': _GCI_gapi,
@@ -15467,8 +15467,8 @@ async def _send_via_gmail_api(
                         'grant_type': 'refresh_token',
                     },
                     timeout=_ah_gapi.ClientTimeout(total=10),
-                )
-                _rd = await _r.json()
+                ) as _r:
+                    _rd = await _r.json()
                 if 'access_token' in _rd:
                     access_token = _rd['access_token']
                     new_tok = dict(token_data)
@@ -15501,7 +15501,7 @@ async def _send_via_gmail_api(
             pass  # plain-text fallback
         raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
         async with _safe_http() as _hgm:
-            _resp = await _hgm.post(
+            async with _hgm.post(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
                 headers={
                     'Authorization': f'Bearer {access_token}',
@@ -15509,8 +15509,8 @@ async def _send_via_gmail_api(
                 },
                 json={'raw': raw},
                 timeout=_ah_gapi.ClientTimeout(total=20),
-            )
-            return _resp.status, await _resp.json()
+            ) as _resp:
+                return _resp.status, await _resp.json()
 
     try:
         status, data = await _do_send()
@@ -16425,7 +16425,7 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             return False
         try:
             async with _safe_http() as _h:
-                _r = await _h.post(
+                async with _h.post(
                     'https://oauth2.googleapis.com/token',
                     data={
                         'client_id': _GCI_r,
@@ -16434,8 +16434,8 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
                         'grant_type': 'refresh_token',
                     },
                     timeout=aiohttp.ClientTimeout(total=10),
-                )
-                _rd = await _r.json()
+                ) as _r:
+                    _rd = await _r.json()
                 if 'access_token' in _rd:
                     access_token = _rd['access_token']
                     new_tok = dict(token_data)
@@ -16455,15 +16455,15 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
     async def _fetch(tok):
         async with _safe_http() as _h:
             # Список последних писем
-            _resp = await _h.get(
+            async with _h.get(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages',
                 headers={'Authorization': f'Bearer {tok}'},
                 params={'maxResults': str(limit), 'labelIds': 'INBOX'},
                 timeout=aiohttp.ClientTimeout(total=15),
-            )
-            if _resp.status == 401:
-                return None  # need refresh
-            _data = await _resp.json()
+            ) as _resp:
+                if _resp.status == 401:
+                    return None  # need refresh
+                _data = await _resp.json()
             msgs = _data.get('messages', [])
             if not msgs:
                 return "Входящих писем нет."
@@ -16519,15 +16519,15 @@ async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, k
             # Параллельный fetch всех сообщений — вместо последовательного (экономия ~5-10с)
             async def _fetch_one_msg(msg_ref):
                 try:
-                    r = await _h.get(
+                    async with _h.get(
                         f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
                         headers={'Authorization': f'Bearer {tok}'},
                         params={'format': 'full'},
                         timeout=aiohttp.ClientTimeout(total=15),
-                    )
-                    if r.status != 200:
-                        return None
-                    return await r.json()
+                    ) as r:
+                        if r.status != 200:
+                            return None
+                        return await r.json()
                 except Exception:
                     return None
 
@@ -17007,13 +17007,13 @@ async def send_email(
                 _gmail_json['reply_to'] = [_gmail_reply_to]
             try:
                 async with _safe_http() as _gm_http:
-                    _gm_resp = await _gm_http.post(
+                    async with _gm_http.post(
                         'https://api.resend.com/emails',
                         headers={'Authorization': f'Bearer {_srv_rk}', 'Content-Type': 'application/json'},
                         json=_gmail_json,
                         timeout=_aiohttp.ClientTimeout(total=15),
-                    )
-                    _gm_data = await _gm_resp.json()
+                    ) as _gm_resp:
+                        _gm_data = await _gm_resp.json()
                     if _gm_resp.status not in (200, 201):
                         return f" Ошибка отправки (Gmail через сервер): {_gm_data.get('message', str(_gm_data))}"
             except Exception as _gm_e:
@@ -17174,7 +17174,7 @@ async def send_email(
                     if _resend_fallback_key and _resend_fallback_from:
                         try:
                             async with _safe_http() as _fb_http:
-                                _fb_resp = await _fb_http.post(
+                                async with _fb_http.post(
                                     'https://api.resend.com/emails',
                                     headers={
                                         'Authorization': f'Bearer {_resend_fallback_key}',
@@ -17187,8 +17187,8 @@ async def send_email(
                                         'text': body,
                                     },
                                     timeout=_aiohttp.ClientTimeout(total=15),
-                                )
-                                _fb_data = await _fb_resp.json()
+                                ) as _fb_resp:
+                                    _fb_data = await _fb_resp.json()
                                 if _fb_resp.status in (200, 201):
                                     resend_id = _fb_data.get('id', '')
                                     sender_email = _resend_fallback_from
@@ -17215,7 +17215,7 @@ async def send_email(
                 _user_resend_key = _chosen_integration['resend_key']
                 async with _safe_http() as http:
                     from_header = f"{sender_name} <{sender_email}>"
-                    resp = await http.post(
+                    async with http.post(
                         'https://api.resend.com/emails',
                         headers={
                             'Authorization': f'Bearer {_user_resend_key}',
@@ -17230,8 +17230,8 @@ async def send_email(
                             'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
                         },
                         timeout=_aiohttp.ClientTimeout(total=15),
-                    )
-                    resp_data = await resp.json()
+                    ) as resp:
+                        resp_data = await resp.json()
                     if resp.status not in (200, 201):
                         err = resp_data.get('message', str(resp_data))
                         return f" Ошибка Resend API: {err}"
