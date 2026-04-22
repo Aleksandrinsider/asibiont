@@ -1398,6 +1398,15 @@ class HybridAutonomousAgent:
         if any(m.startswith(p) or p in m for p in _add_task_patterns):
             return "required"
 
+        # «запомни мне ...» + временной маркер → это задача/напоминание, не правило
+        import re as _re_tc
+        _has_time = bool(_re_tc.search(
+            r'\b(завтра|послезавтра|сегодня|в\s+\d{1,2}[:h]\d{0,2}|через\s+\d|\d{1,2}:\d{2}|утром|вечером|ночью|в\s+понедельник|во\s+вторник|в\s+среду|в\s+четверг|в\s+пятницу|в\s+субботу|в\s+воскресенье)\b',
+            m
+        ))
+        if m.startswith('запомни мне ') and _has_time:
+            return "required"
+
         # ── ЗАДАЧИ: delete / complete / edit ────────────────────────────────────
         _task_action_patterns = (
             'удали задачу', 'удалить задачу', 'убери задачу', 'убери напоминани',
@@ -1458,6 +1467,9 @@ class HybridAutonomousAgent:
             'remember that ', 'remember this',
         )
         if any(p in m for p in _rule_anywhere) and not any(p in m for p in _profile_patterns):
+                # Если есть временной маркер — это задача/напоминание, а не правило
+                if _has_time:
+                    return "required"
             return "required"
 
         # Всё остальное — auto (вопросы, анализ, разговор)
