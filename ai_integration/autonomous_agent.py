@@ -39,6 +39,7 @@ from .tools import get_available_tools
 from .vector_memory import store_conversation_turn_background, build_memory_context, search_memory
 from .multi_agent import get_orchestrator
 from .self_learning import get_learner
+from .runtime_metrics import record_counter as _m_count, record_timing as _m_timing
 
 logger = logging.getLogger(__name__)
 
@@ -1148,6 +1149,21 @@ class HybridAutonomousAgent:
 
         chosen_model = model or DEEPSEEK_MODEL
 
+        telemetry_goal = kwargs.pop('telemetry_goal', 'unknown')
+        telemetry_agent = kwargs.pop('telemetry_agent', 'core')
+        telemetry_integration = kwargs.pop('telemetry_integration', 'deepseek')
+        _call_started = datetime.now(timezone.utc)
+        _call_tags = {
+            'component': 'autopilot',
+            'flow': 'call_ai',
+            'goal': telemetry_goal,
+            'agent': telemetry_agent,
+            'integration': telemetry_integration,
+            'model': chosen_model,
+            'with_tools': str(bool(use_tools)).lower(),
+        }
+        _m_count('autopilot.request.started', tags=_call_tags)
+
         data = {
             "model": chosen_model,
             "messages": messages,
@@ -1169,7 +1185,12 @@ class HybridAutonomousAgent:
         logger.info(f"[AI] Calling model={chosen_model}, tokens={data.get('max_tokens')}")
 
         async with _get_ai_semaphore():
-         _max_retries = 2 if (api_timeout and api_timeout < 40) else 2
+         _max_retries = max(1, int(os.getenv('AI_CALL_MAX_RETRIES', '2')))
+         if use_tools and (tool_choice or 'auto') == 'required':
+             _max_retries = max(_max_retries, 3)
+         _api_timeout_long = int(os.getenv('API_TIMEOUT_LONG', '90'))
+         if (api_timeout or 0) >= _api_timeout_long:
+             _max_retries = min(_max_retries, 2)
          for _attempt in range(_max_retries):
           try:
             # В тестах используем временную сессию, чтобы не оставлять shared session
@@ -1185,6 +1206,8 @@ class HybridAutonomousAgent:
                             _ct = _usage.get('completion_tokens', 0)
                             _cached = _usage.get('prompt_cache_hit_tokens', 0)
                             logger.info(f"[DEEPSEEK] call_ai prompt={_pt}(cache={_cached}) compl={_ct} model={chosen_model}")
+                            _m_count('autopilot.request.success', tags={**_call_tags, 'attempt': str(_attempt + 1)})
+                            _m_timing('autopilot.request.latency_sec', (datetime.now(timezone.utc) - _call_started).total_seconds(), tags=_call_tags)
                             if use_tools:
                                 msg = result.get('choices', [{}])[0].get('message', {})
                                 tcs = msg.get('tool_calls', [])
@@ -1196,7 +1219,9 @@ class HybridAutonomousAgent:
                             return result
                         error = await resp.text()
                         if resp.status < 500 or _attempt >= _max_retries - 1:
+                            _m_count('autopilot.request.error', tags={**_call_tags, 'reason': f'http_{resp.status}'})
                             raise Exception(f"AI call failed: {resp.status} {error[:200]}")
+                        _m_count('autopilot.request.retry', tags={**_call_tags, 'reason': f'http_{resp.status}'})
                         logger.warning(f"[AI] Server error {resp.status}, retrying ({_attempt+1}/{_max_retries})...")
                         await asyncio.sleep(2 * (_attempt + 1))
             else:
@@ -1210,6 +1235,8 @@ class HybridAutonomousAgent:
                         _ct = _usage.get('completion_tokens', 0)
                         _cached = _usage.get('prompt_cache_hit_tokens', 0)
                         logger.info(f"[DEEPSEEK] call_ai prompt={_pt}(cache={_cached}) compl={_ct} model={chosen_model}")
+                        _m_count('autopilot.request.success', tags={**_call_tags, 'attempt': str(_attempt + 1)})
+                        _m_timing('autopilot.request.latency_sec', (datetime.now(timezone.utc) - _call_started).total_seconds(), tags=_call_tags)
                         if use_tools:
                             msg = result.get('choices', [{}])[0].get('message', {})
                             tcs = msg.get('tool_calls', [])
@@ -1221,21 +1248,26 @@ class HybridAutonomousAgent:
                         return result
                     error = await resp.text()
                     if resp.status < 500 or _attempt >= _max_retries - 1:
+                        _m_count('autopilot.request.error', tags={**_call_tags, 'reason': f'http_{resp.status}'})
                         raise Exception(f"AI call failed: {resp.status} {error[:200]}")
+                    _m_count('autopilot.request.retry', tags={**_call_tags, 'reason': f'http_{resp.status}'})
                     logger.warning(f"[AI] Server error {resp.status}, retrying ({_attempt+1}/{_max_retries})...")
                     await asyncio.sleep(2 * (_attempt + 1))
           except asyncio.TimeoutError:
             if _attempt >= _max_retries - 1:
+                                _m_count('autopilot.request.error', tags={**_call_tags, 'reason': 'timeout'})
                 raise
             # Не ретраим внутренне если уже используем максимальный сконфигурированный таймаут —
             # DIRECTOR-EXEC сам повторит, а дублировать retries не нужно
-            _api_timeout_long = int(os.getenv('API_TIMEOUT_LONG', '90'))
             if (api_timeout or 0) >= _api_timeout_long:
+                                _m_count('autopilot.request.error', tags={**_call_tags, 'reason': 'timeout_long_mode'})
                 raise
+                        _m_count('autopilot.request.retry', tags={**_call_tags, 'reason': 'timeout'})
             logger.warning(f"[AI] Timeout on attempt {_attempt+1}/{_max_retries}, retrying...")
             await asyncio.sleep(3 * (_attempt + 1))
           except (aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as _conn_err:
             # Connection-level errors: reset shared session and retry
+                        _m_count('autopilot.request.retry', tags={**_call_tags, 'reason': type(_conn_err).__name__.lower()})
             logger.warning(f"[AI] Connection error on attempt {_attempt+1}/{_max_retries}: {_conn_err}")
             global _SHARED_AI_SESSION
             if _SHARED_AI_SESSION and not os.getenv('PYTEST_CURRENT_TEST'):
@@ -1246,6 +1278,7 @@ class HybridAutonomousAgent:
                     pass
                 _SHARED_AI_SESSION = None
             if _attempt >= _max_retries - 1:
+                _m_count('autopilot.request.error', tags={**_call_tags, 'reason': type(_conn_err).__name__.lower()})
                 raise
             await asyncio.sleep(2 * (_attempt + 1))
          raise Exception("AI call failed: all retries exhausted")
@@ -5672,6 +5705,13 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
         pass
     _max_attempts = max(2, len(_timeouts))
     _session_total_timeout = max(_timeouts) + 15
+    _started = datetime.now(timezone.utc)
+    _metric_tags = {
+        'component': 'autopilot',
+        'flow': 'quick_ai',
+        'caller': (_caller or 'unknown'),
+    }
+    _m_count('autopilot.request.started', tags=_metric_tags)
     for _att in range(_max_attempts):
       try:
         if os.getenv('PYTEST_CURRENT_TEST'):
@@ -5688,6 +5728,8 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
                             data = await resp.json()
                             _usage = data.get('usage', {})
                             logger.info(f"[DEEPSEEK] {_caller or 'quick_ai'}: prompt={_usage.get('prompt_tokens',0)} compl={_usage.get('completion_tokens',0)}")
+                            _m_count('autopilot.request.success', tags={**_metric_tags, 'attempt': str(_att + 1)})
+                            _m_timing('autopilot.request.latency_sec', (datetime.now(timezone.utc) - _started).total_seconds(), tags=_metric_tags)
                             return data["choices"][0]["message"]["content"].strip()
                         if resp.status >= 500 and _att < _max_attempts - 1:
                             logger.warning(f"[quick_ai] Server {resp.status}, retry {_att+1}")
@@ -5705,6 +5747,8 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
                         data = await resp.json()
                         _usage = data.get('usage', {})
                         logger.info(f"[DEEPSEEK] {_caller or 'quick_ai'}: prompt={_usage.get('prompt_tokens',0)} compl={_usage.get('completion_tokens',0)}")
+                        _m_count('autopilot.request.success', tags={**_metric_tags, 'attempt': str(_att + 1)})
+                        _m_timing('autopilot.request.latency_sec', (datetime.now(timezone.utc) - _started).total_seconds(), tags=_metric_tags)
                         return data["choices"][0]["message"]["content"].strip()
                     if resp.status >= 500 and _att < _max_attempts - 1:
                         logger.warning(f"[quick_ai] Server {resp.status}, retry {_att+1}")
@@ -5728,8 +5772,10 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
       except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
         _is_last_attempt = _att >= (_max_attempts - 1)
         _msg = f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}"
+        _m_count('autopilot.request.retry', tags={**_metric_tags, 'reason': type(e).__name__.lower()})
         if _is_last_attempt:
             logger.warning(_msg)
+            _m_count('autopilot.request.error', tags={**_metric_tags, 'reason': type(e).__name__.lower()})
         else:
             logger.info(_msg + " — retrying")
         if not os.getenv('PYTEST_CURRENT_TEST'):
@@ -5753,6 +5799,7 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
             await asyncio.sleep(2)
             continue
       except Exception as e:
+                _m_count('autopilot.request.error', tags={**_metric_tags, 'reason': type(e).__name__.lower()})
         logger.warning(f"[quick_ai] Unexpected error: {type(e).__name__}: {e}")
         break
     return ""

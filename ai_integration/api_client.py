@@ -51,6 +51,14 @@ except ImportError:
     def _rec_err(*a, **kw): pass
     def _clr_err(*a, **kw): pass
 
+try:
+    from .runtime_metrics import record_counter as _m_count, record_timing as _m_timing
+except ImportError:
+    def _m_count(*a, **kw):
+        pass
+    def _m_timing(*a, **kw):
+        pass
+
 # ============================================================================
 # КЭШИРОВАНИЕ
 # ============================================================================
@@ -1183,7 +1191,8 @@ class ExternalAPIClient:
         temperature: float = 0.5,
         max_tokens: int = 600,
         parse_json: bool = False,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
+        metric_tags: Optional[Dict[str, Any]] = None,
     ) -> Optional[str | dict]:
         """
         Отправить запрос в DeepSeek для анализа.
@@ -1201,9 +1210,17 @@ class ExternalAPIClient:
         """
         if not DEEPSEEK_API_KEY:
             return None
+
+        tags = {
+            'integration': 'deepseek',
+            'operation': 'deepseek_analyze',
+            'goal': (metric_tags or {}).get('goal', 'unknown'),
+            'agent': (metric_tags or {}).get('agent', 'unknown'),
+        }
         
         # Rate-limit
         if not await self.rate_limiter.acquire('deepseek'):
+            _m_count('integration.request.rejected', tags={**tags, 'reason': 'rate_limit'})
             return None
         
         # Адаптивный тайм-аут: больше токенов = больше времени
@@ -1212,6 +1229,8 @@ class ExternalAPIClient:
         
         req_timeout = aiohttp.ClientTimeout(total=timeout, connect=5)
         max_attempts = int(os.getenv('DEEPSEEK_RETRIES', '3'))
+        started_at = time.perf_counter()
+        _m_count('integration.request.started', tags=tags)
         
         for attempt in range(max_attempts):
             try:
@@ -1239,6 +1258,8 @@ class ExternalAPIClient:
                         data = await response.json()
                         content = data['choices'][0]['message']['content'].strip()
                         _clr_err('deepseek')
+                        _m_count('integration.request.success', tags={**tags, 'attempt': str(attempt + 1)})
+                        _m_timing('integration.request.latency_sec', time.perf_counter() - started_at, tags=tags)
                         
                         if parse_json:
                             try:
@@ -1264,19 +1285,23 @@ class ExternalAPIClient:
 
                     # 5xx часто кратковременны — даем шанс повторить
                     if response.status >= 500 and attempt < max_attempts - 1:
+                        _m_count('integration.request.retry', tags={**tags, 'reason': f'http_{response.status}'})
                         logger.warning(f"[DEEPSEEK] API {response.status} on attempt {attempt+1}/{max_attempts}, retrying")
                         await asyncio.sleep(1.5 * (attempt + 1))
                         continue
 
+                    _m_count('integration.request.error', tags={**tags, 'reason': f'http_{response.status}'})
                     _rec_err('deepseek', f'API error {response.status}', code=response.status, detail=_body_ds)
                     logger.error(f"[DEEPSEEK] API error: {response.status}")
                     return None
 
             except asyncio.TimeoutError:
                 if attempt < max_attempts - 1:
+                    _m_count('integration.request.retry', tags={**tags, 'reason': 'timeout'})
                     logger.warning(f"[DEEPSEEK] Timeout on attempt {attempt+1}/{max_attempts}, retrying")
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
+                _m_count('integration.request.error', tags={**tags, 'reason': 'timeout'})
                 _rec_err('deepseek', 'Тайм-аут запроса к AI-модели')
                 logger.warning("[DEEPSEEK] Timeout")
                 return None
@@ -1289,21 +1314,26 @@ class ExternalAPIClient:
                         pass
                 self._session = None
                 if attempt < max_attempts - 1:
+                    _m_count('integration.request.retry', tags={**tags, 'reason': 'transport'})
                     logger.warning(f"[DEEPSEEK] Transport error on attempt {attempt+1}/{max_attempts}: {e} — retrying")
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
+                _m_count('integration.request.error', tags={**tags, 'reason': 'transport'})
                 _rec_err('deepseek', f'Exception: {e}')
                 logger.error(f"[DEEPSEEK] Error: {e}")
                 return None
             except aiohttp.ClientError as e:
                 if attempt < max_attempts - 1:
+                    _m_count('integration.request.retry', tags={**tags, 'reason': 'client'})
                     logger.warning(f"[DEEPSEEK] Client error on attempt {attempt+1}/{max_attempts}: {e} — retrying")
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
+                _m_count('integration.request.error', tags={**tags, 'reason': 'client'})
                 _rec_err('deepseek', f'Exception: {e}')
                 logger.error(f"[DEEPSEEK] Error: {e}")
                 return None
             except Exception as e:
+                _m_count('integration.request.error', tags={**tags, 'reason': type(e).__name__.lower()})
                 _rec_err('deepseek', f'Exception: {e}')
                 logger.error(f"[DEEPSEEK] Error: {e}")
                 return None
