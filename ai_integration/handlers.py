@@ -1034,6 +1034,43 @@ async def search_notes(
             session.close()
 
 
+def _strip_public_emojis(text: str) -> str:
+    """Remove decorative emoji/symbols from public blog text."""
+    import re as _re_pub
+    cleaned = _re_pub.sub(
+        r'[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0001F1E0-\U0001F1FF\U0001FA70-\U0001FAFF\ufe0f\u200d]+',
+        '',
+        text or '',
+    )
+    cleaned = _re_pub.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = _re_pub.sub(r' {2,}', ' ', cleaned)
+    return cleaned.strip()
+
+
+def _extract_image_style_from_memory(user) -> str:
+    """Read user rules from memory and return preferred image style if defined."""
+    import json as _json_img, re as _re_img
+    _raw = getattr(user, 'memory', None) or ''
+    if not _raw:
+        return ''
+    try:
+        from ai_integration.memory import decrypt_data as _dec_img
+        _raw = _dec_img(_raw)
+    except Exception:
+        pass
+    if not _raw or not _raw.strip().startswith('{'):
+        return ''
+    try:
+        _mem = _json_img.loads(_raw.strip())
+        for _rule in _mem.get('rules', []):
+            if _re_img.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch', _rule, _re_img.IGNORECASE):
+                _sm = _re_img.search(r'стил[еёи]\s+([^,.\n]{3,80})', _rule, _re_img.IGNORECASE)
+                return (_sm.group(1).strip() if _sm else 'pen and ink drawing')
+    except Exception:
+        return ''
+    return ''
+
+
 async def save_note(content: str, title: str = None, user_id: int = None, session=None, source: str = 'chat') -> str:
     if not content or not content.strip():
         return "Текст заметки не может быть пустым."
@@ -1133,6 +1170,31 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             return "[INTERNAL] Заметка отклонена: список ссылок без пояснения — добавь аннотацию."
 
         _source_val = source if source in ('chat', 'blog') else 'chat'
+
+        # Для blog-заметок: убираем декоративные эмодзи и, при наличии правила, добавляем иллюстрацию
+        if _source_val == 'blog':
+            content = _strip_public_emojis(content)
+            if content:
+                _style = _extract_image_style_from_memory(user)
+                _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
+                if _style and not _has_image_marker:
+                    try:
+                        _img_prompt = f"Editorial blog illustration in {_style}: {content[:220].replace(chr(10), ' ')}"
+                        _img_result = await generate_image(
+                            prompt=_img_prompt,
+                            style=_style,
+                            user_id=user_id,
+                            session=session,
+                            close_session=False,
+                            send_to_telegram=False,
+                        )
+                        import re as _re_img_sn
+                        _m = _re_img_sn.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result or '')
+                        if _m:
+                            _u = _m.group(1)
+                            content = f"![Иллюстрация]({_u})\n\n{content}"
+                    except Exception as _e_img_sn:
+                        logger.warning(f"[SAVE_NOTE] Blog image generation failed: {_e_img_sn}")
 
         # ── Граничная проверка блог-публикации: отклоняем выдуманные рыночные данные ──
         if _source_val == 'blog':
@@ -8619,29 +8681,17 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
 
         # ── Авто-генерация картинки если image_url не указан И пользователь просил картинки в правилах ──
         if not image_url or not image_url.strip():
-            _should_auto_img = False
             try:
-                _raw_mem_img = getattr(user, 'memory', None) or ''
-                if _raw_mem_img:
-                    try:
-                        from ai_integration.memory import decrypt_data as _decrypt_img
-                        _dec_img = _decrypt_img(_raw_mem_img)
-                    except Exception:
-                        _dec_img = _raw_mem_img
-                    if _dec_img:
-                        _lo = _dec_img.lower()
-                        _should_auto_img = any(kw in _lo for kw in (
-                            'картинк', 'изображен', 'image', 'визуал', 'иллюстрац', 'фото',
-                        ))
+                _style = _extract_image_style_from_memory(user)
             except Exception:
-                pass
-            if _should_auto_img:
+                _style = ''
+            if _style:
                 try:
                     import re as _re_img
-                    _img_keywords = content[:200].replace('\n', ' ').strip()
+                    _img_keywords = content[:220].replace('\n', ' ').strip()
                     _img_result = await generate_image(
-                        prompt=f"Blog illustration, modern digital art: {_img_keywords}",
-                        style="modern",
+                        prompt=f"Editorial blog illustration in {_style}: {_img_keywords}",
+                        style=_style,
                         user_id=user_id,
                         session=session,
                         close_session=False,
@@ -8719,10 +8769,14 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             _blog_title = content.strip().split('\n')[0][:120].strip()
             if not _blog_title or len(_blog_title) < 5:
                 _blog_title = post_preview
+            _blog_note_content = content.strip()
+            if _post_image_url:
+                # Markdown image makes it visible on public blog; dashboard notes render markdown too
+                _blog_note_content = f"![Иллюстрация к посту]({_post_image_url})\n\n{_blog_note_content}"
             _blog_note = _NoteCP(
                 user_id=user.id,
                 title=_blog_title,
-                content=content.strip(),
+                content=_blog_note_content,
                 source='blog',
             )
             session.add(_blog_note)

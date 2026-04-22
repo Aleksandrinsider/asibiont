@@ -360,7 +360,10 @@
 
     function buildExcerpt(text, maxLen) {
         maxLen = maxLen || 200;
-        const plain = text.replace(/[#*`_~>[\]()!]/g, '').replace(/\s+/g, ' ').trim();
+        let plain = String(text || '');
+        plain = plain.replace(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g, ' '); // markdown images
+        plain = plain.replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' '); // legacy markers
+        plain = plain.replace(/[#*`_~>[\]()!]/g, '').replace(/\s+/g, ' ').trim();
         return plain.length > maxLen ? plain.slice(0, maxLen).trim() + '…' : plain;
     }
 

@@ -11040,11 +11040,17 @@ except Exception as e:
         }
 
         function renderNoteContent(raw) {
-            // Сначала преобразуем markdown-ссылки [text](url) в обычные URL с меткой
-            // Используем специальный маркер чтобы защитить их от escapeHtml
-            const MD_LINK_MARKER = '\u0001';  // Control character as marker
+            // Поддержка картинок из двух форматов:
+            // 1) [IMAGE:https://...]
+            // 2) Markdown image ![alt](https://...)
+            const IMG_MARKER = '[IMAGE:';
+            let processedText = String(raw || '');
+            processedText = processedText.replace(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g, (m, url) => `${IMG_MARKER}${url}]`);
+
+            // Сначала преобразуем markdown-ссылки [text](url) в маркеры, чтобы не ломать escape/linkify
+            const MD_LINK_MARKER = '\u0001';
             const mdLinksMap = [];
-            let processedText = raw.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, text, url) => {
+            processedText = processedText.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (match, text, url) => {
                 const idx = mdLinksMap.length;
                 mdLinksMap.push({ text: text.trim(), url: url.trim() });
                 return MD_LINK_MARKER + idx + MD_LINK_MARKER;
@@ -11055,10 +11061,8 @@ except Exception as e:
             let html = '';
             for (let i = 0; i < parts.length; i++) {
                 if (i % 2 === 0) {
-                    // Текстовая часть: escape HTML, затем linkify простые URL, затем восстанавливаем markdown-ссылки
                     let textPart = escapeHtml(parts[i]);
                     textPart = linkify(textPart);
-                    // Восстанавливаем markdown-ссылки из маркеров
                     textPart = textPart.replace(new RegExp(MD_LINK_MARKER + '(\\d+)' + MD_LINK_MARKER, 'g'), (m, idx) => {
                         const link = mdLinksMap[parseInt(idx)];
                         if (!link) return m;

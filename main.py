@@ -10636,7 +10636,11 @@ async def blog_post_handler(request):
                     )
                 except Exception:
                     pass
-        excerpt_src = display_content.replace('#', '').replace('*', '').replace('_', '')
+        import re as _re_ex_bp
+        excerpt_src = display_content or ''
+        excerpt_src = _re_ex_bp.sub(r'!\[[^\]]*\]\((https?://[^\)]+)\)', ' ', excerpt_src)
+        excerpt_src = _re_ex_bp.sub(r'\[IMAGE:https?://[^\]]+\]', ' ', excerpt_src)
+        excerpt_src = excerpt_src.replace('#', '').replace('*', '').replace('_', '')
         excerpt = ' '.join(excerpt_src.split())[:200]
         if len(excerpt_src.split()) * 5 > 200:
             excerpt += '…'
