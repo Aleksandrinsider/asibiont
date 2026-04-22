@@ -15901,7 +15901,7 @@ class AnchorEngine:
                     # Если task_brief уже начинается с имени агента — не дублируем.
                     import re as _re_dup_name
                     _starts_with_name = _re_dup_name.match(
-                        r'^' + _re_dup_name.escape(_ag_name.lower()) + r',\s*',
+                        r'^' + _re_dup_name.escape(_ag_name.lower()) + r'[,\s]+',
                         (_task_brief_lower or '').lower()  # case-insensitive проверка
                     )
                     if _starts_with_name:
@@ -17333,6 +17333,8 @@ class AnchorEngine:
                             speaker_name=_ag_name,
                         )
                         _cleaned_chat_m = _sanitize_proactive_text(_cleaned_chat_m, is_fem=_detect_agent_is_female(_ag_name))
+                        if _cleaned_chat_m and _cleaned_chat_m[0].islower():
+                            _cleaned_chat_m = _cleaned_chat_m[0].upper() + _cleaned_chat_m[1:]
                         _msg_type_m = 'agent_msg' if _ag_id != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,
@@ -17354,6 +17356,8 @@ class AnchorEngine:
                             speaker_name=_ag_name,
                         )
                         _cleaned_chat = _sanitize_proactive_text(_cleaned_chat, is_fem=_detect_agent_is_female(_ag_name))
+                        if _cleaned_chat and _cleaned_chat[0].islower():
+                            _cleaned_chat = _cleaned_chat[0].upper() + _cleaned_chat[1:]
                         _msg_type_c2 = 'agent_msg' if _ag_id != 0 else 'proactive'
                         session.add(Interaction(
                             user_id=user.id,

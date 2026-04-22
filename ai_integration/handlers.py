@@ -12895,13 +12895,8 @@ async def send_outreach_email(
                 return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_oe.group()}». "
                         f"Замени на реальные данные или убери. Нельзя отправлять шаблон клиенту.")
 
-        # ── GUARD: имя получателя обязательно ──
+        # ── GUARD: персонализация по имени проверяется только если имя передано явно ──
         _rname_send = (recipient_name or '').strip()
-        if not _rname_send:
-            return ("⛔ Не указано имя получателя (recipient_name). "
-                    "Нельзя отправлять холодное письмо без имени — сначала найди ФИО контакта.")
-
-        # ── GUARD: имя получателя должно быть в теле письма (персонализация) ──
         if _rname_send and body:
             _first_name_oe = _rname_send.split()[0]
             _body_lower_oe = body.lower()
