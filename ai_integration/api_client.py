@@ -628,7 +628,7 @@ class ExternalAPIClient:
             _url = f'https://www.bing.com/search?q={_q_enc}&count={_count}&setlang={_lang}'
             async with s.get(
                 _url, headers=_headers,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False, allow_redirects=True,
             ) as resp:
                 if resp.status in (429, 403):
@@ -688,7 +688,7 @@ class ExternalAPIClient:
                 'https://lite.duckduckgo.com/lite/',
                 data={'q': query, 'kl': 'ru-ru'},
                 headers=_headers,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False, allow_redirects=True,
             ) as resp:
                 if resp.status in (429, 403):
@@ -751,7 +751,7 @@ class ExternalAPIClient:
             _url = f'https://www.google.com/search?q={_q_enc}&num={min(num, 20)}&hl={region}'
             async with s.get(
                 _url, headers=_headers,
-                timeout=aiohttp.ClientTimeout(total=15),
+                timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False, allow_redirects=True,
             ) as resp:
                 if resp.status in (429, 403):
@@ -828,34 +828,43 @@ class ExternalAPIClient:
     ) -> Optional[List[dict]]:
         """Универсальный поиск: DDG API → DDG Lite → Bing → Google fallback.
         Если все движки вернули пусто, а запрос сложный (site: / длинный) — повтор с упрощённым запросом.
+        Глобальный таймаут 35 секунд — агент не ждёт вечно при сбоях всех движков.
         """
         import re as _re_ws
-        region = f"{hl}-{gl}" if gl and hl else "ru-ru"
-        _has_site_op = bool(_re_ws.search(r'\bsite:', query))
-        # site: операторы DDG не умеет (Yahoo их игнорирует) → сразу Bing/Google
-        if not _has_site_op:
-            results = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
-            if not results:
-                results = await self.duckduckgo_lite_search(query, num=num, cache_ttl=cache_ttl)
-        else:
-            results = None
-        if not results:
-            results = await self.bing_search(query, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
-        if not results:
-            results = await self.google_html_search(query, num=num, region=hl, cache_ttl=cache_ttl)
-        # ── Fallback: упростить запрос и повторить, если сложный/специфичный ──
-        if not results:
-            _is_long = len(query.split()) > 6
-            if _has_site_op or _is_long:
-                simplified = self._simplify_search_query(query)
-                if simplified and simplified.lower() != query.lower():
-                    logger.info(f"[WEB_SEARCH] Empty → retry simplified: '{simplified[:60]}'")
-                    results = await self.duckduckgo_search(simplified, num=num, region=region, cache_ttl=cache_ttl)
-                    if not results:
-                        results = await self.duckduckgo_lite_search(simplified, num=num, cache_ttl=cache_ttl)
-                    if not results:
-                        results = await self.bing_search(simplified, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
-        return results
+
+        async def _search_chain() -> Optional[List[dict]]:
+            region = f"{hl}-{gl}" if gl and hl else "ru-ru"
+            _has_site_op = bool(_re_ws.search(r'\bsite:', query))
+            # site: операторы DDG не умеет (Yahoo их игнорирует) → сразу Bing/Google
+            if not _has_site_op:
+                res = await self.duckduckgo_search(query, num=num, region=region, cache_ttl=cache_ttl)
+                if not res:
+                    res = await self.duckduckgo_lite_search(query, num=num, cache_ttl=cache_ttl)
+            else:
+                res = None
+            if not res:
+                res = await self.bing_search(query, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
+            if not res:
+                res = await self.google_html_search(query, num=num, region=hl, cache_ttl=cache_ttl)
+            # ── Fallback: упростить запрос и повторить, если сложный/специфичный ──
+            if not res:
+                _is_long = len(query.split()) > 6
+                if _has_site_op or _is_long:
+                    simplified = self._simplify_search_query(query)
+                    if simplified and simplified.lower() != query.lower():
+                        logger.info(f"[WEB_SEARCH] Empty → retry simplified: '{simplified[:60]}'")
+                        res = await self.duckduckgo_search(simplified, num=num, region=region, cache_ttl=cache_ttl)
+                        if not res:
+                            res = await self.duckduckgo_lite_search(simplified, num=num, cache_ttl=cache_ttl)
+                        if not res:
+                            res = await self.bing_search(simplified, num=num, region=f"{hl}-{gl.upper()}", cache_ttl=cache_ttl)
+            return res
+
+        try:
+            return await asyncio.wait_for(_search_chain(), timeout=35.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"[WEB_SEARCH] Global timeout (35s) — all engines slow/failing for: {query[:60]}")
+            return None
 
     async def web_multi_search(
         self,
