@@ -1467,9 +1467,9 @@ class HybridAutonomousAgent:
             'remember that ', 'remember this',
         )
         if any(p in m for p in _rule_anywhere) and not any(p in m for p in _profile_patterns):
-                # Если есть временной маркер — это задача/напоминание, а не правило
-                if _has_time:
-                    return "required"
+            # Если есть временной маркер — это задача/напоминание, а не правило
+            if _has_time:
+                return "required"
             return "required"
 
         # Всё остальное — auto (вопросы, анализ, разговор)
