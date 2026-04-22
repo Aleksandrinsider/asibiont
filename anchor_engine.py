@@ -3945,7 +3945,20 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                                  if _dec_mem.strip().startswith('{') else {})
                         _rules = _m_ur.get('rules', [])
                         if _rules:
-                            _rules_text = '\n'.join(f"  • {r}" for r in _rules)
+                            import re as _re_ur
+                            _rules_lines = []
+                            for _r in _rules:
+                                _rules_lines.append(f"  • {_r}")
+                                # Если правило про изображения/рисунки — добавить машинно-читаемую инструкцию
+                                if _re_ur.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch', _r, _re_ur.IGNORECASE):
+                                    _style_m = _re_ur.search(r'стил[еёи]\s+([^,.\n]{3,60})', _r, _re_ur.IGNORECASE)
+                                    _style_hint = _style_m.group(1).strip() if _style_m else 'pen and ink drawing'
+                                    _rules_lines.append(
+                                        f"    ⚙️ ИНТЕРПРЕТАЦИЯ: перед публикацией в Telegram/Discord/блог вызови "
+                                        f"generate_image(prompt='...', style='{_style_hint}') и передай URL в параметр image_url. "
+                                        f"НЕ заменяй изображение эмодзи — вызов инструмента обязателен!"
+                                    )
+                            _rules_text = '\n'.join(_rules_lines)
                             _user_rules_block = (
                                 "\n\n� ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (ОБЯЗАТЕЛЬНЫ к выполнению при КАЖДОМ действии):\n"
                                 + _rules_text + '\n'

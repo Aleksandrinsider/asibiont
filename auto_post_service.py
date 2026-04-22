@@ -90,7 +90,7 @@ async def _generate_text_with_ai(prompt: str) -> str:
                 raise Exception(f"AI API error: {response.status} {error_text[:200]}")
 
 
-async def _generate_image_for_post(post_text: str) -> str:
+async def _generate_image_for_post(post_text: str, style: str = "") -> str:
     """Generate an illustration for a post via Replicate Flux.
     Returns image URL or empty string on failure.
     """
@@ -98,17 +98,20 @@ async def _generate_image_for_post(post_text: str) -> str:
         return ""
 
     # Ask AI to build a concise English visual prompt from the post
+    _style_instruction = f" The image must be in '{style}' style." if style else ""
     try:
         image_prompt = await _generate_text_with_ai(
             f"""You are a visual prompt engineer. Based on this social media post, write a short vivid English image-generation prompt (max 40 words). """
-            f"""Focus on mood, scene, and visual aesthetic. No text overlays, no people's faces."""
+            f"""Focus on mood, scene, and visual aesthetic. No text overlays, no people's faces.{_style_instruction}"""
             f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the image prompt:"""
         )
         if not image_prompt or len(image_prompt) < 5:
-            image_prompt = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
+            _fallback_base = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
+            image_prompt = f"{_fallback_base}, {style}" if style else _fallback_base
     except Exception as _img_prompt_err:
         logger.debug("Image prompt generation failed, using fallback: %s", _img_prompt_err)
-        image_prompt = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
+        _fallback_base = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
+        image_prompt = f"{_fallback_base}, {style}" if style else _fallback_base
 
     try:
         model = "black-forest-labs/flux-schnell"
@@ -541,9 +544,35 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         logger.info(f"Auto-post created for user {user_id}")
 
         # === Генерация картинки для поста (отображается в дашборде и каналах) ===
+        # Извлекаем стиль изображения из правил пользователя
+        _img_style = ""
+        try:
+            import re as _re_aps
+            _raw_mem_aps = getattr(user, 'memory', None) or ''
+            if _raw_mem_aps:
+                try:
+                    from ai_integration.memory import decrypt_data as _dec_aps
+                    _raw_mem_aps = _dec_aps(_raw_mem_aps)
+                except Exception:
+                    pass
+                if _raw_mem_aps and _raw_mem_aps.strip().startswith('{'):
+                    import json as _json_aps
+                    _m_aps = _json_aps.loads(_raw_mem_aps.strip())
+                    for _rule_aps in _m_aps.get('rules', []):
+                        if _re_aps.search(r'рисун|изображен|иллюстрац|картин|drawing|image|sketch', _rule_aps, _re_aps.IGNORECASE):
+                            _sm = _re_aps.search(r'стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
+                            if _sm:
+                                _img_style = _sm.group(1).strip()
+                            else:
+                                # Правило есть но стиль не явный — сохраним всё правило как подсказку
+                                _img_style = _rule_aps[:80]
+                            break
+        except Exception as _e_aps:
+            logger.debug("[AUTO_POST] Could not extract image style from rules: %s", _e_aps)
+
         image_url = ""
         try:
-            image_url = await _generate_image_for_post(content)
+            image_url = await _generate_image_for_post(content, style=_img_style)
             if image_url:
                 post.image_url = image_url
                 session.commit()
