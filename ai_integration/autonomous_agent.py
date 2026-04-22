@@ -1446,10 +1446,18 @@ class HybridAutonomousAgent:
             return "required"
 
         # ── ПРАВИЛА ─────────────────────────────────────────────────────────────
-        _rule_patterns = (
+        # startswith — для коротких команд в начале
+        _rule_start_patterns = (
             'запомни правило', 'сохрани правило', 'правило:', 'запомни:', 'всегда ', 'никогда ',
         )
-        if any(m.startswith(p) for p in _rule_patterns):
+        if any(m.startswith(p) for p in _rule_start_patterns):
+            return "required"
+        # anywhere — «запомни» без уточнения «что я» → поведенческое правило
+        _rule_anywhere = (
+            'запомни что ', 'запомни, что ', 'запомни это', 'запомни -',
+            'remember that ', 'remember this',
+        )
+        if any(p in m for p in _rule_anywhere) and not any(p in m for p in _profile_patterns):
             return "required"
 
         # Всё остальное — auto (вопросы, анализ, разговор)
