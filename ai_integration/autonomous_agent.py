@@ -8645,6 +8645,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         w in _decrypt_keys(agent.get('user_api_keys', '') or '').lower()
         for w in ('github', 'gitlab', 'resend', 'sendgrid', 'mailgun', 'gmail_pass', 'gmail_app')
     )
+    # После первого Timeout на старте ослабляем режим, чтобы не застревать на required
+    _timeout_relaxed_mode = False
     # _OUTREACH_KW / _is_outreach_goal уже определены выше (перед Шагом 2)
     for _iter in range(_max_iters):
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
@@ -8654,7 +8656,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Это заставляет DeepSeek вызывать инструменты, а не писать текстовые описания.
         _tc_mode = "auto"
         if _use_tools_now:
-            if _is_autopilot_task and (_tool_call_count == 0 or _iter < 3):
+            if _timeout_relaxed_mode:
+                # После сетевого таймаута разрешаем auto, чтобы модель могла быстро восстановиться
+                _tc_mode = "auto"
+            elif _is_autopilot_task and (_tool_call_count == 0 or _iter < 3):
                 _tc_mode = "required"
             else:
                 _tc_mode = "auto"
@@ -8755,6 +8760,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # AND occasional text responses (summary/report). 1200 prevents mid-sentence truncation.
         # Text-only final summary iterations need full response space (1600).
         _iter_max_tokens = 1200 if _use_tools_now else 1600
+        if _timeout_relaxed_mode:
+            # Облегчаем повтор: меньше токенов => меньше риск повторного timeout
+            _iter_max_tokens = min(_iter_max_tokens, 900)
+        _api_timeout_this = API_TIMEOUT_NORMAL if _timeout_relaxed_mode else API_TIMEOUT_LONG
         try:
             _resp = await _agent_inst.call_ai(
                 _messages,
@@ -8762,16 +8771,17 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 tool_choice=_tc_mode,
                 exclude_tools=_exclude_for_agent if _use_tools_now else None,
                 max_tokens=_iter_max_tokens,
-                api_timeout=API_TIMEOUT_LONG,
+                api_timeout=_api_timeout_this,
             )
         except Exception as _ai_err:
             _err_msg = str(_ai_err) or type(_ai_err).__name__
             logger.warning("[DIRECTOR-EXEC-DIAG] agent %s call_ai EXCEPTION iter=%d tc_mode=%s: %s",
                            agent.get('name'), _iter, _tc_mode, _err_msg)
             # При TimeoutError делаем одну повторную попытку с паузой 3с
-            if isinstance(_ai_err, (asyncio.TimeoutError,)) and _iter == 0:
-                logger.info("[DIRECTOR-EXEC-DIAG] agent %s: TimeoutError on iter=0, retrying once",
-                            agent.get('name'))
+            if isinstance(_ai_err, (asyncio.TimeoutError, TimeoutError)) and _iter == 0:
+                _timeout_relaxed_mode = True
+                logger.info("[DIRECTOR-EXEC-DIAG] agent %s: TimeoutError on iter=0, retrying once in relaxed mode (tc=auto, tokens<=900, timeout=%ss)",
+                            agent.get('name'), _api_timeout_this)
                 await asyncio.sleep(3)
                 continue
             # Иначе — выход; следующий iter в DIRECTOR-EXEC loop подхватит если нужно
