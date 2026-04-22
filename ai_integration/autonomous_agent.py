@@ -6583,16 +6583,27 @@ def _build_user_context_sync(user_db_id: int) -> str:
     # --- Правила пользователя (из user.memory) ---
     try:
         if user and user.memory:
-            import json as _rj
+            import json as _rj, re as _re_rules
             _mem = user.memory.strip()
             if _mem.startswith('{'):
                 _mj = _rj.loads(_mem)
                 _rules = _mj.get('rules', [])
                 if _rules:
-                    _rules_lines = '\n'.join(f"  {i+1}. {r}" for i, r in enumerate(_rules))
+                    _rules_parts = []
+                    for _i, _r in enumerate(_rules):
+                        _rules_parts.append(f"  {_i+1}. {_r}")
+                        # Если правило про изображения — добавить инструкцию вызвать generate_image
+                        if _re_rules.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch', _r, _re_rules.IGNORECASE):
+                            _sm = _re_rules.search(r'стил[еёи]\s+([^,.\n]{3,60})', _r, _re_rules.IGNORECASE)
+                            _style_hint = _sm.group(1).strip() if _sm else 'pen and ink drawing'
+                            _rules_parts.append(
+                                f"     ⚙️ КАК ВЫПОЛНИТЬ: сначала вызови generate_image(prompt='описание сцены', style='{_style_hint}'),"
+                                f" получи URL из ответа, затем передай его в параметр image_url инструмента публикации."
+                                f" НЕ используй эмодзи вместо картинки — только вызов generate_image."
+                            )
                     parts.append(
                         '🔴 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (соблюдай ВСЕГДА, в каждом действии и ответе):\n'
-                        + _rules_lines
+                        + '\n'.join(_rules_parts)
                         + '\nЭти правила отменяют любое поведение по умолчанию. Нарушение = провал.'
                     )
     except Exception:
