@@ -1611,7 +1611,11 @@ if (pwaBtn) {
       posts.forEach(function(p) {
         var d = p.created_at ? new Date(p.created_at) : null;
         var dateStr = d ? d.toLocaleDateString(lang === 'en' ? 'en-US' : 'ru-RU', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
-        var excerpt = (p.content || '').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
+        var excerpt = (p.content || '')
+          .replace(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g, ' ')  // strip markdown images
+          .replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' ')          // strip legacy IMAGE markers
+          .replace(/[#*`_~>[\]()!]/g, '')
+          .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
         if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
         var readMore = lang === 'en' ? 'Read →' : 'Читать →';
         var card = document.createElement('div');
