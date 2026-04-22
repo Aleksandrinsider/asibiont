@@ -13800,7 +13800,14 @@ async def reply_to_outreach_email(
                     session.commit()
 
         if not outreach:
-            return " Не найдено письмо для ответа."
+            if recipient_email:
+                return (
+                    f"📭 Письмо из кампании для {recipient_email} не найдено — возможно, этот человек "
+                    f"написал нам первым (не ответ на outreach). "
+                    f"Используй send_outreach_email(recipient_email='{recipient_email}', "
+                    f"subject='Re: <тема письма>', body=<твой ответ>) для отправки ответа напрямую."
+                )
+            return "📭 Не найдено письмо для ответа. Укажи outreach_id или recipient_email."
 
         # ── GUARD: проверяем владение email-перепиской (кто отправлял = тот и отвечает) ──
         _original_agent = (outreach.sent_by_agent or '').strip()
@@ -15516,6 +15523,11 @@ async def _send_via_gmail_api(
             logger.info(f'[GMAIL_API] Sent from {gmail_email} to {to}')
             return True, gmail_email
         err = data.get('error', {}).get('message', str(data))
+        if status == 403 and 'insufficient authentication scopes' in err.lower():
+            return False, (
+                "Gmail API error 403: insufficient authentication scopes. "
+                "Пользователю нужно переподключить Gmail — открой настройки агента и нажми «Подключить Gmail» заново."
+            )
         return False, f"Gmail API error {status}: {err}"
     except Exception as _ge:
         return False, f"Gmail API exception: {_ge}"

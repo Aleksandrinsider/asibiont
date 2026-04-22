@@ -3906,7 +3906,7 @@ async def api_partners_handler(request):
         user_id = await get_user_id_from_request(request)
         logger.info(f"API partners handler called, user_id: {user_id}")
         if not user_id:
-            logger.error("No user_id in session for partners API")
+            logger.warning("No user_id in session for partners API")
             return web.json_response({'error': 'Not logged in'}, status=401)
 
         try:
@@ -7134,7 +7134,7 @@ async def api_reminders_handler(request):
     user_id = await get_user_id_from_request(request)
     logger.info(f"API reminders handler called, user_id: {user_id}")
     if not user_id:
-        logger.error("No user_id in session for reminders API")
+        logger.warning("No user_id in session for reminders API")
         return web.json_response({'error': 'Not logged in'}, status=401)
 
     session_db = Session()
@@ -7373,7 +7373,7 @@ async def api_tasks_handler(request):
     user_id = session.get('user_id')
     logger.info(f"API tasks handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
     if not user_id:
-        logger.error("No user_id in session for tasks API")
+        logger.warning("No user_id in session for tasks API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     session_db = Session()
@@ -7524,7 +7524,7 @@ async def api_delegations_handler(request):
     user_id = session.get('user_id')
     logger.info(f"API delegations handler called, session: {dict(session) if session else 'None'}, user_id: {user_id}")
     if not user_id:
-        logger.error("No user_id in session for delegations API")
+        logger.warning("No user_id in session for delegations API")
         return web.json_response({'error': 'Not authenticated'}, status=401)
 
     session_db = Session()
@@ -9854,7 +9854,7 @@ async def api_profile_handler(request):
         user_id = session.get('user_id') if session else None
         logger.info(f"API profile: session exists={session is not None}, user_id={user_id}")
         if not user_id:
-            logger.error("No user_id in session for profile API")
+            logger.warning("No user_id in session for profile API")
             return web.json_response({'error': 'Not authenticated'}, status=401)
     except Exception as e:
         logger.error(f"Error getting session in api_profile: {e}", exc_info=True)

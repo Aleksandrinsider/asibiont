@@ -8743,8 +8743,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _err_msg = str(_ai_err) or type(_ai_err).__name__
             logger.warning("[DIRECTOR-EXEC-DIAG] agent %s call_ai EXCEPTION iter=%d tc_mode=%s: %s",
                            agent.get('name'), _iter, _tc_mode, _err_msg)
-            # Нет смысла ретраить внутри DIRECTOR: coordinator.wait_for(200s) сам даёт время
-            # Простой выход — break; следующий iter в DIRECTOR-EXEC loop подхватит если нужно
+            # При TimeoutError делаем одну повторную попытку с паузой 3с
+            if isinstance(_ai_err, (asyncio.TimeoutError,)) and _iter == 0:
+                logger.info("[DIRECTOR-EXEC-DIAG] agent %s: TimeoutError on iter=0, retrying once",
+                            agent.get('name'))
+                await asyncio.sleep(3)
+                continue
+            # Иначе — выход; следующий iter в DIRECTOR-EXEC loop подхватит если нужно
             break
         if _resp:
             _u_ap = _resp.get('usage') or {}
