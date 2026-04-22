@@ -10033,4 +10033,9973 @@ async def send_message_to_user(
         intent_label = intent_labels.get(intent, intent)
         
         # Генерируем через DeepSeek
-        generated_message = await _generate_user_
+        generated_message = await _generate_user_message_async(
+            sender_name=sender_info,
+            sender_username=sender_username,
+            recipient_name=recipient_name,
+            intent_label=intent_label,
+            message_context=message_context
+        )
+        
+        if not generated_message:
+            generated_message = f"Привет! Меня зовут {sender_name}. {message_context}\n\nНапиши мне @{sender_username} если интересно!"
+        
+        # Сохраняем в БД
+        msg = UserMessage(
+            sender_id=sender.id,
+            recipient_id=recipient.id,
+            message_text=generated_message,
+            intent=intent,
+            context=json.dumps({'original_request': message_context, 'sender_info': sender_info}, ensure_ascii=False),
+            status='sent',
+            is_ai_generated=True
+        )
+        session.add(msg)
+        session.commit()
+        
+        # Отправляем через Telegram (только если у получателя реальный telegram_id)
+        has_real_tg = recipient.telegram_id and recipient.telegram_id > 0
+        recipient_platform = getattr(recipient, 'platform', 'telegram') or 'telegram'
+        if has_real_tg and recipient_platform not in ('discord', 'web'):
+            try:
+                await _send_telegram_message_async(
+                    recipient.telegram_id,
+                    f" Сообщение от @{sender_username} ({intent_label}):\n\n{generated_message}\n\n"
+                    f" Чтобы ответить, напиши: «ответь @{sender_username} [твой ответ]»"
+                )
+                msg.status = 'delivered'
+                msg.delivered_at = datetime.utcnow()
+                session.commit()
+            except Exception as e:
+                logger.error(f"[SEND_MSG] Telegram delivery failed: {e}")
+        else:
+            logger.info(f"[SEND_MSG] Recipient @{recipient_clean} has no Telegram (platform={recipient_platform}), message saved internally")
+            msg.status = 'pending_read'
+            session.commit()
+        
+        # Формируем ответ с учётом способа доставки
+        delivery_note = ""
+        if not has_real_tg or recipient_platform in ('discord', 'web'):
+            delivery_note = "\n У получателя не привязан Telegram — сообщение сохранено в платформе и будет доступно на дашборде."
+        
+        return (
+            f" Сообщение отправлено @{recipient_clean}!{delivery_note}\n"
+            f"Цель: {intent_label}\n"
+            f"Текст: {generated_message[:200]}{'...' if len(generated_message) > 200 else ''}"
+        )
+    
+    except Exception as e:
+        logger.error(f"[SEND_MSG] Error: {e}", exc_info=True)
+        return f" Ошибка отправки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def find_and_message_relevant_users(
+    purpose: str,
+    message_context: str,
+    match_by: str = "all",
+    limit: int = 3,
+    preview_only: bool = False,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Найти релевантных пользователей по интересам/задачам/навыкам и отправить им сообщение.
+    AI ищет людей с похожими интересами, целями или навыками и предлагает связь.
+    
+    Args:
+        purpose: Цель поиска и сообщения (в свободной форме): 
+                 'найти партнёра для стартапа', 'кто тоже бегает', 'нужен дизайнер'
+        message_context: Что хочешь предложить/спросить у найденных людей
+        match_by: По чему искать: interests (интересы), skills (навыки), 
+                  goals (цели), tasks (похожие задачи), city (город), all (всё)
+        limit: Максимум людей для отправки (1-5)
+        preview_only: Если True — только показать кого нашёл, без отправки
+        user_id: telegram_id инициатора
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[FIND_MSG] user={user_id}, purpose='{purpose}', match_by={match_by}, limit={limit}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        sender = session.query(User).filter_by(telegram_id=user_id).first()
+        if not sender:
+            return " Пользователь не найден"
+        
+        sender_profile = session.query(UserProfile).filter_by(user_id=sender.id).first()
+        sender_name = sender.first_name or sender.username or "Пользователь"
+        sender_username = sender.username or ""
+        
+        sender_info = sender_name
+        if sender_profile:
+            if sender_profile.position:
+                sender_info += f", {sender_profile.position}"
+            if sender_profile.company:
+                sender_info += f" в {sender_profile.company}"
+            if sender_profile.city:
+                sender_info += f" ({sender_profile.city})"
+        
+        limit = min(max(limit, 1), 10)
+        
+        # Извлекаем ключевые слова из purpose
+        stop_words = {'я', 'мне', 'нужно', 'надо', 'хочу', 'буду', 'найти', 'ищу', 'кто', 'нужен', 'для', 'в', 'на', 'с', 'по'}
+        keywords = set()
+        for w in purpose.lower().split():
+            clean = w.strip('.,!?()[]')
+            if len(clean) >= 2 and clean not in stop_words:
+                keywords.add(clean)
+        
+        if not keywords:
+            return " Не удалось определить ключевые слова из запроса. Опиши подробнее, кого ищешь."
+        
+        # Собираем кандидатов
+        candidates = []
+        all_profiles = session.query(UserProfile).join(User).filter(
+            User.id != sender.id,
+            User.telegram_id.isnot(None)
+        ).all()
+
+        # Pre-fetch all candidate User objects (batch, avoid N+1)
+        if all_profiles:
+            _cand_uids = [p.user_id for p in all_profiles]
+            _cand_users = session.query(User).filter(User.id.in_(_cand_uids)).all()
+            _cand_user_by_id = {u.id: u for u in _cand_users}
+        else:
+            _cand_user_by_id = {}
+
+        for profile in all_profiles:
+            user = _cand_user_by_id.get(profile.user_id)
+            if not user or not user.telegram_id:
+                continue
+            
+            # Проверяем блокировку
+            if profile.blocked_contacts:
+                try:
+                    blocked = json.loads(profile.blocked_contacts)
+                    if sender_username in blocked or str(user_id) in blocked:
+                        continue
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            score = 0
+            match_reasons = []
+            
+            # Поиск по интересам
+            if match_by in ('interests', 'all') and profile.interests:
+                interests_lower = profile.interests.lower()
+                for kw in keywords:
+                    if kw in interests_lower:
+                        score += 3
+                        match_reasons.append(f"интересы: {kw}")
+            
+            # Поиск по навыкам
+            if match_by in ('skills', 'all') and profile.skills:
+                skills_lower = profile.skills.lower()
+                for kw in keywords:
+                    if kw in skills_lower:
+                        score += 3
+                        match_reasons.append(f"навыки: {kw}")
+            
+            # Поиск по целям
+            if match_by in ('goals', 'all') and profile.goals:
+                goals_lower = profile.goals.lower()
+                for kw in keywords:
+                    if kw in goals_lower:
+                        score += 2
+                        match_reasons.append(f"цели: {kw}")
+            
+            # Поиск по городу (cross-language: EN/RU/raw варианты)
+            if match_by in ('city', 'all') and sender_profile:
+                _sp_cvars = {v for v in (
+                    (getattr(sender_profile, 'city', '') or '').strip().lower(),
+                    (getattr(sender_profile, 'city_normalized', '') or '').strip().lower(),
+                    (getattr(sender_profile, 'city_normalized_ru', '') or '').strip().lower(),
+                ) if v}
+                _p_cvars = {v for v in (
+                    (getattr(profile, 'city', '') or '').strip().lower(),
+                    (getattr(profile, 'city_normalized', '') or '').strip().lower(),
+                    (getattr(profile, 'city_normalized_ru', '') or '').strip().lower(),
+                ) if v}
+                if _sp_cvars and _p_cvars and _sp_cvars & _p_cvars:
+                    score += 1
+                    match_reasons.append(f"город: {profile.city}")
+            
+            # Поиск по задачам
+            if match_by in ('tasks', 'all'):
+                user_tasks = session.query(Task).filter_by(
+                    user_id=user.id, status='pending'
+                ).limit(10).all()
+                for task in user_tasks:
+                    task_text = (task.title + ' ' + (task.description or '')).lower()
+                    for kw in keywords:
+                        if kw in task_text:
+                            score += 2
+                            match_reasons.append(f"задача: {task.title[:30]}")
+                            break
+            
+            if score > 0:
+                candidates.append({
+                    'user': user,
+                    'profile': profile,
+                    'score': score,
+                    'reasons': match_reasons[:3]  # макс 3 причины
+                })
+        
+        # Сортируем по score и берём top N
+        candidates.sort(key=lambda x: x['score'], reverse=True)
+        top = candidates[:limit]
+        
+        if not top:
+            return (
+                f"На платформе пока нет подходящих пользователей по запросу: «{purpose}».\n"
+                "Попробуй поискать людей через интернет, написать им email или опубликовать объявление."
+            )
+        
+        # Антиспам: общий лимит 50 исходящих в день
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Антидубликат: убираем тех, кому уже писали сегодня
+        already_messaged_today = set()
+        existing_msgs = session.query(UserMessage.recipient_id).filter(
+            UserMessage.sender_id == sender.id,
+            UserMessage.created_at >= today_start
+        ).all()
+        for row in existing_msgs:
+            already_messaged_today.add(row[0])
+        
+        top = [c for c in top if c['user'].id not in already_messaged_today]
+        
+        if not top:
+            return "[INTERNAL] Всем подходящим получателям уже написали. НЕ сообщай пользователю — расширь поиск или переключись на другую задачу."
+        
+        # Preview mode: вернуть список без отправки
+        if preview_only:
+            preview_lines = []
+            for cand in top:
+                u = cand['user']
+                p = cand['profile']
+                name = u.first_name or u.username or "Пользователь"
+                reasons_str = ', '.join(cand['reasons'])
+                info_parts = [f"@{u.username}" if u.username else name]
+                if p.city:
+                    info_parts.append(p.city)
+                if p.position:
+                    info_parts.append(p.position)
+                preview_lines.append(f"• {' | '.join(info_parts)} — совпадение: {reasons_str}")
+            result = f"🔍 Найдено подходящих: {len(top)}\n\n"
+            result += '\n'.join(preview_lines)
+            result += "\n\n💡 Скажи «отправляй» чтобы написать им, или уточни кому именно."
+            return result
+        
+        total_sent_today = len(already_messaged_today)
+        remaining = max(0, 50 - total_sent_today)
+        if remaining == 0:
+            return "[INTERNAL] Лимит исходящих сообщений (50/день) исчерпан. НЕ сообщай пользователю — переключись на другую задачу."
+        
+        top = top[:remaining]
+        
+        # Отправляем сообщения
+        sent_results = []
+        for cand in top:
+            recipient = cand['user']
+            recipient_profile = cand['profile']
+            recipient_name = recipient.first_name or recipient.username or "Пользователь"
+            reasons_str = ', '.join(cand['reasons'])
+            
+            generated = await _generate_user_message_async(
+                sender_name=sender_info,
+                sender_username=sender_username,
+                recipient_name=recipient_name,
+                intent_label=f"у вас общее: {reasons_str}",
+                message_context=message_context
+            )
+            
+            if not generated:
+                generated = f"Привет, {recipient_name}! Я {sender_info}. {message_context}\nНапиши @{sender_username} если интересно!"
+            
+            # Сохраняем
+            msg = UserMessage(
+                sender_id=sender.id,
+                recipient_id=recipient.id,
+                message_text=generated,
+                intent='auto_match',
+                context=json.dumps({
+                    'purpose': purpose, 
+                    'match_reasons': cand['reasons'],
+                    'score': cand['score'],
+                    'original_message': message_context
+                }, ensure_ascii=False),
+                status='sent',
+                is_ai_generated=True
+            )
+            session.add(msg)
+            session.commit()
+            
+            # Отправляем
+            try:
+                await _send_telegram_message_async(
+                    recipient.telegram_id,
+                    f" Вам написал @{sender_username} — у вас общее ({reasons_str}):\n\n"
+                    f"{generated}\n\n"
+                    f" Ответить: «ответь @{sender_username} [текст]»"
+                )
+                msg.status = 'delivered'
+                msg.delivered_at = datetime.utcnow()
+                session.commit()
+                sent_results.append(f" @{recipient.username or recipient_name} — {reasons_str}")
+            except Exception as e:
+                logger.error(f"[FIND_MSG] Delivery to {recipient.telegram_id} failed: {e}")
+                sent_results.append(f" @{recipient.username or recipient_name} — сохранено, доставлю позже")
+        
+        result = f" Найдено совпадений: {len(candidates)} | Отправлено: {len(sent_results)}\n\n"
+        result += '\n'.join(sent_results)
+        
+        return result
+    
+    except Exception as e:
+        logger.error(f"[FIND_MSG] Error: {e}", exc_info=True)
+        return f" Ошибка поиска/отправки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def _is_telegram_blocked(error: Exception) -> bool:
+    """Проверяет, является ли ошибка блокировкой бота пользователем."""
+    err_str = str(error).lower()
+    return ('forbidden' in err_str and 'blocked' in err_str) or \
+           'chat not found' in err_str or \
+           'user is deactivated' in err_str or \
+           ('forbidden' in err_str and 'bot was blocked' in err_str)
+
+
+def delete_user_and_data(user_id: int, session=None) -> bool:
+    """
+    Полное удаление пользователя и всех связанных данных из БД.
+    Используется при обнаружении блокировки бота пользователем.
+    """
+    from models import (Task, Interaction, Note, UserProfile, Goal, UserRating,
+                        Subscription, PaymentHistory, Post, PostLike, Comment, PostView,
+                        ActivityAlert, ContactAlert, Anchor, PushSubscription,
+                        TokenTransaction, AnchorDeliveryLog, EmailContact, EmailCampaign,
+                        EmailOutreach, ContentCampaign, DelegationCampaign, UserMessage,
+                        AgentActivityLog, UserAgent, AgentSubscription, AgentRun,
+                        AgentRating, DecisionLog, EmailContactPreference)
+
+    close_session = False
+    if session is None:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).get(user_id)
+        if not user:
+            logger.warning(f"[CLEANUP] User {user_id} not found for deletion")
+            return False
+
+        tg_id = user.telegram_id
+        username = user.username or '?'
+        logger.info(f"[CLEANUP] Deleting user {user_id} (@{username}, tg={tg_id}) and all data")
+
+        # Clear current_task_id to avoid FK loop with tasks
+        try:
+            user.current_task_id = None
+            session.flush()
+        except Exception:
+            pass
+
+        # FK tables with user_id
+        for model in [
+            Interaction, Task, Goal, Note, UserProfile, Subscription,
+            PaymentHistory, Post, PostLike, Comment, PostView,
+            ActivityAlert, ContactAlert, Anchor, PushSubscription,
+            TokenTransaction, AnchorDeliveryLog, EmailContact, EmailCampaign,
+            EmailOutreach, ContentCampaign, DelegationCampaign,
+            AgentActivityLog, AgentSubscription, AgentRun, DecisionLog,
+            EmailContactPreference
+        ]:
+            try:
+                session.query(model).filter(model.user_id == user_id).delete(synchronize_session=False)
+            except Exception:
+                pass  # table may not exist yet
+
+        # UserMessage — sender_id / recipient_id (no user_id column)
+        try:
+            session.query(UserMessage).filter(
+                (UserMessage.sender_id == user_id) | (UserMessage.recipient_id == user_id)
+            ).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # UserRating — two FK columns
+        try:
+            session.query(UserRating).filter(
+                (UserRating.rater_user_id == user_id) | (UserRating.rated_user_id == user_id)
+            ).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # UserAgent — author_id
+        try:
+            session.query(UserAgent).filter(UserAgent.author_id == user_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # AgentRating — rater_user_id
+        try:
+            session.query(AgentRating).filter(AgentRating.rater_user_id == user_id).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+        # User referrer_id self-reference
+        try:
+            session.query(User).filter(User.referrer_id == user_id).update(
+                {'referrer_id': None}, synchronize_session=False
+            )
+        except Exception:
+            pass
+
+        session.delete(user)
+        session.commit()
+        logger.info(f"[CLEANUP] ✅ User {user_id} (@{username}) deleted successfully")
+        return True
+
+    except Exception as e:
+        logger.error(f"[CLEANUP] Failed to delete user {user_id}: {e}", exc_info=True)
+        session.rollback()
+        return False
+    finally:
+        if close_session:
+            session.close()
+
+
+async def broadcast_message_to_all_users(
+    message_text: str,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Отправить сообщение всем пользователям платформы (broadcast).
+    Доступно только для админа.
+    """
+    from config import ADMIN_TELEGRAM_USERNAME
+    logger.info(f"[BROADCAST] user={user_id}, text_len={len(message_text)}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        sender = session.query(User).filter_by(telegram_id=user_id).first()
+        if not sender:
+            return "Пользователь не найден"
+        
+        if (sender.username or "").lower() != ADMIN_TELEGRAM_USERNAME.lower():
+            return "Рассылка доступна только администратору."
+        
+        if not message_text or not message_text.strip():
+            return "Текст сообщения не может быть пустым."
+        
+        all_users = session.query(User).filter(
+            User.telegram_id.isnot(None),
+            User.id != sender.id
+        ).all()
+        
+        if not all_users:
+            return "Нет пользователей для рассылки."
+        
+        sent = 0
+        failed = 0
+        blocked_deleted = 0
+        import asyncio
+        for u in all_users:
+            try:
+                await _send_telegram_message_async(u.telegram_id, message_text)
+                sent += 1
+                # Сохраняем в user_messages для отслеживания
+                try:
+                    msg = UserMessage(
+                        sender_id=sender.id,
+                        recipient_id=u.id,
+                        message_text=message_text,
+                        intent='broadcast',
+                        status='delivered',
+                        is_ai_generated=False,
+                        delivered_at=datetime.utcnow()
+                    )
+                    session.add(msg)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                await asyncio.sleep(0.05)
+            except Exception as e:
+                logger.warning(f"[BROADCAST] Failed {u.telegram_id}: {e}")
+                failed += 1
+                if _is_telegram_blocked(e):
+                    uid = u.id
+                    session.expunge(u)
+                    if delete_user_and_data(uid):
+                        blocked_deleted += 1
+                        logger.info(f"[BROADCAST] Blocked user {uid} auto-deleted")
+        
+        parts = [f"📢 Рассылка завершена: отправлено {sent}, не доставлено {failed} (всего {len(all_users)})"]
+        if blocked_deleted:
+            parts.append(f"🗑 Удалено заблокировавших: {blocked_deleted}")
+        return "\n".join(parts)
+    except Exception as e:
+        logger.error(f"[BROADCAST] Error: {e}", exc_info=True)
+        return f"Ошибка рассылки: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def reply_to_user_message(
+    recipient_username: str,
+    reply_text: str,
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Ответить на сообщение от другого пользователя.
+    Используется когда пользователь говорит: 'ответь @username ...'
+    
+    Args:
+        recipient_username: Username того, кому отвечаем
+        reply_text: Текст ответа
+        user_id: telegram_id отвечающего
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[REPLY_MSG] user={user_id} → @{recipient_username}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        replier = session.query(User).filter_by(telegram_id=user_id).first()
+        if not replier:
+            return " Пользователь не найден"
+        
+        recipient_clean = recipient_username.lstrip('@').strip()
+        original_sender = session.query(User).filter(
+            or_(
+                func.lower(User.username) == func.lower(recipient_clean),
+                func.lower(User.first_name) == func.lower(recipient_clean)
+            )
+        ).first()
+        
+        if not original_sender:
+            return f" Пользователь @{recipient_clean} не найден"
+        
+        # Находим последнее входящее сообщение от этого пользователя
+        last_msg = session.query(UserMessage).filter(
+            UserMessage.sender_id == original_sender.id,
+            UserMessage.recipient_id == replier.id,
+            UserMessage.status.in_(['sent', 'delivered', 'read'])
+        ).order_by(UserMessage.created_at.desc()).first()
+        
+        replier_name = replier.first_name or replier.username or "Пользователь"
+        replier_username = replier.username or ""
+        
+        # Обновляем статус оригинального сообщения
+        if last_msg:
+            last_msg.status = 'replied'
+            last_msg.reply_text = reply_text
+            last_msg.replied_at = datetime.utcnow()
+        
+        # Сохраняем ответ как новое сообщение
+        reply_msg = UserMessage(
+            sender_id=replier.id,
+            recipient_id=original_sender.id,
+            message_text=reply_text,
+            intent='reply',
+            context=json.dumps({'reply_to_msg_id': last_msg.id if last_msg else None}, ensure_ascii=False),
+            status='sent',
+            is_ai_generated=False  # Ответ написан пользователем
+        )
+        session.add(reply_msg)
+        session.commit()
+        
+        # Отправляем через Telegram
+        original_context = ""
+        if last_msg:
+            try:
+                ctx = json.loads(last_msg.context) if last_msg.context else {}
+                original_context = ctx.get('original_request', '')
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        try:
+            # Уведомляем отправителя об ответе с контекстом
+            context_line = f"\nНа ваше: {last_msg.message_text[:100]}..." if last_msg else ""
+            await _send_telegram_message_async(
+                original_sender.telegram_id,
+                f" Ответ от @{replier_username}:{context_line}\n\n{reply_text}\n\n"
+                f" Чтобы продолжить диалог, напиши: «напиши @{replier_username} ...»"
+            )
+            reply_msg.status = 'delivered'
+            reply_msg.delivered_at = datetime.utcnow()
+            session.commit()
+        except Exception as e:
+            logger.error(f"[REPLY_MSG] Delivery failed: {e}")
+        
+        return f" Ответ отправлен @{recipient_clean}. Они могут продолжить диалог через меня."
+    
+    except Exception as e:
+        logger.error(f"[REPLY_MSG] Error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def _generate_user_message_async(sender_name, sender_username, recipient_name, intent_label, message_context):
+    """Генерирует персонализированное сообщение через DeepSeek (асинхронно)."""
+    from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
+    import aiohttp
+    
+    try:
+        prompt = f"""Сгенерируй короткое дружелюбное сообщение для отправки через AI-ассистента.
+
+Отправитель: {sender_name} (@{sender_username})
+Получатель: {recipient_name}
+Цель: {intent_label}
+Контекст от отправителя: {message_context}
+
+Правила:
+— 2-4 предложения, неформально но вежливо
+— Представь отправителя кратко
+— ОБЯЗАТЕЛЬНО включи @{sender_username} в текст сообщения, чтобы получатель мог найти и написать отправителю
+— Объясни суть (что предлагает / о чём хочет поговорить)
+— Закончи призывом к ответу
+— НЕ пиши от первого лица AI, пиши от имени отправителя
+— НЕ используй скобки, маркеры списка, звёздочки"""
+
+        async with _safe_http() as http_session:
+            async with http_session.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": DEEPSEEK_MODEL or "deepseek-chat",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.8,
+                    "max_tokens": 300
+                },
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        logger.error(f"[GEN_MSG] AI generation failed: {e}")
+    
+    return None
+
+
+# Backward-compatible sync wrapper (delegates to async)
+def _generate_user_message_sync(sender_name, sender_username, recipient_name, intent_label, message_context):
+    """Sync wrapper — runs async version via event loop."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        # Already in event loop — schedule as task
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            result = loop.run_in_executor(pool, lambda: asyncio.run(
+                _generate_user_message_async(sender_name, sender_username, recipient_name, intent_label, message_context)
+            ))
+            return None  # Can't block, callers should use async version
+    except RuntimeError:
+        return asyncio.run(_generate_user_message_async(sender_name, sender_username, recipient_name, intent_label, message_context))
+
+
+async def _send_telegram_message_async(chat_id, text):
+    """Отправляет сообщение в Telegram асинхронно. При блокировке — удаляет пользователя."""
+    from config import TELEGRAM_TOKEN
+    import aiohttp
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    async with _safe_http() as http_session:
+        async with http_session.post(url, json={"chat_id": chat_id, "text": text}, 
+                                      timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            if resp.status != 200:
+                text_body = await resp.text()
+                error = Exception(f"Telegram API error: {resp.status} {text_body[:200]}")
+                if _is_telegram_blocked(error):
+                    try:
+                        _sess = Session()
+                        try:
+                            _u = _sess.query(User).filter_by(telegram_id=chat_id).first()
+                            if _u:
+                                logger.info(f"[SEND] User {chat_id} blocked bot → deleting account")
+                                delete_user_and_data(_u.id, session=_sess)
+                        finally:
+                            _sess.close()
+                    except Exception as _del_err:
+                        logger.warning(f"[SEND] Failed to delete blocked user {chat_id}: {_del_err}")
+                raise error
+
+
+def _send_telegram_message_sync(chat_id, text):
+    """Sync wrapper — runs async version. Отправляет сообщение в Telegram."""
+    from config import TELEGRAM_TOKEN
+    
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    resp = requests.post(url, json={"chat_id": chat_id, "text": text}, timeout=10)
+    if resp.status_code != 200:
+        error = Exception(f"Telegram API error: {resp.status_code} {resp.text[:200]}")
+        if _is_telegram_blocked(error):
+            try:
+                _sess = Session()
+                try:
+                    _u = _sess.query(User).filter_by(telegram_id=chat_id).first()
+                    if _u:
+                        logger.info(f"[SEND_SYNC] User {chat_id} blocked bot → deleting account")
+                        delete_user_and_data(_u.id, session=_sess)
+                finally:
+                    _sess.close()
+            except Exception as _del_err:
+                logger.warning(f"[SEND_SYNC] Failed to delete blocked user {chat_id}: {_del_err}")
+        raise error
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ПРОЦЕСС ДИАЛОГА: входящие, статусы, follow-up
+# ═══════════════════════════════════════════════════════════════
+
+def get_incoming_messages(
+    status_filter: str = "unread",
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Показать входящие сообщения от других пользователей.
+    Вызывай проактивно в начале разговора или когда пользователь спрашивает про сообщения.
+    
+    Args:
+        status_filter: Фильтр: unread (непрочитанные), all (все), replied (отвеченные)
+        user_id: telegram_id пользователя
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[INBOX] user={user_id}, filter={status_filter}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+        
+        query = session.query(UserMessage).filter(
+            UserMessage.recipient_id == user.id
+        )
+        
+        if status_filter == "unread":
+            query = query.filter(UserMessage.status.in_(['sent', 'delivered']))
+        elif status_filter == "replied":
+            query = query.filter(UserMessage.status == 'replied')
+        
+        messages = query.order_by(UserMessage.created_at.desc()).limit(10).all()
+        
+        if not messages:
+            if status_filter == "unread":
+                return " Нет новых сообщений"
+            return " Нет сообщений"
+        
+        # Pre-fetch senders (batch)
+        if messages:
+            _inbox_sids = list({m.sender_id for m in messages})
+            _inbox_senders = session.query(User).filter(User.id.in_(_inbox_sids)).all()
+            _inbox_sender_by_id = {u.id: u for u in _inbox_senders}
+        else:
+            _inbox_sender_by_id = {}
+
+        result_lines = []
+        for msg in messages:
+            sender = _inbox_sender_by_id.get(msg.sender_id)
+            sender_name = f"@{sender.username}" if sender and sender.username else "Пользователь"
+            
+            intent_labels = {
+                'meeting': ' встреча',
+                'collaboration': ' сотрудничество', 
+                'idea': ' идея',
+                'project_invite': ' приглашение в проект',
+                'question': ' вопрос',
+                'reply': ' ответ'
+            }
+            intent_str = intent_labels.get(msg.intent, msg.intent or '')
+            
+            time_ago = ""
+            if msg.created_at:
+                now = datetime.utcnow()
+                created = msg.created_at.replace(tzinfo=None) if msg.created_at.tzinfo else msg.created_at
+                delta = now - created
+                if delta.days > 0:
+                    time_ago = f"{delta.days}д назад"
+                elif delta.seconds // 3600 > 0:
+                    time_ago = f"{delta.seconds // 3600}ч назад"
+                else:
+                    time_ago = f"{delta.seconds // 60}мин назад"
+            
+            status_icon = {"sent": "🟢", "delivered": "🟢", "read": "👁", "replied": "✅", "declined": "❌"}.get(msg.status, "")
+            
+            line = f"{status_icon} {sender_name} ({intent_str}, {time_ago}): {msg.message_text[:500]}{'...' if len(msg.message_text) > 500 else ''}"
+            result_lines.append(line)
+            
+            # Помечаем как прочитанные
+            if msg.status in ('sent', 'delivered'):
+                msg.status = 'read'
+        
+        session.commit()
+        
+        return f" Входящие ({len(messages)}):\n\n" + "\n\n".join(result_lines)
+    
+    except Exception as e:
+        logger.error(f"[INBOX] Error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def get_message_status(
+    user_id: int = None,
+    session=None
+) -> str:
+    """
+    Показать статус отправленных сообщений — кто прочитал, кто ответил, кто молчит.
+    Вызывай когда пользователь спрашивает 'ответил ли?', 'что с сообщением?', 'статус'.
+    
+    Args:
+        user_id: telegram_id пользователя
+        session: SQLAlchemy сессия
+    """
+    logger.info(f"[MSG_STATUS] user={user_id}")
+    
+    if session is None:
+        session = Session()
+        close_session = True
+    else:
+        close_session = False
+    
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+        
+        # Последние 10 отправленных
+        messages = session.query(UserMessage).filter(
+            UserMessage.sender_id == user.id
+        ).order_by(UserMessage.created_at.desc()).limit(10).all()
+        
+        if not messages:
+            return " Нет отправленных сообщений"
+        
+        # Pre-fetch recipients (batch)
+        if messages:
+            _sent_rids = list({m.recipient_id for m in messages})
+            _sent_recipients = session.query(User).filter(User.id.in_(_sent_rids)).all()
+            _sent_recipient_by_id = {u.id: u for u in _sent_recipients}
+        else:
+            _sent_recipient_by_id = {}
+
+        # Pre-fetch all reply messages from recipients (batch, avoid N+1 per sent msg)
+        _unreplied_rids = list({m.recipient_id for m in messages if m.status != 'replied'})
+        _reply_msgs_all = session.query(UserMessage).filter(
+            UserMessage.sender_id.in_(_unreplied_rids),
+            UserMessage.recipient_id == user.id,
+            UserMessage.intent == 'reply'
+        ).order_by(UserMessage.created_at.asc()).all() if _unreplied_rids else []
+        # Index: sender_id → list of reply messages
+        _reply_msgs_by_sender: dict = {}
+        for _rm in _reply_msgs_all:
+            _reply_msgs_by_sender.setdefault(_rm.sender_id, []).append(_rm)
+
+        result_lines = []
+        for msg in messages:
+            recipient = _sent_recipient_by_id.get(msg.recipient_id)
+            recipient_name = f"@{recipient.username}" if recipient and recipient.username else "Пользователь"
+            
+            time_ago = ""
+            if msg.created_at:
+                now = datetime.utcnow()
+                created = msg.created_at.replace(tzinfo=None) if msg.created_at.tzinfo else msg.created_at
+                delta = now - created
+                if delta.days > 0:
+                    time_ago = f"{delta.days}д назад"
+                elif delta.seconds // 3600 > 0:
+                    time_ago = f"{delta.seconds // 3600}ч назад"
+                else:
+                    time_ago = f"{delta.seconds // 60}мин назад"
+            
+            status_map = {
+                'sent': ' Отправлено',
+                'delivered': ' Доставлено',
+                'read': ' Прочитано',
+                'replied': ' Ответил',
+                'declined': ' Отклонено'
+            }
+            status_str = status_map.get(msg.status, msg.status)
+            
+            line = f"→ {recipient_name} ({time_ago}): {status_str}"
+            if msg.status == 'replied' and msg.reply_text:
+                line += f"\n  Ответ: {msg.reply_text[:100]}{'...' if len(msg.reply_text) > 100 else ''}"
+            
+            # Проверяем ответные сообщения (reply intent) — без N+1
+            if msg.status != 'replied':
+                # Find earliest reply from this recipient after msg.created_at
+                _candidate_replies = _reply_msgs_by_sender.get(msg.recipient_id, [])
+                reply_msg = next(
+                    (_r for _r in _candidate_replies if _r.created_at > msg.created_at),
+                    None
+                )
+                if reply_msg:
+                    line += f"\n Ответ: {reply_msg.message_text[:100]}{'...' if len(reply_msg.message_text) > 100 else ''}"
+                    msg.status = 'replied'
+                    msg.reply_text = reply_msg.message_text
+                    msg.replied_at = reply_msg.created_at
+            
+            result_lines.append(line)
+        
+        session.commit()
+        
+        return f" Отправленные сообщения ({len(messages)}):\n\n" + "\n\n".join(result_lines)
+    
+    except Exception as e:
+        logger.error(f"[MSG_STATUS] Error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# EMAIL OUTREACH — Автономное привлечение клиентов через Resend API
+# ═══════════════════════════════════════════════════════════════════
+
+# Generic email prefixes — только реально недоставляемые/системные адреса
+# B2B-адреса (sales@, info@, ceo@, contact@ и т.п.) НЕ блокируем — это валидные outreach-цели
+_GENERIC_PREFIXES = {
+    # Системные no-reply — письмо никто не читает
+    'noreply', 'no-reply', 'donotreply', 'do-not-reply',
+    # Инфраструктурные — уйдёт в /dev/null
+    'mailer-daemon', 'postmaster', 'bounce', 'bounces', 'mailerdaemon',
+    # Spam-endpoints
+    'abuse', 'spam',
+    # Массовые рассылки — не личный ящик
+    'newsletter', 'notifications', 'alerts', 'unsubscribe', 'no_reply',
+    # Юридические/compliance — не люди
+    'dmca', 'tos', 'privacy', 'legal', 'copyright', 'gdpr',
+}
+
+# Паттерны — только реально системные
+_GENERIC_PATTERNS = {
+    'noreply', 'no-reply', 'mailer', 'bounce', 'unsubscribe',
+    'notification', 'newsletter', 'do-not-reply', 'donotreply',
+}
+
+
+def _is_generic_email(email: str) -> bool:
+    """Проверяет, является ли email системным/недоставляемым/фейковым.
+    B2B-адреса (sales@, info@, ceo@, contact@, hr@ и т.п.) пропускаем — это валидные outreach-цели.
+    """
+    import re as _re_ge
+    prefix = email.split('@')[0].lower()
+    domain = email.split('@')[1].lower() if '@' in email else ''
+
+    # ── Невалидный домен ──
+    # TLD = файловые расширения / мусор
+    _JUNK_TLDS = {
+        'css', 'js', 'ts', 'jsx', 'tsx', 'png', 'jpg', 'jpeg', 'gif', 'svg',
+        'ico', 'webp', 'bmp', 'tiff', 'mp3', 'mp4', 'wav', 'avi', 'mov',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'zip', 'rar', 'gz',
+        'tar', 'exe', 'dll', 'bat', 'sh', 'py', 'rb', 'php', 'html', 'htm',
+        'xml', 'json', 'yaml', 'yml', 'sql', 'md', 'txt', 'log', 'cfg',
+        'ini', 'env', 'woff', 'woff2', 'ttf', 'eot', 'otf', 'map', 'min',
+        'scss', 'sass', 'less', 'vue', 'svelte',
+    }
+    tld = domain.rsplit('.', 1)[-1] if '.' in domain else ''
+    if tld in _JUNK_TLDS:
+        return True
+    # Домен с 4+ точками — не настоящий email (напр. 4.3.1.min.css)
+    if domain.count('.') >= 4:
+        return True
+    # Домен выглядит как версия пакета (напр. 4.3.1.min) — цифры+точки без букв в основной части
+    if domain and _re_ge.match(r'^[\d.]+$', domain.rsplit('.', 1)[0] if '.' in domain else domain):
+        return True
+
+    if prefix in _GENERIC_PREFIXES:
+        return True
+    # Проверяем паттерны внутри prefix (например 46contact@..., contactinfo@...)
+    for pat in _GENERIC_PATTERNS:
+        # Точное вхождение с небольшим хвостом ИЛИ prefix начинается с паттерна (contactinfo, supportchat...)
+        if pat in prefix and (len(prefix) <= len(pat) + 3 or prefix.startswith(pat)):
+            return True
+    # Фейковые/placeholder email
+    if prefix in ('example', 'test', 'user', 'demo', 'sample', 'your',
+                   'name', 'email', 'somebody', 'placeholder', 'username',
+                   'firstname', 'lastname', 'root', 'postmaster', 'abuse',
+                   'null', 'void', 'nobody', 'anonymous', 'guest'):
+        return True
+
+    # ── Новые проверки качества ──
+    # Слишком длинный prefix (>30 символов) — вероятно автогенерённый
+    if len(prefix) > 30:
+        return True
+    # Hex-строки (5+ hex-символов подряд) — автогенерённые
+    if _re_ge.search(r'[0-9a-f]{8,}', prefix):
+        return True
+    # Слишком много цифр (>50% prefix = цифры) — не личный email
+    digit_count = sum(1 for c in prefix if c.isdigit())
+    if len(prefix) > 4 and digit_count / len(prefix) > 0.5:
+        return True
+    # Домен = noreply/bounce/mailer
+    domain_base = domain.split('.')[0] if domain else ''
+    if domain_base in ('noreply', 'bounce', 'mailer', 'donotreply',
+                        'notifications', 'alerts', 'daemon', 'no-reply'):
+        return True
+    # Явно мусорные домены (example.com, test.com, etc.)
+    if domain in ('example.com', 'example.org', 'example.net',
+                  'test.com', 'test.org', 'test.ru',
+                  'localhost', 'email.com',
+                  'domain.com', 'yoursite.com', 'yourdomain.com',
+                  'website.com', 'site.com', 'mysite.com',
+                  'company.com', 'placeholder.com',
+                  'fake.com', 'fake.ru', 'sample.com',
+                  'tempmail.com', 'throwaway.email',
+                  'mailinator.com', 'guerrillamail.com', 'sharklasers.com',
+                  'grr.la', 'guerrillamailblock.com', 'yopmail.com',
+                  'trashmail.com', 'dispostable.com'):
+        return True
+    # Сервисные email платформ (не личные)
+    if domain in ('substackinc.com', 'substack.com', 'medium.com',
+                  'wordpress.com', 'github.com', 'users.noreply.github.com',
+                  'googlegroups.com', 'mailchimp.com', 'sendgrid.net',
+                  'amazonses.com', 'mailgun.org', 'sparkpost.com',
+                  'telegram.org', 'whatsapp.com', 'signal.org',
+                  # Домены парсимых платформ (email самих платформ, не пользователей)
+                  'habr.com', 'vc.ru', 'spark.ru', 'rb.ru', 'tproger.ru',
+                  'dev.to', 'hackernoon.com', 'about.me',
+                  'producthunt.com', 'indiehackers.com',
+                  'reddit.com', 'stackoverflow.com', 'stackexchange.com'):
+        return True
+    # Email начинающиеся с support+ (Substack pattern: support+xxx@substack.com)
+    if prefix.startswith('support+') or prefix.startswith('noreply+'):
+        return True
+    # Невалидные псевдо-домены мессенджеров (агент пишет @telegram вместо реального email)
+    if domain in ('telegram', 'vk', 'vk.com', 't.me', 'instagram', 'twitter', 'facebook',
+                  'linkedin', 'discord', 'slack', 'whatsapp'):
+        return True
+    # Корпоративные субдомены крупных платформ (eda.yandex.ru, business.mail.ru, etc.)
+    # Это не личные email — это ящики подразделений
+    _CORP_PLATFORM_PARENTS = (
+        '.yandex.ru', '.yandex.com', '.mail.ru', '.google.com',
+        '.microsoft.com', '.amazon.com', '.vk.com', '.sber.ru',
+    )
+    if any(domain.endswith(p) for p in _CORP_PLATFORM_PARENTS):
+        return True
+    # Государственные / образовательные домены — не спамим
+    _GOV_EDU_SUFFIXES = ('.gov', '.gov.ru', '.edu', '.edu.ru', '.mil', '.ac.uk', '.edu.au', '.edu.cn')
+    if any(domain.endswith(s) for s in _GOV_EDU_SUFFIXES):
+        return True
+
+    # GUARD: local-part выглядит как домен (gmail.com@ymail.com, company.ru@hotmail.com)
+    # Это артефакты CRM/парсинга — не реальные получатели
+    _DOMAIN_TLD_GE = ('.com', '.ru', '.org', '.net', '.io', '.co', '.ai', '.de',
+                      '.uk', '.fr', '.me', '.edu', '.gov', '.info', '.biz', '.eu', '.cn')
+    if '.' in prefix and any(prefix.endswith(_t) for _t in _DOMAIN_TLD_GE):
+        return True
+
+    # Role-based emails on consumer providers — AI hallucination pattern:
+    # quant.analyst@yahoo.com, fintech.dev@icloud.com, crypto.analyst@yandex.ru
+    _CONSUMER_PROVIDERS_GE = {
+        'icloud.com', 'yahoo.com', 'protonmail.com', 'proton.me',
+        'outlook.com', 'hotmail.com', 'live.com',
+    }
+    _ROLE_WORDS_GE = {
+        'quant', 'algo', 'algorithm', 'analyst', 'analysis', 'trader', 'trading',
+        'fintech', 'hft', 'research', 'researcher', 'fund', 'crypto', 'market',
+        'investment', 'invest', 'venture', 'capital', 'finance', 'financial',
+        'banking', 'hedge', 'portfolio', 'strategy', 'lab', 'labs',
+        'devteam', 'techteam', 'blockchain', 'defi', 'startup',
+    }
+    if domain in _CONSUMER_PROVIDERS_GE:
+        _pparts = set(_re_ge.split(r'[._+-]', prefix))
+        if _pparts & _ROLE_WORDS_GE:
+            return True
+
+    return False
+
+
+# Кэш MX-проверок домена (async version): domain → bool (имеет MX)
+_mx_cache_async: dict[str, bool] = {}
+
+
+async def _check_mx_record(domain: str) -> bool:
+    """Проверяет наличие MX-записей у домена через DNS. Кэширует результат."""
+    domain = domain.lower().strip('.')
+    if domain in _mx_cache_async:
+        return _mx_cache_async[domain]
+
+    import asyncio
+    try:
+        # Используем системный DNS resolver
+        loop = asyncio.get_event_loop()
+        import socket
+        # getaddrinfo проверяет что домен существует (A/AAAA record)
+        result = await loop.run_in_executor(
+            None, lambda: socket.getaddrinfo(domain, 25, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        )
+        has_mx = bool(result)
+    except (socket.gaierror, OSError):
+        has_mx = False
+    except Exception:
+        has_mx = False
+
+    _mx_cache_async[domain] = has_mx
+    return has_mx
+
+
+def _is_likely_email_in_context(text: str, match_start: int, match_end: int) -> bool:
+    """Проверяет контекст вокруг regex-совпадения email — исключает пути/URL/код."""
+    # Символы перед/после совпадения
+    char_before = text[match_start - 1] if match_start > 0 else ' '
+    char_after = text[match_end] if match_end < len(text) else ' '
+    # mailto: — всегда OK (символ : перед email)
+    if match_start >= 7 and text[match_start - 7:match_start].lower() == 'mailto:':
+        return True
+    # Если окружено путевыми/кодовыми символами — не email
+    _path_chars = set('/\\=:!<>(){}[]|`\'";,')
+    if char_before in _path_chars or char_after in _path_chars:
+        return False
+    # Если внутри HTML-тега src/href (но не mailto)
+    if match_start > 7:
+        prefix_ctx = text[max(0, match_start - 30):match_start].lower()
+        if 'src=' in prefix_ctx or 'href=' in prefix_ctx:
+            if 'mailto:' not in prefix_ctx:
+                return False
+    return True
+
+
+_EMAIL_RE = __import__('re').compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}')
+
+
+def _extract_emails_from_text(text: str) -> set[str]:
+    """Извлекает email из текста с контекстной проверкой (отсекает файловые пути, код)."""
+    results = set()
+    for m in _EMAIL_RE.finditer(text):
+        em = m.group(0).lower().strip('.')
+        if _is_generic_email(em):
+            continue
+        if not _is_likely_email_in_context(text, m.start(), m.end()):
+            continue
+        results.add(em)
+    return results
+
+
+# Кэш сгенерированных DDG-запросов: {md5(target_audience[:100]): (queries, timestamp)}
+# Одна и та же кампания каждые 30 мин вызывает _auto_find_leads — запросы не меняются
+_DDG_QUERY_CACHE: dict = {}
+_DDG_QUERY_CACHE_TTL = 7200  # 2 часа
+
+# Кэш AI-сгенерированных платформ для нишевых аудиторий
+_NICHE_PLATFORM_CACHE: dict = {}
+_NICHE_PLATFORM_CACHE_TTL = 86400  # 24 часа
+
+
+async def _get_ai_niche_platforms(target_audience: str, goal: str, offer: str,
+                                  kw_enc: str, core_en: str,
+                                  has_cyrillic: bool, api) -> list:
+    """AI генерирует список платформ/директорий для ЛЮБОЙ аудитории с учётом языка.
+    Правило: если аудитория русскоязычная — возвращает .ru платформы,
+    если EN — международные. Кэш 24ч — не тратим API на повторные вызовы кампании."""
+    import hashlib as _hl_np
+    import time as _time_np
+    import json as _json_np
+    _lang_key = 'ru' if has_cyrillic else 'en'
+    cache_key = _hl_np.md5(
+        f"{_lang_key}:{target_audience[:150]}".encode('utf-8', errors='ignore')
+    ).hexdigest()
+    cached = _NICHE_PLATFORM_CACHE.get(cache_key)
+    if cached and (_time_np.time() - cached[1]) < _NICHE_PLATFORM_CACHE_TTL:
+        return cached[0]
+    try:
+        _kw_first = (target_audience[:80].split()[0] if target_audience.split() else 'specialist')
+        if has_cyrillic:
+            _lang_instruction = (
+                "Аудитория русскоязычная. ОБЯЗАТЕЛЬНО используй российские платформы (.ru домены).\n"
+                "Не используй LinkedIn, Facebook, reddit — они недоступны или требуют авторизацию.\n\n"
+                "ГЛАВНЫЙ ПРИНЦИП: подумай — где эти КОНКРЕТНЫЕ ЛЮДИ сами публикуют свои контакты (email, сайт, соцсети)?\n"
+                "Это могут быть профессиональные каталоги, форумы по увлечениям, сообщества, личные блоги — всё зависит от аудитории.\n\n"
+                "Примеры для разных типов аудиторий (адаптируй под реальную):\n"
+                "  Специалисты / фрилансеры → fl.ru/users, kwork.ru/seller, freelancehunt.com/freelancers, profi.ru/search, youdo.com/user;\n"
+                "  IT / разработчики → career.habr.com/resumes, fl.ru/users, habr.com/ru/search/?target_type=users;\n"
+                "  Предприниматели / бизнес → spark.ru/startup/search, vc.ru/search, tenchat.ru, 2gis.ru/search, cataloxy.ru, yell.ru, flamp.ru;\n"
+                "  Психологи / коучи / терапевты → b17.ru/specialists, psycabi.net/psy, profi.ru/psiholog, TimePad мероприятия;\n"
+                "  Маркетологи / SMM / копирайтеры → tenchat.ru, cossa.ru/people, vc.ru/@ , textach.ru;\n"
+                "  Дизайнеры / художники / фотографы → behance.net/search, 500px.com/popular, kwork.ru/search?query=дизайн, artstation.com;\n"
+                "  Музыканты / авторы / творческие люди → soundcloud.com/search, bandcamp.com/search, promodj.com, realmusic.ru;\n"
+                "  Блогеры / авторы контента → telega.in/channels, tgstat.ru, vc.ru/@ , spark.ru/startup/search;\n"
+                "  Студенты / молодёжь → vk.com/search, pikabu.ru/search, dtf.ru, habr.com;\n"
+                "  Родители → forumroditeley.ru, baby.ru/community, 7ya.ru/forum;\n"
+                "  Спортсмены / тренеры → sportmaster-liga.ru, prosportclub.ru, profi.ru/trener;\n"
+                "  Учёные / исследователи → elibrary.ru, researchgate.net, scholar.google.com;\n"
+                "  Любые люди с личным сайтом → about.me/search (указывай location), личные блоги."
+            )
+        else:
+            _lang_instruction = (
+                "Audience is English-speaking. Use international platforms.\n\n"
+                "KEY PRINCIPLE: think about WHERE THESE SPECIFIC PEOPLE publish their own contacts online.\n"
+                "This could be professional directories, hobby forums, fan communities, personal blogs — depends on the audience type.\n\n"
+                "Examples for different audience types (adapt to the actual audience):\n"
+                "  Professionals / freelancers → upwork.com/freelancers, freelancer.com/users, bark.com/professionals, thumbtack.com/pro;\n"
+                "  Developers / IT → github.com/search, upwork.com/search/profiles, dev.to/search, stackoverflow.com/users;\n"
+                "  Entrepreneurs / business → clutch.co/companies, manta.com/mb, yellowpages.com, yelp.com/search, angel.co/people;\n"
+                "  Coaches / therapists / healers → psychologytoday.com/us/therapists, noomii.com/coaches, theknot.com/marketplace;\n"
+                "  Designers / artists / photographers → behance.net/search, dribbble.com/designers, 500px.com, artstation.com;\n"
+                "  Musicians / bands / creatives → soundcloud.com/search, bandcamp.com/search, reverbnation.com, bandmix.com;\n"
+                "  Bloggers / content creators → youtube.com/results, medium.com/search, substack.com/search, about.me/search;\n"
+                "  Students / youth → reddit.com/search (niche subs), discord servers, quora.com/search;\n"
+                "  Parents → babycenter.com, whattoexpect.com, netmums.com;\n"
+                "  Athletes / coaches → teamreach.com, sportsblog.com, fiverr.com/search/gigs?query=coach;\n"
+                "  Researchers / academics → researchgate.net, academia.edu, scholar.google.com;\n"
+                "  Any personal sites → about.me/search, linktree, personal portfolio sites."
+            )
+        _prompt = (
+            f"Target audience: {target_audience[:300]}\n"
+            f"Goal: {goal[:150]}\n"
+            f"Context/offer: {offer[:150]}\n\n"
+            f"{_lang_instruction}\n\n"
+            f"TASK: Think creatively about where THESE SPECIFIC PEOPLE are present online and publicly share contact info.\n"
+            f"The goal can be anything: commercial, creative, social, educational, community-building — adapt accordingly.\n"
+            f"Do NOT assume it must be a sales/business scenario. Read the goal and audience carefully.\n\n"
+            f"Generate 10 direct URLs to pages/catalogs/listings where people of this audience type\n"
+            f"have PUBLIC contact info (email, website links, etc.).\n"
+            f"Use keyword '{_kw_first}' in search URLs where applicable (URL-encode spaces as +).\n"
+            f"Return ONLY valid JSON array: "
+            f'[{{"url": "https://...", "desc": "what platform and why contacts are public there"}}]'
+        )
+        raw = await api.deepseek_analyze(
+            prompt=_prompt,
+            system_prompt=(
+                "You are a lead generation expert. "
+                "Return ONLY valid JSON array of objects with 'url' and 'desc'. No markdown."
+            ),
+            max_tokens=500,
+        )
+        urls = []
+        if raw:
+            txt = raw.strip()
+            if '```' in txt:
+                for seg in txt.split('```'):
+                    seg = seg.strip()
+                    if seg.startswith('json'):
+                        seg = seg[4:].strip()
+                    if seg.startswith('['):
+                        txt = seg
+                        break
+            try:
+                parsed = _json_np.loads(txt)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict) and item.get('url'):
+                            u = str(item['url']).strip()
+                            if u.startswith('http') and len(u) > 10:
+                                urls.append(u)
+                        elif isinstance(item, str) and item.startswith('http'):
+                            urls.append(item.strip())
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+        _NICHE_PLATFORM_CACHE[cache_key] = (urls, _time_np.time())
+        logger.info(f"[AUTO_LEADS] AI-niche platforms [{_lang_key}] ({len(urls)}): {urls[:5]}")
+        return urls
+    except Exception as _e:
+        logger.warning(f"[AUTO_LEADS] AI niche platforms failed: {_e}")
+        return []
+
+
+async def _auto_find_leads(campaign, user, target_audience: str, goal: str,
+                           offer: str, session, github_token: str = '') -> tuple:
+    """Автоматический поиск лидов: multi-pass подход для 50 лидов/день.
+
+    Pass 0:  GitHub API — публичные email разработчиков (бесплатно, 20-50 за поиск)
+    Pass 0b: hh.ru API — только для B2B-кампаний (AI решает). Даёт HR/CTO компаний
+             из вакансий. НЕ подходит для поиска самих специалистов — там только рекрутёры.
+             Для специалистов: AI-нишевые платформы (fl.ru, kwork.ru, profi.ru, b17.ru и т.д.)
+    Pass 1:  Прямой парсинг платформ: tech-платформы + AI-нишевые URL.
+             AI генерирует URL каталогов, где специалисты САМИ публикуют email (хотят клиентов).
+    Pass 1b: DDG поиск по AI-запросам.
+    Pass 2:  Скачать страницы → regex email-адресов.
+    Pass 3:  AI-фильтрация по релевантности (порог ≥5).
+
+    Возвращает (count_added, message_str).
+    """
+    from .api_client import get_api_client
+    import aiohttp
+    import random
+    api = get_api_client()
+
+    # Ищем GITHUB_TOKEN у агентов пользователя если не передан явно
+    if not github_token:
+        try:
+            from models import UserAgent as _UA_gl
+            from config import decrypt_token as _dt_gl
+            _agents_with_keys = session.query(_UA_gl).filter(
+                _UA_gl.author_id == user.id,
+                _UA_gl.user_api_keys.isnot(None),
+            ).all()
+            for _ag_gl in _agents_with_keys:
+                _raw_keys = _ag_gl.user_api_keys or ''
+                # Decrypt encrypted keys before searching
+                try:
+                    _decrypted_keys = _dt_gl(_raw_keys)
+                except Exception:
+                    _decrypted_keys = _raw_keys
+                for _line in _decrypted_keys.splitlines():
+                    if _line.strip().upper().startswith('GITHUB_TOKEN='):
+                        github_token = _line.split('=', 1)[1].strip()
+                        logger.info(f'[AUTO_LEADS] Using GITHUB_TOKEN from agent {_ag_gl.name}')
+                        break
+                if github_token:
+                    break
+        except Exception as _gt_err:
+            logger.debug(f'[AUTO_LEADS] GITHUB_TOKEN lookup error: {_gt_err}')
+
+    keywords = target_audience[:200].replace(',', ' ').replace('.', ' ')
+    goal_kw = goal[:100].replace(',', ' ').replace('.', ' ')
+    _has_cyrillic = any('\u0400' <= c <= '\u04ff' for c in target_audience)
+
+    # Домены которые блокируют бот-запросы — скачивать бесполезно
+    _unfetchable_domains = {
+        'facebook.com', 'linkedin.com', 'twitter.com', 'x.com',
+        'instagram.com', 'youtube.com', 'reddit.com', 'tiktok.com',
+        'vk.com', 'ok.ru', 't.me', 'pinterest.com',
+    }
+
+    # Извлекаем 2-3 ключевых слова
+    _kw_words = [w for w in keywords.split() if len(w) > 2][:3]
+    core_kw = ' '.join(_kw_words)
+    # Для EN-запросов (работают лучше)
+    _goal_words = [w for w in goal_kw.split() if len(w) > 2][:2]
+    goal_short = ' '.join(_goal_words)
+
+    import re as _re_al
+    all_emails_raw = set()  # email найденные напрямую — инициализируем ДО всех пассов
+
+    # Определяем, техническая ли аудитория (GitHub полезен ТОЛЬКО если сам ЧЕЛОВЕК — тех. спец.)
+    # ВАЖНО: проверяем ТОЛЬКО target_audience, а НЕ goal/offer.
+    # Продукт может быть AI-платформой, но ПОКУПАТЕЛИ могут быть предпринимателями из любых отраслей.
+    # Меченые слова должны описывать ПРОФЕССИЮ/РОЛЬ целевого человека, а не характеристики продукта.
+    _audience_text = target_audience.lower()
+    _tech_markers = [
+        # Языки программирования и фреймворки — явные индикаторы разработчика
+        'python', 'javascript', 'typescript', 'react', 'node', 'django',
+        'fastapi', 'flask', 'blockchain', 'web3', 'devops',
+        'rust', 'golang', 'java', 'php', 'ruby', 'swift',
+        'flutter', 'vue', 'angular', 'nextjs',
+        # Роли разработчиков
+        'developer', 'разработ', 'программист', 'engineer', 'инженер',
+        'backend', 'frontend', 'fullstack', 'open source', 'github',
+        'code', 'coding', 'software',
+        # QA / тестировщики
+        'тестировщ', 'tester', 'testing', 'qa ', 'quality assurance',
+        'selenium', 'cypress', 'appium', 'pytest',
+        # Аналитики / продуктовые роли (IT-контекст)
+        'продуктолог', 'product manager',
+        # IT-роли
+        'it-', 'it специал', 'ит специал',
+        # Инди/соло разработчики
+        'инди разраб', 'indie dev', 'соло.разраб', 'соло разраб',
+        'npm', 'pypi', 'open-source', 'contributor', 'maintainer',
+        # AI/ML инженеры (роль, не интерес к продукту)
+        'ml engineer', 'ai engineer', 'data scientist', 'data science',
+        'machine learning', 'langchain', 'llm developer', 'llm engineer',
+        # SaaS-строители / tech-founders (явный код/продуктовый контекст)
+        'saas founder', 'tech founder', 'технический директор', 'tech lead',
+        # Bio/life sciences — GitHub хранит biotech/genomics профили
+        'bioinformatics', 'bioinformatic', 'biotech', 'genomics', 'genomic',
+        'proteomics', 'metagenomics', 'cheminformatics', 'computational biology',
+        'биоинформатик', 'геномик', 'биотех', 'биостатистик', 'biostatistics',
+        'structural biology', 'structural biolog', 'молекулярн биолог',
+        'sequencing', 'ngs ', 'single-cell', 'scrnaseq', 'rna-seq',
+    ]
+    _is_tech_audience = any(t in _audience_text for t in _tech_markers)
+
+    # Если пользователь явно настроил GITHUB_TOKEN — он хочет GitHub-поиск,
+    # расширяем маркеры чтобы покрыть AI/ML/tech аудитории (гибкость per-user).
+    if github_token and not _is_tech_audience:
+        _broad_tech_markers = [
+            'ai-', 'ai ', 'ml-', 'ml ', 'artificial intelligence', 'искусственн',
+            'нейросет', 'deep learning', 'llm', 'gpt', 'технологич',
+            'автоматизац', 'automation', 'no-code', 'low-code',
+        ]
+        if any(t in _audience_text for t in _broad_tech_markers):
+            _is_tech_audience = True
+            logger.info('[AUTO_LEADS] Broad tech audience match (user has GITHUB_TOKEN)')
+
+    # Предпринимательский контекст без явно технической роли → НЕ ищем на GitHub
+    _business_markers = [
+        'предпринимател', 'бизнесмен', 'владелец бизнеса', 'собственник бизнеса',
+        'entrepreneur', 'business owner', 'малый бизнес', 'средний бизнес',
+        'розница', 'ритейл', 'ресторан', 'кафе', 'услуги', 'торговл',
+        'директор', 'генеральный директор', 'руководитель компании',
+    ]
+    _is_business_audience = any(b in _audience_text for b in _business_markers)
+    if _is_business_audience and not _is_tech_audience:
+        _is_tech_audience = False
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS -1: CRM CONTACTS — используем уже известные контакты из email_contacts
+    # Быстрый путь: email_contacts(status='new') → email_outreach(status='draft')
+    # Создаёт черновики ДО внешнего поиска, экономит API-вызовы
+    # ══════════════════════════════════════════════════════════════════════
+    _crm_added = 0
+    try:
+        _crm_contacts = session.query(EmailContact).filter(
+            EmailContact.user_id == user.id,
+            EmailContact.status == 'new',
+        ).all()
+        _crm_candidates = []
+        for _ec in _crm_contacts:
+            _ec_email = (_ec.email or '').strip().lower()
+            if not _ec_email or '@' not in _ec_email:
+                continue
+            # Пропускаем если уже есть в outreach этой кампании
+            _already = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id,
+                recipient_email=_ec_email,
+            ).first()
+            if _already:
+                continue
+            _crm_candidates.append({
+                'email': _ec_email,
+                'name': _ec.name or '',
+                'company': _ec.company or '',
+                'context': _ec.notes or f'CRM contact ({_ec.source or "manual"})',
+                'relevance': 8,
+            })
+        if _crm_candidates:
+            _crm_leads_json = json.dumps(_crm_candidates[:50], ensure_ascii=False)
+            _crm_result = await add_email_leads(
+                campaign_id=campaign.id,
+                leads=_crm_leads_json,
+                user_id=user.telegram_id,
+                session=session,
+                close_session=False,
+            )
+            _crm_m = _re_al.search(r'(\d+)\s*email', _crm_result or '')
+            _crm_added = int(_crm_m.group(1)) if _crm_m else 0
+            # НЕ помечаем email_contacts как 'contacted' здесь — только при реальной отправке
+            # (send_outreach_email устанавливает status='contacted' сам после успешной доставки)
+            logger.info(f"[AUTO_LEADS] PASS -1 CRM contacts: {len(_crm_contacts)} total, "
+                        f"{len(_crm_candidates)} candidates → {_crm_added} added to campaign #{campaign.id}")
+        else:
+            logger.info(f"[AUTO_LEADS] PASS -1 CRM contacts: {len(_crm_contacts)} total, 0 new candidates for campaign #{campaign.id}")
+    except Exception as _crm_err:
+        logger.warning(f"[AUTO_LEADS] PASS -1 CRM contacts error: {_crm_err}")
+        try:
+            session.rollback()
+        except Exception:
+            pass
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 0: GitHub API — ТОЛЬКО для технической аудитории
+    # (маркетологи, дизайнеры, бизнес и т.д. — GitHub бесполезен)
+    # ══════════════════════════════════════════════════════════════════════
+    github_leads = []
+    if _is_tech_audience:
+        try:
+            gh_queries = []
+            _found_techs = [t for t in _tech_markers if t in _audience_text and len(t) > 2]
+            
+            # Перевод русских терминов в английские для GitHub
+            _ru_to_en = {
+                'тестировщ': 'QA engineer',
+                'разработ': 'developer',
+                'программист': 'programmer',
+                'инженер': 'engineer',
+                'аналитик': 'analyst',
+                'продуктолог': 'product manager',
+                'автоматизац': 'automation',
+                'it специал': 'IT specialist',
+                'ит специал': 'IT specialist',
+                'технолог': 'technology',
+            }
+            _en_techs = []
+            for t in _found_techs:
+                for ru, en in _ru_to_en.items():
+                    if ru in t:
+                        _en_techs.append(en)
+                        break
+                else:
+                    _en_techs.append(t)
+
+            # Используем англ. термины для GitHub-запросов
+            _gh_techs = _en_techs if _en_techs else _found_techs
+            if _gh_techs:
+                # Для location-запросов предпочитаем специфичный термин (не 'ai', 'bot', 'api' — слишком общие)
+                _generic_gh = {'ai', 'api', 'bot', 'app ', 'saas', 'developer', 'programmer',
+                               'engineer', 'bi ', 'crm', 'erp', 'llm', 'gpt', 'software'}
+                _specific_techs = [t for t in _gh_techs if t.lower().strip() not in _generic_gh]
+                _gh_main_base = (_specific_techs[0] if _specific_techs else _gh_techs[0])
+
+                # Основные запросы: каждый уникальный тех в отдельном запросе
+                _seen_qterms: set = set()
+                for tech in _gh_techs[:4]:
+                    if tech not in _seen_qterms:
+                        _seen_qterms.add(tech)
+                        gh_queries.append(tech)
+                # Комбинированные запросы: специфичный тех + 'developer'
+                for tech in (_specific_techs or _gh_techs)[:2]:
+                    combo = f"{tech} developer"
+                    if combo not in _seen_qterms:
+                        _seen_qterms.add(combo)
+                        gh_queries.append(combo)
+            elif core_kw:
+                _gh_main_base = core_kw
+                gh_queries.append(core_kw)
+            else:
+                _gh_main_base = core_kw
+
+            if _has_cyrillic:
+                # Для русской аудитории — используем СПЕЦИФИЧНЫЙ тех для location-запросов
+                _gh_main = _gh_main_base
+                gh_queries.insert(0, f"{_gh_main} location:Russia")
+                gh_queries.append(f"{_gh_main} location:Moscow")
+
+            gh_queries = list(dict.fromkeys(gh_queries))[:6]  # дедупликация, лимит 6
+            if gh_queries:
+                # Циклируем страницы 1-12 с элементом случайности для разнообразия
+                # Дедуп в add_email_leads не даст повторно добавить уже отправленных.
+                import random as _rnd_gh
+                _gh_page_base = max(1, ((campaign.emails_sent or 0) // 10) % 12 + 1)
+                _gh_page_alt = _rnd_gh.randint(1, 12)
+                _gh_pages = list(dict.fromkeys([_gh_page_base, _gh_page_alt]))  # dedup
+                logger.info(f"[AUTO_LEADS] Tech audience → GitHub search pages={_gh_pages}: {gh_queries}")
+                for _gh_page in _gh_pages:
+                    _page_leads = await api.github_multi_search(
+                        queries=gh_queries,
+                        max_users_per_query=20,
+                        page=_gh_page,
+                        github_token=github_token or None,
+                    )
+                    github_leads.extend(_page_leads)
+                for lead in github_leads:
+                    em = lead.get('email', '').lower().strip('.')
+                    if em and not _is_generic_email(em):
+                        all_emails_raw.add(em)
+                logger.info(f"[AUTO_LEADS] GitHub found {len(github_leads)} users total from {len(_gh_pages)} pages")
+                if not github_leads and not github_token:
+                    logger.warning("[AUTO_LEADS] GitHub returned 0 leads without GITHUB_TOKEN — likely rate limited (60 req/hr)")
+        except Exception as _gh_err:
+            logger.warning(f"[AUTO_LEADS] GitHub search failed: {_gh_err}")
+    else:
+        logger.info(f"[AUTO_LEADS] Non-tech audience → skipping GitHub, using web search only")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 0b: hh.ru API — контакты HR/найма (только для русскоязычной аудитории)
+    # ВАЖНО: contacts.email на hh.ru — это HR/нанимающий менеджер компании, а НЕ сам специалист.
+    # Это работает для B2B-кампаний (выйти на компании нужной ниши через их HR/CTO).
+    # Для B2C (найти индивидуальных профессионалов) — AI определит, нужен ли hh пасс.
+    # ══════════════════════════════════════════════════════════════════════
+    hh_leads = []
+    if _has_cyrillic:
+        try:
+            import aiohttp as _aiohttp_hh
+            import asyncio as _asyncio_hh
+            import json as _json_hh
+
+            # AI определяет: полезен ли hh.ru для этого сценария
+            # hh.ru возвращает HR/нанимающие контакты КОМПАНИЙ — только для корпоративных целей
+            _hh_decide_prompt = (
+                f"Goal: {goal[:200]}\n"
+                f"Target audience: {target_audience[:200]}\n"
+                f"Context: {offer[:100]}\n\n"
+                f"Task: decide if hh.ru job vacancy API is useful for reaching this audience.\n"
+                f"hh.ru API returns: HR managers and hiring contacts of COMPANIES — NOT individual people.\n"
+                f"Use it ONLY when the target is: company HR, hiring managers, recruiters, corporate decision-makers,\n"
+                f"or any scenario where 'the company' itself is the contact target.\n\n"
+                f"Set use_hh=false for: individual people (any profession), hobbyists, students, creatives,\n"
+                f"consumers, personal goals, non-business scenarios, or any case where a person (not a company) is the target.\n\n"
+                f"Return JSON: {{\"use_hh\": true/false, \"queries\": [\"query1\", \"query2\"], \"reason\": \"...\"}}\n"
+                f"queries: 1-2 hh.ru vacancy search queries relevant to the niche (if use_hh=true).\n"
+                f"ONLY valid JSON, no markdown."
+            )
+            _hh_ai_raw = await api.deepseek_analyze(
+                prompt=_hh_decide_prompt,
+                system_prompt="Return ONLY valid JSON. No explanation.",
+                max_tokens=150,
+            )
+            _hh_use = False
+            _hh_queries = []
+            if _hh_ai_raw:
+                try:
+                    _hh_txt = _hh_ai_raw.strip()
+                    if '```' in _hh_txt:
+                        for _seg in _hh_txt.split('```'):
+                            _seg = _seg.strip()
+                            if _seg.startswith('json'): _seg = _seg[4:].strip()
+                            if _seg.startswith('{'): _hh_txt = _seg; break
+                    _hh_parsed = _json_hh.loads(_hh_txt)
+                    _hh_use = bool(_hh_parsed.get('use_hh', False))
+                    _hh_queries = [str(q) for q in (_hh_parsed.get('queries') or []) if q][:2]
+                    logger.info(f"[AUTO_LEADS] hh.ru decision: use={_hh_use}, reason={_hh_parsed.get('reason','')[:100]}")
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+
+            if not _hh_use:
+                logger.info(f"[AUTO_LEADS] hh.ru Pass 0b: skipped (AI decided not relevant for this campaign type)")
+
+            if _hh_use and _hh_queries:
+                _hh_headers = {
+                    'User-Agent': 'ASI-Biont/1.0 (outreach@asibiont.com)',
+                    'Accept': 'application/json',
+                }
+
+            async def _hh_get_vacancy_email(session_hh, vacancy_id: str) -> dict | None:
+                """Получить contacts.email из конкретной вакансии hh.ru."""
+                try:
+                    async with session_hh.get(
+                        f'https://api.hh.ru/vacancies/{vacancy_id}',
+                        headers=_hh_headers,
+                        timeout=_aiohttp_hh.ClientTimeout(total=8),
+                        ssl=False,
+                    ) as resp:
+                        if resp.status != 200:
+                            return None
+                        data = await resp.json(content_type=None)
+                        contacts = data.get('contacts') or {}
+                        email = (contacts.get('email') or '').strip().lower()
+                        if not email or _is_generic_email(email):
+                            return None
+                        name = contacts.get('name') or ''
+                        employer = (data.get('employer') or {}).get('name') or ''
+                        area = (data.get('area') or {}).get('name') or ''
+                        snippet = (data.get('description') or '')[:300]
+                        return {
+                            'email': email,
+                            'name': name,
+                            'company': employer,
+                            'context': (
+                                f"hh.ru hiring contact: {name or 'HR'} at {employer}"
+                                f"{', ' + area if area else ''}. "
+                                f"Vacancy snippet: {_re_al.sub(r'<[^>]+>', ' ', snippet)[:200]}"
+                            ),
+                        }
+                except Exception:
+                    return None
+
+            async with _safe_http() as _hh_sess:
+                # Собираем ID вакансий по всем запросам
+                _vacancy_ids = []
+                for _hh_q in _hh_queries:
+                    try:
+                        async with _hh_sess.get(
+                            'https://api.hh.ru/vacancies',
+                            params={'text': _hh_q, 'area': 113, 'per_page': 20, 'page': 0},
+                            headers=_hh_headers,
+                            timeout=_aiohttp_hh.ClientTimeout(total=10),
+                            ssl=False,
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json(content_type=None)
+                                for item in (data.get('items') or []):
+                                    vid = str(item.get('id', ''))
+                                    if vid and vid not in _vacancy_ids:
+                                        _vacancy_ids.append(vid)
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+
+                # Параллельно запрашиваем детали (макс 30 вакансий)
+                _vacancy_ids = _vacancy_ids[:30]
+                if _vacancy_ids:
+                    _tasks_hh = [_hh_get_vacancy_email(_hh_sess, vid) for vid in _vacancy_ids]
+                    # Пауза между батчами чтобы не перегружать API hh.ru
+                    _batch_results = []
+                    for i in range(0, len(_tasks_hh), 10):
+                        batch = await _asyncio_hh.gather(*_tasks_hh[i:i+10], return_exceptions=True)
+                        _batch_results.extend(batch)
+                        if i + 10 < len(_tasks_hh):
+                            await _asyncio_hh.sleep(1)
+
+                    for res in _batch_results:
+                        if isinstance(res, dict) and res.get('email'):
+                            hh_leads.append(res)
+                            all_emails_raw.add(res['email'])
+
+            logger.info(f"[AUTO_LEADS] hh.ru Pass 0b: {len(_vacancy_ids)} vacancies → {len(hh_leads)} contacts with email")
+        except Exception as _hh_err:
+            logger.warning(f"[AUTO_LEADS] hh.ru pass failed: {_hh_err}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 1: ПРЯМОЙ ПАРСИНГ ПЛАТФОРМ (основной источник email)
+    # DDG ненадёжен для email (rate-limit, блокировки) — парсим платформы напрямую
+    # ══════════════════════════════════════════════════════════════════════
+    import asyncio as _asyncio_al
+
+    _kw_enc = core_kw.replace(' ', '%20')
+    _core_en = core_kw.replace(' ', '+')
+    _platform_urls = []
+
+    # ──────────────────────────────────────────────────────────────────────
+    # PASS 1 платформы: AI думает сам — какие площадки подходят этой аудитории
+    # ──────────────────────────────────────────────────────────────────────
+
+    # AI анализирует аудиторию и выбирает платформы сам
+    _ai_platforms = await _get_ai_niche_platforms(
+        target_audience, goal, offer, _kw_enc, _core_en, _has_cyrillic, api
+    )
+    _platform_urls.extend(_ai_platforms)
+
+    # Страховочный минимум если AI вернул 0 URL
+    if not _ai_platforms:
+        if _has_cyrillic:
+            _platform_urls.extend([
+                f'https://career.habr.com/resumes?q={_kw_enc}',
+                f'https://www.fl.ru/users/?skills={_kw_enc}',
+                f'https://profi.ru/search/?q={_kw_enc}',
+                f'https://vc.ru/search?q={_kw_enc}',
+            ])
+        else:
+            _platform_urls.extend([
+                f'https://www.upwork.com/search/profiles/?q={_core_en}',
+                f'https://about.me/search?q={_core_en}',
+                f'https://medium.com/search?q={_core_en}',
+            ])
+    _niche_contact_urls = []
+
+    async def _fetch_platform(url: str) -> tuple:
+        """Скачать страницу платформы, вернуть (url, html)."""
+        try:
+            s = await api._get_session()
+            async with s.get(url, timeout=aiohttp.ClientTimeout(total=10),
+                             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},
+                             allow_redirects=True, ssl=False) as resp:
+                if resp.status == 200 and 'text' in (resp.content_type or ''):
+                    html = await resp.text(errors='replace')
+                    return (url, html[:30000])
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        return (url, "")
+
+    # Параллельная загрузка всех платформ
+    _all_platform_urls = _platform_urls + _niche_contact_urls
+    _pages = await _asyncio_al.gather(
+        *[_fetch_platform(u) for u in _all_platform_urls[:15]],
+        return_exceptions=True,
+    )
+
+    all_results = []  # для совместимости с Pass 2 (url scoring)
+    _direct_emails = 0
+    page_texts = []  # для AI-фильтрации
+
+    for _page_result in _pages:
+        if isinstance(_page_result, Exception) or not isinstance(_page_result, tuple):
+            continue
+        _p_url, _p_html = _page_result
+        if not _p_html:
+            continue
+
+        # Извлекаем email напрямую из HTML
+        _found = _extract_emails_from_text(_p_html)
+        all_emails_raw.update(_found)
+        for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', _p_html):
+            em = em.lower().strip('.')
+            if not _is_generic_email(em):
+                all_emails_raw.add(em)
+        _direct_emails += len(_found)
+
+        # Извлекаем ссылки на профили/страницы контактов для Pass 2
+        _profile_links = _re_al.findall(r'href="(https?://[^"]{10,200})"', _p_html)
+        for _pl in _profile_links[:30]:
+            _pl_lower = _pl.lower()
+            if any(h in _pl_lower for h in ('/user/', '/author/', '/profile/', '/@', '/people/', '/u/')):
+                all_results.append({'title': '', 'snippet': '', 'url': _pl})
+
+        # Чистый текст для AI-анализа
+        _clean = _re_al.sub(r'<[^>]+>', ' ', _p_html)
+        _clean = _re_al.sub(r'\s+', ' ', _clean)[:2000]
+        page_texts.append(_clean)
+
+    logger.info(f"[AUTO_LEADS] Direct platform scrape: {len(_all_platform_urls)} URLs → "
+                f"{_direct_emails} emails extracted, {len(all_results)} profile links, "
+                f"GitHub leads: {len(github_leads)}, total raw: {len(all_emails_raw)}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 1b: DDG поиск с AI-генерированными запросами
+    # Главный путь для ЛЮБОЙ аудитории — DDG находит реальные личные страницы
+    # ══════════════════════════════════════════════════════════════════════
+    import json as _json_q
+    import hashlib as _hl_ddg
+    import time as _time_ddg
+    _ddg_hits = 0
+    try:
+        # Кэш DDG-запросов — та же аудитория = те же запросы, API вызов не нужен
+        _cache_key = _hl_ddg.md5(target_audience[:100].encode('utf-8', errors='ignore')).hexdigest()
+        _cached = _DDG_QUERY_CACHE.get(_cache_key)
+        _now_ts = _time_ddg.time()
+        if _cached and (_now_ts - _cached[1]) < _DDG_QUERY_CACHE_TTL:
+            _ddg_queries = _cached[0]
+            logger.info(f"[AUTO_LEADS] PASS 1b DDG queries from cache ({len(_ddg_queries)}): {_ddg_queries}")
+        else:
+            _q_lang = 'Russian' if _has_cyrillic else 'English'
+            _queries_prompt = (
+                f"Generate 6 web search queries to find CONTACT EMAIL ADDRESSES of people matching:\n"
+                f"Target audience: {target_audience[:200]}\n"
+                f"Goal: {goal[:150]}\n"
+                f"Language preference: {_q_lang}\n\n"
+                f"IMPORTANT: The goal can be anything — commercial, creative, social, hobby, educational.\n"
+                f"Do NOT assume it's a sales scenario. Read the audience and goal carefully.\n"
+                f"Focus on who these PEOPLE ARE (their identity, interests, role) — not what the product is.\n\n"
+                f"Rules:\n"
+                f"- Each query must target pages where these specific people publicly share their email\n"
+                f"  (personal sites, portfolios, community profiles, contact pages, forum profiles, etc.)\n"
+                f"- Think: where do people of this type VOLUNTARILY publish contact info?\n"
+                f"  Professionals → freelance platforms, specialist directories\n"
+                f"  Creatives/artists → portfolio sites, communities, about.me\n"
+                f"  Hobbyists → niche forums, club sites, meetup pages\n"
+                f"  Business people → catalogs, review sites, business directories\n"
+                f"  Enthusiasts/fans → fan communities, event pages\n"
+                f"- Mix direct audience-type searches with platform-specific ones\n"
+                f"- If Russian-speaking audience, use both Russian and English queries\n"
+                f"Return ONLY valid JSON array of 6 query strings: [\"q1\", \"q2\", ...]"
+            )
+            _ai_q_raw = await api.deepseek_analyze(
+                prompt=_queries_prompt,
+                system_prompt="Return ONLY a valid JSON array of strings, no markdown or explanation.",
+                max_tokens=300,
+            )
+            _ddg_queries = []
+            if _ai_q_raw:
+                _qt = _ai_q_raw.strip()
+                if '```' in _qt:
+                    for _seg in _qt.split('```'):
+                        _seg = _seg.strip()
+                        if _seg.startswith('json'):
+                            _seg = _seg[4:].strip()
+                        if _seg.startswith('['):
+                            _qt = _seg
+                            break
+                try:
+                    _pq = _json_q.loads(_qt)
+                    if isinstance(_pq, list):
+                        _ddg_queries = [str(q).strip() for q in _pq if q][:6]
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+            # Fallback-запросы если AI не вернул список
+            if not _ddg_queries:
+                _ddg_queries = [f"{core_kw} email contact", f"{core_kw} личный сайт"]
+                if _has_cyrillic:
+                    _ddg_queries.append(f"{core_kw} написать мне")
+            # Сохраняем в кэш
+            if _ddg_queries:
+                _DDG_QUERY_CACHE[_cache_key] = (_ddg_queries, _now_ts)
+            logger.info(f"[AUTO_LEADS] PASS 1b DDG queries ({len(_ddg_queries)}): {_ddg_queries}")
+        _ddg_raw = await api.web_multi_search(_ddg_queries, num_per_query=8)
+        _ddg_hits = len(_ddg_raw)
+
+        for _r in _ddg_raw:
+            # Сразу извлекаем email из сниппетов DDG
+            _snip = (_r.get('snippet') or '') + ' ' + (_r.get('title') or '')
+            all_emails_raw.update(_extract_emails_from_text(_snip))
+            # URL → PASS 2 (скачать страницу и поискать email там)
+            _r_url = _r.get('link', '')
+            if _r_url:
+                try:
+                    _r_domain = _r_url.split('/')[2]
+                    _r_base = '.'.join(_r_domain.split('.')[-2:])
+                    if _r_base not in _unfetchable_domains:
+                        all_results.append({
+                            'title': _r.get('title', ''),
+                            'snippet': _r.get('snippet', ''),
+                            'url': _r_url,
+                        })
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+
+        logger.info(f"[AUTO_LEADS] PASS 1b DDG: {_ddg_hits} results → "
+                    f"{len(all_results)} URLs in pool, {len(all_emails_raw)} emails total")
+    except Exception as _ddg_err:
+        logger.warning(f"[AUTO_LEADS] PASS 1b DDG failed: {_ddg_err}")
+
+    # Если после ВСЕХ пассов (платформы + GitHub + DDG) ничего — выходим
+    if not all_results and not github_leads and not all_emails_raw:
+        logger.warning(f"[AUTO_LEADS] ZERO results after all passes for campaign #{campaign.id}")
+        return 0, ""
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 2: Скачиваем профильные страницы + contact/about sub-pages → email
+    # ══════════════════════════════════════════════════════════════════════
+    _contact_hints = {'contact', 'about', 'profile', 'author', 'user',
+                      'контакт', 'автор', 'профиль', 'обо мне',
+                      '@', 'email', 'mailto', 'написать', 'связаться'}
+    scored_urls = []
+    seen_domains = set()
+    contact_sub_urls = []  # URL контактных страниц для дополнительного сканирования
+
+    for r in all_results:
+        url = r['url']
+        if not url:
+            continue
+        try:
+            domain = url.split('/')[2]
+        except IndexError:
+            continue
+        
+        # Пропускаем домены которые блокируют ботов
+        base_domain = '.'.join(domain.split('.')[-2:])
+        if base_domain in _unfetchable_domains or domain in _unfetchable_domains:
+            # Но извлекаем email из сниппета
+            all_emails_raw.update(_extract_emails_from_text(r['snippet']))
+            continue
+        
+        if domain not in seen_domains:
+            seen_domains.add(domain)
+            # Добавляем контактные sub-pages для каждого нового домена
+            scheme = 'https' if url.startswith('https') else 'http'
+            for sub in ['/contact', '/contacts', '/about', '/about-us', '/team', '/kontakty']:
+                contact_sub_urls.append(f"{scheme}://{domain}{sub}")
+
+        # Скоринг: сниппет/заголовок содержат email-подсказки?
+        text_lower = f"{r['title']} {r['snippet']}".lower()
+        score = sum(1 for h in _contact_hints if h in text_lower)
+        if '@' in r['snippet'] and '.' in r['snippet'].split('@')[-1][:10]:
+            score += 5
+        scored_urls.append((score, url, r['snippet']))
+
+    scored_urls.sort(reverse=True)
+    top_urls = scored_urls[:20]  # Увеличили до 20 страниц
+    logger.info(f"[AUTO_LEADS] Unique domains: {len(seen_domains)}, "
+                f"top URLs: {len(top_urls)}, contact sub-pages: {len(contact_sub_urls)}")
+
+    page_texts = []
+
+    # Извлекаем email из сниппетов сразу
+    for _, _, snippet in scored_urls:
+        all_emails_raw.update(_extract_emails_from_text(snippet))
+
+    # Скачиваем страницы параллельно
+    async def _fetch_page(url: str) -> str:
+        """Скачать текст страницы (первые 15KB)."""
+        try:
+            s = await api._get_session()
+            async with s.get(url, timeout=aiohttp.ClientTimeout(total=8),
+                             headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}, 
+                             allow_redirects=True, ssl=False) as resp:
+                if resp.status == 200 and 'text' in resp.content_type:
+                    raw = await resp.text(errors='replace')
+                    return raw[:15000]
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        return ""
+
+    import asyncio as _asyncio_al
+
+    # Fetch основных страниц
+    pages = await _asyncio_al.gather(*[_fetch_page(u) for _, u, _ in top_urls],
+                                      return_exceptions=True)
+
+    for page_html in pages:
+        if isinstance(page_html, str) and page_html:
+            all_emails_raw.update(_extract_emails_from_text(page_html))
+            # Также ищем mailto: ссылки (часто скрыты от глаз но есть в HTML)
+            for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', page_html):
+                em = em.lower().strip('.')
+                if not _is_generic_email(em):
+                    all_emails_raw.add(em)
+            clean_text = _re_al.sub(r'<[^>]+>', ' ', page_html)
+            clean_text = _re_al.sub(r'\s+', ' ', clean_text)[:2000]
+            page_texts.append(clean_text)
+
+    pages_fetched = sum(1 for p in pages if isinstance(p, str) and p)
+
+    # Fetch контактных sub-pages (если основные не дали достаточно email)
+    contact_pages_fetched = 0
+    if len(all_emails_raw) < 30 and contact_sub_urls:
+        # Берём до 30 контактных страниц
+        _sub_to_fetch = contact_sub_urls[:30]
+        sub_pages = await _asyncio_al.gather(*[_fetch_page(u) for u in _sub_to_fetch],
+                                              return_exceptions=True)
+        for page_html in sub_pages:
+            if isinstance(page_html, str) and page_html:
+                contact_pages_fetched += 1
+                all_emails_raw.update(_extract_emails_from_text(page_html))
+                for em in _re_al.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6})', page_html):
+                    em = em.lower().strip('.')
+                    if not _is_generic_email(em):
+                        all_emails_raw.add(em)
+
+    logger.info(f"[AUTO_LEADS] Pages fetched: {pages_fetched} main + {contact_pages_fetched} contact, "
+                f"emails from regex: {len(all_emails_raw)}, "
+                f"GitHub leads: {len(github_leads)}, hh.ru leads: {len(hh_leads)}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # PASS 3: AI-фильтрация по релевантности
+    # ══════════════════════════════════════════════════════════════════════
+    combined_text = "\n---\n".join(page_texts[:6])
+    snippets_text = "\n".join(f"- {r['title']}: {r['snippet']}" for r in all_results[:15])
+
+    # Добавляем GitHub и hh.ru leads к all_emails_raw + строим контекст-карту
+    github_context_map = {}  # email → context info from GitHub / hh.ru
+    for gl in github_leads:
+        em = gl.get('email', '').lower().strip('.')
+        if em and not _is_generic_email(em):
+            all_emails_raw.add(em)
+            github_context_map[em] = (
+                f"GitHub user: {gl.get('name', '')} (@{gl.get('url', '').split('/')[-1] if gl.get('url') else '?'}), "
+                f"bio: {gl.get('bio', '')[:100]}, company: {gl.get('company', '')}, "
+                f"repos: {gl.get('repos', 0)}, followers: {gl.get('followers', 0)}"
+            )
+    for hl in hh_leads:
+        em = hl.get('email', '').lower().strip('.')
+        if em and not _is_generic_email(em):
+            all_emails_raw.add(em)
+            github_context_map[em] = hl.get('context', f"hh.ru contact: {hl.get('name','')} at {hl.get('company','')}")
+
+    # Если уже нашли email через regex/GitHub/hh.ru — просим AI отфильтровать по РЕЛЕВАНТНОСТИ
+    if all_emails_raw:
+        emails_list = ", ".join(list(all_emails_raw)[:40])  # Увеличили лимит до 40
+
+        # Формируем контекст из GitHub и hh.ru
+        github_context = ""
+        if github_context_map:
+            gh_lines = [f"  {em}: {ctx}" for em, ctx in list(github_context_map.items())[:20]]
+            github_context = "\n\nProfile/contact data (GitHub + hh.ru):\n" + "\n".join(gh_lines)
+        
+        # Инструкция по языку для AI-фильтра
+        _lang_filter_hint = ""
+        if _has_cyrillic:
+            _lang_filter_hint = "\n7. LANGUAGE PRIORITY: The target audience is RUSSIAN-SPEAKING. Strongly prefer people with Russian names, from .ru/.by/.ua/.kz domains, or with Russian context. Foreign recipients are acceptable ONLY if they clearly match the target audience AND work in the Russian market."
+
+        extract_prompt = f"""I found these email addresses from web search, GitHub profiles and hh.ru vacancies.
+Your job is to FILTER them — keep ONLY emails of people who GENUINELY match the target audience.
+
+Found emails: {emails_list}
+
+Target audience: {target_audience[:300]}
+Campaign goal: {goal[:300]}
+Product: {offer[:200]}
+{github_context}
+
+Context (search results + page content):
+{snippets_text}
+
+{combined_text[:3000]}
+
+STRICT RULES:
+1. For each email, determine: Does this person ACTUALLY match the target audience?
+2. Rate relevance 1-10. Only include emails rated 7+.
+3. If you cannot determine the person's role/interests from context, EXCLUDE them (relevance=0).
+4. SKIP: info@, contact@, support@, sales@, admin@, noreply@, ai@, ml@, data@, research@, dev@, and any corporate/generic emails.
+5. SKIP: emails from unrelated people (random commenters, unrelated authors, etc.)
+6. Better to return 3 RELEVANT leads than 15 irrelevant ones.
+7. ⚠️ EMAIL-PERSON VERIFICATION: Do NOT guess email-to-person associations. Only include an email if there is CLEAR evidence on the page that THIS email belongs to THIS specific person (e.g. email listed next to the person's name/profile). If a page lists multiple emails and multiple names, verify each association independently. Never assign a random email from the page to a person just because both appear on the same page.
+8. Prefer emails with personal prefixes (ivan@, john.doe@) over generic (rating@, user123@) — generic-looking prefixes need stronger evidence of association.{_lang_filter_hint}
+
+Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"DETAILED context: what this person/company does, their specific projects/products/articles, why they match the target audience. This context will be used to write a personalized email, so include SPECIFIC details (product names, technologies, achievements, article topics). NOT just 'works in AI' — write 'built an open-source RAG framework with 2k GitHub stars'"}}]
+If NO emails are relevant, return empty array: []"""
+    else:
+        extract_prompt = f"""Find personal email addresses of people matching this SPECIFIC target audience.
+
+Target audience: {target_audience[:300]}
+Campaign goal: {goal[:300]}
+Product: {offer[:200]}
+
+Search results:
+{snippets_text}
+
+Page content:
+{combined_text[:3000]}
+
+STRICT RULES:
+1. ONLY include emails of people who GENUINELY match the target audience.
+2. Rate relevance 1-10. Only include emails rated 7+.
+3. SKIP: info@, contact@, support@, sales@, admin@, noreply@, ai@, ml@, data@, research@, dev@ — only PERSONAL emails.
+4. If you can't determine why a person matches the target audience, DON'T include them.
+5. Better to return 0 leads than add irrelevant people.
+6. ⚠️ EMAIL-PERSON VERIFICATION: Only include an email if there is CLEAR evidence on the page that THIS email belongs to THIS specific person. Never guess email-to-person associations.
+
+Return JSON array: [{{"email":"...","name":"...","company":"...","relevance":8,"context":"DETAILED context: what this person/company does, their specific projects/products/articles, why they match the target audience. Include SPECIFIC details for email personalization (product names, technologies, achievements). NOT 'works in AI' — write 'built an open-source RAG framework with 2k stars'"}}]
+If no relevant emails found return []"""
+
+    try:
+        ai_result = await api.deepseek_analyze(
+            prompt=extract_prompt,
+            system_prompt="Extract email addresses from text. Return ONLY valid JSON array, no markdown.",
+            max_tokens=1000
+        )
+        logger.info(f"[AUTO_LEADS] AI result length: {len(ai_result or '')}, preview: {(ai_result or '')[:200]}")
+    except Exception as _ai_err:
+        logger.warning(f"[AUTO_LEADS] AI extraction failed: {_ai_err}")
+        ai_result = None
+
+    parsed_leads = []
+
+    if ai_result:
+        import json as _json_al
+        text = ai_result.strip()
+        if '```' in text:
+            parts = text.split('```')
+            for p in parts:
+                p = p.strip()
+                if p.startswith('json'):
+                    p = p[4:].strip()
+                if p.startswith('['):
+                    text = p
+                    break
+        try:
+            raw = _json_al.loads(text)
+            if isinstance(raw, list):
+                for item in raw:
+                    if isinstance(item, dict) and item.get('email'):
+                        em = item['email'].lower().strip('.')
+                        if _is_generic_email(em):
+                            continue
+                        # Фильтр по relevance score — порог 4 пропускает кандидатов с uncertain context
+                        # (AI часто ставит 4-5 когда контекст неполный, но email встречен на релевантной площадке)
+                        relevance = item.get('relevance', 0)
+                        try:
+                            relevance = int(relevance)
+                        except (ValueError, TypeError):
+                            relevance = 0
+                        if relevance < 4:
+                            logger.info(f"[AUTO_LEADS] Skipping low-relevance lead: "
+                                        f"{em} (score={relevance})")
+                            continue
+                        parsed_leads.append(item)
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+
+    # Fallback: если AI не отфильтровал, но есть GitHub/hh.ru leads с контекстом
+    if not parsed_leads and (github_leads or hh_leads):
+        _fb_leads = list(github_leads) + list(hh_leads)
+        logger.info(f"[AUTO_LEADS] AI filter returned 0, using {len(_fb_leads)} GitHub/hh.ru leads as fallback")
+        for gl in github_leads:
+            em = gl.get('email', '').lower().strip('.')
+            if em and not _is_generic_email(em):
+                parsed_leads.append({
+                    'email': em,
+                    'name': gl.get('name', gl.get('url', '').split('/')[-1] if gl.get('url') else ''),
+                    'company': gl.get('company', ''),
+                    'relevance': 7,
+                    'context': f"GitHub: {gl.get('bio', '')[:100]}, {gl.get('repos', 0)} repos, {gl.get('followers', 0)} followers",
+                })
+        for hl in hh_leads:
+            em = hl.get('email', '').lower().strip('.')
+            if em and not _is_generic_email(em):
+                parsed_leads.append({
+                    'email': em,
+                    'name': hl.get('name', ''),
+                    'company': hl.get('company', ''),
+                    'relevance': 6,
+                    'context': hl.get('context', ''),
+                })
+
+    # Если всё ещё 0 — используем regex emails как последний резерв,
+    # но ТОЛЬКО после DNS MX-проверки домена + базовой валидации + персональности
+    if not parsed_leads and all_emails_raw:
+        logger.info(f"[AUTO_LEADS] Regex fallback: validating {len(all_emails_raw)} emails via DNS MX...")
+        validated_fallback = []
+        for em in list(all_emails_raw)[:20]:
+            domain = em.split('@')[1] if '@' in em else ''
+            if not domain:
+                continue
+            # Повторная проверка generic (может быть пропущен для новых prefix'ов)
+            if _is_generic_email(em):
+                logger.info(f"[AUTO_LEADS] Fallback skip (generic): {em}")
+                continue
+            # Базовая структура домена: 1-3 точки, TLD 2-6 букв
+            parts = domain.split('.')
+            tld = parts[-1] if parts else ''
+            if len(parts) < 2 or len(parts) > 4 or len(tld) < 2 or len(tld) > 6:
+                logger.info(f"[AUTO_LEADS] Fallback skip (bad domain structure): {em}")
+                continue
+            # Prefix должен выглядеть как личное имя (минимум 4 символа, не чисто цифры)
+            prefix = em.split('@')[0]
+            if len(prefix) < 4 or prefix.isdigit():
+                logger.info(f"[AUTO_LEADS] Fallback skip (non-personal prefix): {em}")
+                continue
+            # DNS MX проверка
+            if not await _check_mx_record(domain):
+                logger.info(f"[AUTO_LEADS] Fallback skip (no MX record): {em}")
+                continue
+            validated_fallback.append(em)
+        if validated_fallback:
+            logger.info(f"[AUTO_LEADS] Fallback: {len(validated_fallback)} emails passed MX validation")
+            for em in validated_fallback:
+                # Try to extract name from email prefix (john.doe@ → John Doe)
+                _fb_prefix = em.split('@')[0] if '@' in em else ''
+                _fb_parts = [p.capitalize() for p in _re_al.split(r'[._\-]', _fb_prefix)
+                             if len(p) >= 2 and p.isalpha()]
+                _fb_name = ' '.join(_fb_parts) if 1 <= len(_fb_parts) <= 3 else ''
+                if not _fb_name:
+                    logger.info(f"[AUTO_LEADS] Fallback skip (can't extract name): {em}")
+                    continue
+                parsed_leads.append({
+                    'email': em,
+                    'name': _fb_name,
+                    'company': '',
+                    'relevance': 5,
+                    'context': 'Found via web search regex (MX-verified domain)',
+                })
+        else:
+            logger.info(f"[AUTO_LEADS] Fallback: 0 emails passed MX validation")
+
+    if not parsed_leads:
+        # Сбрасываем кэш нишевых платформ если не нашли ни одного лида
+        # — при следующем вызове AI сгенерирует свежие URL вместо тех же плохих
+        import hashlib as _hl_clr
+        _lang_clr = 'ru' if _has_cyrillic else 'en'
+        _clr_key = _hl_clr.md5(
+            f"{_lang_clr}:{target_audience[:150]}".encode('utf-8', errors='ignore')
+        ).hexdigest()
+        if _clr_key in _NICHE_PLATFORM_CACHE:
+            del _NICHE_PLATFORM_CACHE[_clr_key]
+            logger.info(f"[AUTO_LEADS] Cleared stale niche platform cache for campaign #{campaign.id}")
+        logger.warning(f"[AUTO_LEADS] FINAL: 0 leads found for campaign #{campaign.id} "
+                       f"(ddg_results={len(all_results)}, pages={pages_fetched}, "
+                       f"contact_pages={contact_pages_fetched}, github={len(github_leads)}, "
+                       f"regex_emails={len(all_emails_raw)}, ai_parsed=0)")
+        # Подсказки по отсутствующим интеграциям
+        import os as _os_leads
+        _intg_hints = []
+        # GITHUB_TOKEN: сначала проверяем уже найденный в user_api_keys, затем env
+        if _is_tech_audience and not github_token and not _os_leads.getenv('GITHUB_TOKEN'):
+            _intg_hints.append(
+                "💡 Для поиска разработчиков на GitHub — добавь GITHUB_TOKEN в настройки агента "
+                "(дашборд → агент → API-ключи → GITHUB_TOKEN=ghp_...). "
+                "Увеличит лимит запросов с 60 до 5000 в час."
+            )
+        # RESEND_API_KEY: проверяем platform env + личный ключ в user_api_keys агентов
+        _has_personal_resend_h = False
+        try:
+            from models import UserAgent as _UA_rh
+            _has_personal_resend_h = session.query(_UA_rh).filter(
+                _UA_rh.author_id == user.id,
+                _UA_rh.user_api_keys.isnot(None),
+                _UA_rh.user_api_keys.contains('RESEND_API_KEY='),
+            ).first() is not None
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        if not _os_leads.getenv('RESEND_API_KEY') and not _has_personal_resend_h:
+            _intg_hints.append(
+                "💡 Для отправки писем нужен RESEND_API_KEY "
+                "(добавь в настройки агента → API-ключи → RESEND_API_KEY=re_...). "
+                "Регистрация бесплатна: resend.com"
+            )
+        _hint_msg = ("\n⚠️ Интеграции для улучшения поиска: \n" + "\n".join(_intg_hints)) if _intg_hints else ""
+        # Если CRM contacts были добавлены в PASS -1, считаем их
+        if _crm_added > 0:
+            return _crm_added, ""
+        return 0, _hint_msg
+
+    logger.info(f"[AUTO_LEADS] Found {len(parsed_leads)} leads for campaign #{campaign.id}: "
+                f"{[l.get('email') for l in parsed_leads[:10]]}")
+
+    # Добавляем через add_email_leads (централизованная логика с дедупом)
+    leads_json = json.dumps(parsed_leads[:100], ensure_ascii=False)  # Увеличили лимит до 100
+    result_msg = await add_email_leads(
+        campaign_id=campaign.id,
+        leads=leads_json,
+        user_id=user.telegram_id,
+        session=session,
+        close_session=False,
+    )
+
+    # Парсим количество добавленных
+    m = _re_al.search(r'(\d+)\s*email', result_msg or '')
+    count = int(m.group(1)) if m else 0
+
+    return count + _crm_added, ""
+
+async def start_email_campaign(
+    name: str,
+    goal: str,
+    target_audience: str,
+    offer: str,
+    sender_name: str = None,
+    sender_email: str = None,
+    tone: str = 'professional',
+    max_emails: int = 0,
+    daily_limit: int = 100,
+    landing_url: str = None,
+    user_id: int = None,
+    sent_by_agent: str = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создать email-кампанию для автономного привлечения клиентов.
+
+    AI-агент будет автономно:
+    1. Искать email-адреса через web_search
+    2. Генерировать персонализированные письма
+    3. Отправлять через Resend API
+    4. Отвечать на replies в рамках заданной цели
+
+    name: короткое название кампании (2-5 слов). Пример: 'Outreach AI-стартапы', 'Привлечение инвесторов'. НЕ копируй сюда цель или длинное описание.
+    goal: цель кампании — что хотим получить от рассылки.
+    target_audience: кто получатели писем (ниша, роль, индустрия).
+    offer: что предлагаем в письме (продукт, сервис, идея).
+    sender_name: имя отправителя в письме — ИСПОЛЬЗУЙ СВОЁ ИМЯ АГЕНТА (например 'Beatrice', 'Mark'). Не оставляй пустым.
+    max_emails: 0 = безлимитно (рекомендуется). Кампания работает пока AI видит отдачу.
+        НЕ ставь произвольные числа вроде 100 — автопилот сам решает когда остановиться.
+    daily_limit: макс. писем в день (обычно 100).
+    landing_url: ссылка на сайт/лендинг пользователя. Автоматически добавляется в конец каждого
+        письма как CTA (→ https://...). Если не указана — ссылка не добавляется.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        profile = session.query(UserProfile).filter_by(user_id=user.id).first()
+
+        # Fallback sender info — приоритет: явный sender_name → вызывающий агент → агент с email → 'Team'
+        if not sender_name:
+            sender_name = (sent_by_agent or '').strip()
+        if not sender_name:
+            # Ищем агента у которого подключена email-интеграция
+            try:
+                from models import UserAgent as _UA_sc
+                for _ag_sc in session.query(_UA_sc).filter(
+                    _UA_sc.author_id == user.id,
+                    _UA_sc.status != 'disabled',
+                    _UA_sc.user_api_keys.isnot(None),
+                ).all():
+                    _raw_sc = _ag_sc.user_api_keys or ''
+                    try:
+                        _raw_sc = decrypt_token(_raw_sc)
+                    except Exception:
+                        pass
+                    _has_email = any(
+                        ln.strip().upper().startswith(kw)
+                        for ln in _raw_sc.splitlines()
+                        for kw in ('RESEND_API_KEY=', 'GMAIL_USER=', 'YANDEX_USER=', 'MAILRU_USER=', 'SMTP_USER=', 'IMAP_USER=')
+                        if '=' in ln
+                    )
+                    if _has_email:
+                        sender_name = _ag_sc.name
+                        break
+            except Exception:
+                pass
+        if not sender_name:
+            sender_name = 'Team'
+        if not sender_email:
+            sender_email = 'outreach@asibiont.com'
+
+        # Блокируем фейковые домены в sender_email
+        _FAKE_SENDER_DOMAINS = {'example.com', 'example.org', 'test.com', 'placeholder.com', 'domain.com', 'yourdomain.com'}
+        _sender_domain_check = (sender_email or '').split('@')[-1].lower()
+        if _sender_domain_check in _FAKE_SENDER_DOMAINS:
+            sender_email = 'outreach@asibiont.com'
+
+        # Если аудитория не русскоязычная — sender_name должен быть на английском
+        # (сепаратор "От:“ в Gmail покажет русское имя даже если письмо на английском)
+        _RU_CHARS = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюя')
+        _audience_lower = (target_audience or '').lower()
+        _is_ru_audience = any(c in _RU_CHARS for c in _audience_lower) or any(
+            kw in _audience_lower for kw in ('russian', 'русск', 'редак', 'предприним')
+        )
+        if not _is_ru_audience and sender_name and any(c in _RU_CHARS for c in sender_name.lower()):
+            # Аудитория не русская, а sender_name на русском — заменяем на английское
+            _TRANSLATIONS = {
+                'Команда ASI Biont': 'ASI Biont Team',
+                'Команда': 'Team',
+                'Поддержка': 'Support',
+            }
+            sender_name = _TRANSLATIONS.get(sender_name, 'ASI Biont Team')
+
+        # Проверка на дубликат — если есть активная кампания с похожей целью (personal скрытые исключаем)
+        from sqlalchemy import func as sa_func
+        existing = session.query(EmailCampaign).filter(
+            EmailCampaign.user_id == user.id,
+            EmailCampaign.status == 'active',
+        ).all()
+        _stop_camp = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'a', 'the', 'to', 'for', 'of', 'and', 'in', 'with'}
+        for ex in existing:
+            # Сравниваем и goal-текст, и name кампании — достаточно 2 значимых общих слов
+            ex_goal_words = {w for w in (ex.goal or '').lower().split() if len(w) > 2} - _stop_camp
+            ex_name_words = {w for w in (ex.name or '').lower().split() if len(w) > 2} - _stop_camp
+            new_goal_words = {w for w in goal.lower().split() if len(w) > 2} - _stop_camp
+            new_name_words = {w for w in name.lower().split() if len(w) > 2} - _stop_camp
+            goal_overlap = ex_goal_words & new_goal_words
+            name_overlap = ex_name_words & new_name_words
+            if len(goal_overlap) >= 2 or len(name_overlap) >= 2:
+                # Обновляем существующую кампанию вместо создания новой
+                if daily_limit > ex.daily_limit:
+                    ex.daily_limit = min(daily_limit, 100)
+                if max_emails and max_emails > (ex.max_emails or 0):
+                    ex.max_emails = max_emails
+                session.commit()
+                lang = getattr(user, 'language_code', 'ru') or 'ru'
+                if lang == 'en':
+                    return (
+                        f" Campaign #{ex.id} «{ex.name}» already exists and is active (sent {ex.emails_sent}/{ex.max_emails or '∞'}, today limit {ex.daily_limit})! "
+                        f"DO NOT call start_email_campaign again. "
+                        f"To send emails use send_outreach_email(recipient_email, subject, body) for each contact individually."
+                    )
+                return (
+                    f" Кампания #{ex.id} «{ex.name}» уже существует и активна (отправлено {ex.emails_sent}/{ex.max_emails or '∞'}, дневной лимит {ex.daily_limit})! "
+                    f"НЕ вызывай start_email_campaign повторно. "
+                    f"Для отправки писем используй send_outreach_email(recipient_email, subject, body) — по одному письму на контакт."
+                )
+
+        # Нормализация name — не более 60 символов, убираем мусор
+        _clean_name = (name or '').strip()
+        # Удаляем типичные мусорные префиксы от LLM
+        for _pfx in ('Цель:', 'цель:', 'Goal:', 'goal:', 'Название:', 'Campaign:', 'Name:'):
+            if _clean_name.startswith(_pfx):
+                _clean_name = _clean_name[len(_pfx):].strip()
+        # Обрезаем до первого предложения и 60 символов
+        _clean_name = _clean_name.split('.')[0].split(',')[0].strip()[:60]
+        if not _clean_name:
+            _clean_name = f"Email-кампания #{user.id}"
+
+        campaign = EmailCampaign(
+            user_id=user.id,
+            name=_clean_name,
+            goal=goal[:2000],
+            target_audience=target_audience[:1000],
+            offer=offer[:2000],
+            tone=tone,
+            sender_name=sender_name,
+            sender_email=sender_email,
+            landing_url=(landing_url or '').strip()[:500] or None,
+            max_emails=max_emails,
+            daily_limit=min(daily_limit, 100),
+            status='active',
+        )
+        session.add(campaign)
+        session.commit()
+
+        # Логируем создание кампании в хронологию
+        try:
+            from models import AgentActivityLog as _AAL
+            _camp_log = _AAL(
+                user_id=user.id,
+                activity_type='content_campaign',
+                title=f'Email-кампания: {name[:150]}',
+                content=f'Цель: {goal[:200]}' + (f'\nАудитория: {target_audience[:100]}' if target_audience else ''),
+                status='active',
+                ref_id=campaign.id,
+            )
+            session.add(_camp_log)
+            session.commit()
+        except Exception as _le:
+            logger.warning(f"[EMAIL_CAMPAIGN] Failed to log activity: {_le}")
+
+        # ═══════════════════════════════════════════════════════
+        # АВТОПОИСК ЛИДОВ — только для ПРИВЛЕЧЕНИЯ (сценарий 3)
+        # Переговоры (max_emails<=5) — агент сам добавит конкретный email
+        # ═══════════════════════════════════════════════════════
+        is_outreach_campaign = (max_emails == 0 or max_emails > 10) and daily_limit >= 5
+        auto_leads_count = 0
+        auto_leads_msg = ""
+        if is_outreach_campaign:
+            try:
+                auto_leads_count, auto_leads_msg = await _auto_find_leads(
+                    campaign=campaign, user=user, target_audience=target_audience,
+                    goal=goal, offer=offer, session=session
+                )
+            except Exception as _af_err:
+                logger.error(f"[EMAIL_CAMPAIGN] Auto-find leads error: {_af_err}", exc_info=True)
+                auto_leads_msg = ""
+
+        lang = _get_lang(user_id)
+        if is_outreach_campaign:
+            # Сценарий 3 — привлечение
+            if lang == 'en':
+                base = f" Campaign #{campaign.id} «{name}» created!"
+                if auto_leads_count > 0:
+                    base += f"\n Found {auto_leads_count} contacts — first emails will be sent automatically."
+                else:
+                    base += "\n No contacts found automatically. Search for people via the web, then add their emails."
+            else:
+                base = f" Кампания #{campaign.id} «{name}» создана!"
+                if auto_leads_count > 0:
+                    base += f"\n Найдено {auto_leads_count} контактов — первые письма будут отправлены автоматически."
+                else:
+                    base += "\n Автопоиск не нашёл контактов. Найди людей через интернет, затем добавь их email."
+            if auto_leads_msg:
+                base += f"\n{auto_leads_msg}"
+            return base
+        else:
+            # Сценарий 2 — переговоры (конкретный контакт)
+            if lang == 'en':
+                return (
+                    f" Campaign #{campaign.id} «{name}» created.\n"
+                    f"Now add the contact emails and send the first outreach email."
+                )
+            return (
+                f" Кампания #{campaign.id} «{name}» создана.\n"
+                f"Теперь добавь контакты и отправь первое письмо."
+            )
+    except Exception as e:
+        logger.error(f"[EMAIL_CAMPAIGN] Error creating campaign: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка создания кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def update_email_campaign(
+    campaign_id: int = None,
+    name: str = None,
+    goal: str = None,
+    target_audience: str = None,
+    offer: str = None,
+    tone: str = None,
+    max_emails: int = None,
+    daily_limit: int = None,
+    status: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Обновить параметры существующей email-кампании.
+
+    Позволяет изменить daily_limit, max_emails, name, goal, target_audience,
+    offer, tone, status — без создания дубликата.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        # Найти кампанию
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            # Берём последнюю активную кампанию
+            campaign = session.query(EmailCampaign).filter_by(
+                user_id=user.id, status='active'
+            ).order_by(EmailCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return " Кампания не найдена. Укажи ID кампании или создай новую."
+
+        changes = []
+        if name is not None:
+            campaign.name = name[:300]
+            changes.append(f"название: {name[:80]}")
+        if goal is not None:
+            campaign.goal = goal[:2000]
+            changes.append("цель обновлена")
+        if target_audience is not None:
+            campaign.target_audience = target_audience[:1000]
+            changes.append("аудитория обновлена")
+        if offer is not None:
+            campaign.offer = offer[:2000]
+            changes.append("оффер обновлён")
+        if tone is not None and tone in ('professional', 'friendly', 'formal'):
+            campaign.tone = tone
+            changes.append(f"тон: {tone}")
+        if max_emails is not None:
+            campaign.max_emails = max(0, int(max_emails))
+            changes.append(f"макс. писем: {max_emails if max_emails > 0 else 'безлимитно'}")
+        if daily_limit is not None:
+            campaign.daily_limit = min(max(1, int(daily_limit)), 100)
+            changes.append(f"лимит/день: {campaign.daily_limit}")
+        if status is not None and status in ('active', 'paused', 'completed', 'cancelled'):
+            campaign.status = status
+            changes.append(f"статус: {status}")
+
+        if not changes:
+            return f"ℹ Кампания #{campaign.id} «{campaign.name}» — нечего обновлять. Укажи параметры для изменения."
+
+        session.commit()
+
+        lang = _get_lang(user_id)
+        changes_str = ', '.join(changes)
+        if lang == 'en':
+            return (
+                f" Campaign #{campaign.id} «{campaign.name}» updated:\n"
+                f"{changes_str}\n\n"
+                f" Current: {campaign.daily_limit}/day, "
+                f"{'unlimited' if not campaign.max_emails or campaign.max_emails == 0 else f'max {campaign.max_emails}'} total, "
+                f"status: {campaign.status}"
+            )
+        return (
+            f" Кампания #{campaign.id} «{campaign.name}» обновлена:\n"
+            f"{changes_str}\n\n"
+            f" Текущие параметры: {campaign.daily_limit} писем/день, "
+            f"{'безлимитно' if not campaign.max_emails or campaign.max_emails == 0 else f'макс. {campaign.max_emails}'} всего, "
+            f"статус: {campaign.status}"
+        )
+    except Exception as e:
+        logger.error(f"[EMAIL_CAMPAIGN] Error updating campaign: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка обновления кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def send_outreach_email(
+    campaign_id: int = None,
+    recipient_email: str = None,
+    recipient_name: str = None,
+    recipient_company: str = None,
+    recipient_context: str = None,
+    subject: str = None,
+    body: str = None,
+    sent_by_agent: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Отправить email в рамках кампании через Resend API.
+
+    Может вызываться вручную или автономно агентом (через якорь email_outreach_send).
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import RESEND_API_KEY as _platform_resend_key
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        # ── GUARD: проверка user_rules — запрет email-рассылки + извлечение сайта ──
+        _user_landing_url = None
+        try:
+            from ai_integration.memory import decrypt_data as _dec_email_rule
+            import json as _json_er
+            import re as _re_url
+            _mem_er = _json_er.loads(_dec_email_rule(user.memory)) if user.memory else {}
+            _EMAIL_STOP_KW = ('не писать', 'не отправлять', 'не слать', 'стоп email',
+                              'stop email', 'без email', 'без рассылк', 'запрет email',
+                              'не рассыл', 'прекрати email', 'прекрати рассыл',
+                              'отключить email', 'отключи email', 'не использовать email',
+                              'не отправляй email', 'не отправляй письм',
+                              'не пиши по email', 'не пиши email', 'не пиши по почте',
+                              'не писать по email', 'не писать email', 'не писать по почте')
+            _URL_RE = _re_url.compile(r'https?://[^\s\'">,]+', _re_url.IGNORECASE)
+            _SITE_KW = ('сайт', 'site', 'landing', 'лендинг', 'url', 'ссылк', 'мой сайт', 'наш сайт', 'платформ')
+            for _r_er in _mem_er.get('rules', []):
+                if any(kw in _r_er.lower() for kw in _EMAIL_STOP_KW):
+                    return f"⛔ Email-рассылка заблокирована правилом пользователя: «{_r_er[:80]}»"
+                # Извлекаем URL из правил вида "мой сайт https://..." или "landing: https://..."
+                if not _user_landing_url and any(kw in _r_er.lower() for kw in _SITE_KW):
+                    _url_match = _URL_RE.search(_r_er)
+                    if _url_match:
+                        _user_landing_url = _url_match.group(0).rstrip('/')
+        except Exception as _e_er:
+            logger.debug("suppressed email rule check: %s", _e_er)
+
+        # Fallback: берём сайт из профиля пользователя
+        if not _user_landing_url:
+            try:
+                from models import UserProfile as _UP_cta
+                _prof_cta = session.query(_UP_cta).filter_by(user_id=user.id).first()
+                if _prof_cta and getattr(_prof_cta, 'website', None):
+                    _user_landing_url = _prof_cta.website.strip().rstrip('/') or None
+            except Exception as _e_prof_cta:
+                logger.debug("suppressed profile website fetch: %s", _e_prof_cta)
+
+        # ── NORMALIZE: извлекаем чистый email из любого формата ──
+        # Агент может передать "Имя <email@example.com>", "email@example.com (GitHub)",
+        # строку с пробелами/переносами и т.п. — извлекаем только email.
+        import re as _re_email_norm
+        _raw_rcpt = (recipient_email or '').strip()
+        _email_norm_m = _re_email_norm.search(r'[\w.!#$%&\'*+/=?^_`{|}~-]+@[\w.-]+\.[a-zA-Z]{2,}', _raw_rcpt, _re_email_norm.ASCII)
+        if _email_norm_m:
+            recipient_email = _email_norm_m.group().strip().lower()
+        else:
+            recipient_email = _raw_rcpt.lower()
+
+        # ── GUARD: невалидный email после нормализации ──
+        if (not recipient_email or '@' not in recipient_email
+                or '.' not in recipient_email.split('@')[-1]
+                or not recipient_email.isascii()):
+            return (f"⛔ Невалидный email получателя: «{_raw_rcpt[:120]}». "
+                    f"Укажи адрес в формате email@example.com. Если адрес не найден — не отправляй письмо.")
+
+        # ── GUARD: не отправлять email на адрес самого пользователя ИЛИ IMAP-аккаунт агента ──
+        _rcpt = (recipient_email or '').strip().lower()
+        _user_email = (getattr(user, 'email', '') or '').strip().lower()
+        _own_emails_oe = set()
+        if _user_email:
+            _own_emails_oe.add(_user_email)
+        try:
+            from models import UserAgent as _UA_oe
+            for _ag_oe in session.query(_UA_oe).filter(
+                _UA_oe.author_id == user.id,
+                _UA_oe.user_api_keys.isnot(None),
+            ).all():
+                _raw_oe = _ag_oe.user_api_keys or ''
+                try:
+                    _raw_oe = decrypt_token(_raw_oe)
+                except Exception:
+                    pass
+                for _ln_oe in _raw_oe.splitlines():
+                    _ln_oe = _ln_oe.strip()
+                    if _ln_oe.upper().startswith('GMAIL_USER=') or _ln_oe.upper().startswith('IMAP_USER='):
+                        _imap_val_oe = _ln_oe.split('=', 1)[1].strip().lower()
+                        if _imap_val_oe and '@' in _imap_val_oe:
+                            _own_emails_oe.add(_imap_val_oe)
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        if _rcpt and _rcpt in _own_emails_oe:
+            return (f" Нельзя отправлять outreach на {_rcpt} — это ваша почта или IMAP-аккаунт агента. "
+                    f"Найди email реального внешнего получателя.")
+
+        # ── GUARD: не отправлять на домен собственной платформы ──
+        if _rcpt and '@' in _rcpt:
+            _OWN_PLATFORM_DOMAINS_SEND = {'asibiont.com'}
+            _rcpt_domain_chk = _rcpt.rsplit('@', 1)[1]
+            if _rcpt_domain_chk in _OWN_PLATFORM_DOMAINS_SEND:
+                return f"⛔ {_rcpt} — адрес платформы ASI Biont. Не отправляй outreach на собственный домен."
+
+        # ── GUARD: невалидные домены — LinkedIn, noreply, бот-адреса ──
+        if _rcpt and '@' in _rcpt:
+            _rcpt_domain_val = _rcpt.rsplit('@', 1)[1]
+            _BLOCKED_EMAIL_DOMAINS = {
+                'linkedin.com', 'users.noreply.github.com',
+                'reply.github.com', 'notifications.github.com',
+            }
+            if _rcpt_domain_val in _BLOCKED_EMAIL_DOMAINS:
+                return (f"⛔ {_rcpt} — адрес сервиса {_rcpt_domain_val}, email не доставляется. "
+                        f"Найди реальный рабочий email получателя.")
+            _rcpt_local_val = _rcpt.rsplit('@', 1)[0]
+            _BLOCKED_LOCAL_PREFIXES = ('noreply', 'no-reply', 'donotreply', 'do-not-reply',
+                                       'mailer-daemon', 'postmaster', 'abuse', 'bounce')
+            if any(_rcpt_local_val.startswith(p) for p in _BLOCKED_LOCAL_PREFIXES):
+                return (f"⛔ {_rcpt} — системный/noreply адрес. Найди реальный email человека.")
+
+        # ── GUARD: .gov / .edu / .mil — не спамим гос/учебные организации ──
+        if _rcpt:
+            _rcpt_dom_gov = _rcpt.rsplit('@', 1)[-1].lower() if '@' in _rcpt else ''
+            if any(_rcpt_dom_gov.endswith(s) for s in ('.gov', '.gov.ru', '.edu', '.edu.ru', '.mil', '.ac.uk', '.edu.au', '.edu.cn')):
+                return f"⛔ {_rcpt} — адрес государственной/образовательной организации ({_rcpt_dom_gov}). Outreach на .gov/.edu запрещён. Найди личный или коммерческий email."
+
+        # ── GUARD: фейковый / generic email ──
+        if _rcpt and _is_generic_email(_rcpt):
+            return f"⛔ {_rcpt} — фейковый или generic email (example.com, test.com и т.п.). Найди реальный email получателя."
+
+        # ── GUARD: не отправлять outreach уже зарегистрированному пользователю платформы ──
+        if _rcpt:
+            _platform_user_chk = session.query(User).filter(
+                User.id != user.id,
+                User.email == _rcpt,
+            ).first()
+            if _platform_user_chk:
+                return (f"⚠️ {_rcpt} — уже зарегистрирован на платформе ASI Biont "
+                        f"(@{_platform_user_chk.username or _platform_user_chk.first_name or '?'}). "
+                        f"Приглашать существующего пользователя бессмысленно. Ищи НОВЫХ людей.")
+
+        # ── GUARD: фейковое / корпоративное имя получателя ──
+        _rname_chk = (recipient_name or '').strip()
+        if _rname_chk:
+            import re as _re_fn
+            # Слова-признаки команды/компании вместо реального человека
+            _FAKE_NAME_WORDS = {
+                'автор', 'author', 'редакция', 'редактор',
+                'компания', 'company', 'group', 'corp', 'inc', 'llc', 'ltd',
+                'department', 'отдел', 'команда', 'коллектив', 'staff',
+            }
+            # founders@/team@ адреса у стартапов — это реальные основатели/команда:
+            # 'founders' и 'team' допустимы как имя когда email это founders@ или team@
+            _rcpt_pfx = (_rcpt or '').split('@')[0].lower() if '@' in (_rcpt or '') else ''
+            _allow_team_name = _rcpt_pfx in ('founders', 'team', 'co-founders', 'cofounders', 'founding')
+            _name_lower = _rname_chk.lower()
+            _name_words = set(_re_fn.findall(r'[a-zA-Zа-яА-ЯёЁ]+', _name_lower))
+            _bad_words = _name_words & _FAKE_NAME_WORDS
+            # Добавляем 'team' и 'founders' в плохие слова только если email не founders@/team@
+            if not _allow_team_name:
+                _bad_words |= _name_words & {'team', 'founders'}
+            if _bad_words:
+                return (f"⛔ «{_rname_chk}» — это не имя конкретного человека (команда/компания/автор). "
+                        f"Найди ФИО реального получателя.")
+            # Имя = один токен И всё в нижнем или начинается с заглавной — фамилия без имени
+            _name_parts = _rname_chk.split()
+            if len(_name_parts) == 1 and len(_rname_chk) > 2:
+                # Одно слово — OK только если это явно имя (Liam, Марк), иначе предупреждение
+                # Но если нет имени в body, то лучше иметь полное имя
+                pass  # Допускаем одно слово — NAME_NOT_IN_BODY поймает
+
+        # ── GUARD: C-suite крупнейших мировых корпораций ──
+        # Холодный outreach на CEO/CTO Fortune 500 вредит репутации домена и бесполезен
+        _FORTUNE500_DOMAINS = {
+            'oracle.com', 'microsoft.com', 'google.com', 'apple.com', 'amazon.com',
+            'meta.com', 'facebook.com', 'berkshirehathaway.com', 'exxonmobil.com',
+            'unh.com', 'cvs.com', 'mckesson.com', 'walmart.com', 'jpmorgan.com',
+            'jpmorganchase.com', 'bofa.com', 'bankofamerica.com', 'wellsfargo.com',
+            'citi.com', 'citigroup.com', 'goldmansachs.com', 'gs.com',
+            'sap.com', 'ibm.com', 'cisco.com', 'intel.com', 'samsung.com',
+            'nvidia.com', 'tesla.com', 'spacex.com', 'samsung.com',
+        }
+        _CSUITE_PREFIXES = (
+            'ceo', 'cto', 'cfo', 'coo', 'cmo', 'chairman', 'president',
+            'larry', 'elon', 'sundar', 'satya', 'tim.cook', 'jensen',
+            'mark.zuckerberg', 'jeff', 'bezos', 'warren', 'buffett',
+        )
+        if _rcpt and '@' in _rcpt:
+            _rcpt_local, _rcpt_domain = _rcpt.rsplit('@', 1)
+            if _rcpt_domain in _FORTUNE500_DOMAINS:
+                import logging as _log_f500
+                _log_f500.getLogger('anchors').info(f"[EMAIL] Fortune 500 domain skipped: {_rcpt}")
+                return (
+                    f"⚠️ {_rcpt} — корпоративный адрес крупной компании ({_rcpt_domain}). "
+                    f"Холодный outreach на Fortune 500 обычно не результативен. "
+                    f"Лучше писать стартапам, инди-разработчикам, малому/среднему бизнесу — но решать тебе."
+                )
+            if any(_rcpt_local.startswith(pref) for pref in _CSUITE_PREFIXES):
+                # Дополнительно проверим: домен крупной компании или C-suite prefix явный?
+                _csuite_explicit = any(_rcpt_local == pref for pref in ('ceo', 'cto', 'cfo', 'coo', 'cmo', 'chairman'))
+                if _csuite_explicit:
+                    return (
+                        f"⚠️ {_rcpt} — похоже на email C-suite руководителя (префикс '{_rcpt_local}'). "
+                        f"Такие адреса обычно не читаются лично. Лучше найти более подходящий контакт."
+                    )
+
+        # ── GUARD: плейсхолдеры в теле письма ──
+        _body_to_check_oe = (body or '') + ' ' + (subject or '')
+        if _body_to_check_oe:
+            import re as _re_ph_oe
+            _PH_RE_OE = _re_ph_oe.compile(
+                r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+                r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+                _re_ph_oe.IGNORECASE,
+            )
+            _ph_m_oe = _PH_RE_OE.search(_body_to_check_oe)
+            if _ph_m_oe:
+                return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_oe.group()}». "
+                        f"Замени на реальные данные или убери. Нельзя отправлять шаблон клиенту.")
+
+        # ── GUARD: имя получателя обязательно ──
+        _rname_send = (recipient_name or '').strip()
+        if not _rname_send:
+            return ("⛔ Не указано имя получателя (recipient_name). "
+                    "Нельзя отправлять холодное письмо без имени — сначала найди ФИО контакта.")
+
+        # ── GUARD: имя получателя должно быть в теле письма (персонализация) ──
+        if _rname_send and body:
+            _first_name_oe = _rname_send.split()[0]
+            _body_lower_oe = body.lower()
+            # Проверяем точное вхождение имени (Latin или Cyrillic как дано)
+            _name_found = _first_name_oe.lower() in _body_lower_oe
+            # Если не найдено — проверяем наличие стандартного приветствия (Dear/Hi/Здравствуй/Добрый)
+            # Это защита от ложных срабатываний когда AI правильно обращается иначе
+            if not _name_found:
+                import re as _re_greet
+                _HAS_GREETING = bool(_re_greet.search(
+                    r'\b(?:dear|hi|hello|hey|привет|здравствуй|добрый|уважаем|доброе|ciao|hola|bonjour)\b',
+                    _body_lower_oe, _re_greet.IGNORECASE
+                ))
+                if not _HAS_GREETING:
+                    return (f"⛔ ИСПРАВЬ параметр body и повтори вызов send_outreach_email: "
+                            f"добавь 'Здравствуйте, {_first_name_oe}!' в самое начало тела письма. "
+                            f"Остальной текст письма оставь как есть. Имя обязательно для персонализации.")
+
+        # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──
+        # Пользователь просил: "не нужно писать тем, кто уже есть в системе — ищем новых"
+        if _rcpt:
+            try:
+                from sqlalchemy import func as _func_reg
+                _registered = session.query(User).filter(
+                    User.email.isnot(None),
+                    _func_reg.lower(User.email) == _rcpt,
+                    User.id != user.id,
+                ).first()
+                if _registered:
+                    return (f"⛔ {_rcpt} уже зарегистрирован в ASI Biont. "
+                            f"Пишем только новым внешним пользователям — этот контакт пропускаем.")
+            except Exception as _e_reg:
+                logger.debug("suppressed registered-user check: %s", _e_reg)
+
+        # ── GUARD: не отправлять отписавшимся / bounced контактам ──
+        if _rcpt:
+            try:
+                _ec_unsub_chk = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=_rcpt,
+                ).first()
+                if _ec_unsub_chk and _ec_unsub_chk.status == 'unsubscribed':
+                    return f"⛔ {_rcpt} отписался — отправка заблокирована."
+                if _ec_unsub_chk and _ec_unsub_chk.status == 'bounced':
+                    return f"⛔ {_rcpt} — адрес bounced, отправка заблокирована."
+            except Exception as _e_unsub_chk:
+                logger.debug("suppressed unsubscribed/bounced check: %s", _e_unsub_chk)
+
+        # ── GUARD: не слать новый холодный outreach тому, кто уже ответил ──
+        # replied/interested — это активные контакты, для них используй reply_to_outreach_email или negotiate_by_email
+        if _rcpt:
+            try:
+                _ec_replied_chk = session.query(EmailContact).filter(
+                    EmailContact.user_id == user.id,
+                    EmailContact.email == _rcpt,
+                    EmailContact.status.in_(['replied', 'interested']),
+                ).first()
+                if _ec_replied_chk:
+                    return (
+                        f"⛔ {_rcpt} уже ответил (статус: {_ec_replied_chk.status}). "
+                        "Не отправляй новый холодный outreach — используй reply_to_outreach_email "
+                        "чтобы ответить на их сообщение, или negotiate_by_email для продолжения диалога."
+                    )
+            except Exception as _e_rpl_chk:
+                logger.debug("suppressed replied check: %s", _e_rpl_chk)
+
+        # Sanitize token hallucinations in email body/subject
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        if body:
+            body = sanitize_token_hallucinations(body)
+        if subject:
+            subject = sanitize_token_hallucinations(subject)
+
+        # Личный RESEND_API_KEY из user_api_keys агентов пользователя имеет приоритет
+        RESEND_API_KEY = _platform_resend_key
+        _personal_resend_from = ''
+        _smtp_creds_out = None  # SMTP credentials detected from agent keys
+        # Gmail SMTP заблокирован Railway (port 587 filtered) — используем Resend+Reply-To
+        _gmail_reply_to = ''   # Gmail addr для Reply-To в Resend-отправке
+        _gmail_oauth_token_data = None  # Gmail OAuth: отправка напрямую через Gmail API
+        _email_agent_name = None  # имя агента у которого подключена почта
+        # Проверяем Gmail OAuth на уровне пользователя (приоритет #1)
+        if getattr(user, 'google_oauth_token', None):
+            try:
+                import json as _jsn_goa_out
+                _gmail_oauth_token_data = _jsn_goa_out.loads(decrypt_token(user.google_oauth_token))
+                logger.debug('[EMAIL_OUTREACH] Gmail OAuth found for user %d', user.id)
+            except Exception as _goa_err:
+                logger.debug('[EMAIL_OUTREACH] Gmail OAuth read: %s', _goa_err)
+        try:
+            from models import UserAgent as _UA_rs
+            for _ag_rs in session.query(_UA_rs).filter(
+                _UA_rs.author_id == user.id,
+                _UA_rs.status != 'disabled',
+                _UA_rs.user_api_keys.isnot(None),
+            ).all():
+                _env_rs = {}
+                _raw_keys_rs = _ag_rs.user_api_keys or ''
+                # Ключи могут быть зашифрованы (enc:...) — расшифровываем перед парсингом
+                try:
+                    _raw_keys_rs = decrypt_token(_raw_keys_rs)
+                except Exception:
+                    pass
+                for _ln_rs in _raw_keys_rs.splitlines():
+                    _ln_rs = _ln_rs.strip()
+                    if '=' in _ln_rs and not _ln_rs.startswith('#'):
+                        _k_rs, _, _v_rs = _ln_rs.partition('=')
+                        _env_rs[_k_rs.strip().upper()] = _v_rs.strip()
+                if _env_rs.get('RESEND_API_KEY'):
+                    RESEND_API_KEY = _env_rs['RESEND_API_KEY']
+                    _personal_resend_from = (
+                        _env_rs.get('RESEND_FROM') or
+                        _env_rs.get('SENDER_EMAIL') or
+                        _env_rs.get('FROM_EMAIL') or ''
+                    )
+                    if not _email_agent_name:
+                        _email_agent_name = _ag_rs.name
+                    import logging as _log_rs
+                    _log_rs.getLogger(__name__).info(
+                        f'[EMAIL_OUTREACH] Using personal RESEND_API_KEY from agent {_ag_rs.name}'
+                    )
+                    break
+                # Detect SMTP credentials (Yandex / Mail.ru / custom SMTP)
+                # NOTE: Gmail SMTP заблокирован Railway — GMAIL_USER регистрируем как Reply-To
+                if not _smtp_creds_out:
+                    if _env_rs.get('YANDEX_USER') and (
+                        _env_rs.get('YANDEX_PASSWORD') or _env_rs.get('YANDEX_PASS')
+                    ):
+                        _smtp_creds_out = {
+                            'host': 'smtp.yandex.ru', 'port': 587,
+                            'user': _env_rs['YANDEX_USER'],
+                            'pass': _env_rs.get('YANDEX_PASSWORD') or _env_rs.get('YANDEX_PASS', ''),
+                            'label': 'Яндекс',
+                        }
+                        if not _email_agent_name:
+                            _email_agent_name = _ag_rs.name
+                    elif _env_rs.get('MAILRU_USER') and (
+                        _env_rs.get('MAILRU_PASSWORD') or _env_rs.get('MAILRU_PASS')
+                    ):
+                        _smtp_creds_out = {
+                            'host': 'smtp.mail.ru', 'port': 587,
+                            'user': _env_rs['MAILRU_USER'],
+                            'pass': _env_rs.get('MAILRU_PASSWORD') or _env_rs.get('MAILRU_PASS', ''),
+                            'label': 'Mail.ru',
+                        }
+                        if not _email_agent_name:
+                            _email_agent_name = _ag_rs.name
+                    elif _env_rs.get('SMTP_HOST') and _env_rs.get('SMTP_USER') and (
+                        _env_rs.get('SMTP_PASS') or _env_rs.get('SMTP_PASSWORD')
+                    ):
+                        _smtp_creds_out = {
+                            'host': _env_rs['SMTP_HOST'],
+                            'port': int(_env_rs.get('SMTP_PORT', '587')),
+                            'user': _env_rs['SMTP_USER'],
+                            'pass': _env_rs.get('SMTP_PASS') or _env_rs.get('SMTP_PASSWORD', ''),
+                            'label': 'SMTP',
+                        }
+                        if not _email_agent_name:
+                            _email_agent_name = _ag_rs.name
+                # Gmail app-password: Railway блокирует Gmail SMTP.
+                # Регистрируем адрес для Reply-To — ответы придут на Gmail пользователя.
+                if not _gmail_reply_to and _env_rs.get('GMAIL_USER'):
+                    _gm_pass_key = (
+                        _env_rs.get('GMAIL_APP_PASSWORD') or
+                        _env_rs.get('GMAIL_PASS') or
+                        _env_rs.get('GMAIL_PASSWORD') or ''
+                    )
+                    if _gm_pass_key:  # пароль настроен — не просто IMAP-чтение
+                        _gmail_reply_to = _env_rs['GMAIL_USER']
+                        if not _email_agent_name:
+                            _email_agent_name = _ag_rs.name
+        except Exception as _rs_err:
+            import logging as _log_rs2
+            _log_rs2.getLogger(__name__).debug(f'[EMAIL_OUTREACH] Personal Resend lookup: {_rs_err}')
+
+        if not RESEND_API_KEY and not _smtp_creds_out and not _gmail_oauth_token_data and not _gmail_reply_to:
+            return " Email не настроен. Добавьте RESEND_API_KEY или SMTP-ключи (YANDEX_USER+YANDEX_PASSWORD, MAILRU_USER+MAILRU_PASSWORD, GMAIL_USER+GMAIL_APP_PASSWORD) в настройки агента."
+
+        # Найти кампанию
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            # Берём наименее активную кампанию (emails_sent наименьший) — для ротации
+            # Это гарантирует что при нескольких кампаниях они развиваются равномерно,
+            # а не одна накапливает все письма пока остальные стоят
+            campaign = session.query(EmailCampaign).filter(
+                EmailCampaign.user_id == user.id,
+                EmailCampaign.status.in_(['active', 'running']),
+            ).order_by(EmailCampaign.emails_sent.asc()).first()
+
+        if not campaign:
+            # Авто-создаём дефолтную кампанию — агент уже знает цель из контекста,
+            # не заставляем его делать лишний шаг start_email_campaign
+            try:
+                # Берём название из активной цели пользователя → кампания называется по ЦА/задаче
+                _auto_goal_title = ''
+                _auto_audience = ''
+                try:
+                    _ag = session.query(Goal).filter_by(user_id=user.id, status='active').order_by(Goal.updated_at.desc()).first()
+                    if _ag:
+                        _auto_goal_title = (_ag.title or '').strip()
+                        _auto_audience = (_ag.target_audience or '').strip()
+                except Exception:
+                    pass
+                if _auto_goal_title:
+                    _auto_name = _auto_goal_title[:60]
+                elif _auto_audience:
+                    _auto_name = f"Outreach: {_auto_audience[:55]}"
+                else:
+                    _auto_name = "Email Outreach"
+                campaign = EmailCampaign(
+                    user_id=user.id,
+                    name=_auto_name,
+                    goal=_auto_goal_title or 'Привлечение новых пользователей и партнёров',
+                    target_audience=_auto_audience or 'AI-разработчики, стартапы, технологические компании',
+                    offer='Платформа ASI Biont — AI-агенты для автоматизации задач',
+                    tone='professional',
+                    sender_name=_email_agent_name or sent_by_agent or user.first_name or 'ASI Biont Team',
+                    sender_email='outreach@asibiont.com',
+                    max_emails=0,
+                    daily_limit=100,
+                    status='active',
+                )
+                session.add(campaign)
+                session.commit()
+                logger.info(f"[EMAIL_OUTREACH] Auto-created default campaign #{campaign.id} for user {user.id}")
+            except Exception as _ace:
+                logger.warning(f"[EMAIL_OUTREACH] Failed to auto-create campaign: {_ace}")
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                return "⚠️ Нет активной email-кампании. Вызови start_email_campaign чтобы создать её, затем повтори отправку."
+
+        # Проверка лимитов (max_emails=0 означает безлимитно)
+        if campaign.max_emails and campaign.max_emails > 0 and campaign.emails_sent >= campaign.max_emails:
+            campaign.status = 'completed'
+            session.commit()
+            return f" Кампания #{campaign.id} достигла лимита ({campaign.max_emails} писем). Статус: completed."
+
+        # Дневной лимит — считаем «сегодня» по таймзоне пользователя
+        from datetime import datetime as dt, timezone as tz
+        import pytz as _pytz
+        _user_tz = _pytz.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _user_now = dt.now(_user_tz)
+        _day_local = _user_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = _day_local.astimezone(tz.utc)
+        sent_today = session.query(EmailOutreach).filter(
+            EmailOutreach.campaign_id == campaign.id,
+            EmailOutreach.sent_at >= today_start,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).count()
+        if sent_today >= campaign.daily_limit:
+            return f"[INTERNAL] Дневной лимит ({campaign.daily_limit} писем) исчерпан. НЕ сообщай пользователю — переключись на другую задачу (контент, исследование, задачи)."
+
+        # Глобальный дневной лимит: УНИКАЛЬНЫХ получателей на пользователя в сутки
+        GLOBAL_DAILY_LIMIT = 100
+        from sqlalchemy import func, distinct as _distinct
+        global_recipients_today = session.query(
+            func.count(_distinct(EmailOutreach.recipient_email))
+        ).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.sent_at >= today_start,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+        ).scalar() or 0
+        # Проверяем только если это новый получатель сегодня
+        is_new_recipient_today = not session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.sent_at >= today_start,
+        ).first()
+        if is_new_recipient_today and global_recipients_today >= GLOBAL_DAILY_LIMIT:
+            return f"[INTERNAL] Лимит уникальных получателей ({GLOBAL_DAILY_LIMIT}/день) исчерпан. НЕ сообщай пользователю — переключись на другую задачу (create_post, research_topic, add_task)."
+
+        # ── ATOMIC GUARD: pg_try_advisory_xact_lock предотвращает race condition ──
+        # ВАЖНО: используем pg_TRY_advisory_xact_lock (не блокирующий вариант) —
+        # блокирующий pg_advisory_xact_lock замораживает весь asyncio event loop если
+        # другой процесс держит лок, что приводит к зависанию сервера на 29000+ секунд.
+        # Если лок не получен — дубль уже в процессе отправки, пропускаем безопасно.
+        try:
+            import hashlib as _hl_recv
+            _recv_hash = int(_hl_recv.md5(_rcpt.encode()).hexdigest()[:8], 16)
+            _recv_lock_id = (user.id * 1000003 + _recv_hash) % (2 ** 31)
+            from sqlalchemy import text as _adv_text
+            _lock_result = session.execute(
+                _adv_text("SELECT pg_try_advisory_xact_lock(:lid)"), {'lid': _recv_lock_id}
+            ).scalar()
+            if _lock_result is False:
+                logger.info(f"[EMAIL_OUTREACH] Advisory lock busy for {_rcpt} — duplicate send in progress, skipping")
+                return f"[INTERNAL] Дублирующая отправка на {_rcpt} уже в процессе — пропускаем."
+        except Exception:
+            pass  # SQLite fallback — advisory lock недоступен, продолжаем без него
+
+        # ── FAST AAL DEDUP: если этому адресу уже отправлено письмо за последние 10 мин → стоп ──
+        # Ловит дубли даже если advisory lock не помог (SQLite или старая транзакция уже закрыта)
+        try:
+            from models import AgentActivityLog as _AAL_dd
+            _aal_dd = session.query(_AAL_dd).filter(
+                _AAL_dd.user_id == user.id,
+                _AAL_dd.activity_type == 'email',
+                _AAL_dd.target == _rcpt,
+                _AAL_dd.status == 'sent',
+                _AAL_dd.created_at >= datetime.now(timezone.utc) - timedelta(minutes=10),
+            ).first()
+            if _aal_dd:
+                _mins_ago = int(
+                    (datetime.now(timezone.utc) - _aal_dd.created_at.replace(tzinfo=timezone.utc)
+                     ).total_seconds() / 60
+                )
+                return f"⛔ {_rcpt} уже получил письмо {_mins_ago} мин назад (дублирование заблокировано)."
+        except Exception as _aal_dd_err:
+            logger.debug("aal dedup check skipped: %s", _aal_dd_err)
+
+        # Проверка дубликата (не слать дважды одному recipient в одной кампании)
+        # FOR UPDATE блокирует строку чтобы параллельный процесс не отправил то же письмо
+        try:
+            existing = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id,
+                recipient_email=recipient_email,
+            ).with_for_update(skip_locked=False).first()
+        except Exception:
+            try:
+                session.rollback()
+            except Exception:
+                pass
+            # SQLite fallback
+            existing = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id,
+                recipient_email=recipient_email,
+            ).first()
+        if existing and existing.status != 'draft':
+            return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}. Для повторного контакта используй send_follow_up_email — не пытайся слать новое."
+
+        # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
+        # 1. Не слать тому, кому уже отправляли из другой кампании последние 14 дней
+        CROSS_CAMPAIGN_COOLDOWN_DAYS = 14
+        cross_existing = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.campaign_id != campaign.id,
+            EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            EmailOutreach.sent_at >= dt.now(tz.utc) - timedelta(days=CROSS_CAMPAIGN_COOLDOWN_DAYS),
+        ).first()
+        if cross_existing:
+            other_camp = session.query(EmailCampaign).filter_by(id=cross_existing.campaign_id).first()
+            other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
+            return f" {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}), cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней. Используй send_follow_up_email если контакт ответил, иначе жди окончания cooldown."
+
+        # 2. Не слать тому, кто ранее пожаловался (complained) или bounced
+        bad_status = session.query(EmailOutreach).filter(
+            EmailOutreach.user_id == user.id,
+            EmailOutreach.recipient_email == recipient_email,
+            EmailOutreach.status.in_(['bounced', 'failed']),
+        ).first()
+        if bad_status:
+            return f" {recipient_email} ранее вернул bounced/failed (статус: {bad_status.status}). Отправка заблокирована."
+
+        if not subject or not body:
+            return " Нужны subject и body письма."
+
+        # ── GUARD: запрещённые слова в теме письма ──
+        # DeepSeek регулярно игнорирует инструкции и ставит "тестирование", "AI employee" и т.п.
+        # Проверяем программно и отклоняем.
+        if subject:
+            import re as _re_subj
+            _subj_lower = subject.lower()
+            _BANNED_SUBJECT_PATTERNS = [
+                r'\bтест\w*',            # тест, тестирование, тестовый
+                r'\btest\w*',             # test, testing
+                r'\bai.?employee\b',      # AI employee, AI-employee
+                r'\bai.?сотрудни\w*',     # AI-сотрудник, AI сотрудников
+                r'\basi\s*biont\b',       # ASI Biont
+                r'\bплатформ\w*',         # платформа, платформы
+                r'\bпредложение о сотрудничестве\b',
+                r'\bcooperation\s+offer\b',
+                r'\bbusiness\s+opportunity\b',
+                r'\bpartnership\s+opportunity\b',
+                r'\bсотрудничество\b',    # слишком generic
+            ]
+            _banned_match = None
+            for _bp in _BANNED_SUBJECT_PATTERNS:
+                _m = _re_subj.search(_bp, _subj_lower)
+                if _m:
+                    _banned_match = _m.group()
+                    break
+            if _banned_match:
+                return (
+                    f"⛔ Тема письма содержит запрещённое слово/фразу: «{_banned_match}». "
+                    f"Текущая тема: «{subject}». "
+                    "ПЕРЕПИШИ тему: она должна быть конкретной, персонализированной под получателя, "
+                    "без слов 'тест', 'платформа', 'AI employee', 'ASI Biont', 'сотрудничество'. "
+                    "Хороший пример: «Вопрос по автоматизации {компания}» или «{имя}, идея для {проект}»."
+                )
+
+        # ── GUARD: язык subject+body должен соответствовать языку контакта ──
+        if subject and body:
+            import unicodedata as _ud_lang
+            def _detect_script_oe(text):
+                scripts = {}
+                for ch in text:
+                    if ch.isalpha():
+                        try:
+                            name = _ud_lang.name(ch, '').split()[0]
+                        except ValueError:
+                            continue
+                        scripts[name] = scripts.get(name, 0) + 1
+                return scripts
+
+            # Определяем ожидаемый язык контакта
+            _expected_lang = None
+            try:
+                from models import EmailContactPreference as _ECP_oe
+                _pref_oe = session.query(_ECP_oe).filter_by(
+                    user_id=user.id, contact_email=_rcpt
+                ).first()
+                if _pref_oe and _pref_oe.preferred_language:
+                    _expected_lang = _pref_oe.preferred_language.lower()
+            except Exception:
+                pass
+
+            if not _expected_lang:
+                # Определяем по домену/имени/контексту (согласованно с _detect_recipient_lang)
+                _ru_domains = ('.ru', '.by', '.ua', '.kz', '.рф')
+                _ru_providers = ('yandex.com', 'yandex.ru', 'ya.ru', 'mail.ru', 'bk.ru',
+                                 'rambler.ru', 'inbox.ru', 'list.ru', 'tut.by')
+                _domain_oe = _rcpt.split('@')[-1].lower() if '@' in _rcpt else ''
+                def _has_cyr_oe(s):
+                    return any('\u0400' <= c <= '\u04ff' for c in (s or ''))
+                _cyr_in_name_oe = _has_cyr_oe(f"{recipient_name or ''} {recipient_company or ''}")
+                _ctx_lower_oe = (recipient_context or '').lower()
+                _ru_ctx_oe = any(p in _ctx_lower_oe for p in [
+                    'habr', 'vc.ru', 'хабр', 'pikabu', 'mail.ru',
+                    'rambler', 'yandex.ru', 'vk.com', 't.me', 'ok.ru',
+                ])
+                if (any(_domain_oe.endswith(d) for d in _ru_domains)
+                        or _domain_oe in _ru_providers
+                        or _cyr_in_name_oe
+                        or _ru_ctx_oe):
+                    _expected_lang = 'ru'
+                else:
+                    _expected_lang = 'en'
+
+            _body_scripts = _detect_script_oe(subject + ' ' + body)
+            _body_top = max(_body_scripts, key=_body_scripts.get) if _body_scripts else 'LATIN'
+
+            if _expected_lang == 'en' and _body_top == 'CYRILLIC' and _body_scripts.get('CYRILLIC', 0) > 20:
+                return ("⚠ Email написан на русском (кириллица), но контакт ожидает English. "
+                        "ПЕРЕПИШИ subject и body на английском языке!")
+            if _expected_lang == 'ru' and _body_top == 'LATIN' and _body_scripts.get('LATIN', 0) > 20:
+                return ("⚠ Email написан на английском (латиница), но контакт ожидает русский. "
+                        "ПЕРЕПИШИ subject и body на русском языке!")
+
+        # MX-проверка домена получателя
+        mx_valid, mx_err = _validate_email_domain(recipient_email)
+        if not mx_valid:
+            # Помечаем контакт как bounced — чтобы он не попадал в unsent_contacts повторно
+            try:
+                _ec_mx = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=_rcpt,
+                ).first()
+                if _ec_mx and _ec_mx.status not in ('unsubscribed',):
+                    _ec_mx.status = 'bounced'
+                    session.commit()
+            except Exception as _e_mx:
+                logger.debug("suppressed MX bounce mark: %s", _e_mx)
+            return f" {mx_err}"
+
+        # Отправляем через Resend — plain text (без HTML чтобы не попасть в Промоакции)
+        import aiohttp as _aiohttp
+        from config import WEB_APP_URL, generate_unsubscribe_token
+        _unsub_token = generate_unsubscribe_token(_rcpt, user.id)
+        import urllib.parse as _up
+        _unsub_url = (
+            f"{WEB_APP_URL}/unsubscribe"
+            f"?token={_unsub_token}"
+            f"&email={_up.quote(_rcpt)}"
+            f"&uid={user.id}"
+        )
+        resend_id = None
+
+        # Подпись отправителя в теле (если ИИ не добавил сам)
+        _sig_name = (campaign.sender_name or '').strip()
+        _body_signed = body
+        if _sig_name and _sig_name.lower() not in body.lower()[-200:]:
+            _body_signed = body.rstrip() + f"\n\n— {_sig_name}"
+
+        # Сайт: добавляем как plain-text домен в подпись БЕЗ https:// и без гиперссылки.
+        # Ссылки (→ https://...) в холодных письмах — главный триггер спам-фильтров,
+        # они снижают доставляемость и могут убить репутацию домена отправки.
+        # Plain-text домен в подписи безопасен и при этом сообщает пользователю о сайте.
+        _cta_url = (campaign.landing_url or '').strip() or (_user_landing_url or '')
+        if _cta_url:
+            # Извлекаем чистый домен без схемы: https://example.com → example.com
+            _plain_domain = _cta_url.replace('https://', '').replace('http://', '').split('/')[0]
+            if _plain_domain and _plain_domain.lower() not in _body_signed.lower():
+                _body_signed = _body_signed.rstrip() + f"\n{_plain_domain}"
+        # Telegram: plain-text link (t.me/channel) — безопасен для спам-фильтров
+        _tg_link_oe = _get_email_tg_link(user)
+        if _tg_link_oe and _tg_link_oe not in _body_signed:
+            _body_signed = _body_signed.rstrip() + f'\n{_tg_link_oe}'
+
+        # ── SMTP dispatch (Яндекс / Mail.ru / custom SMTP) — приоритет перед Resend ──
+        _smtp_sent_out = False
+        if _smtp_creds_out:
+            import smtplib as _smtplib_out
+            from email.mime.text import MIMEText as _MimeOut
+            from email.mime.multipart import MIMEMultipart as _MMOut
+            import asyncio as _aio_out
+            import ssl as _ssl_out
+            _body_smtp = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
+            def _do_smtp_outreach():
+                _msg_out = _MMOut('alternative')
+                _msg_out['From'] = f"{campaign.sender_name} <{_smtp_creds_out['user']}>"
+                _msg_out['To'] = recipient_email
+                _msg_out['Subject'] = subject
+                try:
+                    _msg_out['List-Unsubscribe'] = f'<{_unsub_url}>'
+                    _msg_out['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+                except Exception:
+                    pass
+                _msg_out.attach(_MimeOut(_body_smtp, 'plain', 'utf-8'))
+                try:
+                    _html_smtp_out = _build_email_html(_text_to_email_html(_body_smtp), sender_name=campaign.sender_name)
+                    _msg_out.attach(_MimeOut(_html_smtp_out, 'html', 'utf-8'))
+                except Exception:
+                    pass
+                _ctx_out = _ssl_out.create_default_context()
+                with _smtplib_out.SMTP(_smtp_creds_out['host'], _smtp_creds_out['port'], timeout=30) as _srv:
+                    _srv.ehlo(); _srv.starttls(context=_ctx_out); _srv.ehlo()
+                    _srv.login(_smtp_creds_out['user'], _smtp_creds_out['pass'].replace(' ', ''))
+                    _srv.sendmail(_smtp_creds_out['user'], recipient_email, _msg_out.as_string())
+            _loop_out = _aio_out.get_running_loop()
+            try:
+                await _aio_out.wait_for(
+                    _loop_out.run_in_executor(None, _do_smtp_outreach), timeout=35.0
+                )
+                logger.info(
+                    f"[EMAIL_OUTREACH] Sent via SMTP ({_smtp_creds_out['label']}) to {redact_email(recipient_email)}"
+                )
+                _smtp_sent_out = True
+                # Rate limit: Яндекс/Mail.ru ограничивают ~100 писем/час.
+                # 5с задержка предотвращает burst-блокировку аккаунта.
+                import asyncio as _aio_delay
+                await _aio_delay.sleep(5)
+            except Exception as _smtp_out_err:
+                logger.warning(
+                    f"[EMAIL_OUTREACH] SMTP ({_smtp_creds_out['label']}) failed: {_smtp_out_err} — falling back to Resend"
+                )
+
+        # ── Gmail OAuth: прямая отправка через Gmail API (приоритет над Resend) ──
+        _gmail_oauth_sent = False
+        if not _smtp_sent_out and _gmail_oauth_token_data:
+            _body_gmail_oa = _body_signed + f"\n\n---\nЧтобы отписаться: {_unsub_url}"
+            _ok_goa, _res_goa = await _send_via_gmail_api(
+                _gmail_oauth_token_data,
+                recipient_email,
+                subject,
+                _body_gmail_oa,
+                campaign.sender_name or 'ASI Biont',
+                user,
+                session,
+            )
+            if _ok_goa:
+                logger.info('[EMAIL_OUTREACH] Sent via Gmail API to %s', redact_email(recipient_email))
+                _gmail_oauth_sent = True
+            else:
+                logger.warning('[EMAIL_OUTREACH] Gmail API failed: %s — falling back to Resend', _res_goa)
+
+        if not _smtp_sent_out and not _gmail_oauth_sent:
+            # Проверка квоты Resend: если вернул 429 ранее — ждём до полуночи UTC
+            # Делаем ЗДЕСЬ а не раньше: SMTP/Gmail должны работать даже когда Resend заблокирован
+            try:
+                from .service_health import get_status as _svc_status_resend
+                _svc_st_r = _svc_status_resend()
+                _resend_st_r = _svc_st_r.get('resend', {})
+                if _resend_st_r.get('code') == 429:
+                    import time as _t429_r
+                    _bu_r = _resend_st_r.get('blocked_until')
+                    if _bu_r and _t429_r.time() < _bu_r:
+                        _mins_left_r = int((_bu_r - _t429_r.time()) / 60)
+                        return f"[INTERNAL] Resend исчерпал дневную квоту. Отправка заблокирована на {_mins_left_r} мин (до полуночи UTC). Переключись на другую задачу."
+            except Exception as _svc_chk_r:
+                logger.debug("resend quota check skipped: %s", _svc_chk_r)
+
+            if not RESEND_API_KEY:
+                return " SMTP/Gmail отправка не удалась и Resend API не настроен. Проверьте ключи в настройках агента."
+            try:
+                async with _safe_http() as http:
+                    # Используем RESEND_FROM (верифицированный домен) если sender_email — сторонний
+                    # _personal_resend_from: из user_api_keys агента (RESEND_FROM/SENDER_EMAIL/FROM_EMAIL)
+                    from config import RESEND_FROM as _resend_from_cfg
+                    _effective_resend_from = _personal_resend_from or _resend_from_cfg
+                    _free_domains = ('gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+                                     'mail.ru', 'yandex.ru', 'yandex.com', 'inbox.ru', 'list.ru')
+                    _sender_domain = (campaign.sender_email or '').split('@')[-1].lower()
+                    # Free-mail domains (gmail, yandex, mail.ru etc.) cannot be used as Resend
+                    # sender — Resend requires a verified domain. Always use RESEND_FROM / platform
+                    # default for free-mail senders. reply_to is set to the real user address below.
+                    if _sender_domain in _free_domains:
+                        _from_addr = _effective_resend_from or 'outreach@asibiont.com'
+                    else:
+                        _from_addr = campaign.sender_email or _effective_resend_from or 'outreach@asibiont.com'
+                    from_header = f"{campaign.sender_name} <{_from_addr}>"
+                    # reply_to: Gmail (app-password mode) → ответы приходят на Gmail пользователя
+                    _reply_to_addr = (
+                        _gmail_reply_to or
+                        (campaign.sender_email if campaign.sender_email and '@' in campaign.sender_email else None)
+                    )
+                    # Добавляем строку отписки в тело (CAN-SPAM / GDPR)
+                    _body_with_footer = _body_signed + f"\n\n---\nЧтобы отписаться от писем: {_unsub_url}"
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={
+                            'Authorization': f'Bearer {RESEND_API_KEY}',
+                            'Content-Type': 'application/json',
+                        },
+                        json={k: v for k, v in {
+                            'from': from_header,
+                            'to': [recipient_email],
+                            'reply_to': [_reply_to_addr] if _reply_to_addr else None,
+                            'subject': subject,
+                            'text': _body_with_footer,
+                            'headers': {'List-Unsubscribe': f'<{_unsub_url}>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'},
+                        }.items() if v is not None},
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    resp_data = await resp.json()
+                    if resp.status in (200, 201):
+                        resend_id = resp_data.get('id')
+                        logger.info(f"[EMAIL_OUTREACH] Sent to {redact_email(recipient_email)}: {resend_id}")
+                        # Сбрасываем запись ошибки при успехе
+                        try:
+                            from .service_health import clear_error as _clr_svc
+                            _clr_svc('resend')
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                    else:
+                        err = resp_data.get('message', str(resp_data))
+                        logger.error(f"[EMAIL_OUTREACH] Resend error: {resp.status} {err}")
+                        try:
+                            from .service_health import record_error as _rec_svc
+                            import time as _t_rec
+                            from datetime import datetime as _dt_rec, timezone as _tz_rec
+                            _blocked_until = None
+                            if resp.status == 429:
+                                # Блокируем до полуночи UTC — Resend сбрасывает квоту ежедневно
+                                _now_utc = _dt_rec.now(_tz_rec.utc)
+                                _midnight_utc = _now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+                                import math as _math_rec
+                                from datetime import timedelta as _td_rec
+                                _next_midnight = _midnight_utc + _td_rec(days=1)
+                                _blocked_until = _t_rec.time() + (_next_midnight - _now_utc).total_seconds()
+                            _rec_svc('resend', f'HTTP {resp.status}: {err}', code=resp.status, detail=str(resp_data)[:300], blocked_until=_blocked_until)
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                        if resp.status == 429:
+                            return f"[INTERNAL] Resend исчерпал дневную квоту (429). Отправка заблокирована до полуночи UTC. Переключись на другую задачу."
+                        return f" Ошибка Resend API: {err}"
+            except Exception as e:
+                logger.error(f"[EMAIL_OUTREACH] Send error: {e}")
+                return f" Ошибка отправки: {str(e)}"
+
+        # Anti-spam задержка между письмами (10 сек)
+        import asyncio as _asyncio_delay
+        await _asyncio_delay.sleep(10)
+
+        # Сохраняем в БД (обновляем draft или создаём новый)
+        if existing and existing.status == 'draft':
+            outreach = existing
+            outreach.subject = subject
+            outreach.body = _body_signed
+            outreach.status = 'sent'
+            outreach.resend_id = resend_id
+            outreach.sent_at = dt.now(tz.utc)
+        else:
+            outreach = EmailOutreach(
+                campaign_id=campaign.id,
+                user_id=user.id,
+                recipient_email=recipient_email,
+                recipient_name=recipient_name,
+                recipient_company=recipient_company,
+                recipient_context=recipient_context,
+                subject=subject,
+                body=_body_signed,
+                status='sent',
+                resend_id=resend_id,
+                sent_at=dt.now(tz.utc),
+                sent_by_agent=sent_by_agent or None,
+            )
+            session.add(outreach)
+        campaign.emails_sent = (campaign.emails_sent or 0) + 1
+        # Адаптивный follow-up: если предыдущее письмо этому адресу было открыто — follow-up через 24ч (горячий лид), иначе 3 дня
+        _was_opened = existing and existing.status == 'opened'
+        _follow_up_delay = timedelta(hours=24) if _was_opened else timedelta(days=3)
+        outreach.next_follow_up_at = dt.now(tz.utc) + _follow_up_delay
+
+        # ── Авто-обновление прогресса цели при отправке письма ──
+        # Ищем активную цель, которая отслеживает отправку писем по этой кампании
+        try:
+            from models import Goal as _Goal_oe
+            _email_kw_oe = ('рассылк', 'email', 'письм', 'outreach', 'кампан', 'campaign', 'отправ')
+            _active_goals_oe = session.query(_Goal_oe).filter(
+                _Goal_oe.user_id == user.id,
+                _Goal_oe.status == 'active',
+                _Goal_oe.metric_target.isnot(None),
+            ).all()
+            for _goal_oe in _active_goals_oe:
+                _gtext_oe = (
+                    _goal_oe.title + ' ' +
+                    (_goal_oe.description or '') + ' ' +
+                    (_goal_oe.metric_unit or '')
+                ).lower()
+                # Цель должна быть про email/рассылку И метрика — про письма/отправку
+                _is_email_goal = any(kw in _gtext_oe for kw in _email_kw_oe)
+                _not_reply_goal = not any(
+                    w in _gtext_oe for w in ('ответ', 'reply', 'replied', 'ответили')
+                )
+                if _is_email_goal and _not_reply_goal:
+                    _new_mc_oe = float(campaign.emails_sent)
+                    _old_mc_oe = float(_goal_oe.metric_current or 0)
+                    if _new_mc_oe > _old_mc_oe:
+                        _pct_oe = min(100, int(_new_mc_oe / float(_goal_oe.metric_target) * 100))
+                        _goal_oe.metric_current = _new_mc_oe
+                        _goal_oe.progress_percentage = _pct_oe
+                        logger.info(
+                            f'[EMAIL_OUTREACH] Auto-updated goal "{_goal_oe.title}": '
+                            f'{_new_mc_oe}/{_goal_oe.metric_target} ({_pct_oe}%)'
+                        )
+                    break
+        except Exception as _e_goal_oe:
+            logger.debug(f'[EMAIL_OUTREACH] Auto goal update failed: {_e_goal_oe}')
+
+        # Логируем в AgentActivityLog для ленты активности
+        try:
+            from models import AgentActivityLog
+            _name_part = f" ({recipient_name})" if recipient_name else ""
+            _sndr_name = (campaign.sender_name or '').strip()
+            _sndr_email = (campaign.sender_email or '').strip()
+            _from_line = ''
+            if _sndr_name or _sndr_email:
+                _from_line = f"От: {_sndr_name}{' <' + _sndr_email + '>' if _sndr_email else ''}\n"
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='email',
+                title=f"{_sndr_name + ' → ' if _sndr_name else ''}{recipient_email}{_name_part}",
+                content=f"Тема: {subject}\n{_from_line}\n{_body_signed}",
+                target=recipient_email,
+                status='sent',
+                ref_id=outreach.id if hasattr(outreach, 'id') else None,
+            )
+            session.add(log_entry)
+        except Exception as _log_err:
+            logger.warning(f"[EMAIL_OUTREACH] Activity log error: {_log_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+        # Авто-сохранение EmailContact при успешной отправке
+        try:
+            from models import EmailContact as _EC_auto
+            _ec_email = (recipient_email or '').strip().lower()
+            with session.no_autoflush:
+                _ec_existing = session.query(_EC_auto).filter_by(
+                    user_id=user.id, email=_ec_email
+                ).first()
+            if not _ec_existing:
+                session.add(_EC_auto(
+                    user_id=user.id,
+                    email=_ec_email,
+                    name=(recipient_name or '').strip() or None,
+                    company=(recipient_company or '').strip() or None,
+                    source='outreach',
+                    status='contacted',
+                    last_contacted_at=dt.now(tz.utc),
+                ))
+            else:
+                _ec_existing.last_contacted_at = dt.now(tz.utc)
+                if recipient_name and not _ec_existing.name:
+                    _ec_existing.name = recipient_name.strip()
+                # Обновляем статус: new → contacted (если ещё не replied/interested)
+                if _ec_existing.status in ('new', None):
+                    _ec_existing.status = 'contacted'
+        except Exception as _ec_err:
+            logger.warning(f"[EMAIL_OUTREACH] Auto-save contact error: {_ec_err}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
+
+        session.commit()
+
+        # ── Email Content Fingerprint (Improvement #2) ──
+        # Вычисляем fingerprint сразу после commit чтобы id уже был
+        try:
+            _body_text = (body or '')
+            _body_len = len(_body_text)
+            _rcpt_markers = []
+            if recipient_name:
+                _rcpt_markers.append(recipient_name.lower().split()[0] if ' ' in recipient_name else recipient_name.lower())
+            if recipient_company:
+                _rcpt_markers.append(recipient_company.lower()[:10])
+            _has_pers = bool(_rcpt_markers and any(m in _body_text.lower() for m in _rcpt_markers))
+            _CTA_KW = ('напишите', 'свяжитесь', 'позвоните', 'ответьте', 'reply', 'contact', 'call', 'book', 'schedule',
+                       'запишитесь', 'оставьте', 'перейдите', 'click', 'нажмите', 'заполните')
+            _has_cta = any(kw in _body_text.lower() for kw in _CTA_KW)
+            _FORMAL_KW = ('уважаемый', 'уважаемая', 'dear', 'sincerely', 'regards', 'с уважением', 'господин', 'госпожа')
+            _TECH_KW = ('api', 'github', 'технолог', 'разработ', 'stack', 'backend', 'frontend', 'cloud', 'devops', 'code')
+            _COMM_KW = ('продажи', 'клиент', 'заказ', 'цена', 'прайс', 'скидка', 'offer', 'price', 'deal', 'partnership')
+            _bl = _body_text.lower()
+            if any(kw in _bl for kw in _FORMAL_KW):
+                _tone = 'formal'
+            elif any(kw in _bl for kw in _TECH_KW):
+                _tone = 'technical'
+            elif any(kw in _bl for kw in _COMM_KW):
+                _tone = 'commercial'
+            else:
+                _tone = 'friendly'
+            from datetime import datetime as _dt_fp, timezone as _tz_fp
+            outreach.body_length = _body_len
+            outreach.has_personalization = _has_pers
+            outreach.has_call_to_action = _has_cta
+            outreach.tone_type = _tone
+            outreach.sent_at_hour_utc = _dt_fp.now(_tz_fp.utc).hour
+            session.commit()
+            logger.info(f'[EMAIL_FP] outreach#{outreach.id}: len={_body_len}, pers={_has_pers}, cta={_has_cta}, tone={_tone}')
+        except Exception as _e_fp:
+            logger.debug('[EMAIL_FP] fingerprint failed: %s', _e_fp)
+
+        lang = _get_lang(user_id)
+        name_str = f" ({recipient_name})" if recipient_name else ""
+        _max_label = campaign.max_emails if campaign.max_emails and campaign.max_emails > 0 else '∞'
+        if lang == 'en':
+            return f" Email sent to {recipient_email}{name_str}\nSubject: {subject}\nCampaign #{campaign.id} — {campaign.emails_sent}/{_max_label} sent"
+        return f" Письмо отправлено: {recipient_email}{name_str}\nТема: {subject}\nКампания #{campaign.id} — {campaign.emails_sent}/{_max_label} отправлено"
+
+    except Exception as e:
+        logger.error(f"[EMAIL_OUTREACH] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def reply_to_outreach_email(
+    outreach_id: int = None,
+    recipient_email: str = None,
+    reply_body: str = None,
+    user_id: int = None,
+    sent_by_agent: str = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Ответить на входящий reply от получателя (AI автоматически или по запросу).
+
+    Приоритет отправки: SMTP пользователя → Resend пользователя → платформенный Resend.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from datetime import datetime as dt, timezone as tz
+        import aiohttp as _aiohttp
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        # Найти письмо
+        outreach = None
+        if outreach_id:
+            outreach = session.query(EmailOutreach).filter_by(
+                id=outreach_id, user_id=user.id
+            ).first()
+        elif recipient_email:
+            # Сначала ищем с status='replied' (идеальный случай — check_emails уже обновил)
+            outreach = session.query(EmailOutreach).filter_by(
+                user_id=user.id, recipient_email=recipient_email, status='replied'
+            ).order_by(EmailOutreach.reply_at.desc()).first()
+            # Fallback: если check_emails не успел обновить статус — ищем sent/delivered/opened
+            if not outreach:
+                outreach = session.query(EmailOutreach).filter(
+                    EmailOutreach.user_id == user.id,
+                    EmailOutreach.recipient_email == recipient_email,
+                    EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+                ).order_by(EmailOutreach.sent_at.desc()).first()
+                # Помечаем как replied раз агент знает об ответе
+                if outreach:
+                    outreach.status = 'replied'
+                    if not outreach.reply_at:
+                        from datetime import datetime as _dt_roe, timezone as _tz_roe
+                        outreach.reply_at = _dt_roe.now(_tz_roe.utc)
+                    session.commit()
+
+        if not outreach:
+            return " Не найдено письмо для ответа."
+
+        # ── GUARD: проверяем владение email-перепиской (кто отправлял = тот и отвечает) ──
+        _original_agent = (outreach.sent_by_agent or '').strip()
+        _current_agent = (sent_by_agent or '').strip()
+        if _original_agent and _current_agent and _original_agent.lower() != _current_agent.lower():
+            # Сначала проверяем сохранённые правила пользователя
+            _has_ownership_rule = False
+            try:
+                import json as _j_own
+                _u_mem = (user.memory or '').strip()
+                if _u_mem.startswith('{'):
+                    _mem_j = _j_own.loads(_u_mem)
+                    _rules = _mem_j.get('rules', [])
+                    _OWNERSHIP_KEYWORDS = (
+                        ('от имени', 'агент'), ('перв', 'писал'), ('перв', 'писала'),
+                        ('перв', 'отправил'), ('перв', 'отправила'),
+                        ('тот', 'начал'), ('та', 'начала'), ('начал', 'диалог'),
+                        ('ведёт', 'тот'), ('ведёт', 'та'), ('переписку', 'агент'),
+                    )
+                    for _r in _rules:
+                        _rl = str(_r).lower()
+                        if any(k1 in _rl and k2 in _rl for k1, k2 in _OWNERSHIP_KEYWORDS):
+                            _has_ownership_rule = True
+                            break
+            except Exception:
+                pass
+            if _has_ownership_rule:
+                return (f"⛔ Это письмо отправлял(а) {_original_agent}. "
+                        f"По правилам пользователя переписку ведёт тот агент, кто первый писал. "
+                        f"Передай задачу {_original_agent} через DELEGATE[{_original_agent}].")
+            else:
+                # Даже без явного правила — логируем и показываем предупреждение в ответе
+                logger.info(f"[EMAIL_REPLY] agent mismatch: original={_original_agent}, current={_current_agent}")
+                return (f"⚠️ Это письмо отправлял(а) {_original_agent}, а отвечает {_current_agent}. "
+                        f"Переписку должен вести тот же агент. "
+                        f"Передай задачу {_original_agent} через DELEGATE[{_original_agent}].")
+                # (принудительная блокировка — агент увидит и перенаправит)
+
+        # ── GUARD: не отвечать отписавшимся контактам ──
+        _reply_rcpt = (recipient_email or outreach.recipient_email or '').strip().lower()
+        if _reply_rcpt:
+            try:
+                _ec_reply_chk = session.query(EmailContact).filter_by(
+                    user_id=user.id, email=_reply_rcpt, status='unsubscribed',
+                ).first()
+                if _ec_reply_chk:
+                    return f"⛔ {_reply_rcpt} отписался — ответ заблокирован."
+            except Exception as _e_reply_chk:
+                logger.debug("suppressed unsubscribed check in reply: %s", _e_reply_chk)
+
+        # ── GUARD: сканируем reply_text на opt-out сигналы (на случай если check_emails ещё не обработал) ──
+        # Убираем цитируемую часть (quoted): строки с '>' и всё после 'On ... wrote:'
+        _raw_reply_text = outreach.reply_text or ''
+        import re as _re_strip_quote
+        # Обрезаем по 'On ... wrote:' (стандарт Gmail/Outlook)
+        _quote_cut = _re_strip_quote.split(r'\r?\nOn .{10,120}wrote:', _raw_reply_text, maxsplit=1)
+        _reply_no_quote = _quote_cut[0] if _quote_cut else _raw_reply_text
+        # Убираем строки начинающиеся с '>'
+        _reply_no_quote = '\n'.join(
+            ln for ln in _reply_no_quote.splitlines() if not ln.strip().startswith('>')
+        )
+        _contact_reply_text = _reply_no_quote.lower()
+        if _contact_reply_text:
+            import re as _re_unsub_guard
+            _UNSUB_GUARD_RE = _re_unsub_guard.compile(
+                r'\bunsubscribe\b|\bopt[\s\-]?out\b|'
+                r'\bstop\s+(?:emailing|contacting|writing|sending)\b|'
+                r'\bdo\s+not\s+(?:contact|email|write|send)\b|'
+                r'\bdon\'?t\s+(?:contact|email|write|send)\b|'
+                r'\bnot\s+interested\b|\bleave\s+me\s+alone\b|'
+                r'не\s*пиши(?:те)?|(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
+                r'отпис(?:ать|ка|аться)|'
+                r'(?:больше\s+)?не\s+(?:нужно|надо|хочу)\s*(?:писать|получать)|'
+                r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
+                # Greek
+                r'μη\s*(?:μου)?\s*(?:στ[εέ]λν|γρ[αά]φ)|σταματ[ήη]στε|'
+                r'(?:δεν|δε)\s+(?:με\s+)?ενδιαφ[εέ]ρ|(?:δεν|δε)\s+θ[εέ]λω|'
+                r'αφ[ήη]στ[εέ]\s+(?:με|μου)|'
+                # Spanish / German / French / Italian / Portuguese / Turkish
+                r'(?:no\s+me\s+(?:escriba|contacte))|(?:darse\s+de\s+baja)|'
+                r'(?:ab(?:bestellen|melden))|(?:kein\s+interesse)|'
+                r'(?:d[eé]sabonner|d[eé]sinscri)|(?:pas\s+int[eé]ress[eé])|'
+                r'(?:non\s+(?:sono\s+)?interessat[oa])|'
+                r'(?:(?:não|nao)\s+(?:estou\s+)?interessad[oa])|'
+                r'(?:yazma(?:yın|yin))|(?:ilgilenmiyorum)',
+                _re_unsub_guard.IGNORECASE,
+            )
+            if _UNSUB_GUARD_RE.search(_contact_reply_text):
+                # Auto-unsubscribe the contact
+                try:
+                    _ec_auto = session.query(EmailContact).filter_by(
+                        user_id=user.id, email=_reply_rcpt
+                    ).first()
+                    if _ec_auto:
+                        _ec_auto.status = 'unsubscribed'
+                        _old_n = _ec_auto.notes or ''
+                        if 'отписка' not in _old_n.lower():
+                            _ec_auto.notes = ((_old_n + '\n') if _old_n else '') + '[отписка: контакт попросил не писать]'
+                    outreach.status = 'unsubscribed'
+                    outreach.next_follow_up_at = None
+                    session.commit()
+                    logger.info(f'[EMAIL_REPLY] AUTO-UNSUBSCRIBE on reply guard: {_reply_rcpt}')
+                except Exception as _e_auto_unsub:
+                    logger.debug(f'[EMAIL_REPLY] auto-unsubscribe failed: {_e_auto_unsub}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                return f"⛔ {_reply_rcpt} просил не писать — ответ заблокирован. Контакт отмечен как отписавшийся."
+
+        # Защита от спама: не более 2 AI-ответов одному контакту суммарно по всем записям
+        # Считаем SUM(ai_reply_count), а не количество СТРОК — иначе 1 строка с 10 ответами пройдёт guard
+        _MAX_AI_REPLIES = 2
+        _email_to_check = (recipient_email or outreach.recipient_email or '').strip().lower()
+        _ai_reply_count = 0
+        _last_ai_reply_at = outreach.ai_reply_sent_at
+        if _email_to_check:
+            from sqlalchemy import func as _func_spam
+            _total_replies = session.query(
+                _func_spam.coalesce(_func_spam.sum(EmailOutreach.ai_reply_count), 0)
+            ).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == _email_to_check,
+                EmailOutreach.ai_reply_sent_at.isnot(None),
+            ).scalar() or 0
+            _ai_reply_count = int(_total_replies)
+            # Get last reply time
+            _last_row = session.query(EmailOutreach.ai_reply_sent_at).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == _email_to_check,
+                EmailOutreach.ai_reply_sent_at.isnot(None),
+            ).order_by(EmailOutreach.ai_reply_sent_at.desc()).first()
+            if _last_row:
+                _last_ai_reply_at = _last_row[0]
+        elif outreach.ai_reply_sent_at:
+            _ai_reply_count = outreach.ai_reply_count or 1
+        if _ai_reply_count >= _MAX_AI_REPLIES:
+            sent_str = _last_ai_reply_at.strftime('%d.%m %H:%M') if _last_ai_reply_at else '?'
+            return (f"🛑 Стоп-спам: {_email_to_check or outreach.recipient_email} уже получил {_ai_reply_count} AI-ответа "
+                    f"(последний: {sent_str}). Максимум {_MAX_AI_REPLIES} ответа на контакт — дальше спам.")
+
+        campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+        if not campaign:
+            return " Кампания не найдена."
+
+        _sender_addr_norm = (campaign.sender_email or '').strip().lower()
+        _user_email_norm = (getattr(user, 'email', '') or '').strip().lower()
+        if _reply_rcpt and ((_sender_addr_norm and _reply_rcpt == _sender_addr_norm) or (_user_email_norm and _reply_rcpt == _user_email_norm)):
+            return f"⛔ Self-reply detected: {_reply_rcpt} — автоответ самому себе заблокирован."
+
+        if not reply_body:
+            return " Нужен текст ответа (reply_body)."
+
+        # ── GUARD: блокируем плейсхолдеры в тексте ответа ──
+        import re as _re_placeholder
+        _PLACEHOLDER_RE = _re_placeholder.compile(
+            r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+            r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+            _re_placeholder.IGNORECASE,
+        )
+        _ph_match = _PLACEHOLDER_RE.search(reply_body)
+        if _ph_match:
+            return (f"⛔ Ответ содержит плейсхолдер: «{_ph_match.group()}». "
+                    f"Нельзя отправлять шаблон вместо реальных данных. "
+                    f"Спроси у пользователя через send_message_to_user если нужна ссылка/данные.")
+        # ── GUARD: язык reply_body должен совпадать с языком ответа контакта (reply_text) ──
+        # Если контакт ответил на определённом языке — AI должен отвечать на ТОМ ЖЕ языке.
+        # Fallback: если reply_text нет — сравниваем с языком оригинального outreach.
+        _contact_reply = (outreach.reply_text or '')
+        _lang_reference = _contact_reply if len(_contact_reply) > 20 else (outreach.body or '')
+        if _lang_reference and reply_body:
+            import re as _re_lang
+            import unicodedata as _ud
+            def _detect_script(text):
+                scripts = {}
+                for ch in text:
+                    if ch.isalpha():
+                        try:
+                            name = _ud.name(ch, '').split()[0]
+                        except ValueError:
+                            continue
+                        scripts[name] = scripts.get(name, 0) + 1
+                return scripts
+            _ref_scripts = _detect_script(_lang_reference)
+            _reply_scripts = _detect_script(reply_body)
+            _ref_top = max(_ref_scripts, key=_ref_scripts.get) if _ref_scripts else 'LATIN'
+            _reply_top = max(_reply_scripts, key=_reply_scripts.get) if _reply_scripts else 'LATIN'
+            # Блокируем если доминирующий скрипт отличается (Greek vs Cyrillic, Cyrillic vs Latin, etc.)
+            if _ref_top != _reply_top and max(_ref_scripts.values(), default=0) > 20:
+                _script_names = {'LATIN': 'латиница', 'CYRILLIC': 'кириллица', 'GREEK': 'греческий', 'ARABIC': 'арабский', 'CJK': 'CJK', 'HANGUL': 'корейский', 'HIRAGANA': 'японский', 'KATAKANA': 'японский', 'DEVANAGARI': 'деванагари'}
+                _ref_name = _script_names.get(_ref_top, _ref_top)
+                _reply_name = _script_names.get(_reply_top, _reply_top)
+                _src = 'ответа контакта' if len(_contact_reply) > 20 else 'оригинального письма'
+                return (f"⚠ Язык reply_body ({_reply_name}) не совпадает с языком {_src} ({_ref_name}). "
+                        f"ПЕРЕПИШИ reply_body на {_ref_name} — контакт ожидает ответ на своём языке!")
+
+        # MX-проверка (на всякий — получатель мог сменить домен)
+        mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
+        if not mx_valid:
+            return f" {mx_err}"
+
+        subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
+        to_clean = outreach.recipient_email.strip().lower()
+        sender_name = campaign.sender_name or ''
+        sender_addr = campaign.sender_email or ''
+
+        # ── Выбор канала отправки ──────────────────────────────────────────────
+        # Ищем интеграцию пользователя с адресом = sender_addr кампании.
+        # Если совпадение есть — используем его (Gmail OAuth / SMTP / user Resend).
+        # Если не найдено — fallback на платформенный Resend с адресом кампании.
+        _integrations = _get_user_email_integrations(user, session)
+        _matched = None
+        for _intg in _integrations:
+            if _intg.get('email_user', '').lower() == sender_addr.lower():
+                _matched = _intg
+                break
+        # Нет точного совпадения — берём первую доступную интеграцию (пользователь настроил почту)
+        if not _matched and _integrations:
+            _matched = _integrations[0]
+
+        _send_error = None
+
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
+            _ok_r, _res_r = await _send_via_gmail_api(
+                _matched['token_data'], to_clean, subject, reply_body,
+                sender_name, user, session,
+            )
+            if _ok_r:
+                logger.info(f'[EMAIL_REPLY] Sent via Gmail API from {_res_r} to {to_clean}')
+            else:
+                _send_error = _res_r
+
+        elif _matched and _matched.get('type') == 'gmail_server':
+            # ── Gmail (пароль приложения): серверный Resend + Reply-To ────────
+            from config import RESEND_API_KEY as _rk_gm_r
+            _rt_gm_r = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
+            _gm_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
+                          'to': [to_clean], 'subject': subject, 'text': reply_body}
+            try:
+                _gm_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+            if _rt_gm_r and '@' in _rt_gm_r:
+                _gm_r_json['reply_to'] = [_rt_gm_r]
+            try:
+                async with _safe_http() as _hgr:
+                    _rgr = await _hgr.post('https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_rk_gm_r}', 'Content-Type': 'application/json'},
+                        json=_gm_r_json, timeout=_aiohttp.ClientTimeout(total=15))
+                    _dgr = await _rgr.json()
+                    if _rgr.status not in (200, 201):
+                        _send_error = _dgr.get('message', str(_dgr))
+                    else:
+                        logger.info(f'[EMAIL_REPLY] Sent via server Resend (Gmail Reply-To: {_rt_gm_r}) to {to_clean}')
+            except Exception as _egr:
+                _send_error = f'Gmail server: {_egr}'
+
+        elif _matched and _matched.get('type') == 'smtp':
+            # ── SMTP пользователя (Яндекс / Mail.ru / Gmail app-password) ──────
+            import smtplib as _smtplib
+            from email.mime.text import MIMEText as _MimeSmtp
+            from email.mime.multipart import MIMEMultipart as _MMsmtp
+            import asyncio as _aio_smtp
+            import ssl as _ssl_smtp
+
+            _smtp_host = _matched['smtp_host']
+            _smtp_port = _matched['smtp_port']
+            _smtp_user = _matched['email_user']
+            _smtp_pass = _matched['email_pass'].replace(' ', '')
+
+            def _do_smtp():
+                msg = _MMsmtp('alternative')
+                msg['From'] = f"{sender_name} <{_smtp_user}>"
+                msg['To'] = to_clean
+                msg['Subject'] = subject
+                msg.attach(_MimeSmtp(reply_body, 'plain', 'utf-8'))
+                try:
+                    _reply_html = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
+                    msg.attach(_MimeSmtp(_reply_html, 'html', 'utf-8'))
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+                _ctx = _ssl_smtp.create_default_context()
+                with _smtplib.SMTP(_smtp_host, _smtp_port, timeout=30) as s:
+                    s.ehlo(); s.starttls(context=_ctx); s.ehlo()
+                    s.login(_smtp_user, _smtp_pass)
+                    s.sendmail(_smtp_user, to_clean, msg.as_string())
+
+            _loop_smtp = _aio_smtp.get_running_loop()
+            try:
+                await _aio_smtp.wait_for(_loop_smtp.run_in_executor(None, _do_smtp), timeout=35.0)
+                logger.info(f'[EMAIL_REPLY] Sent via SMTP ({_matched["label"]}) from {_smtp_user} to {to_clean}')
+            except Exception as _se:
+                _send_error = f'SMTP ({_matched["label"]}): {_se}'
+
+        elif _matched and _matched.get('type') == 'resend':
+            # ── Личный Resend ключ пользователя ───────────────────────────────
+            _urk = _matched['resend_key']
+            _uf = _matched.get('email_user') or sender_addr
+            try:
+                async with _safe_http() as http:
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_urk}', 'Content-Type': 'application/json'},
+                        json={'from': f"{sender_name} <{_uf}>", 'to': [to_clean],
+                              'subject': subject, 'text': reply_body,
+                              'html': _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)},
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    rd = await resp.json()
+                    if resp.status not in (200, 201):
+                        _send_error = rd.get('message', str(rd))
+                    else:
+                        logger.info(f'[EMAIL_REPLY] Sent via user Resend from {_uf} to {to_clean}')
+            except Exception as _re:
+                _send_error = f'Resend: {_re}'
+
+        # Fallback: платформенный Resend (если нет интеграции или предыдущие упали)
+        if _matched is None or _send_error:
+            from config import RESEND_API_KEY
+            if not RESEND_API_KEY:
+                return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
+            try:
+                async with _safe_http() as http:
+                    _fb_r_json = {'from': f"{sender_name} <outreach@asibiont.com>",
+                                  'to': [to_clean], 'subject': subject, 'text': reply_body}
+                    try:
+                        _fb_r_json['html'] = _build_email_html(_text_to_email_html(reply_body), sender_name=sender_name)
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                    if sender_addr and '@' in sender_addr:
+                        _fb_r_json['reply_to'] = [sender_addr]
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
+                        json=_fb_r_json,
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    resp_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err = resp_data.get('message', str(resp_data))
+                        prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
+                        return f" Ошибка Resend API: {err}{prev_err}"
+                    logger.info(f'[EMAIL_REPLY] Sent via platform Resend (Reply-To: {sender_addr}) to {to_clean}')
+            except Exception as e:
+                return f" Ошибка отправки: {_send_error or str(e)}"
+
+        outreach.ai_reply_text = reply_body
+        outreach.ai_reply_sent_at = dt.now(tz.utc)
+        outreach.ai_reply_count = (outreach.ai_reply_count or 0) + 1
+        outreach.success = True  # конверсия: двусторонний диалог состоялся
+
+        # Продвигаем EmailContact в статус 'interested' — двусторонний контакт состоялся.
+        # НЕ оставляем 'replied' — иначе агент будет бесконечно видеть их через list_email_contacts(status='replied').
+        try:
+            from models import EmailContact as _EC_rply
+            _ec_rply = session.query(_EC_rply).filter_by(
+                user_id=user.id, email=outreach.recipient_email.strip().lower()
+            ).first()
+            if _ec_rply:
+                _ec_rply.status = 'interested'  # двусторонний диалог подтверждён
+                _ec_rply.last_contacted_at = dt.now(tz.utc)
+            else:
+                # Создаём контакт с interested статусом если его ещё нет
+                session.add(_EC_rply(
+                    user_id=user.id,
+                    email=outreach.recipient_email.strip().lower(),
+                    name=outreach.recipient_name or '',
+                    source='outreach_reply',
+                    status='interested',  # сразу отмечаем как engaged
+                    notes='Ответил на outreach — подтверждён двусторонний контакт',
+                    last_contacted_at=dt.now(tz.utc),
+                ))
+        except Exception as _ec_err:
+            logger.debug(f"[EMAIL_REPLY] EmailContact replied update failed: {_ec_err}")
+        try:
+            from models import AgentActivityLog
+            _reply_from_line = ''
+            if sender_name or sender_addr:
+                _reply_from_line = f"От: {sender_name}{' <' + sender_addr + '>' if sender_addr else ''}\n"
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='email',
+                title=f"{sender_name + ' → ' if sender_name else ''}Reply → {outreach.recipient_email}",
+                content=f"Re: {outreach.subject}\n{_reply_from_line}\n{reply_body}",
+                target=outreach.recipient_email,
+                status='sent',
+                ref_id=outreach.id,
+            )
+            session.add(log_entry)
+        except Exception as _log_err:
+            logger.warning(f"[EMAIL_REPLY] Activity log error: {_log_err}")
+
+        session.commit()
+
+        return f" Ответ отправлен на {outreach.recipient_email}\nТема: {subject}"
+    except Exception as e:
+        logger.error(f"[EMAIL_REPLY] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def add_email_leads(
+    campaign_id: int = None,
+    leads: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Добавить email-адреса в кампанию (найденные через web_search или указанные вручную).
+
+    leads — JSON-массив: [{"email": "a@b.com", "name": "Name", "company": "Co", "context": "why relevant"}]
+    или простой список email через запятую.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            campaign = session.query(EmailCampaign).filter(
+                EmailCampaign.user_id == user.id,
+                EmailCampaign.status.in_(['active', 'running']),
+            ).order_by(EmailCampaign.created_at.desc()).first()
+        if not campaign:
+            return " Нет активной кампании."
+
+        # Парсим leads
+        parsed = []
+
+        # Если AI передал leads как list/dict — работаем напрямую
+        if isinstance(leads, (list, dict)):
+            raw_list = leads if isinstance(leads, list) else [leads]
+            for item in raw_list:
+                if isinstance(item, dict):
+                    clean = {k.strip('"\' '): v for k, v in item.items()}
+                    parsed.append(clean)
+                elif isinstance(item, str) and '@' in item:
+                    parsed.append({'email': item.strip().lower()})
+        else:
+            leads_str = (leads or '').strip()
+            # Убираем двойное экранирование которое иногда добавляет AI
+            leads_clean = leads_str.replace('\\"', '"')
+            try:
+                raw = json.loads(leads_clean)
+                if isinstance(raw, list):
+                    # normalize keys: strip extra quotes that AI may add
+                    for item in raw:
+                        if isinstance(item, dict):
+                            clean = {k.strip('"\' '): v for k, v in item.items()}
+                            parsed.append(clean)
+                elif isinstance(raw, dict):
+                    clean = {k.strip('"\' '): v for k, v in raw.items()}
+                    parsed.append(clean)
+                elif isinstance(raw, str):
+                    # double-encoded
+                    raw2 = json.loads(raw)
+                    if isinstance(raw2, list):
+                        for item in raw2:
+                            if isinstance(item, dict):
+                                clean = {k.strip('"\' '): v for k, v in item.items()}
+                                parsed.append(clean)
+            except Exception:
+                parsed = []
+
+            if not parsed and isinstance(leads, str):
+                # Простой список email через запятую/перенос строки.
+                # ВАЖНО: сначала пробуем парсить каждую строку как JSON-объект,
+                # чтобы не сохранять фрагменты вроде '{"email": "foo@bar.com"'
+                # (это происходит когда AI передаёт JSONL-строку и json.loads fails,
+                # тогда split(',') режет JSON-объекты по запятым внутри них).
+                _email_re = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
+                _seen_emails_fp: set = set()
+                for line in re.split(r'\n', leads):
+                    line = line.strip(' ,;[]')
+                    if not line:
+                        continue
+                    # Попытка: парсим строку как JSON-объект (JSONL формат)
+                    if line.startswith('{'):
+                        try:
+                            _obj = json.loads(line.rstrip(','))
+                            if isinstance(_obj, dict):
+                                _em = str(_obj.get('email', '')).strip().lower()
+                                if _em and '@' in _em and _em not in _seen_emails_fp:
+                                    _seen_emails_fp.add(_em)
+                                    parsed.append({k: v for k, v in _obj.items()})
+                                continue
+                        except Exception as _e:
+                            logger.debug("suppressed: %s", _e)
+                        # Fallback: вытащить email regex из фрагмента JSON
+                        _match = _email_re.search(line)
+                        if _match:
+                            _em = _match.group(0).lower()
+                            if _em not in _seen_emails_fp:
+                                _seen_emails_fp.add(_em)
+                                parsed.append({'email': _em})
+                        continue
+                    # Обычная строка: ищем email регуляркой
+                    for _m in _email_re.finditer(line):
+                        _em = _m.group(0).lower()
+                        if _em not in _seen_emails_fp:
+                            _seen_emails_fp.add(_em)
+                            parsed.append({'email': _em})
+
+        if not parsed:
+            return " Не удалось распарсить email-адреса. Укажи JSON или через запятую."
+
+        # ── ФИЛЬТР: generic-адреса компаний (info@, contact@, etc.) ──
+        GENERIC_PREFIXES = {
+            'info', 'contact', 'contacts', 'hello', 'hi', 'support', 'sales',
+            'admin', 'office', 'team', 'help', 'mail', 'noreply', 'no-reply',
+            'hr', 'billing', 'press', 'media', 'marketing', 'general',
+            'enquiries', 'enquiry', 'feedback', 'service', 'webmaster',
+        }
+
+        added = 0
+        skipped = 0
+        skipped_generic = 0
+        skipped_registered = 0
+        _user_email_lower = (getattr(user, 'email', '') or '').strip().lower()
+        # Собираем ВСЕ собственные email (user + IMAP-аккаунты агентов)
+        _own_emails_leads = set()
+        if _user_email_lower:
+            _own_emails_leads.add(_user_email_lower)
+        try:
+            from models import UserAgent as _UA_leads
+            for _ag_leads in session.query(_UA_leads).filter(
+                _UA_leads.author_id == user.id,
+                _UA_leads.user_api_keys.isnot(None),
+            ).all():
+                _raw_leads = _ag_leads.user_api_keys or ''
+                try:
+                    _raw_leads = decrypt_token(_raw_leads)
+                except Exception:
+                    pass
+                for _ln_leads in _raw_leads.splitlines():
+                    _ln_leads = _ln_leads.strip()
+                    if _ln_leads.upper().startswith(('GMAIL_USER=', 'IMAP_USER=')):
+                        _imap_v = _ln_leads.split('=', 1)[1].strip().lower()
+                        if _imap_v and '@' in _imap_v:
+                            _own_emails_leads.add(_imap_v)
+        except Exception:
+            pass
+        # Предвыбираем emails зарегистрированных пользователей для быстрой проверки
+        from sqlalchemy import func as _func_leads
+        _registered_emails_set: set = set()
+        try:
+            _reg_rows = session.query(_func_leads.lower(User.email)).filter(
+                User.email.isnot(None)
+            ).all()
+            _registered_emails_set = {r[0] for r in _reg_rows if r[0]}
+        except Exception as _e_re:
+            logger.debug("suppressed registered-emails prefetch: %s", _e_re)
+        # Предвыбираем домены с bounce/failed для быстрой блокировки целых доменов
+        _bounced_domains_set: set = set()
+        try:
+            _bounced_rows = session.query(EmailOutreach.recipient_email).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.status.in_(['bounced', 'failed']),
+            ).all()
+            for _br in _bounced_rows:
+                if _br[0] and '@' in _br[0]:
+                    _bd = _br[0].rsplit('@', 1)[1].lower()
+                    _bounced_domains_set.add(_bd)
+            # Не блокируем крупные домены — gmail, yandex, mail.ru и т.д. (bounce скорее по человеку)
+            _bounced_domains_set -= {'gmail.com', 'yandex.ru', 'mail.ru', 'outlook.com',
+                                      'hotmail.com', 'yahoo.com', 'protonmail.com', 'icloud.com'}
+        except Exception as _e_bd:
+            logger.debug("suppressed bounced-domains prefetch: %s", _e_bd)
+        for lead in parsed:
+            email = lead.get('email', '').strip().lower()
+            if not email or '@' not in email:
+                continue
+            # ── GUARD: не добавлять email самого пользователя / IMAP-аккаунт как лид ──
+            if email in _own_emails_leads:
+                skipped += 1
+                continue
+            # ── GUARD: не добавлять уже зарегистрированных пользователей платформы ──
+            if email in _registered_emails_set:
+                skipped_registered += 1
+                continue
+            # ── GUARD: не добавлять отписавшихся контактов ──
+            _ec_lead_chk = session.query(EmailContact).filter_by(
+                user_id=user.id, email=email, status='unsubscribed',
+            ).first()
+            if _ec_lead_chk:
+                skipped += 1
+                continue
+            # Отклоняем generic-адреса через полный фильтр
+            if _is_generic_email(email):
+                skipped_generic += 1
+                continue
+            # ── GUARD: сервисные домены (LinkedIn, noreply.github, etc.) ──
+            _lead_domain = email.rsplit('@', 1)[1] if '@' in email else ''
+            _BLOCKED_LEAD_DOMAINS = {
+                'linkedin.com', 'users.noreply.github.com',
+                'reply.github.com', 'notifications.github.com',
+                'asibiont.com', 'example.com', 'test.com', 'localhost',
+            }
+            # Добавляем собственные домены пользователя
+            for _oe_l in _own_emails_leads:
+                if '@' in _oe_l:
+                    _BLOCKED_LEAD_DOMAINS.add(_oe_l.rsplit('@', 1)[1])
+            if _lead_domain in _BLOCKED_LEAD_DOMAINS:
+                skipped += 1
+                continue
+            _lead_local = email.rsplit('@', 1)[0] if '@' in email else ''
+            if _lead_local.startswith(('noreply', 'no-reply', 'donotreply', 'mailer-daemon')):
+                skipped += 1
+                continue
+            # ── GUARD: домен ранее давал bounce/failed — скорее всего весь домен мёртв ──
+            if _lead_domain and _lead_domain in _bounced_domains_set:
+                skipped += 1
+                continue
+            # Дубль-проверка в текущей кампании
+            exists = session.query(EmailOutreach).filter_by(
+                campaign_id=campaign.id, recipient_email=email
+            ).first()
+            if exists:
+                skipped += 1
+                continue
+
+            # ── ANTI-SPAM: кросс-кампания + bounced/failed ──
+            from datetime import datetime as _dt_leads, timezone as _tz_leads
+            CROSS_CAMPAIGN_COOLDOWN_DAYS = 14
+            cross_exists = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == email,
+                EmailOutreach.campaign_id != campaign.id,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+                EmailOutreach.sent_at >= _dt_leads.now(_tz_leads.utc) - timedelta(days=CROSS_CAMPAIGN_COOLDOWN_DAYS),
+            ).first()
+            if cross_exists:
+                skipped += 1
+                continue
+            bad_history = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == email,
+                EmailOutreach.status.in_(['bounced', 'failed']),
+            ).first()
+            if bad_history:
+                skipped += 1
+                continue
+
+            outreach = EmailOutreach(
+                campaign_id=campaign.id,
+                user_id=user.id,
+                recipient_email=email,
+                recipient_name=lead.get('name'),
+                recipient_company=lead.get('company'),
+                recipient_context=lead.get('context'),
+                status='draft',
+            )
+            session.add(outreach)
+
+            # Контакт НЕ создаём при добавлении лида — только при реальной переписке
+            # (когда контакт ответил на письмо или идёт диалог)
+
+            added += 1
+        session.commit()
+
+        # ── Немедленный триггер anchor engine для отправки черновиков ──
+        if added > 0:
+            try:
+                from anchor_engine import get_anchor_engine
+                _engine = get_anchor_engine()
+                if _engine:
+                    try:
+                        import asyncio as _asyncio_leads
+                        loop = _asyncio_leads.get_running_loop()
+                        loop.create_task(_engine._process_user(user.telegram_id))
+                    except RuntimeError:
+                        # Нет текущего event loop — запускаем через ensure_future
+                        import asyncio as _asyncio_leads
+                        _asyncio_leads.ensure_future(_engine._process_user(user.telegram_id))
+                    logger.info(f"[EMAIL_LEADS] Triggered anchor engine for user {user.telegram_id} after adding {added} leads")
+            except Exception as _trigger_err:
+                logger.warning(f"[EMAIL_LEADS] Failed to trigger anchor engine: {_trigger_err}")
+
+        parts = [f" Добавлено {added} email-адресов в кампанию #{campaign.id}"]
+        if skipped:
+            parts.append(f"пропущено {skipped} дублей/cooldown")
+        if skipped_generic:
+            parts.append(f"отклонено {skipped_generic} generic-адресов (info@/contact@/hello@ — нужны ЛИЧНЫЕ email людей)")
+        if skipped_registered:
+            parts.append(f"пропущено {skipped_registered} уже зарегистрированных в системе — ищем новых")
+        return parts[0] + (f" ({', '.join(parts[1:])})" if len(parts) > 1 else "")
+    except Exception as e:
+        logger.error(f"[EMAIL_LEADS] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+def get_email_campaign_status(
+    campaign_id: int = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Получить статус email-кампании: сколько отправлено, ответов, ожидающих."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        campaigns = []
+        if campaign_id:
+            c = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+            if c:
+                campaigns = [c]
+        else:
+            campaigns = session.query(EmailCampaign).filter_by(
+                user_id=user.id
+            ).order_by(EmailCampaign.created_at.desc()).limit(5).all()
+
+        if not campaigns:
+            return " Нет email-кампаний. Создай кампанию: «запусти email-кампанию для привлечения клиентов»."
+
+        result = []
+        import pytz as _pytz_cs
+        from datetime import timezone as _tz_cs
+        _user_tz_cs = _pytz_cs.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _user_now_cs = datetime.now(_user_tz_cs)
+        _today_start_cs = _user_now_cs.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_cs.utc)
+
+        # Batch: load all emails for all campaigns in one query
+        _cs_camp_ids = [c.id for c in campaigns]
+        _cs_all_emails = session.query(EmailOutreach).filter(
+            EmailOutreach.campaign_id.in_(_cs_camp_ids)
+        ).all()
+        _cs_emails_by_camp: dict = {}
+        for _e in _cs_all_emails:
+            _cs_emails_by_camp.setdefault(_e.campaign_id, []).append(_e)
+
+        # Batch: sent_today per campaign via GROUP BY
+        from sqlalchemy import func as _func_cs
+        _cs_sent_today_map = dict(
+            session.query(EmailOutreach.campaign_id, _func_cs.count(EmailOutreach.id)).filter(
+                EmailOutreach.campaign_id.in_(_cs_camp_ids),
+                EmailOutreach.sent_at >= _today_start_cs,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).group_by(EmailOutreach.campaign_id).all()
+        )
+
+        for c in campaigns:
+            emails = _cs_emails_by_camp.get(c.id, [])
+            draft = sum(1 for e in emails if e.status == 'draft')
+            sent = sum(1 for e in emails if e.status == 'sent')
+            delivered = sum(1 for e in emails if e.status == 'delivered')
+            replied = sum(1 for e in emails if e.status == 'replied')
+            bounced = sum(1 for e in emails if e.status in ('bounced', 'failed'))
+
+            # Сколько отправлено сегодня (из batch-карты)
+            sent_today = _cs_sent_today_map.get(c.id, 0)
+            daily_limit = c.daily_limit or 50
+
+            # Умный подстатус
+            is_active = c.status in ('active', 'running')
+            if c.status == 'paused':
+                status_emoji = ''
+                status_text = 'На паузе'
+            elif c.status == 'completed':
+                status_emoji = ''
+                status_text = 'Завершена'
+            elif c.status == 'cancelled':
+                status_emoji = ''
+                status_text = 'Отменена'
+            elif is_active and sent_today >= daily_limit:
+                status_emoji = ''
+                status_text = f'Ждёт завтра (лимит {daily_limit}/день исчерпан)'
+            elif is_active and draft == 0 and (c.emails_sent or 0) == 0 and sent_today == 0:
+                status_emoji = ''
+                status_text = 'Нет лидов — нужны контакты (add_email_leads)'
+            elif is_active and draft == 0 and ((c.emails_sent or 0) > 0 or sent_today > 0):
+                status_emoji = ''
+                status_text = 'Все отправлены, ищет новые контакты'
+            elif is_active:
+                status_emoji = '🟢'
+                status_text = f'Отправляет ({draft} черновиков готово)'
+            else:
+                status_emoji = ''
+                status_text = c.status or 'неизвестно'
+
+            block = (
+                f"{status_emoji} Кампания #{c.id}: «{c.name}»\n"
+                f" Статус: {status_text}\n"
+                f" Всего: {len(emails)} | Черновики: {draft} | Отправлено: {sent + delivered}\n"
+                f" Ответов: {replied} | Ошибки: {bounced}\n"
+                f" Сегодня: {sent_today}/{daily_limit} | Всего: {c.emails_sent or 0}{f'/{c.max_emails}' if c.max_emails and c.max_emails > 0 else '/∞'}"
+            )
+            if replied > 0:
+                recent_replies = [e for e in emails if e.status == 'replied' and e.reply_text]
+                for r in recent_replies[:5]:
+                    _rt_display = (r.reply_text or '').strip()
+                    _rt_name = r.recipient_name or r.recipient_email
+                    block += f"\n\n  📩 Ответ от {_rt_name} ({r.recipient_email}):"
+                    if r.reply_at:
+                        import pytz as _ptz_r
+                        _rtz = _ptz_r.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+                        _rat = r.reply_at.replace(tzinfo=__import__('datetime').timezone.utc).astimezone(_rtz)
+                        block += f" {_rat.strftime('%d.%m.%Y %H:%M')}"
+                    block += f"\n     {_rt_display}"
+            result.append(block)
+
+        return "\n\n".join(result)
+    except Exception as e:
+        logger.error(f"[EMAIL_STATUS] Error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def pause_email_campaign(
+    campaign_id: int = None,
+    action: str = 'pause',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Поставить на паузу или возобновить email-кампанию."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        campaign = None
+        if campaign_id:
+            campaign = session.query(EmailCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            campaign = session.query(EmailCampaign).filter_by(
+                user_id=user.id, status='active' if action == 'pause' else 'paused'
+            ).order_by(EmailCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return " Кампания не найдена."
+
+        if action == 'pause':
+            campaign.status = 'paused'
+            session.commit()
+            return f" Кампания #{campaign.id} «{campaign.name}» поставлена на паузу."
+        elif action == 'resume':
+            campaign.status = 'active'
+            session.commit()
+            return f"▶ Кампания #{campaign.id} «{campaign.name}» возобновлена."
+        elif action == 'cancel':
+            campaign.status = 'cancelled'
+            session.commit()
+            return f" Кампания #{campaign.id} «{campaign.name}» отменена."
+        else:
+            return f" Неизвестное действие: {action}. Допустимо: pause, resume, cancel."
+    except Exception as e:
+        logger.error(f"[EMAIL_PAUSE] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def send_follow_up_email(
+    outreach_id: int = None,
+    recipient_email: str = None,
+    subject: str = None,
+    body: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Отправить follow-up email (агент вызывает автономно при якоре email_follow_up).
+
+    Обновляет follow_up_count, next_follow_up_at.
+    Приоритет отправки: SMTP пользователя → Resend пользователя → платформенный Resend.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from datetime import datetime as dt, timezone as tz
+        import aiohttp as _aiohttp
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        # Найти письмо
+        outreach = None
+        if outreach_id:
+            outreach = session.query(EmailOutreach).filter_by(
+                id=outreach_id, user_id=user.id
+            ).first()
+        elif recipient_email:
+            outreach = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == recipient_email,
+                EmailOutreach.status.in_(['sent', 'delivered', 'opened']),
+            ).order_by(EmailOutreach.sent_at.desc()).first()
+
+        if not outreach:
+            return " Не найдено письмо для follow-up."
+
+        # ── GUARD: не отправлять follow-up отписавшимся / bounced контактам ──
+        try:
+            _ec_fu_chk = session.query(EmailContact).filter_by(
+                user_id=user.id, email=(outreach.recipient_email or '').strip().lower(),
+            ).first()
+            if _ec_fu_chk and _ec_fu_chk.status == 'unsubscribed':
+                return f"⛔ {outreach.recipient_email} отписался — follow-up заблокирован."
+            if _ec_fu_chk and _ec_fu_chk.status == 'bounced':
+                return f"⛔ {outreach.recipient_email} — адрес bounced, follow-up заблокирован."
+        except Exception as _e_fu_chk:
+            logger.debug("suppressed unsubscribed check in follow_up: %s", _e_fu_chk)
+
+        campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
+        if not campaign:
+            return " Кампания не найдена."
+
+        max_follow_ups = campaign.max_follow_ups or 2
+        # Если контакт ответил (replied) — follow-up без ограничений (продолжаем диалог)
+        if outreach.status != 'replied' and outreach.follow_up_count >= max_follow_ups:
+            return f" Достигнут лимит follow-up ({max_follow_ups}) для {outreach.recipient_email}. Контакт не отвечает."
+
+        # ── GUARD: слишком рано для follow-up ──
+        if outreach.status != 'replied' and outreach.next_follow_up_at:
+            from datetime import datetime as _dt_fu_g, timezone as _tz_fu_g
+            _nfu_g = outreach.next_follow_up_at
+            if _nfu_g.tzinfo is None:
+                _nfu_g = _nfu_g.replace(tzinfo=_tz_fu_g.utc)
+            if _dt_fu_g.now(_tz_fu_g.utc) < _nfu_g:
+                _days_left = max(1, int((_nfu_g - _dt_fu_g.now(_tz_fu_g.utc)).total_seconds() // 86400) + 1)
+                return (f"⏰ Ещё рано для follow-up {outreach.recipient_email} — "
+                        f"следующий запланирован на {_nfu_g.strftime('%d.%m')} (через ~{_days_left} дн.). "
+                        f"Переключись на другую задачу — не беспокой контакт раньше времени.")
+
+        # Follow-up — к уже существующему получателю, глобальный лимит не применяется
+
+        if not subject:
+            subject = f"Re: {outreach.subject}" if outreach.subject else "Following up"
+        if not body:
+            return " Нужен текст follow-up (body)."
+
+        # ── GUARD: плейсхолдеры в теле follow-up ──
+        import re as _re_ph_fu
+        _PH_RE_FU = _re_ph_fu.compile(
+            r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+            r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+            _re_ph_fu.IGNORECASE,
+        )
+        _ph_m_fu = _PH_RE_FU.search((body or '') + ' ' + (subject or ''))
+        if _ph_m_fu:
+            return (f"⛔ Follow-up содержит плейсхолдер: «{_ph_m_fu.group()}». "
+                    f"Замени на реальные данные или убери. Спроси у пользователя через send_message_to_user.")
+
+        # MX-проверка
+        mx_valid, mx_err = _validate_email_domain(outreach.recipient_email)
+        if not mx_valid:
+            return f" {mx_err}"
+
+        # ── Выбор канала отправки: SMTP пользователя → user Resend → platform Resend ──
+        sender_name = campaign.sender_name or ''
+        sender_addr = campaign.sender_email or ''
+        to_clean = outreach.recipient_email.strip().lower()
+        from config import WEB_APP_URL, generate_unsubscribe_token
+        _unsub_token_fu = generate_unsubscribe_token(to_clean, user.id)
+        import urllib.parse as _up_fu
+        _unsub_url = (
+            f"{WEB_APP_URL}/unsubscribe"
+            f"?token={_unsub_token_fu}"
+            f"&email={_up_fu.quote(to_clean)}"
+            f"&uid={user.id}"
+        )
+
+        # Подпись отправителя (если ИИ не добавил сам)
+        _sig_name_fu = sender_name.strip()
+        _body_signed_fu = body
+        if _sig_name_fu and _sig_name_fu.lower() not in body.lower()[-200:]:
+            _body_signed_fu = body.rstrip() + f"\n\n— {_sig_name_fu}"
+
+        _integrations = _get_user_email_integrations(user, session)
+        _matched = None
+        for _intg in _integrations:
+            if _intg.get('email_user', '').lower() == sender_addr.lower():
+                _matched = _intg
+                break
+        if not _matched and _integrations:
+            _matched = _integrations[0]
+
+        _send_error = None
+
+        if _matched and _matched.get('type') == 'gmail_oauth':
+            # ── Gmail OAuth: прямая отправка через Gmail API ─────────────────
+            _ok_f, _res_f = await _send_via_gmail_api(
+                _matched['token_data'], to_clean, subject, _body_signed_fu,
+                sender_name, user, session,
+            )
+            if _ok_f:
+                logger.info(f'[EMAIL_FOLLOWUP] Sent via Gmail API from {_res_f} to {to_clean}')
+            else:
+                _send_error = _res_f
+
+        elif _matched and _matched.get('type') == 'gmail_server':
+            # ── Gmail (пароль приложения): серверный Resend + Reply-To ────────
+            from config import RESEND_API_KEY as _rk_gm_f
+            _rt_gm_f = _matched.get('reply_to') or _matched.get('email_user') or sender_addr
+            _gm_f_json = {'from': f"{sender_name} <outreach@asibiont.com>",
+                          'to': [to_clean], 'subject': subject, 'text': _body_signed_fu}
+            try:
+                _gm_f_json['html'] = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+            if _rt_gm_f and '@' in _rt_gm_f:
+                _gm_f_json['reply_to'] = [_rt_gm_f]
+            try:
+                async with _safe_http() as _hgf:
+                    _rgf = await _hgf.post('https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_rk_gm_f}', 'Content-Type': 'application/json'},
+                        json=_gm_f_json, timeout=_aiohttp.ClientTimeout(total=15))
+                    _dgf = await _rgf.json()
+                    if _rgf.status not in (200, 201):
+                        _send_error = _dgf.get('message', str(_dgf))
+                    else:
+                        logger.info(f'[EMAIL_FOLLOWUP] Sent via server Resend (Gmail Reply-To: {_rt_gm_f}) to {to_clean}')
+            except Exception as _egf:
+                _send_error = f'Gmail server: {_egf}'
+
+        elif _matched and _matched.get('type') == 'smtp':
+            import smtplib as _smtplib2
+            from email.mime.text import MIMEText as _MimeSmtp2
+            from email.mime.multipart import MIMEMultipart as _MMsmtp2
+            import asyncio as _aio_smtp2
+            import ssl as _ssl2
+            _sh2 = _matched['smtp_host']; _sp2 = _matched['smtp_port']
+            _su2 = _matched['email_user']; _spw2 = _matched['email_pass'].replace(' ', '')
+
+            def _do_smtp2():
+                msg2 = _MMsmtp2('alternative')
+                msg2['From'] = f"{sender_name} <{_su2}>"
+                msg2['To'] = to_clean; msg2['Subject'] = subject
+                msg2.attach(_MimeSmtp2(_body_signed_fu, 'plain', 'utf-8'))
+                try:
+                    _fu_html = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
+                    msg2.attach(_MimeSmtp2(_fu_html, 'html', 'utf-8'))
+                except Exception as _e:
+                    logger.debug("suppressed: %s", _e)
+                _ctx2 = _ssl2.create_default_context()
+                with _smtplib2.SMTP(_sh2, _sp2, timeout=30) as s2:
+                    s2.ehlo(); s2.starttls(context=_ctx2); s2.ehlo()
+                    s2.login(_su2, _spw2); s2.sendmail(_su2, to_clean, msg2.as_string())
+
+            _loop2 = _aio_smtp2.get_running_loop()
+            try:
+                await _aio_smtp2.wait_for(_loop2.run_in_executor(None, _do_smtp2), timeout=35.0)
+                logger.info(f'[EMAIL_FOLLOWUP] Sent via SMTP ({_matched["label"]}) to {to_clean}')
+            except Exception as _se2:
+                _send_error = f'SMTP ({_matched["label"]}): {_se2}'
+
+        elif _matched and _matched.get('type') == 'resend':
+            _urk2 = _matched['resend_key']
+            _uf2 = _matched.get('email_user') or sender_addr
+            try:
+                async with _safe_http() as http2:
+                    resp2 = await http2.post('https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_urk2}', 'Content-Type': 'application/json'},
+                        json={'from': f"{sender_name} <{_uf2}>", 'to': [to_clean], 'subject': subject,
+                              'text': _body_signed_fu,
+                              'html': _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name),
+                              'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}},
+                        timeout=_aiohttp.ClientTimeout(total=15))
+                    rd2 = await resp2.json()
+                    if resp2.status not in (200, 201):
+                        _send_error = rd2.get('message', str(rd2))
+            except Exception as _re2:
+                _send_error = f'Resend: {_re2}'
+
+        # Fallback: платформенный Resend
+        if _matched is None or _send_error:
+            from config import RESEND_API_KEY
+            if not RESEND_API_KEY:
+                return f" Ошибка отправки{': ' + _send_error if _send_error else ''}. Подключи почту в настройках агента."
+            try:
+                async with _safe_http() as http:
+                    _fbu_json = {'from': f"{sender_name} <outreach@asibiont.com>",
+                                 'to': [to_clean], 'subject': subject, 'text': _body_signed_fu,
+                                 'headers': {'List-Unsubscribe': f'<{_unsub_url}>'}}
+                    try:
+                        _fbu_json['html'] = _build_email_html(_text_to_email_html(_body_signed_fu), sender_name=sender_name)
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                    if sender_addr and '@' in sender_addr:
+                        _fbu_json['reply_to'] = [sender_addr]
+                    resp = await http.post('https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {RESEND_API_KEY}', 'Content-Type': 'application/json'},
+                        json=_fbu_json,
+                        timeout=_aiohttp.ClientTimeout(total=15))
+                    resp_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err = resp_data.get('message', str(resp_data))
+                        prev_err = f' (предыдущая попытка: {_send_error})' if _send_error else ''
+                        return f" Ошибка Resend API: {err}{prev_err}"
+            except Exception as e:
+                return f" Ошибка отправки: {_send_error or str(e)}"
+
+        # Anti-spam задержка (10 сек)
+        import asyncio as _asyncio_delay
+        await _asyncio_delay.sleep(10)
+
+        # Обновляем запись
+        outreach.follow_up_count = (outreach.follow_up_count or 0) + 1
+        outreach.last_follow_up_at = dt.now(tz.utc)
+        # Следующий follow-up через 5 дней (экспоненциальное замедление)
+        next_gap_days = 3 + (outreach.follow_up_count * 2)
+        outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=next_gap_days)
+
+        # Логируем в AgentActivityLog
+        try:
+            from models import AgentActivityLog
+            log_entry = AgentActivityLog(
+                user_id=user.id,
+                activity_type='email',
+                title=f"Follow-up #{outreach.follow_up_count} → {outreach.recipient_email}",
+                content=f"{subject}\n\n{body}",
+                target=outreach.recipient_email,
+                status='sent',
+                ref_id=outreach.id,
+            )
+            session.add(log_entry)
+        except Exception as _log_err:
+            logger.warning(f"[EMAIL_FOLLOWUP] Activity log error: {_log_err}")
+
+        session.commit()
+
+        return f" Follow-up #{outreach.follow_up_count} отправлен на {outreach.recipient_email}\nТема: {subject}"
+    except Exception as e:
+        logger.error(f"[EMAIL_FOLLOWUP] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# NEGOTIATE BY EMAIL — Автономные переговоры для достижения цели
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def negotiate_by_email(
+    contact_email: str = None,
+    contact_name: str = None,
+    goal: str = None,
+    opening_message: str = None,
+    subject: str = None,
+    sender_name: str = None,
+    from_account: str = None,
+    user_id: int = None,
+    sent_by_agent: str = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Начать email-переговоры с конкретным человеком для достижения цели.
+
+    Агент автономно ведёт переписку: отправляет первое письмо, отслеживает ответы
+    (через якорь email_reply_received) и продолжает диалог до достижения цели.
+
+    Примеры целей:
+    - «Договориться о встрече на следующей неделе»
+    - «Согласовать условия партнёрства»
+    - «Уточнить детали заказа и получить подтверждение»
+    - «Договориться об интервью»
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from datetime import datetime as dt, timezone as tz
+
+        if not contact_email or '@' not in contact_email:
+            return " Укажи email контакта (contact_email)."
+        if not goal:
+            return " Укажи цель переговоров (goal)."
+        if not opening_message:
+            return " Нужен текст открывающего письма (opening_message)."
+
+        # ── GUARD: плейсхолдеры в теле переговорного письма ──
+        import re as _re_ph_neg
+        _PH_RE_NEG = _re_ph_neg.compile(
+            r'\[(?:вставьте|вставить|ваш[аеу]?|your|insert|add)\s+[^\]]{3,50}\]|'
+            r'\[(?:ссылк[аеу]|link|url|zoom|meet)\s*(?:здесь|here|сюда)?\]',
+            _re_ph_neg.IGNORECASE,
+        )
+        _ph_m_neg = _PH_RE_NEG.search((opening_message or '') + ' ' + (subject or ''))
+        if _ph_m_neg:
+            return (f"⛔ Письмо содержит плейсхолдер: «{_ph_m_neg.group()}». "
+                    f"Замени на реальные данные или убери. Спроси у пользователя через send_message_to_user.")
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден."
+
+        # ── GUARD: не начинать переговоры с отписавшимся контактом ──
+        _neg_rcpt = contact_email.strip().lower()
+        try:
+            _ec_neg = session.query(EmailContact).filter_by(
+                user_id=user.id, email=_neg_rcpt, status='unsubscribed'
+            ).first()
+            if _ec_neg:
+                return f"⛔ {_neg_rcpt} отписался — переговоры заблокированы."
+        except Exception as _e_neg:
+            logger.debug("suppressed unsubscribed check in negotiate: %s", _e_neg)
+
+        # ── GUARD: не начинать новые переговоры с тем, кто уже в активном диалоге ──
+        # Если контакт уже ответил на письмо — нужно reply_to_outreach_email, не новая кампания
+        try:
+            _ec_active_neg = session.query(EmailContact).filter(
+                EmailContact.user_id == user.id,
+                EmailContact.email == _neg_rcpt,
+                EmailContact.status.in_(['replied', 'interested']),
+            ).first()
+            if _ec_active_neg:
+                _existing_replied_eon = session.query(EmailOutreach).filter(
+                    EmailOutreach.user_id == user.id,
+                    EmailOutreach.recipient_email == _neg_rcpt,
+                    EmailOutreach.status == 'replied',
+                    EmailOutreach.ai_reply_sent_at.is_(None),
+                ).order_by(EmailOutreach.reply_at.desc()).first()
+                if _existing_replied_eon:
+                    return (
+                        f"⛔ {contact_email} уже ответил на письмо #{_existing_replied_eon.id} "
+                        f"(«{(_existing_replied_eon.subject or '')[:50]}»). "
+                        f"Используй reply_to_outreach_email(outreach_id={_existing_replied_eon.id}, reply_body=...) "
+                        f"вместо negotiate_by_email."
+                    )
+                else:
+                    return (
+                        f"⛔ {contact_email} уже в активном диалоге (статус: {_ec_active_neg.status}). "
+                        f"Вызови check_emails чтобы увидеть входящие, и reply_to_outreach_email чтобы ответить. "
+                        f"Новые переговоры не нужны — переписка уже идёт."
+                    )
+        except Exception as _e_active_neg:
+            logger.debug("suppressed active contact check in negotiate: %s", _e_active_neg)
+
+        # ── GUARD: анти-спам — не более 3 писем одному контакту за 7 дней ──
+        try:
+            from datetime import timedelta as _td_neg
+            _neg_sent_count = session.query(EmailOutreach).filter(
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.recipient_email == _neg_rcpt,
+                EmailOutreach.sent_at >= dt.now(tz.utc) - _td_neg(days=7),
+                EmailOutreach.status.in_(['sent', 'delivered', 'replied', 'opened']),
+            ).count()
+            if _neg_sent_count >= 3:
+                return (
+                    f"🛑 Стоп-спам: {contact_email} уже получил {_neg_sent_count} писем за последние 7 дней. "
+                    f"Подожди ответа или смени контакт."
+                )
+        except Exception as _e_spam_neg:
+            logger.debug("suppressed spam check in negotiate: %s", _e_spam_neg)
+
+        # MX-проверка
+        mx_valid, mx_err = _validate_email_domain(contact_email.strip().lower())
+        if not mx_valid:
+            return f" {mx_err}"
+
+        # ── Определяем имя и адрес отправителя ──────────────────────────────
+        _integrations = _get_user_email_integrations(user, session)
+        _chosen = None
+        if _integrations:
+            if from_account:
+                _fa = from_account.strip().lower()
+                for _i in _integrations:
+                    if _fa in _i.get('email_user', '').lower() or _fa in _i.get('label', '').lower():
+                        _chosen = _i
+                        break
+                if not _chosen:
+                    _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _integrations)
+                    return f" Аккаунт '{from_account}' не найден. Доступные: {_list}"
+            else:
+                _chosen = _integrations[0]
+
+        if not _chosen:
+            return (
+                " Не настроена почтовая интеграция. Добавь в ключи агента:\n"
+                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
+                "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
+                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
+                "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
+            )
+
+        _sender_addr = _chosen['email_user']
+        _sender_name = sender_name or (sent_by_agent or '').strip() or 'Team'
+        _subject = subject or f"Regarding: {goal[:60]}"
+
+        # ── Создаём мини-кампанию для отслеживания переговоров ──────────────
+        campaign = EmailCampaign(
+            user_id=user.id,
+            name=f"Переговоры: {goal[:80]}",
+            goal=goal,
+            target_audience=f"{contact_name or contact_email}",
+            offer=goal,
+            tone='professional',
+            sender_name=_sender_name,
+            sender_email=_sender_addr,
+            max_emails=1,           # один контакт
+            daily_limit=5,          # follow-ups разрешены
+            status='active',
+            max_follow_ups=3,
+        )
+        session.add(campaign)
+        session.flush()  # получаем campaign.id
+
+        # ── Сохраняем контакт в переговорную кампанию ───────────────────────
+        outreach = EmailOutreach(
+            campaign_id=campaign.id,
+            user_id=user.id,
+            recipient_email=contact_email.strip().lower(),
+            recipient_name=contact_name,
+            subject=_subject,
+            body=opening_message,
+            status='draft',
+            sent_by_agent=(sent_by_agent or '').strip() or None,
+        )
+        session.add(outreach)
+        session.flush()
+
+        # ── Отправляем первое письмо ─────────────────────────────────────────
+        # Повторно используем логику из send_email (без дублирования кода)
+        send_result = await send_email(
+            to=contact_email,
+            subject=_subject,
+            body=opening_message,
+            sender_name=_sender_name,
+            from_account=_sender_addr,
+            user_id=user_id,
+            session=session,
+            close_session=False,
+        )
+
+        if '' in (send_result or ''):
+            # Помечаем outreach как отправленный
+            outreach.status = 'sent'
+            outreach.sent_at = dt.now(tz.utc)
+            outreach.next_follow_up_at = dt.now(tz.utc) + timedelta(days=3)
+            campaign.emails_sent = 1
+
+            # Логируем в AgentActivityLog
+            try:
+                from models import AgentActivityLog
+                log_entry = AgentActivityLog(
+                    user_id=user.id,
+                    activity_type='email',
+                    title=f"Переговоры → {contact_email}",
+                    content=f"Цель: {goal}\n\nТема: {_subject}\n\n{opening_message[:400]}",
+                    target=contact_email,
+                    status='sent',
+                    ref_id=outreach.id,
+                )
+                session.add(log_entry)
+            except Exception as _le:
+                logger.warning(f"[NEGOTIATE_EMAIL] Activity log error: {_le}")
+
+            # Обновляем EmailContact → 'contacted' (контакт получил первое письмо)
+            # Если уже был 'replied'/'interested' — guards выше заблокировали бы этот вызов.
+            try:
+                from models import EmailContact as _EC_neg
+                _ec_neg_upd = session.query(_EC_neg).filter_by(
+                    user_id=user.id, email=contact_email.strip().lower()
+                ).first()
+                if _ec_neg_upd:
+                    if _ec_neg_upd.status in ('new', None):
+                        _ec_neg_upd.status = 'contacted'
+                    _ec_neg_upd.last_contacted_at = dt.now(tz.utc)
+                else:
+                    session.add(_EC_neg(
+                        user_id=user.id,
+                        email=contact_email.strip().lower(),
+                        name=contact_name or '',
+                        source='negotiate',
+                        status='contacted',
+                        notes=f'Переговоры: {goal[:80]}',
+                        last_contacted_at=dt.now(tz.utc),
+                    ))
+            except Exception as _le_ec:
+                logger.debug("[NEGOTIATE_EMAIL] EmailContact update: %s", _le_ec)
+
+            session.commit()
+            return (
+                f" Переговоры начаты!\n"
+                f" Кому: {contact_email}{' (' + contact_name + ')' if contact_name else ''}\n"
+                f" Цель: {goal}\n"
+                f" Тема: {_subject}\n"
+                f" Кампания #{campaign.id} (активна — агент отслеживает ответы)\n\n"
+                f"Когда {contact_email} ответит — агент автоматически продолжит диалог "
+                f"через якорь email_reply_received."
+            )
+        else:
+            # Отправка не удалась — удаляем пустую кампанию
+            session.rollback()
+            return f" Не удалось отправить первое письмо: {send_result}"
+
+    except Exception as e:
+        logger.error(f"[NEGOTIATE_EMAIL] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# GENERIC EMAIL — Отправка одиночных писем через Resend API или SMTP
+# ═══════════════════════════════════════════════════════════════════
+
+
+async def _send_via_gmail_oauth(
+    to_email: str, subject: str, body: str, sender_name: str,
+    token_data: dict, user_obj, session_obj
+) -> tuple:
+    """Отправить письмо через Gmail API (HTTPS, обходит блокировку SMTP на Railway).
+    При 401 автоматически обновляет access_token через refresh_token.
+    Возвращает (success: bool, error_str: str).
+    """
+    import base64 as _b64_go, json as _jsn_go
+    from email.mime.text import MIMEText as _MT_go
+    from email.mime.multipart import MIMEMultipart as _MM_go
+    import aiohttp as _ah_go
+
+    _go_email = token_data.get('email', '')
+    _go_access = token_data.get('access_token', '')
+    _go_refresh = token_data.get('refresh_token', '')
+
+    msg_go = _MM_go()
+    msg_go['From'] = f"{sender_name} <{_go_email}>"
+    msg_go['To'] = to_email
+    msg_go['Subject'] = subject
+    msg_go.attach(_MT_go(body, 'plain', 'utf-8'))
+    _raw_go = _b64_go.urlsafe_b64encode(msg_go.as_bytes()).decode()
+
+    async def _gmail_post(token):
+        async with _safe_http() as _hh:
+            _rr = await _hh.post(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+                json={'raw': _raw_go},
+                timeout=_ah_go.ClientTimeout(total=20),
+            )
+            return _rr.status, await _rr.json()
+
+    _gs, _gd = await _gmail_post(_go_access)
+    if _gs in (200, 201):
+        return True, ''
+
+    if _gs == 401 and _go_refresh:
+        # Обновляем access_token
+        try:
+            from config import GOOGLE_CLIENT_ID as _GCI_r, GOOGLE_CLIENT_SECRET as _GCS_r
+            async with _safe_http() as _hh2:
+                _tr = await _hh2.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'client_id': _GCI_r, 'client_secret': _GCS_r,
+                        'refresh_token': _go_refresh, 'grant_type': 'refresh_token',
+                    },
+                    timeout=_ah_go.ClientTimeout(total=10),
+                )
+                _td = await _tr.json()
+            if 'error' in _td:
+                return False, f"Gmail токен истёк, переподключи Gmail в профиле: {_td.get('error_description', _td.get('error'))}"
+            _new_access = _td['access_token']
+            user_obj.google_oauth_token = encrypt_token(_jsn_go.dumps({**token_data, 'access_token': _new_access}))
+            try:
+                session_obj.commit()
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+            _gs2, _gd2 = await _gmail_post(_new_access)
+            if _gs2 in (200, 201):
+                return True, ''
+            return False, (_gd2.get('error') or {}).get('message', str(_gd2))
+        except Exception as _ref_e:
+            return False, f'Ошибка обновления Gmail токена: {_ref_e}'
+
+    return False, (_gd.get('error') or {}).get('message', str(_gd))
+
+
+def _get_user_email_integrations(user, session) -> list:
+    """Возвращает список почтовых интеграций пользователя.
+
+    Каждый элемент имеет поле 'type':
+      'gmail_oauth' — {label, email_user, token_data}  ← приоритет #1, HTTPS
+      'smtp'        — {label, email_user, email_pass, smtp_host, smtp_port, agent_name, agent_id}
+      'resend'      — {label, email_user, resend_key, agent_name, agent_id}
+    """
+    try:
+        results = []
+        seen_emails: set = set()
+        seen_resend: set = set()
+
+        # Gmail OAuth2 — приоритет #1, отправка через HTTPS Gmail API (не SMTP)
+        if getattr(user, 'google_oauth_token', None):
+            import json as _jsn_go_i
+            try:
+                _go_data_i = _jsn_go_i.loads(decrypt_token(user.google_oauth_token))
+                _go_email_i = _go_data_i.get('email', '')
+                if _go_email_i and _go_email_i not in seen_emails:
+                    seen_emails.add(_go_email_i)
+                    results.append({
+                        'type': 'gmail_oauth',
+                        'label': 'Gmail OAuth',
+                        'email_user': _go_email_i,
+                        'token_data': _go_data_i,
+                    })
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+
+        from models import UserAgent as _UA
+        agents = session.query(_UA).filter(
+            _UA.author_id == user.id,
+            _UA.status != 'disabled',
+            _UA.user_api_keys != None,
+            _UA.user_api_keys != '',
+        ).all()
+        # SMTP-конфиги для поддерживаемых почтовых сервисов
+        # Порт 587 + STARTTLS: Railway/Render/Heroku не блокируют его.
+        # Порт 465 (SMTP_SSL) заблокирован на большинстве хостингов.
+        # Gmail SMTP заблокирован Railway (порт 587) — регистрируем как gmail_server
+        # (отправка через платформенный Resend + Reply-To на gmail пользователя)
+        # Яндекс и Mail.ru — работают через SMTP напрямую
+        _SMTP_SVC = [
+            ('YANDEX', 'smtp.yandex.ru',  587, 'Яндекс Почта'),
+            ('MAILRU', 'smtp.mail.ru',    587, 'Mail.ru'),
+        ]
+        for agent in agents:
+            env: dict = {}
+            _raw_ag_keys = agent.user_api_keys or ''
+            # Ключи могут быть зашифрованы (enc:...) — расшифровываем
+            try:
+                from config import decrypt_token as _dt_egu
+                _raw_ag_keys = _dt_egu(_raw_ag_keys)
+            except Exception:
+                pass
+            for line in _raw_ag_keys.splitlines():
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    k, _, v = line.partition('=')
+                    env[k.strip().upper()] = v.strip()
+            # Gmail — через серверный Resend + Reply-To (SMTP заблокирован на Railway)
+            _gmail_u = env.get('GMAIL_USER', '')
+            _gmail_p = env.get('GMAIL_PASS', '')
+            if _gmail_u and _gmail_u not in seen_emails:
+                seen_emails.add(_gmail_u)
+                results.append({
+                    'type': 'gmail_server',
+                    'label': 'Gmail',
+                    'email_user': _gmail_u,
+                    'email_pass': _gmail_p,  # пароль приложения для IMAP
+                    'reply_to': _gmail_u,
+                    'agent_name': agent.name or 'Gmail',
+                    'agent_id': agent.id,
+                })
+            # SMTP-сервисы (Яндекс, Mail.ru)
+            for svc_key, smtp_host, smtp_port, label in _SMTP_SVC:
+                eu = env.get(f'{svc_key}_USER', '')
+                ep = env.get(f'{svc_key}_PASS', '')
+                if eu and ep and eu not in seen_emails:
+                    seen_emails.add(eu)
+                    results.append({
+                        'type': 'smtp',
+                        'label': label,
+                        'email_user': eu,
+                        'email_pass': ep,
+                        'smtp_host': smtp_host,
+                        'smtp_port': smtp_port,
+                        'agent_name': agent.name or label,
+                        'agent_id': agent.id,
+                    })
+            # Личный Resend API ключ
+            rk = env.get('RESEND_API_KEY', '')
+            re_from = env.get('RESEND_FROM', env.get('SENDER_EMAIL', env.get('FROM_EMAIL', '')))
+            if rk and rk not in seen_resend:
+                seen_resend.add(rk)
+                results.append({
+                    'type': 'resend',
+                    'label': 'Resend',
+                    'email_user': re_from,  # пустая строка если не задан — проверим позже
+                    'resend_key': rk,
+                    'agent_name': agent.name or 'Resend',
+                    'agent_id': agent.id,
+                })
+        return results
+    except Exception as _e:
+        logger.warning(f'[EMAIL_INTEGRATIONS] {_e}')
+        return []
+
+
+async def _send_via_gmail_api(
+    token_data: dict,
+    to: str,
+    subject: str,
+    body: str,
+    sender_name: str,
+    user,
+    session,
+) -> tuple:
+    """Отправить письмо напрямую через Gmail API v1.
+
+    Автоматически рефрешит access_token при истечении (401).
+    Возвращает: (success: bool, result: str)
+      success=True  → result = gmail_email пользователя
+      success=False → result = текст ошибки
+    """
+    import base64 as _b64
+    import json as _jsn_gapi
+    import datetime as _dt_gapi
+    from email.mime.text import MIMEText as _MimeGapi
+    import aiohttp as _ah_gapi
+    from config import GOOGLE_CLIENT_ID as _GCI_gapi, GOOGLE_CLIENT_SECRET as _GCS_gapi
+
+    gmail_email = token_data.get('email', '')
+    access_token = token_data.get('access_token', '')
+    refresh_token = token_data.get('refresh_token', '')
+
+    async def _refresh():
+        nonlocal access_token
+        if not refresh_token or not _GCI_gapi or not _GCS_gapi:
+            return False
+        try:
+            async with _safe_http() as _hrf:
+                _r = await _hrf.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'client_id': _GCI_gapi,
+                        'client_secret': _GCS_gapi,
+                        'refresh_token': refresh_token,
+                        'grant_type': 'refresh_token',
+                    },
+                    timeout=_ah_gapi.ClientTimeout(total=10),
+                )
+                _rd = await _r.json()
+                if 'access_token' in _rd:
+                    access_token = _rd['access_token']
+                    new_tok = dict(token_data)
+                    new_tok['access_token'] = access_token
+                    new_tok['saved_at'] = _dt_gapi.datetime.utcnow().isoformat()
+                    user.google_oauth_token = encrypt_token(_jsn_gapi.dumps(new_tok))
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return True
+        except Exception as _re_err:
+            logger.warning(f'[GMAIL_API] Token refresh error: {_re_err}')
+        return False
+
+    async def _do_send():
+        from email.mime.multipart import MIMEMultipart as _MimeMp
+        # Multipart alternative: plain + HTML
+        msg = _MimeMp('alternative')
+        msg['From'] = f"{sender_name} <{gmail_email}>"
+        msg['To'] = to
+        msg['Subject'] = subject
+        msg.attach(_MimeGapi(body, 'plain', 'utf-8'))
+        try:
+            _body_html = _text_to_email_html(body)
+            _full_html = _build_email_html(_body_html, sender_name=sender_name)
+            from email.mime.text import MIMEText as _MHTml
+            msg.attach(_MHTml(_full_html, 'html', 'utf-8'))
+        except Exception:
+            pass  # plain-text fallback
+        raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+        async with _safe_http() as _hgm:
+            _resp = await _hgm.post(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json',
+                },
+                json={'raw': raw},
+                timeout=_ah_gapi.ClientTimeout(total=20),
+            )
+            return _resp.status, await _resp.json()
+
+    try:
+        status, data = await _do_send()
+        if status == 401:
+            refreshed = await _refresh()
+            if not refreshed:
+                return False, "Gmail OAuth токен истёк. Переподключи Gmail в настройках агента."
+            status, data = await _do_send()
+        if status in (200, 201):
+            logger.info(f'[GMAIL_API] Sent from {gmail_email} to {to}')
+            return True, gmail_email
+        err = data.get('error', {}).get('message', str(data))
+        return False, f"Gmail API error {status}: {err}"
+    except Exception as _ge:
+        return False, f"Gmail API exception: {_ge}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# check_emails — чтение входящих писем из почты пользователя
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Кеш результатов check_emails: user_id → (timestamp, result_str)
+# TTL 2 минуты — повторные запросы «есть новые письма?» возвращаются мгновенно
+_CHECK_EMAILS_CACHE: dict = {}
+_CHECK_EMAILS_CACHE_TTL = 120  # секунд
+
+async def check_emails(
+    limit: int = 5,
+    from_account: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Проверить входящие письма из подключённой почты пользователя (Gmail/Яндекс/Mail.ru)."""
+    import time as _time_ce
+    # Кеш: если результат свежий (< 2 мин) — не идём в почту снова
+    _cache_key_ce = (user_id, from_account)
+    _cached_ce = _CHECK_EMAILS_CACHE.get(_cache_key_ce)
+    if _cached_ce and _time_ce.time() - _cached_ce[0] < _CHECK_EMAILS_CACHE_TTL:
+        logger.debug("[CHECK_EMAILS] cache hit for user %s", user_id)
+        return _cached_ce[1] + "\n\n_(результат из кеша, проверено менее 2 минут назад)_"
+
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден."
+
+        _integrations = _get_user_email_integrations(user, session)
+        if not _integrations:
+            return ("Почта не подключена. Чтобы я мог проверять входящие письма, "
+                    "подключи почтовый ящик в настройках дашборда: Профиль → Настройки агента → API-ключи → "
+                    "добавь GMAIL_USER (для Gmail OAuth) или YANDEX_USER/YANDEX_PASS (для Яндекс/Mail.ru).")
+
+        # Выбираем интеграцию
+        chosen = None
+        if from_account:
+            _fa = from_account.strip().lower()
+            for _intg in _integrations:
+                if _fa in _intg['email_user'].lower() or _fa in _intg['label'].lower():
+                    chosen = _intg
+                    break
+        if not chosen:
+            chosen = _integrations[0]
+
+        limit = max(1, min(limit, 20))
+
+        # Загружаем уже-известные контакты для фильтрации дублей
+        _my_email = chosen.get('email_user', '').lower()
+        # Собираем ВСЕ собственные email-адреса (Gmail + Resend sender + все интеграции)
+        # чтобы не показывать копии собственных исходящих как "входящие"
+        _my_emails: set = {_my_email} if _my_email else set()
+        for _intg in _integrations:
+            _ie = _intg.get('email_user', '').lower()
+            if _ie:
+                _my_emails.add(_ie)
+        # Resend sender — платформенный outreach@...
+        try:
+            import os as _os_me
+            _resend_from = _os_me.getenv('RESEND_FROM_EMAIL', 'outreach@asibiont.com').lower()
+            _my_emails.add(_resend_from)
+        except Exception:
+            _my_emails.add('outreach@asibiont.com')
+        # Личный Resend-адрес пользователя (из user_api_keys агентов)
+        try:
+            from models import UserAgent as _UA_me
+            _ua_rows = session.query(_UA_me).filter_by(author_id=user.id).all()
+            for _ua_r in _ua_rows:
+                _keys_str = getattr(_ua_r, 'user_api_keys', '') or ''
+                if 'RESEND_FROM=' in _keys_str:
+                    import re as _re_me
+                    _m_from = _re_me.search(r'RESEND_FROM=([^\s,;]+)', _keys_str)
+                    if _m_from:
+                        _my_emails.add(_m_from.group(1).strip().lower())
+        except Exception as _e_me:
+            logger.debug("suppressed own-emails: %s", _e_me)
+        _my_emails.discard('')
+        _known_emails: set = set()
+        _registered_emails: set = set()
+        try:
+            from models import EmailContact as _EC_ce
+            _known_emails = {r.email.lower() for r in session.query(_EC_ce.email).filter_by(user_id=user.id).all() if r.email}
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        try:
+            from models import User as _U_re
+            _registered_emails = {r.email.lower() for r in session.query(_U_re.email).filter(_U_re.email.isnot(None)).all() if r.email}
+        except Exception as _e_re:
+            logger.debug("suppressed registered_emails: %s", _e_re)
+
+        # Словарь outreach: кто из наших агентов писал каждому контакту
+        _outreach_map: dict = {}
+        try:
+            from models import EmailOutreach as _EO_ce3
+            _eo_rows = session.query(_EO_ce3).filter(
+                _EO_ce3.user_id == user.id,
+                _EO_ce3.status.in_(['sent', 'delivered', 'opened', 'replied']),
+            ).order_by(_EO_ce3.sent_at.desc()).limit(500).all()
+            for _eo_r in _eo_rows:
+                if _eo_r.recipient_email:
+                    _eo_key = _eo_r.recipient_email.lower()
+                    if _eo_key not in _outreach_map:  # берём последний по sent_at
+                        _outreach_map[_eo_key] = {
+                            'sent_by_agent': _eo_r.sent_by_agent,
+                            'outreach_id': _eo_r.id,
+                            'sent_at': _eo_r.sent_at,
+                            'subject': _eo_r.subject or '',
+                        }
+        except Exception as _e_om:
+            logger.debug("outreach_map build: %s", _e_om)
+
+        if chosen['type'] == 'gmail_oauth':
+            result = await _check_emails_gmail_api(chosen['token_data'], limit, user, session, _known_emails, _my_emails, _outreach_map, _registered_emails)
+        elif chosen['type'] in ('smtp', 'gmail_server'):
+            result = await _check_emails_imap(chosen, limit, _known_emails, _my_emails, _outreach_map, _registered_emails)
+        elif chosen['type'] == 'resend':
+            return "Resend — сервис только для отправки, входящие не поддерживаются."
+        else:
+            return f"Тип интеграции '{chosen['type']}' не поддерживает чтение входящих."
+
+        # ── Дедупликация: фильтруем письма, о которых агент уже сообщал ──
+        _no_new_kw_pre = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
+        if result and not any(kw in result.lower() for kw in _no_new_kw_pre):
+            try:
+                import hashlib as _hl_dup
+                import json as _json_dup
+                from models import AgentActivityLog as _AAL_dup
+                # Загружаем ранее виденные fingerprints (за 48ч)
+                _seen_fp: set = set()
+                try:
+                    _seen_rows = session.query(_AAL_dup).filter(
+                        _AAL_dup.user_id == user.id,
+                        _AAL_dup.activity_type == 'seen_inbox_emails',
+                        _AAL_dup.created_at >= datetime.utcnow() - timedelta(hours=48),
+                    ).all()
+                    for _sr in _seen_rows:
+                        try:
+                            _fps = _json_dup.loads(_sr.content or '[]')
+                            _seen_fp.update(_fps)
+                        except Exception:
+                            pass
+                except Exception as _e_seen:
+                    logger.debug('[CHECK_EMAILS] seen_fp load: %s', _e_seen)
+
+                # Разбиваем result на блоки по "---"
+                import re as _re_dup
+                _header_match = _re_dup.match(r'^(.*?\d+\s*писем[^:]*:?\s*(?:\n[^\n]*примечание[^\n]*)?)\n\n', result, _re_dup.DOTALL | _re_dup.IGNORECASE)
+                _header_part = _header_match.group(1) if _header_match else ''
+                _body_part = result[len(_header_part):].strip() if _header_part else result
+                _blocks = _re_dup.split(r'\n---\n', _body_part)
+
+                _new_blocks = []
+                _new_fps = []
+                _skipped_count = 0
+                for _blk in _blocks:
+                    if not _blk.strip():
+                        continue
+                    # Fingerprint = hash(from + subject + date_prefix)
+                    _fp_from = _re_dup.search(r'От:\s*(?:\[email-контакт[^\]]*\]\s*)?(.+)', _blk)
+                    _fp_subj = _re_dup.search(r'Тема:\s*(.+)', _blk)
+                    _fp_date = _re_dup.search(r'Дата:\s*(.+)', _blk)
+                    _fp_str = (
+                        (_fp_from.group(1).strip() if _fp_from else '') + '|' +
+                        (_fp_subj.group(1).strip() if _fp_subj else '') + '|' +
+                        (_fp_date.group(1).strip()[:20] if _fp_date else '')
+                    )
+                    _fp_hash = _hl_dup.md5(_fp_str.encode('utf-8', 'ignore')).hexdigest()[:16]
+
+                    if _fp_hash in _seen_fp:
+                        _skipped_count += 1
+                        continue
+                    _new_blocks.append(_blk)
+                    _new_fps.append(_fp_hash)
+
+                # Сохраняем fingerprints новых писем — ОТДЕЛЬНАЯ сессия чтобы не зависеть от
+                # состояния основной (она может быть в mid-transaction или dirty).
+                if _new_fps:
+                    try:
+                        from models import Session as _SessFP
+                        _fp_sess = _SessFP()
+                        try:
+                            _aal_seen = _AAL_dup(
+                                user_id=user.id,
+                                activity_type='seen_inbox_emails',
+                                title=f'seen {len(_new_fps)} emails',
+                                content=_json_dup.dumps(_new_fps),
+                                target='email_inbox',
+                                status='completed',
+                            )
+                            _fp_sess.add(_aal_seen)
+                            _fp_sess.commit()
+                            logger.info('[CHECK_EMAILS] Saved %d inbox fingerprints', len(_new_fps))
+                        except Exception as _e_save_fp:
+                            logger.warning('[CHECK_EMAILS] save seen_fp FAILED: %s', _e_save_fp)
+                            try:
+                                _fp_sess.rollback()
+                            except Exception:
+                                pass
+                        finally:
+                            try:
+                                _fp_sess.close()
+                            except Exception:
+                                pass
+                    except Exception as _e_fp_outer:
+                        logger.warning('[CHECK_EMAILS] fingerprint session setup failed: %s', _e_fp_outer)
+
+                if _skipped_count > 0:
+                    logger.info('[CHECK_EMAILS] Dedup: skipped %d already-seen emails, %d new', _skipped_count, len(_new_blocks))
+
+                if not _new_blocks:
+                    result = f"Нет новых писем (все {_skipped_count} уже были обработаны ранее)."
+                elif _skipped_count > 0:
+                    _email_account = _re_dup.search(r'\(([^,]+),', _header_part)
+                    _acct = _email_account.group(1) if _email_account else chosen.get('email_user', '')
+                    result = (
+                        f"Новые входящие ({_acct}, {len(_new_blocks)} новых, {_skipped_count} уже обработано):\n\n"
+                        + "\n---\n".join(_new_blocks)
+                    )
+                # else: result stays as-is (all emails are new)
+            except Exception as _e_dedup:
+                logger.debug('[CHECK_EMAILS] dedup error (skipping): %s', _e_dedup)
+
+        # Автоматически сохраняем/обновляем контакты из входящих в EmailContact
+        _no_new_keywords = ('нет новых писем', 'входящих писем нет', 'нет писем', 'no new', 'нет входящих')
+        if result and not any(kw in result.lower() for kw in _no_new_keywords):
+            import re as _re_ce
+            import datetime as _dt_ce
+            from models import EmailContact as _EC_ce2, EmailOutreach as _EO_ce2
+            # Фильтруем нотификационные / авто-адреса — они не являются реальными контактами
+            _NOREPLY_PATS = (
+                'no-reply', 'noreply', 'do-not-reply', 'donotreply',
+                'notification', 'notifications', 'mailer-daemon', 'postmaster',
+                'bounce@', 'bounces@', 'automated@', 'reply-to@',
+                '@email.github', '@notifications.github', '@github.com',
+                'support@', 'info@', 'admin@', 'hello@', 'team@',
+                'feedback@', 'newsletter@', 'news@', 'updates@',
+            )
+            def _is_noreply(em: str) -> bool:
+                el = em.lower()
+                return any(p in el for p in _NOREPLY_PATS)
+
+            _found_em = set(e.lower() for e in _re_ce.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', result, _re_ce.IGNORECASE))
+            _found_em -= _my_emails
+            _found_em = {em for em in _found_em if not _is_noreply(em)}
+            _new_auto = _found_em - _known_emails
+            # 1) Новые контакты → создаём с status=replied
+            _truly_new_contacts = 0  # Счётчик реально новых контактов (не повторных)
+            for _new_em in list(_new_auto)[:5]:
+                try:
+                    _existing_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_new_em).first()
+                    if not _existing_ec:
+                        _ec_new = _EC_ce2(
+                            user_id=user.id,
+                            email=_new_em,
+                            source='imap_reply',
+                            status='replied',
+                            notes='Автоматически найден во входящих письмах',
+                            last_contacted_at=_dt_ce.datetime.utcnow(),
+                        )
+                        session.add(_ec_new)
+                        session.commit()
+                        _known_emails.add(_new_em)
+                        _truly_new_contacts += 1
+                        logger.info(f'[CHECK_EMAILS] Auto-saved contact: {_new_em} for user {user.id}')
+                except Exception as _e_save:
+                    logger.debug(f'[CHECK_EMAILS] auto-save contact failed: {_e_save}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+            # Парсим result чтобы вытащить snippet/preview для каждого email
+            _reply_snippets: dict = {}
+            try:
+                import re as _re_snip
+                # Разбиваем по блокам "---", каждый блок = одно письмо
+                _blocks = re.split(r'\n---\n', result)
+                for _blk in _blocks:
+                    _em_in_blk = _re_snip.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _blk, _re_snip.IGNORECASE)
+                    _preview_m = _re_snip.search(r'[Пп]ревью:\s*(.+)', _blk, _re_snip.DOTALL)
+                    if _em_in_blk and _preview_m:
+                        _snip_raw = _preview_m.group(1).strip()[:3000]
+                        # Отрезаем служебные аннотации outreach (не должны попадать в reply_text в БД)
+                        _snip_raw = _re_snip.split(r'\n?⚡ ИСХОДЯЩИЙ OUTREACH', _snip_raw, maxsplit=1)[0]
+                        # Очищаем MIME boundary/header артефакты (защита от старых raw-ответов IMAP)
+                        _snip_raw = _re_snip.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _snip_raw)
+                        _snip_raw = _re_snip.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _snip_raw)
+                        _snip_text = _snip_raw.strip()[:3000]
+                        if not _snip_text:
+                            continue
+                        for _em_raw in _em_in_blk:
+                            _reply_snippets[_em_raw.lower()] = _snip_text  # до 3000 символов
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+
+            # 2) Известные контакты, которые ответили → обновляем статус на replied + сохраняем текст
+            _replied_known = _found_em & _known_emails
+            _truly_new_replies = 0  # Счётчик контактов, чей статус ИЗМЕНИЛСЯ на replied впервые
+            for _rep_em in list(_replied_known)[:10]:
+                try:
+                    _rep_snippet = _reply_snippets.get(_rep_em, '')
+                    _now_ce = _dt_ce.datetime.utcnow()
+                    _ec_existing = session.query(_EC_ce2).filter_by(user_id=user.id, email=_rep_em).first()
+                    if _ec_existing and _ec_existing.status in ('contacted', 'new', None):
+                        _ec_existing.status = 'replied'
+                        _ec_existing.last_contacted_at = _now_ce
+                        _truly_new_replies += 1  # Только реальное ПЕРВОЕ изменение статуса
+                        session.commit()
+                        logger.info(f'[CHECK_EMAILS] Updated contact status to replied: {_rep_em}')
+                    # Также обновляем EmailOutreach если есть — сохраняем reply_text и reply_at
+                    _eo = session.query(_EO_ce2).filter_by(
+                        user_id=user.id, recipient_email=_rep_em
+                    ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened'])).first()
+                    if _eo:
+                        _was_replied_ce = (_eo.status == 'replied')
+                        _eo.status = 'replied'
+                        # Обновляем reply_text если новый текст лучше старого (нет старого или старый короче)
+                        if _rep_snippet and (not _eo.reply_text or len(_rep_snippet) > len(_eo.reply_text or '')):
+                            _eo.reply_text = _rep_snippet
+                        if not _eo.reply_at:
+                            _eo.reply_at = _now_ce
+                        # Outcome Feedback Loop (#1): обновляем счётчик ответов
+                        try:
+                            _eo.reply_count = (_eo.reply_count or 0) + 1
+                            # Рассчитываем задержку ответа в часах
+                            if _eo.sent_at and _eo.reply_at:
+                                _delay_h = (_eo.reply_at - _eo.sent_at).total_seconds() / 3600.0
+                                # engagement_rating: быстрый ответ (<24ч) = высокий рейтинг
+                                _eo.engagement_rating = max(0.1, min(1.0, 1.0 - _delay_h / 96.0))
+                        except Exception as _e_rc:
+                            logger.debug('[CHECK_EMAILS] reply_count update: %s', _e_rc)
+                        # Инкрементируем счётчик ответов на кампании (только если статус изменился)
+                        if not _was_replied_ce and _eo.campaign_id:
+                            try:
+                                from models import EmailCampaign as _EC_camp_ce
+                                _camp_ce = session.query(_EC_camp_ce).filter_by(id=_eo.campaign_id).first()
+                                if _camp_ce:
+                                    _camp_ce.emails_replied = (_camp_ce.emails_replied or 0) + 1
+                            except Exception as _e_camp:
+                                logger.debug(f'[CHECK_EMAILS] campaign replies counter update failed: {_e_camp}')
+                        session.commit()
+                        logger.info(f'[CHECK_EMAILS] Updated EmailOutreach status=replied, reply_text saved: {_rep_em}')
+
+                        # Contact Preference Memory (#3): обновляем предпочтения на основе ответа
+                        try:
+                            from models import EmailContactPreference as _ECP_ce
+                            _pref = session.query(_ECP_ce).filter_by(
+                                user_id=user.id, contact_email=_rep_em
+                            ).first()
+                            if not _pref:
+                                _pref = _ECP_ce(user_id=user.id, contact_email=_rep_em)
+                                session.add(_pref)
+                            _pref.emails_received = (_pref.emails_received or 0)
+                            _pref.emails_replied = (_pref.emails_replied or 0) + 1
+                            _pref.last_reply_at = _now_ce
+                            _pref.typical_reply_hour = _now_ce.hour
+                            # Определяем предпочтения по телу письма которое вызвало ответ
+                            if _eo.body_length:
+                                if _eo.body_length < 300:
+                                    _pref.preferred_length = 'short'
+                                elif _eo.body_length < 600:
+                                    _pref.preferred_length = 'medium'
+                                else:
+                                    _pref.preferred_length = 'long'
+                            if _eo.tone_type:
+                                _pref.preferred_tone = _eo.tone_type
+                            # Определяем язык ответа контакта и сохраняем
+                            if _rep_snippet and len(_rep_snippet) > 20:
+                                import unicodedata as _ud_cl
+                                _cl_scripts = {}
+                                for _ch_cl in _rep_snippet:
+                                    if _ch_cl.isalpha():
+                                        try:
+                                            _sn = _ud_cl.name(_ch_cl, '').split()[0]
+                                        except ValueError:
+                                            continue
+                                        _cl_scripts[_sn] = _cl_scripts.get(_sn, 0) + 1
+                                _cl_top = max(_cl_scripts, key=_cl_scripts.get) if _cl_scripts else None
+                                if _cl_top == 'CYRILLIC':
+                                    _pref.preferred_language = 'ru'
+                                elif _cl_top == 'LATIN':
+                                    _pref.preferred_language = 'en'
+                            _pref.updated_at = _now_ce
+                            session.commit()
+                            logger.info(f'[CHECK_EMAILS] Updated ContactPreference for {_rep_em}')
+                        except Exception as _e_pref:
+                            logger.debug('[CHECK_EMAILS] ContactPreference update: %s', _e_pref)
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+                    else:
+                        # Если контакт уже replied/unsubscribed (напр. через webhook) — обновить reply_text если snippet лучше
+                        _eo_any = session.query(_EO_ce2).filter_by(
+                            user_id=user.id, recipient_email=_rep_em,
+                        ).filter(_EO_ce2.status.in_(['replied', 'unsubscribed'])).order_by(
+                            _EO_ce2.reply_at.desc()
+                        ).first()
+                        if _eo_any and _rep_snippet and (not _eo_any.reply_text or len(_rep_snippet) > len(_eo_any.reply_text or '')):
+                            _eo_any.reply_text = _rep_snippet
+                            if not _eo_any.reply_at:
+                                _eo_any.reply_at = _now_ce
+                            session.commit()
+                            logger.info(f'[CHECK_EMAILS] Saved/updated reply_text for replied: {_rep_em}')
+                except Exception as _e_upd:
+                    logger.debug(f'[CHECK_EMAILS] update replied status failed: {_e_upd}')
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+
+            # ── Извлекаем предпочтения по общению из входящих писем ─────────
+            # Сканируем snippets ответных писем: если контакт написал что хочет
+            # общаться на определённом языке или в определённом стиле — сохраняем
+            # это в EmailContact.notes и показываем агенту при ответе.
+            #
+            # ── AUTO-UNSUBSCRIBE: распознаём отказы в ответах ──
+            # Если контакт просит не писать → status='unsubscribed', блокируем follow-up и новые письма
+            _unsubscribed_emails: list = []
+            if _reply_snippets:
+                import re as _re_unsub_ce
+                _UNSUB_RE = _re_unsub_ce.compile(
+                    r'\bunsubscribe\b|'
+                    r'\bopt[\s\-]?out\b|'
+                    r'\bstop\s+(?:emailing|contacting|writing|sending)\b|'
+                    r'\bremove\s+(?:me|my\s+email)\b|'
+                    r'\bdo\s+not\s+(?:contact|email|write|send)\b|'
+                    r'\bdon\'?t\s+(?:contact|email|write|send)\b|'
+                    r'\bnot\s+interested\b|'
+                    r'\bno\s+thanks?\b|'
+                    r'\bleave\s+me\s+alone\b|'
+                    r'\bnot\s+(?:for\s+us|for\s+me|relevant|applicable)\b|'
+                    r'\bwe\s+already\s+(?:have|use)\b|'
+                    r'\bnot\s+(?:right\s+)?now\b|'
+                    r'\bmaybe\s+later\b|'
+                    r'\bdoes\s*n\'?t\s+(?:fit|suit|apply|work\s+for)\b|'
+                    r'\bpass\s+on\s+this\b|'
+                    r'\bwe\'?re?\s+(?:not\s+looking|good|all\s+set)\b|'
+                    # Russian
+                    r'не\s*пиши(?:те)?|'
+                    r'(?:прошу|просьба)\s+(?:не\s+писать|больше\s+не|прекратить)|'
+                    r'отпис(?:ать|ка|аться)|'
+                    r'(?:больше\s+)?не\s+(?:нужно|надо|хочу)\s*(?:писать|получать|ваших?\s+пис)|'
+                    r'(?:уберите|удалите)\s+(?:меня|мой\s+(?:email|адрес))|'
+                    r'(?:прекратите|перестаньте)\s+(?:писать|рассылку|отправлять)|'
+                    r'(?:не\s+)?интересно|'
+                    r'не\s+(?:подходит|актуально|релевантно)|'
+                    r'(?:у\s+нас\s+)?уже\s+(?:есть|используем|имеется)|'
+                    r'не\s+сейчас|'
+                    r'(?:может\s+)?позже|как[\s\-]нибудь\s+потом|'
+                    r'нет[,.]?\s*спасибо|'
+                    r'(?:мы\s+)?(?:это\s+)?не\s+(?:используем|применяем)|'
+                    r'спам|spam|'
+                    # Greek
+                    r'μη\s*(?:μου)?\s*(?:στ[εέ]λν|γρ[αά]φ)|'
+                    r'σταματ[ήη]στε|'
+                    r'(?:δεν|δε)\s+(?:με\s+)?ενδιαφ[εέ]ρ|'
+                    r'(?:δεν|δε)\s+θ[εέ]λω|'
+                    r'αφ[ήη]στ[εέ]\s+(?:με|μου)|'
+                    r'διαγρ[αά]ψτε\s+(?:με|μου)|'
+                    # Spanish
+                    r'(?:no\s+me\s+(?:escriba|contacte|envíe))|'
+                    r'(?:darse\s+de\s+baja|cancelar\s+suscripci[oó]n)|'
+                    r'(?:no\s+(?:estoy\s+)?interesad[oa])|'
+                    # German
+                    r'(?:ab(?:bestellen|melden))|'
+                    r'(?:(?:nicht|kein)\s+(?:mehr\s+)?(?:schreiben|kontaktieren|senden))|'
+                    r'(?:kein\s+interesse)|'
+                    # French
+                    r'(?:(?:ne\s+)?(?:m\'|me\s+)?(?:[ée]crivez|contactez|envoyez)\s+(?:plus|pas))|'
+                    r'(?:d[eé]sabonner|d[eé]sinscri)|'
+                    r'(?:pas\s+int[eé]ress[eé])|'
+                    # Italian
+                    r'(?:(?:non\s+)?(?:mi\s+)?(?:scriva|contatti|invii)\s+più)|'
+                    r'(?:non\s+(?:sono\s+)?interessat[oa])|'
+                    r'(?:cancellar[emsit]+\s+(?:la\s+)?iscrizion)|'
+                    # Portuguese
+                    r'(?:(?:não|nao)\s+me\s+(?:escreva|contacte|envie))|'
+                    r'(?:(?:não|nao)\s+(?:estou\s+)?interessad[oa])|'
+                    r'(?:cancelar\s+inscri[çc][ãa]o)|'
+                    # Turkish
+                    r'(?:yazma(?:yın|yin))|(?:abonelikten\s+çık)|(?:ilgilenmiyorum)',
+                    _re_unsub_ce.IGNORECASE,
+                )
+                for _unsub_em, _unsub_snip in _reply_snippets.items():
+                    if _UNSUB_RE.search(_unsub_snip):
+                        _unsubscribed_emails.append(_unsub_em)
+                        try:
+                            # Обновляем EmailContact → unsubscribed
+                            _ec_unsub = session.query(_EC_ce2).filter_by(
+                                user_id=user.id, email=_unsub_em
+                            ).first()
+                            if _ec_unsub:
+                                _ec_unsub.status = 'unsubscribed'
+                                _old_notes = _ec_unsub.notes or ''
+                                if 'отписка' not in _old_notes.lower():
+                                    _ec_unsub.notes = ((_old_notes + '\n') if _old_notes else '') + '[отписка: контакт попросил не писать]'
+                            else:
+                                session.add(_EC_ce2(
+                                    user_id=user.id, email=_unsub_em,
+                                    source='imap_reply', status='unsubscribed',
+                                    notes='[отписка: контакт попросил не писать]',
+                                    last_contacted_at=_dt_ce.datetime.utcnow(),
+                                ))
+                            # Обновляем EmailOutreach → статус 'unsubscribed', убираем follow-up
+                            _eo_unsub = session.query(_EO_ce2).filter(
+                                _EO_ce2.user_id == user.id,
+                                _EO_ce2.recipient_email == _unsub_em,
+                            ).all()
+                            for _eo_u in _eo_unsub:
+                                _eo_u.status = 'unsubscribed' if _eo_u.status != 'replied' else 'replied'
+                                _eo_u.next_follow_up_at = None  # убираем запланированные follow-up
+                            session.commit()
+                            logger.info(f'[CHECK_EMAILS] AUTO-UNSUBSCRIBE: {_unsub_em} marked as unsubscribed')
+                        except Exception as _e_unsub:
+                            logger.debug(f'[CHECK_EMAILS] auto-unsubscribe failed: {_e_unsub}')
+                            try:
+                                session.rollback()
+                            except Exception:
+                                pass
+
+            _contact_prefs_found: dict = {}
+            if _reply_snippets:
+                import re as _re_pref_ce
+                _PREF_TRIGGER_CE = _re_pref_ce.compile(
+                    r'prefer|would like|please (?:use|write|respond|reply)|'
+                    r'write in|respond in|reply in|communicate in|'
+                    r'хочу использовать|хочу общаться|хотел.{0,10}бы|'
+                    r'предпочитаю|пожалуйста пишите|пишите на|прошу писать|'
+                    r'давайте (?:общаться|переписываться)|want to (?:use|communicate|write)|'
+                    # Greek preference triggers
+                    r'(?:παρακαλ[ώω]|θ[αά]\s+[ήη]θελα)\s+(?:γρ[αά]ψτε|απαντ[ήη]στε)|'
+                    r'(?:γρ[αά]ψτε|στ[εέ]λνετε)\s+(?:στα?|σε)\s+(?:ελληνικ[αά]|αγγλικ[αά])|'
+                    r'προτιμ[ώω]|'
+                    # Spanish
+                    r'(?:por\s+favor\s+(?:escrib|respond))|(?:prefer[ií]a)|'
+                    # German
+                    r'(?:bitte\s+(?:schreiben|antworten)\s+(?:auf|in))|'
+                    # French
+                    r'(?:veuillez\s+(?:[ée]crire|r[ée]pondre))|(?:je\s+pr[eé]f[eè]re)',
+                    _re_pref_ce.IGNORECASE,
+                )
+                _LANG_PREF_CE = [
+                    (r'greek|греческ|ελληνικ[αά]|στα\s+ελληνικ', 'язык: греческий'),
+                    (r'\brussian\b|по-?русски|на\s+русском|ρωσικ[αά]', 'язык: русский'),
+                    (r'\benglish\b|по-?английски|на\s+английском|αγγλικ[αά]', 'язык: английский'),
+                    (r'spanish|по-?испански|на\s+испанском|español|ισπανικ[αά]', 'язык: испанский'),
+                    (r'german|по-?немецки|на\s+немецком|deutsch', 'язык: немецкий'),
+                    (r'french|по-?французски|на\s+французском|français', 'язык: французский'),
+                    (r'chinese|по-?китайски|на\s+китайском|中文',  'язык: китайский'),
+                    (r'japanese|по-?японски|на\s+японском|日本語',  'язык: японский'),
+                    (r'ukrainian|по-?украински|на\s+украинском',  'язык: украинский'),
+                    (r'portuguese|по-?португальски|на\s+португальском', 'язык: португальский'),
+                    (r'italian|по-?итальянски|на\s+итальянском',  'язык: итальянский'),
+                    (r'arabic|по-?арабски|на\s+арабском',         'язык: арабский'),
+                    (r'turkish|по-?турецки|на\s+турецком',        'язык: турецкий'),
+                    (r'formal|официальн|деловой стиль',            'стиль: официальный'),
+                    (r'informal|неформальн|casual|дружеск',        'стиль: неформальный'),
+                ]
+                for _pref_em, _pref_snip in _reply_snippets.items():
+                    if not _PREF_TRIGGER_CE.search(_pref_snip):
+                        continue
+                    _pref_low = _pref_snip.lower()
+                    for _lpat, _llabel in _LANG_PREF_CE:
+                        if _re_pref_ce.search(_lpat, _pref_low):
+                            _contact_prefs_found[_pref_em] = _llabel
+                            try:
+                                _ec_pref = session.query(_EC_ce2).filter_by(user_id=user.id, email=_pref_em).first()
+                                if _ec_pref:
+                                    _old_notes_pref = _ec_pref.notes or ''
+                                    _pref_tag = f'[предпочтение: {_llabel}]'
+                                    if _llabel not in _old_notes_pref:
+                                        _clean_pref = _re_pref_ce.sub(r'\[предпочтение:[^\]]*\]', '', _old_notes_pref).strip()
+                                        _ec_pref.notes = ((_clean_pref + '\n') if _clean_pref else '') + _pref_tag
+                                        session.commit()
+                                        logger.info(f'[CHECK_EMAILS] Saved preference for {_pref_em}: {_pref_tag}')
+                            except Exception as _e_pref:
+                                logger.debug(f'[CHECK_EMAILS] pref save failed: {_e_pref}')
+                                try:
+                                    session.rollback()
+                                except Exception:
+                                    pass
+                            break  # одно предпочтение на контакт
+
+            # Авто-обновление метрики если появились новые replied контакты
+            # Считаем ТОЛЬКО реально новые ответы (статус изменился с non-replied → replied)
+            # НЕ считаем уже известных replied-контактов повторно при каждой проверке!
+            _newly_replied_this_call = _truly_new_contacts + _truly_new_replies
+            if _newly_replied_this_call > 0:
+                try:
+                    from models import Goal as _Goal_ce
+                    _ppl_kw_ce = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт',
+                                  'заинтересован', 'привлеч', 'клиент', 'партнёр', 'лиц ')
+                    _ppl_goals_ce = session.query(_Goal_ce).filter(
+                        _Goal_ce.user_id == user.id,
+                        _Goal_ce.status == 'active',
+                        _Goal_ce.metric_target.isnot(None),
+                    ).all()
+                    for _g_ce2 in _ppl_goals_ce:
+                        _g_text_ce = (_g_ce2.title + ' ' + (_g_ce2.description or '') + ' ' + (_g_ce2.metric_unit or '')).lower()
+                        if any(w in _g_text_ce for w in _ppl_kw_ce):
+                            _new_metric = float(_g_ce2.metric_current or 0) + _newly_replied_this_call
+                            if _new_metric > (_g_ce2.metric_current or 0):
+                                update_goal_progress(
+                                    goal_title=_g_ce2.title,
+                                    metric_current=int(_new_metric),
+                                    notes=f'check_emails: +{_newly_replied_this_call} новых ответов',
+                                    user_id=user_id,
+                                )
+                                logger.info(f'[CHECK_EMAILS] Auto-updated goal metric: {_g_ce2.title} +{_newly_replied_this_call} → {_new_metric}')
+                                # Логируем inbox_reply в AgentActivityLog — status='new' чтобы
+                                # _scan_agent_inbox_replies создал CRITICAL якорь → пользователь получит уведомление
+                                try:
+                                    from models import AgentActivityLog as _AAL_ce_ir
+                                    # Собираем preview ответов для content
+                                    _reply_preview_lines = []
+                                    for _rp_em, _rp_snip in list(_reply_snippets.items())[:5]:
+                                        _rp_name = ''
+                                        try:
+                                            _rp_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_rp_em).first()
+                                            _rp_name = getattr(_rp_ec, 'name', '') or ''
+                                        except Exception:
+                                            pass
+                                        _reply_preview_lines.append(
+                                            f"От: {_rp_name} <{_rp_em}>\n"
+                                            f"Тема: ответ на outreach\n"
+                                            f"Превью: {(_rp_snip or '')[:300]}"
+                                        )
+                                    _reply_content = '\n---\n'.join(_reply_preview_lines) if _reply_preview_lines else f'Новые ответы: {_newly_replied_this_call}'
+                                    _aal_ir = _AAL_ce_ir(
+                                        user_id=user.id,
+                                        activity_type='inbox_reply',
+                                        title=f'check_emails: {_newly_replied_this_call} новых ответов на письма',
+                                        content=_reply_content[:2000],
+                                        target=f'agent:{chosen.get("agent_name", chosen.get("label", "email"))}',
+                                        status='new',
+                                    )
+                                    session.add(_aal_ir)
+                                    session.commit()
+                                except Exception as _e_aal_ir:
+                                    logger.debug(f'[CHECK_EMAILS] AAL inbox_reply log failed: {_e_aal_ir}')
+                                break
+                    # ── Авто-прогресс для целей без числовой метрики ──
+                    # Цели типа "найти инвесторов" / "outreach в fintech" не имеют metric_target,
+                    # но реальный ответ — это реальный прогресс. Даём +3% за каждый новый ответ (не более +10% за раз).
+                    _incr_pct = min(10, _newly_replied_this_call * 3)
+                    _outreach_kw_ce = (
+                        'outreach', 'клиент', 'партнёр', 'инвестор', 'лид', 'продаж',
+                        'привлеч', 'контакт', 'пользовател', 'рассылк', 'письм',
+                    )
+                    try:
+                        _no_metric_goals = session.query(_Goal_ce).filter(
+                            _Goal_ce.user_id == user.id,
+                            _Goal_ce.status == 'active',
+                            _Goal_ce.metric_target.is_(None),
+                        ).all()
+                        for _g_nm in _no_metric_goals:
+                            _g_nm_text = (_g_nm.title + ' ' + (_g_nm.description or '')).lower()
+                            if any(w in _g_nm_text for w in _outreach_kw_ce):
+                                if (_g_nm.progress_percentage or 0) < 99:
+                                    update_goal_progress(
+                                        goal_title=_g_nm.title,
+                                        progress_increment=_incr_pct,
+                                        notes=f'check_emails: +{_newly_replied_this_call} ответов → +{_incr_pct}%',
+                                        user_id=user_id,
+                                    )
+                                    logger.info(f'[CHECK_EMAILS] Auto-progress (no-metric) goal: {_g_nm.title} +{_incr_pct}%')
+                                    break
+                    except Exception as _e_nm_gp:
+                        logger.debug(f'[CHECK_EMAILS] no-metric goal progress failed: {_e_nm_gp}')
+                except Exception as _e_auto_gp:
+                    logger.debug(f'[CHECK_EMAILS] auto update_goal_progress failed: {_e_auto_gp}')
+            else:
+                # Reconciliation: metric_current=0 но replied-контакты уже есть → синхронизировать
+                try:
+                    from models import Goal as _Goal_rec, EmailOutreach as _EO_rec
+                    _ppl_kw_rec = ('пользовател', 'тестировщик', 'участник', 'подписчик', 'user', 'tester', 'контакт',
+                                   'заинтересован', 'привлеч', 'клиент', 'партнёр', 'лиц ')
+                    _ppl_goals_rec = session.query(_Goal_rec).filter(
+                        _Goal_rec.user_id == user.id,
+                        _Goal_rec.status == 'active',
+                        _Goal_rec.metric_target.isnot(None),
+                    ).all()
+                    for _g_rec in _ppl_goals_rec:
+                        if float(_g_rec.metric_current or 0) > 0:
+                            continue  # уже синхронизирована
+                        _g_text_rec = (_g_rec.title + ' ' + (_g_rec.description or '') + ' ' + (_g_rec.metric_unit or '')).lower()
+                        if not any(w in _g_text_rec for w in _ppl_kw_rec):
+                            continue
+                        _total_replied_rec = session.query(_EO_rec).filter(
+                            _EO_rec.user_id == user.id,
+                            _EO_rec.status == 'replied',
+                        ).count()
+                        if _total_replied_rec > 0:
+                            update_goal_progress(
+                                goal_title=_g_rec.title,
+                                metric_current=_total_replied_rec,
+                                notes=f'check_emails reconciliation: {_total_replied_rec} replied контактов',
+                                user_id=user_id,
+                            )
+                            logger.info(f'[CHECK_EMAILS] Reconciled metric: {_g_rec.title} → {_total_replied_rec}')
+                except Exception as _e_rec:
+                    logger.debug(f'[CHECK_EMAILS] reconciliation failed: {_e_rec}')
+
+            # Аннотируем результат: показываем агенту предпочтения контактов
+            # (только что найденные + ранее сохранённые в EmailContact.notes)
+            try:
+                _all_prefs_ann: dict = dict(_contact_prefs_found)
+                import re as _re_pref_ann
+                for _ann_em in _found_em:
+                    if _ann_em not in _all_prefs_ann:
+                        _ann_ec = session.query(_EC_ce2).filter_by(user_id=user.id, email=_ann_em).first()
+                        if _ann_ec and 'предпочтение' in (_ann_ec.notes or ''):
+                            _saved = _re_pref_ann.findall(r'\[предпочтение: ([^\]]+)\]', _ann_ec.notes)
+                            if _saved:
+                                _all_prefs_ann[_ann_em] = ', '.join(_saved)
+                if _all_prefs_ann:
+                    _pref_ann = '\n\n⚠ ПРЕДПОЧТЕНИЯ КОНТАКТОВ (обязательно учитывай при ответе):\n'
+                    _pref_ann += '\n'.join(f'• {_em}: {_pref}' for _em, _pref in _all_prefs_ann.items())
+                    _pref_ann += '\n→ Пиши reply_body на указанном языке и в указанном стиле!'
+                    result += _pref_ann
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+
+            # ── Аннотация для агента: отписавшиеся контакты ──
+            if _unsubscribed_emails:
+                result += '\n\n⛔ ОТПИСАЛИСЬ (НЕ отправляй им больше ни одного письма):\n'
+                result += '\n'.join(f'• {_ue}' for _ue in _unsubscribed_emails)
+
+            # ── Явный счётчик новых ответов для агента ──
+            if _newly_replied_this_call > 0:
+                result += (
+                    f'\n\n📊 НОВЫЕ ОТВЕТЫ В ЭТОМ СЕАНСЕ: +{_newly_replied_this_call} контакт(а/ов) с интересом к проекту.\n'
+                    f'   → Метрика цели уже обновлена автоматически (+{_newly_replied_this_call}).\n'
+                    f'   → НЕ вызывай update_goal_progress повторно — уже сделано!'
+                )
+
+            # ── Пре-классификация намерений + аннотация для агента ──
+            _has_replies = bool(_reply_snippets)
+            _reply_classifications: dict = {}
+            if _has_replies:
+                import re as _re_cls_ce
+                _QUESTION_RE = _re_cls_ce.compile(
+                    r'\?\s*$|'
+                    r'\b(?:how|what|when|where|which|who|why|can\s+you|could\s+you|is\s+there|do\s+you)\b|'
+                    r'\b(?:как|что|когда|где|какой|какая|какие|можно|можете|есть\s+ли|подскажите|расскажите|покажите)\b|'
+                    r'(?:πώς|τι|πότε|πού|ποιο|μπορ(?:εί|ούν)|υπάρχ)|'
+                    r'(?:cómo|qué|cuándo|dónde|puede|hay)|'
+                    r'(?:wie|was|wann|wo|können|gibt\s+es)',
+                    _re_cls_ce.IGNORECASE | _re_cls_ce.MULTILINE,
+                )
+                _INTEREST_RE = _re_cls_ce.compile(
+                    r'\b(?:interested|love|great|awesome|sounds?\s+good|let\'?s?\s+(?:do|try|talk)|sign\s+me\s+up|count\s+me\s+in)\b|'
+                    r'\b(?:интересно|отлично|здорово|давайте|хочу|готов[аы]?|попробу|подключ|хотел.{0,5}бы)\b|'
+                    r'(?:ενδιαφ[εέ]ρ(?:ομαι|ον)|τ[εέ]λεια|θα\s+[ήη]θελα)',
+                    _re_cls_ce.IGNORECASE,
+                )
+                for _cls_em, _cls_snip in _reply_snippets.items():
+                    if _cls_em in [e.lower() for e in _unsubscribed_emails]:
+                        _reply_classifications[_cls_em] = '🔴 ОТКАЗ'
+                    elif _INTEREST_RE.search(_cls_snip):
+                        if _QUESTION_RE.search(_cls_snip):
+                            _reply_classifications[_cls_em] = '🟢 ИНТЕРЕС + ВОПРОС'
+                        else:
+                            _reply_classifications[_cls_em] = '🟢 ИНТЕРЕС'
+                    elif _QUESTION_RE.search(_cls_snip):
+                        _reply_classifications[_cls_em] = '🟡 ВОПРОС'
+                    else:
+                        _reply_classifications[_cls_em] = '⚪ НЕЯСНО — прочитай внимательно'
+
+                # Показываем агенту пре-классификацию
+                if _reply_classifications:
+                    result += '\n\n📋 КЛАССИФИКАЦИЯ ОТВЕТОВ (проверь по тексту выше):\n'
+                    for _cls_em2, _cls_label in _reply_classifications.items():
+                        result += f'• {_cls_em2} → {_cls_label}\n'
+
+                result += (
+                    '\n🛡️ КАК ДЕЙСТВОВАТЬ ПО КАЖДОМУ ТИПУ ОТВЕТА:'
+                    '\n'
+                    '\n🟢 ИНТЕРЕС (хочу попробовать, расскажите подробнее, давайте):'
+                    '\n   → Ответь БЫСТРО, дай конкретику: ссылку, инструкцию, предложение созвона'
+                    '\n   → reply_to_outreach_email → negotiate_by_email → update_goal_progress(+1)'
+                    '\n'
+                    '\n🟡 ВОПРОС (как это работает? сколько стоит? есть ли X?):'
+                    '\n   → ОТВЕТЬ НА КОНКРЕТНЫЙ ВОПРОС — не шаблонно, а именно то что спросили'
+                    '\n   → Если знаешь ответ — дай его. Если нет — скажи "уточню и вернусь"'
+                    '\n   → reply_to_outreach_email с reply_body = ответ на вопрос + мягкий CTA'
+                    '\n   → НЕ игнорируй вопрос, не отвечай общими фразами'
+                    '\n'
+                    '\n🔴 ОТКАЗ (не интересно, уже есть решение, не пишите, не сейчас):'
+                    '\n   → НЕ ОТВЕЧАЙ. Контакт уже автоматически отписан.'
+                    '\n   → Если автоотписка не сработала — вызови DELEGATE или отметь вручную'
+                    '\n'
+                    '\n⚪ НЕЯСНО (автоответ, подпись, короткое "ок"):'
+                    '\n   → Прочитай текст внимательно. Если есть вопрос — ответь.'
+                    '\n   → Если просто "ок/спасибо" без запроса — не отвечай, жди следующего шага от них.'
+                    '\n'
+                    '\n→ Определяй язык из текста ответа контакта и пиши reply_body на том же языке!'
+                )
+
+            # ── AI-уже-ответил: УДАЛЯЕМ из результата контакты, которым AI уже дважды ответил ──
+            # Стратегия: если ai_reply_count >= _MAX_AI_REPLIES → блок удаляется из result целиком.
+            # Это предотвращает ситуацию когда агент «объявляет» ответ на уже закрытые контакты.
+            # Если остались блоки с частично-ответившими → добавляем inline-метку внутрь блока.
+            try:
+                if _found_em and result:
+                    _MAX_R = 2  # должен совпадать с _MAX_AI_REPLIES в reply_to_outreach_email
+                    import re as _re_air2
+                    # Разбиваем result на заголовок + блоки
+                    _hdr_m2 = _re_air2.match(r'^(.*?(?:\d+\s*писем[^\n]*|входящих[^\n]*)\n(?:[^\n]*примечание[^\n]*\n)?\n)', result, _re_air2.DOTALL | _re_air2.IGNORECASE)
+                    _hdr2 = _hdr_m2.group(1) if _hdr_m2 else ''
+                    _body2 = result[len(_hdr2):].strip()
+                    _blks2 = _re_air2.split(r'\n---\n', _body2)
+                    _kept_blks: list = []
+                    _skipped_replied_count = 0
+                    for _blk2 in _blks2:
+                        if not _blk2.strip():
+                            continue
+                        # Находим email в блоке
+                        _blk_ems = _re_air2.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', _blk2, _re_air2.IGNORECASE)
+                        _blk_em = _blk_ems[0].lower() if _blk_ems else None
+                        if not _blk_em or _blk_em not in _found_em:
+                            _kept_blks.append(_blk2)
+                            continue
+                        # Считаем сколько раз AI уже ответил этому контакту
+                        _replied_cnt2 = session.query(_EO_ce2).filter(
+                            _EO_ce2.user_id == user.id,
+                            _EO_ce2.recipient_email == _blk_em,
+                            _EO_ce2.ai_reply_sent_at.isnot(None),
+                        ).count()
+                        if _replied_cnt2 >= _MAX_R:
+                            # Максимум ответов — убираем блок из result
+                            _skipped_replied_count += 1
+                            logger.info('[CHECK_EMAILS] Filtered already-max-replied contact from output: %s (%d replies)', _blk_em, _replied_cnt2)
+                        elif _replied_cnt2 > 0:
+                            # Уже ответили один раз, но можно ещё — добавляем inline-пометку
+                            _eo_air2 = session.query(_EO_ce2).filter(
+                                _EO_ce2.user_id == user.id,
+                                _EO_ce2.recipient_email == _blk_em,
+                                _EO_ce2.ai_reply_sent_at.isnot(None),
+                            ).order_by(_EO_ce2.ai_reply_sent_at.desc()).first()
+                            _air2_date = str(_eo_air2.ai_reply_sent_at)[:10] if _eo_air2 else '?'
+                            _kept_blks.append(_blk2.rstrip() + f'\n[ℹ️ AI уже отвечал {_air2_date} — ответ допустим ещё 1 раз]')
+                        else:
+                            _kept_blks.append(_blk2)
+                    if _skipped_replied_count > 0:
+                        if not _kept_blks:
+                            result = 'Нет новых входящих для обработки (все письма уже получили ответ от AI).'
+                        else:
+                            result = _hdr2 + '\n---\n'.join(_kept_blks)
+            except Exception as _e_air:
+                logger.debug('[CHECK_EMAILS] ai_reply_sent_at filter failed: %s', _e_air)
+
+        # Кешируем результат (2 мин) — повторный "есть новые письма?" будет мгновенным
+        try:
+            import time as _time_ce2
+            _CHECK_EMAILS_CACHE[_cache_key_ce] = (_time_ce2.time(), result)
+        except Exception:
+            pass
+        return result
+    except Exception as e:
+        logger.error(f"[CHECK_EMAILS] Error: {e}", exc_info=True)
+        return f"Ошибка при проверке почты: {e}"
+    finally:
+        if close_session:
+            session.close()
+
+    # Недостижимо — но на случай рефакторинга: кеш сохраняется только при успехе
+    # (см. ниже в блоке try: result = ...; _CHECK_EMAILS_CACHE[...] = ...)
+
+
+async def _check_emails_gmail_api(token_data: dict, limit: int, user, session, known_emails: set = None, my_emails: set = None, outreach_map: dict = None, registered_emails: set = None) -> str:
+    """Читает входящие через Gmail API v1."""
+    import base64 as _b64_r
+    import json as _jsn_r
+    import datetime as _dt_r
+    from config import GOOGLE_CLIENT_ID as _GCI_r, GOOGLE_CLIENT_SECRET as _GCS_r
+
+    access_token = token_data.get('access_token', '')
+    refresh_token = token_data.get('refresh_token', '')
+    gmail_email = token_data.get('email', '')
+
+    async def _refresh():
+        nonlocal access_token
+        if not refresh_token or not _GCI_r or not _GCS_r:
+            return False
+        try:
+            async with _safe_http() as _h:
+                _r = await _h.post(
+                    'https://oauth2.googleapis.com/token',
+                    data={
+                        'client_id': _GCI_r,
+                        'client_secret': _GCS_r,
+                        'refresh_token': refresh_token,
+                        'grant_type': 'refresh_token',
+                    },
+                    timeout=aiohttp.ClientTimeout(total=10),
+                )
+                _rd = await _r.json()
+                if 'access_token' in _rd:
+                    access_token = _rd['access_token']
+                    new_tok = dict(token_data)
+                    new_tok['access_token'] = access_token
+                    new_tok['saved_at'] = _dt_r.datetime.utcnow().isoformat()
+                    from config import encrypt_token as _et_r
+                    user.google_oauth_token = _et_r(_jsn_r.dumps(new_tok))
+                    try:
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                    return True
+        except Exception as _re:
+            logger.warning(f'[CHECK_EMAILS_GMAIL] Token refresh error: {_re}')
+        return False
+
+    async def _fetch(tok):
+        async with _safe_http() as _h:
+            # Список последних писем
+            _resp = await _h.get(
+                'https://gmail.googleapis.com/gmail/v1/users/me/messages',
+                headers={'Authorization': f'Bearer {tok}'},
+                params={'maxResults': str(limit), 'labelIds': 'INBOX'},
+                timeout=aiohttp.ClientTimeout(total=15),
+            )
+            if _resp.status == 401:
+                return None  # need refresh
+            _data = await _resp.json()
+            msgs = _data.get('messages', [])
+            if not msgs:
+                return "Входящих писем нет."
+
+            results = []
+            skipped_known_g = []
+            import re as _re_gm
+            import base64 as _b64_gm
+
+            def _gmail_extract_body(payload: dict) -> str:
+                """Рекурсивно извлекает text/plain (или text/html) из Gmail payload."""
+                import re as _re_body
+                mime = payload.get('mimeType', '')
+                parts = payload.get('parts', [])
+                body_data = payload.get('body', {}).get('data', '')
+                if mime == 'text/plain' and body_data:
+                    try:
+                        return _b64_gm.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace').strip()
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                if mime == 'text/html' and body_data:
+                    try:
+                        raw = _b64_gm.urlsafe_b64decode(body_data + '==').decode('utf-8', errors='replace')
+                        return _re_body.sub(r'<[^>]+>', '', raw).strip()
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                # Рекурсивно искать text/plain среди parts
+                for part in parts:
+                    if part.get('mimeType') == 'text/plain':
+                        _d = part.get('body', {}).get('data', '')
+                        if _d:
+                            try:
+                                return _b64_gm.urlsafe_b64decode(_d + '==').decode('utf-8', errors='replace').strip()
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
+                # Fallback: text/html
+                for part in parts:
+                    if part.get('mimeType') == 'text/html':
+                        _d = part.get('body', {}).get('data', '')
+                        if _d:
+                            try:
+                                raw = _b64_gm.urlsafe_b64decode(_d + '==').decode('utf-8', errors='replace')
+                                return _re_body.sub(r'<[^>]+>', '', raw).strip()
+                            except Exception as _e:
+                                logger.debug("suppressed: %s", _e)
+                    # multipart вложенные
+                    if part.get('parts'):
+                        _sub = _gmail_extract_body(part)
+                        if _sub:
+                            return _sub
+                return ''
+
+            # Параллельный fetch всех сообщений — вместо последовательного (экономия ~5-10с)
+            async def _fetch_one_msg(msg_ref):
+                try:
+                    r = await _h.get(
+                        f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_ref['id']}",
+                        headers={'Authorization': f'Bearer {tok}'},
+                        params={'format': 'full'},
+                        timeout=aiohttp.ClientTimeout(total=15),
+                    )
+                    if r.status != 200:
+                        return None
+                    return await r.json()
+                except Exception:
+                    return None
+
+            import asyncio as _aio_gm
+            msgs_data = await _aio_gm.gather(*[_fetch_one_msg(m) for m in msgs[:limit]])
+
+            for msg_data in msgs_data:
+                if not msg_data:
+                    continue
+                headers = {h['name']: h['value'] for h in msg_data.get('payload', {}).get('headers', [])}
+                # Извлекаем полный текст тела письма (приоритет: body_text > snippet)
+                body_text = _gmail_extract_body(msg_data.get('payload', {}))
+                snippet = body_text[:3000] if body_text else msg_data.get('snippet', '')[:500]
+                from_hdr = headers.get('From', '?')
+                # Фильтруем письма от собственных аккаунтов (копии исходящих)
+                _gm_ems = _re_gm.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_hdr, _re_gm.IGNORECASE)
+                _gm_em_low = _gm_ems[0].lower() if _gm_ems else ''
+                if my_emails and _gm_em_low and _gm_em_low in my_emails:
+                    continue
+                # Помечаем известные контакты — но НЕ скрываем их письма
+                _is_known = known_emails and _gm_em_low and _gm_em_low in known_emails
+                _is_registered = registered_emails and _gm_em_low and _gm_em_low in registered_emails
+                if _is_known:
+                    skipped_known_g.append(from_hdr)
+                _known_badge = "[зарегистрированный пользователь] " if _is_registered else ("[email-контакт, не зарегистрирован в сервисе] " if _is_known else "")
+                _gm_outreach_ctx = ""
+                if outreach_map and _gm_em_low and _gm_em_low in outreach_map:
+                    _goc = outreach_map[_gm_em_low]
+                    _goc_agent = _goc.get("sent_by_agent") or "наш агент"
+                    _goc_date = _goc["sent_at"].strftime("%d.%m") if _goc.get("sent_at") else "?"
+                    _goc_subj = (_goc.get("subject") or "")[:50]
+                    _gm_outreach_ctx = (f"\n⚡ ИСХОДЯЩИЙ OUTREACH (outreach_id={_goc['outreach_id']}): "
+                                        f"{_goc_agent} писал(а) этому контакту {_goc_date}, тема: «{_goc_subj}». "
+                                        f"⚠️ Отвечать ДОЛЖЕН(А) {_goc_agent} — переписку ведёт тот агент, кто начал диалог. "
+                                        f"Используй reply_to_outreach_email(outreach_id={_goc['outreach_id']})")
+                results.append(
+                    f"От: {_known_badge}{from_hdr}\n"
+                    f"Тема: {headers.get('Subject', '(без темы)')}\n"
+                    f"Дата: {headers.get('Date', '?')}\n"
+                    f"Превью: {snippet}{_gm_outreach_ctx}\n"
+                )
+            if not results:
+                return "Входящих писем нет."
+            _known_count = len(skipped_known_g)
+            _known_note = (f"\n⚠️ Примечание: {_known_count} из них помечены [email-контакт]. "
+                           f"Проверяй бейдж: [зарегистрированный пользователь] = есть в сервисе, "
+                           f"[email-контакт, не зарегистрирован в сервисе] = только в контактах." if _known_count else "")
+            return (f"Входящие ({gmail_email}, {len(results)} писем){_known_note}:\n\n"
+                    + "\n---\n".join(results))
+
+    result = await _fetch(access_token)
+    if result is None:
+        # Token expired → refresh
+        if await _refresh():
+            result = await _fetch(access_token)
+        if result is None:
+            return "Не удалось авторизоваться в Gmail. Пользователю нужно переподключить Google OAuth."
+    return result
+
+
+async def _check_emails_imap(integration: dict, limit: int, known_emails: set = None, my_emails: set = None, outreach_map: dict = None, registered_emails: set = None) -> str:
+    """Читает входящие через IMAP (Яндекс, Mail.ru, Gmail app-password)."""    
+    import asyncio
+    import imaplib
+    import email as _email_mod
+    from email.header import decode_header as _dh
+
+    label = integration.get('label', 'Email')
+    email_user = integration.get('email_user', '')
+
+    # Определяем IMAP-сервер
+    if 'gmail' in label.lower() or 'gmail' in email_user.lower():
+        imap_host = 'imap.gmail.com'
+    elif 'yandex' in label.lower() or 'yandex' in email_user.lower():
+        imap_host = 'imap.yandex.ru'
+    elif 'mail.ru' in label.lower() or 'mail.ru' in email_user.lower():
+        imap_host = 'imap.mail.ru'
+    else:
+        imap_host = integration.get('smtp_host', '').replace('smtp.', 'imap.')
+
+    email_pass = integration.get('email_pass', '').replace(' ', '')
+    if not email_pass:
+        svc = 'GMAIL_PASS' if 'gmail' in (email_user or label or '').lower() else 'YANDEX_PASS или MAILRU_PASS'
+        return (f"Для чтения входящих через IMAP нужен пароль приложения. "
+                f"Настрой {svc} в настройках агента на дашборде.")
+
+    def _decode_subj(raw):
+        parts = _dh(raw)
+        result = []
+        for data, charset in parts:
+            if isinstance(data, bytes):
+                result.append(data.decode(charset or 'utf-8', errors='replace'))
+            else:
+                result.append(str(data))
+        return ' '.join(result)
+
+    def _imap_fetch():
+        mail = None
+        try:
+            mail = imaplib.IMAP4_SSL(imap_host, 993, timeout=15)
+            mail.login(email_user, email_pass)
+            mail.select('INBOX', readonly=True)
+            _status, _nums = mail.search(None, 'ALL')
+            if _status != 'OK' or not _nums[0]:
+                return "Входящих писем нет."
+            ids = _nums[0].split()
+            ids = ids[-limit:]  # последние N
+            ids.reverse()
+
+            results = []
+            skipped_known = []
+            import re as _re_imap
+            for mid in ids:
+                _s, _d = mail.fetch(mid, '(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])')
+                if _s != 'OK':
+                    continue
+                raw_header = _d[0][1] if _d[0] and len(_d[0]) > 1 else b''
+                msg = _email_mod.message_from_bytes(raw_header)
+                from_addr = msg.get('From', '?')
+                subject = _decode_subj(msg.get('Subject', '(без темы)'))
+                date = msg.get('Date', '?')
+
+                # Фильтруем уже-известные контакты
+                _from_ems = _re_imap.findall(r'[\w\.\+\-]+@[\w\-]+\.[a-z]{2,10}', from_addr, _re_imap.IGNORECASE)
+                _from_low = _from_ems[0].lower() if _from_ems else ''
+
+                # Пропускаем письма от собственных аккаунтов (копии исходящих, тесты)
+                if my_emails and _from_low and _from_low in my_emails:
+                    continue
+
+                # Помечаем известные контакты — но НЕ скрываем их письма
+                _is_known_imap = known_emails and _from_low and _from_low in known_emails
+                _is_registered_imap = registered_emails and _from_low and _from_low in registered_emails
+                if _is_known_imap:
+                    skipped_known.append(from_addr)
+
+                # Snippet: фетчим начало полного письма и парсим через email-модуль.
+                # BODY.PEEK[TEXT] для multipart возвращает сырой MIME с boundary-строками
+                # вместо текста — поэтому используем BODY.PEEK[] + email.message_from_bytes.
+                _st, _dt2 = mail.fetch(mid, '(BODY.PEEK[]<0.5000>)')
+                snippet = ''
+                if _st == 'OK' and _dt2[0] and len(_dt2[0]) > 1:
+                    raw_full = _dt2[0][1]
+                    try:
+                        _parsed = _email_mod.message_from_bytes(raw_full)
+                        if _parsed.is_multipart():
+                            # Ищем text/plain часть
+                            for _part in _parsed.walk():
+                                if (_part.get_content_type() == 'text/plain'
+                                        and 'attachment' not in str(_part.get('Content-Disposition', ''))):
+                                    _pay = _part.get_payload(decode=True)
+                                    if _pay:
+                                        _cs = _part.get_content_charset() or 'utf-8'
+                                        for _enc in (_cs, 'utf-8', 'windows-1252', 'latin-1'):
+                                            try:
+                                                snippet = _pay.decode(_enc, errors='strict').strip()[:400]
+                                                break
+                                            except (UnicodeDecodeError, LookupError):
+                                                continue
+                                        else:
+                                            snippet = _pay.decode('latin-1', errors='replace').strip()[:400]
+                                        break
+                            # Fallback: text/html → убираем теги через html.parser
+                            if not snippet:
+                                for _part in _parsed.walk():
+                                    if _part.get_content_type() == 'text/html':
+                                        _pay = _part.get_payload(decode=True)
+                                        if _pay:
+                                            _cs = _part.get_content_charset() or 'utf-8'
+                                            try:
+                                                _htxt = _pay.decode(_cs, errors='replace')
+                                            except (LookupError, UnicodeDecodeError):
+                                                _htxt = _pay.decode('latin-1', errors='replace')
+                                            try:
+                                                from html.parser import HTMLParser as _HHP
+                                                class _HTE(_HHP):
+                                                    def __init__(self):
+                                                        super().__init__(convert_charrefs=True)
+                                                        self._o = []; self._s = 0
+                                                    def handle_starttag(self, tag, attrs):
+                                                        if tag in ('style','script','head','title'): self._s += 1
+                                                    def handle_endtag(self, tag):
+                                                        if tag in ('style','script','head','title'): self._s = max(0, self._s - 1)
+                                                    def handle_data(self, data):
+                                                        if not self._s: self._o.append(data)
+                                                _hte = _HTE(); _hte.feed(_htxt)
+                                                snippet = ' '.join(_hte._o).strip()[:400]
+                                            except Exception:
+                                                import re as _re_htm
+                                                snippet = _re_htm.sub(r'<[^>]+>', ' ', _htxt).strip()[:400]
+                                            break
+                        else:
+                            _pay = _parsed.get_payload(decode=True)
+                            if _pay:
+                                _cs = _parsed.get_content_charset() or 'utf-8'
+                                try:
+                                    snippet = _pay.decode(_cs, errors='replace').strip()[:400]
+                                except (LookupError, UnicodeDecodeError):
+                                    snippet = _pay.decode('latin-1', errors='replace').strip()[:400]
+                    except Exception:
+                        # Крайний fallback: вырезаем MIME boundary вручную
+                        try:
+                            import re as _re_mime
+                            _raw_s = raw_full.decode('utf-8', errors='replace')
+                            _raw_s = _re_mime.sub(r'--[A-Za-z0-9_\-]{6,}[^\n]*\n?', '', _raw_s)
+                            _raw_s = _re_mime.sub(r'Content-[A-Za-z\-]+:[^\n]*\n?', '', _raw_s)
+                            snippet = _raw_s.strip()[:3000]
+                        except Exception:
+                            snippet = ''
+                # Храним полный текст (до 3000 символов) для reply_text в БД
+                _known_badge_imap = "[зарегистрированный пользователь] " if _is_registered_imap else ("[email-контакт, не зарегистрирован в сервисе] " if _is_known_imap else "")
+                _im_outreach_ctx = ""
+                if outreach_map and _from_low and _from_low in outreach_map:
+                    _ioc = outreach_map[_from_low]
+                    _ioc_agent = _ioc.get("sent_by_agent") or "наш агент"
+                    _ioc_date = _ioc["sent_at"].strftime("%d.%m") if _ioc.get("sent_at") else "?"
+                    _ioc_subj = (_ioc.get("subject") or "")[:50]
+                    _im_outreach_ctx = (f"\n⚡ ИСХОДЯЩИЙ OUTREACH (outreach_id={_ioc['outreach_id']}): "
+                                        f"{_ioc_agent} писал(а) этому контакту {_ioc_date}, тема: «{_ioc_subj}». "
+                                        f"⚠️ Отвечать ДОЛЖЕН(А) {_ioc_agent} — переписку ведёт тот агент, кто начал диалог. "
+                                        f"Используй reply_to_outreach_email(outreach_id={_ioc['outreach_id']})")
+                results.append(
+                    f"От: {_known_badge_imap}{from_addr}\n"
+                    f"Тема: {subject}\n"
+                    f"Дата: {date}\n"
+                    f"Превью: {snippet}{_im_outreach_ctx}\n"
+                )
+            if not results:
+                return "Входящих писем нет."
+            _known_cnt = len(skipped_known)
+            _known_n = (f"\n⚠️ Примечание: {_known_cnt} из них помечены [email-контакт]. "
+                        f"Проверяй бейдж: [зарегистрированный пользователь] = есть в сервисе, "
+                        f"[email-контакт, не зарегистрирован в сервисе] = только в контактах." if _known_cnt else "")
+            return (f"Входящие ({email_user}, {len(results)} писем){_known_n}:\n\n"
+                    + "\n---\n".join(results))
+        except imaplib.IMAP4.error as e:
+            return f"Ошибка IMAP ({label}): {e}. Проверь пароль приложения."
+        except Exception as e:
+            return f"Ошибка при чтении почты ({label}): {e}"
+        finally:
+            if mail is not None:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
+
+    return await asyncio.wait_for(
+        asyncio.get_running_loop().run_in_executor(None, _imap_fetch),
+        timeout=60.0,
+    )
+
+
+async def send_email(
+    to: str = None,
+    subject: str = None,
+    body: str = None,
+    sender_name: str = None,
+    sender_email: str = None,
+    from_account: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Отправить одиночное email-сообщение.
+
+    Требует подключённой почты пользователя (Gmail/Яндекс/Mail.ru) или личного
+    Resend-ключа. Платформенный email НЕ используется.
+    Универсальный инструмент — предложение, вопрос, напоминание,
+    благодарность, что угодно. НЕ связан с кампаниями.
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        import aiohttp as _aiohttp
+
+        if not to:
+            return " Укажи email получателя (to)."
+        if not subject:
+            return " Укажи тему письма (subject)."
+        if not body:
+            return " Нужен текст письма (body)."
+
+        # Sanitize token hallucinations
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        body = sanitize_token_hallucinations(body)
+        subject = sanitize_token_hallucinations(subject)
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден."
+
+        # ── Проверяем почтовые интеграции пользователя ──────────────────────
+        _email_integrations = _get_user_email_integrations(user, session)
+        _chosen_integration = None
+
+        if _email_integrations:
+            if len(_email_integrations) == 1:
+                # Одна интеграция — используем автоматически
+                _chosen_integration = _email_integrations[0]
+            elif from_account:
+                # Пользователь уточнил откуда отправить
+                _fa = from_account.strip().lower()
+                for _intg in _email_integrations:
+                    if _fa in _intg['email_user'].lower() or _fa in _intg['label'].lower():
+                        _chosen_integration = _intg
+                        break
+                if not _chosen_integration:
+                    _list = ', '.join(f"{i['label']} ({i['email_user']})" for i in _email_integrations)
+                    return f" Аккаунт '{from_account}' не найден среди подключённых почт. Доступные: {_list}"
+            else:
+                # Несколько интеграций — Gmail OAuth в приоритете, затем SMTP
+                _oauth_integrations = [i for i in _email_integrations if i.get('type') == 'gmail_oauth']
+                if _oauth_integrations:
+                    _chosen_integration = _oauth_integrations[0]
+                else:
+                    _smtp_integrations = [i for i in _email_integrations if i.get('type') == 'smtp']
+                    if len(_smtp_integrations) == 1:
+                        _chosen_integration = _smtp_integrations[0]
+                    elif len(_smtp_integrations) > 1:
+                        _list = '\n'.join(
+                            f"• {i['label']}: {i['email_user']}" for i in _smtp_integrations
+                        )
+                        return (
+                            f"У тебя подключено несколько почтовых аккаунтов:\n{_list}\n\n"
+                            f"С какого адреса отправить письмо?"
+                        )
+                    else:
+                        # Нет личной почты — берём первый Resend без вопроса
+                        _chosen_integration = _email_integrations[0]
+
+        if not _chosen_integration:
+            return (
+                " Не настроена почтовая интеграция. "
+                "Добавь в настройках агента одно из:\n"
+                "• Gmail: GMAIL_USER=you@gmail.com и GMAIL_PASS=xxxx xxxx xxxx xxxx\n"
+                "• Яндекс: YANDEX_USER=you@yandex.ru и YANDEX_PASS=...\n"
+                "• Mail.ru: MAILRU_USER=you@mail.ru и MAILRU_PASS=...\n"
+                "• Resend: RESEND_API_KEY=re_... и RESEND_FROM=noreply@твой-домен.com"
+            )
+
+        # Fallback sender
+        if not sender_name:
+            sender_name = user.first_name or user.username or 'Team'
+        # Всегда использовать email из интеграции (не из параметров ИИ)
+        sender_email = _chosen_integration['email_user']
+        # Нормализация адресата
+        to_clean = to.strip().lower()
+        if not to_clean or '@' not in to_clean:
+            return f" Некорректный email получателя: {to!r}. Укажи адрес в формате name@domain.com"
+
+        # ── GUARD: не отправлять email самому себе (user.email / IMAP-аккаунт агента) ──
+        _own_emails_se = set()
+        _user_email_se = (getattr(user, 'email', '') or '').strip().lower()
+        if _user_email_se:
+            _own_emails_se.add(_user_email_se)
+        try:
+            from models import UserAgent as _UA_se
+            for _ag_se in session.query(_UA_se).filter(
+                _UA_se.author_id == user.id,
+                _UA_se.user_api_keys.isnot(None),
+            ).all():
+                for _ln_se in (_ag_se.user_api_keys or '').splitlines():
+                    _ln_se = _ln_se.strip()
+                    if _ln_se.upper().startswith(('GMAIL_USER=', 'IMAP_USER=')):
+                        _v = _ln_se.split('=', 1)[1].strip().lower()
+                        if _v and '@' in _v:
+                            _own_emails_se.add(_v)
+        except Exception:
+            pass
+        if to_clean in _own_emails_se:
+            return (f"⛔ {to_clean} — это ваша собственная почта или IMAP-аккаунт агента. "
+                    f"Нельзя отправлять email самому себе. Найди email реального получателя.")
+
+        # ── GUARD: фейковый / generic / сервисный email ──
+        if _is_generic_email(to_clean):
+            return f"⛔ {to_clean} — фейковый или generic email. Найди реальный email получателя через поиск или контакты."
+
+        # ── GUARD: дубликат — не слать тому же адресату чаще 1 раза за 4 часа ──
+        try:
+            from models import EmailOutreach as _EO_dup
+            _dup_cut = datetime.now(timezone.utc) - timedelta(hours=4)
+            _dup_sess = session
+            _dup_close = False
+            if _dup_sess is None:
+                _dup_sess = Session()
+                _dup_close = True
+            try:
+                _dup_cnt = _dup_sess.query(func.count(_EO_dup.id)).filter(
+                    _EO_dup.user_id == user.id,
+                    func.lower(_EO_dup.recipient_email) == to_clean,
+                    _EO_dup.sent_at >= _dup_cut,
+                ).scalar() or 0
+            finally:
+                if _dup_close:
+                    _dup_sess.close()
+            if _dup_cnt > 0:
+                return f"⛔ {to_clean} уже получал письмо менее 4ч назад. Подожди или выбери другого получателя."
+        except Exception as _dup_e:
+            logger.debug("send_email dup check: %s", _dup_e)
+
+        # Telegram link в подписи (plain-text, безопасно для всех типов писем)
+        _tg_lnk = _get_email_tg_link(user)
+        if _tg_lnk and _tg_lnk not in body:
+            body = body.rstrip() + f'\n{_tg_lnk}'
+
+        # ── Gmail OAuth: прямая отправка через Gmail API ──────────────────────
+        if _chosen_integration.get('type') == 'gmail_oauth':
+            _goa_ok, _goa_result = await _send_via_gmail_api(
+                _chosen_integration['token_data'], to_clean, subject, body,
+                sender_name, user, session,
+            )
+            if not _goa_ok:
+                return f" Ошибка отправки (Gmail OAuth): {_goa_result}"
+            _gmail_from = _goa_result  # email пользователя
+            try:
+                from models import EmailOutreach as _EO_log_g
+                from models import EmailCampaign as _EC_log_g
+                import datetime as _dt_mod_g
+                _now_g = _dt_mod_g.datetime.now(_dt_mod_g.timezone.utc)
+                _camp_g = session.query(_EC_log_g).filter_by(
+                    user_id=user.id, status='personal', sender_email=_gmail_from,
+                ).first()
+                if not _camp_g:
+                    _camp_g = _EC_log_g(
+                        user_id=user.id, name='Личная почта (Gmail OAuth)',
+                        goal='', target_audience='', offer='',
+                        sender_name=sender_name, sender_email=_gmail_from,
+                        status='personal', daily_limit=50, max_emails=0,
+                        emails_sent=0, emails_replied=0,
+                    )
+                    session.add(_camp_g)
+                    session.flush()
+                _eo_g = session.query(_EO_log_g).filter_by(
+                    campaign_id=_camp_g.id, recipient_email=to_clean,
+                ).first()
+                if _eo_g:
+                    _eo_g.subject = subject; _eo_g.body = body
+                    _eo_g.status = 'sent'; _eo_g.sent_at = _now_g
+                else:
+                    session.add(_EO_log_g(
+                        campaign_id=_camp_g.id, user_id=user.id,
+                        recipient_email=to_clean, subject=subject, body=body,
+                        sender_email=_gmail_from, status='sent', sent_at=_now_g,
+                    ))
+                    _camp_g.emails_sent = (_camp_g.emails_sent or 0) + 1
+                session.commit()
+            except Exception as _log_err_goa:
+                logger.warning(f'[SEND_EMAIL] Campaign log (gmail_oauth) error: {_log_err_goa}')
+                try: session.rollback()
+                except Exception: pass
+            # Не создаем AgentActivityLog - письмо уже залогировано в EmailOutreach кампании
+            return f" Письмо отправлено с {_gmail_from} на {to_clean} через Gmail"
+
+        # ── Gmail server (пароль приложения) → серверный Resend + Reply-To ───
+        # (SMTP Gmail заблокирован Railway; пользователь не привязал OAuth)
+        if _chosen_integration.get('type') == 'gmail_server':
+            from config import RESEND_API_KEY as _srv_rk
+            if not _srv_rk:
+                return " Серверный Resend не настроен (RESEND_API_KEY)."
+            _gmail_reply_to = (_chosen_integration.get('reply_to')
+                               or _chosen_integration.get('email_user', '')
+                               or (user.first_name or ''))
+            _gmail_json = {
+                'from': f"{sender_name} <outreach@asibiont.com>",
+                'to': [to_clean],
+                'subject': subject,
+                'text': body,
+            }
+            try:
+                _gmail_json['html'] = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+            except Exception as _e:
+                logger.debug("suppressed: %s", _e)
+            if _gmail_reply_to and '@' in _gmail_reply_to:
+                _gmail_json['reply_to'] = [_gmail_reply_to]
+            try:
+                async with _safe_http() as _gm_http:
+                    _gm_resp = await _gm_http.post(
+                        'https://api.resend.com/emails',
+                        headers={'Authorization': f'Bearer {_srv_rk}', 'Content-Type': 'application/json'},
+                        json=_gmail_json,
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    _gm_data = await _gm_resp.json()
+                    if _gm_resp.status not in (200, 201):
+                        return f" Ошибка отправки (Gmail через сервер): {_gm_data.get('message', str(_gm_data))}"
+            except Exception as _gm_e:
+                return f" Ошибка отправки (Gmail): {_gm_e}"
+            logger.info(f'[SEND_EMAIL] Sent via server Resend (Gmail Reply-To: {_gmail_reply_to}) to {to_clean}')
+            try:
+                from models import EmailOutreach as _EO_log_g
+                from models import EmailCampaign as _EC_log_g
+                import datetime as _dt_mod_g
+                _now_g = _dt_mod_g.datetime.now(_dt_mod_g.timezone.utc)
+                # Ищем личную кампанию для этого gmail-адреса отправителя
+                _camp_g = session.query(_EC_log_g).filter_by(
+                    user_id=user.id, status='personal',
+                    sender_email=_gmail_reply_to
+                ).first()
+                if not _camp_g:
+                    _camp_g = _EC_log_g(
+                        user_id=user.id, name='Личная почта',
+                        goal='', target_audience='', offer='',
+                        sender_name=sender_name, sender_email=_gmail_reply_to,
+                        status='personal', daily_limit=50, max_emails=0,
+                        emails_sent=0, emails_replied=0,
+                    )
+                    session.add(_camp_g)
+                    session.flush()
+                # Обновляем существующий outreach или создаём новый
+                # (уникальный индекс: campaign_id + recipient_email)
+                _eo_g = session.query(_EO_log_g).filter_by(
+                    campaign_id=_camp_g.id, recipient_email=to_clean
+                ).first()
+                if _eo_g:
+                    _eo_g.subject = subject
+                    _eo_g.body = body
+                    _eo_g.status = 'sent'
+                    _eo_g.sent_at = _now_g
+                else:
+                    session.add(_EO_log_g(
+                        campaign_id=_camp_g.id, user_id=user.id,
+                        recipient_email=to_clean, subject=subject, body=body,
+                        status='sent', sent_at=_now_g,
+                    ))
+                    _camp_g.emails_sent = (_camp_g.emails_sent or 0) + 1
+                session.commit()
+            except Exception as _log_err_g:
+                logger.warning(f'[SEND_EMAIL] Campaign log error: {_log_err_g}')
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+            # Не создаем AgentActivityLog - письмо уже залогировано в EmailOutreach кампании
+            _reply_hint = f" (ответы придут на {_gmail_reply_to})" if _gmail_reply_to and '@' in _gmail_reply_to else ''
+            return f" Письмо отправлено на {to_clean} (Gmail){_reply_hint}"
+
+        # Для Resend: проверяем что from-адрес задан и валиден
+        if _chosen_integration.get('type') == 'resend' and '@' not in (sender_email or ''):
+            return (
+                " Для Resend не задан адрес отправителя.\n"
+                "Добавь в настройках агента: RESEND_FROM=noreply@твой-домен.com\n"
+                "(домен должен быть верифицирован в Resend dashboard)"
+            )
+
+        # Нормализация: удалить пробелы, lowercase
+        to_clean = to.strip().lower()
+
+        # MX-проверка домена
+        mx_valid, mx_err = _validate_email_domain(to_clean)
+        if not mx_valid:
+            return f" {mx_err}"
+
+        # Простой дневной лимит для прямых писем: 50 отправок/день
+        from models import EmailOutreach as _EO_check
+        from datetime import datetime as _dt_limit, timezone as _tz_limit
+        import pytz as _pytz_limit
+        _user_tz_p = _pytz_limit.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+        _today_start = _dt_limit.now(_user_tz_p).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_tz_limit.utc)
+        from sqlalchemy import func as _func_limit
+        _sent_today = session.query(_func_limit.count(_EO_check.id)).filter(
+            _EO_check.user_id == user.id,
+            _EO_check.sent_at >= _today_start,
+        ).scalar() or 0
+        if _sent_today >= 50:
+            return f" Достигнут дневной лимит: {_sent_today} писем отправлено сегодня (макс. 50). Продолжим завтра."
+
+
+        from config import WEB_APP_URL
+        _unsub_url = f"{WEB_APP_URL}/terms#unsubscribe"
+
+        resend_id = ''
+        try:
+            if _chosen_integration and _chosen_integration.get('type') == 'smtp':
+                # ── Отправка через личную почту пользователя (SMTP) ────────
+                import smtplib as _smtplib
+                from email.mime.text import MIMEText as _MIMEText
+                from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+                import asyncio as _aio_smtp
+
+                _smtp_host = _chosen_integration['smtp_host']
+                _smtp_port = _chosen_integration['smtp_port']
+                _smtp_user = _chosen_integration['email_user']
+                _smtp_pass = _chosen_integration['email_pass'].replace(' ', '')
+                _from_label = _chosen_integration['label']
+
+                def _smtp_send_personal():
+                    import ssl as _ssl
+                    msg = _MIMEMultipart('alternative')
+                    msg['From'] = f"{sender_name} <{_smtp_user}>"
+                    msg['To'] = to_clean
+                    msg['Subject'] = subject
+                    msg.attach(_MIMEText(body, 'plain', 'utf-8'))
+                    try:
+                        _html_smtp = _build_email_html(_text_to_email_html(body), sender_name=sender_name)
+                        msg.attach(_MIMEText(_html_smtp, 'html', 'utf-8'))
+                    except Exception as _e:
+                        logger.debug("suppressed: %s", _e)
+                    _ssl_ctx = _ssl.create_default_context()
+                    # STARTTLS (порт 587) — работает на Railway.
+                    # Порт 465 (SMTP_SSL) блокируется хостингом на уровне сети.
+                    with _smtplib.SMTP(_smtp_host, _smtp_port, timeout=30) as s:
+                        s.ehlo()
+                        s.starttls(context=_ssl_ctx)
+                        s.ehlo()
+                        s.login(_smtp_user, _smtp_pass)
+                        s.sendmail(_smtp_user, to_clean, msg.as_string())
+
+                loop = _aio_smtp.get_running_loop()
+                # Перед SMTP пробуем Gmail OAuth если текущая интеграция — не oauth,
+                # но oauth доступен (на случай если выбрали SMTP а oauth есть)
+                _smtp_net_err = None  # сетевая ошибка → будет Resend fallback
+                try:
+                    await _aio_smtp.wait_for(
+                        loop.run_in_executor(None, _smtp_send_personal),
+                        timeout=35.0
+                    )
+                except _aio_smtp.TimeoutError:
+                    _smtp_net_err = f"Таймаут ({_from_label}): сервер не ответил за 35 сек."
+                except Exception as _smtp_err:
+                    _smtp_msg = str(_smtp_err)
+                    # Gmail: 535 = неверный app password — это не сетевая ошибка, сразу возвращаем
+                    if '535' in _smtp_msg or 'Username and Password not accepted' in _smtp_msg:
+                        return (
+                            f" Gmail не принял пароль. Нужен App Password, а не обычный пароль.\n"
+                            f"Зайди в Google Account → Security → App Passwords → создай пароль для 'Mail'.\n"
+                            f"Вставь его в настройки агента: GMAIL_PASS=xxxx xxxx xxxx xxxx"
+                        )
+                    _smtp_net_err = f"{_from_label}: {_smtp_msg}"
+
+                if _smtp_net_err:
+                    # ── Автоматический fallback на Resend (Railway блокирует SMTP) ──
+                    logger.warning(f"[SEND_EMAIL] SMTP failed ({_smtp_net_err}), trying Resend fallback")
+                    # 1. Ищем Resend-интеграцию пользователя
+                    _resend_fallback_key = None
+                    _resend_fallback_from = None
+                    for _ri in _email_integrations:
+                        if _ri.get('type') == 'resend' and _ri.get('resend_key') and _ri.get('email_user') and '@' in _ri['email_user']:
+                            _resend_fallback_key = _ri['resend_key']
+                            _resend_fallback_from = _ri['email_user']
+                            break
+                    if _resend_fallback_key and _resend_fallback_from:
+                        try:
+                            async with _safe_http() as _fb_http:
+                                _fb_resp = await _fb_http.post(
+                                    'https://api.resend.com/emails',
+                                    headers={
+                                        'Authorization': f'Bearer {_resend_fallback_key}',
+                                        'Content-Type': 'application/json',
+                                    },
+                                    json={
+                                        'from': f"{sender_name} <{_resend_fallback_from}>",
+                                        'to': [to_clean],
+                                        'subject': subject,
+                                        'text': body,
+                                    },
+                                    timeout=_aiohttp.ClientTimeout(total=15),
+                                )
+                                _fb_data = await _fb_resp.json()
+                                if _fb_resp.status in (200, 201):
+                                    resend_id = _fb_data.get('id', '')
+                                    sender_email = _resend_fallback_from
+                                    logger.info(f'[SEND_EMAIL] Sent via Resend fallback ({_resend_fallback_from}) to {to_clean}')
+                                    # не возвращаем ошибку — письмо дошло
+                                else:
+                                    _fb_err = _fb_data.get('message', str(_fb_data))
+                                    return f" Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n Резервный Resend тоже не сработал: {_fb_err}"
+                        except Exception as _fb_exc:
+                            return f" Ошибка отправки через {_from_label} (SMTP): {_smtp_net_err}\n Резервный Resend тоже не сработал: {_fb_exc}"
+                    else:
+                        return (
+                            f" Не удалось отправить через {_from_label} (SMTP): {_smtp_net_err}\n\n"
+                            f"Варианты решения:\n"
+                            f"• Gmail: убедись, что GMAIL_PASS — это App Password (не обычный пароль)\n"
+                            f"• Добавь Resend-интеграцию: RESEND_API_KEY=re_... и RESEND_FROM=noreply@домен.com"
+                        )
+                else:
+                    # Обновляем sender_email чтобы лог показывал реальный адрес
+                    sender_email = _smtp_user
+                    logger.info(f'[SEND_EMAIL] Sent via {_from_label} SMTP from {_smtp_user} to {to_clean}')
+            elif _chosen_integration.get('type') == 'resend':
+                # ── Отправка через личный Resend ключ пользователя ────────
+                _user_resend_key = _chosen_integration['resend_key']
+                async with _safe_http() as http:
+                    from_header = f"{sender_name} <{sender_email}>"
+                    resp = await http.post(
+                        'https://api.resend.com/emails',
+                        headers={
+                            'Authorization': f'Bearer {_user_resend_key}',
+                            'Content-Type': 'application/json',
+                        },
+                        json={
+                            'from': from_header,
+                            'to': [to_clean],
+                            'subject': subject,
+                            'text': body,
+                            'html': _build_email_html(_text_to_email_html(body), sender_name=sender_name),
+                            'headers': {'List-Unsubscribe': f'<{_unsub_url}>'},
+                        },
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    resp_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err = resp_data.get('message', str(resp_data))
+                        return f" Ошибка Resend API: {err}"
+                    resend_id = resp_data.get('id', '')
+                    logger.info(f'[SEND_EMAIL] Sent via user Resend from {redact_email(sender_email)} to {redact_email(to_clean)}')
+        except Exception as e:
+            return f" Ошибка отправки: {str(e)}"
+
+        # Anti-spam задержка (только для Resend, не для личного SMTP)
+        if _chosen_integration and _chosen_integration.get('type') == 'resend':
+            import asyncio as _asyncio_delay
+            await _asyncio_delay.sleep(10)
+
+        # --- Сохраняем EmailOutreach для трекинга ответов через webhook ---
+        try:
+            from models import EmailCampaign as _EmailCampaign, EmailOutreach as _EmailOutreach
+            from datetime import datetime as _dt2, timezone as _tz2
+            # Ищем скрытую служебную кампанию для личных писем (status='personal')
+            # НЕ используем активные кампании — они принадлежат пользователю
+            campaign = session.query(_EmailCampaign).filter_by(
+                user_id=user.id, status='personal'
+            ).first()
+            if not campaign:
+                campaign = _EmailCampaign(
+                    user_id=user.id,
+                    name='Личная почта',
+                    goal='Служебная запись для личных писем',
+                    target_audience='',
+                    offer='',
+                    sender_name=sender_name,
+                    sender_email=sender_email,
+                    status='personal',  # скрыто от UI и ИИ
+                    daily_limit=50,
+                    max_emails=0,
+                )
+                session.add(campaign)
+                session.flush()
+            now_utc = _dt2.now(_tz2.utc)
+            # Обновляем или создаём запись outreach (unique: campaign_id + recipient_email)
+            _eo_existing = session.query(_EmailOutreach).filter_by(
+                campaign_id=campaign.id, recipient_email=to_clean
+            ).first()
+            if _eo_existing:
+                _eo_existing.subject = subject
+                _eo_existing.body = body
+                _eo_existing.status = 'sent'
+                _eo_existing.sent_at = now_utc
+                if resend_id:
+                    _eo_existing.resend_id = resend_id
+                _eo_saved = _eo_existing
+            else:
+                _eo_new = _EmailOutreach(
+                    campaign_id=campaign.id,
+                    user_id=user.id,
+                    recipient_email=to_clean,
+                    subject=subject,
+                    body=body,
+                    status='sent',
+                    resend_id=resend_id,
+                    sent_at=now_utc,
+                )
+                session.add(_eo_new)
+                campaign.emails_sent = (campaign.emails_sent or 0) + 1
+                _eo_saved = _eo_new
+            session.commit()
+            logger.info(f"[SEND_EMAIL] Outreach saved for {to_clean} (campaign #{campaign.id})")
+            # Контакт НЕ создаём при отправке — только при реальной переписке
+            # (reply_to_outreach_email, negotiate_by_email) или вручную.
+        except Exception as _e:
+            logger.warning(f"[SEND_EMAIL] Failed to save outreach record: {_e}")
+            session.rollback()
+
+        # Не создаем AgentActivityLog - письмо уже залогировано в EmailOutreach кампании со status='personal'
+        # Кампании отображаются отдельно в интерфейсе, не загромождая хронологию каждым письмом
+
+        lang = _get_lang(user_id)
+        _from_info = f' (от {sender_email})' if _chosen_integration else ''
+        if lang == 'en':
+            _from_en = f' from {sender_email}' if _chosen_integration else ''
+            return f" Email sent to {to_clean}{_from_en}\nSubject: {subject}"
+        return f" Email отправлен на {to_clean}{_from_info}\nТема: {subject}"
+    except Exception as e:
+        logger.error(f"[SEND_EMAIL] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def save_email_contact(
+    email: str = None,
+    name: str = None,
+    company: str = None,
+    position: str = None,
+    notes: str = None,
+    source: str = 'manual',
+    status: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Сохранить email-контакт в справочник пользователя."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import User, EmailContact
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        email_clean = (email or '').strip().lower()
+        if not email_clean or '@' not in email_clean:
+            return " Некорректный email"
+
+        # Блокируем фейковые/placeholder домены — агент не должен придумывать email
+        _FAKE_DOMAINS = {
+            'example.com', 'example.org', 'example.net',
+            'test.com', 'test.ru', 'test.org',
+            'fake.com', 'fake.ru', 'placeholder.com',
+            'domain.com', 'email.com', 'yourdomain.com',
+        }
+        # Домены сервисов — email не доставляется, нет смысла сохранять
+        _SERVICE_DOMAINS = {
+            'linkedin.com', 'users.noreply.github.com',
+            'reply.github.com', 'notifications.github.com',
+            'facebook.com', 'twitter.com', 'instagram.com',
+        }
+        _email_domain = email_clean.split('@')[-1] if '@' in email_clean else ''
+        if _email_domain in _FAKE_DOMAINS:
+            return (
+                f"⛔ {email_clean} — это placeholder/фейковый адрес. "
+                "Сохраняй только РЕАЛЬНЫЕ email, найденные через поиск или входящие письма. "
+                "НЕ придумывай адреса из имён пользователей."
+            )
+        if _email_domain in _SERVICE_DOMAINS:
+            return (
+                f"⛔ {email_clean} — адрес сервиса {_email_domain}, email не доставляется. "
+                "Найди реальный рабочий email этого человека через web_search."
+            )
+
+        # Блокируем generic/корпоративные адреса
+        if _is_generic_email(email_clean):
+            return f" {email_clean} — это корпоративный/generic адрес. Сохраняй только личные email конкретных людей."
+
+        # ── GUARD: не сохранять адреса собственной платформы (asibiont.com, resend bounce и т.п.) ──
+        _OWN_PLATFORM_DOMAINS = {'asibiont.com'}
+        if _email_domain in _OWN_PLATFORM_DOMAINS:
+            return f"⛔ {email_clean} — это адрес платформы ASI Biont, не внешний контакт. Не сохраняй."
+
+        # ── GUARD: не сохранять свой собственный email или IMAP-аккаунт агента ──
+        _user_email_own = (getattr(user, 'email', '') or '').strip().lower()
+        _own_emails = set()
+        if _user_email_own:
+            _own_emails.add(_user_email_own)
+        try:
+            from models import UserAgent as _UA_sec
+            for _ag_sec in session.query(_UA_sec).filter(
+                _UA_sec.author_id == user.id,
+                _UA_sec.user_api_keys.isnot(None),
+            ).all():
+                for _ln_sec in (_ag_sec.user_api_keys or '').splitlines():
+                    _ln_sec = _ln_sec.strip()
+                    if _ln_sec.upper().startswith('GMAIL_USER=') or _ln_sec.upper().startswith('IMAP_USER='):
+                        _imap_val = _ln_sec.split('=', 1)[1].strip().lower()
+                        if _imap_val and '@' in _imap_val:
+                            _own_emails.add(_imap_val)
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+        if email_clean in _own_emails:
+            return (f" Нельзя сохранять собственный адрес ({email_clean}) как контакт — "
+                    f"это ваша почта или почта агента. Найди внешний email реального человека.")
+
+        # ── GUARD: не приглашать/сохранять уже зарегистрированного пользователя платформы ──
+        _existing_platform_user = session.query(User).filter(
+            User.id != user.id,
+            User.email == email_clean,
+        ).first()
+        if _existing_platform_user:
+            return (f"⚠️ {email_clean} — уже зарегистрирован на платформе ASI Biont "
+                    f"(пользователь @{_existing_platform_user.username or _existing_platform_user.first_name or '?'}). "
+                    f"Приглашать его бессмысленно — он уже с нами. Ищи НОВЫХ людей за пределами платформы.")
+
+        # ── GUARD: не сохранять контакт с telegram_id владельца ──
+        _owner_tg_id = str(user.telegram_id) if user.telegram_id else ''
+        _owner_username = (user.username or '').strip().lower()
+        _owner_first = (user.first_name or '').strip().lower()
+        _name_clean = (name or '').strip().lower()
+        # Если имя контакта содержит telegram_id владельца — это он сам
+        if _owner_tg_id and _owner_tg_id in _name_clean:
+            return (f"⛔ Это telegram_id владельца ({_owner_tg_id}). "
+                    "Нельзя сохранять владельца как контакт. Ищи внешних людей.")
+        # Если имя точно совпадает с username или first_name владельца и email тоже его
+        if _owner_username and _name_clean == _owner_username:
+            logger.warning("[SELF-SAVE] agent tried to save owner username=%s as contact", _owner_username)
+
+        # Check duplicate
+        existing = session.query(EmailContact).filter_by(
+            user_id=user.id, email=email_clean
+        ).first()
+        if existing:
+            # Update existing
+            _prev_status = existing.status or 'new'
+            if name:
+                existing.name = name.strip()
+            if company:
+                existing.company = company.strip()
+            if position:
+                existing.position = position.strip()
+            if notes:
+                existing.notes = notes.strip()
+            if status:
+                # Запрет понижать или вручную ставить replied/interested — только система
+                _RESERVED_STATUSES = ('replied', 'interested')
+                if status in _RESERVED_STATUSES and _prev_status not in _RESERVED_STATUSES:
+                    pass  # игнорируем: агент не может вручную повысить до replied/interested
+                else:
+                    existing.status = status
+            session.commit()
+            _cur_status = existing.status or _prev_status
+            # Информативный ответ: агент видит реальное состояние и знает следующий шаг
+            _contact_label = f"{existing.name or email_clean} ({email_clean})"
+            if _cur_status == 'contacted':
+                try:
+                    import datetime as _dt_ec
+                    _age = (
+                        _dt_ec.datetime.now(_dt_ec.timezone.utc) -
+                        (existing.updated_at or existing.created_at).replace(
+                            tzinfo=getattr((existing.updated_at or existing.created_at), 'tzinfo', None) or _dt_ec.timezone.utc
+                        )
+                    ).days
+                except Exception:
+                    _age = 0
+                if _age >= 3:
+                    return (
+                        f"ℹ️ {_contact_label} — статус contacted, уже {_age} д. без ответа. "
+                        f"Стоит отправить follow-up: новый угол/ценность, не копия первого письма. "
+                        f"Используй send_outreach_email с другой темой."
+                    )
+                return (
+                    f"ℹ️ {_contact_label} — статус contacted (письмо отправлено {_age} д. назад). "
+                    f"Подожди ответа. Если не ответит через {3 - _age} д. — отправь follow-up с иным pitch."
+                )
+            if _cur_status in ('replied', 'interested'):
+                return (
+                    f"✅ {_contact_label} — статус {_cur_status}, уже в диалоге! "
+                    f"Это твой приоритет: negotiate_by_email — développe личный диалог, "
+                    f"выясни потребность, предложи конкретный следующий шаг."
+                )
+            if _cur_status == 'unsubscribed':
+                return (
+                    f"🔕 {_contact_label} — статус unsubscribed. "
+                    f"Прямые письма не нужны. Если контакт ценен — взаимодействуй через другой канал "
+                    f"(LinkedIn, сообщество, пост) или оставь для органического интереса."
+                )
+            # Статус 'new' или другой: контакт в базе, ещё не написали — это приоритет
+            return (
+                f"ℹ️ {_contact_label} уже в базе (статус: {_cur_status} — письмо не отправлялось). "
+                f"→ Следующий шаг: send_outreach_email с персональным питчем."
+            )
+
+        # Авто-определение source по контексту (если агент не указал)
+        _effective_source = source or 'manual'
+        if _effective_source in ('manual', 'outreach'):
+            _all_fields = f"{notes or ''} {company or ''} {position or ''}".lower()
+            if 'github' in _all_fields or 'repos,' in _all_fields or 'followers' in _all_fields:
+                _effective_source = 'github'
+            elif 'web_search' in _all_fields or 'найден через поиск' in _all_fields:
+                _effective_source = 'web_search'
+
+        # Статусы 'interested'/'replied' нельзя ставить вручную при создании контакта.
+        # Они устанавливаются только системой при получении реального email-ответа.
+        _MANUAL_FORBIDDEN_STATUSES = ('interested', 'replied')
+        _effective_status = status or 'new'
+        if _effective_status in _MANUAL_FORBIDDEN_STATUSES:
+            _effective_status = 'new'
+            logger.info('[SAVE_CONTACT] Blocked manual status=%s → reset to new for %s', status, email_clean)
+
+        contact = EmailContact(
+            user_id=user.id,
+            email=email_clean,
+            name=(name or '').strip() or None,
+            company=(company or '').strip() or None,
+            position=(position or '').strip() or None,
+            notes=(notes or '').strip() or None,
+            source=_effective_source,
+            # Дефолт 'new' — агент сохраняет найденный контакт, это НЕ означает что он ответил
+            status=_effective_status,
+        )
+        session.add(contact)
+        session.commit()
+        return f" Контакт сохранён: {email_clean}" + (f" ({name.strip()})" if name else "")
+    except Exception as e:
+        logger.error(f"[SAVE_EMAIL_CONTACT] Error: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def update_email_contact_status(
+    email: str = None,
+    status: str = None,
+    reason: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Обновить статус email-контакта (напр. unsubscribed) и почистить follow-up."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import User, EmailContact, EmailOutreach
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        email_clean = (email or '').strip().lower()
+        if not email_clean or '@' not in email_clean:
+            return "Некорректный email"
+        valid_statuses = ('new', 'contacted', 'replied', 'interested', 'unsubscribed', 'bounced')
+        if status not in valid_statuses:
+            return f"Некорректный статус. Допустимые: {', '.join(valid_statuses)}"
+
+        contact = session.query(EmailContact).filter_by(
+            user_id=user.id, email=email_clean
+        ).first()
+        if not contact:
+            return f"Контакт {email_clean} не найден"
+
+        old_status = contact.status
+        contact.status = status
+        if reason:
+            existing_notes = (contact.notes or '').strip()
+            contact.notes = f"{existing_notes}\n[{status}] {reason}".strip()
+
+        # При unsubscribed — отменяем все follow-up
+        if status == 'unsubscribed':
+            outreaches = session.query(EmailOutreach).filter(
+                EmailOutreach.recipient_email == email_clean,
+                EmailOutreach.user_id == user.id,
+                EmailOutreach.next_follow_up_at.isnot(None),
+            ).all()
+            for o in outreaches:
+                o.next_follow_up_at = None
+                o.status = 'unsubscribed'
+
+        session.commit()
+        msg = f"Контакт {email_clean}: {old_status} → {status}"
+        if status == 'unsubscribed':
+            msg += ". Follow-up отменены. Больше не пишем этому контакту."
+        return msg
+    except Exception as e:
+        logger.error(f"[UPDATE_EMAIL_CONTACT_STATUS] Error: {e}", exc_info=True)
+        session.rollback()
+        return f"Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def list_email_contacts(
+    status_filter: str = 'all',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Список email-контактов из справочника пользователя."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import User, EmailContact
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        query = session.query(EmailContact).filter_by(user_id=user.id)
+        if status_filter and status_filter != 'all':
+            query = query.filter_by(status=status_filter)
+        total_count = query.count()
+        contacts = query.order_by(EmailContact.created_at.desc()).limit(15).all()
+
+        if not contacts:
+            return " Справочник контактов пуст. Добавь через save_email_contact или на дашборде → Контакты."
+
+        lines = [f" Email-контакты (показано {len(contacts)} из {total_count}):"]
+        for c in contacts:
+            parts = [c.email]
+            if c.name:
+                parts.append(c.name)
+            if c.company:
+                parts.append(c.company)
+            status_emoji = {'new': '🆕', 'contacted': '', 'replied': '', 'interested': '', 'bounced': '', 'unsubscribed': ''}.get(c.status, '')
+            line = f"{status_emoji} {' — '.join(parts)}"
+            if c.notes:
+                line += f" ({c.notes[:50]})"
+            lines.append(line)
+        if total_count > 15:
+            lines.append(f"\n... и ещё {total_count - 15} контактов. Используй send_email / start_email_campaign для работы с ними.")
+        lines.append("\n⚠️ Не пересылай этот список пользователю. Используй контакты для отправки писем.")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"[LIST_EMAIL_CONTACTS] Error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def publish_to_discord(
+    content: str,
+    image_url: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+    force: bool = False,
+):
+    """ ПУБЛИКАЦИЯ В DISCORD канал пользователя через webhook.
+    Требования: discord_webhook должен быть указан в профиле (Настройки → Discord).
+    """
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        if not user.discord_webhook:
+            return (
+                " Discord webhook не настроен.\n"
+                "Чтобы публиковать в Discord канал:\n"
+                "1. Открой нужный канал в Discord → Настройки канала → Интеграции → Webhooks\n"
+                "2. Создай webhook и скопируй URL\n"
+                "3. Вставь URL в дашборде: Настройки профиля → Discord webhook\n"
+                "Ссылка: https://asibiont.com/dashboard"
+            )
+
+        if not user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
+            return " Некорректный Discord webhook URL. Убедись, что URL начинается с https://discord.com/api/webhooks/"
+
+        # ── GUARD: не публиковать внутренние отчёты в публичный канал ──
+        _content_lower = (content or '').lower()
+        _INTERNAL_MARKERS = (
+            'проверил', 'проверила', 'обновила прогресс', 'обновил прогресс',
+            'update_goal_progress', 'goal_progress', 'save_email_contact',
+            'отправил письм', 'отправила письм', 'нашёл контакт', 'нашла контакт',
+            'сохранила контакт', 'сохранил контакт', 'добавила в crm', 'добавил в crm',
+            'делегиру', 'delegate[',
+        )
+        _PUBLIC_MARKERS = (
+            'тренд', 'обзор', 'кейс', 'инсайт', 'аналитик', 'исследован',
+            'стратеги', 'индустри', 'рынок', 'технолог',
+        )
+        _has_internal = sum(1 for m in _INTERNAL_MARKERS if m in _content_lower)
+        _has_public = sum(1 for m in _PUBLIC_MARKERS if m in _content_lower)
+        if _has_internal >= 2 and _has_public == 0:
+            logger.warning('[DISCORD_GUARD] Blocked internal report from public channel: %.100s', content)
+            return (
+                "⛔ Этот текст похож на внутренний отчёт, а не на публичный пост. "
+                "Discord-канал — для аудитории: инсайты, кейсы, аналитика. "
+                "Переформулируй контент как экспертный пост для подписчиков."
+            )
+
+        # Лимит: 1 пост в Discord в день (можно обойти force=True если пользователь явно просит)
+        if not force:
+            import pytz as _pytz_dc
+            import datetime as _dt_dc
+            _utz_dc = _pytz_dc.timezone(getattr(user, 'timezone', None) or 'Europe/Moscow')
+            _today_dc = _dt_dc.datetime.now(_utz_dc).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(_pytz_dc.UTC).replace(tzinfo=None)
+            try:
+                from models import AgentActivityLog as _AAL
+                _discord_today = session.query(_AAL).filter(
+                    _AAL.user_id == user.id,
+                    _AAL.activity_type == 'post_discord',
+                    _AAL.created_at >= _today_dc,
+                    _AAL.status == 'published',
+                ).count()
+                if _discord_today >= 3:
+                    return f" Сегодня в Discord уже {_discord_today} постов (anti-spam лимит — 3 в день)."
+            except Exception as _lim_e:
+                logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
+
+        import aiohttp as _aiohttp
+
+        # Sanitize token hallucinations
+        from ai_integration.conversation_history import sanitize_token_hallucinations
+        content = sanitize_token_hallucinations(content)
+
+        # Discord лимит 2000 символов в content — обрезаем с многоточием
+        if len(content) > 2000:
+            content = content[:1997] + '…'
+
+        # Если есть картинка — публикуем через embed
+        if image_url:
+            payload = {
+                "content": content,
+                "embeds": [{"image": {"url": image_url}}]
+            }
+        else:
+            payload = {"content": content}
+
+        async with _safe_http() as http:
+            resp = await http.post(
+                user.discord_webhook,
+                json=payload,
+                timeout=_aiohttp.ClientTimeout(total=15)
+            )
+            if resp.status in (200, 204):
+                try:
+                    from models import AgentActivityLog
+                    log = AgentActivityLog(
+                        user_id=user.id,
+                        activity_type='post_discord',
+                        title=content[:80] + ('...' if len(content) > 80 else ''),
+                        content=content,
+                        target='Discord канал',
+                        status='published',
+                    )
+                    session.add(log)
+                    session.commit()
+                except Exception as _le:
+                    logger.warning(f"[DISCORD] Failed to log: {_le}")
+                server = getattr(user, 'discord_server_name', None) or 'Discord канал'
+                img_note = " с изображением" if image_url else ""
+                return f" Пост опубликован{img_note} в {server}"
+            else:
+                err = await resp.text()
+                return f" Ошибка Discord webhook: {resp.status} — {err[:200]}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_DISCORD] Error: {e}", exc_info=True)
+        return f" Ошибка публикации в Discord: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_vk ──────────────────────────────────────────────────────
+async def publish_to_vk(
+    content: str,
+    image_url: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация поста на стене ВКонтакте через VK API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        vk_token, vk_owner_id = None, None
+        try:
+            from models import UserAgent as _UA_vk
+            for _ag in session.query(_UA_vk).filter(
+                _UA_vk.author_id == user.id, _UA_vk.status != 'disabled',
+                _UA_vk.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('VK_TOKEN'):
+                    vk_token = _env['VK_TOKEN']
+                    vk_owner_id = _env.get('VK_OWNER_ID', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[VK] agent lookup: {_e}")
+
+        if not vk_token:
+            return (
+                "VK_TOKEN не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "VK_TOKEN=ваш_токен\n"
+                "VK_OWNER_ID=id_страницы_или_группы\n"
+                "Получить: vk.com/dev → Мои приложения → Standalone → Получить токен"
+            )
+
+        import urllib.parse
+        import aiohttp as _aiohttp
+        url = (
+            f"https://api.vk.com/method/wall.post?"
+            f"owner_id={vk_owner_id}&message={urllib.parse.quote(content)}"
+            f"&access_token={vk_token}&v=5.199"
+        )
+        if image_url:
+            url += f"&attachments={urllib.parse.quote(image_url)}"
+
+        async with _safe_http() as http:
+            async with http.get(url, timeout=_aiohttp.ClientTimeout(total=15)) as resp:
+                data = await resp.json()
+
+        if 'error' in data:
+            return f"Ошибка VK: {data['error'].get('error_msg', str(data['error']))}"
+
+        post_id = data.get('response', {}).get('post_id', '?')
+        try:
+            from models import AgentActivityLog
+            log = AgentActivityLog(
+                user_id=user.id, activity_type='post_vk',
+                title=content[:80], content=content,
+                target=f'VK {vk_owner_id}', status='published',
+            )
+            session.add(log)
+            session.commit()
+        except Exception as _le:
+            logger.warning(f"[VK] log: {_le}")
+
+        return f"Пост #{post_id} опубликован в ВКонтакте"
+    except Exception as e:
+        logger.error(f"[PUBLISH_VK] Error: {e}", exc_info=True)
+        return f"Ошибка публикации в VK: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_twitter ─────────────────────────────────────────────────
+async def publish_to_twitter(
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация твита в Twitter/X через OAuth 1.0a."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        tw_keys = {}
+        try:
+            from models import UserAgent as _UA_tw
+            for _ag in session.query(_UA_tw).filter(
+                _UA_tw.author_id == user.id, _UA_tw.status != 'disabled',
+                _UA_tw.user_api_keys.isnot(None),
+            ).all():
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _ku = _k.strip().upper()
+                        if _ku.startswith('TWITTER_') or _ku.startswith('X_'):
+                            tw_keys[_ku] = _v.strip()
+                if tw_keys:
+                    break
+        except Exception as _e:
+            logger.debug(f"[TWITTER] agent lookup: {_e}")
+
+        api_key = tw_keys.get('TWITTER_API_KEY') or tw_keys.get('X_API_KEY', '')
+        api_secret = tw_keys.get('TWITTER_API_SECRET') or tw_keys.get('X_API_SECRET', '')
+        access_token = tw_keys.get('TWITTER_ACCESS_TOKEN') or tw_keys.get('X_ACCESS_TOKEN', '')
+        access_secret = tw_keys.get('TWITTER_ACCESS_SECRET') or tw_keys.get('X_ACCESS_SECRET', '')
+
+        if not all([api_key, api_secret, access_token, access_secret]):
+            return (
+                "Twitter API не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "TWITTER_API_KEY=...\nTWITTER_API_SECRET=...\n"
+                "TWITTER_ACCESS_TOKEN=...\nTWITTER_ACCESS_SECRET=...\n"
+                "Получить: developer.twitter.com → Projects & Apps"
+            )
+
+        if len(content) > 280:
+            content = content[:277] + '...'
+
+        import hashlib, hmac, time, urllib.parse, uuid, json as _json
+        import aiohttp as _aiohttp
+
+        # OAuth 1.0a signature
+        method = 'POST'
+        url = 'https://api.twitter.com/2/tweets'
+        nonce = uuid.uuid4().hex
+        timestamp = str(int(time.time()))
+
+        oauth_params = {
+            'oauth_consumer_key': api_key,
+            'oauth_nonce': nonce,
+            'oauth_signature_method': 'HMAC-SHA1',
+            'oauth_timestamp': timestamp,
+            'oauth_token': access_token,
+            'oauth_version': '1.0',
+        }
+        sig_base = '&'.join([
+            method,
+            urllib.parse.quote(url, safe=''),
+            urllib.parse.quote('&'.join(f'{k}={urllib.parse.quote(v, safe="")}' for k, v in sorted(oauth_params.items())), safe=''),
+        ])
+        sig_key = f"{urllib.parse.quote(api_secret, safe='')}&{urllib.parse.quote(access_secret, safe='')}"
+        import base64
+        signature = base64.b64encode(hmac.new(sig_key.encode(), sig_base.encode(), hashlib.sha1).digest()).decode()
+
+        auth_header = 'OAuth ' + ', '.join(
+            f'{k}="{urllib.parse.quote(v, safe="")}"' for k, v in
+            {**oauth_params, 'oauth_signature': signature}.items()
+        )
+
+        async with _safe_http() as http:
+            async with http.post(
+                url,
+                json={"text": content},
+                headers={
+                    'Authorization': auth_header,
+                    'Content-Type': 'application/json',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201):
+            tweet_id = data.get('data', {}).get('id', '?')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='post_twitter',
+                    title=content[:80], content=content,
+                    target='Twitter/X', status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[TWITTER] log: {_le}")
+            return f"Твит опубликован (ID: {tweet_id})"
+        else:
+            err = data.get('detail') or data.get('title') or str(data)
+            return f"Ошибка Twitter: {err[:200]}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_TWITTER] Error: {e}", exc_info=True)
+        return f"Ошибка публикации в Twitter: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_linkedin ────────────────────────────────────────────────
+async def publish_to_linkedin(
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Публикация поста в LinkedIn через Marketing API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        li_token = None
+        try:
+            from models import UserAgent as _UA_li
+            for _ag in session.query(_UA_li).filter(
+                _UA_li.author_id == user.id, _UA_li.status != 'disabled',
+                _UA_li.user_api_keys.isnot(None),
+            ).all():
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        if _k.strip().upper() == 'LINKEDIN_ACCESS_TOKEN':
+                            li_token = _v.strip()
+                            break
+                if li_token:
+                    break
+        except Exception as _e:
+            logger.debug(f"[LINKEDIN] agent lookup: {_e}")
+
+        if not li_token:
+            return (
+                "LINKEDIN_ACCESS_TOKEN не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "LINKEDIN_ACCESS_TOKEN=ваш_токен\n"
+                "Получить: linkedin.com/developers → Create App → OAuth 2.0"
+            )
+
+        import aiohttp as _aiohttp
+        import json as _json
+
+        # Get user profile URN
+        async with _safe_http() as http:
+            async with http.get(
+                'https://api.linkedin.com/v2/userinfo',
+                headers={'Authorization': f'Bearer {li_token}'},
+                timeout=_aiohttp.ClientTimeout(total=10),
+            ) as prof_resp:
+                if prof_resp.status != 200:
+                    return f"Ошибка LinkedIn авторизации: {prof_resp.status}"
+                prof_data = await prof_resp.json()
+
+        person_id = prof_data.get('sub', '')
+        if not person_id:
+            return "Не удалось получить LinkedIn profile ID"
+
+        post_body = {
+            "author": f"urn:li:person:{person_id}",
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {
+                "com.linkedin.ugc.ShareContent": {
+                    "shareCommentary": {"text": content},
+                    "shareMediaCategory": "NONE",
+                }
+            },
+            "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
+        }
+
+        async with _safe_http() as http:
+            async with http.post(
+                'https://api.linkedin.com/v2/ugcPosts',
+                json=post_body,
+                headers={
+                    'Authorization': f'Bearer {li_token}',
+                    'Content-Type': 'application/json',
+                    'X-Restli-Protocol-Version': '2.0.0',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                if resp.status == 201:
+                    try:
+                        from models import AgentActivityLog
+                        log = AgentActivityLog(
+                            user_id=user.id, activity_type='post_linkedin',
+                            title=content[:80], content=content,
+                            target='LinkedIn', status='published',
+                        )
+                        session.add(log)
+                        session.commit()
+                    except Exception as _le:
+                        logger.warning(f"[LINKEDIN] log: {_le}")
+                    return "Пост опубликован в LinkedIn"
+                else:
+                    err = await resp.text()
+                    return f"Ошибка LinkedIn: {resp.status} — {err[:200]}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_LINKEDIN] Error: {e}", exc_info=True)
+        return f"Ошибка публикации в LinkedIn: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_notion ──────────────────────────────────────────────────
+async def publish_to_notion(
+    title: str,
+    content: str,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создание страницы в Notion через API."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        notion_token, notion_db_id = None, None
+        try:
+            from models import UserAgent as _UA_nt
+            for _ag in session.query(_UA_nt).filter(
+                _UA_nt.author_id == user.id, _UA_nt.status != 'disabled',
+                _UA_nt.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('NOTION_TOKEN'):
+                    notion_token = _env['NOTION_TOKEN']
+                    notion_db_id = _env.get('NOTION_DB_ID', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[NOTION] agent lookup: {_e}")
+
+        if not notion_token or not notion_db_id:
+            return (
+                "NOTION_TOKEN / NOTION_DB_ID не настроены.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "NOTION_TOKEN=secret_xxx\n"
+                "NOTION_DB_ID=id_базы_данных\n"
+                "Notion → Settings → Integrations → New Integration"
+            )
+
+        import aiohttp as _aiohttp
+
+        children = []
+        for p in content.split('\n\n'):
+            p = p.strip()
+            if p:
+                children.append({
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {"rich_text": [{"type": "text", "text": {"content": p[:2000]}}]}
+                })
+        if not children:
+            children = [{"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": content[:2000]}}]}}]
+
+        page_data = {
+            "parent": {"database_id": notion_db_id},
+            "properties": {
+                "Name": {"title": [{"text": {"content": title}}]},
+            },
+            "children": children[:100],
+        }
+
+        async with _safe_http() as http:
+            async with http.post(
+                'https://api.notion.com/v1/pages',
+                json=page_data,
+                headers={
+                    'Authorization': f'Bearer {notion_token}',
+                    'Notion-Version': '2022-06-28',
+                    'Content-Type': 'application/json',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201):
+            page_url = data.get('url', '')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='post_notion',
+                    title=title[:80], content=content[:300],
+                    target='Notion', status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[NOTION] log: {_le}")
+            return f"Страница «{title}» создана в Notion: {page_url}"
+        else:
+            err = data.get('message') or str(data)[:200]
+            return f"Ошибка Notion: {err}"
+    except Exception as e:
+        logger.error(f"[PUBLISH_NOTION] Error: {e}", exc_info=True)
+        return f"Ошибка создания страницы в Notion: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── publish_to_youtube ─────────────────────────────────────────────────
+async def publish_to_youtube(
+    action: str = 'analytics',
+    video_id: str = None,
+    content: str = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Аналитика YouTube-канала или публикация комментария."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        yt_key, yt_channel = None, None
+        try:
+            from models import UserAgent as _UA_yt
+            for _ag in session.query(_UA_yt).filter(
+                _UA_yt.author_id == user.id, _UA_yt.status != 'disabled',
+                _UA_yt.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('YOUTUBE_API_KEY'):
+                    yt_key = _env['YOUTUBE_API_KEY']
+                    yt_channel = _env.get('YOUTUBE_CHANNEL_ID', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[YOUTUBE] agent lookup: {_e}")
+
+        if not yt_key:
+            return (
+                "YOUTUBE_API_KEY не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "YOUTUBE_API_KEY=AIza...\n"
+                "YOUTUBE_CHANNEL_ID=UCxxx...\n"
+                "Получить: console.cloud.google.com → YouTube Data API v3"
+            )
+
+        import aiohttp as _aiohttp
+
+        if action == 'analytics':
+            if not yt_channel:
+                return "YOUTUBE_CHANNEL_ID не указан. Добавьте в API-ключи агента."
+            async with _safe_http() as http:
+                async with http.get(
+                    f'https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id={yt_channel}&key={yt_key}',
+                    timeout=_aiohttp.ClientTimeout(total=10),
+                ) as resp:
+                    data = await resp.json()
+            items = data.get('items', [])
+            if not items:
+                return "Канал не найден. Проверьте YOUTUBE_CHANNEL_ID."
+            ch = items[0]
+            stats = ch.get('statistics', {})
+            name = ch.get('snippet', {}).get('title', '?')
+            return (
+                f"YouTube: {name}\n"
+                f"Подписчиков: {stats.get('subscriberCount', '?')}\n"
+                f"Видео: {stats.get('videoCount', '?')}\n"
+                f"Просмотров: {stats.get('viewCount', '?')}"
+            )
+        else:
+            return f"Неизвестное действие: {action}. Используйте 'analytics'."
+    except Exception as e:
+        logger.error(f"[YOUTUBE] Error: {e}", exc_info=True)
+        return f"Ошибка YouTube: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ── initiate_phone_call ────────────────────────────────────────────────
+async def initiate_phone_call(
+    to_phone: str,
+    message: str,
+    language: str = 'ru-RU',
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Инициировать телефонный звонок через Twilio с TTS-сообщением."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return "Пользователь не найден"
+
+        twilio_sid, twilio_token, twilio_from = None, None, None
+        try:
+            from models import UserAgent as _UA_tw
+            for _ag in session.query(_UA_tw).filter(
+                _UA_tw.author_id == user.id, _UA_tw.status != 'disabled',
+                _UA_tw.user_api_keys.isnot(None),
+            ).all():
+                _env = {}
+                for _ln in (_ag.user_api_keys or '').splitlines():
+                    _ln = _ln.strip()
+                    if '=' in _ln and not _ln.startswith('#'):
+                        _k, _, _v = _ln.partition('=')
+                        _env[_k.strip().upper()] = _v.strip()
+                if _env.get('TWILIO_ACCOUNT_SID'):
+                    twilio_sid = _env['TWILIO_ACCOUNT_SID']
+                    twilio_token = _env.get('TWILIO_AUTH_TOKEN', '')
+                    twilio_from = _env.get('TWILIO_FROM', '')
+                    break
+        except Exception as _e:
+            logger.debug(f"[CALL] agent lookup: {_e}")
+
+        if not all([twilio_sid, twilio_token, twilio_from]):
+            return (
+                "Twilio не настроен.\n"
+                "Добавьте в настройках агента (API-ключи):\n"
+                "TWILIO_ACCOUNT_SID=ACxxx\n"
+                "TWILIO_AUTH_TOKEN=xxx\n"
+                "TWILIO_FROM=+1234567890\n"
+                "Получить: console.twilio.com → Account Info"
+            )
+
+        import re
+        if not re.match(r'^\+\d{10,15}$', to_phone):
+            return f"Некорректный номер: {to_phone}. Формат: +79991234567"
+
+        # Escape XML special chars in message for TwiML
+        import html as _html_mod
+        safe_message = _html_mod.escape(message)
+
+        twiml = f'<Response><Say language="{language}" voice="alice">{safe_message}</Say></Response>'
+
+        import aiohttp as _aiohttp
+        import base64, urllib.parse
+        auth = base64.b64encode(f"{twilio_sid}:{twilio_token}".encode()).decode()
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{twilio_sid}/Calls.json"
+
+        async with _safe_http() as http:
+            async with http.post(
+                url,
+                data=urllib.parse.urlencode({
+                    'From': twilio_from,
+                    'To': to_phone,
+                    'Twiml': twiml,
+                }),
+                headers={
+                    'Authorization': f'Basic {auth}',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                timeout=_aiohttp.ClientTimeout(total=15),
+            ) as resp:
+                data = await resp.json()
+
+        if resp.status in (200, 201):
+            call_sid = data.get('sid', '?')
+            try:
+                from models import AgentActivityLog
+                log = AgentActivityLog(
+                    user_id=user.id, activity_type='phone_call',
+                    title=f'Звонок на {to_phone}',
+                    content=message[:300],
+                    target=to_phone, status='published',
+                )
+                session.add(log)
+                session.commit()
+            except Exception as _le:
+                logger.warning(f"[CALL] log: {_le}")
+            return f"Звонок инициирован на {to_phone} (SID: {call_sid})"
+        else:
+            err = data.get('message') or str(data)[:200]
+            return f"Ошибка Twilio: {err}"
+    except Exception as e:
+        logger.error(f"[PHONE_CALL] Error: {e}", exc_info=True)
+        return f"Ошибка звонка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def generate_image(
+    prompt: str,
+    style: str = None,
+    aspect_ratio: str = "1:1",
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+    send_to_telegram: bool = True,
+) -> str:
+    """Генерация изображения через Replicate (Flux). send_to_telegram=False — только URL, без отправки в TG."""
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from config import REPLICATE_API_TOKEN as _platform_replicate_key, TELEGRAM_TOKEN
+
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден."
+
+        # Личный REPLICATE_API_TOKEN из user_api_keys агентов пользователя имеет приоритет
+        REPLICATE_API_TOKEN = _platform_replicate_key
+        try:
+            from models import UserAgent as _UA_rep
+            for _ag_rep in session.query(_UA_rep).filter(
+                _UA_rep.author_id == user.id,
+                _UA_rep.status != 'disabled',
+                _UA_rep.user_api_keys.isnot(None),
+            ).all():
+                _env_rep = {}
+                for _ln_rep in (_ag_rep.user_api_keys or '').splitlines():
+                    _ln_rep = _ln_rep.strip()
+                    if '=' in _ln_rep and not _ln_rep.startswith('#'):
+                        _k_rep, _, _v_rep = _ln_rep.partition('=')
+                        _env_rep[_k_rep.strip().upper()] = _v_rep.strip()
+                if _env_rep.get('REPLICATE_API_TOKEN'):
+                    REPLICATE_API_TOKEN = _env_rep['REPLICATE_API_TOKEN']
+                    import logging as _log_rep
+                    _log_rep.getLogger(__name__).info(
+                        f'[GENERATE_IMAGE] Using personal REPLICATE_API_TOKEN from agent {_ag_rep.name}'
+                    )
+                    break
+        except Exception as _rep_err:
+            import logging as _log_rep2
+            _log_rep2.getLogger(__name__).debug(f'[GENERATE_IMAGE] Personal Replicate lookup: {_rep_err}')
+
+        if not REPLICATE_API_TOKEN:
+            return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
+
+        full_prompt = f"{prompt}, {style} style" if style else prompt
+
+        import aiohttp as _aiohttp
+        import asyncio as _asyncio
+
+        model = "black-forest-labs/flux-schnell"
+        input_data = {
+            "prompt": full_prompt,
+            "aspect_ratio": aspect_ratio or "1:1",
+            "width": 550,
+            "height": 550,
+            "output_format": "webp",
+            "output_quality": 80,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
+            "Content-Type": "application/json",
+            "Prefer": "wait",  # ждём результат синхронно (до 60с)
+        }
+
+        async with _safe_http() as http:
+            # Запускаем генерацию
+            resp = await http.post(
+                f"https://api.replicate.com/v1/models/{model}/predictions",
+                headers=headers,
+                json={"input": input_data},
+                timeout=_aiohttp.ClientTimeout(total=90),
+            )
+            data = await resp.json()
+
+            if resp.status not in (200, 201):
+                err = data.get("detail", str(data))
+                return f" Ошибка Replicate: {err}"
+
+            output = data.get("output")
+            prediction_id = data.get("id")
+
+            # Если Prefer:wait не сработал — опрашиваем статус
+            if output is None and prediction_id:
+                for _ in range(30):
+                    await _asyncio.sleep(3)
+                    poll = await http.get(
+                        f"https://api.replicate.com/v1/predictions/{prediction_id}",
+                        headers=headers,
+                        timeout=_aiohttp.ClientTimeout(total=15),
+                    )
+                    poll_data = await poll.json()
+                    status = poll_data.get("status")
+                    if status == "succeeded":
+                        output = poll_data.get("output")
+                        break
+                    elif status in ("failed", "canceled"):
+                        err = poll_data.get("error", "Unknown error")
+                        return f" Генерация не удалась: {err}"
+
+            if not output:
+                return " Изображение не сгенерировано (таймаут)."
+
+            # output — URL или список URL
+            image_url = output[0] if isinstance(output, list) else output
+
+            # Отправляем фото в Telegram (только если send_to_telegram=True)
+            # Replicate URL временные → скачиваем изображение и отправляем как файл
+            send_data = {"ok": False}
+            if send_to_telegram:
+                try:
+                    # Скачиваем изображение с Replicate
+                    _img_resp = await http.get(image_url, timeout=_aiohttp.ClientTimeout(total=30))
+                    if _img_resp.status == 200:
+                        _img_bytes = await _img_resp.read()
+                        
+                        # Отправляем как multipart/form-data с файлом
+                        import aiohttp as _aiohttp_form
+                        _form = _aiohttp_form.FormData()
+                        _form.add_field('chat_id', str(user.telegram_id))
+                        _form.add_field('photo', _img_bytes, filename='generated.png', content_type='image/png')
+                        
+                        send_resp = await http.post(
+                            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                            data=_form,
+                            timeout=_aiohttp.ClientTimeout(total=40),
+                        )
+                        send_data = await send_resp.json()
+                        logger.info(f"[GENERATE_IMAGE] Photo sent to TG user {user_id}: ok={send_data.get('ok')}")
+                    else:
+                        logger.warning(f"[GENERATE_IMAGE] Failed to download image: HTTP {_img_resp.status}")
+                except Exception as _send_err:
+                    logger.error(f"[GENERATE_IMAGE] Error sending to Telegram: {_send_err}")
+                    send_data = {"ok": False, "error": str(_send_err)}
+
+        if send_to_telegram and send_data.get("ok"):
+            # Telegram получил фото — возвращаем без URL чтобы не было дублирования
+            result_msg = f" Изображение отправлено!"
+        else:
+            # Web-контекст или Telegram не принял — возвращаем markdown-изображение для рендеринга
+            result_msg = f" Готово!\n\n![изображение]({image_url})"
+
+        return result_msg
+
+    except Exception as e:
+        logger.error(f"[GENERATE_IMAGE] Error: {e}", exc_info=True)
+        return f" Ошибка генерации изображения: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════
+# КОНТЕНТ-КАМПАНИИ — автономная публикация постов
+# ═══════════════════════════════════════════════════════
+
+async def get_system_status(
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+) -> dict:
+    """Получить текущее состояние всех сервисов и квоты пользователя.
+
+    Используй когда:
+    — пользователь спрашивает почему что-то не работает
+    — перед началом рассылки или публикации
+    — при ошибке email/API чтобы объяснить причину
+
+    Returns структуру:
+        {
+            'overall': 'ok' | 'degraded',
+            'summary': '...',
+            'services': {...},
+            'email_quota': {'sent_today': N, 'daily_limit': 50, 'remaining': N, 'exhausted': bool},
+            'token_balance': {'balance': N, 'low': bool},
+        }
+    """
+    from .service_health import get_all_services_report
+
+    report = get_all_services_report(user_id=user_id)
+
+    # Добавьём остаток токенов
+    try:
+        from token_service import get_balance
+        balance = get_balance(user_id) if user_id else 0
+        report['token_balance'] = {
+            'balance': balance,
+            'low': balance < 50,
+        }
+    except Exception:
+        report['token_balance'] = None
+
+    # Статистика email-кампаний
+    if user_id and not report.get('email_quota'):
+        try:
+            if not session:
+                session = Session()
+                close_session = True
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            if user:
+                from models import EmailCampaign
+                active_campaigns = session.query(EmailCampaign).filter(
+                    EmailCampaign.user_id == user.id,
+                    EmailCampaign.status == 'active',
+                ).count()
+                report['active_email_campaigns'] = active_campaigns
+        except Exception as _e:
+            logger.debug(f"[SYSTEM_STATUS] campaign count error: {_e}")
+        finally:
+            if close_session and session:
+                session.close()
+
+    # ── Формируем человекочитаемый текст (AI не должен показывать raw JSON) ──
+    lines = []
+    overall = report.get('overall', '?')
+    lines.append(f"Общий статус: {'✅ Всё работает' if overall == 'ok' else '⚠️ Есть проблемы'}")
+
+    svcs = report.get('services', {})
+    if svcs:
+        for _svc_key, _svc in svcs.items():
+            _label = _svc.get('label', _svc_key)
+            _st = _svc.get('status', '?')
+            _icon = '✅' if _st == 'ok' else '❌'
+            _line = f"  {_icon} {_label}"
+            if _st != 'ok' and _svc.get('message'):
+                _line += f" — {_svc['message']}"
+            lines.append(_line)
+
+    eq = report.get('email_quota')
+    if eq:
+        lines.append(f"Email: отправлено {eq.get('sent_today', '?')}/{eq.get('daily_limit', 50)}, осталось {eq.get('remaining', '?')}")
+
+    tb = report.get('token_balance')
+    if tb and tb.get('balance') is not None:
+        lines.append(f"Токены: {tb['balance']}" + (" ⚠️ мало" if tb.get('low') else ""))
+
+    ac = report.get('active_email_campaigns')
+    if ac is not None:
+        lines.append(f"Активных email-кампаний: {ac}")
+
+    report['_human_summary'] = '\n'.join(lines)
+    return report
+
+
+async def start_content_campaign(
+    name: str,
+    goal: str,
+    platforms: list = None,
+    topics: str = None,
+    tone: str = 'professional',
+    frequency: str = 'daily',
+    post_time: str | None = None,
+    max_posts: int = 0,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создать контент-кампанию для автономной публикации постов.
+
+    AI-агент будет автономно:
+    1. Генерировать контент по заданной стратегии и темам
+    2. Публиковать в выбранные площадки (лента/TG/Discord)
+    3. Соблюдать расписание и лимиты
+    """
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        if not name or not goal:
+            return " Укажи название и цель кампании"
+
+        # Если время не указано — найти свободный слот и ПРЕДЛОЖИТЬ пользователю
+        if not post_time:
+            _suggested_time = '10:00'
+            try:
+                _tasks_today = session.query(Task).filter(
+                    Task.user_id == user.id,
+                    Task.status.in_(['active', 'pending']),
+                    Task.reminder_time.isnot(None),
+                ).all()
+                _busy_hours = set()
+                for _t in _tasks_today:
+                    _rt = _t.reminder_time
+                    if _rt and hasattr(_rt, 'hour'):
+                        _busy_hours.add(_rt.hour)
+                for _candidate in ['10:00', '18:00', '09:00', '19:00', '12:00', '15:00']:
+                    _ch = int(_candidate.split(':')[0])
+                    if _ch not in _busy_hours:
+                        _suggested_time = _candidate
+                        break
+            except Exception:
+                pass
+            _busy_info = f" (занято: {', '.join(f'{h}:00' for h in sorted(_busy_hours))})" if _busy_hours else ""
+            return (
+                f"У тебя свободно в {_suggested_time}{_busy_info}. "
+                f"Запускаю кампанию «{name}» на {_suggested_time}? "
+                f"Или скажи другое время (например 09:00, 18:00, 21:00)."
+            )
+
+        if platforms is None:
+            platforms = ['feed']
+
+        # Валидация площадок
+        valid_platforms = {'feed', 'telegram', 'discord'}
+        platforms = [p for p in platforms if p in valid_platforms]
+        if not platforms:
+            platforms = ['feed']
+
+        # Проверяем наличие каналов для выбранных площадок
+        warnings = []
+        if 'telegram' in platforms and not user.telegram_channel:
+            warnings.append(" Telegram-канал не настроен — посты в TG публиковаться не будут. Укажи канал командой /settings.")
+        if 'discord' in platforms and not getattr(user, 'discord_webhook', None):
+            warnings.append(" Discord webhook не настроен — посты в Discord публиковаться не будут. Настрой в дашборде.")
+
+        # Проверяем дубликаты (активная кампания с похожим названием)
+        from models import ContentCampaign
+        existing = session.query(ContentCampaign).filter(
+            ContentCampaign.user_id == user.id,
+            ContentCampaign.status == 'active',
+        ).all()
+        for ex in existing:
+            if ex.name and name.lower() in ex.name.lower():
+                return f" Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_content_campaign чтобы обновить."
+
+        # Лимит активных кампаний
+        if len(existing) >= 5:
+            return " Максимум 5 активных контент-кампаний. Заверши или отмени старые."
+
+        # Валидация частоты
+        valid_freq = {'daily', 'every_2_days', 'every_3_days', 'weekly'}
+        if frequency not in valid_freq:
+            frequency = 'daily'
+
+        # Валидация времени
+        try:
+            h, m = map(int, post_time.split(':'))
+            if h < 0 or h > 23 or m < 0 or m > 59:
+                return " Невалидное время. Спроси пользователя удобное время для публикации (HH:MM)."
+        except (ValueError, AttributeError):
+            return " Время должно быть в формате HH:MM (09:00, 18:00, 21:30). Спроси пользователя какое время удобно."
+
+        import json as _json_cc
+        campaign = ContentCampaign(
+            user_id=user.id,
+            name=name[:300],
+            goal=goal[:2000],
+            topics=(topics or '')[:1000],
+            platforms=_json_cc.dumps(platforms),
+            tone=tone or 'professional',
+            language=getattr(user, 'language', 'ru') or 'ru',
+            frequency=frequency,
+            post_time=post_time,
+            daily_limit=1,
+            max_posts=max_posts if max_posts and max_posts > 0 else 0,
+            status='active',
+            posts_published=0,
+        )
+        session.add(campaign)
+        session.commit()
+
+        freq_map = {
+            'daily': 'каждый день',
+            'every_2_days': 'раз в 2 дня',
+            'every_3_days': 'раз в 3 дня',
+            'weekly': 'раз в неделю',
+        }
+        platforms_ru = {
+            'feed': 'лента новостей',
+            'telegram': f'TG канал {user.telegram_channel or "?"}',
+            'discord': 'Discord',
+        }
+        platforms_str = ', '.join(platforms_ru.get(p, p) for p in platforms)
+
+        result = (
+            f" Контент-кампания «{name}» запущена! (#{campaign.id})\n\n"
+            f" Площадки: {platforms_str}\n"
+            f" Частота: {freq_map.get(frequency, frequency)} в {post_time}\n"
+            f" Цель: {goal[:150]}\n"
+        )
+        if topics:
+            result += f" Темы: {topics[:150]}\n"
+        if max_posts and max_posts > 0:
+            result += f" Всего постов: {max_posts}\n"
+        else:
+            result += " Без ограничения по количеству\n"
+
+        result += "\nАгент будет автономно генерировать и публиковать посты по расписанию."
+
+        if warnings:
+            result += "\n\n" + "\n".join(warnings)
+
+        # Логируем в AgentActivityLog → отображается в «Активность» на дашборде
+        try:
+            from models import AgentActivityLog
+            activity = AgentActivityLog(
+                user_id=user.id,
+                activity_type='content_campaign',
+                title=f"Контент-кампания «{name[:80]}» запущена",
+                content=f"Площадки: {platforms_str} | Частота: {freq_map.get(frequency, frequency)} | Цель: {goal[:200]}",
+                target=platforms_str,
+                status='active',
+                ref_id=campaign.id,
+            )
+            session.add(activity)
+            session.commit()
+        except Exception as _ae:
+            logger.warning(f"[CONTENT_CAMPAIGN] Failed to log activity: {_ae}")
+
+        logger.info(f"[CONTENT_CAMPAIGN] Created #{campaign.id} «{name}» for user {user_id}: {platforms}, {frequency}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[CONTENT_CAMPAIGN] Error creating: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка создания кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def manage_content_campaign(
+    action: str,
+    campaign_id: int = None,
+    updates: dict = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Управление контент-кампанией: пауза, возобновление, отмена, обновление."""
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        from models import ContentCampaign
+
+        # Находим кампанию
+        if campaign_id:
+            campaign = session.query(ContentCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            # Последняя активная/paused
+            campaign = session.query(ContentCampaign).filter(
+                ContentCampaign.user_id == user.id,
+                ContentCampaign.status.in_(['active', 'paused'])
+            ).order_by(ContentCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return " Контент-кампания не найдена. Создай новую с помощью start_content_campaign."
+
+        if action == 'pause':
+            if campaign.status == 'paused':
+                return f" Кампания «{campaign.name}» уже на паузе."
+            campaign.status = 'paused'
+            session.commit()
+            return f" Кампания «{campaign.name}» (#{campaign.id}) поставлена на паузу. Публикация остановлена."
+
+        elif action == 'resume':
+            if campaign.status == 'active':
+                return f"▶ Кампания «{campaign.name}» уже активна."
+            if campaign.status in ('completed', 'cancelled'):
+                return f" Кампания «{campaign.name}» завершена/отменена. Создай новую."
+            campaign.status = 'active'
+            session.commit()
+            return f"▶ Кампания «{campaign.name}» (#{campaign.id}) возобновлена! Публикация продолжится по расписанию."
+
+        elif action == 'cancel':
+            campaign.status = 'cancelled'
+            session.commit()
+            return f" Кампания «{campaign.name}» (#{campaign.id}) отменена. Опубликовано {campaign.posts_published or 0} постов."
+
+        elif action == 'update':
+            if not updates:
+                return " Укажи параметры для обновления (updates)."
+
+            import json as _json_upd
+            changed = []
+            if 'name' in updates:
+                campaign.name = str(updates['name'])[:300]
+                changed.append(f"название → {campaign.name}")
+            if 'goal' in updates:
+                campaign.goal = str(updates['goal'])[:2000]
+                changed.append("цель обновлена")
+            if 'topics' in updates:
+                campaign.topics = str(updates['topics'])[:1000]
+                changed.append(f"темы → {campaign.topics[:100]}")
+            if 'tone' in updates:
+                campaign.tone = str(updates['tone'])
+                changed.append(f"тон → {campaign.tone}")
+            if 'frequency' in updates:
+                valid_freq = {'daily', 'every_2_days', 'every_3_days', 'weekly'}
+                freq = str(updates['frequency'])
+                if freq in valid_freq:
+                    campaign.frequency = freq
+                    changed.append(f"частота → {freq}")
+            if 'post_time' in updates:
+                campaign.post_time = str(updates['post_time'])[:10]
+                changed.append(f"время → {campaign.post_time}")
+            if 'max_posts' in updates:
+                campaign.max_posts = int(updates['max_posts'])
+                changed.append(f"макс.постов → {campaign.max_posts}")
+            if 'platforms' in updates:
+                valid_p = {'feed', 'telegram', 'discord'}
+                new_p = [p for p in updates['platforms'] if p in valid_p]
+                if new_p:
+                    campaign.platforms = _json_upd.dumps(new_p)
+                    changed.append(f"площадки → {', '.join(new_p)}")
+
+            if not changed:
+                return " Нет распознанных параметров для обновления."
+
+            session.commit()
+            return f" Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f" • {c}" for c in changed)
+
+        else:
+            return f" Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
+
+    except Exception as e:
+        logger.error(f"[CONTENT_CAMPAIGN] Error managing: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════
+# КАМПАНИИ ДЕЛЕГИРОВАНИЯ — массовое автономное делегирование
+# ═══════════════════════════════════════════════════════
+
+async def start_delegation_campaign(
+    name: str,
+    goal: str,
+    target_audience: str,
+    task_template: str = None,
+    offer: str = None,
+    tone: str = 'professional',
+    max_delegations: int = 10,
+    daily_limit: int = 3,
+    default_deadline_hours: int = 48,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Создать кампанию делегирования для автономного распределения задач.
+
+    AI-агент будет автономно:
+    1. Находить подходящих исполнителей по навыкам/интересам
+    2. Создавать задачи и делегировать
+    3. Отправлять мотивирующие уведомления
+    4. Отслеживать принятие/отклонение
+    """
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        if not name or not goal or not target_audience:
+            return " Укажи название, цель и целевую аудиторию кампании"
+
+        # Проверяем дубликаты (семантически: точный substring + пересечение слов)
+        from models import DelegationCampaign
+        existing = session.query(DelegationCampaign).filter(
+            DelegationCampaign.user_id == user.id,
+            DelegationCampaign.status == 'active',
+        ).all()
+        _stop_d = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'the', 'and', 'for', 'of', 'to'}
+        _new_name_words = {w for w in name.lower().split() if len(w) > 3} - _stop_d
+        _new_goal_words = {w for w in goal.lower().split() if len(w) > 3} - _stop_d
+        for ex in existing:
+            if ex.name and name.lower() in ex.name.lower():
+                return f"⚠️ Уже есть активная кампания «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign чтобы обновить."
+            _ex_name_words = {w for w in (ex.name or '').lower().split() if len(w) > 3} - _stop_d
+            _ex_goal_words = {w for w in (ex.goal or '').lower().split() if len(w) > 3} - _stop_d
+            if _new_name_words and _ex_name_words and len(_new_name_words & _ex_name_words) >= 2:
+                return f"⚠️ Похожая кампания делегирования уже существует: «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign для обновления."
+            if _new_goal_words and _ex_goal_words and len(_new_goal_words & _ex_goal_words) >= 3:
+                return f"⚠️ Кампания с похожей целью уже существует: «{ex.name}» (#{ex.id}). Используй manage_delegation_campaign для обновления."
+
+        # Лимит активных кампаний
+        if len(existing) >= 5:
+            return " Максимум 5 активных кампаний делегирования. Заверши или отмени старые."
+
+        # Очищаем название от служебных префиксов, которые агент иногда добавляет
+        _clean_name = name
+        for _pfx in ('Цель: ', 'Цель:', 'Goal: ', 'Goal:', 'Название: ', 'Name: '):
+            if _clean_name.startswith(_pfx):
+                _clean_name = _clean_name[len(_pfx):].strip()
+                break
+
+        campaign = DelegationCampaign(
+            user_id=user.id,
+            name=_clean_name[:300],
+            goal=goal[:2000],
+            target_audience=target_audience[:3000],
+            task_template=(task_template or '')[:1000],
+            offer=(offer or '')[:500],
+            tone=tone or 'professional',
+            max_delegations=max_delegations if max_delegations and max_delegations > 0 else 10,
+            daily_limit=daily_limit if daily_limit and daily_limit > 0 else 3,
+            max_follow_ups=2,
+            default_deadline_hours=default_deadline_hours if default_deadline_hours and default_deadline_hours > 0 else 48,
+            status='active',
+            delegations_sent=0,
+            delegations_accepted=0,
+            delegations_completed=0,
+            delegations_rejected=0,
+        )
+        session.add(campaign)
+        session.commit()
+
+        result = (
+            f"Кампания делегирования «{name}» запущена (#{campaign.id})\n\n"
+            f"Цель: {goal[:150]}\n"
+            f"Аудитория: {target_audience[:150]}\n"
+            f"Макс. делегирований: {max_delegations}\n"
+            f"Лимит в день: {daily_limit}\n"
+            f"Дедлайн задач: {default_deadline_hours}ч\n"
+        )
+        if task_template:
+            result += f"Шаблон: {task_template[:100]}\n"
+        if offer:
+            result += f"Мотивация: {offer[:100]}\n"
+
+        result += "\nАгент будет автономно находить подходящих исполнителей и делегировать задачи."
+
+        # Логируем в AgentActivityLog → отображается в «Активность» на дашборде
+        try:
+            from models import AgentActivityLog
+            activity = AgentActivityLog(
+                user_id=user.id,
+                activity_type='delegation_campaign',
+                title=f"Кампания делегирования «{name[:80]}» запущена",
+                content=f"Цель: {goal[:200]} | Аудитория: {target_audience[:200]}",
+                target=target_audience[:200],
+                status='active',
+                ref_id=campaign.id,
+            )
+            session.add(activity)
+            session.commit()
+        except Exception as _ae:
+            logger.warning(f"[DELEGATION_CAMPAIGN] Failed to log activity: {_ae}")
+
+        logger.info(f"[DELEGATION_CAMPAIGN] Created #{campaign.id} «{name}» for user {user_id}")
+        return result
+
+    except Exception as e:
+        logger.error(f"[DELEGATION_CAMPAIGN] Error creating: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка создания кампании: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def manage_delegation_campaign(
+    action: str,
+    campaign_id: int = None,
+    updates: dict = None,
+    user_id: int = None,
+    session=None,
+    close_session: bool = True,
+):
+    """Управление кампанией делегирования: пауза, возобновление, отмена, обновление."""
+    if not session:
+        session = Session()
+        close_session = True
+
+    try:
+        user = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user:
+            return " Пользователь не найден"
+
+        from models import DelegationCampaign
+
+        if campaign_id:
+            campaign = session.query(DelegationCampaign).filter_by(
+                id=campaign_id, user_id=user.id
+            ).first()
+        else:
+            campaign = session.query(DelegationCampaign).filter(
+                DelegationCampaign.user_id == user.id,
+                DelegationCampaign.status.in_(['active', 'paused'])
+            ).order_by(DelegationCampaign.created_at.desc()).first()
+
+        if not campaign:
+            return "Кампания делегирования не найдена. Создай новую с помощью start_delegation_campaign."
+
+        if action == 'pause':
+            if campaign.status == 'paused':
+                return f" Кампания «{campaign.name}» уже на паузе."
+            campaign.status = 'paused'
+            session.commit()
+            return (
+                f" Кампания «{campaign.name}» (#{campaign.id}) на паузе.\n"
+                f" Отправлено: {campaign.delegations_sent or 0}, принято: {campaign.delegations_accepted or 0}"
+            )
+
+        elif action == 'resume':
+            if campaign.status == 'active':
+                return f"▶ Кампания «{campaign.name}» уже активна."
+            if campaign.status in ('completed', 'cancelled'):
+                return f" Кампания «{campaign.name}» завершена/отменена. Создай новую."
+            campaign.status = 'active'
+            session.commit()
+            return f"▶ Кампания «{campaign.name}» (#{campaign.id}) возобновлена!"
+
+        elif action == 'cancel':
+            campaign.status = 'cancelled'
+            session.commit()
+            return (
+                f" Кампания «{campaign.name}» (#{campaign.id}) отменена.\n"
+                f" Итого: отправлено {campaign.delegations_sent or 0}, "
+                f"принято {campaign.delegations_accepted or 0}, "
+                f"завершено {campaign.delegations_completed or 0}"
+            )
+
+        elif action == 'update':
+            if not updates:
+                return " Укажи параметры для обновления (updates)."
+
+            changed = []
+            if 'name' in updates:
+                _upd_name = str(updates['name'])
+                for _pfx in ('Цель: ', 'Цель:', 'Goal: ', 'Goal:', 'Название: ', 'Name: '):
+                    if _upd_name.startswith(_pfx):
+                        _upd_name = _upd_name[len(_pfx):].strip()
+                        break
+                campaign.name = _upd_name[:300]
+                changed.append(f"название → {campaign.name}")
+            if 'goal' in updates:
+                campaign.goal = str(updates['goal'])[:2000]
+                changed.append("цель обновлена")
+            if 'target_audience' in updates:
+                campaign.target_audience = str(updates['target_audience'])[:3000]
+                changed.append(f"аудитория → {campaign.target_audience[:100]}")
+            if 'task_template' in updates:
+                campaign.task_template = str(updates['task_template'])[:1000]
+                changed.append("шаблон задачи обновлён")
+            if 'offer' in updates:
+                campaign.offer = str(updates['offer'])[:500]
+                changed.append(f"мотивация → {campaign.offer[:100]}")
+            if 'tone' in updates:
+                campaign.tone = str(updates['tone'])
+                changed.append(f"тон → {campaign.tone}")
+            if 'max_delegations' in updates:
+                campaign.max_delegations = int(updates['max_delegations'])
+                changed.append(f"макс.делегирований → {campaign.max_delegations}")
+            if 'daily_limit' in updates:
+                campaign.daily_limit = int(updates['daily_limit'])
+                changed.append(f"лимит в день → {campaign.daily_limit}")
+            if 'default_deadline_hours' in updates:
+                campaign.default_deadline_hours = int(updates['default_deadline_hours'])
+                changed.append(f"дедлайн → {campaign.default_deadline_hours}ч")
+
+            if not changed:
+                return " Нет распознанных параметров для обновления."
+
+            session.commit()
+            return f" Кампания «{campaign.name}» (#{campaign.id}) обновлена:\n" + "\n".join(f" • {c}" for c in changed)
+
+        else:
+            return f" Неизвестное действие: {action}. Доступны: pause, resume, cancel, update."
+
+    except Exception as e:
+        logger.error(f"[DELEGATION_CAMPAIGN] Error managing: {e}", exc_info=True)
+        session.rollback()
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+# ═══════════════════════════════════════════════════════
+# MARKETPLACE: Агенты и скрипты
+# ═══════════════════════════════════════════════════════
+
+async def list_marketplace(category: str = None, search: str = None,
+                           item_type: str = 'agents',
+                           user_id: int = None, session=None) -> str:
+    """Показывает маркетплейс: активных агентов или скрипты."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserAgent
+        try:
+            from models import UserScript as _UserScript
+        except ImportError:
+            _UserScript = None
+        import json as _json
+
+        if item_type == 'scripts':
+            if _UserScript is None:
+                return " Раздел скриптов временно недоступен."
+            q = session.query(_UserScript).filter_by(status='active')
+            if category:
+                q = q.filter(_UserScript.category == category)
+            if search:
+                q = q.filter(_UserScript.name.ilike(f'%{search}%'))
+            items = q.order_by(_UserScript.installs_count.desc()).limit(10).all()
+            if not items:
+                return " Скриптов пока нет. Будьте первым — создайте скрипт!"
+            lines = [" **Маркетплейс скриптов:**\n"]
+            for s in items:
+                lines.append(f"• **{s.name}** (#{s.id}) — {s.price_per_run} токенов/запуск | {s.installs_count} установок\n  {s.description or ''}")
+            return "\n".join(lines)
+        else:
+            q = session.query(UserAgent).filter_by(status='active')
+            if category:
+                q = q.filter(UserAgent.specialization == category)
+            if search:
+                q = q.filter(UserAgent.name.ilike(f'%{search}%'))
+            items = q.order_by(UserAgent.subscribers_count.desc()).limit(10).all()
+            if not items:
+                return " Агентов пока нет. Создай первого!"
+            lines = [" **Маркетплейс агентов:**\n"]
+            for a in items:
+                rating = round(a.rating_sum / a.rating_count, 1) if a.rating_count else "—"
+                lines.append(f"• **{a.name}** (@{a.slug}) — {a.price_per_message} токенов/сообщение | {rating} | {a.subscribers_count} подписчиков\n {a.description or ''}")
+            return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] list error: {e}", exc_info=True)
+        return f" Ошибка загрузки маркетплейса: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def switch_agent(agent_slug: str = None, reset: bool = False,
+                       user_id: int = None, session=None) -> str:
+    """Переключает пользователя на кастомного агента или сбрасывает на основного."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserAgent, AgentSubscription, User
+        from .user_agents import set_user_active_agent, bill_agent_message
+
+        if reset:
+            set_user_active_agent(user_id, None)
+            return " Возвращаюсь в стандартный режим ASI Biont."
+
+        if not agent_slug:
+            return " Укажи slug или имя агента (например @crypto-alex или «Марк»)"
+
+        slug = agent_slug.lstrip('@').strip()
+
+        # Поиск по slug (приоритет), затем по name (case-insensitive) — для поддержки @Имя
+        agent = session.query(UserAgent).filter_by(slug=slug, status='active').first()
+        if not agent:
+            agent = session.query(UserAgent).filter(
+                UserAgent.name.ilike(slug),
+                UserAgent.status == 'active',
+            ).first()
+        # Дополнительный поиск среди собственных агентов пользователя (status active/paused)
+        if not agent:
+            user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+            if user_obj:
+                agent = session.query(UserAgent).filter(
+                    UserAgent.author_id == user_obj.id,
+                    UserAgent.name.ilike(slug),
+                    UserAgent.status.in_(['active', 'paused']),
+                ).first()
+        if not agent:
+            return f" Агент «{slug}» не найден. Проверь имя или slug в разделе Маркетплейс."
+
+        # Проверяем/создаём подписку
+        user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user_obj:
+            return " Пользователь не найден."
+
+        sub = session.query(AgentSubscription).filter_by(
+            user_id=user_obj.id, agent_id=agent.id).first()
+        is_new = not sub
+        if is_new:
+            sub = AgentSubscription(user_id=user_obj.id, agent_id=agent.id)
+            session.add(sub)
+            agent.subscribers_count = (agent.subscribers_count or 0) + 1
+            session.commit()
+
+        set_user_active_agent(user_id, agent.id)
+
+        return (f" Подключён агент **{agent.name}**!\n"
+                f"Цена: {agent.price_per_message} токенов/сообщение.\n"
+                f"Чтобы вернуться к стандартному режиму — скажи «переключись на ASI Biont».")
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] switch_agent error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+async def run_user_script(script_id: int = None, script_slug: str = None,
+                          params: dict = None,
+                          user_id: int = None, session=None) -> str:
+    """Запускает установленный скрипт из маркетплейса в sandbox."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserScript, ScriptInstall, User
+        from .user_agents import run_script_sandbox, bill_script_run
+
+        user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user_obj:
+            return " Пользователь не найден."
+
+        # Ищем скрипт по id или slug
+        if script_id:
+            script = session.query(UserScript).filter_by(id=script_id, status='active').first()
+        elif script_slug:
+            script = session.query(UserScript).filter_by(slug=script_slug, status='active').first()
+        else:
+            return " Укажи id или slug скрипта."
+
+        if not script:
+            return " Скрипт не найден или недоступен."
+
+        # Проверяем установку
+        install = session.query(ScriptInstall).filter_by(
+            user_id=user_obj.id, script_id=script.id).first()
+        if not install:
+            return (f" Скрипт «{script.name}» не установлен. "
+                    f"Установи его в маркетплейсе за {script.price_per_run} токенов/запуск.")
+
+        # Запускаем в sandbox
+        run_params = params or {}
+        exec_result = run_script_sandbox(script.code, run_params)
+
+        # Биллинг
+        bill_script_run(
+            user_id=user_id, script_id=script.id,
+            params=run_params, result=exec_result['result'],
+            success=exec_result['success'], exec_ms=exec_result['exec_ms'],
+        )
+
+        if exec_result['success']:
+            return f" Скрипт «{script.name}» выполнен за {exec_result['exec_ms']}мс:\n\n{exec_result['result']}"
+        else:
+            return f" Скрипт «{script.name}» завершился с ошибкой:\n{exec_result['error']}"
+
+    except Exception as e:
+        logger.error(f"[MARKETPLACE] run_script error: {e}", exc_info=True)
+        return f" Ошибка запуска скрипта: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def install_script(script_id: int = None, script_slug: str = None,
+                         user_id: int = None, session=None) -> str:
+    """Устанавливает скрипт из маркетплейса."""
+    close_session = False
+    if not session:
+        session = Session()
+        close_session = True
+    try:
+        from models import UserScript, ScriptInstall, User
+
+        user_obj = session.query(User).filter_by(telegram_id=user_id).first()
+        if not user_obj:
+            return " Пользователь не найден."
+
+        if script_id:
+            script = session.query(UserScript).filter_by(id=script_id, status='active').first()
+        elif script_slug:
+            script = session.query(UserScript).filter_by(slug=script_slug, status='active').first()
+        else:
+            return " Укажи id или slug скрипта."
+
+        if not script:
+            return " Скрипт не найден."
+
+        existing = session.query(ScriptInstall).filter_by(
+            user_id=user_obj.id, script_id=script.id).first()
+        if existing:
+            return f"ℹ Скрипт «{script.name}» уже установлен."
+
+        install = ScriptInstall(user_id=user_obj.id, script_id=script.id)
+        session.add(install)
+        script.installs_count = (script.installs_count or 0) + 1
+        session.commit()
+
+        return (f" Скрипт «{script.name}» установлен!\n"
+                f"Цена: {script.price_per_run} токенов/запуск.\n"
+                f"Запусти его: «запусти скрипт {script.slug}»")
+    except Exception as e:
+        session.rollback()
+        logger.error(f"[MARKETPLACE] install_script error: {e}", exc_info=True)
+        return f" Ошибка: {str(e)}"
+    finally:
+        if close_session:
+            session.close()
+
+
+async def run_agent_action(user_id: int, action: str, params: dict = None,
+                           session=None, close_session: bool = True) -> str:
+    """Запускает действие через скрипт активного кастомного агента пользователя.
+
+    Делегирует в HybridAutonomousAgent._run_external_action.
+    Доступен только когда у пользователя активен агент с настроенным python_code.
+
+    Args:
+        user_id: Telegram ID пользователя
+        action: Название действия (строка, передаётся агенту через AGENT_ACTION)
+        params: Словарь параметров действия (передаются как AGENT_PARAM_* env vars)
+    """
+    from .autonomous_agent import get_autonomous_agent
+    agent = get_autonomous_agent()
+
+    # Убеждаемся, что данные агента загружены в кеш агента
+    if user_id not in agent._active_agent_data:
+        try:
+            from .user_agents import get_user_active_agent, load_agent_personality
+            aid = get_user_active_agent(user_id)
+            if aid:
+                adata = load_agent_personality(aid)
+                if adata:
+                    agent._active_agent_data[user_id] = adata
+        except Exception as _e:
+            logger.debug("suppressed: %s", _e)
+
+    if user_id not in agent._active_agent_data:
+        return " Нет активного агента со скриптом. Активируй агента через /dashboard → Агенты."
+
+    # ── GUARD: cooldown для перегретых action (>4x за 48ч) ──
+    try:
+        from models import AgentActivityLog as _AAL_cd, User as _User_cd
+        _cd_cut = datetime.now(timezone.utc) - timedelta(hours=48)
+        _cd_action_l = (action or '').strip().lower()
+        _cd_sess = session or Session()
+        _cd_close = session is None
+        try:
+            # user_id в run_agent_action — telegram_id, AAL.user_id — internal id
+            _cd_user = _cd_sess.query(_User_cd.id).filter_by(telegram_id=user_id).first()
+            _cd_uid = _cd_user[0] if _cd_user else None
+            if _cd_uid:
+                # title в AAL: "AgentName · action_name", ищем по суффиксу
+                _cd_count = _cd_sess.query(func.count(_AAL_cd.id)).filter(
+                    _AAL_cd.user_id == _cd_uid,
+                    _AAL_cd.activity_type == 'run_agent_action',
+                    func.lower(_AAL_cd.title).like(f'%· {_cd_action_l}%'),
+                    _AAL_cd.created_at >= _cd_cut,
+                ).scalar() or 0
+                # Short-window cooldown: 2+ за 2 часа — антилуп
+                _cd_cut_short = datetime.now(timezone.utc) - timedelta(hours=2)
+                _cd_count_short = _cd_sess.query(func.count(_AAL_cd.id)).filter(
+                    _AAL_cd.user_id == _cd_uid,
+                    _AAL_cd.activity_type == 'run_agent_action',
+                    func.lower(_AAL_cd.title).like(f'%· {_cd_action_l}%'),
+                    _AAL_cd.created_at >= _cd_cut_short,
+                ).scalar() or 0
+            else:
+                _cd_count = 0
+                _cd_count_short = 0
+        finally:
+            if _cd_close:
+                _cd_sess.close()
+        if _cd_count >= 4:
+            return (
+                f"⛔ Действие «{action}» заблокировано: уже вызывалось {_cd_count}x за 48ч. "
+                f"Используй ДРУГОЙ инструмент или стратегию."
+            )
+        if _cd_count_short >= 2:
+            return (
+                f"⛔ Действие «{action}» заблокировано: уже вызывалось {_cd_count_short}x за 2ч. "
+                f"Слишком часто. Используй ДРУГОЙ инструмент или стратегию."
+            )
+    except Exception as _cd_e:
+        logger.debug("run_agent_action cooldown check: %s", _cd_e)
+
+    # Адаптивная нормализация action под конкретного пользователя/агента/интеграции.
+    # Без жёстких правил: комбинируем similarity + сигналы интеграций + эмпирику DecisionLog.
+    try:
+        import re as _re_ra
+        from difflib import SequenceMatcher as _SM_ra
+        from models import DecisionLog as _DL_ra
+
+        _adata = agent._active_agent_data.get(user_id) or {}
+        _agent_name = (_adata.get('name') or '').strip()
+        _py_code = (_adata.get('python_code') or '').strip()
+        _tools_allowed_raw = (_adata.get('tools_allowed') or '').strip()
+        _api_keys_raw = (_adata.get('user_api_keys') or '').strip()
+        _supported = []
+        if _py_code:
+            for _m in _re_ra.finditer(r"ACTION\s*==\s*['\"]([^'\"]+)['\"]", _py_code):
+                _a = _m.group(1).strip()
+                if _a and _a not in _supported:
+                    _supported.append(_a)
+            for _m in _re_ra.finditer(r"ACTION\s+in\s*\(([^)]+)\)", _py_code):
+                for _part in _m.group(1).split(','):
+                    _a = _part.strip().strip("'\" ").strip()
+                    if _a and _a not in _supported:
+                        _supported.append(_a)
+
+        _supported_l = [s.lower() for s in _supported]
+        _orig_action = (action or '').strip()
+        _action_l = _orig_action.lower()
+
+        # Платформенные action (send_email, search_users) обрабатываются _run_external_action
+        # напрямую — нормализация их превращает в чужие действия (search_users → search_contacts).
+        _PLATFORM_HANDLED_RA = {'send_email', 'search_users'}
+
+        if _orig_action and _supported and _action_l not in _supported_l and _action_l not in _PLATFORM_HANDLED_RA:
+            _context_hint = ' '.join([
+                _orig_action,
+                str(params or ''),
+                _agent_name,
+                _tools_allowed_raw,
+                _api_keys_raw,
+                _py_code[:1200],
+            ]).lower()
+
+            def _tokens(_txt: str) -> set:
+                return {t for t in _re_ra.findall(r'[a-zA-Zа-яА-Я0-9_]{3,}', (_txt or '').lower())}
+
+            _signal_map = {
+                'email': ('email', 'gmail', 'imap', 'inbox', 'outreach', 'reply', 'письм', 'почт'),
+                'rss': ('rss', 'news', 'feed', 'хабр', 'новост', 'стать'),
+                'market': ('market', 'finance', 'alpha', 'vantage', 'stock', 'crypto', 'рын', 'котиров'),
+                'social': ('telegram', 'discord', 'post', 'publish', 'канал', 'пост', 'публик'),
+                'code': ('github', 'repo', 'commit', 'issue', 'pull', 'код', 'разработ'),
+                'crm': ('crm', 'amocrm', 'contact', 'contacts', 'lead', 'сделк', 'контакт', 'воронк'),
+            }
+
+            def _signals(_txt: str) -> set:
+                _s = set()
+                _low = (_txt or '').lower()
+                for _k, _kws in _signal_map.items():
+                    if any(_kw in _low for _kw in _kws):
+                        _s.add(_k)
+                return _s
+
+            _req_tokens = _tokens(_action_l)
+            _req_signals = _signals(_context_hint)
+            _cand_score_map = {}
+
+            for _cand in _supported:
+                _cand_l = _cand.lower().strip()
+                _cand_tokens = _tokens(_cand_l)
+                _inter = len(_req_tokens & _cand_tokens)
+                _union = max(1, len(_req_tokens | _cand_tokens))
+                _token_jacc = _inter / _union
+                _lex_sim = _SM_ra(None, _action_l, _cand_l).ratio()
+                _cand_signals = _signals(_cand_l)
+                _signal_overlap = len(_req_signals & _cand_signals)
+                _score = (_lex_sim * 0.55) + (_token_jacc * 0.30) + (_signal_overlap * 0.20)
+                _cand_score_map[_cand_l] = _score
+
+            # Эмпирический буст: что у этого пользователя и этого агента реально работало
+            _hist_session = session
+            _hist_close = False
+            try:
+                if _hist_session is None:
+                    _hist_session = Session()
+                    _hist_close = True
+                _cut = datetime.now(timezone.utc) - timedelta(days=30)
+                _q = _hist_session.query(
+                    _DL_ra.chosen_action,
+                    func.avg(_DL_ra.outcome_score).label('avg_score'),
+                    func.count(_DL_ra.id).label('n_rows'),
+                ).filter(
+                    _DL_ra.user_id == user_id,
+                    _DL_ra.decision_type == 'tool_selection',
+                    _DL_ra.outcome_score.isnot(None),
+                    _DL_ra.created_at >= _cut,
+                )
+                if _agent_name:
+                    _q = _q.filter(_DL_ra.context_summary.ilike(f"{_agent_name}:%"))
+                _hist_rows = _q.group_by(_DL_ra.chosen_action).all()
+
+                for _chosen, _avg, _n in _hist_rows:
+                    _chosen_l = (_chosen or '').strip().lower()
+                    if '·' in _chosen_l:
+                        _chosen_l = _chosen_l.split('·', 1)[-1].strip().lower()
+                    if _chosen_l in _cand_score_map:
+                        _weight = min(1.0, float(_n or 0) / 8.0)
+                        _emp_adj = (float(_avg or 0.5) - 0.5) * 0.8 * _weight
+                        _cand_score_map[_chosen_l] += _emp_adj
+            finally:
+                if _hist_close and _hist_session is not None:
+                    _hist_session.close()
+
+            _replacement_l = max(_cand_score_map, key=lambda _k: _cand_score_map.get(_k, -1.0))
+            _replacement = next((s for s in _supported if s.lower() == _replacement_l), _supported[0])
+            logger.info(
+                "[RUN_AGENT_ACTION] adaptive normalize: %s -> %s (user=%s agent=%s score=%.3f)",
+                _orig_action,
+                _replacement,
+                user_id,
+                _agent_name or '?',
+                _cand_score_map.get(_replacement_l, 0.0),
+            )
+            # ── Signal-family mismatch guard ──
+            # Если сигналы запроса и лучшего кандидата не пересекаются,
+            # нормализация семантически неверна (github → email и т.п.)
+            _req_action_signals = _signals(_orig_action)
+            _best_signals = _signals(_replacement_l)
+            if _req_action_signals and _best_signals and not (_req_action_signals & _best_signals):
+                logger.warning(
+                    "[RUN_AGENT_ACTION] signal mismatch: %s (%s) vs %s (%s) — skip normalize",
+                    _orig_action, _req_action_signals, _replacement, _best_signals,
+                )
+            else:
+                action = _replacement
+    except Exception as _norm_e:
+        logger.debug("[RUN_AGENT_ACTION] action normalize skipped: %s", _norm_e)
+
+    raw_params = {'action': action, 'params': params or {}}
+    result = await agent._run_external_action(raw_params, user_id)
+
+    # ── POST-PROCESS: search_contacts — аннотируем статус outreach по email ──
+    # Чтобы агент видел, кому уже писали / кто уже ответил, и не зацикливался
+    if (action or '').lower() in ('search_contacts', 'get_contacts') and isinstance(result, dict) and result.get('status') == 'success':
+        _sc_output = result.get('output', '')
+        try:
+            import re as _re_sc
+            _emails_in_out = _re_sc.findall(r'EMAIL:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})', _sc_output)
+            if _emails_in_out:
+                from models import EmailContact as _EC_sc, User as _U_sc
+                _sc_sess = Session()
+                try:
+                    _sc_user = _sc_sess.query(_U_sc.id).filter_by(telegram_id=user_id).first()
+                    _sc_uid = _sc_user[0] if _sc_user else None
+                    if _sc_uid:
+                        _STATUS_LABEL = {
+                            'replied': '✉️ уже ОТВЕТИЛ — не слать outreach',
+                            'interested': '✉️ заинтересован — используй reply/negotiate',
+                            'unsubscribed': '🚫 отписался',
+                            'bounced': '🚫 bounced',
+                            'sent': '📩 письмо уже отправлено',
+                        }
+                        _annot_map = {}
+                        for _em in set(_emails_in_out):
+                            _ec = _sc_sess.query(_EC_sc).filter(
+                                _EC_sc.user_id == _sc_uid,
+                                func.lower(_EC_sc.email) == _em.strip().lower(),
+                            ).first()
+                            if _ec and _ec.status in _STATUS_LABEL:
+                                _annot_map[_em.strip().lower()] = _STATUS_LABEL[_ec.status]
+                        if _annot_map:
+                            def _sc_sub(m):
+                                _m_email = m.group(1).strip()
+                                _lbl = _annot_map.get(_m_email.lower())
+                                return f'EMAIL: {_m_email} [{_lbl}]' if _lbl else m.group(0)
+                            _sc_output = _re_sc.sub(
+                                r'EMAIL:\s*([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})',
+                                _sc_sub, _sc_output,
+                            )
+                            result = dict(result, output=_sc_output)
+                finally:
+                    _sc_sess.close()
+        except Exception as _sc_err:
+            logger.debug("suppressed search_contacts annotation: %s", _sc_err)
+
+    if isinstance(result, dict):
+        if result.get('status') == 'success':
+            output = result.get('output', '')
+            return f" Действие «{action}» выполнено:\n{output}"
+        else:
+            err = result.get('error', 'неизвестная ошибка')
+            return f" Ошибка при выполнении «{action}»: {err}"
+    return str(result)
+
+
+# ─── Universal HTTP API Request ───────────────────────────────────
+
+async def http_api_request(user_id: int, url: str, method: str = 'GET',
+                           headers: dict = None, body: dict = None,
+                           auth_key: str = None, auth_scheme: str = 'Bearer',
+                           agent_name: str = None,
+                           session=None, close_session: bool = True) -> str:
+    """Универсальный HTTP-запрос к любому внешнему API с автоподстановкой API-ключей агента."""
+    import aiohttp
+    import ipaddress
+    from urllib.parse import urlparse
+
+    if not url or not isinstance(url, str):
+        return "Ошибка: URL не указан"
+    url = url.strip()
+    if not url.startswith('https://') and not url.startswith('http://'):
+        return "Ошибка: URL должен начинаться с https:// или http://"
+
+    # Block internal/private IPs
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ''
+        if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1', ''):
+            return "Ошибка: запросы к локальным адресам запрещены"
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                return "Ошибка: запросы к приватным адресам запрещены"
+        except ValueError:
+            pass  # hostname, not IP
+    except Exception:
+        return "Ошибка: некорректный URL"
+
+    method = (method or 'GET').upper()
+    if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
+        return "Ошибка: метод должен быть GET, POST, PUT, PATCH или DELETE"
+
+    # Resolve API key from agent config
+    req_headers = dict(headers or {})
+    if auth_key:
+        _key_value = _resolve_agent_api_key(user_id, auth_key.strip(), agent_name)
+        if _key_value:
+            scheme = (auth_scheme or 'Bearer').strip()
+            if scheme:
+                req_headers['Authorization'] = f'{scheme} {_key_value}'
+            else:
+                req_headers['Authorization'] = _key_value
+        else:
+            return f"Ошибка: API-ключ '{auth_key}' не найден в настройках агента. Добавь его в дашборде: https://asibiont.com/dashboard → Агенты → API-ключи"
+
+    if 'Content-Type' not in req_headers and method in ('POST', 'PUT', 'PATCH'):
+        req_headers['Content-Type'] = 'application/json'
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with _safe_http(timeout=timeout) as http_session:
+            kwargs = {'headers': req_headers}
+            if body and method in ('POST', 'PUT', 'PATCH'):
+                kwargs['json'] = body
+
+            async with http_session.request(method, url, **kwargs) as resp:
+                status = resp.status
+                try:
+                    resp_text = await resp.text(encoding='utf-8')
+                except Exception:
+                    resp_text = await resp.read()
+                    resp_text = resp_text.decode('utf-8', errors='replace')
+
+                if len(resp_text) > 3000:
+                    resp_text = resp_text[:3000] + '\n... (обрезано, всего ' + str(len(resp_text)) + ' символов)'
+
+                if 200 <= status < 300:
+                    return f"✅ HTTP {status}\n{resp_text}"
+                else:
+                    return f"❌ HTTP {status}\n{resp_text}"
+    except aiohttp.ClientError as e:
+        return f"Ошибка HTTP-запроса: {e}"
+    except Exception as e:
+        return f"Ошибка: {e}"
+
+
+def _resolve_agent_api_key(user_id: int, key_name: str, agent_name: str = None) -> str | None:
+    """Находит значение API-ключа из настроек агента пользователя."""
+    from .autonomous_agent import get_autonomous_agent, _decrypt_keys
+
+    agent = get_autonomous_agent()
+    agent_data = None
+
+    if agent_name:
+        try:
+            from models import Session as _S, UserAgent as _UA
+            _s = _S()
+            try:
+                _tg_user = _s.execute(
+                    __import__('sqlalchemy').text("SELECT id FROM users WHERE telegram_id = :tid"),
+                    {"tid": user_id}
+                ).fetchone()
+                if _tg_user:
+                    _req_lower = agent_name.lower().strip()
+                    for _ca in _s.query(_UA).filter(
+                        _UA.author_id == _tg_user[0],
+                        _UA.status.in_(('active', 'draft', 'paused')),
+                    ).all():
+                        if (_ca.name or '').lower() == _req_lower:
+                            agent_data = {'user_api_keys': _ca.user_api_keys or ''}
+                            break
+            finally:
+                _s.close()
+        except Exception:
+            pass
+
+    if not agent_data:
+        agent_data = agent._active_agent_data.get(user_id)
+
+    if not agent_data:
+        try:
+            from .user_agents import get_user_active_agent, load_agent_personality
+            aid = get_user_active_agent(user_id)
+            if aid:
+                agent_data = load_agent_personality(aid)
+        except Exception:
+            pass
+
+    if not agent_data:
+        return None
+
+    api_keys_raw = _decrypt_keys(agent_data.get('user_api_keys', '') or '')
+    key_name_upper = key_name.upper()
+    for line in api_keys_raw.splitlines():
+        line = line.strip()
+        if '=' in line and not line.startswith('#'):
+            k, _, v = line.partition('=')
+            if k.strip().upper() == key_name_upper:
+                return v.strip()
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# EXECUTE_CODE — Python sandbox с ограниченным окружением
+# ═══════════════════════════════════════════════════════════════════════
+
+async def execute_code(code: str, timeout: int = 10, user_id: int = None) -> str:
+    """Выполняет Python-код в изолированном subprocess с ограниченным набором модулей."""
+    import asyncio
+    import sys
+
+    if not code or not isinstance(code, str):
+        return "Ошибка: код не указан"
+    if len(code) > 10000:
+        return "Ошибка: код слишком длинный (максимум 10 000 символов)"
+
+    timeout = min(max(int(timeout or 10), 1), 30)
+
+    # Wrapper запрещает опасные импорты и блокирует сеть/файловую систему
+    safe_wrapper = '''
+import sys
+import signal
+
+# Whitelist разрешённых модулей
+_ALLOWED = {
+    'math', 'json', 'csv', 'io', 'datetime', 're', 'statistics',
+    'itertools', 'collections', 'hashlib', 'base64', 'urllib.parse',
+    'decimal', 'fractions', 'random', 'string', 'textwrap', 'unicodedata',
+    'functools', 'operator', 'copy', 'pprint', 'enum', 'dataclasses',
+    'typing', 'abc', 'contextlib', 'calendar', 'locale', 'heapq', 'bisect',
+    'array', 'struct', 'codecs', 'binascii', 'quopri', 'uu',
+}
+
+_original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+def _safe_import(name, *args, **kwargs):
+    base = name.split('.')[0]
+    if base not in _ALLOWED:
+        raise ImportError(f"Модуль '{name}' недоступен в sandbox")
+    return _original_import(name, *args, **kwargs)
+
+import builtins
+builtins.__import__ = _safe_import
+
+# Запрещаем опасные builtins
+for _b in ('open', 'compile', 'eval', 'exec', '__import__'):
+    pass  # exec ниже делаем через restricted namespace
+
+_CODE = """ + repr(code) + """
+exec(_CODE, {'__builtins__': builtins, '__name__': '__sandbox__'})
+'''
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, '-c', safe_wrapper,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            return f"⏱ Timeout: код выполнялся дольше {timeout}с и был прерван"
+
+        out = stdout.decode('utf-8', errors='replace')
+        err = stderr.decode('utf-8', errors='replace')
+
+        # Убираем шум из stderr (предупреждения Python)
+        err_lines = [l for l in err.splitlines() if l.strip() and 'DeprecationWarning' not in l and 'ResourceWarning' not in l]
+        err_clean = '\n'.join(err_lines)
+
+        result_parts = []
+        if out.strip():
+            result_parts.append(out.strip()[:5000])
+        if err_clean.strip():
+            result_parts.append(f"⚠️ stderr:\n{err_clean.strip()[:1000]}")
+
+        if not result_parts:
+            return "✅ Код выполнен (нет вывода)"
+        return '\n'.join(result_parts)
+
+    except Exception as e:
+        return f"Ошибка выполнения: {e}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# PARSE_FILE — извлечение текста из PDF, Excel, CSV, TXT, DOCX
+# ═══════════════════════════════════════════════════════════════════════
+
+async def parse_file(file_id: str = None, file_url: str = None, max_chars: int = 8000,
+                     user_id: int = None) -> str:
+    """Читает файл из Telegram или по URL и возвращает извлечённый текст."""
+    import io
+    import os
+
+    max_chars = min(max(int(max_chars or 8000), 500), 30000)
+
+    raw_bytes: bytes | None = None
+    filename: str = ''
+
+    # 1. Получаем байты файла
+    if file_id:
+        try:
+            from config import TELEGRAM_TOKEN
+            import aiohttp
+            async with _safe_http() as sess:
+                # Получаем file_path через Bot API
+                async with sess.get(f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/getFile?file_id={file_id}') as r:
+                    data = await r.json()
+                file_path = data.get('result', {}).get('file_path', '')
+                if not file_path:
+                    return "Ошибка: файл не найден в Telegram (возможно, устарел file_id)"
+                filename = os.path.basename(file_path)
+                async with sess.get(f'https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}') as r:
+                    raw_bytes = await r.read()
+        except Exception as e:
+            return f"Ошибка загрузки файла из Telegram: {e}"
+
+    elif file_url:
+        if not file_url.startswith('https://'):
+            return "Ошибка: file_url должен начинаться с https://"
+        try:
+            import aiohttp
+            async with _safe_http(timeout=aiohttp.ClientTimeout(total=30)) as sess:
+                async with sess.get(file_url) as r:
+                    raw_bytes = await r.read()
+                    cd = r.headers.get('Content-Disposition', '')
+                    if 'filename=' in cd:
+                        filename = cd.split('filename=')[-1].strip('" ')
+                    else:
+                        filename = file_url.split('/')[-1].split('?')[0]
+        except Exception as e:
+            return f"Ошибка загрузки файла по URL: {e}"
+    else:
+        return "Ошибка: укажи file_id или file_url"
+
+    if not raw_bytes:
+        return "Ошибка: файл пустой"
+
+    ext = (filename.rsplit('.', 1)[-1] if '.' in filename else '').lower()
+    text = ''
+
+    # 2. Парсим по типу
+    try:
+        if ext == 'pdf' or (not ext and raw_bytes[:4] == b'%PDF'):
+            try:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(io.BytesIO(raw_bytes))
+                pages = []
+                for page in reader.pages:
+                    t = page.extract_text() or ''
+                    pages.append(t)
+                    if sum(len(p) for p in pages) > max_chars * 2:
+                        break
+                text = '\n'.join(pages)
+            except ImportError:
+                return "PDF-парсинг недоступен (PyPDF2 не установлен)"
+
+        elif ext in ('xlsx', 'xls'):
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), read_only=True, data_only=True)
+                rows = []
+                for sheet in wb.worksheets:
+                    rows.append(f'=== Лист: {sheet.title} ===')
+                    for row in sheet.iter_rows(values_only=True):
+                        row_str = '\t'.join(str(c) if c is not None else '' for c in row)
+                        if row_str.strip():
+                            rows.append(row_str)
+                        if sum(len(r) for r in rows) > max_chars * 2:
+                            break
+                text = '\n'.join(rows)
+            except ImportError:
+                return "Excel-парсинг недоступен (openpyxl не установлен)"
+
+        elif ext == 'csv':
+            import csv
+            decoded = raw_bytes.decode('utf-8', errors='replace')
+            reader = csv.reader(io.StringIO(decoded))
+            rows = ['\t'.join(row) for row in reader]
+            text = '\n'.join(rows)
+
+        elif ext in ('txt', 'md', 'log', 'json', 'xml', 'html', 'py', 'js', 'ts', 'css', ''):
+            text = raw_bytes.decode('utf-8', errors='replace')
+
+        elif ext in ('doc', 'docx'):
+            try:
+                import docx
+                doc = docx.Document(io.BytesIO(raw_bytes))
+                text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+            except ImportError:
+                # Fallback: raw text extraction
+                text = raw_bytes.decode('utf-8', errors='replace')
+
+        else:
+            # Попытка декодировать как текст
+            try:
+                text = raw_bytes.decode('utf-8', errors='strict')
+            except UnicodeDecodeError:
+                return f"Файл с расширением '.{ext}' не поддерживается для текстового извлечения"
+
+    except Exception as e:
+        return f"Ошибка парсинга файла: {e}"
+
+    if not text.strip():
+        return f"Файл прочитан, но текст не извлечён (возможно, сканированный PDF или бинарный файл)"
+
+    # 3. Обрезаем до max_chars
+    text = text.strip()
+    if len(text) > max_chars:
+        text = text[:max_chars] + f'\n\n... (обрезано, всего {len(text)} символов)'
+
+    lines_count = text.count('\n') + 1
+    return f"📄 {filename or 'файл'} ({ext.upper() or 'TXT'}, ~{len(raw_bytes)//1024}KB, {lines_count} строк)\n\n{text}"
