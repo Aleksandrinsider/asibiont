@@ -8506,6 +8506,14 @@ class AnchorEngine:
                         import re as _re_ct_parens
                         _coord_text = _re_ct_parens.sub(r'\s*\(\s*\)\s*', ' ', _coord_text).strip()
                         _coord_text = _re_ct_parens.sub(r'  +', ' ', _coord_text)
+                        # ── Двойное имя агента: «Hugo, Hugo …» → «Hugo, …» ──────────────
+                        if _chosen_name:
+                            _coord_text = _re_ct_parens.sub(
+                                r'^(' + re.escape(_chosen_name) + r',?\s+)' + re.escape(_chosen_name) + r',?\s+',
+                                r'\1',
+                                _coord_text,
+                            )
+                        _coord_text = _coord_text.strip()
                     # ── Context-aware fallback: если AI не сгенерировал → динамическая LLM-генерация → шаблон ──
                     if _coord_text is None:
                         # Шаг 1: пробуем динамическую генерацию через LLM (работает для любой цели + 60+ интеграций)
@@ -8539,9 +8547,14 @@ class AnchorEngine:
                         # Если есть свежий результат агента — дополняем контекстом вместо абстрактного шаблона
                         if _last_agent_reply_c and len(_last_agent_reply_c.strip()) > 80:
                             _arl = _last_agent_reply_c.strip().splitlines()
-                            _arl_snippet = next((l.strip() for l in _arl if len(l.strip()) > 40), '')
+                            # Берём только строки начинающиеся с заглавной буквы (полное предложение, не фрагмент)
+                            _arl_snippet = next(
+                                (l.strip() for l in _arl
+                                 if len(l.strip()) > 40 and l.strip()[:1] == l.strip()[:1].upper() and l.strip()[:1].isalpha()),
+                                ''
+                            )
                             if _arl_snippet:
-                                _coord_text += f' Опирайся на последний результат: {_arl_snippet[:160]}'
+                                _coord_text += f' Используй это: {_arl_snippet[:160]}'
                         logger.info("[ANCHOR-AUTOPILOT] using context-aware fallback for %s", _chosen_name)
                     _coord_text_clean_save = ''  # pre-init to avoid NameError when _skip_coord=True
                     try:
