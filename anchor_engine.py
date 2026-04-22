@@ -5031,7 +5031,8 @@ class AnchorEngine:
 
         async with lock:
             try:
-                await asyncio.wait_for(self._process_user(user_id), timeout=600)
+                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+                await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
                 self._timeout_backoff_until.pop(user_id, None)
@@ -5041,9 +5042,9 @@ class AnchorEngine:
                 if _cnt >= 3:
                     # Backoff: 30 минут после 3+ таймаутов
                     self._timeout_backoff_until[user_id] = _time_cb.monotonic() + 1800
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 600s ({_cnt}x) — circuit breaker ON for 30min")
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after {_process_timeout_sec}s ({_cnt}x) — circuit breaker ON for 30min")
                 else:
-                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after 600s ({_cnt}/3) — lock released")
+                    logger.error(f"[ANCHOR] User {user_id}: _process_user timed out after {_process_timeout_sec}s ({_cnt}/3) — lock released")
                 # Закрываем подвешенные AI-сессии
                 try:
                     from ai_integration.autonomous_agent import (
@@ -5111,11 +5112,13 @@ class AnchorEngine:
     async def _process_user_inner(self, user_id: int, session):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
         # ── DEADLINE TRACKING ──
-        # Внешний _process_user_safe имеет timeout=180s.
+        # Внешний _process_user_safe имеет timeout=ANCHOR_PROCESS_USER_TIMEOUT_SEC (default 300s).
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
         # чтобы НЕ допускать CancelledError от asyncio.wait_for.
         import time as _time_inner
-        _deadline = _time_inner.monotonic() + 270  # 270s — 30s запас до внешнего 300s
+        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+        _inner_budget_sec = max(30, _outer_timeout_sec - 30)
+        _deadline = _time_inner.monotonic() + _inner_budget_sec
 
         def _time_left():
             return _deadline - _time_inner.monotonic()

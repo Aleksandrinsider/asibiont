@@ -16,6 +16,7 @@ import json
 import logging
 import time
 import hashlib
+import os
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 
@@ -1210,66 +1211,104 @@ class ExternalAPIClient:
             timeout = 60 if max_tokens > 1000 else (15 if max_tokens <= 300 else 25)
         
         req_timeout = aiohttp.ClientTimeout(total=timeout, connect=5)
-        session = await self._get_session()
+        max_attempts = int(os.getenv('DEEPSEEK_RETRIES', '3'))
         
-        try:
-            async with session.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={
-                    'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    "model": DEEPSEEK_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": temperature,
-                    "max_tokens": max_tokens
-                },
-                timeout=req_timeout
-            ) as response:
-                self._track_call('deepseek')
-                
-                if response.status == 200:
-                    data = await response.json()
-                    content = data['choices'][0]['message']['content'].strip()
-                    _clr_err('deepseek')
+        for attempt in range(max_attempts):
+            try:
+                session = await self._get_session()
+                async with session.post(
+                    'https://api.deepseek.com/chat/completions',
+                    headers={
+                        'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                        'Content-Type': 'application/json'
+                    },
+                    json={
+                        "model": DEEPSEEK_MODEL,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": temperature,
+                        "max_tokens": max_tokens
+                    },
+                    timeout=req_timeout
+                ) as response:
+                    self._track_call('deepseek')
                     
-                    if parse_json:
-                        try:
-                            # Извлекаем JSON из ответа
-                            start = content.find('{')
-                            end = content.rfind('}') + 1
-                            if start != -1 and end > start:
-                                return json.loads(content[start:end])
-                            else:
-                                logger.warning("[DEEPSEEK] No JSON found in response")
+                    if response.status == 200:
+                        data = await response.json()
+                        content = data['choices'][0]['message']['content'].strip()
+                        _clr_err('deepseek')
+                        
+                        if parse_json:
+                            try:
+                                # Извлекаем JSON из ответа
+                                start = content.find('{')
+                                end = content.rfind('}') + 1
+                                if start != -1 and end > start:
+                                    return json.loads(content[start:end])
+                                else:
+                                    logger.warning("[DEEPSEEK] No JSON found in response")
+                                    return content
+                            except json.JSONDecodeError as e:
+                                logger.warning(f"[DEEPSEEK] JSON parse error: {e}")
                                 return content
-                        except json.JSONDecodeError as e:
-                            logger.warning(f"[DEEPSEEK] JSON parse error: {e}")
-                            return content
-                    
-                    return content
-                else:
+                        
+                        return content
+
                     _body_ds = ''
                     try:
                         _body_ds = (await response.text())[:300]
                     except Exception:
                         pass
+
+                    # 5xx часто кратковременны — даем шанс повторить
+                    if response.status >= 500 and attempt < max_attempts - 1:
+                        logger.warning(f"[DEEPSEEK] API {response.status} on attempt {attempt+1}/{max_attempts}, retrying")
+                        await asyncio.sleep(1.5 * (attempt + 1))
+                        continue
+
                     _rec_err('deepseek', f'API error {response.status}', code=response.status, detail=_body_ds)
                     logger.error(f"[DEEPSEEK] API error: {response.status}")
                     return None
-                    
-        except asyncio.TimeoutError:
-            _rec_err('deepseek', 'Тайм-аут запроса к AI-модели')
-            logger.warning("[DEEPSEEK] Timeout")
-            return None
-        except Exception as e:
-            _rec_err('deepseek', f'Exception: {e}')
-            logger.error(f"[DEEPSEEK] Error: {e}")
-            return None
+
+            except asyncio.TimeoutError:
+                if attempt < max_attempts - 1:
+                    logger.warning(f"[DEEPSEEK] Timeout on attempt {attempt+1}/{max_attempts}, retrying")
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                _rec_err('deepseek', 'Тайм-аут запроса к AI-модели')
+                logger.warning("[DEEPSEEK] Timeout")
+                return None
+            except (aiohttp.ClientPayloadError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
+                # Разорванный payload/соединение: принудительно пересоздаем shared session перед ретраем
+                if self._session is not None and not self._session.closed:
+                    try:
+                        await self._session.close()
+                    except Exception:
+                        pass
+                self._session = None
+                if attempt < max_attempts - 1:
+                    logger.warning(f"[DEEPSEEK] Transport error on attempt {attempt+1}/{max_attempts}: {e} — retrying")
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                _rec_err('deepseek', f'Exception: {e}')
+                logger.error(f"[DEEPSEEK] Error: {e}")
+                return None
+            except aiohttp.ClientError as e:
+                if attempt < max_attempts - 1:
+                    logger.warning(f"[DEEPSEEK] Client error on attempt {attempt+1}/{max_attempts}: {e} — retrying")
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                    continue
+                _rec_err('deepseek', f'Exception: {e}')
+                logger.error(f"[DEEPSEEK] Error: {e}")
+                return None
+            except Exception as e:
+                _rec_err('deepseek', f'Exception: {e}')
+                logger.error(f"[DEEPSEEK] Error: {e}")
+                return None
+
+        return None
     
     # ========================================================================
     # ВЫСОКОУРОВНЕВЫЕ СОСТАВНЫЕ МЕТОДЫ

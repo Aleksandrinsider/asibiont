@@ -5658,6 +5658,18 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
     это преждевременно рубит запрос и провоцирует каскад таймаутов."""
     global _QUICK_AI_SESSION
     _timeouts = _timeouts if _timeouts else [60, 95]
+    # Для длинных промптов первый таймаут 60s часто слишком короткий.
+    # Поднимаем бюджет только когда контекст действительно большой.
+    try:
+        _approx_chars = sum(len((m or {}).get('content', '')) for m in (messages or []) if isinstance(m, dict))
+        if _approx_chars > 12000:
+            _timeouts = list(_timeouts)
+            if _timeouts:
+                _timeouts[0] = max(int(_timeouts[0]), 80)
+            if len(_timeouts) > 1:
+                _timeouts[1] = max(int(_timeouts[1]), 130)
+    except Exception:
+        pass
     _max_attempts = max(2, len(_timeouts))
     _session_total_timeout = max(_timeouts) + 15
     for _att in range(_max_attempts):
