@@ -952,13 +952,25 @@ async def notify_indexnow(urls: list):
             # Bing/Yandex оба поддерживают IndexNow
             for endpoint in ['https://api.indexnow.org/indexnow',
                              'https://yandex.com/indexnow']:
-                try:
-                    async with session.post(endpoint, json=payload,
-                                           headers={'Content-Type': 'application/json'},
-                                           timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                        logger.info(f"[IndexNow] {endpoint} -> {resp.status}")
-                except Exception as e:
-                    logger.warning(f"[IndexNow] {endpoint} error: {e}")
+                _ok = False
+                for _attempt in range(3):
+                    try:
+                        async with session.post(
+                            endpoint,
+                            json=payload,
+                            headers={'Content-Type': 'application/json'},
+                            timeout=aiohttp.ClientTimeout(total=12, connect=4),
+                        ) as resp:
+                            logger.info(f"[IndexNow] {endpoint} -> {resp.status}")
+                            _ok = True
+                            break
+                    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                        if _attempt >= 2:
+                            logger.warning(f"[IndexNow] {endpoint} error after retries: {type(e).__name__}: {e}")
+                            break
+                        await asyncio.sleep(0.8 * (_attempt + 1))
+                if not _ok:
+                    continue
     except Exception as e:
         logger.warning(f"[IndexNow] Failed: {e}")
 
@@ -7307,11 +7319,21 @@ async def on_startup(app):
     # Set webhook for production mode
     if bot and not LOCAL:
         webhook_url = os.getenv('WEBHOOK_URL', 'https://asibiont.com/webhook')
-        try:
-            await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
-            logger.info(f"✅ Webhook set to: {webhook_url}")
-        except Exception as e:
-            logger.error(f"❌ Failed to set webhook: {e}")
+        _set_ok = False
+        for _attempt in range(3):
+            try:
+                await bot.set_webhook(webhook_url, secret_token=WEBHOOK_SECRET or None)
+                logger.info(f"✅ Webhook set to: {webhook_url}")
+                _set_ok = True
+                break
+            except Exception as e:
+                if _attempt >= 2:
+                    logger.error(f"❌ Failed to set webhook after retries: {e}")
+                    break
+                await asyncio.sleep(1.2 * (_attempt + 1))
+                logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/3 after error: {e}")
+        if not _set_ok:
+            logger.warning("[WEBHOOK] Bot starts without confirmed webhook; platform will retry on next restart")
 
 
 async def on_shutdown(app):

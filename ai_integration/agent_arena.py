@@ -720,6 +720,8 @@ async def _comment_loop():
                         commented_this_round += 1
         except asyncio.CancelledError:
             raise  # дать asyncio правильно завершить задачу
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            logger.warning("[ARENA] comment_loop timeout: %s", e)
         except Exception as e:
             logger.error("[ARENA] comment_loop error: %s", e, exc_info=True)
 

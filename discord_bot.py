@@ -124,10 +124,23 @@ async def start_discord_bot():
             await message.channel.send(chunk)
 
     async def runner():
-        try:
-            await bot.start(DISCORD_BOT_TOKEN)
-        except Exception as e:
-            logger.error(f"Discord bot error: {e}", exc_info=True)
+        _retry = 0
+        while True:
+            try:
+                await bot.start(DISCORD_BOT_TOKEN)
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                _retry += 1
+                _is_timeout = isinstance(e, (asyncio.TimeoutError, aiohttp.ClientError, TimeoutError))
+                if _is_timeout and _retry <= 5:
+                    _delay = min(30, 2 * _retry)
+                    logger.warning(f"Discord bot transient network error (retry {_retry}/5 in {_delay}s): {e}")
+                    await asyncio.sleep(_delay)
+                    continue
+                logger.error(f"Discord bot error: {e}", exc_info=True)
+                return
 
     _discord_task = asyncio.create_task(runner())
     logger.info("Discord bot task started")

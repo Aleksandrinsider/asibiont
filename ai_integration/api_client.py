@@ -945,34 +945,45 @@ class ExternalAPIClient:
         session = await self._get_session()
         
         try:
-            url = f"http://api.openweathermap.org/data/2.5/weather"
+            url = "https://api.openweathermap.org/data/2.5/weather"
             params = {
                 'q': city,
                 'appid': OPENWEATHERMAP_API_KEY,
                 'units': 'metric',
                 'lang': 'ru'
             }
-            
-            async with session.get(url, params=params) as response:
-                self._track_call('openweathermap')
-                
-                if response.status == 200:
-                    data = await response.json()
-                    result = {
-                        'temp': data['main']['temp'],
-                        'feels_like': data['main']['feels_like'],
-                        'description': data['weather'][0]['description'].capitalize(),
-                        'humidity': data['main']['humidity'],
-                        'wind_speed': data['wind']['speed'],
-                        'city_name': data['name']
-                    }
-                    _clr_err('openweathermap')
-                    await self.cache.set('weather', cache_params, result, cache_ttl)
-                    return result
-                else:
-                    _rec_err('openweathermap', f'API error {response.status}', code=response.status)
-                    logger.warning(f"[WEATHER] API error {response.status} for: {city}")
-                    return None
+
+            for _attempt in range(3):
+                try:
+                    async with session.get(
+                        url,
+                        params=params,
+                        timeout=aiohttp.ClientTimeout(total=12, connect=4),
+                    ) as response:
+                        self._track_call('openweathermap')
+
+                        if response.status == 200:
+                            data = await response.json()
+                            result = {
+                                'temp': data['main']['temp'],
+                                'feels_like': data['main']['feels_like'],
+                                'description': data['weather'][0]['description'].capitalize(),
+                                'humidity': data['main']['humidity'],
+                                'wind_speed': data['wind']['speed'],
+                                'city_name': data['name']
+                            }
+                            _clr_err('openweathermap')
+                            await self.cache.set('weather', cache_params, result, cache_ttl)
+                            return result
+
+                        _rec_err('openweathermap', f'API error {response.status}', code=response.status)
+                        logger.warning(f"[WEATHER] API error {response.status} for: {city}")
+                        return None
+                except (asyncio.TimeoutError, aiohttp.ClientError) as _net_err:
+                    if _attempt >= 2:
+                        raise
+                    await asyncio.sleep(0.8 * (_attempt + 1))
+                    logger.warning(f"[WEATHER] transient network error (attempt {_attempt+1}/3): {_net_err}")
                     
         except Exception as e:
             _rec_err('openweathermap', f'Exception: {e}')
