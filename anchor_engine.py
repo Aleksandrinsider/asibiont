@@ -8529,6 +8529,7 @@ class AnchorEngine:
                         _fb_name_prefix = f'{_chosen_name},'
                         if _g_label and _fb_choice.startswith(_fb_name_prefix):
                             _fb_body = _fb_choice[len(_fb_name_prefix):].strip()
+                            _fb_body = _fb_body.rstrip(' .!?')
                             _coord_text = (
                                 f'{_chosen_name}, давай сменим подход: {_fb_body}. '
                                 f'Это поможет продвинуть цель «{_g_label[:55].rstrip(".")}».'
