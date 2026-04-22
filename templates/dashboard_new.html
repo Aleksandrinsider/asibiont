@@ -3236,10 +3236,16 @@ if True:  # всегда проверяем IMAP
         mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-        import re as _re, os as _os
+        import os as _os
         _task_env = _os.environ.get('AGENT_TASK', '')
-        _from_match = _re.search(r'(?:от|from)\s+([\u0400-\u04ff\w][\u0400-\u04ff\w]+(?:\s+[\u0400-\u04ff\w]+)?)', _task_env, _re.IGNORECASE)
-        _search_from = _from_match.group(1).strip() if _from_match else ''
+        _search_from = ''
+        _task_lower = _task_env.lower()
+        for _kw in ('от ', 'from '):
+            _ki = _task_lower.find(_kw)
+            if _ki >= 0:
+                _after = _task_env[_ki + len(_kw):].strip()
+                _search_from = _after.split()[0] if _after.split() else ''
+                break
         if _search_from:
             _, data = mail.search(None, 'FROM', '"' + _search_from + '"')
         else:
@@ -3367,10 +3373,16 @@ else:
         mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-        import re as _re, os as _os
+        import os as _os
         _task_env = _os.environ.get('AGENT_TASK', '')
-        _from_match = _re.search(r'(?:от|from)\s+([\u0400-\u04ff\w][\u0400-\u04ff\w]+(?:\s+[\u0400-\u04ff\w]+)?)', _task_env, _re.IGNORECASE)
-        _search_from = _from_match.group(1).strip() if _from_match else ''
+        _search_from = ''
+        _task_lower = _task_env.lower()
+        for _kw in ('от ', 'from '):
+            _ki = _task_lower.find(_kw)
+            if _ki >= 0:
+                _after = _task_env[_ki + len(_kw):].strip()
+                _search_from = _after.split()[0] if _after.split() else ''
+                break
         if _search_from:
             _, data = mail.search(None, 'FROM', '"' + _search_from + '"')
         else:
@@ -3498,10 +3510,16 @@ else:
         mail.login(USER, PASS.replace(' ', ''))
         mail.select('inbox')
         since = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime('%d-%b-%Y')
-        import re as _re, os as _os
+        import os as _os
         _task_env = _os.environ.get('AGENT_TASK', '')
-        _from_match = _re.search(r'(?:от|from)\s+([\u0400-\u04ff\w][\u0400-\u04ff\w]+(?:\s+[\u0400-\u04ff\w]+)?)', _task_env, _re.IGNORECASE)
-        _search_from = _from_match.group(1).strip() if _from_match else ''
+        _search_from = ''
+        _task_lower = _task_env.lower()
+        for _kw in ('от ', 'from '):
+            _ki = _task_lower.find(_kw)
+            if _ki >= 0:
+                _after = _task_env[_ki + len(_kw):].strip()
+                _search_from = _after.split()[0] if _after.split() else ''
+                break
         if _search_from:
             _, data = mail.search(None, 'FROM', '"' + _search_from + '"')
         else:
