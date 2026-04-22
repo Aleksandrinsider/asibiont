@@ -5694,7 +5694,12 @@ async def _quick_ai_call_raw(messages: list, max_tokens: int = 250, _caller: str
                     pass
         raise  # CancelledError обязательно перебросить
       except (asyncio.TimeoutError, aiohttp.ClientError, aiohttp.ServerDisconnectedError, ConnectionResetError, OSError) as e:
-        logger.warning(f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}")
+        _is_last_attempt = _att >= (_max_attempts - 1)
+        _msg = f"[quick_ai] {type(e).__name__} on attempt {_att+1}/{_max_attempts}: {e}"
+        if _is_last_attempt:
+            logger.warning(_msg)
+        else:
+            logger.info(_msg + " — retrying")
         if not os.getenv('PYTEST_CURRENT_TEST'):
             # Закрываем сессию только при реальных ошибках соединения.
             # asyncio.TimeoutError НЕ ломает сессию — per-request timeout уже закрыл

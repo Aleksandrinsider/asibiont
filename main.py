@@ -780,7 +780,7 @@ async def send_email(to: str, subject: str, body: str):
         try:
             logger.info(f"Sending email via Resend API to {to}")
             async with _safe_http() as session:
-                resp = await session.post(
+                async with session.post(
                     'https://api.resend.com/emails',
                     headers={
                         'Authorization': f'Bearer {RESEND_API_KEY}',
@@ -794,15 +794,15 @@ async def send_email(to: str, subject: str, body: str):
                         'html': html,
                     },
                     timeout=aiohttp.ClientTimeout(total=15)
-                )
-                resp_data = await resp.json()
-                if resp.status in (200, 201):
-                    logger.info(f"Email sent via Resend API to {to}: {resp_data.get('id', 'ok')}")
-                    return
-                else:
-                    err = resp_data.get('message', resp_data.get('error', str(resp_data)))
-                    errors.append(f"Resend API {resp.status}: {err}")
-                    logger.warning(f"Resend API failed: {resp.status} {err}")
+                ) as resp:
+                    resp_data = await resp.json()
+                    if resp.status in (200, 201):
+                        logger.info(f"Email sent via Resend API to {to}: {resp_data.get('id', 'ok')}")
+                        return
+                    else:
+                        err = resp_data.get('message', resp_data.get('error', str(resp_data)))
+                        errors.append(f"Resend API {resp.status}: {err}")
+                        logger.warning(f"Resend API failed: {resp.status} {err}")
         except Exception as e:
             errors.append(f"Resend API: {e}")
             logger.warning(f"Resend API error: {e}")
@@ -6748,7 +6748,7 @@ async def translate_post_handler(request):
         lang_name = lang_names.get(target_lang, target_lang)
 
         async with _safe_http() as session:
-            resp = await session.post(
+            async with session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={
                     'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
@@ -6764,8 +6764,8 @@ async def translate_post_handler(request):
                     'temperature': 0.3,
                 },
                 timeout=aiohttp.ClientTimeout(total=30),
-            )
-            result = await resp.json()
+            ) as resp:
+                result = await resp.json()
 
         translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
         if not translated:
@@ -6797,7 +6797,7 @@ async def translate_text_handler(request):
         }
         lang_name = lang_names.get(target_lang, target_lang)
         async with _safe_http() as session:
-            resp = await session.post(
+            async with session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
                 json={
@@ -6810,8 +6810,8 @@ async def translate_text_handler(request):
                     'temperature': 0.3,
                 },
                 timeout=aiohttp.ClientTimeout(total=30),
-            )
-            result = await resp.json()
+            ) as resp:
+                result = await resp.json()
         translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
         if not translated:
             return web.json_response({'error': 'Translation failed'}, status=500)
@@ -6852,7 +6852,7 @@ async def translate_comment_handler(request):
         lang_name = lang_names.get(target_lang, target_lang)
 
         async with _safe_http() as session:
-            resp = await session.post(
+            async with session.post(
                 'https://api.deepseek.com/chat/completions',
                 headers={
                     'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
@@ -6868,8 +6868,8 @@ async def translate_comment_handler(request):
                     'temperature': 0.3,
                 },
                 timeout=aiohttp.ClientTimeout(total=30),
-            )
-            result = await resp.json()
+            ) as resp:
+                result = await resp.json()
 
         translated = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
         if not translated:
@@ -9183,26 +9183,26 @@ async def api_reports_handler(request):
                                 if outreach_obj and outreach_obj.resend_id:
                                     try:
                                         async with _safe_http() as http:
-                                            resp = await http.get(
+                                            async with http.get(
                                                 f'https://api.resend.com/emails/{outreach_obj.resend_id}',
                                                 headers={'Authorization': f'Bearer {RESEND_API_KEY}'},
                                                 timeout=_aiohttp.ClientTimeout(total=5),
-                                            )
-                                            if resp.status == 200:
-                                                r_data = await resp.json()
-                                                last_event = None
-                                                for evt in r_data.get('events', []):
-                                                    evt_type = evt.get('type', '')
-                                                    if evt_type in ('email.opened',):
-                                                        last_event = 'opened'
-                                                    elif evt_type == 'email.delivered' and last_event != 'opened':
-                                                        last_event = 'delivered'
-                                                if last_event:
-                                                    status_priority = {'draft': 0, 'sent': 1, 'delivered': 2, 'opened': 3, 'replied': 4}
-                                                    if status_priority.get(last_event, 0) > status_priority.get(outreach_obj.status, 0):
-                                                        outreach_obj.status = last_event
-                                                        o_data['status'] = last_event
-                                                        synced += 1
+                                            ) as resp:
+                                                if resp.status == 200:
+                                                    r_data = await resp.json()
+                                                    last_event = None
+                                                    for evt in r_data.get('events', []):
+                                                        evt_type = evt.get('type', '')
+                                                        if evt_type in ('email.opened',):
+                                                            last_event = 'opened'
+                                                        elif evt_type == 'email.delivered' and last_event != 'opened':
+                                                            last_event = 'delivered'
+                                                    if last_event:
+                                                        status_priority = {'draft': 0, 'sent': 1, 'delivered': 2, 'opened': 3, 'replied': 4}
+                                                        if status_priority.get(last_event, 0) > status_priority.get(outreach_obj.status, 0):
+                                                            outreach_obj.status = last_event
+                                                            o_data['status'] = last_event
+                                                            synced += 1
                                     except Exception as _e:
                                         logger.debug("suppressed: %s", _e)
                     if synced > 0:
@@ -9612,17 +9612,17 @@ async def api_outreach_load_reply_handler(request):
                     if not refresh_token or not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
                         return False
                     async with _safe_http() as h:
-                        r = await h.post('https://oauth2.googleapis.com/token', data={
+                        async with h.post('https://oauth2.googleapis.com/token', data={
                             'client_id': GOOGLE_CLIENT_ID, 'client_secret': GOOGLE_CLIENT_SECRET,
                             'refresh_token': refresh_token, 'grant_type': 'refresh_token',
-                        }, timeout=aiohttp.ClientTimeout(total=10))
-                        if r.status == 200:
-                            d = await r.json()
-                            access_token = d.get('access_token', access_token)
-                            new_tok = {**token_data, 'access_token': access_token}
-                            user.google_oauth_token = encrypt_token(_json_lr.dumps(new_tok))
-                            session_db.commit()
-                            return True
+                        }, timeout=aiohttp.ClientTimeout(total=10)) as r:
+                            if r.status == 200:
+                                d = await r.json()
+                                access_token = d.get('access_token', access_token)
+                                new_tok = {**token_data, 'access_token': access_token}
+                                user.google_oauth_token = encrypt_token(_json_lr.dumps(new_tok))
+                                session_db.commit()
+                                return True
                     return False
 
                 def _extract_body(payload):
@@ -9658,27 +9658,32 @@ async def api_outreach_load_reply_handler(request):
 
                 async def _fetch_reply():
                     async with _safe_http() as h:
-                        r = await h.get(
+                        async with h.get(
                             'https://gmail.googleapis.com/gmail/v1/users/me/messages',
                             headers={'Authorization': f'Bearer {access_token}'},
                             params={'maxResults': '5', 'q': f'from:{email}'},
                             timeout=aiohttp.ClientTimeout(total=10),
-                        )
-                        if r.status == 401: return None
-                        if r.status != 200: return ''
-                        d = await r.json()
+                        ) as r:
+                            if r.status == 401:
+                                return None
+                            if r.status != 200:
+                                return ''
+                            d = await r.json()
                         msgs = d.get('messages', [])
-                        if not msgs: return ''
-                        mr = await h.get(
+                        if not msgs:
+                            return ''
+                        async with h.get(
                             f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{msgs[0]["id"]}',
                             headers={'Authorization': f'Bearer {access_token}'},
                             params={'format': 'full'},
                             timeout=aiohttp.ClientTimeout(total=15),
-                        )
-                        if mr.status != 200: return ''
-                        md = await mr.json()
+                        ) as mr:
+                            if mr.status != 200:
+                                return ''
+                            md = await mr.json()
                         body = _extract_body(md.get('payload', {}))
-                        if not body: body = md.get('snippet', '')
+                        if not body:
+                            body = md.get('snippet', '')
                         return body
 
                 reply_body = await _fetch_reply()
@@ -10379,7 +10384,7 @@ async def gmail_oauth_callback(request):
 
         async with _safe_http() as http:
             # Обмен code → tokens
-            token_resp = await http.post(
+            async with http.post(
                 'https://oauth2.googleapis.com/token',
                 data={
                     'code': code,
@@ -10389,8 +10394,8 @@ async def gmail_oauth_callback(request):
                     'grant_type': 'authorization_code',
                 },
                 timeout=aiohttp.ClientTimeout(total=15),
-            )
-            token_data = await token_resp.json()
+            ) as token_resp:
+                token_data = await token_resp.json()
             if 'error' in token_data:
                 logger.error(f"Gmail OAuth token error: {token_data}")
                 return web.HTTPFound('/dashboard?gmail_auth=error')
@@ -10399,12 +10404,12 @@ async def gmail_oauth_callback(request):
             refresh_token = token_data.get('refresh_token', '')
 
             # Получаем email пользователя
-            ui_resp = await http.get(
+            async with http.get(
                 'https://www.googleapis.com/oauth2/v2/userinfo',
                 headers={'Authorization': f'Bearer {access_token}'},
                 timeout=aiohttp.ClientTimeout(total=10),
-            )
-            userinfo = await ui_resp.json()
+            ) as ui_resp:
+                userinfo = await ui_resp.json()
             gmail_email = userinfo.get('email', '')
 
         # Сохраняем в БД
@@ -11328,27 +11333,27 @@ async def resend_webhook_handler(request):
                         if RESEND_RECEIVING_API_KEY:
                             import aiohttp as _aiohttp
                             async with _safe_http() as http:
-                                r = await http.get(
+                                async with http.get(
                                     f'https://api.resend.com/emails/receiving/{email_id}',
                                     headers={'Authorization': f'Bearer {RESEND_RECEIVING_API_KEY}'},
                                     timeout=_aiohttp.ClientTimeout(total=10),
-                                )
-                                resp_text = await r.text()
-                                logger.info(f"[RESEND_WEBHOOK] Receiving API status={r.status}, body (first 500): {resp_text[:500]}")
-                                if r.status == 200:
-                                    import json as _json2
-                                    rec = _json2.loads(resp_text)
-                                    fetched_body = rec.get('text') or rec.get('html') or ''
-                                    if fetched_body:
-                                        text_body = fetched_body
-                                    if not raw_from:
-                                        raw_from = rec.get('from', '')
-                                    if not subject:
-                                        subject = rec.get('subject', '')
-                                elif r.status == 401:
-                                    logger.warning(f"[RESEND_WEBHOOK] Receiving API 401 — API key restricted to sending only. Set RESEND_RECEIVING_API_KEY env var with a full-access key.")
-                                else:
-                                    logger.warning(f"[RESEND_WEBHOOK] Receiving API returned {r.status}")
+                                ) as r:
+                                    resp_text = await r.text()
+                                    logger.info(f"[RESEND_WEBHOOK] Receiving API status={r.status}, body (first 500): {resp_text[:500]}")
+                                    if r.status == 200:
+                                        import json as _json2
+                                        rec = _json2.loads(resp_text)
+                                        fetched_body = rec.get('text') or rec.get('html') or ''
+                                        if fetched_body:
+                                            text_body = fetched_body
+                                        if not raw_from:
+                                            raw_from = rec.get('from', '')
+                                        if not subject:
+                                            subject = rec.get('subject', '')
+                                    elif r.status == 401:
+                                        logger.warning(f"[RESEND_WEBHOOK] Receiving API 401 — API key restricted to sending only. Set RESEND_RECEIVING_API_KEY env var with a full-access key.")
+                                    else:
+                                        logger.warning(f"[RESEND_WEBHOOK] Receiving API returned {r.status}")
                     except Exception as e:
                         logger.warning(f"[RESEND_WEBHOOK] Failed to fetch received email body: {e}")
 
@@ -12452,14 +12457,14 @@ async def api_agent_chat_handler(request):
         messages.append({'role': 'user', 'content': user_message})
 
         async with _safe_http() as sess:
-            resp = await sess.post(
+            async with sess.post(
                 'https://api.deepseek.com/v1/chat/completions',
                 headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
                 json={'model': DEEPSEEK_MODEL, 'messages': messages,
                       'max_tokens': 1000, 'temperature': 0.7},
                 timeout=_aio.ClientTimeout(total=60)
-            )
-            result = await resp.json()
+            ) as resp:
+                result = await resp.json()
 
         ai_reply = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip() or '...'
         return web.json_response({

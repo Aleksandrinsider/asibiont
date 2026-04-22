@@ -17739,32 +17739,32 @@ async def publish_to_discord(
             payload = {"content": content}
 
         async with _safe_http() as http:
-            resp = await http.post(
+            async with http.post(
                 user.discord_webhook,
                 json=payload,
                 timeout=_aiohttp.ClientTimeout(total=15)
-            )
-            if resp.status in (200, 204):
-                try:
-                    from models import AgentActivityLog
-                    log = AgentActivityLog(
-                        user_id=user.id,
-                        activity_type='post_discord',
-                        title=content[:80] + ('...' if len(content) > 80 else ''),
-                        content=content,
-                        target='Discord канал',
-                        status='published',
-                    )
-                    session.add(log)
-                    session.commit()
-                except Exception as _le:
-                    logger.warning(f"[DISCORD] Failed to log: {_le}")
-                server = getattr(user, 'discord_server_name', None) or 'Discord канал'
-                img_note = " с изображением" if image_url else ""
-                return f" Пост опубликован{img_note} в {server}"
-            else:
-                err = await resp.text()
-                return f" Ошибка Discord webhook: {resp.status} — {err[:200]}"
+            ) as resp:
+                if resp.status in (200, 204):
+                    try:
+                        from models import AgentActivityLog
+                        log = AgentActivityLog(
+                            user_id=user.id,
+                            activity_type='post_discord',
+                            title=content[:80] + ('...' if len(content) > 80 else ''),
+                            content=content,
+                            target='Discord канал',
+                            status='published',
+                        )
+                        session.add(log)
+                        session.commit()
+                    except Exception as _le:
+                        logger.warning(f"[DISCORD] Failed to log: {_le}")
+                    server = getattr(user, 'discord_server_name', None) or 'Discord канал'
+                    img_note = " с изображением" if image_url else ""
+                    return f" Пост опубликован{img_note} в {server}"
+                else:
+                    err = await resp.text()
+                    return f" Ошибка Discord webhook: {resp.status} — {err[:200]}"
     except Exception as e:
         logger.error(f"[PUBLISH_DISCORD] Error: {e}", exc_info=True)
         return f" Ошибка публикации в Discord: {str(e)}"
@@ -18450,13 +18450,13 @@ async def generate_image(
 
         async with _safe_http() as http:
             # Запускаем генерацию
-            resp = await http.post(
+            async with http.post(
                 f"https://api.replicate.com/v1/models/{model}/predictions",
                 headers=headers,
                 json={"input": input_data},
                 timeout=_aiohttp.ClientTimeout(total=90),
-            )
-            data = await resp.json()
+            ) as resp:
+                data = await resp.json()
 
             if resp.status not in (200, 201):
                 err = data.get("detail", str(data))
@@ -18469,12 +18469,12 @@ async def generate_image(
             if output is None and prediction_id:
                 for _ in range(30):
                     await _asyncio.sleep(3)
-                    poll = await http.get(
+                    async with http.get(
                         f"https://api.replicate.com/v1/predictions/{prediction_id}",
                         headers=headers,
                         timeout=_aiohttp.ClientTimeout(total=15),
-                    )
-                    poll_data = await poll.json()
+                    ) as poll:
+                        poll_data = await poll.json()
                     status = poll_data.get("status")
                     if status == "succeeded":
                         output = poll_data.get("output")
@@ -18495,25 +18495,25 @@ async def generate_image(
             if send_to_telegram:
                 try:
                     # Скачиваем изображение с Replicate
-                    _img_resp = await http.get(image_url, timeout=_aiohttp.ClientTimeout(total=30))
-                    if _img_resp.status == 200:
-                        _img_bytes = await _img_resp.read()
+                    async with http.get(image_url, timeout=_aiohttp.ClientTimeout(total=30)) as _img_resp:
+                        if _img_resp.status == 200:
+                            _img_bytes = await _img_resp.read()
                         
-                        # Отправляем как multipart/form-data с файлом
-                        import aiohttp as _aiohttp_form
-                        _form = _aiohttp_form.FormData()
-                        _form.add_field('chat_id', str(user.telegram_id))
-                        _form.add_field('photo', _img_bytes, filename='generated.png', content_type='image/png')
+                            # Отправляем как multipart/form-data с файлом
+                            import aiohttp as _aiohttp_form
+                            _form = _aiohttp_form.FormData()
+                            _form.add_field('chat_id', str(user.telegram_id))
+                            _form.add_field('photo', _img_bytes, filename='generated.png', content_type='image/png')
                         
-                        send_resp = await http.post(
-                            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
-                            data=_form,
-                            timeout=_aiohttp.ClientTimeout(total=40),
-                        )
-                        send_data = await send_resp.json()
-                        logger.info(f"[GENERATE_IMAGE] Photo sent to TG user {user_id}: ok={send_data.get('ok')}")
-                    else:
-                        logger.warning(f"[GENERATE_IMAGE] Failed to download image: HTTP {_img_resp.status}")
+                            async with http.post(
+                                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto",
+                                data=_form,
+                                timeout=_aiohttp.ClientTimeout(total=40),
+                            ) as send_resp:
+                                send_data = await send_resp.json()
+                            logger.info(f"[GENERATE_IMAGE] Photo sent to TG user {user_id}: ok={send_data.get('ok')}")
+                        else:
+                            logger.warning(f"[GENERATE_IMAGE] Failed to download image: HTTP {_img_resp.status}")
                 except Exception as _send_err:
                     logger.error(f"[GENERATE_IMAGE] Error sending to Telegram: {_send_err}")
                     send_data = {"ok": False, "error": str(_send_err)}

@@ -15938,37 +15938,25 @@ class AnchorEngine:
                             f'{_task_brief_lower[0].upper() + _task_brief_lower[1:] if _task_brief_lower else ""}.'
                         )
                     else:
-                        # Фильтруем технические reason-коды ПЕРЕД использованием в шаблоне
-                        _INTERNAL_REASON_CODES = frozenset({
-                            'fair_assignment diversification', 'fairness backfill',
-                            'backfill', 'diversification', 'fallback',
-                        })
-                        _INTERNAL_REASON_PREFIXES = ('critical_stuck', 'stuck_', 'stall_', 'loop_', 'dedup_')
-                        _step_reason_show = (
-                            '' if (
-                                _step_reason.lower().strip() in _INTERNAL_REASON_CODES
-                                or any(_step_reason.lower().strip().startswith(p) for p in _INTERNAL_REASON_PREFIXES)
-                            )
-                            else _step_reason
-                        )
+                        # По запросу пользователя не отсекаем reason: используем как сгенерировал ИИ.
+                        _step_reason_show = (_step_reason or '').strip()
 
                         if _eff_goal_title and len(_eff_goal_title.strip()) > 5:
-                            _gt = _eff_goal_title.strip()[:55].rstrip('.,;')
-                            # Разговорная формулировка поручения: без канцелярского "По цели —"
-                            if _step_reason_show and len(_step_reason_show.strip()) > 15:
-                                _reason_clean = _step_reason_show.strip().rstrip('.')
-                                _asi_assign_text = (
-                                    f'{_ag_name}, {_reason_clean}. '
-                                    f'Давай так: {_task_brief_lower}. '
-                                    f'Это продвинет цель «{_gt}».'
-                                )
+                            if _step_reason_show:
+                                _reason_part = _step_reason_show
+                                if not _reason_part.endswith(('.', '!', '?')):
+                                    _reason_part = _reason_part + '.'
+                                _asi_assign_text = f'{_ag_name}, {_reason_part} {_task_brief_lower}.'
                             else:
-                                _asi_assign_text = (
-                                    f'{_ag_name}, давай так: {_task_brief_lower}. '
-                                    f'Это продвинет цель «{_gt}».'
-                                )
+                                _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
                         else:
-                            _asi_assign_text = f'{_ag_name}, давай так: {_task_brief_lower}.'
+                            if _step_reason_show:
+                                _reason_part = _step_reason_show
+                                if not _reason_part.endswith(('.', '!', '?')):
+                                    _reason_part = _reason_part + '.'
+                                _asi_assign_text = f'{_ag_name}, {_reason_part} {_task_brief_lower}.'
+                            else:
+                                _asi_assign_text = f'{_ag_name}, {_task_brief_lower}.'
                     # УДАЛЕНА: вся логика инфинитив→императив трансформации (L15523-15660)
                     # Теперь LLM генерирует task_brief уже в правильной форме через self-check в промпте.
                 except Exception as _aac_err:
@@ -22323,25 +22311,25 @@ class AnchorEngine:
                 try:
                     if user.discord_webhook and user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
                         async with _safe_http() as http:
-                            resp = await http.post(
+                            async with http.post(
                                 user.discord_webhook,
                                 json={"content": post_text},
                                 timeout=_aiohttp_dc.ClientTimeout(total=15)
-                            )
-                            if resp.status in (200, 204):
-                                dc_log = AgentActivityLog(
-                                    user_id=user.id,
-                                    activity_type='post_discord',
-                                    title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
-                                    content=post_text,
-                                    target='Discord канал',
-                                    status='published',
-                                )
-                                session.add(dc_log)
-                                session.commit()
-                                logger.info(f"[ANCHOR] ✅ Auto-published feed post to Discord for {user.telegram_id}")
-                            else:
-                                logger.warning(f"[ANCHOR] Discord webhook failed ({resp.status}) for {user.telegram_id}")
+                            ) as resp:
+                                if resp.status in (200, 204):
+                                    dc_log = AgentActivityLog(
+                                        user_id=user.id,
+                                        activity_type='post_discord',
+                                        title=post_text[:80] + ('...' if len(post_text) > 80 else ''),
+                                        content=post_text,
+                                        target='Discord канал',
+                                        status='published',
+                                    )
+                                    session.add(dc_log)
+                                    session.commit()
+                                    logger.info(f"[ANCHOR] ✅ Auto-published feed post to Discord for {user.telegram_id}")
+                                else:
+                                    logger.warning(f"[ANCHOR] Discord webhook failed ({resp.status}) for {user.telegram_id}")
                 except Exception as dc_err:
                     logger.debug(f"[ANCHOR] Discord auto-publish failed (non-critical): {dc_err}")
 
@@ -22452,12 +22440,12 @@ class AnchorEngine:
                 dc_ok = False
                 try:
                     async with _safe_http() as http_dc:
-                        resp = await http_dc.post(
+                        async with http_dc.post(
                             discord_wh,
                             json={"content": post_text},
                             timeout=aiohttp.ClientTimeout(total=15),
-                        )
-                        dc_ok = resp.status in (200, 204)
+                        ) as resp:
+                            dc_ok = resp.status in (200, 204)
                 except Exception as dc_err:
                     logger.error(f"[ANCHOR] Discord webhook error: {dc_err}")
 
@@ -22616,12 +22604,12 @@ class AnchorEngine:
                 try:
                     if user.discord_webhook.startswith('https://discord.com/api/webhooks/'):
                         async with _safe_http() as http:
-                            resp = await http.post(
+                            async with http.post(
                                 user.discord_webhook,
                                 json={"content": post_text},
                                 timeout=_aiohttp_cc.ClientTimeout(total=15)
-                            )
-                            dc_ok = resp.status in (200, 204)
+                            ) as resp:
+                                dc_ok = resp.status in (200, 204)
                 except Exception as dc_err:
                     logger.error(f"[ANCHOR] Content campaign Discord publish error: {dc_err}")
                 activity = AgentActivityLog(
@@ -23053,7 +23041,7 @@ class AnchorEngine:
             )
 
             async with _safe_http() as http:
-                resp = await http.post(
+                async with http.post(
                     'https://api.deepseek.com/chat/completions',
                     headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
                     json={
@@ -23066,12 +23054,12 @@ class AnchorEngine:
                         'temperature': 0.7,
                     },
                     timeout=aiohttp.ClientTimeout(total=30),
-                )
-                if resp.status != 200:
-                    logger.warning(f"[ANCHOR] _ai_compose_delegation: API error {resp.status}")
-                    return (None, None, None)
-                data = await resp.json()
-                text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(f"[ANCHOR] _ai_compose_delegation: API error {resp.status}")
+                        return (None, None, None)
+                    data = await resp.json()
+                    text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
 
             if not text:
                 return (None, None, None)
