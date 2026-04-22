@@ -3288,7 +3288,7 @@ if True:  # всегда проверяем IMAP
                             s = _re.sub(r'<[^>]+>', ' ', s)
                             s = _he.unescape(s)
                         s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
-                        return _re.sub(r'\s+', ' ', s).strip()
+                        return ' '.join(s.split())
                     def _decode_part(raw, charset):
                         for enc in (charset or 'utf-8', 'utf-8', 'windows-1252', 'latin-1'):
                             try:
@@ -3419,7 +3419,7 @@ else:
                             s = _re.sub(r'<[^>]+>', ' ', s)
                             s = _he.unescape(s)
                         s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
-                        return _re.sub(r'\s+', ' ', s).strip()
+                        return ' '.join(s.split())
                     def _decode_part(raw, charset):
                         for enc in (charset or 'utf-8', 'utf-8', 'windows-1252', 'latin-1'):
                             try:
@@ -3550,7 +3550,7 @@ else:
                             s = _re.sub(r'<[^>]+>', ' ', s)
                             s = _he.unescape(s)
                         s = _re.sub(r'[\u00a0\u200b\u200c\u200d\u2060\ufeff\u00ad\u200e\u200f]', '', s)
-                        return _re.sub(r'\s+', ' ', s).strip()
+                        return ' '.join(s.split())
                     def _decode_part(raw, charset):
                         for enc in (charset or 'utf-8', 'utf-8', 'windows-1252', 'latin-1'):
                             try:
