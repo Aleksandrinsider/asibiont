@@ -12038,7 +12038,12 @@ async def api_agent_test_code_handler(request):
             _kline = _kline.strip()
             if '=' in _kline and not _kline.startswith('#'):
                 _k, _, _v = _kline.partition('=')
-                _env[_k.strip()] = _v.strip()
+                _kn = _k.strip()
+                _vn = _v.strip()
+                # App Passwords (Gmail, Yandex, Mail.ru) содержат пробелы между группами
+                if 'PASS' in _kn.upper() or 'PASSWORD' in _kn.upper():
+                    _vn = _vn.replace(' ', '')
+                _env[_kn] = _vn
 
         # Оборачиваем код SSRF-преамбулой (как в autonomous_agent)
         from ai_integration.autonomous_agent import _wrap_agent_code

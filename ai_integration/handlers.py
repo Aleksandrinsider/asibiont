@@ -16596,7 +16596,7 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
     else:
         imap_host = integration.get('smtp_host', '').replace('smtp.', 'imap.')
 
-    email_pass = integration.get('email_pass', '')
+    email_pass = integration.get('email_pass', '').replace(' ', '')
     if not email_pass:
         svc = 'GMAIL_PASS' if 'gmail' in (email_user or label or '').lower() else 'YANDEX_PASS или MAILRU_PASS'
         return (f"Для чтения входящих через IMAP нужен пароль приложения. "
