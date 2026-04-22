@@ -3298,19 +3298,18 @@ if True:  # всегда проверяем IMAP
                         return raw.decode('latin-1', errors='replace')
                     body = ''
                     if msg.is_multipart():
+                        _txt_fb = ''
                         _html_fb = ''
                         for part in msg.walk():
                             _ct = part.get_content_type()
                             _disp = (part.get('Content-Disposition') or '').lower()
-                            if _ct == 'text/plain' and 'attachment' not in _disp:
-                                raw = part.get_payload(decode=True) or b''
-                                body = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
-                                break
                             if _ct == 'text/html' and not _html_fb and 'attachment' not in _disp:
                                 raw = part.get_payload(decode=True) or b''
                                 _html_fb = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
-                        if not body:
-                            body = _html_fb
+                            elif _ct == 'text/plain' and not _txt_fb and 'attachment' not in _disp:
+                                raw = part.get_payload(decode=True) or b''
+                                _txt_fb = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
+                        body = _html_fb or _txt_fb
                     else:
                         raw = msg.get_payload(decode=True) or b''
                         body = _strip_html(_decode_part(raw, msg.get_content_charset()))[:150]
@@ -3430,19 +3429,18 @@ else:
                         return raw.decode('latin-1', errors='replace')
                     body = ''
                     if msg.is_multipart():
+                        _txt_fb = ''
                         _html_fb = ''
                         for part in msg.walk():
                             _ct = part.get_content_type()
                             _disp = (part.get('Content-Disposition') or '').lower()
-                            if _ct == 'text/plain' and 'attachment' not in _disp:
-                                raw = part.get_payload(decode=True) or b''
-                                body = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
-                                break
                             if _ct == 'text/html' and not _html_fb and 'attachment' not in _disp:
                                 raw = part.get_payload(decode=True) or b''
                                 _html_fb = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
-                        if not body:
-                            body = _html_fb
+                            elif _ct == 'text/plain' and not _txt_fb and 'attachment' not in _disp:
+                                raw = part.get_payload(decode=True) or b''
+                                _txt_fb = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
+                        body = _html_fb or _txt_fb
                     else:
                         raw = msg.get_payload(decode=True) or b''
                         body = _strip_html(_decode_part(raw, msg.get_content_charset()))[:150]
@@ -3562,19 +3560,18 @@ else:
                         return raw.decode('latin-1', errors='replace')
                     body = ''
                     if msg.is_multipart():
+                        _txt_fb = ''
                         _html_fb = ''
                         for part in msg.walk():
                             _ct = part.get_content_type()
                             _disp = (part.get('Content-Disposition') or '').lower()
-                            if _ct == 'text/plain' and 'attachment' not in _disp:
-                                raw = part.get_payload(decode=True) or b''
-                                body = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
-                                break
                             if _ct == 'text/html' and not _html_fb and 'attachment' not in _disp:
                                 raw = part.get_payload(decode=True) or b''
                                 _html_fb = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
-                        if not body:
-                            body = _html_fb
+                            elif _ct == 'text/plain' and not _txt_fb and 'attachment' not in _disp:
+                                raw = part.get_payload(decode=True) or b''
+                                _txt_fb = _strip_html(_decode_part(raw, part.get_content_charset()))[:150]
+                        body = _html_fb or _txt_fb
                     else:
                         raw = msg.get_payload(decode=True) or b''
                         body = _strip_html(_decode_part(raw, msg.get_content_charset()))[:150]

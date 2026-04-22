@@ -16662,51 +16662,53 @@ async def _check_emails_imap(integration: dict, limit: int, known_emails: set = 
                     try:
                         _parsed = _email_mod.message_from_bytes(raw_full)
                         if _parsed.is_multipart():
-                            # Ищем text/plain часть
+                            # Собираем и HTML и text/plain; предпочитаем HTML —
+                            # gmail-клиенты удаляют содержимое <s>-тегов при генерации text/plain
+                            _html_snip = ''
+                            _txt_snip = ''
                             for _part in _parsed.walk():
-                                if (_part.get_content_type() == 'text/plain'
-                                        and 'attachment' not in str(_part.get('Content-Disposition', ''))):
+                                _part_ct = _part.get_content_type()
+                                _part_disp = str(_part.get('Content-Disposition', ''))
+                                if 'attachment' in _part_disp:
+                                    continue
+                                if _part_ct == 'text/html' and not _html_snip:
+                                    _pay = _part.get_payload(decode=True)
+                                    if _pay:
+                                        _cs = _part.get_content_charset() or 'utf-8'
+                                        try:
+                                            _htxt = _pay.decode(_cs, errors='replace')
+                                        except (LookupError, UnicodeDecodeError):
+                                            _htxt = _pay.decode('latin-1', errors='replace')
+                                        try:
+                                            from html.parser import HTMLParser as _HHP
+                                            class _HTE(_HHP):
+                                                def __init__(self):
+                                                    super().__init__(convert_charrefs=True)
+                                                    self._o = []; self._s = 0
+                                                def handle_starttag(self, tag, attrs):
+                                                    if tag in ('style','script','head','title'): self._s += 1
+                                                def handle_endtag(self, tag):
+                                                    if tag in ('style','script','head','title'): self._s = max(0, self._s - 1)
+                                                def handle_data(self, data):
+                                                    if not self._s: self._o.append(data)
+                                            _hte = _HTE(); _hte.feed(_htxt)
+                                            _html_snip = ' '.join(_hte._o).strip()[:400]
+                                        except Exception:
+                                            import re as _re_htm
+                                            _html_snip = _re_htm.sub(r'<[^>]+>', ' ', _htxt).strip()[:400]
+                                elif _part_ct == 'text/plain' and not _txt_snip:
                                     _pay = _part.get_payload(decode=True)
                                     if _pay:
                                         _cs = _part.get_content_charset() or 'utf-8'
                                         for _enc in (_cs, 'utf-8', 'windows-1252', 'latin-1'):
                                             try:
-                                                snippet = _pay.decode(_enc, errors='strict').strip()[:400]
+                                                _txt_snip = _pay.decode(_enc, errors='strict').strip()[:400]
                                                 break
                                             except (UnicodeDecodeError, LookupError):
                                                 continue
                                         else:
-                                            snippet = _pay.decode('latin-1', errors='replace').strip()[:400]
-                                        break
-                            # Fallback: text/html → убираем теги через html.parser
-                            if not snippet:
-                                for _part in _parsed.walk():
-                                    if _part.get_content_type() == 'text/html':
-                                        _pay = _part.get_payload(decode=True)
-                                        if _pay:
-                                            _cs = _part.get_content_charset() or 'utf-8'
-                                            try:
-                                                _htxt = _pay.decode(_cs, errors='replace')
-                                            except (LookupError, UnicodeDecodeError):
-                                                _htxt = _pay.decode('latin-1', errors='replace')
-                                            try:
-                                                from html.parser import HTMLParser as _HHP
-                                                class _HTE(_HHP):
-                                                    def __init__(self):
-                                                        super().__init__(convert_charrefs=True)
-                                                        self._o = []; self._s = 0
-                                                    def handle_starttag(self, tag, attrs):
-                                                        if tag in ('style','script','head','title'): self._s += 1
-                                                    def handle_endtag(self, tag):
-                                                        if tag in ('style','script','head','title'): self._s = max(0, self._s - 1)
-                                                    def handle_data(self, data):
-                                                        if not self._s: self._o.append(data)
-                                                _hte = _HTE(); _hte.feed(_htxt)
-                                                snippet = ' '.join(_hte._o).strip()[:400]
-                                            except Exception:
-                                                import re as _re_htm
-                                                snippet = _re_htm.sub(r'<[^>]+>', ' ', _htxt).strip()[:400]
-                                            break
+                                            _txt_snip = _pay.decode('latin-1', errors='replace').strip()[:400]
+                            snippet = _html_snip or _txt_snip
                         else:
                             _pay = _parsed.get_payload(decode=True)
                             if _pay:
