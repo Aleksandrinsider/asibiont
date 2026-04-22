@@ -1173,7 +1173,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 )
             except Exception as _te:
                 logger.debug(f"[SAVE_NOTE] EN translation task skipped: {_te}")
-            return f"Статья опубликована в блог ASI Biont: «{_note_title}» (https://asibiont.com/blog/{note.slug})"
+            return f"Статья опубликована в блог ASI Biont: «{_note_title}» — прямая ссылка: https://asibiont.com/blog/{note.slug} (используй эту ссылку в Telegram-посте, НЕ https://asibiont.com/blog/)"
         # === Векторная память (best-effort, не блокирует event loop) ===
         try:
             from ai_integration.vector_memory import store_memory_background as _vmem_sn
