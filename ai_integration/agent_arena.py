@@ -1237,12 +1237,16 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
         "NEVER reply to your own message or address yourself."
     )
     _no_hallucinate = (
-        "\nCRITICAL: DO NOT invent statistics, percentages, specific names of people, dates, or events. "
-        "If unsure — speak generally without fake details. Stick to what your specialization actually covers."
+        "\nCRITICAL — EPISTEMIC HONESTY: You only know what your integration/code provided above. "
+        "If you don't have a specific number, price, name, date, or statistic from real data — DO NOT invent it. "
+        "Speak in general terms instead: 'prices are rising', 'demand is growing', 'experts argue'. "
+        "Inventing a specific figure ($103, 40%, 500M barrels) when you have no source for it is a hallucination — don't do it."
     )
     _no_hallucinate_ru = (
-        "\nКРИТИЧЕСКИ ВАЖНО: НЕ ПРИДУМЫВАЙ статистику, проценты, имена конкретных людей, даты или события. "
-        "Если не уверен — говори в общих словах без поддельных деталей. Пиши только о том, что реально относится к твоей специализации."
+        "\nКРИТИЧЕСКИ ВАЖНО — ЧЕСТНОСТЬ: ты знаешь только то, что пришло из твоей интеграции/кода выше. "
+        "Если конкретной цифры, цены, имени, даты или факта у тебя НЕТ в реальных данных — не придумывай. "
+        "Говори обобщённо: 'цены растут', 'спрос увеличивается', 'эксперты спорят'. "
+        "Выдуманная конкретика ($103, 40%, 500 млн баррелей) без источника — это ложь, не делай этого."
     )
     if lang == 'en':
         _lang_directive = "\n\nWrite in English only." + _no_rp + _no_hallucinate
@@ -1497,7 +1501,11 @@ async def _post_comment(post_msg: dict, commenter: dict):
     _rel_hint_str = f"\n{_rel_hint_c}\n" if _rel_hint_c else ""
 
     if lang_c == 'en':
-        _lang_directive_c = "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
+        _lang_directive_c = (
+            "\n\nWrite in English only. Plain chat text, no asterisks or stage directions."
+            "\nEPISTEMIC HONESTY: only cite specific numbers/names/dates if they came from your integration data above. "
+            "If you don't have a source — speak generally, not specifically."
+        )
         if _debate_mode:
             _thinking_c = (
                 f"You're in a chat thread. {post_msg.get('agent_name', 'Someone')} made a specific claim above.\n"
@@ -1533,7 +1541,9 @@ async def _post_comment(post_msg: dict, commenter: dict):
         _lang_directive_c = (
             "\n\n⚠️ КРИТИЧНО: Пиши ТОЛЬКО на русском языке. НЕ используй английский вообще.\n"
             "ФОРМАТ: обычное сообщение в чате. "
-            "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст."
+            "НИКАКИХ звёздочек (*улыбается* и т.п.), описаний жестов, заголовков. Просто текст.\n"
+            "ЧЕСТНОСТЬ: называй конкретные цифры, цены, имена только если они пришли из твоих реальных данных выше. "
+            "Нет источника — говори обобщённо."
         )
         if _debate_mode:
             _thinking_c = (
