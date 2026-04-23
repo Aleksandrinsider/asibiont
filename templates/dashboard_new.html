@@ -6017,7 +6017,7 @@ except Exception as e:
                     {k:'FINNHUB_API_KEY', label:'API Key Finnhub', ph:'xxxxxxxxxxxxxxxxxxxxxxxx', t:'text'},
                     {k:'FINNHUB_SYMBOLS', label:'Тикеры через запятую', ph:'AAPL,MSFT,TSLA', t:'text', opt:true}
                 ],
-                hint: 'Бесплатный ключ: finnhub.io → Get Free API Key. 60 запросов/мин. Котировки, новости компаний с sentiment-анализом, календарь earnings, IPO, insider transactions.',
+                hint: 'Бесплатный ключ: finnhub.io → Get Free API Key. 60 запросов/мин. Котировки, новости, earnings календарь, IPO, инсайдерские сделки (insider_trades).',
                 code: `import urllib.request, json, os
 API_KEY = os.environ.get('FINNHUB_API_KEY', '')
 SYMBOLS = os.environ.get('FINNHUB_SYMBOLS', 'AAPL,MSFT')
@@ -6034,7 +6034,17 @@ try:
         print('Ошибка: FINNHUB_API_KEY не задан.')
     else:
         symbols = [s.strip().upper() for s in SYMBOLS.split(',') if s.strip()]
-        if ACTION == 'news':
+        if ACTION == 'insider_trades':
+            sym = symbols[0] if symbols else 'AAPL'
+            d = fh_get('stock/insider-transactions?symbol=' + sym)
+            print(f'[ИНСАЙДЕРЫ {sym}] последние сделки:')
+            for item in (d.get('data') or [])[:10]:
+                name = item.get('name', '?')
+                share = item.get('share', 0)
+                trans = 'ПОКУПКА' if share > 0 else 'ПРОДАЖА'
+                date = item.get('transactionDate', '')[:10]
+                print(f'  {name}: {trans} {abs(share)} шт ({date})')
+        elif ACTION == 'news':
             d = fh_get('news?category=general')
             for item in d[:5]:
                 print(item.get('headline','') + '  (' + item.get('source','') + ')')
@@ -7929,7 +7939,7 @@ except Exception as e:
                             <option value="tinkoff">Тинькофф Инвестиции</option>
                             <option value="ga4">Google Analytics 4</option>
                             <option value="alphavantage">Alpha Vantage (акции / форекс / сырьё)</option>
-                            <option value="finnhub">Finnhub (новости / котировки / календарь)</option>
+                            <option value="finnhub">Finnhub (инсайдеры / котировки / новости / earnings)</option>
                             <option value="twelvedata">Twelve Data (акции / форекс / крипто)</option>
                             <option value="yahoo_finance">Yahoo Finance (акции / индексы / ETF)</option>
                             <option value="fmp">Financial Modeling Prep (финансовая отчётность)</option>
