@@ -1017,6 +1017,67 @@ async def _run_agent_python_code(code: str, timeout: int = 15, env_vars: dict = 
         return f'[ошибка: {e}]'
 
 
+def _parse_api_keys_to_env(api_keys_str: str) -> dict:
+    """Разбирает user_api_keys в словарь env-переменных с поддержкой multiline значений.
+
+    Формат:
+        KEY=value
+        continuation_line   ← принадлежит предыдущему ключу (напр. RSS_URLS)
+        KEY2=value2
+
+    Для RSS_URLS= несколько URL на отдельных строках собираются в одну env-переменную
+    с символом новой строки, что корректно воспринимает Python-код агента.
+    """
+    result: dict = {}
+    current_key: str | None = None
+    current_val_parts: list[str] = []
+
+    for raw_line in api_keys_str.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith('#'):
+            # Пустые строки завершают текущее значение только если они не внутри multiline
+            continue
+        if '=' in line and not line.startswith('http'):
+            # Сохраняем предыдущий ключ
+            if current_key is not None:
+                result[current_key] = '\n'.join(current_val_parts)
+            k, _, v = line.partition('=')
+            current_key = k.strip()
+            current_val_parts = [v.strip()] if v.strip() else []
+        else:
+            # Строка без '=' или URL — продолжение предыдущего значения
+            if current_key is not None and line:
+                current_val_parts.append(line)
+
+    if current_key is not None:
+        result[current_key] = '\n'.join(current_val_parts)
+
+    return result
+
+
+def _get_rss_urls_from_keys(api_keys_str: str) -> list[str]:
+    """Возвращает список всех RSS URL из user_api_keys.
+
+    Поддерживает оба формата:
+    - RSS_URLS=url1\\nurl2\\nurl3  (новый, multiline textarea)
+    - RSS_URL=url1                 (старый, single)
+    """
+    urls: list[str] = []
+    env = _parse_api_keys_to_env(api_keys_str)
+    # Новый формат: RSS_URLS с несколькими URL через \\n
+    if 'RSS_URLS' in env:
+        for u in env['RSS_URLS'].splitlines():
+            u = u.strip()
+            if u.startswith('http'):
+                urls.append(u)
+    # Старый формат: RSS_URL (одиночный)
+    if 'RSS_URL' in env:
+        u = env['RSS_URL'].strip()
+        if u.startswith('http') and u not in urls:
+            urls.append(u)
+    return urls
+
+
 def _has_overlap(new_text: str, recent_texts: list, threshold: float = 0.45) -> bool:
     """True если new_text имеет >threshold доли общих слов с любым из recent_texts."""
     new_words = set(new_text.lower().split())
@@ -1050,12 +1111,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
 
     # Разбираем интеграции агента и строим env-словарь для subprocess
     _user_api_keys_str = agent.get('user_api_keys', '')
-    _agent_env: dict = {}
-    for _line in _user_api_keys_str.splitlines():
-        _line = _line.strip()
-        if '=' in _line and not _line.startswith('#'):
-            _k, _, _v = _line.partition('=')
-            _agent_env[_k.strip()] = _v.strip()
+    _agent_env: dict = _parse_api_keys_to_env(_user_api_keys_str)
 
     # Список человекочитаемых интеграций для системного промпта
     try:
@@ -1825,12 +1881,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
 
     # Добавляем тот же data-grounding, что и для топ-постов: интеграции + optional python_code output
     _user_api_keys_str = agent.get('user_api_keys', '')
-    _agent_env: dict = {}
-    for _line in _user_api_keys_str.splitlines():
-        _line = _line.strip()
-        if '=' in _line and not _line.startswith('#'):
-            _k, _, _v = _line.partition('=')
-            _agent_env[_k.strip()] = _v.strip()
+    _agent_env: dict = _parse_api_keys_to_env(_user_api_keys_str)
 
     try:
         from ai_integration.autonomous_agent import _parse_agent_integrations

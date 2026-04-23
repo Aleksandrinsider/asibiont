@@ -6890,10 +6890,21 @@ class AnchorEngine:
                             "2. Если нужно — используй send_outreach_email или reply_to_outreach_email."
                         )
                     # RSS/новости
-                    if any(w in _api_lower for w in ('rss_url=', 'feed_url=')) or 'feedparser' in _pc_lower:
-                        _rss_url = next((l.split('=',1)[1].strip() for l in _api_keys.splitlines() if l.strip().upper().startswith('RSS_URL=')), '')
+                    if any(w in _api_lower for w in ('rss_url=', 'rss_urls=', 'feed_url=')) or 'feedparser' in _pc_lower:
+                        _rss_urls_ap = []
+                        for _rl in _api_keys.splitlines():
+                            _rl = _rl.strip()
+                            if _rl.upper().startswith('RSS_URLS=') or _rl.upper().startswith('RSS_URL='):
+                                for _u in _rl.split('=', 1)[1].split('\n'):
+                                    _u = _u.strip()
+                                    if _u.startswith('http'):
+                                        _rss_urls_ap.append(_u)
+                            elif _rl.startswith('http') and _rss_urls_ap:
+                                _rss_urls_ap.append(_rl)
+                        _rss_hint = ', '.join(u[:60] for u in _rss_urls_ap[:3]) if _rss_urls_ap else ''
                         _primary_actions.append(
-                            f"1. Загрузи новости через run_agent_action (RSS{': ' + _rss_url[:60] if _rss_url else ''}). "
+                            f"1. Загрузи новости через run_agent_action (RSS{': ' + _rss_hint if _rss_hint else ''}). "
+                            f"{'Читай все ' + str(len(_rss_urls_ap)) + ' лент.' if len(_rss_urls_ap) > 1 else ''}"
                             "Найди релевантные статьи и создай задачу или делегируй коллеге с Email."
                         )
                     # GitHub
@@ -11543,13 +11554,26 @@ class AnchorEngine:
                 _spec_part = f' [{p["spec"]}]' if p.get('spec') else ''
                 # Добавляем конкретный RSS URL чтобы координатор понимал тематику ленты
                 _ag_obj = next((a for a in real_agents if a.name == p['name']), None)
-                _rss_url_val = ''
+                _rss_urls_coord: list = []
                 if _ag_obj:
-                    for _kline in (getattr(_ag_obj, 'user_api_keys', '') or '').splitlines():
-                        if _kline.strip().upper().startswith('RSS_URL='):
-                            _rss_url_val = _kline.split('=', 1)[1].strip()[:80]
-                            break
-                _rss_note = f', RSS={_rss_url_val}' if _rss_url_val else ''
+                    _ak_coord = (getattr(_ag_obj, 'user_api_keys', '') or '')
+                    _prev_is_rss_coord = False
+                    for _kline in _ak_coord.splitlines():
+                        _kline_s = _kline.strip()
+                        if _kline_s.upper().startswith('RSS_URLS=') or _kline_s.upper().startswith('RSS_URL='):
+                            for _u in _kline_s.split('=', 1)[1].split('\n'):
+                                _u = _u.strip()
+                                if _u.startswith('http'):
+                                    _rss_urls_coord.append(_u[:80])
+                            _prev_is_rss_coord = True
+                        elif _kline_s.startswith('http') and _prev_is_rss_coord:
+                            _rss_urls_coord.append(_kline_s[:80])
+                        else:
+                            _prev_is_rss_coord = False
+                if _rss_urls_coord:
+                    _rss_note = ', RSS=' + '|'.join(_rss_urls_coord[:3])
+                else:
+                    _rss_note = ''
                 # Определяем может ли агент ОТПРАВЛЯТЬ письма
                 _ag_api_keys = (getattr(_ag_obj, 'user_api_keys', '') or '') if _ag_obj else ''
                 _keys_lower = _ag_api_keys.lower()
@@ -15795,7 +15819,7 @@ class AnchorEngine:
                 if _target_ag:
                     _tg_keys = (getattr(_target_ag, 'user_api_keys', '') or '').lower()
                     _tg_py   = (getattr(_target_ag, 'python_code', '') or '').lower()
-                    _tg_is_rss = 'rss_url=' in _tg_keys
+                    _tg_is_rss = 'rss_url=' in _tg_keys or 'rss_urls=' in _tg_keys
                     _tg_has_email = ('gmail_user=' in _tg_keys or 'imap_' in _tg_keys or 'yandex_user=' in _tg_keys or 'mailru_user=' in _tg_keys)
                     _tg_has_github = ('github_token=' in _tg_keys or 'github_access_token=' in _tg_keys)
                     _tg_is_rss_only = _tg_is_rss and not _tg_has_email and not _tg_has_github
@@ -16406,7 +16430,7 @@ class AnchorEngine:
                             'reply_to_outreach_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
                             'send_follow_up_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
                             'negotiate_by_email': ('gmail_user=', 'yandex_user=', 'mailru_user=', 'smtp_', 'resend_api_key'),
-                            'run_agent_action': ('github_token=', 'github_access_token=', 'rss_url='),
+                            'run_agent_action': ('github_token=', 'github_access_token=', 'rss_url=', 'rss_urls='),
                             'publish_to_telegram': ('telegram_channel',),
                             'publish_to_discord': ('discord_webhook',),
                         }
@@ -16631,15 +16655,22 @@ class AnchorEngine:
                                 f"reply_body=ОТВЕТ_НА_ИХ_КОНКРЕТНЫЙ_ВОПРОС) — НЕ send_outreach_email!"
                             )
 
-                # RSS: URL и тематика ленты
-                _rss_url_live = ''
+                # RSS: все URL и тематика лент
+                _rss_urls_live: list = []
+                _prev_is_rss_live = False
                 for _kl in _ag_api_keys_raw.splitlines():
-                    if _kl.strip().upper().startswith('RSS_URL='):
-                        _rss_url_live = _kl.split('=', 1)[1].strip()
-                        break
-                if _rss_url_live:
-                    # Определяем тематику по URL
-                    _rss_topics = []
+                    _kl_s = _kl.strip()
+                    if _kl_s.upper().startswith('RSS_URLS=') or _kl_s.upper().startswith('RSS_URL='):
+                        for _u in _kl_s.split('=', 1)[1].split('\n'):
+                            _u = _u.strip()
+                            if _u.startswith('http'):
+                                _rss_urls_live.append(_u)
+                        _prev_is_rss_live = True
+                    elif _kl_s.startswith('http') and _prev_is_rss_live:
+                        _rss_urls_live.append(_kl_s)
+                    else:
+                        _prev_is_rss_live = False
+                if _rss_urls_live:
                     _rss_domain_map = [
                         (('habr', 'habrahabr'), 'IT/технологии/разработка (Хабр)'),
                         (('tass', 'ria.ru', 'rbc.ru', 'kommersant'), 'новости России (деловые СМИ)'),
@@ -16649,16 +16680,19 @@ class AnchorEngine:
                         (('hh.ru', 'superjob', 'linkedin'), 'вакансии/рекрутинг'),
                         (('vc.ru', 'spark.ru', 'rb.ru'), 'стартапы и предпринимательство'),
                     ]
-                    _rss_lower = _rss_url_live.lower()
-                    for _patterns, _topic in _rss_domain_map:
-                        if any(p in _rss_lower for p in _patterns):
-                            _rss_topics.append(_topic)
-                    _rss_topic_str = ', '.join(_rss_topics) if _rss_topics else 'тематика определяется по контенту'
+                    for _rss_u in _rss_urls_live:
+                        _rss_topics = []
+                        _rss_lower = _rss_u.lower()
+                        for _patterns, _topic in _rss_domain_map:
+                            if any(p in _rss_lower for p in _patterns):
+                                _rss_topics.append(_topic)
+                        _rss_topic_str = ', '.join(_rss_topics) if _rss_topics else 'тематика определяется по контенту'
+                        _intg_live_lines.append(
+                            f"📰 RSS-лента: {_rss_u} (тематика: {_rss_topic_str})"
+                        )
+                    _feed_count = len(_rss_urls_live)
                     _intg_live_lines.append(
-                        f"📰 RSS-лента: {_rss_url_live} (тематика: {_rss_topic_str})"
-                    )
-                    _intg_live_lines.append(
-                        "  ⚠️ run_agent_action читает ТОЛЬКО ЭТУ ленту. "
+                        f"  ⚠️ run_agent_action читает ВСЕ {_feed_count} лент{'у' if _feed_count == 1 else 'ы' if _feed_count < 5 else ''}. "
                         "Если тема задачи не совпадает с тематикой ленты → "
                         "передай коллеге через DELEGATE[имя]: что нужно найти/сделать. "
                         "НЕ занимайся поиском контактов или GitHub-поиском — это роль агента с email/GitHub-интеграцией."
