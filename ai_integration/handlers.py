@@ -16273,6 +16273,19 @@ async def check_emails(
                                             f"Тема: ответ на outreach\n"
                                             f"Превью: {(_rp_snip or '')[:300]}"
                                         )
+                                    if not _reply_preview_lines:
+                                        _fallback_replies = session.query(_EO_ce2).filter(
+                                            _EO_ce2.user_id == user.id,
+                                            _EO_ce2.status == 'replied',
+                                            _EO_ce2.reply_text.isnot(None),
+                                            _EO_ce2.reply_text != '',
+                                        ).order_by(_EO_ce2.reply_at.desc(), _EO_ce2.id.desc()).limit(5).all()
+                                        for _fb in _fallback_replies:
+                                            _reply_preview_lines.append(
+                                                f"От: {(_fb.recipient_name or '')} <{_fb.recipient_email or ''}>\n"
+                                                f"Тема: {_fb.subject or 'ответ на outreach'}\n"
+                                                f"Превью: {(_fb.reply_text or '')[:300]}"
+                                            )
                                     _reply_content = '\n---\n'.join(_reply_preview_lines) if _reply_preview_lines else f'Новые ответы: {_newly_replied_this_call}'
                                     _aal_ir = _AAL_ce_ir(
                                         user_id=user.id,

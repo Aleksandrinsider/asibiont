@@ -9053,7 +9053,8 @@ except Exception as e:
                 if (_sc && _sl) _statusBadge = `<span style="font-size:11px;color:${_sc};flex-shrink:0;">${_sl}</span>`;
             }
 
-            const chevron = hasContent ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(-90deg);"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
+            const _autoExpand = a.activity_type === 'inbox_reply';
+            const chevron = hasContent ? `<svg class="tl-chev" width="12" height="12" viewBox="0 0 16 16" fill="#9CA3AF" style="flex-shrink:0;transition:transform 0.2s;transform:rotate(${_autoExpand ? '0deg' : '-90deg'});"><path d="M12.78 6.22a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L3.22 7.28a.75.75 0 0 1 1.06-1.06L8 9.94l3.72-3.72a.75.75 0 0 1 1.06 0Z"/></svg>` : '<span style="width:12px;flex-shrink:0;display:inline-block;"></span>';
 
             const header = document.createElement('div');
             header.style.cssText = 'display:flex;align-items:center;gap:6px;padding:10px 0;' + (hasContent ? 'cursor:pointer;user-select:none;' : '');
@@ -9073,11 +9074,14 @@ except Exception as e:
             if (hasContent) {
                 const body = document.createElement('div');
                 // Начинаем свёрнутым; клик — развернуть полностью
-                body.style.cssText = 'overflow:hidden;transition:max-height 0.3s ease;max-height:0px;';
+                body.style.cssText = 'overflow:hidden;transition:max-height 0.3s ease;' + (_autoExpand ? 'max-height:none;' : 'max-height:0px;');
                 const inner = document.createElement('div');
                 inner.style.cssText = 'font-size:13px;color:#374151;line-height:1.5;padding:0 0 10px 0;white-space:pre-wrap;word-break:break-word;';
                 inner.textContent = cleanContent;
                 body.appendChild(inner);
+                if (_autoExpand) {
+                    body.style.overflow = 'visible';
+                }
                 wrap.appendChild(body);
 
                 header.onclick = () => {
