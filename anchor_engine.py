@@ -15833,6 +15833,13 @@ class AnchorEngine:
                     ).strip(' ,.-')
                     # Ограничиваем reason — обрезаем по последнему полному слову
                     _step_reason = (_step.get('reason') or '').strip()
+                    # Фильтруем внутренние технические метки — не должны попасть в текст сообщения
+                    _INTERNAL_REASON_KEYWORDS = (
+                        'fair_assignment', 'diversification', 'backfill',
+                        'fallback', 'exec_error', 'retry', 'forced',
+                    )
+                    if any(_k in _step_reason.lower() for _k in _INTERNAL_REASON_KEYWORDS):
+                        _step_reason = ''
                     if _step_reason and len(_step_reason) > 150:
                         _step_reason = _step_reason[:150].rsplit(' ', 1)[0]
                     # Удаляем оборванный предлог/союз на конце (артефакт обрезки JSON/текста)
