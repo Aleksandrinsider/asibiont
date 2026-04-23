@@ -16667,6 +16667,8 @@ class AnchorEngine:
                      'run_agent_action для отправки сообщений в канал'),
                     (('ALPHAVANTAGE_API_KEY=', 'ALPHA_VANTAGE_API_KEY='), '📈', 'Alpha Vantage (биржевые данные)',
                      'run_agent_action(action="get_price", symbol="BRENT"/"BTC"/"GAZP.MCX")'),
+                    (('FINNHUB_API_KEY=', 'FINNHUB_KEY='), '🔍', 'Finnhub (инсайдеры)',
+                     'run_agent_action(action="insider_trades", symbol="AAPL"/"MSFT") для отслеживания инсайдерских сделок'),
                     (('NEWSAPI_KEY=', 'NEWS_API_KEY='), '📰', 'NewsAPI (100+ источников)',
                      'run_agent_action / get_news_trends для поиска новостей'),
                     (('SLACK_BOT_TOKEN=',), '💬', 'Slack',
