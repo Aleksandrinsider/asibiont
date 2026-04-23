@@ -11866,21 +11866,58 @@ except Exception as e:
 
         from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
         import aiohttp as _aio_h
-        import json as _json_g
-        async with _safe_http() as _sess:
-            async with _sess.post(
-                'https://api.deepseek.com/chat/completions',
-                headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
-                json={'model': DEEPSEEK_MODEL, 'messages': [{'role': 'user', 'content': prompt}],
-                      'max_tokens': 1400, 'temperature': 0.1},
-                timeout=_aio_h.ClientTimeout(total=50)
-            ) as resp:
-                result = await resp.json()
-        code = result.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
-        # Убираем markdown-блоки если DeepSeek их добавил
+        import ast as _ast_gc
         import re as _re_gc
-        code = _re_gc.sub(r'^```python\s*', '', code, flags=_re_gc.MULTILINE)
-        code = _re_gc.sub(r'^```\s*', '', code, flags=_re_gc.MULTILINE).strip()
+
+        def _cleanup_generated_code(_raw: str) -> str:
+            _code = (_raw or '').strip()
+            _code = _re_gc.sub(r'^```python\s*', '', _code, flags=_re_gc.MULTILINE)
+            _code = _re_gc.sub(r'^```\s*', '', _code, flags=_re_gc.MULTILINE).strip()
+            return _code
+
+        async def _call_codegen(_prompt: str, *, _max_tokens: int = 1400, _temperature: float = 0.1) -> str:
+            async with _safe_http() as _sess:
+                async with _sess.post(
+                    'https://api.deepseek.com/chat/completions',
+                    headers={'Authorization': f'Bearer {DEEPSEEK_API_KEY}', 'Content-Type': 'application/json'},
+                    json={
+                        'model': DEEPSEEK_MODEL,
+                        'messages': [{'role': 'user', 'content': _prompt}],
+                        'max_tokens': _max_tokens,
+                        'temperature': _temperature,
+                    },
+                    timeout=_aio_h.ClientTimeout(total=50)
+                ) as resp:
+                    _result = await resp.json()
+            return _cleanup_generated_code(_result.get('choices', [{}])[0].get('message', {}).get('content', ''))
+
+        code = await _call_codegen(prompt)
+        if code:
+            try:
+                _ast_gc.parse(code)
+            except SyntaxError as _se_gc:
+                repair_prompt = f"""Исправь синтаксическую ошибку в Python-коде.
+
+Ошибка Python: {_se_gc}
+
+Требования:
+- Верни ПОЛНЫЙ исправленный Python-код целиком
+- Не сокращай код
+- Не добавляй markdown-блоки
+- Не добавляй пояснения
+
+Код:
+```python
+{code}
+```"""
+                code = await _call_codegen(repair_prompt, _max_tokens=1800, _temperature=0)
+                try:
+                    _ast_gc.parse(code)
+                except SyntaxError as _se_gc2:
+                    return web.json_response(
+                        {'error': f'Генератор вернул некорректный Python-код: {_se_gc2}. Нажмите «Тестировать код» или попробуйте уточнить задачу.'},
+                        status=500
+                    )
         return web.json_response({'code': code})
     except Exception as e:
         logger.error(f"[MARKETPLACE] generate-code error: {e}", exc_info=True)
