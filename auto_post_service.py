@@ -6,6 +6,7 @@ Automatic post generation service - creates daily progress posts and birthday po
 
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 import pytz
@@ -29,6 +30,20 @@ from ai_integration.memory import decrypt_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _strip_post_visual_prompt(text: str) -> str:
+    if not text:
+        return text
+
+    cleaned = str(text)
+    marker = re.search(
+        r'(?im)(?:^|\n)\s*(иллюстрация|изображение|illustration|image)\s*:\s*',
+        cleaned,
+    )
+    if marker:
+        cleaned = cleaned[:marker.start()].rstrip()
+    return re.sub(r'\n{3,}', '\n\n', cleaned).strip()
 
 
 def _detect_gender(first_name: str) -> str:
@@ -512,6 +527,11 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             if content is None:
                 logger.error(f"Failed to generate content for auto-post for user {user_id}")
                 return False
+
+        content = _strip_post_visual_prompt(content)
+        if not content:
+            logger.warning(f"[AUTO_POST] Skipped empty post after prompt-tail cleanup for user {user_id}")
+            return False
         
         post = Post(
             user_id=user.id,

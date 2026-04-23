@@ -5811,6 +5811,9 @@ async def create_post_handler(request):
             content = data.get('content', '').strip()
             image_url = data.get('image_url', '').strip() or None
 
+            from ai_integration.handlers import _strip_post_visual_prompt
+            content = _strip_post_visual_prompt(content)
+
             if not content and not image_url:
                 return web.json_response({'error': 'Post content or image is required'}, status=400)
 

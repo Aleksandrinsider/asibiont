@@ -1121,6 +1121,9 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             session.add(user)
             session.commit()
 
+        if source == 'blog':
+            content = _strip_post_visual_prompt(content)
+
         from models import Note
         import datetime as _dt_sn
 
