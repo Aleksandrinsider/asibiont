@@ -2015,6 +2015,13 @@
                     let html = marked.parse(text, { renderer });
                     // Убираем пустые <p> (marked создаёт их при лишних пустых строках)
                     html = html.replace(/<p>\s*<\/p>/gi, '');
+                    // Linkify bare domain URLs not caught by marked (e.g. "asibiont.com/blog/123")
+                    // Group 1: full <a>...</a> — skip; Group 2: any HTML tag — skip; Group 3: bare URL — linkify
+                    html = html.replace(/(<a[^>]*>[\s\S]*?<\/a>)|(<[^>]+>)|(\b[a-zA-Z0-9][a-zA-Z0-9-]*\.[a-zA-Z]{2,}\/[^\s<>"'`()\[\]]*)/g,
+                        (match, anchor, tag, url) => {
+                            if (anchor || tag) return match;
+                            return `<a href="https://${url}" target="_blank" rel="noopener noreferrer" style="color: #068487; text-decoration: underline;">${url}</a>`;
+                        });
                     processedText = html;
                 } catch(e) {
                     processedText = escapeHtml(text).replace(/\n/g, '<br>');
