@@ -387,6 +387,9 @@ async def _generate_dynamic_fallback(
             _quick_ai_call_raw(
                 [{'role': 'user', 'content': prompt}],
                     max_tokens=600,
+            ),
+            timeout=30,
+        )
 
         if result and len(result.strip()) > 40:
             return result.strip()
