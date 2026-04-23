@@ -8424,7 +8424,8 @@ async def generate_marketing_content(product_name, target_audience, platform, go
             platform=platform,
             goal=goal,
             user_id=user_id,
-            session=session
+            session=session,
+            contact_email=getattr(user, 'email', None),
         )
         
         return result.get('message', 'Контент создан')

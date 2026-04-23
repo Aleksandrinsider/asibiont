@@ -14,7 +14,7 @@ from models import Session, User
 logger = logging.getLogger(__name__)
 
 
-async def generate_marketing_content(product_name, target_audience, platform, goal="привлечение", user_id=None, session=None):
+async def generate_marketing_content(product_name, target_audience, platform, goal="привлечение", user_id=None, session=None, contact_email=None):
     """
     Генерация маркетингового контента с помощью AI
     
@@ -73,12 +73,20 @@ async def generate_marketing_content(product_name, target_audience, platform, go
     except Exception as e:
         logger.debug(f"[MARKETING] DDG research failed (non-critical): {e}")
 
+    _email_rule = (
+        f"КОНТАКТЫ: если нужно указать email для связи — используй ТОЛЬКО {contact_email}. Не придумывай другие адреса."
+        if contact_email else
+        "КОНТАКТЫ: НЕ указывай email-адреса в тексте. Владелец добавит свои контакты самостоятельно."
+    )
+
     prompt = f"""Создай мощный маркетинговый пост для {platform}.
 
 ПРОДУКТ: {product_name}
 АУДИТОРИЯ: {target_audience}
 ЦЕЛЬ: {goal}
 {competitor_ctx}{pain_ctx}{trend_ctx}
+
+{_email_rule}
 
 Требования:
 1. Цепляющий заголовок (до 10 слов)
@@ -409,7 +417,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
     # Sanitize token hallucinations (AI иногда пишет "1000+500" вместо "1500")
     from ai_integration.conversation_history import sanitize_token_hallucinations
     post_text = sanitize_token_hallucinations(post_text)
-    
+
     # Отправляем через Telegram Bot API
     try:
         channel = user.telegram_channel
