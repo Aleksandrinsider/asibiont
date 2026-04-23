@@ -5967,7 +5967,7 @@ _INTEGRATION_LABELS: dict = {
     'GOOGLE': 'Google API',
     'ALPHAVANTAGE': 'Биржевые данные (Alpha Vantage)',
     'ALPHA_VANTAGE': 'Биржевые данные (Alpha Vantage)',
-    'FINNHUB': 'Инсайдерские сделки (Finnhub),
+    'FINNHUB': 'Инсайдерские сделки (Finnhub)',
     'NEWSAPI': 'NewsAPI (новости)',
     'NEWS_API': 'NewsAPI (новости)',
     'BINANCE': 'Binance (крипта)',
