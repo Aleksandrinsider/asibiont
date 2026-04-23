@@ -1178,7 +1178,8 @@
                     <h2 class="steps-section-title" id="blog-title">{% if lang == 'en' %}Latest Posts{% else %}Последние публикации{% endif %}</h2>
                 </div>
                 <div class="blog-grid" id="blog-grid"></div>
-                <div style="text-align: center; margin-top: 16px;">
+                <div style="text-align: center; margin-top: 16px; display: flex; gap: 10px; justify-content: center; align-items: center;">
+                    <button id="blog-load-more" onclick="blogLoadMore()" style="font-size: 13px; color: #374151; font-weight: 500; background: none; cursor: pointer; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 20px; display: none; transition: all 0.2s; font-family: inherit;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">{% if lang == 'en' %}Load 6 more{% else %}Ещё 6{% endif %}</button>
                     <a href="/blog" id="blog-all-link" style="font-size: 13px; color: #374151; font-weight: 500; text-decoration: none; border: 1px solid #D1D9E0; border-radius: 6px; padding: 8px 20px; display: inline-block; transition: all 0.2s;" onmouseover="this.style.borderColor='#1F2328'" onmouseout="this.style.borderColor='#D1D9E0'">{% if lang == 'en' %}All posts →{% else %}Все публикации →{% endif %}</a>
                 </div>
             </div>
@@ -1596,51 +1597,80 @@ if (pwaBtn) {
   });
 }
 
-// ── Blog: загрузка последних 3 постов ──
+// ── Blog: загрузка 6 постов с кнопкой «Ещё 6» ──
 (function() {
-  var lang = (document.documentElement.lang || 'ru').substring(0, 2);
-  fetch('/api/blog?per_page=6&lang=' + lang)
+  var _bLang = (document.documentElement.lang || 'ru').substring(0, 2);
+  var _bPage = 1;
+  var _bTotal = 0;
+  var _bPer = 6;
+
+  function _bRender(p, grid) {
+    var d = p.created_at ? new Date(p.created_at) : null;
+    var dateStr = d ? d.toLocaleDateString(_bLang === 'en' ? 'en-US' : 'ru-RU', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
+    var excerpt = (p.content || '')
+      .replace(/!\[[^\]]*\]\(([^)]+)\)/g, ' ')
+      .replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' ')
+      .replace(/[#*`_~>[\]()!]/g, '')
+      .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
+    if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
+    var imgMatch = (p.content || '').match(/!\[[^\]]*\]\(([^)]+)\)/) ||
+                   (p.content || '').match(/\[IMAGE:(https?:\/\/[^\]]+)\]/);
+    var imgUrl = imgMatch ? imgMatch[1] : '';
+    var readMore = _bLang === 'en' ? 'Read →' : 'Читать →';
+    var card = document.createElement('div');
+    card.className = 'blog-card';
+    card.innerHTML =
+      (imgUrl ? '<a href="/blog/' + (p.slug || p.id) + '"><img class="blog-card-img" src="' + imgUrl + '" alt="" loading="lazy"></a>' : '') +
+      '<div class="blog-card-date">' + dateStr + '</div>' +
+      '<div class="blog-card-title"><a href="/blog/' + (p.slug || p.id) + '">' + (p.title || '') + '</a></div>' +
+      '<div class="blog-card-excerpt">' + excerpt + '</div>' +
+      '<a href="/blog/' + (p.slug || p.id) + '" class="blog-card-more">' + readMore + '</a>';
+    grid.appendChild(card);
+  }
+
+  function _bSyncBtn() {
+    var btn = document.getElementById('blog-load-more');
+    if (btn) btn.style.display = (_bPage * _bPer < _bTotal) ? '' : 'none';
+  }
+
+  window.blogLoadMore = function() {
+    _bPage++;
+    var grid = document.getElementById('blog-grid');
+    var btn = document.getElementById('blog-load-more');
+    if (btn) btn.disabled = true;
+    fetch('/api/blog?per_page=' + _bPer + '&page=' + _bPage + '&lang=' + _bLang)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        _bTotal = data.total || _bTotal;
+        (data.posts || []).forEach(function(p) { _bRender(p, grid); });
+        _bSyncBtn();
+        if (btn) btn.disabled = false;
+      })
+      .catch(function() { if (btn) btn.disabled = false; });
+  };
+
+  fetch('/api/blog?per_page=' + _bPer + '&page=1&lang=' + _bLang)
     .then(function(r) { return r.json(); })
     .then(function(data) {
       var posts = data.posts || [];
+      _bTotal = data.total || 0;
       if (!posts.length) return;
       var grid = document.getElementById('blog-grid');
       var section = document.getElementById('blog-latest-section');
       if (!grid || !section) return;
-      // i18n
       var lbl = document.getElementById('blog-label');
       var ttl = document.getElementById('blog-title');
       var lnk = document.getElementById('blog-all-link');
-      if (lang === 'en') {
+      if (_bLang === 'en') {
         if (lbl) lbl.textContent = 'Blog';
         if (ttl) ttl.textContent = 'Latest posts';
         if (lnk) lnk.textContent = 'All posts →';
+        var mb = document.getElementById('blog-load-more');
+        if (mb) mb.textContent = 'Load 6 more';
       }
-      posts.forEach(function(p) {
-        var d = p.created_at ? new Date(p.created_at) : null;
-        var dateStr = d ? d.toLocaleDateString(lang === 'en' ? 'en-US' : 'ru-RU', {day: 'numeric', month: 'long', year: 'numeric'}) : '';
-        var excerpt = (p.content || '')
-                    .replace(/!\[[^\]]*\]\(([^)]+)\)/g, ' ')  // strip markdown images (absolute or relative)
-          .replace(/\[IMAGE:https?:\/\/[^\]]+\]/g, ' ')          // strip legacy IMAGE markers
-          .replace(/[#*`_~>[\]()!]/g, '')
-          .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
-        if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
-        // Extract image URL from content (markdown or legacy marker)
-        var imgMatch = (p.content || '').match(/!\[[^\]]*\]\(([^)]+)\)/) ||
-                       (p.content || '').match(/\[IMAGE:(https?:\/\/[^\]]+)\]/);
-        var imgUrl = imgMatch ? imgMatch[1] : '';
-        var readMore = lang === 'en' ? 'Read →' : 'Читать →';
-        var card = document.createElement('div');
-        card.className = 'blog-card';
-        card.innerHTML =
-          (imgUrl ? '<a href="/blog/' + (p.slug || p.id) + '"><img class="blog-card-img" src="' + imgUrl + '" alt="" loading="lazy"></a>' : '') +
-          '<div class="blog-card-date">' + dateStr + '</div>' +
-          '<div class="blog-card-title"><a href="/blog/' + (p.slug || p.id) + '">' + (p.title || '') + '</a></div>' +
-          '<div class="blog-card-excerpt">' + excerpt + '</div>' +
-          '<a href="/blog/' + (p.slug || p.id) + '" class="blog-card-more">' + readMore + '</a>';
-        grid.appendChild(card);
-      });
+      posts.forEach(function(p) { _bRender(p, grid); });
       section.style.display = '';
+      _bSyncBtn();
     })
     .catch(function() {});
 })();
