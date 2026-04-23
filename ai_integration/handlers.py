@@ -12573,16 +12573,28 @@ async def start_email_campaign(
             EmailCampaign.user_id == user.id,
             EmailCampaign.status == 'active',
         ).all()
-        _stop_camp = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'a', 'the', 'to', 'for', 'of', 'and', 'in', 'with'}
+        _stop_camp = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'a', 'the', 'to', 'for', 'of', 'and', 'in', 'with',
+                      'привлечь', 'привлечение', 'outreach', 'аутрич', 'рассылка', 'кампания', 'campaign'}
+
+        def _norm_camp_words(text: str) -> set:
+            """Нормализация: срезаем флексии рус. слов до 5 символов для fuzzy-сравнения."""
+            import re as _re_nc
+            words = _re_nc.findall(r'[а-яёa-z]{3,}', (text or '').lower())
+            return {w[:5] for w in words if w not in _stop_camp}
+
         for ex in existing:
-            # Сравниваем и goal-текст, и name кампании — достаточно 2 значимых общих слов
-            ex_goal_words = {w for w in (ex.goal or '').lower().split() if len(w) > 2} - _stop_camp
-            ex_name_words = {w for w in (ex.name or '').lower().split() if len(w) > 2} - _stop_camp
-            new_goal_words = {w for w in goal.lower().split() if len(w) > 2} - _stop_camp
-            new_name_words = {w for w in name.lower().split() if len(w) > 2} - _stop_camp
-            goal_overlap = ex_goal_words & new_goal_words
-            name_overlap = ex_name_words & new_name_words
-            if len(goal_overlap) >= 2 or len(name_overlap) >= 2:
+            ex_goal_norm = _norm_camp_words(ex.goal)
+            ex_aud_norm  = _norm_camp_words(ex.target_audience)
+            ex_name_norm = _norm_camp_words(ex.name)
+            new_goal_norm = _norm_camp_words(goal)
+            new_aud_norm  = _norm_camp_words(target_audience)
+            new_name_norm = _norm_camp_words(name)
+            # Дубль если: 1+ слов из audience совпадают И 1+ из goal/name, ИЛИ 3+ слов name совпадают
+            aud_overlap  = ex_aud_norm & new_aud_norm
+            goal_overlap = ex_goal_norm & new_goal_norm
+            name_overlap = ex_name_norm & new_name_norm
+            is_dup = (len(aud_overlap) >= 1 and len(goal_overlap) >= 1) or len(name_overlap) >= 3
+            if is_dup:
                 # Обновляем существующую кампанию вместо создания новой
                 if daily_limit > ex.daily_limit:
                     ex.daily_limit = min(daily_limit, 100)
