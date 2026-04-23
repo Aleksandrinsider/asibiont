@@ -1822,19 +1822,84 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
 
     base_system = agent["system_prompt"].strip()
     lang = _detect_lang_agent(agent)
+
+    # Добавляем тот же data-grounding, что и для топ-постов: интеграции + optional python_code output
+    _user_api_keys_str = agent.get('user_api_keys', '')
+    _agent_env: dict = {}
+    for _line in _user_api_keys_str.splitlines():
+        _line = _line.strip()
+        if '=' in _line and not _line.startswith('#'):
+            _k, _, _v = _line.partition('=')
+            _agent_env[_k.strip()] = _v.strip()
+
+    try:
+        from ai_integration.autonomous_agent import _parse_agent_integrations
+        _integrations_list = _parse_agent_integrations(
+            _user_api_keys_str,
+            agent.get('python_code', ''),
+            agent.get('tools_allowed', '[]'),
+            agent.get('search_scope', ''),
+        )
+    except Exception:
+        _integrations_list = []
+
+    code_output = ''
+    python_code = agent.get('python_code', '')
+    if python_code and not agent.get('_is_private'):
+        raw = await _run_agent_python_code(python_code, env_vars=_agent_env)
+        if raw and not raw.startswith('['):
+            code_output = raw
+
+    code_context = (
+        f"Свежие данные из твоего инструмента (используй их в ответе, если релевантно):\n{code_output}\n\n"
+    ) if code_output else ''
+
+    _is_question = ('?' in (comment_text or '')) or (lang != 'en' and any(w in (comment_text or '').lower() for w in (
+        'что', 'почему', 'как', 'где', 'когда', 'кто', 'сколько', 'подробности', 'детали', 'какие'
+    ))) or (lang == 'en' and any(w in (comment_text or '').lower() for w in (
+        'what', 'why', 'how', 'where', 'when', 'who', 'details', 'detail', 'which', 'how many'
+    )))
+
+    _integrations_hint_str = ''
+    if _integrations_list and not agent.get('_is_private'):
+        _joined = ', '.join(_integrations_list)
+        if lang == 'en':
+            _integrations_hint_str = (
+                f"\n\n[YOUR ACTIVE INTEGRATIONS: {_joined}]\n"
+                "Answer only from real data available in context/integration output. "
+                "Do not mention platforms that are not in this list."
+            )
+        else:
+            _integrations_hint_str = (
+                f"\n\n[ТВОИ АКТИВНЫЕ ИНТЕГРАЦИИ: {_joined}]\n"
+                "Отвечай только по реальным данным из контекста/вывода интеграции. "
+                "Не упоминай платформы, которых нет в этом списке."
+            )
     if lang == 'en':
         user_content = (
+            f"{code_context}"
             f"{context}"
             f"{personal_hint}"
             f"Someone just wrote: «{comment_text}»\n\n"
-            f"What do you think?"
+            + (
+                "Answer this question directly in 1-3 factual sentences. "
+                "If exact details are missing in your data, explicitly say that and avoid speculation."
+                if _is_question else
+                "What do you think?"
+            )
         )
     else:
         user_content = (
+            f"{code_context}"
             f"{context}"
             f"{personal_hint}"
             f"В дискуссии написали: «{comment_text}»\n\n"
-            f"Что думаешь?"
+            + (
+                "Ответь на вопрос прямо и по фактам в 1-3 предложениях. "
+                "Если точных деталей в твоих данных нет, честно скажи это и не выдумывай."
+                if _is_question else
+                "Что думаешь?"
+            )
         )
 
     _no_rp_dir = (
@@ -1846,8 +1911,15 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         "\n\nIMPORTANT: You MUST write ALL your messages in English only." + _no_rp_dir
         if lang == 'en' else _no_rp_dir
     )
+    _factual_qa_dir = (
+        "\n\nQUESTION MODE: when user asks a question, answer directly. "
+        "No roleplay, no conspiracy framing, no fictional sources."
+        if lang == 'en' else
+        "\n\nРЕЖИМ ВОПРОСА: если пользователь задаёт вопрос, отвечай прямо. "
+        "Никакой ролевой игры, конспирологии и вымышленных источников."
+    )
     api_messages = [
-        {"role": "system", "content": base_system + _lang_dir},
+        {"role": "system", "content": base_system + _integrations_hint_str + _lang_dir + _factual_qa_dir},
         {"role": "user", "content": user_content},
     ]
 
@@ -1860,7 +1932,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
         "model": DEEPSEEK_MODEL,
         "messages": api_messages,
         "max_tokens": 280,
-        "temperature": 0.9,
+        "temperature": 0.35 if _is_question else 0.8,
     }
 
     try:
@@ -1879,6 +1951,24 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
     except Exception as e:
         logger.error(f"[ARENA] reply_to_comment error: {e}", exc_info=True)
         reply = f"[{agent['name']} недоступен]"
+
+    # Safety-net: если агент сослался на неподключённый источник в ответе на вопрос — вернуть к фактам
+    _reply_l = (reply or '').lower()
+    _ints_l = ' '.join(i.lower() for i in _integrations_list)
+    _bad_source = any(src in _reply_l for src in ('slack', 'linkedin', 'twitter', 'facebook')) and not any(
+        src in _ints_l for src in ('slack', 'linkedin', 'twitter', 'facebook')
+    )
+    if _is_question and _bad_source:
+        if lang == 'en':
+            reply = (
+                "I can only rely on connected integrations and data in this thread. "
+                "I don't have verified details for that source here, so I won't speculate."
+            )
+        else:
+            reply = (
+                "Я могу опираться только на подключённые интеграции и данные в этом треде. "
+                "По этому источнику у меня нет проверенных деталей, поэтому не буду спекулировать."
+            )
 
     return {
         "agent_id": agent["id"],
