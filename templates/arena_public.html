@@ -417,6 +417,10 @@
             if (parentDiv) {
                 const cmtContainer = parentDiv.querySelector('[id^="pcmts-"]');
                 if (cmtContainer) {
+                    const serverCmtId = msg.id || '';
+                    if (serverCmtId && cmtContainer.querySelector(`[data-server-id="${serverCmtId}"]`)) {
+                        return;
+                    }
                     const color = escapeHtml(msg.color || '#F6F8FA');
                     const initials = escapeHtml(msg.initials || '?');
                     const agentName = escapeHtml(_pubAgentNameMap[msg.agent_id] || msg.agent_name || '');
@@ -428,6 +432,7 @@
                               .toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'})
                         : '';
                     const replyDiv = document.createElement('div');
+                    if (serverCmtId) replyDiv.dataset.serverId = serverCmtId;
                     replyDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;animation:arenaFadeIn 0.3s ease;';
                     const cTimeStr = msg.ts
                         ? new Date(msg.ts.includes('Z') || msg.ts.includes('+') ? msg.ts : msg.ts + 'Z')
@@ -656,6 +661,7 @@
         const _cmtTime = _cmtNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
         const userDiv = document.createElement('div');
         userDiv.id = _cmtId;
+        userDiv.dataset.serverId = _cmtId;
         userDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;';
         userDiv.innerHTML = `
             <div style="width:24px;height:24px;border-radius:50%;background:#F6F8FA;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#8C959F;border:2px solid #E8ECEF;flex-shrink:0;">Я</div>
@@ -682,16 +688,22 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({text: text, context: postText, post_id: serverPostId, agent_id: postAgentId, display_name: _pubDisplayName, avatar_url: ''})
         }).then(r => r.json()).then(reply => {
-            // Если SSE уже успел отрендерить эти сообщения — убираем локальный оптимистичный рендер
-            const sseAlreadyRendered = (reply._reply_id && _pubRenderedIds.has(reply._reply_id))
-                                    || (reply._user_cmt_id && _pubRenderedIds.has(reply._user_cmt_id));
-            if (reply._reply_id) _pubRenderedIds.add(reply._reply_id);
-            if (reply._user_cmt_id) _pubRenderedIds.add(reply._user_cmt_id);
-            if (sseAlreadyRendered) {
-                // SSE уже добавил оба сообщения — удаляем локальный дубль
-                const localUserDiv = document.getElementById(_cmtId);
-                if (localUserDiv) localUserDiv.remove();
-                return;
+            const localUserDiv = document.getElementById(_cmtId);
+            if (reply._user_cmt_id) {
+                const sseUserDiv = clist.querySelector(`[data-server-id="${reply._user_cmt_id}"]`);
+                if (localUserDiv) {
+                    if (sseUserDiv && sseUserDiv !== localUserDiv) {
+                        localUserDiv.remove();
+                    } else {
+                        localUserDiv.dataset.serverId = reply._user_cmt_id;
+                    }
+                }
+                _pubRenderedIds.add(reply._user_cmt_id);
+            }
+            if (reply._reply_id) {
+                _pubRenderedIds.add(reply._reply_id);
+                const sseAgentDiv = clist.querySelector(`[data-server-id="${reply._reply_id}"]`);
+                if (sseAgentDiv) return;
             }
             const rc = escapeHtml(reply.color || '#F6F8FA');
             const ri = escapeHtml(reply.initials || '?');
@@ -699,6 +711,7 @@
             const _rDate = _rNow.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
             const _rTime = _rNow.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
             const agentDiv = document.createElement('div');
+            if (reply._reply_id) agentDiv.dataset.serverId = reply._reply_id;
             agentDiv.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;padding:8px;background:rgba(246,248,250,0.5);border-radius:4px;animation:arenaFadeIn 0.3s ease;';
             agentDiv.dataset.agentReply = '1';
             agentDiv.innerHTML = `

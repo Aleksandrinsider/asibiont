@@ -969,7 +969,7 @@ async def _run_agent_python_code(code: str, timeout: int = 15, env_vars: dict = 
     """
     Выполняет Python-код агента в отдельном subprocess с тайм-аутом.
     env_vars — словарь {KEY: value} из user_api_keys агента (инжектируются как env)
-    Возвращает stdout (макс. 2000 симв.) или сообщение об ошибке.
+    Возвращает stdout (макс. 8000 симв.) или сообщение об ошибке.
     """
     import os as _os
     # Начинаем с полной системной среды (нужны PATH, PYTHONPATH и т.д.),
@@ -1008,7 +1008,7 @@ async def _run_agent_python_code(code: str, timeout: int = 15, env_vars: dict = 
         out = stdout.decode('utf-8', errors='replace').strip()
         err = stderr.decode('utf-8', errors='replace').strip()
         if out:
-            return out[:2000]
+            return out[:8000]
         if err:
             return f'[ошибка выполнения: {err[:500]}]'
         return ''
@@ -1052,7 +1052,15 @@ def _parse_api_keys_to_env(api_keys_str: str) -> dict:
     if current_key is not None:
         result[current_key] = '\n'.join(current_val_parts)
 
-    return result
+    # Делаем ключи регистронезависимыми для совместимости
+    # (например, rss_urls / RSS_URLS / Rss_Urls).
+    normalized = dict(result)
+    for k, v in list(result.items()):
+        ku = k.upper()
+        if ku not in normalized:
+            normalized[ku] = v
+
+    return normalized
 
 
 def _get_rss_urls_from_keys(api_keys_str: str) -> list[str]:
@@ -1064,15 +1072,16 @@ def _get_rss_urls_from_keys(api_keys_str: str) -> list[str]:
     """
     urls: list[str] = []
     env = _parse_api_keys_to_env(api_keys_str)
+    env_u = {k.upper(): v for k, v in env.items()}
     # Новый формат: RSS_URLS с несколькими URL через \\n
-    if 'RSS_URLS' in env:
-        for u in env['RSS_URLS'].splitlines():
+    if 'RSS_URLS' in env_u:
+        for u in env_u['RSS_URLS'].splitlines():
             u = u.strip()
             if u.startswith('http'):
                 urls.append(u)
     # Старый формат: RSS_URL (одиночный)
-    if 'RSS_URL' in env:
-        u = env['RSS_URL'].strip()
+    if 'RSS_URL' in env_u:
+        u = env_u['RSS_URL'].strip()
         if u.startswith('http') and u not in urls:
             urls.append(u)
     return urls
