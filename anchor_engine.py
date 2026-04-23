@@ -887,6 +887,9 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     t = _re_san.sub(r',\.', '.', t)
     t = _re_san.sub(r'\s{2,}', ' ', t)
     t = _re_san.sub(r'\s+([.,;!?])', r'\1', t)
+    # Restore missing space between sentences if text was glued like "...аналитиков.Дальше"
+    # Apply only when punctuation is immediately followed by an uppercase letter.
+    t = _re_san.sub(r'([.!?])([A-ZА-ЯЁ])', r'\1 \2', t)
     # Sanitize hallucinated token amounts ("1000+500", "бесплатных токенов" etc.)
     try:
         from ai_integration.conversation_history import sanitize_token_hallucinations
