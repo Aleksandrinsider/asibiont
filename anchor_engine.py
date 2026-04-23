@@ -5902,7 +5902,8 @@ class AnchorEngine:
             email_silent_anchors = []
         if email_silent_anchors:
             logger.info(f"[ANCHOR] User {user_id}: 📧 Processing {len(email_silent_anchors)} email silent anchors (night={is_night})...")
-            for _ea_idx, ea in enumerate(email_silent_anchors[:12]):  # макс 12 за цикл
+            _EMAIL_SILENT_MAX_PER_CYCLE = 3
+            for _ea_idx, ea in enumerate(email_silent_anchors[:_EMAIL_SILENT_MAX_PER_CYCLE]):
                 _min_time_needed = 120 if ea.anchor_type == 'email_need_leads' else 15
                 if _time_left() < _min_time_needed:
                     logger.warning(f"[ANCHOR] User {user_id}: ⏱ skipping {ea.anchor_type} #{ea.id} (only {_time_left():.0f}s left, need {_min_time_needed})")
@@ -5911,13 +5912,20 @@ class AnchorEngine:
                     if _ea_idx > 0:
                         await asyncio.sleep(5)  # Краткая задержка между email-якорями
                     async with self._ai_semaphore:
-                        # email_need_leads вызывает _auto_find_leads с 5+ web passes — нужно 300+ сек
+                        # email_need_leads — самый тяжёлый путь; ограничиваем бюджет чтобы не уронить весь _process_user (300s)
                         _is_need_leads = ea.anchor_type == 'email_need_leads'
-                        _ea_timeout = min(360 if _is_need_leads else 150, max(60, _time_left() - 20))
-                        await asyncio.wait_for(
-                            self._process_email_silent_anchor(user, ea, session),
-                            timeout=_ea_timeout,
-                        )
+                        _ea_timeout = min(180 if _is_need_leads else 90, max(45, _time_left() - 25))
+                        _email_session = Session()
+                        try:
+                            await asyncio.wait_for(
+                                self._process_email_silent_anchor(user, ea, _email_session),
+                                timeout=_ea_timeout,
+                            )
+                        finally:
+                            try:
+                                _email_session.close()
+                            except Exception:
+                                pass
                 except Exception as _ea_err:
                     logger.error(f"[ANCHOR] User {user_id}: email anchor #{ea.id} (idx={_ea_idx}) error: {type(_ea_err).__name__}: {_ea_err!r}")
                     try:
