@@ -10623,11 +10623,13 @@ async def blog_post_handler(request):
         if lang == 'en':
             display_title = note.title_en or note.title or 'Untitled'
             display_content = note.content_en or note.content or ''
-        else:
-            display_title = note.title or 'Без заголовка'
-            display_content = note.content or ''
-            # Lazy retranslation: post not yet translated — same trigger as save_note
-            if note.title_en is None:
+            # Lazy translation: trigger if EN not yet available or content_en is stale (no image)
+            _needs_en_trans = (
+                note.title_en is None
+                or not note.content_en
+                or ('replicate.delivery' in (note.content or '') and 'replicate.delivery' not in (note.content_en or ''))
+            )
+            if _needs_en_trans:
                 try:
                     import asyncio as _aio_lazy_bp
                     from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr_bp
@@ -10636,6 +10638,9 @@ async def blog_post_handler(request):
                     )
                 except Exception:
                     pass
+        else:
+            display_title = note.title or 'Без заголовка'
+            display_content = note.content or ''
         import re as _re_ex_bp
         excerpt_src = display_content or ''
         excerpt_src = _re_ex_bp.sub(r'!\[[^\]]*\]\((https?://[^\)]+)\)', ' ', excerpt_src)
@@ -10681,11 +10686,13 @@ async def api_blog_handler(request):
             if lang == 'en':
                 display_title = n.title_en or n.title or 'Untitled'
                 display_content = n.content_en or n.content or ''
-            else:
-                display_title = n.title or 'Без заголовка'
-                display_content = n.content or ''
-                # Lazy retranslation: post not yet translated — same trigger as save_note
-                if n.title_en is None:
+                # Lazy translation: trigger if EN not yet available or stale (missing image)
+                _needs_en = (
+                    n.title_en is None
+                    or not n.content_en
+                    or ('replicate.delivery' in (n.content or '') and 'replicate.delivery' not in (n.content_en or ''))
+                )
+                if _needs_en:
                     try:
                         import asyncio as _aio_lazy
                         from ai_integration.handlers import _translate_blog_post_to_en as _lazy_tr
@@ -10694,6 +10701,9 @@ async def api_blog_handler(request):
                         )
                     except Exception:
                         pass
+            else:
+                display_title = n.title or 'Без заголовка'
+                display_content = n.content or ''
             posts.append({
                 'id': n.id,
                 'slug': n.slug or str(n.id),

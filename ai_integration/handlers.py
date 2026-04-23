@@ -905,6 +905,16 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
         # Limit content passed to API to avoid huge token cost
         content_truncated = content[:4000] if len(content) > 4000 else content
 
+        # Extract image markdown lines before translation — preserve URL as-is
+        import re as _re_img_tr
+        _img_line_match = _re_img_tr.match(r'(!\[[^\]]*\]\(https?://[^)]+\))\s*\n?([\s\S]*)', content_truncated)
+        if _img_line_match:
+            _img_prefix = _img_line_match.group(1)  # e.g. ![Иллюстрация](https://...)
+            content_for_translate = _img_line_match.group(2).strip()
+        else:
+            _img_prefix = ''
+            content_for_translate = content_truncated
+
         if _is_en_original:
             # EN→RU: оригинал на английском — переводим на русский
             prompt = (
@@ -912,7 +922,7 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
                 f"Return ONLY a JSON object with two keys: \"title\" and \"content\".\n"
                 f"Preserve markdown formatting.\n\n"
                 f"TITLE: {title}\n\n"
-                f"CONTENT:\n{content_truncated}"
+                f"CONTENT:\n{content_for_translate}"
             )
         else:
             # RU→EN: оригинал на русском — переводим на английский
@@ -921,7 +931,7 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
                 f"Return ONLY a JSON object with two keys: \"title\" and \"content\".\n"
                 f"Preserve markdown formatting.\n\n"
                 f"TITLE: {title}\n\n"
-                f"CONTENT:\n{content_truncated}"
+                f"CONTENT:\n{content_for_translate}"
             )
 
         result = await _api_client.deepseek_analyze(
@@ -949,13 +959,17 @@ async def _translate_blog_post_to_en(note_id: int, title: str, content: str) -> 
         if not translated_title or not translated_content:
             return
 
+        # Restore image prefix (URL preserved as-is, only alt text may change)
+        if _img_prefix:
+            translated_content = _img_prefix + '\n\n' + translated_content
+
         with Session() as db:
             note = db.query(Note).filter_by(id=note_id).first()
             if note:
                 if _is_en_original:
                     # Оригинал EN → сохраняем EN в title_en/content_en, перевод RU в title/content
                     note.title_en = title
-                    note.content_en = content
+                    note.content_en = content  # EN original already has image
                     note.title = translated_title
                     note.content = translated_content
                 else:
