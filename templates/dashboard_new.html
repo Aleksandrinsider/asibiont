@@ -11045,7 +11045,8 @@ except Exception as e:
             // 2) Markdown image ![alt](https://...)
             const IMG_MARKER = '[IMAGE:';
             let processedText = String(raw || '');
-            processedText = processedText.replace(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g, (m, url) => `${IMG_MARKER}${url}]`);
+                // Матчим и абсолютные (https://...) и относительные (/blog/image/...) URL
+                processedText = processedText.replace(/!\[[^\]]*\]\(([^)]+)\)/g, (m, url) => `${IMG_MARKER}${url}]`);
 
             // Сначала преобразуем markdown-ссылки [text](url) в маркеры, чтобы не ломать escape/linkify
             const MD_LINK_MARKER = '\u0001';
@@ -11057,7 +11058,7 @@ except Exception as e:
             });
 
             // Разбиваем по [IMAGE:URL], чётные части — текст, нечётные — URL картинки
-            const parts = processedText.split(/\[IMAGE:(https?:\/\/[^\]]+)\]/g);
+            const parts = processedText.split(/\[IMAGE:([^\]]+)\]/g);
             let html = '';
             for (let i = 0; i < parts.length; i++) {
                 if (i % 2 === 0) {
