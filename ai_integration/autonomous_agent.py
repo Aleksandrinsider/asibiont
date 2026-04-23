@@ -7579,6 +7579,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "    Контент — рабочая заметка, список, отчёт, 'нашёл X контактов'? → chat.\n"
             "  Если пишешь в блог: пиши как АВТОР, не как отчёт. Добавь свою позицию,\n"
             "    напиши связный текст. Без эмодзи-заголовков (🎯📊), без 'ВЫВОДЫ:', без шаблонных списков.\n"
+            "    ДЛИНА БЛОГ-СТАТЬИ: 1500–2500 слов. Это полноценный материал с введением, аргументами и выводами.\n"
+            "    Раскрой тему глубоко: примеры, данные из поиска, своя позиция, практические советы.\n"
             "Свою работу делай сам. Делегируй через DELEGATE[Имя] только когда нет нужного инструмента.\n"
             "💬 ОБЩЕНИЕ С ПОЛЬЗОВАТЕЛЕМ: ты специалист, а не робот-исполнитель.\n"
             "   Пиши как живой человек: коротко, по делу, от первого лица.\n"
@@ -7686,7 +7688,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "  КРИТЕРИЙ: контент — самостоятельная статья с тезисом и аргументами? → blog.\n"
         "    Контент — рабочая заметка, список, отчёт, 'нашёл X контактов'? → chat.\n"
         "  Если пишешь в блог: пиши как АВТОР, не как отчёт. Добавь свою позицию,\n"
-        "    напиши связный текст. Без эмодзи-заголовков (🎯📊), без 'ВЫВОДЫ:', без шаблонных списков.\n\n"
+        "    напиши связный текст. Без эмодзи-заголовков (🎯📊), без 'ВЫВОДЫ:', без шаблонных списков.\n"
+        "    ДЛИНА БЛОГ-СТАТЬИ: 1500–2500 слов. Это полноценный материал с введением, аргументами и выводами.\n"
+        "    Раскрой тему глубоко: примеры, данные из поиска, своя позиция, практические советы.\n\n"
 
         "⛔ ЗАПРЕТ НА ВЫДУМКУ ДАННЫХ — главное правило:\n"
         "  Никогда не пиши цифры, факты или даты которые ты не получил из инструмента или контекста.\n"
@@ -8782,7 +8786,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         # Adaptive tokens: tool-calling iterations need room for both JSON tool-calls
         # AND occasional text responses (summary/report). 1200 prevents mid-sentence truncation.
         # Text-only final summary iterations need full response space (1600).
-        _iter_max_tokens = 1200 if _use_tools_now else 1600
+        # Blog/article tasks need much more tokens to generate 1500-2500 word content.
+        _is_blog_task = any(kw in (task or '').lower() for kw in ('blog', 'блог', 'стать', 'article', 'публикац', 'create_post', 'save_note'))
+        _iter_max_tokens = (4000 if _is_blog_task else 1200) if _use_tools_now else (4000 if _is_blog_task else 1600)
         if _timeout_relaxed_mode:
             # Облегчаем повтор: меньше токенов => меньше риск повторного timeout
             _iter_max_tokens = min(_iter_max_tokens, 900)
