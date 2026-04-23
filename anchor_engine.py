@@ -626,20 +626,40 @@ def _normalize_coordinator_assignment_by_capabilities(
     task_norm = (task or '').strip()
     task_l = task_norm.lower()
 
-    # publish_* без канала пользователя/агента → переводим в подготовку контента
-    if tool_norm == 'publish_to_telegram' and ('telegram' not in cats and not has_user_tg_channel):
+    # publish_* без capability агента: не назначаем невыполнимый tool
+    if tool_norm == 'publish_to_telegram' and ('telegram' not in cats):
+        if has_user_tg_channel:
+            return (
+                'delegate_task',
+                (
+                    task_norm
+                    + ' У тебя нет Telegram capability в этом цикле. '
+                    + 'Сделай delegate_task агенту с Telegram-доступом на публикацию и запроси короткий отчёт с ссылкой/результатом.'
+                ).strip(),
+                'publish_to_telegram → delegate_task (у агента нет Telegram capability)',
+            )
         return (
             'create_post',
-            (task_norm + ' Канал Telegram не подключён: подготовь контент и передай пользователю через send_message_to_user.').strip(),
+            (task_norm + ' Telegram-канал не подключён: подготовь контент и передай пользователю через send_message_to_user.').strip(),
             'publish_to_telegram недоступен без Telegram-канала/бота',
         )
-    if tool_norm == 'publish_to_discord' and ('discord' not in cats and not has_user_discord_webhook):
-        # Если есть Telegram-канал — автоматически переключаем на него, иначе create_post
-        if 'telegram' in cats or has_user_tg_channel:
+    if tool_norm == 'publish_to_discord' and ('discord' not in cats):
+        # Если агент умеет Telegram — переключаем. Иначе делегируем агенту с Telegram capability.
+        if 'telegram' in cats:
             return (
                 'publish_to_telegram',
                 (task_norm + ' Discord webhook не подключён, публикую в Telegram-канал как альтернативу.').strip(),
                 'publish_to_discord → publish_to_telegram (Discord не подключён)',
+            )
+        if has_user_tg_channel:
+            return (
+                'delegate_task',
+                (
+                    task_norm
+                    + ' Discord недоступен, а у тебя нет Telegram capability. '
+                    + 'Сделай delegate_task агенту с Telegram-доступом для публикации и отчёта.'
+                ).strip(),
+                'publish_to_discord → delegate_task (у агента нет Discord/Telegram capability)',
             )
         return (
             'create_post',
