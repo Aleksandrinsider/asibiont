@@ -4859,10 +4859,11 @@ class HybridAutonomousAgent:
             logger.info(f"[COGNITIVE] Response fixed: {issues}")
 
         # Встраиваем картинку в ответ если generate_image отработал успешно
+        # (как прямой вызов, так и через delegate_task — когда агент делает generate_image внутри)
         import re as _re
         for _r in execution_results:
+            _res_text = str(_r.get('result', ''))
             if _r.get('tool') == 'generate_image' and _r.get('success'):
-                _res_text = str(_r.get('result', ''))
                 _url_match = _re.search(r'https?://\S+', _res_text)
                 if _url_match:
                     _img_url = _url_match.group(0).rstrip(')')
@@ -4870,6 +4871,14 @@ class HybridAutonomousAgent:
                     if _img_url not in final:
                         final = final + f'\n\n![изображение]({_img_url})'
                         logger.info(f"[IMAGE] Injected image markdown into response: {_img_url[:80]}")
+            elif _r.get('tool') == 'delegate_task' and _r.get('success'):
+                # Извлекаем URL картинки из ответа делегированного агента
+                _img_md = _re.search(r'!\[[^\]]*\]\((https?://[^)]+)\)', _res_text)
+                if _img_md:
+                    _img_url = _img_md.group(1)
+                    if _img_url not in final:
+                        final = final + f'\n\n![изображение]({_img_url})'
+                        logger.info(f"[IMAGE] Injected delegate image into coordinator response: {_img_url[:80]}")
 
         # Рефлексия для обучения
         tools_used = [r['tool'] for r in execution_results if r.get('success')]
