@@ -7452,10 +7452,17 @@ except Exception as e:
                 return;
             }
             const tmpl = _MPA_SVC[svc];
+            const commonFields = [
+                {k:'AGENT_PARAM_PERIOD', label:'Общий период', ph:'today / week / month', t:'text', opt:true},
+                {k:'AGENT_PARAM_FROM', label:'Дата от', ph:'2026-04-23', t:'text', opt:true},
+                {k:'AGENT_PARAM_TO', label:'Дата до', ph:'2026-04-23', t:'text', opt:true},
+                {k:'AGENT_PARAM_LIMIT', label:'Лимит записей', ph:'10', t:'number', opt:true}
+            ];
+            const renderFields = [...(tmpl.fields || []), ...commonFields];
             if (fieldsEl) {
                 let h = '<div style="display:flex;flex-direction:column;gap:7px;">';
                 // Gmail OAuth block — temporarily hidden, manual password only
-                for (const f of tmpl.fields) {
+                for (const f of renderFields) {
                     const label = `<div style="font-size:12px;color:#6B7280;margin-bottom:3px;">${f.label}${f.opt ? ' <span style="color:#9CA3AF">(необязательно)</span>' : ''}</div>`;
                     const inputStyle = 'width:100%;box-sizing:border-box;padding:7px 8px;border:1px solid #D1D9E0;border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:#374151;';
                     if (f.t === 'textarea') {
@@ -7469,14 +7476,24 @@ except Exception as e:
                 fieldsEl.innerHTML = h;
                 fieldsEl.style.display = 'block';
             }
-            if (hintEl && tmpl.hint) { hintEl.textContent = tmpl.hint; hintEl.style.display = 'block'; }
+            if (hintEl && tmpl.hint) {
+                hintEl.textContent = tmpl.hint + ' Общие фильтры для любых интеграций: AGENT_PARAM_PERIOD, AGENT_PARAM_FROM, AGENT_PARAM_TO, AGENT_PARAM_LIMIT.';
+                hintEl.style.display = 'block';
+            }
         }
 
         function mpApplyTemplateConfirm(svc) {
             const tmpl = _MPA_SVC[svc];
             if (!tmpl) return;
+            const commonFields = [
+                {k:'AGENT_PARAM_PERIOD', t:'text'},
+                {k:'AGENT_PARAM_FROM', t:'text'},
+                {k:'AGENT_PARAM_TO', t:'text'},
+                {k:'AGENT_PARAM_LIMIT', t:'number'}
+            ];
+            const collectedFields = [...(tmpl.fields || []), ...commonFields];
             const newKeys = {};
-            for (const f of tmpl.fields) {
+            for (const f of collectedFields) {
                 const el = document.getElementById('mpa-svc-' + f.k);
                 let val = el ? el.value.trim() : '';
                 // textarea: заменяем переносы строк на запятые чтобы значение осталось однострочным
@@ -7533,6 +7550,13 @@ except Exception as e:
             const descEl = document.getElementById('mpa-code-desc');
             const desc = descEl?.value?.trim() || '';
             const apiKeys = (document.getElementById('mpa-apikeys') || {}).value || '';
+            const commonFilterLines = apiKeys
+                .split('\n')
+                .map(line => line.trim())
+                .filter(line => /^AGENT_PARAM_(PERIOD|FROM|TO|LIMIT)=/i.test(line));
+            const generationDesc = commonFilterLines.length
+                ? (desc + '\n\nОбщие фильтры запроса: ' + commonFilterLines.join(', ') + '. Используй их как универсальные AGENT_PARAM_* параметры, а не как ключи конкретной интеграции.').trim()
+                : desc;
             const btn = document.getElementById('mpa-gen-btn');
             const status = document.getElementById('mpa-gen-status');
             const codeEl = document.getElementById('mpa-pycode');
@@ -7609,7 +7633,7 @@ except Exception as e:
                 const r = await fetch('/api/marketplace/agents/generate-code', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({description: desc, api_keys: apiKeys, base_code})
+                    body: JSON.stringify({description: generationDesc, api_keys: apiKeys, base_code})
                 });
                 const data = await r.json();
                 if (data.error) throw new Error(data.error);
