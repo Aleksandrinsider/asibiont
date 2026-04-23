@@ -1599,7 +1599,7 @@ if (pwaBtn) {
 // ── Blog: загрузка последних 3 постов ──
 (function() {
   var lang = (document.documentElement.lang || 'ru').substring(0, 2);
-  fetch('/api/blog?per_page=3&lang=' + lang)
+  fetch('/api/blog?per_page=6&lang=' + lang)
     .then(function(r) { return r.json(); })
     .then(function(data) {
       var posts = data.posts || [];
