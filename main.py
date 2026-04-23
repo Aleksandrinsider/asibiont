@@ -10733,6 +10733,7 @@ async def api_blog_handler(request):
                 _img_tag = f"![Иллюстрация](/blog/image/{n.id})"
                 if _re_api_blog.search(r'^!\[[^\]]*\]\([^)]+\)', display_content or ''):
                     display_content = _re_api_blog.sub(
+                        r'^!\[[^\]]*\]\([^)]+\)',
                         _img_tag,
                         display_content,
                         count=1,
