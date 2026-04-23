@@ -687,6 +687,14 @@
         .blog-card-more:hover {
             color: #1F2328;
         }
+        .blog-card-img {
+            width: 100%;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            display: block;
+        }
         /* ── Интеграции — бегущая строка ── */
         .integrations-section {
             margin: 0 0 30px 0;
@@ -1617,10 +1625,15 @@ if (pwaBtn) {
           .replace(/[#*`_~>[\]()!]/g, '')
           .replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().substring(0, 160);
         if (excerpt.length >= 158) excerpt = excerpt.replace(/\s\S*$/, '') + '…';
+        // Extract image URL from content (markdown or legacy marker)
+        var imgMatch = (p.content || '').match(/!\[[^\]]*\]\((https?:\/\/[^)]+)\)/) ||
+                       (p.content || '').match(/\[IMAGE:(https?:\/\/[^\]]+)\]/);
+        var imgUrl = imgMatch ? imgMatch[1] : '';
         var readMore = lang === 'en' ? 'Read →' : 'Читать →';
         var card = document.createElement('div');
         card.className = 'blog-card';
         card.innerHTML =
+          (imgUrl ? '<a href="/blog/' + (p.slug || p.id) + '"><img class="blog-card-img" src="' + imgUrl + '" alt="" loading="lazy"></a>' : '') +
           '<div class="blog-card-date">' + dateStr + '</div>' +
           '<div class="blog-card-title"><a href="/blog/' + (p.slug || p.id) + '">' + (p.title || '') + '</a></div>' +
           '<div class="blog-card-excerpt">' + excerpt + '</div>' +
