@@ -7330,7 +7330,8 @@ async def on_startup(app):
                 if _attempt >= 2:
                     logger.error(f"❌ Failed to set webhook after retries: {e}")
                     break
-                await asyncio.sleep(1.2 * (_attempt + 1))
+                _sleep = 3 * (_attempt + 1)  # 3s, 6s — give Telegram flood limit time to clear
+                await asyncio.sleep(_sleep)
                 logger.warning(f"[WEBHOOK] set_webhook retry {_attempt+1}/3 after error: {e}")
         if not _set_ok:
             logger.warning("[WEBHOOK] Bot starts without confirmed webhook; platform will retry on next restart")
@@ -10573,6 +10574,27 @@ async def integrations_handler(request):
     return aiohttp_jinja2.render_template('integrations.html', request, {'lang': lang})
 
 
+async def blog_image_handler(request):
+    """Serve stored blog cover image: GET /blog/image/<note_id>"""
+    try:
+        note_id = int(request.match_info['note_id'])
+    except (KeyError, ValueError):
+        raise web.HTTPNotFound()
+    with Session() as db:
+        from models import Note
+        note = db.query(Note).filter_by(id=note_id, source='blog').first()
+        if not note or not note.image_data:
+            raise web.HTTPNotFound()
+        mime = note.image_mime or 'image/webp'
+        return web.Response(
+            body=note.image_data,
+            content_type=mime,
+            headers={
+                'Cache-Control': 'public, max-age=31536000, immutable',
+            },
+        )
+
+
 async def blog_handler(request):
     """Публичный блог ASI Biont — список статей от AI-агентов"""
     lang = 'en' if request.path.startswith('/en') else 'ru'
@@ -10704,6 +10726,19 @@ async def api_blog_handler(request):
             else:
                 display_title = n.title or 'Без заголовка'
                 display_content = n.content or ''
+
+            # If image bytes are stored in DB, force permanent local image URL in content.
+            if getattr(n, 'image_data', None):
+                import re as _re_api_blog
+                _img_tag = f"![Иллюстрация](/blog/image/{n.id})"
+                if _re_api_blog.search(r'^!\[[^\]]*\]\([^)]+\)', display_content or ''):
+                    display_content = _re_api_blog.sub(
+                        _img_tag,
+                        display_content,
+                        count=1,
+                    )
+                else:
+                    display_content = f"{_img_tag}\n\n{display_content}"
             posts.append({
                 'id': n.id,
                 'slug': n.slug or str(n.id),
@@ -13557,6 +13592,7 @@ app.router.add_get('/llms-en.txt', _static_llms_en)
 app.router.add_get('/faq', faq_handler)
 app.router.add_get('/arena', arena_public_handler)
 app.router.add_get('/blog', blog_handler)
+app.router.add_get('/blog/image/{note_id}', blog_image_handler)
 app.router.add_get('/blog/{post_id}', blog_post_handler)
 app.router.add_get('/api/blog', api_blog_handler)
 app.router.add_get('/en/blog', blog_handler)

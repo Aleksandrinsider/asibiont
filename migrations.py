@@ -360,6 +360,8 @@ def _migrate_notes(session, inspector):
             'slug': 'ALTER TABLE notes ADD COLUMN slug VARCHAR(300)',
             'title_en': 'ALTER TABLE notes ADD COLUMN title_en VARCHAR(500)',
             'content_en': 'ALTER TABLE notes ADD COLUMN content_en TEXT',
+            'image_data': 'ALTER TABLE notes ADD COLUMN image_data BYTEA',
+            'image_mime': "ALTER TABLE notes ADD COLUMN image_mime VARCHAR(20)",
         })
         # Index on slug for fast lookups
         if 'slug' not in cols:

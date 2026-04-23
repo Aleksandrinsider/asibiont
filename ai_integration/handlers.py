@@ -1184,6 +1184,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             return "[INTERNAL] Заметка отклонена: список ссылок без пояснения — добавь аннотацию."
 
         _source_val = source if source in ('chat', 'blog') else 'chat'
+        _pending_image = None  # (bytes, mime) for blog cover image
 
         # Для blog-заметок: убираем декоративные эмодзи и, при наличии правила, добавляем иллюстрацию
         if _source_val == 'blog':
@@ -1206,7 +1207,26 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                         _m = _re_img_sn.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result or '')
                         if _m:
                             _u = _m.group(1)
-                            content = f"![Иллюстрация]({_u})\n\n{content}"
+                            # Download image bytes immediately — Replicate URLs expire in ~1h
+                            _img_bytes = None
+                            _img_mime = 'image/webp'
+                            try:
+                                import aiohttp as _aiohttp_dl
+                                async with _aiohttp_dl.ClientSession() as _http_dl:
+                                    async with _http_dl.get(_u, timeout=_aiohttp_dl.ClientTimeout(total=30)) as _r:
+                                        if _r.status == 200:
+                                            _img_bytes = await _r.read()
+                                            _img_mime = _r.headers.get('Content-Type', 'image/webp').split(';')[0].strip()
+                            except Exception as _e_dl:
+                                logger.warning(f"[SAVE_NOTE] Image download failed: {_e_dl}")
+                            if _img_bytes:
+                                # Store bytes now — will be associated with note after commit
+                                _pending_image = (_img_bytes, _img_mime)
+                                content = f"![Иллюстрация](/blog/image/PENDING_ID)\n\n{content}"
+                            else:
+                                # Fallback: embed Replicate URL (will expire)
+                                _pending_image = None
+                                content = f"![Иллюстрация]({_u})\n\n{content}"
                     except Exception as _e_img_sn:
                         logger.warning(f"[SAVE_NOTE] Blog image generation failed: {_e_img_sn}")
 
@@ -1243,13 +1263,18 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         session.commit()
         if _source_val == 'blog':
             note.slug = _make_blog_slug(_note_title, note.id)
+            # If we have pending image bytes, store them and fix the placeholder URL
+            if _pending_image:
+                note.image_data = _pending_image[0]
+                note.image_mime = _pending_image[1]
+                note.content = note.content.replace('PENDING_ID', str(note.id))
             session.commit()
             logger.info(f"[SAVE_NOTE] Blog post published: id={note.id}, slug={note.slug!r}, title={_note_title[:60]!r}")
             # Fire-and-forget EN translation
             try:
                 import asyncio as _aio_blog
                 _aio_blog.get_running_loop().create_task(
-                    _translate_blog_post_to_en(note.id, _note_title, content.strip())
+                    _translate_blog_post_to_en(note.id, _note_title, note.content or content.strip())
                 )
             except Exception as _te:
                 logger.debug(f"[SAVE_NOTE] EN translation task skipped: {_te}")
@@ -8785,8 +8810,23 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 _blog_title = post_preview
             _blog_note_content = content.strip()
             if _post_image_url:
-                # Markdown image makes it visible on public blog; dashboard notes render markdown too
-                _blog_note_content = f"![Иллюстрация к посту]({_post_image_url})\n\n{_blog_note_content}"
+                # Download image bytes immediately — Replicate URLs expire in ~1h
+                _img_bytes_cp = None
+                _img_mime_cp = 'image/webp'
+                try:
+                    import aiohttp as _aiohttp_cp_dl
+                    async with _aiohttp_cp_dl.ClientSession() as _http_cp_dl:
+                        async with _http_cp_dl.get(_post_image_url, timeout=_aiohttp_cp_dl.ClientTimeout(total=30)) as _r_cp:
+                            if _r_cp.status == 200:
+                                _img_bytes_cp = await _r_cp.read()
+                                _img_mime_cp = _r_cp.headers.get('Content-Type', 'image/webp').split(';')[0].strip()
+                except Exception as _e_cp_dl:
+                    logger.warning(f"[CREATE_POST] Image download failed: {_e_cp_dl}")
+                if _img_bytes_cp:
+                    _blog_note_content = f"![Иллюстрация к посту](/blog/image/PENDING_CP_ID)\n\n{_blog_note_content}"
+                else:
+                    # Fallback: use Replicate URL directly (may expire)
+                    _blog_note_content = f"![Иллюстрация к посту]({_post_image_url})\n\n{_blog_note_content}"
             _blog_note = _NoteCP(
                 user_id=user.id,
                 title=_blog_title,
@@ -8796,6 +8836,10 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             session.add(_blog_note)
             session.commit()
             _blog_note.slug = _make_blog_slug(_blog_title, _blog_note.id)
+            if _post_image_url and _img_bytes_cp:
+                _blog_note.image_data = _img_bytes_cp
+                _blog_note.image_mime = _img_mime_cp
+                _blog_note.content = _blog_note.content.replace('PENDING_CP_ID', str(_blog_note.id))
             session.commit()
             _blog_url = f'https://asibiont.com/blog/{_blog_note.slug}'
             logger.info(f"[CREATE_POST] Blog note created: id={_blog_note.id}, slug={_blog_note.slug!r}")
@@ -8803,7 +8847,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             try:
                 import asyncio as _aio_cp
                 _aio_cp.get_running_loop().create_task(
-                    _translate_blog_post_to_en(_blog_note.id, _blog_title, content.strip())
+                    _translate_blog_post_to_en(_blog_note.id, _blog_title, _blog_note.content or content.strip())
                 )
             except Exception:
                 pass

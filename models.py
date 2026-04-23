@@ -3,7 +3,7 @@ import logging
 import enum
 import json
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, Float, text, Index
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, UniqueConstraint, BigInteger, Float, text, Index, LargeBinary
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from sqlalchemy.types import TypeDecorator
 from config import DATABASE_URL, encrypt_token, decrypt_token
@@ -158,6 +158,8 @@ class Note(Base):
     content_en = Column(Text, nullable=True)         # EN translation of content
     source = Column(String(20), default='manual')  # 'manual', 'chat', or 'blog'
     slug = Column(String(300), nullable=True, index=True)  # SEO-friendly URL slug for blog posts
+    image_data = Column(LargeBinary, nullable=True)   # blog cover image bytes (permanent storage)
+    image_mime = Column(String(20), nullable=True)    # e.g. 'image/webp' or 'image/png'
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 
     user = relationship("User", backref="notes")
