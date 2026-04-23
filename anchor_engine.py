@@ -8025,7 +8025,10 @@ class AnchorEngine:
                             f"  ЯЗЫК: чистый разговорный русский. Без канцеляризмов, без грамматических ошибок.\n"
                             f"  ❌ НЕЛЬЗЯ: 'поищи контактов' (падеж) → ✅ 'найди контакты'\n"
                             f"  ❌ НЕЛЬЗЯ: 'произведи анализ' → ✅ 'проанализируй'\n"
-                            f"  ❌ НЕЛЬЗЯ: инфинитив 'найти/создать/отправить' → ✅ повелит. 'найди/создай/отправь'\n\n"
+                            f"  ❌ НЕЛЬЗЯ: инфинитив 'найти/создать/отправить' → ✅ повелит. 'найди/создай/отправь'\n"
+                            f"  ❌ НЕЛЬЗЯ: говорить об агенте в 3-м лице — '{_chosen_name} зациклен', '{_chosen_name} застрял', '{_chosen_name} не даёт результат'.\n"
+                            f"     ✅ ПРАВИЛЬНО: 'ты зациклился', 'ты застрял', 'прошлый подход не дал результата'.\n"
+                            f"     Помни: ты обращаешься НАПРЯМУЮ к {_chosen_name}, а не рассказываешь о нём кому-то.\n\n"
                             f"🚫 СТОП-ЛИСТ (нарушение = сгоревший цикл без результата):\n"
                             f"  ❌ LinkedIn + email/контакты = ЗАПРЕЩЕНО абсолютно. LinkedIn требует авторизации → 100% таймаут.\n"
                             f"     Замени на: web_search site:github.com, Habr-авторы, ProductHunt, Eventbrite, конференции.\n"
@@ -8206,6 +8209,25 @@ class AnchorEngine:
                                 lambda m: m.group(0).split(',')[0] + ', ',
                                 _gen, flags=_re_post.IGNORECASE
                             )
+                            # Convert 3rd-person references to agent → 2nd person (direct address)
+                            # e.g. "Lorenzo зациклен" → "ты зациклился", "Lorenzo застрял" → "ты застрял"
+                            if _chosen_name and _chosen_name in _gen:
+                                _is_fem_gen = _detect_agent_is_female(_chosen_name)
+                                _3p_map = [
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+зациклен(а?)\b', 'ты зациклил' + ('ась' if _is_fem_gen else 'ся')),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+застрял(а?)\b', 'ты застрял' + ('а' if _is_fem_gen else '')),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+повторяет\b', 'ты повторяешь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+не\s+даёт\b', 'ты не даёшь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+продолжает\b', 'ты продолжаешь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+использует\b', 'ты используешь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+делает\b', 'ты делаешь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+ищет\b', 'ты ищешь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+не\s+может\b', 'ты не можешь'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+снова\b', 'ты снова'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+уже\b', 'ты уже'),
+                                ]
+                                for _pat, _repl in _3p_map:
+                                    _gen = _re_post.sub(_pat, _repl, _gen, flags=_re_post.IGNORECASE)
                             # If truncated (doesn't end with sentence-ending punctuation), trim to last complete sentence
                             _gen = _gen.strip()
                             if _gen and _gen[-1] not in '.!?»':
