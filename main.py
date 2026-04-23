@@ -13530,6 +13530,7 @@ async def _static_sitemap(request):
         ('https://asibiont.com/blog', '0.8', 'daily'),
         ('https://asibiont.com/en/blog', '0.8', 'daily'),
         ('https://asibiont.com/arena', '0.7', 'daily'),
+        ('https://asibiont.com/en/arena', '0.6', 'daily'),
         ('https://asibiont.com/privacy', '0.5', 'monthly'),
         ('https://asibiont.com/terms', '0.5', 'monthly'),
     ]
