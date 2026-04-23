@@ -8234,6 +8234,32 @@ class AnchorEngine:
                                 ]
                                 for _pat, _repl in _3p_map:
                                     _gen = _re_post.sub(_pat, _repl, _gen, flags=_re_post.IGNORECASE)
+                            # Убираем дубли имени в начале: "Hugo, Hugo ..." / "Hugo Hugo ..."
+                            if _chosen_name:
+                                _name_esc = _re_post.escape(_chosen_name)
+                                _gen = _re_post.sub(rf'^(?:{_name_esc}\s*,\s*){{2,}}', f'{_chosen_name}, ', _gen, flags=_re_post.IGNORECASE)
+                                _gen = _re_post.sub(rf'^{_name_esc}\s+{_name_esc}\b', _chosen_name, _gen, flags=_re_post.IGNORECASE)
+                            # Удаляем обрывки после 3rd→2nd преобразования: "ты зациклился на."
+                            _gen = _re_post.sub(r'\bты\s+зациклил(?:ся|ась)\s+на\s*[.!?]', '', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bзациклен(?:а)?\s+на\s*[.!?]', '', _gen, flags=_re_post.IGNORECASE)
+                            # Если есть оборванные предложения, удаляем только их, сохраняя остальные
+                            _parts = [p.strip() for p in _re_post.split(r'(?<=[.!?])\s+', _gen) if p.strip()]
+                            _bad_tail = re.compile(r'\b(?:на|в|к|о|об|по|для|через|с|у|от|и|или|что|как)\s*[.!?]$', re.IGNORECASE)
+                            _parts = [p for p in _parts if not _bad_tail.search(p)]
+                            if _parts:
+                                _gen = ' '.join(_parts)
+                            # Guard: задачи про инсайдеров не должны уводиться в Discord-мониторинг
+                            _gen_l = _gen.lower()
+                            if (
+                                ('инсайдер' in _gen_l or 'insider' in _gen_l)
+                                and ('discord' in _gen_l or 'дискорд' in _gen_l)
+                                and ('finance' in _cats_c or 'rss' in _cats_c)
+                            ):
+                                _route_hint = 'run_agent_action(action="insider_trades")' if 'finance' in _cats_c else 'get_rss_feed'
+                                _gen = (
+                                    f'{_chosen_name}, через {_route_hint} собери сделки инсайдеров за последние 2 дня '
+                                    f'по ключевым тикерам и передай краткий отчёт с 3-5 выводами.'
+                                )
                             # If truncated (doesn't end with sentence-ending punctuation), trim to last complete sentence
                             _gen = _gen.strip()
                             if _gen and _gen[-1] not in '.!?»':
