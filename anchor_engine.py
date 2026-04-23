@@ -8721,19 +8721,7 @@ class AnchorEngine:
                                     _coord_text_clean_save = _re_ct_conv.sub(r'\bприоритет\s*[—:\-]\s*', '', _coord_text_clean_save, flags=_re_ct_conv.IGNORECASE)
                                     _coord_text_clean_save = _re_ct_conv.sub(r'\s{2,}', ' ', _coord_text_clean_save).strip()
 
-                                    # Принудительная лаконичность: максимум 2 завершённых предложения
-                                    _parts_ct = [p.strip() for p in _re_ct_conv.split(r'(?<=[.!?])\s+', _coord_text_clean_save) if p.strip()]
-                                    if len(_parts_ct) > 2:
-                                        _coord_text_clean_save = ' '.join(_parts_ct[:2]).strip()
 
-                                    # Ограничение длины (чтобы не превращалось в отчёт вместо поручения)
-                                    if len(_coord_text_clean_save) > 280:
-                                        from ai_integration.utils import _rfind_sentence_end as _rfse_coord
-                                        _cut_ct = _rfse_coord(_coord_text_clean_save, 280)
-                                        if _cut_ct > 80:
-                                            _coord_text_clean_save = _coord_text_clean_save[:_cut_ct + 1].strip()
-                                        else:
-                                            _coord_text_clean_save = _coord_text_clean_save[:280].rstrip() + '…'
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                                     # ── META-TASK GUARD (Path 2): блокируем диагностические/метрические пустышки ──
                                     _ctcs_lower = _coord_text_clean_save.lower()
