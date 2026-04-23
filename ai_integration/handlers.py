@@ -33,6 +33,23 @@ _ASI_REPORT_REVIEW_ACTIVE: set = set()
 _mx_cache = {}  # domain → (has_mx: bool, timestamp)
 
 
+def _strip_post_visual_prompt(text: str) -> str:
+    """Убирает хвосты вида 'Иллюстрация: ...' / 'Изображение: ...' из публичных постов."""
+    if not text:
+        return text
+
+    cleaned = str(text)
+    _marker = re.search(
+        r'(?im)(?:^|\n)\s*(иллюстрация|изображение|illustration|image)\s*:\s*',
+        cleaned,
+    )
+    if _marker:
+        cleaned = cleaned[:_marker.start()].rstrip()
+
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+    return cleaned
+
+
 def _validate_email_domain(email: str) -> tuple:
     """Check if email domain has valid MX records. Returns (is_valid, error_message).
 
@@ -8690,6 +8707,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         # Sanitize token hallucinations (AI иногда пишет "1000+500" вместо "1500")
         from ai_integration.conversation_history import sanitize_token_hallucinations
         content = sanitize_token_hallucinations(content)
+        content = _strip_post_visual_prompt(content)
 
         # Очистка от markdown-звёздочек и эмодзи для публичного блога
         import re
@@ -9118,11 +9136,14 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         from ai_integration.conversation_history import sanitize_token_hallucinations
         if isinstance(content_data, str):
             content_data = sanitize_token_hallucinations(content_data)
+            content_data = _strip_post_visual_prompt(content_data)
             content = sanitize_token_hallucinations(content)
+            content = _strip_post_visual_prompt(content)
         elif isinstance(content_data, dict):
-            for _k in ('text', 'title', 'body'):
+            for _k in ('text', 'title', 'body', 'cta'):
                 if _k in content_data and isinstance(content_data[_k], str):
                     content_data[_k] = sanitize_token_hallucinations(content_data[_k])
+                    content_data[_k] = _strip_post_visual_prompt(content_data[_k])
 
         # ── GUARD: не публиковать внутренние отчёты в публичный канал ──
         _tg_lower = (content if isinstance(content, str) else str(content)).lower()
@@ -17847,6 +17868,7 @@ async def publish_to_discord(
         # Sanitize token hallucinations
         from ai_integration.conversation_history import sanitize_token_hallucinations
         content = sanitize_token_hallucinations(content)
+        content = _strip_post_visual_prompt(content)
 
         # Discord лимит 2000 символов в content — обрезаем с многоточием
         if len(content) > 2000:
@@ -17912,6 +17934,8 @@ async def publish_to_vk(
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
+
+        content = _strip_post_visual_prompt(content)
 
         vk_token, vk_owner_id = None, None
         try:
@@ -17996,6 +18020,8 @@ async def publish_to_twitter(
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
+
+        content = _strip_post_visual_prompt(content)
 
         tw_keys = {}
         try:
@@ -18116,6 +18142,8 @@ async def publish_to_linkedin(
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return "Пользователь не найден"
+
+        content = _strip_post_visual_prompt(content)
 
         li_token = None
         try:
