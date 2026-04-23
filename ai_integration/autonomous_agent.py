@@ -5810,6 +5810,38 @@ def _strip_agent_html(text: str) -> str:
     return _t
 
 
+def _normalize_agent_interaction_text(text: str, max_len: int = 900) -> str:
+    """Нормализует агентский текст для чата/заметок без рваных хвостов и лишних пустых строк."""
+    if not text:
+        return ''
+    _t = _strip_agent_html(str(text))
+    try:
+        from .utils import clean_technical_details as _clean_interaction_details
+        _cleaned = _clean_interaction_details(_t)
+        if _cleaned and _cleaned.strip():
+            _t = _cleaned
+    except Exception:
+        pass
+    _t = re.sub(r'\r\n?', '\n', _t)
+    _t = re.sub(r'[ \t]+\n', '\n', _t)
+    _t = re.sub(r'\n[ \t]+', '\n', _t)
+    _t = re.sub(r'\n{3,}', '\n\n', _t)
+    _t = re.sub(r'[ \t]{2,}', ' ', _t).strip()
+    if max_len and len(_t) > max_len:
+        _cut = _t[:max_len]
+        _m = re.search(r'(.+[.!?…])(?:\s|$)', _cut, flags=re.S)
+        if _m:
+            _t = _m.group(1).strip()
+        else:
+            _nl = _cut.rfind('\n')
+            if _nl >= max_len // 2:
+                _t = _cut[:_nl].strip()
+            else:
+                _sp = _cut.rfind(' ')
+                _t = _cut[:_sp].strip() if _sp >= max_len // 2 else _cut.strip()
+    return _t
+
+
 def _save_interaction_for_director(telegram_id: int, content: str, message_type: str = 'agent_msg') -> bool:
     """Сохраняет промежуточное сообщение агента/АСИ в Interaction чата.
     
@@ -9770,13 +9802,14 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                             or _sd_lower.rstrip('.!') in _SD_NOISE
                                         )
                                         if not _sd_is_noise:
+                                            _sd_saved_text = _normalize_agent_interaction_text(_sd_result_text, max_len=900)
                                             # Сохраняем interaction
                                             _msg_s.add(_MsgInt(
                                                 user_id=_msg_u.id,
                                                 message_type='proactive',
                                                 content=json.dumps({
                                                     '__agent': {'name': _sd_target_name, 'id': _sd_ag_id, 'avatar_url': _sd_ag_avatar},
-                                                    'text': re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _sd_result_text[:600]),
+                                                    'text': re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', _sd_saved_text),
                                                     '__tools_used': _sub_tools,
                                                     '__anchor_type': 'agent_delegation',
                                                 }, ensure_ascii=False),
