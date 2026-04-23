@@ -8174,10 +8174,11 @@ class AnchorEngine:
                             f"  4) Прогресс цели вырос? Если нет — спроси себя: что мешает? Может нужна другая аудитория, другой формат, или конкретное действие вместо исследования.\n"
                             f"  5) Есть ли незавершённые задачи (см. 📋 выше)? Если да — имеет ли смысл дать поручение по СУЩЕСТВУЮЩЕЙ задаче вместо создания новой? Много висящих задач = признак что команда генерирует задачи быстрее чем решает.\n"
 
-                            + f"\nНапиши как живой коллега: 2-3 предложения по делу, каждое с точкой. Обратись по имени.\n"
+                            + f"\nНапиши как живой коллега: 1-2 коротких предложения по делу (без канцелярита). Обратись по имени.\n"
                             "ОБЯЗАТЕЛЬНО: ЗАЧЕМ (1 фраза) + конкретный инструмент из карточки + ожидаемый результат. Без всех трёх — пустышка.\n"
                             "Работай только с инструментами из карточки выше. Тон: старший коллега — конкретно, без официоза.\n"
                             "Если один агент собрал данные — назначь другому использовать ЭТИ данные для действия.\n"
+                            "Если для выполнения нужен коллега — явно поручи делегирование и попроси короткий отчёт по итогу.\n"
                             "Если есть «Последний результат» — отталкивайся от него.\n"
                             f"✅ Примеры ПРАВИЛЬНОГО поручения (ЗАЧЕМ+КАК+РЕЗУЛЬТАТ):\n"
                             f"  СЛАБОЕ ❌: '{_chosen_name}, займись рассылкой. Возьми перспективный контакт.' — нет контекста ПОЧЕМУ, нет инструмента, нет критерия.\n"
@@ -8204,7 +8205,7 @@ class AnchorEngine:
                             "ФОРМУЛА: [Имя], [ФАКТ из контекста — не повторяй имя]. [Глагол+TOOL+что]. [Результат]."
                             + _lang_directive(user)
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=900)
+                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=420)
                         # ── Post-generation: strip lists, evaluation phrases, truncated endings ──
                         if _gen:
                             import re as _re_post
@@ -8715,6 +8716,24 @@ class AnchorEngine:
                                     _coord_text_clean_save = _re_ct_conv.sub(
                                         r'\s+по\s+(?:\w+\s+)?«[^»]{15,}»', '', _coord_text_clean_save
                                     ).strip()
+                                    # Убираем канцелярские маркеры, оставляя смысл задания
+                                    _coord_text_clean_save = _re_ct_conv.sub(r'\bподтверждено\s*[×xх]?\s*\d+\b', '', _coord_text_clean_save, flags=_re_ct_conv.IGNORECASE)
+                                    _coord_text_clean_save = _re_ct_conv.sub(r'\bприоритет\s*[—:\-]\s*', '', _coord_text_clean_save, flags=_re_ct_conv.IGNORECASE)
+                                    _coord_text_clean_save = _re_ct_conv.sub(r'\s{2,}', ' ', _coord_text_clean_save).strip()
+
+                                    # Принудительная лаконичность: максимум 2 завершённых предложения
+                                    _parts_ct = [p.strip() for p in _re_ct_conv.split(r'(?<=[.!?])\s+', _coord_text_clean_save) if p.strip()]
+                                    if len(_parts_ct) > 2:
+                                        _coord_text_clean_save = ' '.join(_parts_ct[:2]).strip()
+
+                                    # Ограничение длины (чтобы не превращалось в отчёт вместо поручения)
+                                    if len(_coord_text_clean_save) > 280:
+                                        from ai_integration.utils import _rfind_sentence_end as _rfse_coord
+                                        _cut_ct = _rfse_coord(_coord_text_clean_save, 280)
+                                        if _cut_ct > 80:
+                                            _coord_text_clean_save = _coord_text_clean_save[:_cut_ct + 1].strip()
+                                        else:
+                                            _coord_text_clean_save = _coord_text_clean_save[:280].rstrip() + '…'
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                                     # ── META-TASK GUARD (Path 2): блокируем диагностические/метрические пустышки ──
                                     _ctcs_lower = _coord_text_clean_save.lower()
