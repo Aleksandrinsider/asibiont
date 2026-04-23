@@ -5614,14 +5614,26 @@ def get_autonomous_agent():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _has_explicit_mention(message: str) -> bool:
-    """True если сообщение начинается с @Агент или 'ИмяАгента, ...'."""
+    """True если сообщение похоже на прямое обращение к агенту.
+
+    Поддерживает:
+    - @agent
+    - "Имя, ..."
+    - "Name ты ..." / "Name как ..." (без запятой)
+    """
     m = (message or '').strip()
     if not m:
         return False
     if re.match(r'@\w+\b', m):
         return True
-    # "Кристина, ..." — обращение по имени через запятую (типичный русский паттерн)
-    if re.match(r'[А-ЯЁа-яё]{3,}\s*,', m):
+    # "Кристина, ..." / "Beatrice, ..." — обращение по имени через запятую
+    if re.match(r'[A-Za-zА-ЯЁа-яё]{3,}\s*,', m):
+        return True
+    # "Beatrice ты ..." / "Беатрис как ..." — живой формат без запятой
+    if re.match(
+        r'(?i)^[a-zа-яё]{3,}\s+(?:ты|как|что|когда|почему|где|сколько|видишь|можешь|знаешь|проверь|сделай|расскажи)\b',
+        m,
+    ):
         return True
     return False
 
@@ -11278,7 +11290,7 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
         # (директор всё равно загрузит агентов из DB и вернёт None — экономим 10-15с)
         _director_response = None
         _skip_director = False
-        if _is_question_message(message or ''):
+        if _is_question_message(message or '') and not _has_explicit_mention(message or ''):
             # Имена агентов — русские, с заглавной буквы, ≥3 символа
             _words = re.findall(r'[А-ЯЁ][а-яё]{2,}', message or '')
             # Если нет слов похожих на имена — вопрос без обращения к агенту
