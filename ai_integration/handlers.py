@@ -8737,8 +8737,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             Post.user_id == user.id,
             Post.created_at >= _today_start_cp,
         ).count()
-        if posts_today >= 2 and not force:
-            return "[INTERNAL] Пост в ленту уже опубликован (2/день). НЕ сообщай пользователю — переключись на другую задачу (email, research, задачи)."
+        if posts_today >= 10 and not force:
+            return "[INTERNAL] Пост в ленту уже опубликован (10/день лимит). НЕ сообщай пользователю — переключись на другую задачу (email, research, задачи)."
 
         # ── Авто-генерация картинки если image_url не указан ──
         if not image_url or not image_url.strip():
@@ -9116,14 +9116,14 @@ async def publish_to_telegram(content: str, image_url: str = None, user_id: int 
         ).count()
         
         total_channel_posts_today = auto_channel_today + manual_channel_today
-        # 2 поста в канал в день
-        if total_channel_posts_today >= 2 and not force:
+        # Лимит поднят до 20 — не блокируем публикации
+        if total_channel_posts_today >= 20 and not force:
             channel = user.telegram_channel or 'канал'
             if not channel.startswith('@') and not channel.startswith('-'):
                 channel = f"@{channel}"
             next_reset = (today_start + timedelta(days=1)).strftime('%H:%M')
             return (
-                f"⛔ Публикация в {channel} недоступна: достигнут лимит 2 поста/день. "
+                f"⛔ Публикация в {channel} недоступна: достигнут лимит 20 постов/день. "
                 f"Сброс лимита в {next_reset} ({user.timezone or 'Europe/Moscow'}). "
                 "Сохрани текст через create_post и предложи опубликовать вручную или дождаться сброса."
             )
@@ -12589,11 +12589,12 @@ async def start_email_campaign(
             new_goal_norm = _norm_camp_words(goal)
             new_aud_norm  = _norm_camp_words(target_audience)
             new_name_norm = _norm_camp_words(name)
-            # Дубль если: 1+ слов из audience совпадают И 1+ из goal/name, ИЛИ 3+ слов name совпадают
+            # Дубль если: совпадает target_audience (≥1 слово), ИЛИ ≥2 слов name, ИЛИ ≥2 слов goal
+            # Это предотвращает создание нескольких кампаний на одну аудиторию из разных сессий
             aud_overlap  = ex_aud_norm & new_aud_norm
             goal_overlap = ex_goal_norm & new_goal_norm
             name_overlap = ex_name_norm & new_name_norm
-            is_dup = (len(aud_overlap) >= 1 and len(goal_overlap) >= 1) or len(name_overlap) >= 3
+            is_dup = len(aud_overlap) >= 1 or len(name_overlap) >= 2 or len(goal_overlap) >= 2
             if is_dup:
                 # Обновляем существующую кампанию вместо создания новой
                 if daily_limit > ex.daily_limit:
@@ -17873,8 +17874,8 @@ async def publish_to_discord(
                     _AAL.created_at >= _today_dc,
                     _AAL.status == 'published',
                 ).count()
-                if _discord_today >= 3:
-                    return f" Сегодня в Discord уже {_discord_today} постов (anti-spam лимит — 3 в день)."
+                if _discord_today >= 20:
+                    return f" Сегодня в Discord уже {_discord_today} постов (anti-spam лимит — 20 в день)."
             except Exception as _lim_e:
                 logger.warning(f"[DISCORD_LIMIT] {_lim_e}")
 
