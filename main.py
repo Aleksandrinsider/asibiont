@@ -11317,20 +11317,68 @@ async def resend_webhook_handler(request):
         logger.info(f"[RESEND_WEBHOOK] Event: {event_type}, payload keys: {list(payload.keys())}, data keys: {list(data.keys())}")
 
         session_db = Session()
+        _wh_timeout_disabled = False
         try:
             # Отключаем statement_timeout для этого соединения — вебхук делает несколько
             # сложных запросов (scan по func.lower), и Railway 30s timeout их обрывает.
             try:
                 from sqlalchemy import text as _wh_text
-                session_db.execute(_wh_text("SET LOCAL statement_timeout = 0"))
+                session_db.execute(_wh_text("SET SESSION statement_timeout = 0"))
+                _wh_timeout_disabled = True
             except Exception:
                 pass
             # --- Tracking events (delivered, opened, bounced, complained) ---
             if event_type in ('email.delivered', 'email.opened', 'email.bounced', 'email.complained'):
-                email_id = payload.get('email_id', '')
+                from sqlalchemy import func
+
+                def _extract_first_email(_raw):
+                    try:
+                        if isinstance(_raw, list) and _raw:
+                            _raw = _raw[0]
+                        if isinstance(_raw, dict):
+                            return (_raw.get('email') or _raw.get('address') or '').strip().lower()
+                        _s = str(_raw or '').strip().lower()
+                        if '<' in _s and '>' in _s:
+                            import re as _re_em
+                            _m = _re_em.search(r'<([^>]+@[^>]+)>', _s)
+                            return (_m.group(1) if _m else _s).strip().lower()
+                        return _s
+                    except Exception:
+                        return ''
+
+                _payload_email = payload.get('email') if isinstance(payload, dict) else None
+                email_id = (
+                    (payload.get('email_id') if isinstance(payload, dict) else '')
+                    or data.get('email_id', '')
+                    or (_payload_email.get('id', '') if isinstance(_payload_email, dict) else '')
+                )
+                recipient_email = _extract_first_email(
+                    (payload.get('to') if isinstance(payload, dict) else None) or data.get('to')
+                )
+                subject_hint = (
+                    (payload.get('subject') if isinstance(payload, dict) else '')
+                    or data.get('subject', '')
+                ).strip()
+
                 if email_id:
                     from models import EmailOutreach, EmailCampaign
                     outreach = session_db.query(EmailOutreach).filter_by(resend_id=email_id).first()
+                    if not outreach and recipient_email:
+                        _q_base = session_db.query(EmailOutreach).filter(
+                            func.lower(EmailOutreach.recipient_email) == recipient_email,
+                            EmailOutreach.sent_at.isnot(None),
+                            EmailOutreach.sent_at >= (datetime.now(dt_timezone.utc) - timedelta(days=14)),
+                        )
+                        if subject_hint:
+                            outreach = _q_base.filter(func.lower(EmailOutreach.subject) == subject_hint.lower()).order_by(
+                                EmailOutreach.sent_at.desc(),
+                                EmailOutreach.id.desc(),
+                            ).first()
+                        if not outreach:
+                            outreach = _q_base.order_by(
+                                EmailOutreach.sent_at.desc(),
+                                EmailOutreach.id.desc(),
+                            ).first()
                     if outreach:
                         status_map = {
                             'email.delivered': 'delivered',
@@ -11353,12 +11401,39 @@ async def resend_webhook_handler(request):
                                     user_id=outreach.user_id,
                                     email=(outreach.recipient_email or '').strip().lower(),
                                 ).first()
-                                if _ec_bounce and _ec_bounce.status not in ('unsubscribed',):
-                                    _ec_bounce.status = 'bounced'
-                                    session_db.commit()
-                                    logger.info(f"[RESEND_WEBHOOK] Contact {outreach.recipient_email} → bounced")
+                                if _ec_bounce:
+                                    if _ec_bounce.status not in ('unsubscribed',):
+                                        _ec_bounce.status = 'bounced'
+                                else:
+                                    session_db.add(EmailContact(
+                                        user_id=outreach.user_id,
+                                        email=(outreach.recipient_email or '').strip().lower(),
+                                        source='resend_webhook',
+                                        status='bounced',
+                                        notes='[auto: marked bounced via resend webhook]',
+                                    ))
+
+                                _pending_same_recipient = session_db.query(EmailOutreach).filter(
+                                    EmailOutreach.user_id == outreach.user_id,
+                                    func.lower(EmailOutreach.recipient_email) == (outreach.recipient_email or '').strip().lower(),
+                                    EmailOutreach.id != outreach.id,
+                                    EmailOutreach.status.in_(['draft', 'sent', 'delivered', 'opened']),
+                                ).all()
+                                for _p in _pending_same_recipient:
+                                    _p.status = 'bounced'
+                                    _p.next_follow_up_at = None
+
+                                session_db.commit()
+                                logger.info(
+                                    f"[RESEND_WEBHOOK] Contact {outreach.recipient_email} → bounced; "
+                                    f"suppressed={len(_pending_same_recipient)}"
+                                )
                             except Exception as _e_bc:
                                 logger.warning(f"[RESEND_WEBHOOK] Failed to sync contact bounce: {_e_bc}")
+                                try:
+                                    session_db.rollback()
+                                except Exception:
+                                    pass
                             # Очищаем follow-up для bounced/complained
                             if outreach.next_follow_up_at:
                                 outreach.next_follow_up_at = None
@@ -11390,6 +11465,11 @@ async def resend_webhook_handler(request):
                                     logger.warning(f"[RESEND_WEBHOOK] SPAM COMPLAINT: outreach #{outreach.id} from {outreach.recipient_email} in campaign #{outreach.campaign_id}")
                                 except Exception as _e_aal:
                                     logger.debug(f"[RESEND_WEBHOOK] Failed to log complaint to AAL: {_e_aal}")
+                    elif recipient_email and event_type in ('email.bounced', 'email.complained'):
+                        logger.warning(
+                            f"[RESEND_WEBHOOK] {event_type}: email_id={email_id or '?'} unmatched, "
+                            f"recipient={redact_email(recipient_email)}, subject={(subject_hint or '')[:80]}"
+                        )
 
             # --- Inbound email (reply) ---
             elif event_type == 'email.received' or 'from' in payload:
@@ -11647,6 +11727,16 @@ async def resend_webhook_handler(request):
                         logger.info(f"[RESEND_WEBHOOK] No matching outreach for reply from {from_email}")
 
         finally:
+            if _wh_timeout_disabled:
+                try:
+                    from sqlalchemy import text as _wh_text
+                    session_db.execute(_wh_text("RESET statement_timeout"))
+                    session_db.commit()
+                except Exception:
+                    try:
+                        session_db.rollback()
+                    except Exception:
+                        pass
             session_db.close()
 
         return web.json_response({'status': 'ok'})
