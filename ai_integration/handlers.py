@@ -1089,16 +1089,45 @@ def _extract_image_style_from_memory(user) -> str:
         _raw = _dec_img(_raw)
     except Exception:
         pass
-    if not _raw or not _raw.strip().startswith('{'):
+    if not _raw:
         return ''
+
+    def _style_from_text(_txt: str) -> str:
+        _txt = (_txt or '').strip()
+        if not _txt:
+            return ''
+        if not _re_img.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|style|стил', _txt, _re_img.IGNORECASE):
+            return ''
+        # Ищем явный prompt/style хвост: "промпт: ..." / "style=..." / "стиль: ..."
+        _m = _re_img.search(
+            r'(?:промпт|prompt|style|стиль|image\s*prompt|illustration)\s*[:=]\s*(.{6,240})',
+            _txt,
+            _re_img.IGNORECASE,
+        )
+        if _m:
+            return _m.group(1).strip(' .;')[:220]
+        # Фоллбек: если правило про иллюстрации, берём текст как есть
+        return _txt[:220]
+
     try:
-        _mem = _json_img.loads(_raw.strip())
-        for _rule in _mem.get('rules', []):
-            if _re_img.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch', _rule, _re_img.IGNORECASE):
-                _sm = _re_img.search(r'стил[еёи]\s+([^,.\n]{3,80})', _rule, _re_img.IGNORECASE)
-                return (_sm.group(1).strip() if _sm else 'pen and ink drawing')
+        _raw_s = _raw.strip()
+        if _raw_s.startswith('{') or _raw_s.startswith('['):
+            _mem = _json_img.loads(_raw_s)
+            _rules = _mem.get('rules', []) if isinstance(_mem, dict) else _mem
+            for _rule in _rules:
+                _rule_text = _rule if isinstance(_rule, str) else str(_rule)
+                _style = _style_from_text(_rule_text)
+                if _style:
+                    return _style
+        else:
+            _style = _style_from_text(_raw_s)
+            if _style:
+                return _style
     except Exception:
-        return ''
+        # На битом JSON пробуем как plain text, чтобы не терять пользовательское правило
+        _style = _style_from_text(str(_raw))
+        if _style:
+            return _style
     return ''
 
 
