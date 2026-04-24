@@ -7993,7 +7993,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                              'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'):
                     if _wk in _os2.environ:
                         _exec_env[_wk] = _os2.environ[_wk]
-            _exec_env['AGENT_TASK'] = str(task or '')[:500]
+            _exec_env['AGENT_TASK'] = str(task or '')[:2000]
             _api_raw = agent.get('user_api_keys', '') or ''
             for _kl in _api_raw.splitlines():
                 _kl = _kl.strip()
@@ -8911,7 +8911,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _content, _re_sub.DOTALL | _re_sub.IGNORECASE,
                 ):
                     _aname = _m.group(1).strip()
-                    _atask = _m.group(2).strip()[:400]
+                    _atask = _m.group(2).strip()[:1500]
                     if _aname and _atask:
                         # ── DELEGATE quality guard: обогащаем короткие делегирования ──
                         # Если задача < 100 символов — добавляем контекст из последних результатов агента
@@ -9564,7 +9564,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 _final_text, _re_fin.DOTALL | _re_fin.IGNORECASE,
             ):
                 _aname = _m.group(1).strip()
-                _atask = _m.group(2).strip()[:400]
+                _atask = _m.group(2).strip()[:1500]
                 if _aname and _atask:
                     # ── DELEGATE quality guard (финальный парсинг) ──
                     if len(_atask) < 120:
@@ -9647,9 +9647,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         except Exception as _sum_err:
             logger.debug("[DIRECTOR-EXEC] summary expansion failed: %s", _sum_err)
 
-    if _final_text and len(_final_text) > 3500 and _final_text != _done_fb:
-        # Обрезаем до последнего завершённого предложения в пределах 3500 символов
-        _cut = _final_text[:3500]
+    if _final_text and len(_final_text) > 4000 and _final_text != _done_fb:
+        # Обрезаем до последнего завершённого предложения в пределах 4000 символов (лимит Telegram)
+        _cut = _final_text[:4000]
         _last_dot = max(_cut.rfind('.'), _cut.rfind('!'), _cut.rfind('?'))
         if _last_dot > 200:
             _final_text = _cut[:_last_dot + 1]
@@ -9695,7 +9695,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     user_id=user_id,
                     activity_type='task_blocked',
                     title=f"{agent['name']}: нужно решение",
-                    content=_final_text[:600],
+                    content=_final_text[:3000],
                     target=f"agent:{agent['name']}",
                     status='new',
                 ))
@@ -10728,11 +10728,11 @@ async def _office_director_chat(user_message: str, user_id: int, progress_callba
                     _ts2.add(_AAL2(
                         user_id=user_db_id,
                         activity_type='agent_task',
-                        title=_clean_title[:200],
-                        content=str(resp)[:500],
+                        title=_clean_title[:1000],
+                        content=str(resp)[:4000],
                         target=f"agent:{ag.get('name', 'Агент')}",
                         status='completed',
-                        result=_tools_info[:300] if _tools_info else None,
+                        result=_tools_info[:600] if _tools_info else None,
                     ))
                     _ts2.commit()
                 finally:
