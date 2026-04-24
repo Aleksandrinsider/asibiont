@@ -426,7 +426,8 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
             channel = f"@{channel}"
 
         async with _safe_http() as http_session:
-            if image_url:
+            _can_send_photo = bool(image_url and str(image_url).strip().lower().startswith(('http://', 'https://')))
+            if _can_send_photo:
                 # Публикуем фото с подписью
                 tg_method = 'sendPhoto'
                 caption_text = post_text[:1024]  # Telegram caption limit
@@ -461,10 +462,30 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                             json=tg_payload
                         ) as retry_resp:
                             result = await retry_resp.json()
+                    elif tg_method == 'sendPhoto' and 'failed to get http url content' in err_desc.lower():
+                        logger.warning("[PUBLISH] Telegram can't fetch image URL, retrying as text-only post")
+                        tg_method = 'sendMessage'
+                        tg_payload = {
+                            'chat_id': channel,
+                            'text': post_text[:4096],
+                            'parse_mode': 'Markdown'
+                        }
+                        async with http_session.post(
+                            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{tg_method}',
+                            json=tg_payload
+                        ) as retry_resp:
+                            result = await retry_resp.json()
+                        if not result.get('ok') and "can't parse entities" in (result.get('description', '') or '').lower():
+                            tg_payload.pop('parse_mode', None)
+                            async with http_session.post(
+                                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{tg_method}',
+                                json=tg_payload
+                            ) as retry_resp2:
+                                result = await retry_resp2.json()
 
                 if result.get('ok'):
                     # Если текст не влез в caption (>1024) — допосылаем остаток отдельным сообщением
-                    if image_url and len(post_text) > 1024:
+                    if tg_method == 'sendPhoto' and image_url and len(post_text) > 1024:
                         remaining_text = post_text[1024:]
                         try:
                             _cont_payload = {
@@ -486,7 +507,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                     # Создаем задачу-отчет об успешной публикации (с защитой от дублей)
                     if user_id and session:
                         from models import Task
-                        img_note = " (с изображением)" if image_url else ""
+                        img_note = " (с изображением)" if tg_method == 'sendPhoto' and image_url else ""
                         _pub_title = f"Пост опубликован в {channel}{img_note}"
                         # Дедупликация: не создаём если такой отчёт уже есть за последние 2 часа
                         _cutoff = datetime.now(timezone.utc) - timedelta(hours=2)

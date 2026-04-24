@@ -23268,11 +23268,15 @@ class AnchorEngine:
 
         Не отправляет сообщение пользователю — только выполняет email-действие.
         """
+        _esa_text = None
+        _email_timeout_disabled = False
         try:
-            # Отключаем statement_timeout для email-операций — Railway 30s лимит слишком агрессивен
+            # Отключаем statement_timeout для ВСЕГО жизненного цикла email-операции.
+            # SET LOCAL сбрасывается после commit(), а внутри этой функции есть несколько commit().
             try:
                 from sqlalchemy import text as _esa_text
-                session.execute(_esa_text("SET LOCAL statement_timeout = 0"))
+                session.execute(_esa_text("SET SESSION statement_timeout = 0"))
+                _email_timeout_disabled = True
             except Exception:
                 pass
             # ── ЗАЩИТА ОТ ДУБЛЕЙ ──
@@ -24431,6 +24435,11 @@ class AnchorEngine:
             try:
                 _s2 = Session()
                 try:
+                    try:
+                        from sqlalchemy import text as _fb_text
+                        _s2.execute(_fb_text("SET SESSION statement_timeout = 0"))
+                    except Exception:
+                        pass
                     _a2 = _s2.query(Anchor).filter_by(id=anchor.id).first()
                     if _a2 and not _a2.delivered_at:
                         _a2.delivered_at = datetime.now(timezone.utc)
@@ -24448,6 +24457,16 @@ class AnchorEngine:
                     _s2.close()
             except Exception as _fb_err:
                 logger.warning(f"[ANCHOR] email_silent_anchor #{anchor.id}: fallback deliver failed: {_fb_err}")
+        finally:
+            if _email_timeout_disabled and _esa_text is not None:
+                try:
+                    session.rollback()
+                except Exception:
+                    pass
+                try:
+                    session.execute(_esa_text("RESET statement_timeout"))
+                except Exception:
+                    pass
 
     async def _ai_compose_post(self, user, anchor_data: dict, session, mode: str = 'feed') -> str | None:
         """Просит AI создать пост на основе данных пользователя.
