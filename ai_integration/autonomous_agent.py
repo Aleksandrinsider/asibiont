@@ -8983,6 +8983,69 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 except Exception as _ah_err:
                     logger.warning("[DIRECTOR-EXEC] anti-hallucination retry error: %s", _ah_err)
 
+            # ── Anti-meta/no-op: short planning replies without any real tool call ──
+            # Пример bad output: "Попробую короче запрос." — пользователь не получает действия.
+            _meta_lc = (_content or '').strip().lower()
+            _META_NOOP_STARTS = (
+                'попробую', 'сейчас попробую', 'попробую короче', 'попробую другой',
+                'запускаю', 'начинаю', 'сейчас сделаю', 'пробую',
+                'i will try', 'let me try', 'trying ',
+            )
+            _is_meta_noop = (
+                _is_autopilot_task
+                and _iter == 0
+                and not _tool_calls
+                and _tool_call_count == 0
+                and bool(_meta_lc)
+                and len(_meta_lc) <= 140
+                and (
+                    any(_meta_lc.startswith(_pfx) for _pfx in _META_NOOP_STARTS)
+                    or ('короче запрос' in _meta_lc)
+                )
+            )
+            if _is_meta_noop:
+                logger.warning(
+                    "[DIRECTOR-EXEC] anti-meta-noop: %s produced planning text without tool call: %s",
+                    agent.get('name'), _meta_lc[:120],
+                )
+                _messages.append({"role": "assistant", "content": _content})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Ты дал короткий план/обещание без действия. Пользователь этого не просил. "
+                    "ОБЯЗАТЕЛЬНО прямо сейчас вызови нужный инструмент и выполни задачу. "
+                    "Нельзя отвечать 'попробую', 'сейчас' и т.п. без результата."
+                )})
+                try:
+                    _mn_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=1200,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _mn_resp and _mn_resp.get('choices'):
+                        _mn_msg = _mn_resp['choices'][0]['message']
+                        _mn_tools = _mn_msg.get('tool_calls') or []
+                        if _mn_tools:
+                            logger.info("[DIRECTOR-EXEC] anti-meta-noop retry succeeded: %d tools", len(_mn_tools))
+                            _tool_calls = _mn_tools
+                            _msg = _mn_msg
+                            _content = _mn_msg.get('content') or ''
+                        else:
+                            _content = (
+                                "Не удалось выполнить действие: агент не вызвал инструмент отправки письма. "
+                                "Проверь доступность email-инструментов у агента и повтори задачу."
+                            )
+                except Exception as _mn_err:
+                    logger.warning("[DIRECTOR-EXEC] anti-meta-noop retry error: %s", _mn_err)
+                    _content = (
+                        "Не удалось выполнить действие из-за технической ошибки при вызове инструмента. "
+                        "Повтори задачу, я отправлю заново."
+                    )
+
             # ── Autopilot: текст содержит email-адреса, но агент не вызвал save_email_contact ──
             # Принудительный retry: извлекаем email из текста и заставляем агента сохранить контакт.
             if (_is_autopilot_task and not _tool_calls and _content
