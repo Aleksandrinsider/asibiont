@@ -17,9 +17,23 @@ Token Service — система токенов (1 токен = 1 рубль).
 import logging
 import json
 import datetime
+import os
+import time
+import random
 from models import Session, User
 
 logger = logging.getLogger(__name__)
+
+
+def _is_transient_lock_error(exc: Exception) -> bool:
+    """Detect PostgreSQL row lock timeout / lock-not-available transient errors."""
+    txt = str(exc or '').lower()
+    return (
+        'locknotavailable' in txt
+        or 'lock timeout' in txt
+        or 'could not obtain lock' in txt
+        or 'canceling statement due to lock timeout' in txt
+    )
 
 # ═══════════════════════════════════════════════════════
 # СТОИМОСТЬ ДЕЙСТВИЙ (1 токен = 1 рубль)
@@ -224,79 +238,96 @@ def spend_tokens(user_id: int, action: str, description: str = '', session=None,
         session = Session()
         close = True
     
+    _max_retries = max(1, int(os.getenv('TOKEN_LOCK_RETRIES', '3')))
+    _lock_timeout_ms = max(200, int(os.getenv('TOKEN_LOCK_TIMEOUT_MS', '800')))
+
     try:
-        # Атомарное списание — защита от race condition
-        from sqlalchemy import text as sa_text
-        from config import LOCAL
-        
-        if LOCAL:
-            # SQLite не поддерживает RETURNING — используем ORM
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user or (user.token_balance or 0) < cost:
-                balance = (user.token_balance or 0) if user else 0
-                return {
-                    'success': False,
-                    'balance': balance,
-                    'spent': 0,
-                    'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
-                }
-            user.token_balance = user.token_balance - cost
-            user.tokens_spent = (user.tokens_spent or 0) + cost
-            db_user_id = user.id
-            new_balance = user.token_balance
-        else:
-            # Короткий lock_timeout: если строка заблокирована другой транзакцией,
-            # не ждём 60с (statement_timeout) — фейлим за 5с и возвращаем ошибку.
-            # Вызывающий код (якорь) продолжит без биллинга, а следующий цикл спишет.
+        for _attempt in range(_max_retries):
             try:
-                session.execute(sa_text("SET LOCAL lock_timeout = '5s'"))
-            except Exception:
-                pass  # SQLite / старый PG — игнорируем
-            result = session.execute(
-                sa_text(
-                    "UPDATE users SET token_balance = token_balance - :cost, "
-                    "tokens_spent = COALESCE(tokens_spent, 0) + :cost "
-                    "WHERE telegram_id = :tid AND COALESCE(token_balance, 0) >= :cost "
-                    "RETURNING id, token_balance"
-                ),
-                {'cost': cost, 'tid': user_id}
-            )
-            row = result.fetchone()
-            if not row:
-                balance = get_balance(user_id, session)
+                # Атомарное списание — защита от race condition
+                from sqlalchemy import text as sa_text
+                from config import LOCAL
+
+                if LOCAL:
+                    # SQLite не поддерживает RETURNING — используем ORM
+                    user = session.query(User).filter_by(telegram_id=user_id).first()
+                    if not user or (user.token_balance or 0) < cost:
+                        balance = (user.token_balance or 0) if user else 0
+                        return {
+                            'success': False,
+                            'balance': balance,
+                            'spent': 0,
+                            'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
+                        }
+                    user.token_balance = user.token_balance - cost
+                    user.tokens_spent = (user.tokens_spent or 0) + cost
+                    db_user_id = user.id
+                    new_balance = user.token_balance
+                else:
+                    # Короткий lock_timeout: если строка заблокирована другой транзакцией,
+                    # не ждём долго — лучше короткий retry с backoff.
+                    try:
+                        session.execute(sa_text(f"SET LOCAL lock_timeout = '{_lock_timeout_ms}ms'"))
+                    except Exception:
+                        pass  # SQLite / старый PG — игнорируем
+                    result = session.execute(
+                        sa_text(
+                            "UPDATE users SET token_balance = token_balance - :cost, "
+                            "tokens_spent = COALESCE(tokens_spent, 0) + :cost "
+                            "WHERE telegram_id = :tid AND COALESCE(token_balance, 0) >= :cost "
+                            "RETURNING id, token_balance"
+                        ),
+                        {'cost': cost, 'tid': user_id}
+                    )
+                    row = result.fetchone()
+                    if not row:
+                        balance = get_balance(user_id, session)
+                        return {
+                            'success': False,
+                            'balance': balance,
+                            'spent': 0,
+                            'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
+                        }
+                    db_user_id, new_balance = row
+
+                # Записываем транзакцию
+                from models import TokenTransaction
+                tx = TokenTransaction(
+                    user_id=db_user_id,
+                    amount=-cost,
+                    action=action,
+                    description=description or action,
+                    balance_after=new_balance
+                )
+                session.add(tx)
+                if auto_commit:
+                    session.commit()
+
+                logger.debug(f"[TOKEN] User {user_id}: -{cost} за {action} (баланс: {new_balance})")
+
                 return {
-                    'success': False,
-                    'balance': balance,
-                    'spent': 0,
-                    'error': f'Недостаточно токенов. Нужно: {cost}, баланс: {balance}. Пополни: /buy'
+                    'success': True,
+                    'balance': new_balance,
+                    'spent': cost,
                 }
-            db_user_id, new_balance = row
-        
-        # Записываем транзакцию
-        from models import TokenTransaction
-        tx = TokenTransaction(
-            user_id=db_user_id,
-            amount=-cost,
-            action=action,
-            description=description or action,
-            balance_after=new_balance
-        )
-        session.add(tx)
-        if auto_commit:
-            session.commit()
-        
-        logger.debug(f"[TOKEN] User {user_id}: -{cost} за {action} (баланс: {new_balance})")
-        
-        return {
-            'success': True,
-            'balance': new_balance,
-            'spent': cost,
-        }
-        
-    except Exception as e:
-        logger.warning(f"[TOKEN] spend_tokens skipped (lock contention or transient error): {e}")
-        session.rollback()
-        return {'success': False, 'balance': 0, 'spent': 0, 'error': str(e)}
+
+            except Exception as e:
+                session.rollback()
+                if _is_transient_lock_error(e) and _attempt < (_max_retries - 1):
+                    _sleep_s = 0.05 * (_attempt + 1) + random.uniform(0.01, 0.06)
+                    logger.info(
+                        "[TOKEN] spend_tokens lock contention (attempt %d/%d), retry in %.2fs: %s",
+                        _attempt + 1,
+                        _max_retries,
+                        _sleep_s,
+                        e,
+                    )
+                    time.sleep(_sleep_s)
+                    continue
+                logger.warning(f"[TOKEN] spend_tokens skipped (lock contention or transient error): {e}")
+                return {'success': False, 'balance': 0, 'spent': 0, 'error': str(e)}
+
+        return {'success': False, 'balance': 0, 'spent': 0, 'error': 'lock contention retries exceeded'}
     finally:
         if close:
             session.close()
@@ -318,56 +349,74 @@ def add_tokens(user_id: int, amount: int, reason: str = 'purchase', session=None
         session = Session()
         close = True
     
+    _max_retries = max(1, int(os.getenv('TOKEN_LOCK_RETRIES', '3')))
+    _lock_timeout_ms = max(200, int(os.getenv('TOKEN_LOCK_TIMEOUT_MS', '800')))
+
     try:
-        # Атомарное начисление — защита от race condition при параллельных webhook'ах
-        from sqlalchemy import text as sa_text
-        from config import LOCAL
-        
-        if LOCAL:
-            # SQLite не поддерживает RETURNING — используем ORM
-            user = session.query(User).filter_by(telegram_id=user_id).first()
-            if not user:
-                return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
-            user.token_balance = (user.token_balance or 0) + amount
-            new_balance = user.token_balance
-            db_user_id = user.id
-        else:
+        for _attempt in range(_max_retries):
             try:
-                session.execute(sa_text("SET LOCAL lock_timeout = '5s'"))
-            except Exception:
-                pass
-            result = session.execute(
-                sa_text(
-                    "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amount "
-                    "WHERE telegram_id = :tid "
-                    "RETURNING id, token_balance"
-                ),
-                {'amount': amount, 'tid': user_id}
-            )
-            row = result.fetchone()
-            if not row:
-                return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
-            db_user_id, new_balance = row
-        
-        from models import TokenTransaction
-        tx = TokenTransaction(
-            user_id=db_user_id,
-            amount=amount,
-            action=reason,
-            description=f'+{amount} токенов ({reason})',
-            balance_after=new_balance
-        )
-        session.add(tx)
-        session.commit()
-        
-        logger.info(f"[TOKEN] User {user_id}: +{amount} ({reason}) → баланс: {new_balance}")
-        
-        return {'success': True, 'balance': new_balance}
-        
-    except Exception as e:
-        logger.error(f"[TOKEN] add_tokens error: {e}")
-        session.rollback()
-        return {'success': False, 'balance': 0, 'error': str(e)}
+                # Атомарное начисление — защита от race condition при параллельных webhook'ах
+                from sqlalchemy import text as sa_text
+                from config import LOCAL
+
+                if LOCAL:
+                    # SQLite не поддерживает RETURNING — используем ORM
+                    user = session.query(User).filter_by(telegram_id=user_id).first()
+                    if not user:
+                        return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
+                    user.token_balance = (user.token_balance or 0) + amount
+                    new_balance = user.token_balance
+                    db_user_id = user.id
+                else:
+                    try:
+                        session.execute(sa_text(f"SET LOCAL lock_timeout = '{_lock_timeout_ms}ms'"))
+                    except Exception:
+                        pass
+                    result = session.execute(
+                        sa_text(
+                            "UPDATE users SET token_balance = COALESCE(token_balance, 0) + :amount "
+                            "WHERE telegram_id = :tid "
+                            "RETURNING id, token_balance"
+                        ),
+                        {'amount': amount, 'tid': user_id}
+                    )
+                    row = result.fetchone()
+                    if not row:
+                        return {'success': False, 'balance': 0, 'error': 'Пользователь не найден'}
+                    db_user_id, new_balance = row
+
+                from models import TokenTransaction
+                tx = TokenTransaction(
+                    user_id=db_user_id,
+                    amount=amount,
+                    action=reason,
+                    description=f'+{amount} токенов ({reason})',
+                    balance_after=new_balance
+                )
+                session.add(tx)
+                session.commit()
+
+                logger.info(f"[TOKEN] User {user_id}: +{amount} ({reason}) → баланс: {new_balance}")
+
+                return {'success': True, 'balance': new_balance}
+
+            except Exception as e:
+                session.rollback()
+                if _is_transient_lock_error(e) and _attempt < (_max_retries - 1):
+                    _sleep_s = 0.05 * (_attempt + 1) + random.uniform(0.01, 0.06)
+                    logger.info(
+                        "[TOKEN] add_tokens lock contention (attempt %d/%d), retry in %.2fs: %s",
+                        _attempt + 1,
+                        _max_retries,
+                        _sleep_s,
+                        e,
+                    )
+                    time.sleep(_sleep_s)
+                    continue
+                logger.error(f"[TOKEN] add_tokens error: {e}")
+                return {'success': False, 'balance': 0, 'error': str(e)}
+
+        return {'success': False, 'balance': 0, 'error': 'lock contention retries exceeded'}
     finally:
         if close:
             session.close()
