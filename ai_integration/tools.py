@@ -224,7 +224,7 @@ TOOLS = [
                     "source": {
                         "type": "string",
                         "enum": ["chat", "blog"],
-                        "description": "Тип записи: 'chat' — личная заметка пользователя (по умолчанию), 'blog' — публичная статья в блог ASI Biont на сайте asibiont.com/blog.",
+                        "description": "Тип записи: 'chat' — личная заметка пользователя (по умолчанию), 'blog' — публичная статья в блог ASI Biont на сайте https://asibiont.com/blog.",
                     },
                 },
                 "required": ["content"],
