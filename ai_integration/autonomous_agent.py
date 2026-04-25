@@ -7746,7 +7746,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
         "Если можешь выполнить задачу доступными тебе инструментами — делай сам, не делегируй.\n"
         "💡 Коллега НЕ видит твои предыдущие tool-ответы. Делегирование = задача + ВСЕ данные что ты уже нашёл.\n"
         "❌ DELEGATE[Марк]: найди контакты. → Марк начнёт с нуля и найдёт не тех.\n"
-        "✅ DELEGATE[Марк]: найди email Алексея Соколова (профиль: https://...) через web_search — ищи личный сайт или соцсети, сохрани через save_email_contact.\n\n"
+        "✅ DELEGATE[Марк]: найди email Алексея Соколова (профиль: https://...) через web_search — ищи личный сайт или соцсети, сохрани через save_email_contact.\n"
+        "⚠️ Текст поручения НЕ начинается с имени агента. ❌ DELEGATE[Марк]: Марк, найди... — ОШИБКА (имя уже в скобках).\n"
+        "Поручение = ИМПЕРАТИВ: глагол в начале. ✅ 'Найди email...', 'Напиши пост...', 'Опубликуй в Telegram...'\n\n"
 
         "📝 ЗАМЕТКИ vs БЛОГ — как выбрать:\n"
         "  save_note(source='chat') — ЛИЧНАЯ заметка, видит только пользователь.\n"
@@ -8968,6 +8970,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                 ):
                     _aname = _m.group(1).strip()
                     _atask = _m.group(2).strip()[:1500]
+                    # Убираем имя агента из начала задачи (напр. "Hugo, Hugo уже...") 
+                    _atask = _re_sub.sub(
+                        r'^' + _re_sub.escape(_aname) + r'[\s,:.!]+',
+                        '', _atask, flags=_re_sub.IGNORECASE,
+                    ).strip()
                     if _aname and _atask:
                         # ── DELEGATE quality guard: обогащаем короткие делегирования ──
                         # Если задача < 100 символов — добавляем контекст из последних результатов агента
@@ -9698,6 +9705,11 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             ):
                 _aname = _m.group(1).strip()
                 _atask = _m.group(2).strip()[:1500]
+                # Убираем имя агента из начала задачи
+                _atask = _re_fin.sub(
+                    r'^' + _re_fin.escape(_aname) + r'[\s,:.!]+',
+                    '', _atask, flags=_re_fin.IGNORECASE,
+                ).strip()
                 if _aname and _atask:
                     # ── DELEGATE quality guard (финальный парсинг) ──
                     if len(_atask) < 120:
