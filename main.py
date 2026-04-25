@@ -1751,7 +1751,6 @@ async def dashboard_handler(request):
                                 _s.close()
                         except Exception as _ne:
                             logger.warning(f"[DASHBOARD] Background normalization failed: {_ne}")
-                    import asyncio
                     asyncio.ensure_future(_bg_normalize(_profile_id))
 
             # Получить контакты по делегироаю
