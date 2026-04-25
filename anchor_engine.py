@@ -908,6 +908,10 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     t = _re_san.sub(r',\.', '.', t)
     t = _re_san.sub(r'\s{2,}', ' ', t)
     t = _re_san.sub(r'\s+([.,;!?])', r'\1', t)
+    # Fix "чтобы." / "чтобы," artifacts left when tool names after "чтобы" were stripped
+    # e.g. "...за 24 часа, чтобы research_topic." → strip tool → "...чтобы." → remove ", чтобы."
+    t = _re_san.sub(r',?\s*чтобы\s*[.,;]', '.', t, flags=_re_san.IGNORECASE)
+    t = _re_san.sub(r'\s+чтобы\s*$', '', t, flags=_re_san.IGNORECASE)
     # Restore missing space between sentences if text was glued like "...аналитиков.Дальше"
     # Apply only when punctuation is immediately followed by an uppercase letter.
     t = _re_san.sub(r'([.!?])([A-ZА-ЯЁ])', r'\1 \2', t)

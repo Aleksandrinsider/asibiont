@@ -885,9 +885,9 @@ def _detect_integration_signal(service_label: str, text_lc: str, text_raw: str):
     reason = next(
         (l.strip() for l in text_clean.splitlines()
          if l.strip() and not _header_pat.match(l.strip())),
-        text_clean[:80]
+        text_clean[:500]
     )
-    return ('MEDIUM', reason[:80])
+    return ('MEDIUM', reason[:500])
 
 
 def spawn_integration_anchors(user_db_id: int, agent_name: str, service_label: str, output: str) -> None:
@@ -6547,7 +6547,7 @@ def _build_user_context_sync(user_db_id: int) -> str:
             if a.specialization:
                 line += f' ({a.specialization})'
             if a.description:
-                line += f': {a.description[:80]}'
+                line += f': {a.description[:300]}'
             if integrations:
                 line += f'\n  Интеграции: {", ".join(integrations[:5])}'
             agent_lines.append(line)
