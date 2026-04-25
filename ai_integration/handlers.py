@@ -1112,16 +1112,16 @@ def _extract_image_style_from_memory(user) -> str:
         _txt = (_txt or '').strip()
         if not _txt:
             return ''
-        if not _re_img.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|style|стил', _txt, _re_img.IGNORECASE):
+        if not _re_img.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|style|стил', _txt, _re_img.IGNORECASE):
             return ''
-        # Ищем явный prompt/style хвост: "промпт: ..." / "style=..." / "стиль: ..."
+        # Ищем явный prompt/style хвост — поддерживаем «промт» (без п) и гибкую форму «промт для X: ...»
         _m = _re_img.search(
-            r'(?:промпт|prompt|style|стиль|image\s*prompt|illustration)\s*[:=]\s*(.{6,240})',
+            r'(?:промпт|промт|prompt|style|стиль|image\s*prompt|illustration)(?:[\s\w]{0,30})?\s*[:=]\s*(.{6,300})',
             _txt,
             _re_img.IGNORECASE,
         )
         if _m:
-            return _m.group(1).strip(' .;')[:220]
+            return _m.group(1).strip(' .;\n')[:280]
         # Фоллбек: если правило про иллюстрации, берём текст как есть
         return _txt[:220]
 
@@ -1259,11 +1259,20 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker:
                     try:
-                        _img_prompt = (_explicit_visual_prompt or content[:320]).replace(chr(10), ' ').strip()
-                        _img_style = None if _explicit_visual_prompt else _style
+                        # Приоритет: маркер «Иллюстрация:» > правило из памяти > дефолт
+                        if _explicit_visual_prompt:
+                            _img_prompt_sn = _explicit_visual_prompt
+                            _img_style_sn = None
+                        elif _style and _style != 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture':
+                            # Пользователь задал свой промт — используем напрямую
+                            _img_prompt_sn = _style
+                            _img_style_sn = None
+                        else:
+                            _img_prompt_sn = content[:320].replace(chr(10), ' ').strip()
+                            _img_style_sn = _style
                         _img_result = await generate_image(
-                            prompt=_img_prompt,
-                            style=_img_style,
+                            prompt=_img_prompt_sn,
+                            style=_img_style_sn,
                             user_id=user_id,
                             session=session,
                             close_session=False,
@@ -8795,11 +8804,20 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 _style = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
             try:
                 import re as _re_img
-                _img_keywords = (_explicit_visual_prompt or content[:320]).replace('\n', ' ').strip()
-                _img_style = None if _explicit_visual_prompt else _style
+                # Приоритет: явный маркер «Иллюстрация:» > правило из памяти > дефолт
+                if _explicit_visual_prompt:
+                    _img_prompt_final = _explicit_visual_prompt
+                    _img_style_final = None
+                elif _style and _style != 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture':
+                    # Пользователь задал свой промт — используем его напрямую
+                    _img_prompt_final = _style
+                    _img_style_final = None
+                else:
+                    _img_prompt_final = content[:320].replace('\n', ' ').strip()
+                    _img_style_final = _style
                 _img_result = await generate_image(
-                    prompt=_img_keywords,
-                    style=_img_style,
+                    prompt=_img_prompt_final,
+                    style=_img_style_final,
                     user_id=user_id,
                     session=session,
                     close_session=False,
