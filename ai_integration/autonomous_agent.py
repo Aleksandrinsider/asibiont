@@ -5850,6 +5850,29 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
     """
     if not content or not content.strip():
         return False
+
+    def _normalize_blog_urls(_text: str) -> str:
+        if not _text:
+            return _text
+        import re as _re_url
+
+        def _repl(_m):
+            _raw = _m.group(0)
+            _trail = ''
+            while _raw and _raw[-1] in '.,!?:;':
+                _trail = _raw[-1] + _trail
+                _raw = _raw[:-1]
+            if not _raw.lower().startswith(('http://', 'https://')):
+                _raw = f'https://{_raw}'
+            return _raw + _trail
+
+        return _re_url.sub(
+            r'\b(?:https?://)?asibiont\.com/blog/[^\s)\]]+',
+            _repl,
+            _text,
+            flags=_re_url.IGNORECASE,
+        )
+
     try:
         from models import Session as _Db, User as _User, Interaction as _Intr
         from datetime import timezone as _tz_dir, timedelta as _td_dir, datetime as _dt_dir
@@ -5872,9 +5895,12 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
                     _agent_name = str(_p.get('__agent', {}).get('name') or '').strip()
                     _txt = str(_p.get('text') or '').strip()
                     if _txt:
-                        _raw_text = _txt
+                        _raw_text = _normalize_blog_urls(_txt)
             except Exception:
                 pass
+
+            if not _is_json_wrapped:
+                _raw_text = _normalize_blog_urls(_raw_text)
 
             # Директивами считаем:
             # 1) plain-text agent_msg от директора;
@@ -5965,9 +5991,21 @@ def _save_interaction_for_director(telegram_id: int, content: str, message_type:
                             )
                             return False
             # ────────────────────────────────────────────────────────────────────────
-            _s.add(_Intr(user_id=_u.id, message_type=message_type, content=content))
+            _content_to_save = content
+            if _is_json_wrapped:
+                try:
+                    _p_save = json.loads(content)
+                    if isinstance(_p_save, dict):
+                        _p_save['text'] = _normalize_blog_urls(str(_p_save.get('text') or ''))
+                        _content_to_save = json.dumps(_p_save, ensure_ascii=False)
+                except Exception:
+                    _content_to_save = _normalize_blog_urls(content)
+            else:
+                _content_to_save = _normalize_blog_urls(content)
+
+            _s.add(_Intr(user_id=_u.id, message_type=message_type, content=_content_to_save))
             _s.commit()
-            logger.info("[DIRECTOR] saved interaction type=%s for tg=%s, len=%d", message_type, telegram_id, len(content))
+            logger.info("[DIRECTOR] saved interaction type=%s for tg=%s, len=%d", message_type, telegram_id, len(_content_to_save))
             return True
         except Exception as _db_err:
             logger.error("[DIRECTOR] DB commit error: %s", _db_err)
