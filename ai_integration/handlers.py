@@ -35,19 +35,35 @@ _mx_cache = {}  # domain → (has_mx: bool, timestamp)
 
 def _strip_post_visual_prompt(text: str) -> str:
     """Убирает хвосты вида 'Иллюстрация: ...' / 'Изображение: ...' из публичных постов."""
+    cleaned, _ = _extract_post_visual_prompt(text)
+    return cleaned
+
+
+def _extract_post_visual_prompt(text: str) -> tuple[str, str]:
+    """Возвращает (очищенный_текст_поста, visual_prompt).
+
+    Если в тексте есть блок вида:
+    - "Иллюстрация: ..."
+    - "Изображение: ..."
+    - "Illustration: ..."
+    - "Image: ..."
+    то он вырезается из публичного текста и используется как явный промпт.
+    """
     if not text:
-        return text
+        return '', ''
 
     cleaned = str(text)
     _marker = re.search(
         r'(?im)(?:^|\n)\s*(иллюстрация|изображение|illustration|image)\s*:\s*',
         cleaned,
     )
+    visual_prompt = ''
     if _marker:
+        visual_prompt = cleaned[_marker.end():].strip()
         cleaned = cleaned[:_marker.start()].rstrip()
 
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
-    return cleaned
+    return cleaned, visual_prompt
 
 
 def _validate_email_domain(email: str) -> tuple:
@@ -1150,7 +1166,7 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
             session.add(user)
             session.commit()
 
-        content = _strip_post_visual_prompt(content)
+        content, _explicit_visual_prompt = _extract_post_visual_prompt(content)
 
         from models import Note
         import datetime as _dt_sn
@@ -1243,10 +1259,11 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker:
                     try:
-                        _img_prompt = f"Editorial blog illustration in {_style}: {content[:220].replace(chr(10), ' ')}"
+                        _img_prompt = (_explicit_visual_prompt or content[:320]).replace(chr(10), ' ').strip()
+                        _img_style = None if _explicit_visual_prompt else _style
                         _img_result = await generate_image(
                             prompt=_img_prompt,
-                            style=_style,
+                            style=_img_style,
                             user_id=user_id,
                             session=session,
                             close_session=False,
@@ -8739,7 +8756,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         # Sanitize token hallucinations (AI иногда пишет "1000+500" вместо "1500")
         from ai_integration.conversation_history import sanitize_token_hallucinations
         content = sanitize_token_hallucinations(content)
-        content = _strip_post_visual_prompt(content)
+        content, _explicit_visual_prompt = _extract_post_visual_prompt(content)
 
         # Очистка от markdown-звёздочек и эмодзи для публичного блога
         import re
@@ -8778,10 +8795,11 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 _style = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
             try:
                 import re as _re_img
-                _img_keywords = content[:220].replace('\n', ' ').strip()
+                _img_keywords = (_explicit_visual_prompt or content[:320]).replace('\n', ' ').strip()
+                _img_style = None if _explicit_visual_prompt else _style
                 _img_result = await generate_image(
-                    prompt=f"Editorial blog illustration in {_style}: {_img_keywords}",
-                    style=_style,
+                    prompt=_img_keywords,
+                    style=_img_style,
                     user_id=user_id,
                     session=session,
                     close_session=False,
