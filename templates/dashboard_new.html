@@ -1187,6 +1187,9 @@
                                 <input type="text" id="note-input" placeholder="Текст заметки..." data-i18n-ph="note-placeholder" onkeypress="if(event.key==='Enter')addManualNote()">
                                 <input type="file" id="note-file-input" style="display: none;" accept="text/*,.pdf,.doc,.docx,.csv,.json,.xml,.md,.txt,.log">
                                 <div style="display: flex; gap: 4px; flex-direction: row;">
+                                    <button id="note-delete-non-blog-button" onclick="deleteNotesExceptPosts()" class="chat-action-btn" title="Удалить заметки кроме постов" data-i18n-title="delete-notes-except-posts">
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M11 1.75V3h2.25a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1 0-1.5H5V1.75C5 .784 5.784 0 6.75 0h2.5C10.216 0 11 .784 11 1.75ZM6.5 1.75V3h3V1.75a.25.25 0 0 0-.25-.25h-2.5a.25.25 0 0 0-.25.25Zm-2.004 4.925.66 6.6a.25.25 0 0 0 .249.225h5.19a.25.25 0 0 0 .249-.225l.66-6.6a.75.75 0 1 1 1.492.149l-.66 6.6A1.748 1.748 0 0 1 10.595 15h-5.19a1.75 1.75 0 0 1-1.741-1.575l-.66-6.6a.75.75 0 1 1 1.492-.15Z"></path></svg>
+                                    </button>
                                     <button id="note-voice-button" onclick="startVoiceNote()" class="chat-action-btn" title="Голосовой ввод" data-i18n-title="voice-input">
                                         <svg width="16" height="16" viewBox="0 0 16 16" fill="#374151"><path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3ZM3.5 6.5A.5.5 0 0 1 4 7v1a4 4 0 0 0 8 0V7a.5.5 0 0 1 1 0v1a5 5 0 0 1-4.5 4.975V15h3a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1h3v-2.025A5 5 0 0 1 3 8V7a.5.5 0 0 1 .5-.5Z"/></svg>
                                     </button>
@@ -17271,6 +17274,30 @@ except Exception as e:
                 }
             }
         }
+
+        async function deleteNotesExceptPosts() {
+            if (!confirm(t('confirm-delete-notes-except-posts') || 'Удалить все заметки, кроме постов блога? Это действие нельзя отменить.')) {
+                return;
+            }
+            try {
+                const response = await fetch('/clear_notes_except_posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                if (!await checkAuth(response)) return;
+                const data = await response.json();
+                if (response.ok) {
+                    showNotification((t('ok-notes-cleared-except-posts') || 'Удалены заметки, кроме постов') + ` (${data.deleted || 0})`, 'success');
+                    loadNotes();
+                } else {
+                    showNotification(t('err-prefix') + ' ' + (data.error || t('err-clear-notes-except-posts') || 'Ошибка удаления заметок'), 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting non-blog notes:', error);
+                showNotification(t('err-clear-notes-except-posts') || 'Ошибка удаления заметок', 'error');
+            }
+        }
     </script>
 
     <script>
@@ -18087,7 +18114,8 @@ except Exception as e:
       'act-del-deleg':'Отменить и удалить это делегирование?','act-del-agent-task':'Удалить это поручение агенту?','act-del-post-feed':'Удалить пост из ленты новостей?','act-del-post-tg':'Удалить запись об этом Telegram-посте?','act-del-default':'Удалить запись об активности?','act-del-group':'Удалить все записи ({n} шт.) из этой группы?',
       'act-deleted-ok':'Удалено','act-deleted-n':'Удалено {n} записей','act-del-failed-n':'Не удалось удалить {n}','act-del-err':'Ошибка удаления','act-del-all':'Удалить всё','act-del-one':'Удалить','act-cancel-deleg':'Отменить делегирование','act-clear-all':'Очистить хронологию','act-clear-all-confirm':'Очистить всю хронологию? Действие нельзя отменить.','rules-title':'Пользовательские правила','rules-empty':'Правил пока нет — скажи агенту «запомни, что...»','rule-edit':'Редактировать','rule-delete':'Удалить правило','rule-save':'Сохранить','rule-cancel':'Отмена','rule-delete-confirm':'Удалить это правило?','rule-deleted':'Правило удалено','rule-saved':'Правило сохранено','rule-item-1':'правило','rule-item-2':'правила','rule-item-5':'правил',
       'contacts-tab':'Контакты','contacts-empty':'Контактов пока нет','contacts-empty-desc':'Добавьте контакт вручную или сохраните из отчётов.','contact-saved':'Контакт сохранён!','contact-deleted':'Контакт удалён','contact-blocked':'Контакт заблокирован','contact-invalid-email':'Введите корректный email','contact-placeholder':'email@example.com, Имя, Компания','add-contact':'Добавить контакт','add-contact-btn':'Добавить','delete-contact':'Удалить контакт','block-contact':'Заблокировать контакт','edit-contact':'Редактировать контакт','save-contact':'Сохранить в контакты','email-contacts-title':'Email-контакты','contact-email-ph':'email@example.com','contact-name-ph':'Имя','contact-company-ph':'Компания','contact-notes-ph':'Описание / заметки','contacts-empty-short':'Нет контактов',
-      'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
+    'add-note':'Добавить заметку','note-placeholder':'Текст заметки...','save-to-notes':'В заметки',
+    'delete-notes-except-posts':'Удалить заметки кроме постов',
       'from-chat':'Из чата','manual-note':'Вручную','delete-note':'Удалить заметку','edit-note':'Редактировать заметку',
       'save':'Сохранить','cancel':'Отмена',
       'rate-contact':'Рекомендовать контакт','you-rate':'Рекомендуете',
@@ -18152,8 +18180,11 @@ except Exception as e:
       'confirm-block':'Вы уверены, что хотите заблокировать',
     'confirm-delete-all-tasks':'Вы уверены, что хотите удалить все задачи? Это действие нельзя отменить.',
     'confirm-delete-all-email-contacts':'Вы уверены, что хотите удалить все email-контакты? Это действие нельзя отменить.',
+    'confirm-delete-notes-except-posts':'Удалить все заметки, кроме постов блога? Это действие нельзя отменить.',
     'ok-email-contacts-clear':'Email-контакты удалены',
+    'ok-notes-cleared-except-posts':'Удалены заметки, кроме постов',
     'err-clear-email-contacts':'Ошибка удаления email-контактов',
+    'err-clear-notes-except-posts':'Ошибка удаления заметок',
     'delete-all-email-contacts':'Удалить все контакты',
       'delete-filtered-tasks':'Удалить задачи',
       'confirm-delete-filtered-tasks':'Удалить все задачи в разделе',
@@ -18386,7 +18417,8 @@ except Exception as e:
       'act-del-deleg':'Cancel and delete this delegation?','act-del-agent-task':'Delete this agent task?','act-del-post-feed':'Delete this post from news feed?','act-del-post-tg':'Delete this Telegram post record?','act-del-default':'Delete this activity record?','act-del-group':'Delete all records ({n}) from this group?',
       'act-deleted-ok':'Deleted','act-deleted-n':'{n} records deleted','act-del-failed-n':'Failed to delete {n}','act-del-err':'Error deleting','act-del-all':'Delete all','act-del-one':'Delete','act-cancel-deleg':'Cancel delegation','act-clear-all':'Clear timeline','act-clear-all-confirm':'Clear entire timeline? This cannot be undone.','rules-title':'User Rules','rules-empty':'No rules yet — tell the agent «remember that...»','rule-edit':'Edit','rule-delete':'Delete rule','rule-save':'Save','rule-cancel':'Cancel','rule-delete-confirm':'Delete this rule?','rule-deleted':'Rule deleted','rule-saved':'Rule saved','rule-item-1':'rule','rule-item-2':'rules','rule-item-5':'rules',
       'contacts-tab':'Contacts','contacts-empty':'No contacts yet','contacts-empty-desc':'Add a contact manually or save from reports.','contact-saved':'Contact saved!','contact-deleted':'Contact deleted','contact-blocked':'Contact blocked','contact-invalid-email':'Enter a valid email','contact-placeholder':'email@example.com, Name, Company','add-contact':'Add contact','add-contact-btn':'Add','delete-contact':'Delete contact','block-contact':'Block contact','edit-contact':'Edit contact','save-contact':'Save to contacts','email-contacts-title':'Email contacts','contact-email-ph':'email@example.com','contact-name-ph':'Name','contact-company-ph':'Company','contact-notes-ph':'Description / notes','contacts-empty-short':'No contacts',
-      'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
+    'add-note':'Add note','note-placeholder':'Note text...','save-to-notes':'Save to notes',
+    'delete-notes-except-posts':'Delete notes except posts',
       'from-chat':'From chat','manual-note':'Manual','delete-note':'Delete note','edit-note':'Edit note',
       'save':'Save','cancel':'Cancel',
       'rate-contact':'Rate contact','you-rate':'You rate',
@@ -18450,9 +18482,12 @@ except Exception as e:
       'confirm-cancel-deleg':'Cancel task delegation for',
       'confirm-block':'Are you sure you want to block',
       'confirm-delete-all-tasks':'Are you sure you want to delete all tasks? This cannot be undone.',
-      'confirm-delete-all-email-contacts':'Are you sure you want to delete all email contacts? This cannot be undone.',
+    'confirm-delete-all-email-contacts':'Are you sure you want to delete all email contacts? This cannot be undone.',
+    'confirm-delete-notes-except-posts':'Delete all notes except blog posts? This cannot be undone.',
       'ok-email-contacts-clear':'Email contacts deleted',
+    'ok-notes-cleared-except-posts':'Deleted notes except posts',
       'err-clear-email-contacts':'Error deleting email contacts',
+    'err-clear-notes-except-posts':'Error deleting notes',
       'delete-all-email-contacts':'Delete all contacts',
       'delete-filtered-tasks':'Delete tasks',
       'confirm-delete-filtered-tasks':'Delete all tasks in section',
