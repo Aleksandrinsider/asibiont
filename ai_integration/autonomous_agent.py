@@ -8742,6 +8742,49 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     )
     # После первого Timeout на старте ослабляем режим, чтобы не застревать на required
     _timeout_relaxed_mode = False
+    _tool_chain_repair_attempts = 0
+
+    def _repair_dangling_tool_chain(_msgs: list) -> int:
+        """Вставляет фиктивные tool-ответы для assistant.tool_calls без полного набора tool_call_id.
+
+        Это защищает следующий call_ai от 400:
+        "An assistant message with 'tool_calls' must be followed by tool messages ..."
+        """
+        try:
+            _inserted = 0
+            _i = 0
+            while _i < len(_msgs):
+                _m = _msgs[_i] if isinstance(_msgs[_i], dict) else {}
+                if _m.get('role') == 'assistant' and isinstance(_m.get('tool_calls'), list) and _m.get('tool_calls'):
+                    _expected_ids = []
+                    for _tc in (_m.get('tool_calls') or []):
+                        if isinstance(_tc, dict) and _tc.get('id'):
+                            _expected_ids.append(str(_tc.get('id')))
+
+                    _j = _i + 1
+                    _present_ids = set()
+                    while _j < len(_msgs) and isinstance(_msgs[_j], dict) and _msgs[_j].get('role') == 'tool':
+                        _tid = (_msgs[_j].get('tool_call_id') if isinstance(_msgs[_j], dict) else None)
+                        if _tid:
+                            _present_ids.add(str(_tid))
+                        _j += 1
+
+                    _missing = [x for x in _expected_ids if x not in _present_ids]
+                    if _missing:
+                        for _mid in _missing:
+                            _msgs.insert(_j, {
+                                "role": "tool",
+                                "tool_call_id": _mid,
+                                "content": '{"status":"auto-repaired: missing tool response"}',
+                            })
+                            _inserted += 1
+                            _j += 1
+                _i += 1
+            return _inserted
+        except Exception as _rep_err:
+            logger.debug("[DIRECTOR-EXEC] tool-chain repair failed: %s", _rep_err)
+            return 0
+
     # _OUTREACH_KW / _is_outreach_goal уже определены выше (перед Шагом 2)
     for _iter in range(_max_iters):
         # Адаптивные лимиты: автопилот-задачи с интеграциями нуждаются в цепочках 3-4 шага
@@ -8874,6 +8917,19 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             _err_msg = str(_ai_err) or type(_ai_err).__name__
             logger.warning("[DIRECTOR-EXEC-DIAG] agent %s call_ai EXCEPTION iter=%d tc_mode=%s: %s",
                            agent.get('name'), _iter, _tc_mode, _err_msg)
+            _err_lc = _err_msg.lower()
+            if (
+                'insufficient tool messages' in _err_lc
+                and _tool_chain_repair_attempts < 2
+            ):
+                _repaired = _repair_dangling_tool_chain(_messages)
+                if _repaired > 0:
+                    _tool_chain_repair_attempts += 1
+                    logger.warning(
+                        "[DIRECTOR-EXEC-DIAG] repaired %d dangling tool messages for %s (attempt %d), retrying iter=%d",
+                        _repaired, agent.get('name'), _tool_chain_repair_attempts, _iter,
+                    )
+                    continue
             # При TimeoutError делаем одну повторную попытку с паузой 3с
             if isinstance(_ai_err, (asyncio.TimeoutError, TimeoutError)) and _iter == 0:
                 _timeout_relaxed_mode = True
@@ -9156,6 +9212,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                     _sws_result = json.dumps({"error": str(_sws_err)[:200]}, ensure_ascii=False)
                                 _messages.append({"role": "tool", "tool_call_id": _swstc['id'], "content": _sws_result})
                                 _tool_call_count += 1
+                            # Закрываем все оставшиеся tool_call_id, которые не выполняли
+                            for _swstc_skip in _sws_tools[2:]:
+                                _messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": _swstc_skip['id'],
+                                    "content": '{"status":"skipped"}'
+                                })
                 except Exception as _sws_ex:
                     logger.warning("[DIRECTOR-EXEC] save-without-send retry error: %s", _sws_ex)
 
@@ -9244,6 +9307,13 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                                     except Exception as _te:
                                         _tc_result = json.dumps({"error": str(_te)[:200]}, ensure_ascii=False)
                                     _messages.append({"role": "tool", "tool_call_id": _tc['id'], "content": _tc_result})
+                                # Закрываем пропущенные tool_calls, чтобы не сломать следующий call_ai
+                                for _tc_skip in _retry_tools[_tc_limit:]:
+                                    _messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": _tc_skip['id'],
+                                        "content": '{"status":"skipped"}'
+                                    })
                                 _tool_call_count += 1
                                 # Continue to next iteration for summary
                                 continue
