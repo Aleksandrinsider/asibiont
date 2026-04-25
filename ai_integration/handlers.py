@@ -13138,8 +13138,15 @@ async def send_outreach_email(
                     _body_lower_oe, _re_greet.IGNORECASE
                 ))
                 if not _HAS_GREETING:
+                    # Определяем язык письма по наличию кириллицы
+                    import re as _re_lang
+                    _is_russian = bool(_re_lang.search(r'[а-яёА-ЯЁ]', body or ''))
+                    _greeting_hint = (
+                        f"Здравствуйте, {_first_name_oe}!" if _is_russian
+                        else f"Hi {_first_name_oe},"
+                    )
                     return (f"⛔ ИСПРАВЬ параметр body и повтори вызов send_outreach_email: "
-                            f"добавь 'Здравствуйте, {_first_name_oe}!' в самое начало тела письма. "
+                            f"добавь '{_greeting_hint}' в самое начало тела письма. "
                             f"Остальной текст письма оставь как есть. Имя обязательно для персонализации.")
 
         # ── GUARD: не отправлять уже зарегистрированным в системе пользователям ──

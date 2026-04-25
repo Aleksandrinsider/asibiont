@@ -23601,8 +23601,11 @@ class AnchorEngine:
                         f"Do NOT mix languages.\n"
                         f"⚠️ NAME RULE: address the recipient by the EXACT name given above ('{name}'). "
                         f"Do NOT translate, transliterate, or change it to another script. "
-                        f"Write exactly: 'Hi {name},' or 'Здравствуй, {name},' — never 'Иван' if name is 'Ivan'.\n\n"
-                        f"Return ONLY a JSON object: {{\"subject\": \"...\", \"body\": \"...\"}}\n\n"
+                        f"Write exactly: "
+                        + (f"'Hi {name},' or 'Hello {name},' — keep English throughout.\n\n"
+                           if lang_hint != 'Russian' else
+                           f"'Здравствуй, {name},' or 'Привет, {name},' — keep Russian throughout.\n\n")
+                        + f"Return ONLY a JSON object: {{\"subject\": \"...\", \"body\": \"...\"}}\n\n"
                         f"STRICT QUALITY RULES:\n"
                         f"- Subject: 3-7 words, specific to THIS person, no spam words (free, amazing, opportunity)\n"
                         f"- Length: 120-200 words, 4-5 short paragraphs. NOT shorter — too short looks lazy.\n"
