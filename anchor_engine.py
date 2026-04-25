@@ -23505,7 +23505,10 @@ class AnchorEngine:
                     }
                     # Точное совпадение ИЛИ generic слово в составном префиксе (python-genai-team → 'team')
                     _prefix_parts_set = set(re.split(r'[._\-+]', _email_prefix))
-                    if _email_prefix in _GENERIC_SKIP or (_prefix_parts_set & _GENERIC_SKIP) or 'decision-maker' in _email_prefix:
+                    # Блокируем только если ВЕСЬ prefix — generic (info@, contact@)
+                    # НЕ блокируем составные (marketing.john@ → john реальный человек)
+                    _all_parts_generic = bool(_prefix_parts_set) and _prefix_parts_set.issubset(_GENERIC_SKIP)
+                    if _email_prefix in _GENERIC_SKIP or _all_parts_generic or 'decision-maker' in _email_prefix:
                         d_obj.status = 'failed'
                         _draft_failures.append(f'{d_obj.id}:generic_prefix:{_email_prefix}')
                         logger.info(f"[ANCHOR] Skipping draft #{d_obj.id}: generic email prefix '{_email_prefix}'")

@@ -13481,14 +13481,15 @@ async def send_outreach_email(
             other_name = other_camp.name if other_camp else f'#{cross_existing.campaign_id}'
             return f" {recipient_email} уже получал письмо из кампании «{other_name}» ({cross_existing.sent_at.strftime('%d.%m.%Y')}), cooldown {CROSS_CAMPAIGN_COOLDOWN_DAYS} дней. Используй send_follow_up_email если контакт ответил, иначе жди окончания cooldown."
 
-        # 2. Не слать тому, кто ранее пожаловался (complained) или bounced
+        # 2. Не слать тому, кто ранее получил hard bounce (bounced)
+        # 'failed' = технические/валидационные ошибки — не блокируем навсегда
         bad_status = session.query(EmailOutreach).filter(
             EmailOutreach.user_id == user.id,
             EmailOutreach.recipient_email == recipient_email,
-            EmailOutreach.status.in_(['bounced', 'failed']),
+            EmailOutreach.status == 'bounced',
         ).first()
         if bad_status:
-            return f" {recipient_email} ранее вернул bounced/failed (статус: {bad_status.status}). Отправка заблокирована."
+            return f" {recipient_email} ранее вернул hard bounce. Отправка заблокирована."
 
         if not subject or not body:
             return " Нужны subject и body письма."
