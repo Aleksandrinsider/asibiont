@@ -9826,6 +9826,70 @@ async def api_outreach_load_reply_handler(request):
         return web.json_response({'error': 'Internal server error'}, status=500)
 
 
+async def regen_note_image_handler(request):
+    """POST /api/notes/{note_id}/regen-image — regenerate blog cover image using user's style rules."""
+    try:
+        user_session = await get_session(request)
+        user_id = user_session.get('user_id') if user_session else None
+        if not user_id:
+            return web.json_response({'error': 'Not authenticated'}, status=401)
+        note_id = int(request.match_info['note_id'])
+        with Session() as db:
+            user = db.query(User).filter_by(telegram_id=user_id).first()
+            if not user:
+                return web.json_response({'error': 'User not found'}, status=404)
+            note = db.query(Note).filter_by(id=note_id, user_id=user.id, source='blog').first()
+            if not note:
+                return web.json_response({'error': 'Note not found'}, status=404)
+            from ai_integration.handlers import generate_image, _extract_image_style_from_memory
+            _style = _extract_image_style_from_memory(user) or \
+                'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+            _DEFAULT_STYLE = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
+            if _style and _style != _DEFAULT_STYLE:
+                _img_prompt = _style
+                _img_style = None
+            else:
+                _img_prompt = (note.title or note.content[:200]).replace('\n', ' ').strip()
+                _img_style = _style
+            _img_result = await generate_image(
+                prompt=_img_prompt,
+                style=_img_style,
+                user_id=user_id,
+                session=db,
+                close_session=False,
+                send_to_telegram=False,
+            )
+            import re as _re_regen
+            _m = _re_regen.search(r'!\[.*?\]\((https?://[^\)]+)\)', _img_result or '')
+            if not _m:
+                return web.json_response({'error': 'Image generation failed', 'detail': _img_result}, status=500)
+            _img_url = _m.group(1)
+            # Download image bytes
+            import aiohttp as _aiohttp_regen
+            _img_bytes = None
+            _img_mime = 'image/webp'
+            async with _aiohttp_regen.ClientSession() as _http_regen:
+                async with _http_regen.get(_img_url, timeout=_aiohttp_regen.ClientTimeout(total=30)) as _r:
+                    if _r.status == 200:
+                        _img_bytes = await _r.read()
+                        _img_mime = _r.headers.get('Content-Type', 'image/webp').split(';')[0].strip()
+            if not _img_bytes:
+                return web.json_response({'error': 'Failed to download generated image'}, status=500)
+            note.image_data = _img_bytes
+            note.image_mime = _img_mime
+            # Replace image tag in content if needed
+            import re as _re_regen2
+            _note_content = note.content or ''
+            _note_content = _re_regen2.sub(r'!\[Иллюстрация\]\(/blog/image/\d+\)', '', _note_content).lstrip('\n')
+            note.content = f"![Иллюстрация](/blog/image/{note.id})\n\n{_note_content}"
+            db.commit()
+            logger.info(f"[REGEN_IMAGE] note_id={note_id} user={user_id} style={_img_prompt[:80]}")
+            return web.json_response({'ok': True, 'image_url': f'/blog/image/{note.id}'})
+    except Exception as e:
+        logger.error(f"[REGEN_IMAGE] Error: {e}", exc_info=True)
+        return web.json_response({'error': str(e)}, status=500)
+
+
 async def translate_note_handler(request):
     """Translate a note to the specified language using DeepSeek"""
     db_session = None
@@ -13868,6 +13932,7 @@ app.router.add_post('/api/posts/{post_id}/translate', translate_post_handler)
 app.router.add_post('/api/translate', translate_text_handler)
 app.router.add_post('/api/comments/{comment_id}/translate', translate_comment_handler)
 app.router.add_post('/api/notes/{note_id}/translate', translate_note_handler)
+app.router.add_post('/api/notes/{note_id}/regen-image', regen_note_image_handler)
 app.router.add_post('/api/hide_contact', hide_contact_handler)
 app.router.add_get('/api/profile', api_profile_handler)
 app.router.add_post('/api/profile', api_profile_handler)

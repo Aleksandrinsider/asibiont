@@ -1108,13 +1108,15 @@ def _extract_image_style_from_memory(user) -> str:
     if not _raw:
         return ''
 
+    _IMG_KW = r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|style|стил|генерац|фото|photo|визуал'
+
     def _style_from_text(_txt: str) -> str:
         _txt = (_txt or '').strip()
         if not _txt:
             return ''
-        if not _re_img.search(r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|style|стил', _txt, _re_img.IGNORECASE):
+        if not _re_img.search(_IMG_KW, _txt, _re_img.IGNORECASE):
             return ''
-        # Ищем явный prompt/style хвост — поддерживаем «промт» (без п) и гибкую форму «промт для X: ...»
+        # 1. Явный prefix: «промт:», «style:», «image prompt:» и т.п.
         _m = _re_img.search(
             r'(?:промпт|промт|prompt|style|стиль|image\s*prompt|illustration)(?:[\s\w]{0,30})?\s*[:=]\s*(.{6,300})',
             _txt,
@@ -1122,8 +1124,16 @@ def _extract_image_style_from_memory(user) -> str:
         )
         if _m:
             return _m.group(1).strip(' .;\n')[:280]
-        # Фоллбек: если правило про иллюстрации, берём текст как есть
-        return _txt[:220]
+        # 2. Любое ключевое слово + двоеточие: «картинки: [промт]», «для изображений: [style]»
+        _m2 = _re_img.search(
+            r'(?:' + _IMG_KW + r')[^:=\n]{0,60}[:=]\s*(.{6,300})',
+            _txt,
+            _re_img.IGNORECASE,
+        )
+        if _m2:
+            return _m2.group(1).strip(' .;\n')[:280]
+        # 3. Фоллбек: весь текст правила (бывает когда правило = сам промт без префикса)
+        return _txt[:280]
 
     try:
         _raw_s = _raw.strip()
