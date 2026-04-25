@@ -9147,6 +9147,65 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                         "Повтори задачу, я отправлю заново."
                     )
 
+            # ── Anti-fake-action: агент заявляет о выполнении, но не вызвал ни одного инструмента ──
+            # Цель: пресечь ответы вида "нашёл/сохранил/отправил" без фактического действия.
+            _claim_lc = (_content or '').strip().lower()
+            _ACTION_CLAIM_KW = (
+                'нашел', 'нашёл', 'нашла', 'нашли',
+                'сохранил', 'сохранила', 'сохранено',
+                'отправил', 'отправила', 'отправлено',
+                'проверил', 'проверила', 'проверено',
+                'сделал', 'сделала', 'сделано',
+                'выполнил', 'выполнила', 'выполнено',
+                'готово', 'done', 'completed', 'sent', 'saved', 'found',
+            )
+            _looks_like_action_claim = any(_kw in _claim_lc for _kw in _ACTION_CLAIM_KW)
+            _is_claim_without_tools = (
+                _is_autopilot_task
+                and bool(_claim_lc)
+                and _looks_like_action_claim
+                and not _tool_calls
+                and _tool_call_count == 0
+                and _iter <= 1
+            )
+            if _is_claim_without_tools:
+                logger.warning(
+                    "[DIRECTOR-EXEC] anti-fake-action: %s claims action without tool call: %s",
+                    agent.get('name'), _claim_lc[:160],
+                )
+                _messages.append({"role": "assistant", "content": _content})
+                _messages.append({"role": "user", "content": (
+                    "СТОП. Ты заявил, что действие выполнено, но НЕ ВЫЗВАЛ ни одного инструмента. "
+                    "Сейчас ОБЯЗАТЕЛЬНО выполни реальное действие через инструмент (tool_choice=required). "
+                    "Если действие невозможно — напиши честно причину, без фраз 'готово/сделано'."
+                )})
+                try:
+                    _af_resp = await asyncio.wait_for(
+                        _agent_inst.call_ai(
+                            _messages,
+                            use_tools=True,
+                            tool_choice="required",
+                            exclude_tools=_exclude_for_agent,
+                            max_tokens=1200,
+                            api_timeout=API_TIMEOUT_LONG,
+                        ),
+                        timeout=API_TIMEOUT_LONG + 5,
+                    )
+                    if _af_resp and _af_resp.get('choices'):
+                        _af_msg = _af_resp['choices'][0]['message']
+                        _af_tools = _af_msg.get('tool_calls') or []
+                        if _af_tools:
+                            logger.info("[DIRECTOR-EXEC] anti-fake-action retry succeeded: %d tools", len(_af_tools))
+                            _tool_calls = _af_tools
+                            _msg = _af_msg
+                            _content = _af_msg.get('content') or ''
+                        else:
+                            # Короткий fallback: ниже сработает noise-filter для autopilot без действий.
+                            _content = "Действие не выполнено."
+                except Exception as _af_err:
+                    logger.warning("[DIRECTOR-EXEC] anti-fake-action retry error: %s", _af_err)
+                    _content = "Действие не выполнено."
+
             # ── Autopilot: текст содержит email-адреса, но агент не вызвал save_email_contact ──
             # Принудительный retry: извлекаем email из текста и заставляем агента сохранить контакт.
             if (_is_autopilot_task and not _tool_calls and _content
