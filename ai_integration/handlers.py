@@ -8842,11 +8842,33 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
             except Exception as _img_err:
                 logger.warning(f"[CREATE_POST] Auto image generation failed: {_img_err}")
 
+        # Скачиваем байты картинки для постоянного хранения
+        _img_bytes = None
+        _img_mime = None
+        if image_url and image_url.strip():
+            try:
+                import aiohttp as _aiohttp_dl
+                async with _aiohttp_dl.ClientSession() as _dl_http:
+                    async with _dl_http.get(
+                        image_url.strip(),
+                        timeout=_aiohttp_dl.ClientTimeout(total=30),
+                    ) as _dl_resp:
+                        if _dl_resp.status == 200:
+                            _img_bytes = await _dl_resp.read()
+                            _img_mime = _dl_resp.content_type or 'image/webp'
+                            logger.info(f"[CREATE_POST] Downloaded image bytes: {len(_img_bytes)} bytes")
+                        else:
+                            logger.warning(f"[CREATE_POST] Image download failed: HTTP {_dl_resp.status}")
+            except Exception as _dl_err:
+                logger.warning(f"[CREATE_POST] Image download error: {_dl_err}")
+
         post = Post(
             user_id=user.id,
             username=user.username or user.first_name or f"user_{user.telegram_id}",
             content=content.strip(),
             image_url=(image_url.strip() if image_url and image_url.strip() else None),
+            image_data=_img_bytes,
+            image_mime=_img_mime,
             created_at=dt.datetime.now(dt.timezone.utc)
         )
         
@@ -8857,7 +8879,8 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         # сессия может сделать commit с expire_on_commit=True, что детачит объект.
         # Обращение к post.id / post.image_url после этого → DetachedInstanceError.
         _post_id = post.id
-        _post_image_url = post.image_url
+        # Для кросс-постинга в TG/Discord используем оригинальный Replicate URL (байты уже скачаны)
+        _post_image_url = post.image_url  # ephemeral Replicate URL — для отправки файла в TG
 
         post_preview = content[:80] + '...' if len(content) > 80 else content
         has_img = bool(_post_image_url)

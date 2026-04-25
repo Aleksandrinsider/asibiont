@@ -595,6 +595,21 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
             image_url = await _generate_image_for_post(content, style=_img_style)
             if image_url:
                 post.image_url = image_url
+                # Скачиваем байты для постоянного хранения
+                try:
+                    async with _safe_http() as _dl_sess:
+                        async with _dl_sess.get(
+                            image_url,
+                            timeout=aiohttp.ClientTimeout(total=30),
+                        ) as _dl_resp:
+                            if _dl_resp.status == 200:
+                                post.image_data = await _dl_resp.read()
+                                post.image_mime = _dl_resp.content_type or 'image/webp'
+                                logger.info(f"[AUTO_POST] Image bytes stored: {len(post.image_data)} bytes")
+                            else:
+                                logger.warning(f"[AUTO_POST] Image download HTTP {_dl_resp.status}")
+                except Exception as _dl_err:
+                    logger.warning(f"[AUTO_POST] Image bytes download failed: {_dl_err}")
                 session.commit()
                 logger.info(f"[AUTO_POST] Image saved to post {post.id}")
         except Exception as img_err:

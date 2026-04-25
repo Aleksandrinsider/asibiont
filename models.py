@@ -344,7 +344,9 @@ class Post(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     username = Column(String(255))  # Denormalized username for easy viewing
     content = Column(Text, nullable=False)  # Post content
-    image_url = Column(Text, nullable=True)  # Optional image (base64 data URL)
+    image_url = Column(Text, nullable=True)  # Optional image URL (ephemeral Replicate URL)
+    image_data = Column(LargeBinary, nullable=True)   # Permanent image bytes (feed cover)
+    image_mime = Column(String(20), nullable=True)    # e.g. 'image/webp' or 'image/png'
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     user = relationship("User", backref="posts")

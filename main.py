@@ -6225,7 +6225,7 @@ async def get_feed_handler(request):
                     feed.append({
                         'id': post.id,
                         'content': post.content,
-                        'image_url': post.image_url,
+                        'image_url': f'/feed/image/{post.id}' if post.image_data else post.image_url,
                         'created_at': created_at_str,
                         'likes_count': likes_count,
                         'user_liked': user_liked,
@@ -10626,6 +10626,26 @@ async def blog_image_handler(request):
         )
 
 
+async def feed_image_handler(request):
+    """Serve stored feed post image: GET /feed/image/<post_id>"""
+    try:
+        post_id = int(request.match_info['post_id'])
+    except (KeyError, ValueError):
+        raise web.HTTPNotFound()
+    with Session() as db:
+        post = db.query(Post).filter_by(id=post_id).first()
+        if not post or not post.image_data:
+            raise web.HTTPNotFound()
+        mime = post.image_mime or 'image/webp'
+        return web.Response(
+            body=post.image_data,
+            content_type=mime,
+            headers={
+                'Cache-Control': 'public, max-age=31536000, immutable',
+            },
+        )
+
+
 async def blog_handler(request):
     """Публичный блог ASI Biont — список статей от AI-агентов"""
     lang = 'en' if request.path.startswith('/en') else 'ru'
@@ -13754,6 +13774,7 @@ app.router.add_get('/faq', faq_handler)
 app.router.add_get('/arena', arena_public_handler)
 app.router.add_get('/blog', blog_handler)
 app.router.add_get('/blog/image/{note_id}', blog_image_handler)
+app.router.add_get('/feed/image/{post_id}', feed_image_handler)
 app.router.add_get('/blog/{post_id}', blog_post_handler)
 app.router.add_get('/api/blog', api_blog_handler)
 app.router.add_get('/en/blog', blog_handler)

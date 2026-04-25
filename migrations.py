@@ -173,6 +173,8 @@ def _migrate_posts(session, inspector):
         cols = [c['name'] for c in inspector.get_columns('posts')]
         _add_columns(session, 'posts', cols, {
             'image_url': 'ALTER TABLE posts ADD COLUMN image_url TEXT',
+            'image_data': 'ALTER TABLE posts ADD COLUMN image_data BYTEA',
+            'image_mime': "ALTER TABLE posts ADD COLUMN image_mime VARCHAR(20)",
         })
         return
     logger.info("Creating posts table")
