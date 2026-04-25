@@ -5918,7 +5918,9 @@ class AnchorEngine:
                     async with self._ai_semaphore:
                         # email_need_leads — самый тяжёлый путь; ограничиваем бюджет чтобы не уронить весь _process_user (300s)
                         _is_need_leads = ea.anchor_type == 'email_need_leads'
-                        _ea_timeout = min(180 if _is_need_leads else 90, max(45, _time_left() - 25))
+                        # email_outreach_send: AI compose (≤60s) + SMTP (≤30s) per draft, 2 drafts max → ~180s needed
+                        _ea_max = 240 if _is_need_leads else 180
+                        _ea_timeout = min(_ea_max, max(90, _time_left() - 25))
                         _email_session = Session()
                         try:
                             await asyncio.wait_for(
@@ -5936,16 +5938,23 @@ class AnchorEngine:
                         session.rollback()
                     except Exception:
                         pass
-                    # CRITICAL: помечаем anchor delivered чтобы не было бесконечного retry
+                    # При таймауте — снузим на 10 мин для повторной попытки (письмо ещё не отправлено).
+                    # При других ошибках — помечаем delivered чтобы не было бесконечного retry.
+                    _is_timeout_err = isinstance(_ea_err, (asyncio.TimeoutError, TimeoutError))
                     try:
                         from models import Session as _S_ea_fix
                         _s_ea_fix = _S_ea_fix()
                         try:
                             _a_fix = _s_ea_fix.query(Anchor).filter_by(id=ea.id).first()
                             if _a_fix and not _a_fix.delivered_at:
-                                _a_fix.delivered_at = datetime.now(timezone.utc)
-                                _s_ea_fix.commit()
-                                logger.info(f"[ANCHOR] User {user_id}: marked email anchor #{ea.id} delivered after error")
+                                if _is_timeout_err:
+                                    _a_fix.suppress_until = datetime.now(timezone.utc) + timedelta(minutes=10)
+                                    _s_ea_fix.commit()
+                                    logger.info(f"[ANCHOR] User {user_id}: email anchor #{ea.id} snoozed 10min after timeout")
+                                else:
+                                    _a_fix.delivered_at = datetime.now(timezone.utc)
+                                    _s_ea_fix.commit()
+                                    logger.info(f"[ANCHOR] User {user_id}: marked email anchor #{ea.id} delivered after error")
                         finally:
                             _s_ea_fix.close()
                     except Exception:
