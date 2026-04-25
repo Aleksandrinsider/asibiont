@@ -401,6 +401,25 @@ def clean_technical_details(text, preserve_tool_names: bool = False):
     logger = logging.getLogger(__name__)
     original_text = text
     import re
+
+    # Нормализуем URL блога: модель иногда пишет asibiont.com/blog/... без схемы.
+    # Оставляем существующие http/https как есть, иначе добавляем https://.
+    def _normalize_blog_url(_m):
+        _raw = _m.group(0)
+        _trail = ''
+        while _raw and _raw[-1] in '.,!?:;':
+            _trail = _raw[-1] + _trail
+            _raw = _raw[:-1]
+        if not _raw.lower().startswith(('http://', 'https://')):
+            _raw = f'https://{_raw}'
+        return _raw + _trail
+
+    text = re.sub(
+        r'\b(?:https?://)?asibiont\.com/blog/[^\s)\]]+',
+        _normalize_blog_url,
+        text,
+        flags=re.IGNORECASE,
+    )
     
     # КРИТИЧЕСКИ ВАЖНО: Удаляем DeepSeek DSML теги (вызовы функций через спец. формат)
     # Стратегия: удаляем всё после первого DSML тега до конца текста
