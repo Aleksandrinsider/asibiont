@@ -8845,42 +8845,85 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
     _tool_chain_repair_attempts = 0
 
     def _repair_dangling_tool_chain(_msgs: list) -> int:
-        """Вставляет фиктивные tool-ответы для assistant.tool_calls без полного набора tool_call_id.
+        """Нормализует цепочку tool-calls для следующего call_ai.
 
-        Это защищает следующий call_ai от 400:
-        "An assistant message with 'tool_calls' must be followed by tool messages ..."
+        Правила OpenAI/DeepSeek:
+        1) assistant с tool_calls ДОЛЖЕН сразу иметь tool-ответы на каждый tool_call_id
+        2) role=tool не может существовать без ближайшего preceding assistant.tool_calls
+
+        Возвращает число применённых исправлений (вставки + удаления).
         """
         try:
-            _inserted = 0
+            if not isinstance(_msgs, list) or not _msgs:
+                return 0
+
+            _fixed = 0
+            _normalized = []
             _i = 0
+
             while _i < len(_msgs):
-                _m = _msgs[_i] if isinstance(_msgs[_i], dict) else {}
-                if _m.get('role') == 'assistant' and isinstance(_m.get('tool_calls'), list) and _m.get('tool_calls'):
-                    _expected_ids = []
-                    for _tc in (_m.get('tool_calls') or []):
-                        if isinstance(_tc, dict) and _tc.get('id'):
-                            _expected_ids.append(str(_tc.get('id')))
+                _m = _msgs[_i] if isinstance(_msgs[_i], dict) else None
+                if not isinstance(_m, dict):
+                    _i += 1
+                    continue
+
+                _role = _m.get('role')
+
+                # Осиротевший tool без preceding assistant.tool_calls — удаляем
+                if _role == 'tool':
+                    _fixed += 1
+                    _i += 1
+                    continue
+
+                _normalized.append(_m)
+
+                # Для assistant.tool_calls собираем следующий contiguous block tool-сообщений,
+                # оставляем только корректные id и добавляем недостающие.
+                _tool_calls = _m.get('tool_calls') if _role == 'assistant' else None
+                if isinstance(_tool_calls, list) and _tool_calls:
+                    _expected_ids = [
+                        str(_tc.get('id'))
+                        for _tc in _tool_calls
+                        if isinstance(_tc, dict) and _tc.get('id')
+                    ]
+                    _remaining = set(_expected_ids)
 
                     _j = _i + 1
-                    _present_ids = set()
-                    while _j < len(_msgs) and isinstance(_msgs[_j], dict) and _msgs[_j].get('role') == 'tool':
-                        _tid = (_msgs[_j].get('tool_call_id') if isinstance(_msgs[_j], dict) else None)
-                        if _tid:
-                            _present_ids.add(str(_tid))
+                    while _j < len(_msgs):
+                        _n = _msgs[_j] if isinstance(_msgs[_j], dict) else None
+                        if not isinstance(_n, dict):
+                            _j += 1
+                            continue
+                        if _n.get('role') != 'tool':
+                            break
+
+                        _tid = str(_n.get('tool_call_id') or '')
+                        if _tid and _tid in _remaining:
+                            _normalized.append(_n)
+                            _remaining.remove(_tid)
+                        else:
+                            # Лишний tool (чужой id / дубль / пустой id) удаляем
+                            _fixed += 1
                         _j += 1
 
-                    _missing = [x for x in _expected_ids if x not in _present_ids]
-                    if _missing:
-                        for _mid in _missing:
-                            _msgs.insert(_j, {
-                                "role": "tool",
-                                "tool_call_id": _mid,
-                                "content": '{"status":"auto-repaired: missing tool response"}',
-                            })
-                            _inserted += 1
-                            _j += 1
+                    if _remaining:
+                        for _mid in _expected_ids:
+                            if _mid in _remaining:
+                                _normalized.append({
+                                    "role": "tool",
+                                    "tool_call_id": _mid,
+                                    "content": '{"status":"auto-repaired: missing tool response"}',
+                                })
+                                _fixed += 1
+
+                    _i = _j
+                    continue
+
                 _i += 1
-            return _inserted
+
+            if _fixed > 0:
+                _msgs[:] = _normalized
+            return _fixed
         except Exception as _rep_err:
             logger.debug("[DIRECTOR-EXEC] tool-chain repair failed: %s", _rep_err)
             return 0
