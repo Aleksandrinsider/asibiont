@@ -1121,11 +1121,6 @@
                         <div id="chat-view" class="view-panel">
                             <div id="chat-messages" class="chat-messages" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 20px;">
                             </div>
-                            <div id="chat-history-controls" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 12px;border-top:1px solid #E5E7EB;background:#FAFBFC;">
-                                <button id="chat-history-prev" onclick="goToPrevChatPage()" class="chat-action-btn" title="Предыдущая страница" style="min-width:34px;">←</button>
-                                <span id="chat-history-page-indicator" style="font-size:12px;color:#6B7280;">1 / 1</span>
-                                <button id="chat-history-next" onclick="goToNextChatPage()" class="chat-action-btn" title="Следующая страница" style="min-width:34px;">→</button>
-                            </div>
                         {% if logged_in %}
                         <!-- Бар активных агентов -->
                         <div id="active-agents-bar" style="display:none;padding:6px 12px 4px;border-top:1px solid #F0F2F5;background:#FAFBFC;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
@@ -2744,7 +2739,6 @@
                             lastMessageCount = syncData.interactions.length;
                             chatHistoryHasMore = !!syncData.has_more;
                             chatHistoryNextBeforeId = syncData.next_before_id || null;
-                            updateChatHistoryControls();
                         }
                     }
                 } catch(e) {}
@@ -2774,9 +2768,6 @@
                     displayedMessageIds.clear();
                     chatHistoryHasMore = false;
                     chatHistoryNextBeforeId = null;
-                    chatCurrentPage = 1;
-                    chatNoMoreNext = false;
-                    updateChatHistoryControls();
                     // Show notification instead of adding to chat
                     showNotification(t('ok-chat-clear'), 'success');
                     // Получить текущее количество сообщений из БД, чтобы updateChat не добавлял старые
@@ -2789,7 +2780,6 @@
                                 lastMessageCount = data.interactions ? data.interactions.length : 0;
                                 chatHistoryHasMore = !!data.has_more;
                                 chatHistoryNextBeforeId = data.next_before_id || null;
-                                updateChatHistoryControls();
                             }
                         } catch (error) {
                             console.error('Error getting message count:', error);
@@ -13157,36 +13147,14 @@ except Exception as e:
         let chatHistoryHasMore = false;
         let chatHistoryNextBeforeId = null;
         let chatHistoryLoading = false;
-        let chatCurrentPage = 1;
-        let chatTotalPages = 1;
-        let chatNoMoreNext = false;  // true when → exhausted all pages
         let lastTasksUpdate = 0;
         let lastPeopleUpdate = 0;
         let lastProfileUpdate = 0;
         let lastSeenPostId = null; // Для отслеживания последнего просмотренного поста
 
-        function updateChatHistoryControls() {
-            const controls = document.getElementById('chat-history-controls');
-            const prevBtn = document.getElementById('chat-history-prev');
-            const nextBtn = document.getElementById('chat-history-next');
-            const indicator = document.getElementById('chat-history-page-indicator');
-            if (!controls || !prevBtn || !nextBtn || !indicator) return;
-
-            // Скрываем если на первой странице и больше нет (как в арене: hide when totalPages<=1)
-            if (chatCurrentPage === 1 && chatNoMoreNext) {
-                controls.style.display = 'none';
-                return;
-            }
-            controls.style.display = 'flex';
-            prevBtn.disabled = chatCurrentPage <= 1 || chatHistoryLoading;
-            nextBtn.disabled = chatNoMoreNext || chatHistoryLoading;
-            indicator.textContent = `${chatCurrentPage}`;
-        }
-
         async function loadChatHistoryPage(pageNum = 1, _autoSkipCount = 0, _dir = 1) {
             if (chatHistoryLoading) return;
             chatHistoryLoading = true;
-            updateChatHistoryControls();
             try {
                 const safePage = Math.max(1, Number(pageNum) || 1);
                 const response = await fetch(`/api/interactions?page=${safePage}&per_page=${CHAT_HISTORY_PAGE_SIZE}`, {
@@ -13215,55 +13183,21 @@ except Exception as e:
                     if (msgId > _chatMaxSeenId) _chatMaxSeenId = msgId;
                 });
 
-                chatCurrentPage = data.page || safePage;
-                chatTotalPages = data.total_pages || 1;
                 chatHistoryHasMore = !!data.has_more;
                 chatHistoryNextBeforeId = data.next_before_id || null;
-                // Reset noMore flag when navigating backwards (there might be older content)
-                if (_dir < 0) chatNoMoreNext = false;
-                updateChatHistoryControls();
 
-                // Auto-skip pages that contain only noise (filtered out server-side)
-                if (pageInteractions.length === 0 && _autoSkipCount < 10) {
-                    const _nextPage = chatCurrentPage + _dir;
-                    if (_dir > 0 && _nextPage <= chatTotalPages) {
-                        chatHistoryLoading = false;
-                        await loadChatHistoryPage(_nextPage, _autoSkipCount + 1, _dir);
-                        return;
-                    } else if (_dir < 0 && _nextPage >= 1) {
-                        chatHistoryLoading = false;
-                        await loadChatHistoryPage(_nextPage, _autoSkipCount + 1, _dir);
-                        return;
-                    }
-                }
                 if (pageInteractions.length === 0) {
-                    // Exhausted all pages in this direction
-                    if (_dir > 0) chatNoMoreNext = true;
-                    updateChatHistoryControls();
                     if (!chatEl.querySelector('.chat-empty-state')) {
                         chatEl.innerHTML = `<div class="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;"><p style="margin:0;font-size:13px;color:#9CA3AF;max-width:340px;">${t('start-dialog-desc')}</p></div>`;
                     }
                 } else {
-                    setTimeout(() => {
-                        chatEl.scrollTop = (chatCurrentPage === 1) ? chatEl.scrollHeight : 0;
-                    }, 30);
+                    setTimeout(() => { chatEl.scrollTop = chatEl.scrollHeight; }, 30);
                 }
             } catch (error) {
                 console.error('Error loading chat history page:', error);
             } finally {
                 chatHistoryLoading = false;
-                updateChatHistoryControls();
             }
-        }
-
-        async function goToPrevChatPage() {
-            if (chatCurrentPage <= 1 || chatHistoryLoading) return;
-            await loadChatHistoryPage(chatCurrentPage - 1, 0, -1);
-        }
-
-        async function goToNextChatPage() {
-            if (chatNoMoreNext || chatHistoryLoading) return;
-            await loadChatHistoryPage(chatCurrentPage + 1, 0, 1);
         }
 
         // Устанавливаем аватар пользователя для использования в чате
@@ -13280,7 +13214,6 @@ except Exception as e:
 
         // Функция для проверки новых сообщений (ID-based, не count-based)
         async function checkForNewMessages() {
-            if (chatCurrentPage !== 1) return;
             try {
                 const response = await fetch(`/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}`, {
                     credentials: 'include',
@@ -17220,9 +17153,6 @@ except Exception as e:
 
         async function updateChat() {
             try {
-                if (chatCurrentPage !== 1) {
-                    return;
-                }
                 // Не обновляем чат в течение 15 секунд после отправки сообщения
                 const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
                 if (timeSinceLastSend < 15000) {
