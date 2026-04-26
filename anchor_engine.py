@@ -23104,6 +23104,32 @@ class AnchorEngine:
             }
             tone_desc = tone_map.get(anchor_data.get('tone', 'professional'), 'профессиональный')
 
+            # Правила пользователя (в т.ч. стиль/тон) из user.memory
+            _user_rules = []
+            _user_style_rules = []
+            try:
+                _raw_mem_cp = getattr(user, 'memory', None) or ''
+                if _raw_mem_cp:
+                    try:
+                        from ai_integration.memory import decrypt_data as _decrypt_cp
+                        _dec_mem_cp = _decrypt_cp(_raw_mem_cp)
+                    except Exception:
+                        _dec_mem_cp = _raw_mem_cp
+                    if _dec_mem_cp:
+                        _mem_cp = json.loads(_dec_mem_cp) if isinstance(_dec_mem_cp, str) else {}
+                        _user_rules = _mem_cp.get('rules', []) if isinstance(_mem_cp, dict) else []
+                        if _user_rules:
+                            import re as _re_cp
+                            for _r in _user_rules:
+                                _r_txt = str(_r or '').strip()
+                                if not _r_txt:
+                                    continue
+                                # Выделяем правила стилистики отдельным приоритетным блоком
+                                if _re_cp.search(r'стил|тон|формулиров|язык|эмод|хештег|длин|кратк|коротк|разговорн|официал|канцеляр', _r_txt, _re_cp.IGNORECASE):
+                                    _user_style_rules.append(_r_txt)
+            except Exception as _ur_cp_err:
+                logger.debug("[ANCHOR] campaign post user rules parse: %s", _ur_cp_err)
+
             # Номер поста и формат для ротации
             post_num = (campaign.posts_published or 0) + 1
             _formats = [
@@ -23174,13 +23200,27 @@ class AnchorEngine:
                 f"ПОСТ #{post_num}"
                 f"{f' из {campaign.max_posts}' if campaign.max_posts else ''}\n"
                 f"ФОРМАТ ЭТОГО ПОСТА: {post_format}\n\n"
+                + (
+                    "🔴 ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА СТИЛЯ ОТ ПОЛЬЗОВАТЕЛЯ (приоритет №1):\n"
+                    + "\n".join(f"  {i+1}. {r}" for i, r in enumerate(_user_style_rules[:8]))
+                    + "\nЕсли эти правила конфликтуют с общими пунктами ниже — соблюдай правила пользователя.\n\n"
+                    if _user_style_rules else ""
+                )
+                + (
+                    "📌 ПРОЧИЕ ПРАВИЛА ПОЛЬЗОВАТЕЛЯ (учитывай при генерации):\n"
+                    + "\n".join(f"  • {r}" for r in _user_rules[:12])
+                    + "\n\n"
+                    if _user_rules else ""
+                )
+                +
                 f"ПРАВИЛА:\n"
                 f"1. Пиши от ПЕРВОГО лица, как будто сам пользователь\n"
                 f"2. СТРОГО придерживайся цели и тем кампании — пиши ТОЛЬКО про них\n"
                 f"3. ИГНОРИРУЙ любые личные интересы автора, не связанные с темой кампании\n"
                 f"4. Каждый пост должен быть УНИКАЛЬНЫМ — НЕ повторяй предыдущие посты кампании\n"
                 f"5. 3-8 предложений, {tone_desc} стиль\n"
-                f"6. БЕЗ эмодзи, без хештегов, без призывов вроде 'подписывайтесь'\n"
+                f"6. По умолчанию: без эмодзи, без хештегов, без призывов вроде 'подписывайтесь'. "
+                f"Если в правилах пользователя явно задано иное — следуй правилам пользователя.\n"
                 f"7. Если есть свежие данные из сети — используй их: цитируй статистику, упоминай конкретные примеры, ссылайся на реальные факты\n"
                 f"8. Верни ТОЛЬКО текст поста. Ничего больше.\n"
                 f"9. Пиши КОНКРЕТНО: не 'AI помогает в работе', а 'AI-агент за 15 секунд составляет email по 3 ключевым словам — экономит 20 минут'\n"
