@@ -4537,6 +4537,7 @@ class AnchorEngine:
                 _s_rec.close()
         except Exception as _rec_err:
             logger.debug("[ANCHOR] Recovery error: %s", _rec_err)
+
         while self.running:
             try:
                 import time as _time
@@ -10721,6 +10722,25 @@ class AnchorEngine:
                     logger.info("[ANCHOR-CHAIN] user %d: skip chain — spend race: %s", _user_id, _sp_res_ch.get('error', ''))
                     return
 
+            # ── Сохраняем задачу в tasks ДО запуска агента ──
+            # Это единственная защита от потери: если Railway убьёт процесс,
+            # существующая recovery в цикле сбросит in_progress → pending
+            # и агент выполнит задачу в следующем цикле автоматически.
+            from models import Task as _ChainTask
+            _chain_task_obj = _ChainTask(
+                user_id=_user_id,
+                title=f'[chain→{_next_ag.name}] {_next_task[:200]}',
+                description=_next_task[:1000],
+                status='in_progress',
+                source='agent',
+                created_by_agent_id=_next_ag.id if getattr(_next_ag, 'id', 0) != 0 else None,
+                delegated_to_username=_next_ag.name,
+                skipped_reason='chain_continue',
+            )
+            session.add(_chain_task_obj)
+            session.commit()
+            _chain_task_id = _chain_task_obj.id
+
             # Запускаем следующего агента
             from ai_integration.autonomous_agent import _exec_agent_for_director
             import json as _jd2
@@ -10791,7 +10811,7 @@ class AnchorEngine:
             )
             _chain_tools_used = list(_next_raw[1]) if isinstance(_next_raw, (tuple, list)) and len(_next_raw) > 1 else []
 
-            # Сохраняем результат в лог
+            # Сохраняем результат в лог + закрываем задачу в tasks
             try:
                 _chain_log = (
                     session.query(_AAL3)
@@ -10807,7 +10827,15 @@ class AnchorEngine:
                 if _chain_log:
                     _chain_log.result = (_next_result or '')[:400]
                     _chain_log.status = 'completed'
-                    session.commit()
+                # Закрываем Task, созданную до запуска агента
+                try:
+                    _ct = session.query(_ChainTask).get(_chain_task_id)
+                    if _ct:
+                        _ct.status = 'completed'
+                        _ct.completion_notes = (_next_result or '')[:255]
+                except Exception:
+                    pass
+                session.commit()
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
 
@@ -10873,6 +10901,17 @@ class AnchorEngine:
         except Exception as _chain_e:
             _uid_log = locals().get('_user_id', getattr(user, 'id', '?'))
             logger.debug("[ANCHOR-CHAIN] error for user %s: %s", _uid_log, _chain_e)
+            # Помечаем задачу как failed, чтобы recovery не перезапускал её бесконечно
+            try:
+                _ct_fail_id = locals().get('_chain_task_id')
+                if _ct_fail_id:
+                    _ct_fail = session.query(_ChainTask).get(_ct_fail_id)
+                    if _ct_fail and _ct_fail.status == 'in_progress':
+                        _ct_fail.status = 'failed'
+                        _ct_fail.skipped_reason = f'chain_error: {str(_chain_e)[:120]}'
+                        session.commit()
+            except Exception:
+                pass
 
     # ═══════════════════════════════════════════════════════
     # COORDINATOR DISPATCH — multi-agent plan execution
