@@ -13157,6 +13157,7 @@ except Exception as e:
         let chatHistoryLoading = false;
         let chatCurrentPage = 1;
         let chatTotalPages = 1;
+        let chatNoMoreNext = false;  // true when → exhausted all pages
         let lastTasksUpdate = 0;
         let lastPeopleUpdate = 0;
         let lastProfileUpdate = 0;
@@ -13171,8 +13172,8 @@ except Exception as e:
 
             controls.style.display = 'flex';
             prevBtn.disabled = chatCurrentPage <= 1 || chatHistoryLoading;
-            nextBtn.disabled = chatCurrentPage >= chatTotalPages || chatHistoryLoading;
-            indicator.textContent = `${chatCurrentPage} / ${chatTotalPages}`;
+            nextBtn.disabled = chatNoMoreNext || chatHistoryLoading;
+            indicator.textContent = `${chatCurrentPage}`;
         }
 
         async function loadChatHistoryPage(pageNum = 1, _autoSkipCount = 0, _dir = 1) {
@@ -13211,6 +13212,8 @@ except Exception as e:
                 chatTotalPages = data.total_pages || 1;
                 chatHistoryHasMore = !!data.has_more;
                 chatHistoryNextBeforeId = data.next_before_id || null;
+                // Reset noMore flag when navigating backwards (there might be older content)
+                if (_dir < 0) chatNoMoreNext = false;
                 updateChatHistoryControls();
 
                 // Auto-skip pages that contain only noise (filtered out server-side)
@@ -13227,6 +13230,9 @@ except Exception as e:
                     }
                 }
                 if (pageInteractions.length === 0) {
+                    // Exhausted all pages in this direction
+                    if (_dir > 0) chatNoMoreNext = true;
+                    updateChatHistoryControls();
                     if (!chatEl.querySelector('.chat-empty-state')) {
                         chatEl.innerHTML = `<div class="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;"><p style="margin:0;font-size:13px;color:#9CA3AF;max-width:340px;">${t('start-dialog-desc')}</p></div>`;
                     }
@@ -13249,7 +13255,7 @@ except Exception as e:
         }
 
         async function goToNextChatPage() {
-            if (chatCurrentPage >= chatTotalPages || chatHistoryLoading) return;
+            if (chatNoMoreNext || chatHistoryLoading) return;
             await loadChatHistoryPage(chatCurrentPage + 1, 0, 1);
         }
 
