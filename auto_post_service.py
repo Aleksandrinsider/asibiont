@@ -31,18 +31,22 @@ from ai_integration.memory import decrypt_data
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+_VISUAL_PROMPT_MARKER_RE = re.compile(
+    r'(?im)\s*["\'«»„“”\(\[]?\s*(иллюстрация|изображение|illustration|image)\s*[:\-—]\s*'
+)
+
 
 def _strip_post_visual_prompt(text: str) -> str:
     if not text:
         return text
 
     cleaned = str(text)
-    marker = re.search(
-        r'(?im)(?:^|\n)\s*(иллюстрация|изображение|illustration|image)\s*:\s*',
-        cleaned,
-    )
-    if marker:
-        cleaned = cleaned[:marker.start()].rstrip()
+    markers = list(_VISUAL_PROMPT_MARKER_RE.finditer(cleaned))
+    if markers:
+        marker = markers[-1]
+        tail = cleaned[marker.end():].strip().strip('"\'«»')
+        if 0 < len(tail) <= 500:
+            cleaned = cleaned[:marker.start()].rstrip()
     return re.sub(r'\n{3,}', '\n\n', cleaned).strip()
 
 
@@ -113,11 +117,13 @@ async def _generate_image_for_post(post_text: str, style: str = "") -> str:
         return ""
 
     # Ask AI to build a concise English visual prompt from the post
-    _style_instruction = f" The image must be in '{style}' style." if style else ""
+    _style_instruction = f" Apply style as a secondary modifier: {style}." if style else ""
     try:
         image_prompt = await _generate_text_with_ai(
-            f"""You are a visual prompt engineer. Based on this social media post, write a short vivid English image-generation prompt (max 40 words). """
-            f"""Focus on mood, scene, and visual aesthetic. No text overlays, no people's faces.{_style_instruction}"""
+            f"""You are a visual prompt engineer. Based on this social media post, write one short English image-generation prompt (max 40 words). """
+            f"""Use concrete entities from the text: objects, place, and action. Keep the topic faithful. """
+            f"""Do not substitute the main subject with decorative nature motifs unless explicitly mentioned in the post. """
+            f"""No text overlays, no meta-phrases like 'concept of'.{_style_instruction}"""
             f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the image prompt:"""
         )
         if not image_prompt or len(image_prompt) < 5:

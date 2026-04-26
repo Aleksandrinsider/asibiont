@@ -25,6 +25,10 @@ from config import OPENWEATHERMAP_API_KEY, NEWSAPI_API_KEY, encrypt_token, decry
 
 logger = logging.getLogger(__name__)
 
+_VISUAL_PROMPT_MARKER_RE = re.compile(
+    r'(?im)\s*["\'«»„“”\(\[]?\s*(иллюстрация|изображение|illustration|image)\s*[:\-—]\s*'
+)
+
 # Множество user_id для которых сейчас активен ASI-обзор отчёта агента.
 # Предотвращает бесконечную рекурсию: отчёт → ASI → делегирование → отчёт → ...
 _ASI_REPORT_REVIEW_ACTIVE: set = set()
@@ -53,14 +57,15 @@ def _extract_post_visual_prompt(text: str) -> tuple[str, str]:
         return '', ''
 
     cleaned = str(text)
-    _marker = re.search(
-        r'(?im)(?:^|\n)\s*(иллюстрация|изображение|illustration|image)\s*:\s*',
-        cleaned,
-    )
+    _markers = list(_VISUAL_PROMPT_MARKER_RE.finditer(cleaned))
     visual_prompt = ''
-    if _marker:
-        visual_prompt = cleaned[_marker.end():].strip()
-        cleaned = cleaned[:_marker.start()].rstrip()
+    if _markers:
+        _marker = _markers[-1]
+        _tail = cleaned[_marker.end():].strip().strip('"\'«»')
+        # Удаляем только хвост-маркер в конце текста, а не упоминания внутри абзацев.
+        if 0 < len(_tail) <= 500:
+            visual_prompt = _tail
+            cleaned = cleaned[:_marker.start()].rstrip()
 
     cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
     return cleaned, visual_prompt
@@ -8831,11 +8836,10 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     _api_cp = _get_api_cp()
                     _vis_msgs = [
                         {"role": "system", "content": (
-                            "Переведи тему текста в короткое описание изображения для text-to-image модели. "
-                            "Ответь ТОЛЬКО визуальным описанием объектов/сцены на английском языке, "
-                            "1-2 предложения, без абстракций типа 'concept of' или 'idea of'. "
-                            "Примеры: 'stock market chart on screen, businessman analyzing data at desk' "
-                            "или 'ancient ruins in a forest clearing, stone columns covered in moss'."
+                            "Convert the post into a concrete image scene prompt in English. "
+                            "Return ONLY one short prompt (max 40 words), with specific objects, place, and action from the text. "
+                            "Stay faithful to the original topic: do not replace subject matter with decorative nature motifs unless the post explicitly mentions them. "
+                            "No meta-phrases like 'concept of' or 'idea of'."
                         )},
                         {"role": "user", "content": f"Текст поста:\n{content[:400]}"},
                     ]
