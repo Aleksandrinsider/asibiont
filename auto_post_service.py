@@ -117,22 +117,24 @@ async def _generate_image_for_post(post_text: str, style: str = "") -> str:
         return ""
 
     # Ask AI to build a concise English visual prompt from the post
-    _style_instruction = f" IMPORTANT — apply this visual style requirement: {style}." if style else ""
+    _style_instruction = f" The image MUST be rendered in this style: {style}." if style else ""
     try:
         image_prompt = await _generate_text_with_ai(
-            f"""You are a visual prompt engineer. Based on this social media post, write one short English image-generation prompt (max 40 words). """
-            f"""Use concrete entities from the text: objects, place, and action. Keep the topic faithful. """
+            f"""You are a visual prompt engineer. Based on this social media post, write one short English image-generation prompt (max 35 words, NO style words). """
+            f"""Describe only concrete visual elements: objects, place, action, mood. Keep the topic faithful. """
             f"""Do not substitute the main subject with decorative nature motifs unless explicitly mentioned in the post. """
-            f"""No text overlays, no meta-phrases like 'concept of'.{_style_instruction}"""
-            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the image prompt:"""
+            f"""No text overlays, no meta-phrases like 'concept of', no style descriptors (style will be appended separately).{_style_instruction}"""
+            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the scene description (no style words):"""
         )
         if not image_prompt or len(image_prompt) < 5:
-            _fallback_base = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
-            image_prompt = f"{_fallback_base}, {style}" if style else _fallback_base
+            image_prompt = "person working at a desk, focused, modern office"
     except Exception as _img_prompt_err:
         logger.debug("Image prompt generation failed, using fallback: %s", _img_prompt_err)
-        _fallback_base = "productivity lifestyle, warm natural light, minimalist workspace, calm focus"
-        image_prompt = f"{_fallback_base}, {style}" if style else _fallback_base
+        image_prompt = "person working at a desk, focused, modern office"
+
+    # Гарантированно добавляем стиль пользователя в финальный промпт для Replicate
+    if style:
+        image_prompt = f"{image_prompt.rstrip(', ')} | style: {style}"
 
     try:
         model = "black-forest-labs/flux-schnell"
@@ -588,13 +590,26 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                     _IMAGE_KW = r'рисун|изображен|иллюстрац|картин|визуал|арт\b|drawing|image|sketch|visual|art\b|иконк|минимал|реалист|акварел|стиль\s+фото|фотостил'
                     for _rule_aps in _m_aps.get('rules', []):
                         if _re_aps.search(_IMAGE_KW, _rule_aps, _re_aps.IGNORECASE):
-                            _sm = _re_aps.search(r'стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
+                            # Пробуем извлечь стиль несколькими паттернами
+                            _style_val = None
+                            # "в стиле X" / "стиле X"
+                            _sm = _re_aps.search(r'в\s+стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
                             if _sm:
-                                _collected_styles.append(_sm.group(1).strip())
+                                _style_val = _sm.group(1).strip()
                             else:
-                                _collected_styles.append(_rule_aps[:80])
+                                # "X стиль" / "X-стиль"
+                                _sm2 = _re_aps.search(r'([A-Za-zА-Яа-яЁё][^,\.\n]{2,50})\s+стил[еёьяи]', _rule_aps, _re_aps.IGNORECASE)
+                                if _sm2:
+                                    _style_val = _sm2.group(1).strip()
+                                else:
+                                    # "стиле X" (без предлога)
+                                    _sm3 = _re_aps.search(r'стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
+                                    if _sm3:
+                                        _style_val = _sm3.group(1).strip()
+                            _collected_styles.append(_style_val if _style_val else _rule_aps[:80])
                     if _collected_styles:
                         _img_style = '; '.join(_collected_styles)
+                    logger.info("[AUTO_POST] img_style extracted: %r", _img_style)
         except Exception as _e_aps:
             logger.debug("[AUTO_POST] Could not extract image style from rules: %s", _e_aps)
 
