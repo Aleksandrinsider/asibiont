@@ -117,7 +117,7 @@ async def _generate_image_for_post(post_text: str, style: str = "") -> str:
         return ""
 
     # Ask AI to build a concise English visual prompt from the post
-    _style_instruction = f" Apply style as a secondary modifier: {style}." if style else ""
+    _style_instruction = f" IMPORTANT — apply this visual style requirement: {style}." if style else ""
     try:
         image_prompt = await _generate_text_with_ai(
             f"""You are a visual prompt engineer. Based on this social media post, write one short English image-generation prompt (max 40 words). """
@@ -584,15 +584,17 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                 if _raw_mem_aps and _raw_mem_aps.strip().startswith('{'):
                     import json as _json_aps
                     _m_aps = _json_aps.loads(_raw_mem_aps.strip())
+                    _collected_styles: list = []
+                    _IMAGE_KW = r'рисун|изображен|иллюстрац|картин|визуал|арт\b|drawing|image|sketch|visual|art\b|иконк|минимал|реалист|акварел|стиль\s+фото|фотостил'
                     for _rule_aps in _m_aps.get('rules', []):
-                        if _re_aps.search(r'рисун|изображен|иллюстрац|картин|drawing|image|sketch', _rule_aps, _re_aps.IGNORECASE):
+                        if _re_aps.search(_IMAGE_KW, _rule_aps, _re_aps.IGNORECASE):
                             _sm = _re_aps.search(r'стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
                             if _sm:
-                                _img_style = _sm.group(1).strip()
+                                _collected_styles.append(_sm.group(1).strip())
                             else:
-                                # Правило есть но стиль не явный — сохраним всё правило как подсказку
-                                _img_style = _rule_aps[:80]
-                            break
+                                _collected_styles.append(_rule_aps[:80])
+                    if _collected_styles:
+                        _img_style = '; '.join(_collected_styles)
         except Exception as _e_aps:
             logger.debug("[AUTO_POST] Could not extract image style from rules: %s", _e_aps)
 
