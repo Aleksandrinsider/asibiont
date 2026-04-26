@@ -9824,7 +9824,7 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
                     _messages.append({"role": "user", "content": (
                         "Действие выполнено. Выбери следующий шаг:\n"
                         "— Есть ещё действия по цели → продолжай цепочку\n"
-                        "— Цепочка завершена → расскажи результат пользователю."
+                        "— Все действия выполнены → сразу сообщи результат пользователю (без вводных фраз)."
                     )})
             else:
                 # Последняя итерация: завершаем
@@ -10374,6 +10374,12 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             r'[Рр]асскажу результат(?: пользователю)?',
         )
         _narr_kw = '|'.join(_NARRATION_KEYWORDS)
+        # Вариант 0: ведущая шаблонная фраза в начале текста (даже если за ней нет переноса строки)
+        # Например: "Цепочка завершена. Вот ..." → "Вот ..."
+        _final_text = _re_tools.sub(
+            rf'^[\s]*(?:{_narr_kw})[^.!?\n]*[.!?\u2026]?\s*',
+            '', _final_text, flags=_re_tools.IGNORECASE
+        ).strip()
         # Вариант 1: начало строки / после newline
         _final_text = _re_tools.sub(
             rf'(?:^|\n)[^\S\n]*(?:{_narr_kw})[^.!?\n]*[.!?\u2026]?[^\S\n]*(?:\n|$)',
