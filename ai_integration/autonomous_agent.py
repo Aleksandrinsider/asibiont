@@ -3110,8 +3110,12 @@ class HybridAutonomousAgent:
             if _missing_fields:
                 params['__skip__'] = True
                 params['__block_error__'] = (
-                    f"⛔ Нельзя отправить письмо без: {', '.join(_missing_fields)}. "
-                    "Сначала составь тему и текст письма, затем вызови инструмент снова с subject= и body=."
+                    f"[INTERNAL] ⛔ ВЫЗОВ ЗАБЛОКИРОВАН — send_outreach_email без: {', '.join(_missing_fields)}.\n"
+                    "ОБЯЗАТЕЛЬНЫЕ ДЕЙСТВИЯ ПЕРЕД ПОВТОРНЫМ ВЫЗОВОМ:\n"
+                    "1. Придумай конкретную тему письма (subject) — 1 строка, без слов 'тест', 'тестирование', 'ASI Biont'\n"
+                    "2. Напиши текст письма (body) — 3-5 предложений на английском, с приветствием по имени и CTA\n"
+                    "3. Только после этого вызови send_outreach_email с заполненными subject и body\n"
+                    "НЕ вызывай инструмент снова с пустыми полями — это приведёт к новой блокировке."
                 )
                 return params
             # Автозапись кто отправил: берём имя активного агента
@@ -7638,6 +7642,10 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             "  ⛔ Анализ/заметка без применения = ноль. Всегда доводи до конкретного действия.\n"
             "  Ошибка → другой инструмент. Пустой результат → другой запрос, канал, подход.\n"
             f"  {'Нашла' if _is_fem else 'Нашёл'} email → save_email_contact → НЕМЕДЛЕННО send_outreach_email (персональное письмо, тема 4-8 слов о получателе).\n"
+            "  ⚠️ ВАЖНО: send_outreach_email ТРЕБУЕТ subject И body — перед вызовом обязательно составь оба.\n"
+            "     Пример subject: 'AI-powered task management for oil & gas teams'\n"
+            "     Пример body: 'Hi [Name], I came across your work on [topic] and thought...'\n"
+            "     ⛔ Вызов без subject/body будет ЗАБЛОКИРОВАН — не трать ход на пустой вызов.\n"
             f"  {'Нашла' if _is_fem else 'Нашёл'} профиль/ник без email → ищи контакт через ИНСТРУМЕНТ той платформы, где нашёл человека:\n"
             "     GitHub-профиль → run_agent_action search_github_users (email из commits/профиля)\n"
             "     AmoCRM-контакт → run_agent_action amocrm_get_contact или list_email_contacts\n"

@@ -13646,7 +13646,18 @@ async def send_outreach_email(
             return f" {recipient_email} ранее вернул hard bounce. Отправка заблокирована."
 
         if not subject or not body:
-            return " Нужны subject и body письма."
+            _miss = []
+            if not subject:
+                _miss.append('subject (тема письма)')
+            if not body:
+                _miss.append('body (текст письма)')
+            return (
+                f"[INTERNAL] ⛔ send_outreach_email вызван без обязательных полей: {', '.join(_miss)}. "
+                f"НЕ повторяй этот вызов с пустыми полями — сначала СОСТАВЬ письмо:\n"
+                f"  subject = конкретная тема (пример: 'Invitation to ASI Biont — AI insights for oil & gas')\n"
+                f"  body = полный текст письма на английском, 3-5 предложений, с приветствием и CTA\n"
+                f"Затем повторно вызови send_outreach_email с заполненными subject и body."
+            )
 
         # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
         if _has_email_no_calls_rule(user):
@@ -15171,7 +15182,12 @@ async def send_follow_up_email(
         if not subject:
             subject = f"Re: {outreach.subject}" if outreach.subject else "Following up"
         if not body:
-            return " Нужен текст follow-up (body)."
+            return (
+                "[INTERNAL] ⛔ send_follow_up_email вызван без текста (body). "
+                "НЕ повторяй с пустым body — сначала СОСТАВЬ текст follow-up: "
+                "напомни о предыдущем письме, спроси есть ли интерес, предложи следующий шаг (2-3 предложения). "
+                "Затем вызови send_follow_up_email с заполненным body."
+            )
 
         # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
         if _has_email_no_calls_rule(user):
@@ -17240,11 +17256,17 @@ async def send_email(
         import aiohttp as _aiohttp
 
         if not to:
-            return " Укажи email получателя (to)."
+            return "[INTERNAL] ⛔ send_email: укажи email получателя (to)."
         if not subject:
-            return " Укажи тему письма (subject)."
+            return (
+                "[INTERNAL] ⛔ send_email вызван без темы (subject). "
+                "СОСТАВЬ тему письма и вызови повторно с заполненным subject."
+            )
         if not body:
-            return " Нужен текст письма (body)."
+            return (
+                "[INTERNAL] ⛔ send_email вызван без текста (body). "
+                "СОСТАВЬ текст письма и вызови повторно с заполненным body."
+            )
 
         # Sanitize token hallucinations
         from ai_integration.conversation_history import sanitize_token_hallucinations
