@@ -278,6 +278,30 @@ def _get_active_agent_integration_snapshot(user_id: int) -> dict:
             if _caps:
                 _aname = _adata.get('name') or _adata.get('agent_name') or f'agent_{_aid}'
                 _agent_map.append({'name': _aname, 'integrations': _caps})
+
+        # ВАЖНО: Telegram/Discord часто подключаются через профиль пользователя,
+        # а не через API-ключи агента. Добавляем их в snapshot, чтобы агент
+        # не сообщал ложно "интеграция не подключена".
+        try:
+            _db = Session()
+            try:
+                _u = _db.query(User).filter_by(telegram_id=user_id).first()
+                if _u:
+                    _tg = (getattr(_u, 'telegram_channel', None) or '').strip()
+                    _dc = (getattr(_u, 'discord_webhook', None) or '').strip()
+                    if _tg:
+                        if 'Telegram' not in _all_labels:
+                            _all_labels.append('Telegram')
+                        _all_caps.extend(['telegram', 'telegram_channel'])
+                    if _dc:
+                        if 'Discord' not in _all_labels:
+                            _all_labels.append('Discord')
+                        _all_caps.extend(['discord', 'discord_webhook'])
+            finally:
+                _db.close()
+        except Exception as _profile_intg_err:
+            logger.debug("[INTG HINT] profile integration check failed: %s", _profile_intg_err)
+
         return {
             'labels': _all_labels,
             'caps_text': ' '.join(_all_caps),
