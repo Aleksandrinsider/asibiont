@@ -10570,6 +10570,7 @@ class AnchorEngine:
                 _email_agent_relay = None
 
             _decision: dict = {}
+            _already_done_note = ''  # пометка для следующего агента если предыдущий уже опубликовал пост
             if _is_inbox_result:
                 # Дедупликация: не передавать ASI те же входящие что уже обрабатывались в последние 2ч
                 import hashlib as _hashlib
@@ -10667,6 +10668,36 @@ class AnchorEngine:
                         )
 
                 if not _decision:
+                    # Pre-check: если предыдущий агент уже опубликовал пост — не продолжаем цепочку
+                    # для задач публикации (prevent duplicate posts)
+                    _result_lower = (result or '').lower()
+                    _PUBLISH_DONE_KW = (
+                        'опубликован', 'published', 'пост создан', 'post created',
+                        'пост опубликован', 'опубликовала', 'опубликовал',
+                        'успешно опубликован', 'successfully published',
+                    )
+                    _PUBLISH_TASK_KW = (
+                        'пост', 'post', 'публик', 'publish', 'telegram', 'discord',
+                        'create_post', 'опублик',
+                    )
+                    _was_published = any(kw in _result_lower for kw in _PUBLISH_DONE_KW)
+                    _task_is_publish = any(kw in (task_text or '').lower() for kw in _PUBLISH_TASK_KW)
+                    if _was_published and _task_is_publish:
+                        logger.info(
+                            "[ANCHOR-CHAIN] post already published by %s — stopping chain to prevent duplicate",
+                            prev_agent.name,
+                        )
+                        return
+
+                    # Строим контекст "что уже сделано" для следующего агента
+                    _already_done_note = ''
+                    if _was_published:
+                        _already_done_note = (
+                            f"\n⛔ ВАЖНО: {prev_agent.name} уже создал и/или опубликовал пост. "
+                            "НЕ создавай новый пост (create_post) и НЕ публикуй (publish_to_telegram/publish_to_discord) — "
+                            "это приведёт к дублю. Выполни только ту часть задачи, которую ещё не сделал предыдущий агент."
+                        )
+
                     _analysis = await _quick_ai_call_raw([{
                         "role": "user",
                         "content": (
@@ -10676,6 +10707,8 @@ class AnchorEngine:
                             "Оцени: задача завершена или нужен следующий агент?\n"
                             "Цепочки: поиск людей → отправка письма; анализ → создание задач; данные → публикация.\n"
                             "Признаки завершения: update_goal_progress выполнен, цель достигнута, БЛОКЕР без решения.\n"
+                            "Признаки завершения публикации: result содержит 'опубликован'/'published'/'create_post' — "
+                            "⛔ следующий агент НЕ должен создавать ещё один пост — это дубль.\n"
                             "Признаки продолжения: найдены email/контакты но не написали; данные получены но не опубликованы.\n\n"
                             "Если завершено — {\"continue\": false}\n"
                             "Если нужен следующий агент — JSON с полями:\n"
@@ -10707,6 +10740,9 @@ class AnchorEngine:
             _next_task = _decision.get('task', '')
             if not _next_name or not _next_task:
                 return
+            # Если предыдущий агент уже опубликовал пост — предупреждаем следующего
+            if _already_done_note:
+                _next_task = _next_task + _already_done_note
             # Маркер автопилота в TASK (не только в dialog_context!) —
             # иначе _is_autopilot_task=False → нет echo-фильтра, нет tool_choice=required
             if '[АВТОПИЛОТ]' not in _next_task:
