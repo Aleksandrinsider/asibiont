@@ -18889,6 +18889,12 @@ async def generate_image(
         if not REPLICATE_API_TOKEN:
             return " Replicate API не настроен. Добавьте REPLICATE_API_TOKEN в настройки агента (API-ключи)."
 
+        # Пользовательское правило стиля имеет приоритет над тем что передал агент
+        _user_style = _extract_image_style_from_memory(user) or None
+        if _user_style:
+            # Если агент передал style — добавляем его к пользовательскому (пользовательский сначала)
+            style = f"{_user_style}, {style}" if style else _user_style
+
         full_prompt = f"{prompt}, {style} style" if style else prompt
 
         import aiohttp as _aiohttp
