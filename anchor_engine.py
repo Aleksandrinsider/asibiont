@@ -23125,7 +23125,7 @@ class AnchorEngine:
                                 if not _r_txt:
                                     continue
                                 # Выделяем правила стилистики отдельным приоритетным блоком
-                                if _re_cp.search(r'стил|тон|формулиров|язык|эмод|хештег|длин|кратк|коротк|разговорн|официал|канцеляр', _r_txt, _re_cp.IGNORECASE):
+                                if _re_cp.search(r'стил|тон|формулиров|язык|эмод|хештег|длин|кратк|коротк|разговорн|официал|канцеляр|style|tone|emoji|hashtag|length|short|brief|formal|informal|casual|language', _r_txt, _re_cp.IGNORECASE):
                                     _user_style_rules.append(_r_txt)
             except Exception as _ur_cp_err:
                 logger.debug("[ANCHOR] campaign post user rules parse: %s", _ur_cp_err)
@@ -23191,6 +23191,13 @@ class AnchorEngine:
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
 
+            _lang_out = lang if lang in ('en', 'ru') else 'ru'
+            _lang_instruction = (
+                "\n\n🗣️ LANGUAGE: Write the ENTIRE post in English. Do NOT use Russian."
+                if _lang_out == 'en' else
+                "\n\n🗣️ ЯЗЫК: Весь пост пиши на русском."
+            )
+
             system_msg = (
                 f"Ты — SMM-специалист, продвигающий конкретный продукт или идею в социальных сетях.\n\n"
                 f"КАМПАНИЯ: {campaign.name}\n"
@@ -23226,6 +23233,7 @@ class AnchorEngine:
                 f"9. Пиши КОНКРЕТНО: не 'AI помогает в работе', а 'AI-агент за 15 секунд составляет email по 3 ключевым словам — экономит 20 минут'\n"
                 f"10. Каждый пост = ОДНА практическая фишка/совет/кейс. Не пытайся охватить всё.\n\n"
                 f"ВАЖНО: Тема кампании — приоритет №1. Посторонние темы ЗАПРЕЩЕНЫ."
+                + _lang_instruction
             )
 
             user_prompt_parts = [f"Автор: {user_name}"]
