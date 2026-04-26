@@ -1212,7 +1212,9 @@ def _extract_image_style_from_memory(user) -> str:
     if not _raw:
         return ''
 
-    _IMG_KW = r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|style|стил|генерац|фото|photo|визуал'
+    _IMG_KW = r'рисун|изображен|иллюстрац|картин|drawing|image|picture|sketch|prompt|промпт|промт|стил|генерац|фото|photo|визуал|watercolor|акварел|painterly|palette|цвет'
+    _CHANNEL_KW = r'telegram|discord|блог|blog|публикац|post|пост'
+    _HEX_RE = _re_img.compile(r'#[0-9a-fA-F]{6}\b')
 
     def _style_from_text(_txt: str) -> str:
         _txt = (_txt or '').strip()
@@ -1220,6 +1222,14 @@ def _extract_image_style_from_memory(user) -> str:
             return ''
         if not _re_img.search(_IMG_KW, _txt, _re_img.IGNORECASE):
             return ''
+        # 0. Предпочтительный паттерн: правило про изображения + "в стиле ..."
+        _m0 = _re_img.search(
+            r'(?:изображ|рисун|иллюстрац|картин|image|illustration|visual)[^\n]{0,120}?(?:в\s+стиле|style)\s*[:=\-]?\s*(.{6,300})',
+            _txt,
+            _re_img.IGNORECASE,
+        )
+        if _m0:
+            return _m0.group(1).strip(' .;\n')[:280]
         # 1. Явный prefix: «промт:», «style:», «image prompt:» и т.п.
         _m = _re_img.search(
             r'(?:промпт|промт|prompt|style|стиль|image\s*prompt|illustration)(?:[\s\w]{0,30})?\s*[:=]\s*(.{6,300})',
@@ -1239,16 +1249,42 @@ def _extract_image_style_from_memory(user) -> str:
         # 3. Фоллбек: весь текст правила (бывает когда правило = сам промт без префикса)
         return _txt[:280]
 
+    def _score_rule(_txt: str) -> int:
+        _t = (_txt or '').strip()
+        if not _t:
+            return 0
+        _score = 0
+        if _re_img.search(_IMG_KW, _t, _re_img.IGNORECASE):
+            _score += 5
+        if _re_img.search(_CHANNEL_KW, _t, _re_img.IGNORECASE):
+            _score += 2
+        if _HEX_RE.search(_t):
+            _score += 3
+        if _re_img.search(r'watercolor|акварел|soft|muted|painterly|artistic|illustration', _t, _re_img.IGNORECASE):
+            _score += 2
+        # Небольшой штраф за явно текстовые правила без визуального контекста
+        if _re_img.search(r'пиши|текст|эмод|хештег|длина|кратк|tone|emoji|hashtag|length', _t, _re_img.IGNORECASE):
+            _score -= 1
+        return _score
+
     try:
         _raw_s = _raw.strip()
         if _raw_s.startswith('{') or _raw_s.startswith('['):
             _mem = _json_img.loads(_raw_s)
             _rules = _mem.get('rules', []) if isinstance(_mem, dict) else _mem
+            _best_style = ''
+            _best_score = -999
             for _rule in _rules:
                 _rule_text = _rule if isinstance(_rule, str) else str(_rule)
                 _style = _style_from_text(_rule_text)
-                if _style:
-                    return _style
+                if not _style:
+                    continue
+                _sc = _score_rule(_rule_text)
+                if _sc > _best_score:
+                    _best_score = _sc
+                    _best_style = _style
+            if _best_style:
+                return _best_style
         else:
             _style = _style_from_text(_raw_s)
             if _style:
