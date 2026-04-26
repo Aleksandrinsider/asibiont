@@ -1269,17 +1269,25 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
                 _has_image_marker = ('[IMAGE:' in content) or ('![' in content and '](' in content)
                 if not _has_image_marker:
                     try:
-                        # Приоритет: маркер «Иллюстрация:» > правило из памяти > дефолт
-                        if _explicit_visual_prompt:
-                            _img_prompt_sn = _explicit_visual_prompt
-                            _img_style_sn = None
-                        elif _style and _style != 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture':
-                            # Пользователь задал свой промт — используем напрямую
-                            _img_prompt_sn = _style
-                            _img_style_sn = None
-                        else:
+                        # Всегда генерируем описание сцены из контента через AI — стиль как модификатор
+                        _img_style_sn = _explicit_visual_prompt or _style
+                        try:
+                            from ai_integration.api_client import get_api_client as _get_api_sn
+                            _api_sn = _get_api_sn()
+                            _vis_msgs_sn = [
+                                {"role": "system", "content": (
+                                    "Переведи тему текста в короткое описание изображения для text-to-image модели. "
+                                    "Ответь ТОЛЬКО визуальным описанием объектов/сцены на английском языке, "
+                                    "1-2 предложения, без абстракций типа 'concept of' или 'idea of'. "
+                                    "Примеры: 'stock market chart on screen, businessman analyzing data at desk' "
+                                    "или 'ancient ruins in a forest clearing, stone columns covered in moss'."
+                                )},
+                                {"role": "user", "content": f"Текст:\n{content[:400]}"},
+                            ]
+                            _vis_resp_sn = await _api_sn.chat(_vis_msgs_sn, max_tokens=80, temperature=0.4)
+                            _img_prompt_sn = (_vis_resp_sn or '').strip().strip('"').strip("'") or content[:150]
+                        except Exception:
                             _img_prompt_sn = content[:320].replace(chr(10), ' ').strip()
-                            _img_style_sn = _style
                         _img_result = await generate_image(
                             prompt=_img_prompt_sn,
                             style=_img_style_sn,
@@ -8814,36 +8822,28 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                 _style = 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture'
             try:
                 import re as _re_img
-                # Приоритет: явный маркер «Иллюстрация:» > правило из памяти > дефолт
-                if _explicit_visual_prompt:
-                    _img_prompt_final = _explicit_visual_prompt
-                    _img_style_final = None
-                elif _style and _style != 'watercolor illustration, soft artistic style, muted tones, colors #70666e #494253 #068488, painterly texture':
-                    # Пользователь задал свой промт — используем его напрямую
-                    _img_prompt_final = _style
-                    _img_style_final = None
-                else:
-                    # ── AI-конвертация текста поста в визуальный промпт ──
-                    # Берём не сырой текст (нарратив), а просим AI описать картинку
-                    try:
-                        from ai_integration.api_client import get_api_client as _get_api_cp
-                        _api_cp = _get_api_cp()
-                        _vis_msgs = [
-                            {"role": "system", "content": (
-                                "Переведи тему текста в короткое описание изображения для text-to-image модели. "
-                                "Ответь ТОЛЬКО визуальным описанием объектов/сцены на английском языке, "
-                                "1-2 предложения, без абстракций типа 'concept of' или 'idea of'. "
-                                "Примеры: 'stock market chart on screen, businessman analyzing data at desk' "
-                                "или 'ancient ruins in a forest clearing, stone columns covered in moss'."
-                            )},
-                            {"role": "user", "content": f"Текст поста:\n{content[:400]}"},
-                        ]
-                        _vis_resp = await _api_cp.chat(_vis_msgs, max_tokens=80, temperature=0.4)
-                        _img_prompt_final = (_vis_resp or '').strip().strip('"').strip("'") or content[:150]
-                    except Exception as _vis_err:
-                        logger.debug(f"[CREATE_POST] Visual prompt AI failed: {_vis_err}")
-                        _img_prompt_final = content[:150].replace('\n', ' ').strip()
-                    _img_style_final = _style
+                # Всегда генерируем описание сцены из текста поста через AI.
+                # _explicit_visual_prompt и _style используются ТОЛЬКО как style-модификатор,
+                # а не как замена сцены — иначе картинка не будет связана с темой поста.
+                _img_style_final = _explicit_visual_prompt or _style
+                try:
+                    from ai_integration.api_client import get_api_client as _get_api_cp
+                    _api_cp = _get_api_cp()
+                    _vis_msgs = [
+                        {"role": "system", "content": (
+                            "Переведи тему текста в короткое описание изображения для text-to-image модели. "
+                            "Ответь ТОЛЬКО визуальным описанием объектов/сцены на английском языке, "
+                            "1-2 предложения, без абстракций типа 'concept of' или 'idea of'. "
+                            "Примеры: 'stock market chart on screen, businessman analyzing data at desk' "
+                            "или 'ancient ruins in a forest clearing, stone columns covered in moss'."
+                        )},
+                        {"role": "user", "content": f"Текст поста:\n{content[:400]}"},
+                    ]
+                    _vis_resp = await _api_cp.chat(_vis_msgs, max_tokens=80, temperature=0.4)
+                    _img_prompt_final = (_vis_resp or '').strip().strip('"').strip("'") or content[:150]
+                except Exception as _vis_err:
+                    logger.debug(f"[CREATE_POST] Visual prompt AI failed: {_vis_err}")
+                    _img_prompt_final = content[:150].replace('\n', ' ').strip()
                 _img_result = await generate_image(
                     prompt=_img_prompt_final,
                     style=_img_style_final,

@@ -3982,9 +3982,12 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                                     _style_m = _re_ur.search(r'стил[еёи]\s+([^,.\n]{3,60})', _r, _re_ur.IGNORECASE)
                                     _style_hint = _style_m.group(1).strip() if _style_m else 'pen and ink drawing'
                                     _rules_lines.append(
-                                        f"    ⚙️ ИНТЕРПРЕТАЦИЯ: перед публикацией в Telegram/Discord/блог вызови "
-                                        f"generate_image(prompt='...', style='{_style_hint}') и передай URL в параметр image_url. "
-                                        f"НЕ заменяй изображение эмодзи — вызов инструмента обязателен!"
+                                        f"    ⚙️ ИНТЕРПРЕТАЦИЯ: перед публикацией в Telegram/Discord/блог ОБЯЗАТЕЛЬНО вызови "
+                                        f"generate_image(prompt='<краткое описание СЦЕНЫ/ОБЪЕКТОВ на английском, релевантных теме поста>', "
+                                        f"style='{_style_hint}') и передай полученный URL в параметр image_url. "
+                                        f"prompt должен описывать что изображено (сцену, предметы), а НЕ стиль. "
+                                        f"Пример: prompt='geothermal power plant in Iceland, steam rising from ground'. "
+                                        f"НЕ пиши 'Иллюстрация:' в тексте поста — только вызов инструмента!"
                                     )
                             _rules_text = '\n'.join(_rules_lines)
                             _user_rules_block = (
