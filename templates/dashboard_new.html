@@ -13175,7 +13175,7 @@ except Exception as e:
             indicator.textContent = `${chatCurrentPage} / ${chatTotalPages}`;
         }
 
-        async function loadChatHistoryPage(pageNum = 1) {
+        async function loadChatHistoryPage(pageNum = 1, _autoSkipCount = 0, _dir = 1) {
             if (chatHistoryLoading) return;
             chatHistoryLoading = true;
             updateChatHistoryControls();
@@ -13213,6 +13213,19 @@ except Exception as e:
                 chatHistoryNextBeforeId = data.next_before_id || null;
                 updateChatHistoryControls();
 
+                // Auto-skip pages that contain only noise (filtered out server-side)
+                if (pageInteractions.length === 0 && _autoSkipCount < 10) {
+                    const _nextPage = chatCurrentPage + _dir;
+                    if (_dir > 0 && _nextPage <= chatTotalPages) {
+                        chatHistoryLoading = false;
+                        await loadChatHistoryPage(_nextPage, _autoSkipCount + 1, _dir);
+                        return;
+                    } else if (_dir < 0 && _nextPage >= 1) {
+                        chatHistoryLoading = false;
+                        await loadChatHistoryPage(_nextPage, _autoSkipCount + 1, _dir);
+                        return;
+                    }
+                }
                 if (pageInteractions.length === 0) {
                     if (!chatEl.querySelector('.chat-empty-state')) {
                         chatEl.innerHTML = `<div class="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;"><p style="margin:0;font-size:13px;color:#9CA3AF;max-width:340px;">${t('start-dialog-desc')}</p></div>`;
@@ -13232,12 +13245,12 @@ except Exception as e:
 
         async function goToPrevChatPage() {
             if (chatCurrentPage <= 1 || chatHistoryLoading) return;
-            await loadChatHistoryPage(chatCurrentPage - 1);
+            await loadChatHistoryPage(chatCurrentPage - 1, 0, -1);
         }
 
         async function goToNextChatPage() {
             if (chatCurrentPage >= chatTotalPages || chatHistoryLoading) return;
-            await loadChatHistoryPage(chatCurrentPage + 1);
+            await loadChatHistoryPage(chatCurrentPage + 1, 0, 1);
         }
 
         // Устанавливаем аватар пользователя для использования в чате

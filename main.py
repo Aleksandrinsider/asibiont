@@ -7724,7 +7724,22 @@ async def api_interactions_handler(request):
         _total_interactions = None
         _total_pages = None
         if _page_mode:
-            _total_interactions = _iq.count()
+            # Count only visible (non-noise) interactions for accurate total_pages.
+            # Exclude hidden anchor types (internal autopilot messages, not shown to user)
+            # and empty/null content.
+            _HIDDEN_ANCHOR_TYPES_SQL = [
+                'coordinator_agent_request',
+                'coordinator_intg_recommend',
+                'goal_autopilot_review',
+                'asi_self_analysis',
+            ]
+            _count_iq = _iq.filter(
+                Interaction.content.isnot(None),
+                Interaction.content != '',
+            )
+            for _ha in _HIDDEN_ANCHOR_TYPES_SQL:
+                _count_iq = _count_iq.filter(~Interaction.content.contains(_ha))
+            _total_interactions = _count_iq.count()
             _total_pages = max(1, (_total_interactions + _per_page - 1) // _per_page)
             if _page > _total_pages:
                 _page = _total_pages
