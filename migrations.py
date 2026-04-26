@@ -446,6 +446,19 @@ def _migrate_email_campaigns(session, inspector):
         except Exception as e:
             session.rollback()
             logger.warning(f"[MIGRATION] Unique index email_outreach skipped: {e}")
+        # Unique index на (user_id, name) для email_campaigns — защита от дублей при race condition
+        try:
+            existing_indexes = [idx['name'] for idx in inspector.get_indexes('email_campaigns')]
+            if 'ix_email_campaigns_user_name' not in existing_indexes:
+                session.execute(text(
+                    'CREATE UNIQUE INDEX ix_email_campaigns_user_name '
+                    'ON email_campaigns (user_id, name)'
+                ))
+                session.commit()
+                logger.info("[MIGRATION] Created unique index ix_email_campaigns_user_name")
+        except Exception as e:
+            session.rollback()
+            logger.warning(f"[MIGRATION] Unique index email_campaigns user_name skipped: {e}")
 
 
 def _migrate_email_contacts(session, inspector):

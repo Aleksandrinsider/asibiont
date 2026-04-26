@@ -12666,11 +12666,12 @@ async def start_email_campaign(
             sender_name = _TRANSLATIONS.get(sender_name, 'ASI Biont Team')
 
         # Проверка на дубликат — если есть активная кампания с похожей целью (personal скрытые исключаем)
+        # with_for_update блокирует строки чтобы избежать race condition при параллельных вызовах
         from sqlalchemy import func as sa_func
         existing = session.query(EmailCampaign).filter(
             EmailCampaign.user_id == user.id,
             EmailCampaign.status == 'active',
-        ).all()
+        ).with_for_update(skip_locked=False).all()
         _stop_camp = {'и', 'в', 'на', 'для', 'по', 'с', 'к', 'или', 'что', 'при', 'a', 'the', 'to', 'for', 'of', 'and', 'in', 'with',
                       'привлечь', 'привлечение', 'outreach', 'аутрич', 'рассылка', 'кампания', 'campaign'}
 
@@ -12687,12 +12688,13 @@ async def start_email_campaign(
             new_goal_norm = _norm_camp_words(goal)
             new_aud_norm  = _norm_camp_words(target_audience)
             new_name_norm = _norm_camp_words(name)
-            # Дубль если: совпадает target_audience (≥1 слово), ИЛИ ≥2 слов name, ИЛИ ≥2 слов goal
-            # Это предотвращает создание нескольких кампаний на одну аудиторию из разных сессий
+            # Дубль если: идентичное имя, ИЛИ совпадает target_audience (≥1 слово),
+            # ИЛИ ≥2 слов name, ИЛИ ≥2 слов goal
             aud_overlap  = ex_aud_norm & new_aud_norm
             goal_overlap = ex_goal_norm & new_goal_norm
             name_overlap = ex_name_norm & new_name_norm
-            is_dup = len(aud_overlap) >= 1 or len(name_overlap) >= 2 or len(goal_overlap) >= 2
+            _names_equal = (ex.name or '').strip().lower() == (name or '').strip().lower()
+            is_dup = _names_equal or len(aud_overlap) >= 1 or len(name_overlap) >= 2 or len(goal_overlap) >= 2
             if is_dup:
                 # Обновляем существующую кампанию вместо создания новой
                 if daily_limit > ex.daily_limit:
