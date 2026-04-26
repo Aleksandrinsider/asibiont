@@ -23565,10 +23565,14 @@ class AnchorEngine:
                 # 1. Сохранённый preferred_language из прошлых переписок
                 try:
                     from models import EmailContactPreference as _ECP_lang
-                    _pref = session.query(_ECP_lang).filter_by(
-                        user_id=user.id,
-                        contact_email=(email or '').strip().lower(),
-                    ).first()
+                    # В этой точке в session уже могут быть грязные объекты email-черновиков.
+                    # Если сделать обычный query().first(), SQLAlchemy вызовет autoflush,
+                    # что может повиснуть на блокировках UPDATE и заморозить event loop.
+                    with session.no_autoflush:
+                        _pref = session.query(_ECP_lang).filter_by(
+                            user_id=user.id,
+                            contact_email=(email or '').strip().lower(),
+                        ).first()
                     if _pref and _pref.preferred_language:
                         return _pref.preferred_language.capitalize()
                 except Exception:
