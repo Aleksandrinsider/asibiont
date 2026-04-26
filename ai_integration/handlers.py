@@ -71,6 +71,105 @@ def _extract_post_visual_prompt(text: str) -> tuple[str, str]:
     return cleaned, visual_prompt
 
 
+def _has_email_no_calls_rule(user) -> bool:
+    """Return True if user rules explicitly forbid call/meeting offers in email."""
+    _raw = getattr(user, 'memory', None) or ''
+    if not _raw:
+        return False
+    try:
+        from ai_integration.memory import decrypt_data as _dec_no_calls
+        _raw = _dec_no_calls(_raw)
+    except Exception:
+        pass
+
+    _RULE_HINTS = (
+        'не предлагать созвон', 'не предлагай созвон', 'без созвонов',
+        'не упоминать звон', 'не предлагать звон', 'не предлагать встреч',
+        'не предлагать встречу', 'не упоминать встреч',
+        'no calls', 'do not suggest calls', 'do not offer calls',
+        'no meetings', 'do not suggest meetings',
+    )
+    try:
+        import json as _json_nc
+        _s = str(_raw or '').strip()
+        if _s.startswith('{') or _s.startswith('['):
+            _obj = _json_nc.loads(_s)
+            _rules = _obj.get('rules', []) if isinstance(_obj, dict) else []
+            for _r in _rules:
+                _rl = str(_r).lower()
+                if any(_h in _rl for _h in _RULE_HINTS):
+                    return True
+    except Exception:
+        pass
+
+    _raw_l = str(_raw).lower()
+    return any(_h in _raw_l for _h in _RULE_HINTS)
+
+
+def _contains_call_or_meeting_invite(text: str) -> bool:
+    """Detect explicit call/meeting proposals in email text."""
+    _txt = (text or '').lower()
+    if not _txt:
+        return False
+    _CALL_RE = re.compile(
+        r'созвон|созвониться|созвонит|звонок|позвон|'
+        r'встрет(?:иться|им|и[мт])|встреч[ауеи]|'
+        r'call\b|phone\s*call|quick\s*call|'
+        r'meeting\b|meet\s*up|zoom\b|google\s*meet|'
+        r'15\s*min|10\s*min|15\s*minute|10\s*minute',
+        re.IGNORECASE,
+    )
+    return bool(_CALL_RE.search(_txt))
+
+
+def _sanitize_no_calls_email_text(text: str) -> tuple[str, bool]:
+    """Remove call/meeting invitations from email text, keep email-only flow.
+
+    Returns (sanitized_text, changed).
+    """
+    _src = str(text or '')
+    if not _src.strip():
+        return _src, False
+    if not _contains_call_or_meeting_invite(_src):
+        return _src, False
+
+    _parts = re.split(r'(?<=[\.!\?])\s+|\n+', _src)
+    _kept = [p for p in _parts if p.strip() and not _contains_call_or_meeting_invite(p)]
+    _changed = len(_kept) != len([p for p in _parts if p.strip()])
+
+    _out = ' '.join(_kept).strip()
+    if not _out:
+        _is_ru = bool(re.search(r'[а-яё]', _src.lower()))
+        _out = (
+            'Буду рад(а) продолжить обсуждение в переписке по email и ответить на ваши вопросы.'
+            if _is_ru else
+            'Happy to continue the discussion via email and answer any questions.'
+        )
+    _out = re.sub(r'\s{2,}', ' ', _out).strip()
+    return _out, _changed
+
+
+def _sanitize_no_calls_subject(subject: str, body_hint: str = '') -> tuple[str, bool]:
+    """Sanitize subject line from call/meeting wording. Returns (subject, changed)."""
+    _subj = str(subject or '').strip()
+    if not _subj:
+        return _subj, False
+    if not _contains_call_or_meeting_invite(_subj):
+        return _subj, False
+
+    _clean = re.sub(
+        r'(?i)\b(call|meeting|zoom|meet|созвон(?:иться)?|звонок|встреча|встретимся)\b',
+        '',
+        _subj,
+    )
+    _clean = re.sub(r'\s{2,}', ' ', _clean).strip(' -:;,.')
+    if not _clean:
+        _probe = f"{_subj}\n{body_hint or ''}"
+        _is_ru = bool(re.search(r'[а-яё]', _probe.lower()))
+        _clean = 'Продолжим в email' if _is_ru else 'Following up by email'
+    return _clean, True
+
+
 def _validate_email_domain(email: str) -> tuple:
     """Check if email domain has valid MX records. Returns (is_valid, error_message).
 
@@ -13542,6 +13641,16 @@ async def send_outreach_email(
         if not subject or not body:
             return " Нужны subject и body письма."
 
+        # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
+        if _has_email_no_calls_rule(user):
+            subject, _subj_fixed = _sanitize_no_calls_subject(subject, body)
+            body, _body_fixed = _sanitize_no_calls_email_text(body)
+            if _subj_fixed or _body_fixed:
+                logger.info(
+                    "[EMAIL_OUTREACH] Auto-sanitized call/meeting phrases by user rule (user_id=%s, subject=%s, body=%s)",
+                    user_id, _subj_fixed, _body_fixed,
+                )
+
         # ── GUARD: запрещённые слова в теме письма ──
         # DeepSeek регулярно игнорирует инструкции и ставит "тестирование", "AI employee" и т.п.
         # Проверяем программно и отклоняем.
@@ -14238,6 +14347,12 @@ async def reply_to_outreach_email(
 
         if not reply_body:
             return " Нужен текст ответа (reply_body)."
+
+        # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
+        if _has_email_no_calls_rule(user):
+            reply_body, _reply_fixed = _sanitize_no_calls_email_text(reply_body)
+            if _reply_fixed:
+                logger.info("[EMAIL_REPLY] Auto-sanitized call/meeting phrases by user rule (user_id=%s)", user_id)
 
         # ── GUARD: блокируем плейсхолдеры в тексте ответа ──
         import re as _re_placeholder
@@ -15051,6 +15166,16 @@ async def send_follow_up_email(
         if not body:
             return " Нужен текст follow-up (body)."
 
+        # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
+        if _has_email_no_calls_rule(user):
+            subject, _fu_subj_fixed = _sanitize_no_calls_subject(subject, body)
+            body, _fu_body_fixed = _sanitize_no_calls_email_text(body)
+            if _fu_subj_fixed or _fu_body_fixed:
+                logger.info(
+                    "[EMAIL_FOLLOWUP] Auto-sanitized call/meeting phrases by user rule (user_id=%s, subject=%s, body=%s)",
+                    user_id, _fu_subj_fixed, _fu_body_fixed,
+                )
+
         # ── GUARD: плейсхолдеры в теле follow-up ──
         import re as _re_ph_fu
         _PH_RE_FU = _re_ph_fu.compile(
@@ -15308,6 +15433,16 @@ async def negotiate_by_email(
         user = session.query(User).filter_by(telegram_id=user_id).first()
         if not user:
             return " Пользователь не найден."
+
+        # ── RULE ENFORCEMENT: «без созвонов/встреч в email» (мягкая авто-правка) ──
+        if _has_email_no_calls_rule(user):
+            subject, _neg_subj_fixed = _sanitize_no_calls_subject(subject, opening_message)
+            opening_message, _neg_body_fixed = _sanitize_no_calls_email_text(opening_message)
+            if _neg_subj_fixed or _neg_body_fixed:
+                logger.info(
+                    "[EMAIL_NEGOTIATE] Auto-sanitized call/meeting phrases by user rule (user_id=%s, subject=%s, body=%s)",
+                    user_id, _neg_subj_fixed, _neg_body_fixed,
+                )
 
         # ── GUARD: не начинать переговоры с отписавшимся контактом ──
         _neg_rcpt = contact_email.strip().lower()
