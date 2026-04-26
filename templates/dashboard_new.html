@@ -1121,7 +1121,7 @@
                         <div id="chat-view" class="view-panel">
                             <div id="chat-messages" class="chat-messages" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 20px;">
                             </div>
-                            <div id="chat-history-controls" style="display:none;align-items:center;justify-content:center;gap:10px;padding:8px 12px;border-top:1px solid #E5E7EB;background:#FAFBFC;">
+                            <div id="chat-history-controls" style="display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 12px;border-top:1px solid #E5E7EB;background:#FAFBFC;">
                                 <button id="chat-history-prev" onclick="goToPrevChatPage()" class="chat-action-btn" title="Предыдущая страница" style="min-width:34px;">←</button>
                                 <span id="chat-history-page-indicator" style="font-size:12px;color:#6B7280;">1 / 1</span>
                                 <button id="chat-history-next" onclick="goToNextChatPage()" class="chat-action-btn" title="Следующая страница" style="min-width:34px;">→</button>
@@ -13169,8 +13169,7 @@ except Exception as e:
             const indicator = document.getElementById('chat-history-page-indicator');
             if (!controls || !prevBtn || !nextBtn || !indicator) return;
 
-            const hasPages = (chatTotalPages || 1) > 1;
-            controls.style.display = hasPages ? 'flex' : 'none';
+            controls.style.display = 'flex';
             prevBtn.disabled = chatCurrentPage <= 1 || chatHistoryLoading;
             nextBtn.disabled = chatCurrentPage >= chatTotalPages || chatHistoryLoading;
             indicator.textContent = `${chatCurrentPage} / ${chatTotalPages}`;
