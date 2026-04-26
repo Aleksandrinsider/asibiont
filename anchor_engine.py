@@ -8803,6 +8803,63 @@ class AnchorEngine:
                                         logger.info("[ANCHOR-AUTOPILOT] ⛔ meta-task blocked (Path 2) for %s: %r", _chosen_name, _coord_text_clean_save[:80])
                                         _coord_text_clean_save = ''
                                 if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
+                                    try:
+                                        import re as _re_coord_dedup
+                                        from difflib import SequenceMatcher as _SM_coord
+                                        _other_assigns_recent = locals().get('_other_assigns') or []
+                                        _stop_tokens = {
+                                            'нужно', 'нужен', 'нужна', 'нужно', 'сделай', 'сделать', 'готовый',
+                                            'пост', 'поста', 'посте', 'через', 'канал', 'канале', 'каналe',
+                                            'telegram', 'телеграм', 'опубликуй', 'публикация', 'недоступен',
+                                            'команды', 'команда', 'сделке', 'сделка', 'про', 'это', 'этот',
+                                            'нужно', 'кому', 'кого', 'уже', 'есть', 'для', 'что', 'чтобы',
+                                        }
+
+                                        def _coord_norm_tokens(_txt: str) -> set[str]:
+                                            _clean = (_txt or '').lower().strip()
+                                            _clean = _re_coord_dedup.sub(r'^\s*[a-zа-яё0-9_@.-]+\s*,\s*', '', _clean)
+                                            _clean = _re_coord_dedup.sub(r'[^a-zа-яё0-9_@.-]+', ' ', _clean)
+                                            return {
+                                                _tok for _tok in _clean.split()
+                                                if len(_tok) >= 4 and _tok not in _stop_tokens and not _tok.isdigit()
+                                            }
+
+                                        def _assignment_kind(_txt: str) -> str:
+                                            _low = (_txt or '').lower()
+                                            if ('publish_to_telegram' in _low or 'telegram' in _low or 'телеграм' in _low) and ('опублику' in _low or 'publish' in _low or 'пост' in _low):
+                                                return 'publish_telegram'
+                                            if 'create_post' in _low or 'создай пост' in _low or 'напиши пост' in _low:
+                                                return 'create_post'
+                                            if 'send_outreach_email' in _low or 'send_email' in _low or 'отправь письмо' in _low or 'email' in _low and 'отправ' in _low:
+                                                return 'send_email'
+                                            if 'web_search' in _low or 'research_topic' in _low or 'поиск' in _low or 'проанализируй' in _low or 'исследуй' in _low:
+                                                return 'research'
+                                            return ''
+
+                                        _new_tokens = _coord_norm_tokens(_coord_text_clean_save)
+                                        _new_norm = ' '.join(sorted(_new_tokens))
+                                        _new_kind = _assignment_kind(_coord_text_clean_save)
+                                        for _oa_nm, _oa_txt in _other_assigns_recent:
+                                            if not _oa_txt or _oa_nm == _chosen_name:
+                                                continue
+                                            _old_tokens = _coord_norm_tokens(_oa_txt)
+                                            if not _new_tokens or not _old_tokens:
+                                                continue
+                                            _overlap = _new_tokens & _old_tokens
+                                            _same_kind = _new_kind and _new_kind == _assignment_kind(_oa_txt)
+                                            _old_norm = ' '.join(sorted(_old_tokens))
+                                            _similarity = _SM_coord(None, _new_norm, _old_norm).ratio() if _new_norm and _old_norm else 0.0
+                                            if _same_kind and (len(_overlap) >= 3 or _similarity >= 0.62):
+                                                logger.info(
+                                                    "[ANCHOR-AUTOPILOT] coord-assign duplicate skipped user %d → %s; kind=%s overlaps with %s; overlap=%s similarity=%.2f",
+                                                    user.id, _chosen_name, _new_kind, _oa_nm, sorted(_overlap)[:8], _similarity,
+                                                )
+                                                _coord_text_clean_save = ''
+                                                break
+                                    except Exception as _coord_dedup_err:
+                                        logger.debug("[ANCHOR-AUTOPILOT] coord dedup guard failed: %s", _coord_dedup_err)
+
+                                if _coord_text_clean_save and len(_coord_text_clean_save.strip()) > 10:
                                     # Выбираем одну основную цель (первую в списке = самая приоритетная)
                                     # Не склеиваем через запятую — это путает агентов
                                     _ap_assign_goals = data.get('goals', [])
