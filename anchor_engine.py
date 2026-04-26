@@ -1004,6 +1004,17 @@ def _is_delegation_message(text: str, agent_names: list) -> bool:
         for verb in _IMPERATIVE_VERBS:
             if t.startswith(nl + ' ' + verb):
                 return True
+        # "Beatrice может сделать это" / "Beatrice может опубликовать"
+        import re as _re_dlg
+        if _re_dlg.search(
+            r'\b' + _re_dlg.escape(nl) + r'\s+(?:может|умеет|способна|способен)\s+(?:сделать|опублик|отправ)',
+            t
+        ):
+            return True
+    # "у меня нет доступа к публикации в Telegram, но [Имя] может"
+    import re as _re_dlg2
+    if _re_dlg2.search(r'нет доступа к публика?ц', t) and any(n.lower() in t for n in agent_names):
+        return True
     return False
 
 
