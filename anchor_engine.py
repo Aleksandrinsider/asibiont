@@ -8661,6 +8661,25 @@ class AnchorEngine:
                                 r'\1',
                                 _coord_text,
                             )
+                            # 3rd person self-reference: "У Beatrice есть" → "у тебя есть"
+                            _coord_text = _re_ct_parens.sub(
+                                r'(?i)\bу\s+' + re.escape(_chosen_name) + r'\s+есть\b',
+                                'у тебя есть',
+                                _coord_text,
+                            )
+                            # Sentence fragment after dot with 3rd-person verb: ". отправляет" → ", отправь"
+                            _coord_text = _re_ct_parens.sub(r'(?i)\.\s+отправляет\b', ', отправь', _coord_text)
+                            _coord_text = _re_ct_parens.sub(r'(?i)\.\s+публикует\b', ', опубликуй', _coord_text)
+                            _coord_text = _re_ct_parens.sub(r'(?i)\.\s+созда[её]т\b', ', создай', _coord_text)
+                            _coord_text = _re_ct_parens.sub(r'(?i)\.\s+ищет\b', ', найди', _coord_text)
+                            _coord_text = _re_ct_parens.sub(r'(?i)\.\s+проверяет\b', ', проверь', _coord_text)
+                            _coord_text = _re_ct_parens.sub(r'(?i)\.\s+сохраняет\b', ', сохрани', _coord_text)
+                            # Cleanup: avoid leading capital in "Имя, У тебя ..."
+                            _coord_text = _re_ct_parens.sub(
+                                r'^(' + re.escape(_chosen_name) + r',\s*)У\s+тебя\b',
+                                r'\1у тебя',
+                                _coord_text,
+                            )
                         _coord_text = _coord_text.strip()
                     # ── Context-aware fallback: если AI не сгенерировал → динамическая LLM-генерация → шаблон ──
                     if _coord_text is None:
