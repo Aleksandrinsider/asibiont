@@ -8238,7 +8238,9 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             )
             if _has_email_tools:
                 _allowed_tools.update({
+                    'check_emails',
                     'send_outreach_email', 'reply_to_outreach_email',
+                    'send_follow_up_email', 'negotiate_by_email',
                     'start_email_campaign', 'add_email_leads',
                     'list_email_contacts', 'save_email_contact',
                     'find_relevant_contacts_for_task',

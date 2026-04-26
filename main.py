@@ -7693,6 +7693,18 @@ async def api_interactions_handler(request):
             _limit = 200
         _limit = max(1, min(_limit, 500))
 
+        # Page-style pagination (dashboard UI): /api/interactions?page=1&per_page=200
+        try:
+            _page_raw = request.query.get('page')
+            _page = int(_page_raw) if _page_raw is not None else None
+        except Exception:
+            _page = None
+        try:
+            _per_page = int(request.query.get('per_page', str(_limit)))
+        except Exception:
+            _per_page = _limit
+        _per_page = max(1, min(_per_page, 500))
+
         try:
             _before_id_raw = request.query.get('before_id')
             _before_id = int(_before_id_raw) if _before_id_raw is not None else None
@@ -7705,13 +7717,26 @@ async def api_interactions_handler(request):
         except Exception:
             _after_id = None
 
-        # Load interactions for the chat (with optional pagination window)
+        # Load interactions for the chat.
+        # Priority: explicit page/per_page, then before/after cursor mode.
         _iq = session_db.query(Interaction).filter_by(user_id=user.id)
-        if _before_id is not None:
-            _iq = _iq.filter(Interaction.id < _before_id)
-        if _after_id is not None:
-            _iq = _iq.filter(Interaction.id > _after_id)
-        interactions = _iq.order_by(Interaction.created_at.desc()).limit(_limit).all()
+        _page_mode = bool(_page and _page > 0)
+        _total_interactions = None
+        _total_pages = None
+        if _page_mode:
+            _total_interactions = _iq.count()
+            _total_pages = max(1, (_total_interactions + _per_page - 1) // _per_page)
+            if _page > _total_pages:
+                _page = _total_pages
+            _offset = (_page - 1) * _per_page
+            interactions = _iq.order_by(Interaction.created_at.desc()).offset(_offset).limit(_per_page).all()
+            _limit = _per_page
+        else:
+            if _before_id is not None:
+                _iq = _iq.filter(Interaction.id < _before_id)
+            if _after_id is not None:
+                _iq = _iq.filter(Interaction.id > _after_id)
+            interactions = _iq.order_by(Interaction.created_at.desc()).limit(_limit).all()
         interactions.reverse()  # Back to chronological order
         
         logger.info(f"Loaded last {len(interactions)} interactions for user {user.id}")
@@ -7869,11 +7894,22 @@ async def api_interactions_handler(request):
 
         logger.info(f"Returning {len(interactions_data)} interactions to frontend")
         _next_before_id = interactions_data[0]['id'] if interactions_data else None
-        return web.json_response({
+        _payload = {
             'interactions': interactions_data,
             'has_more': len(interactions) == _limit,
             'next_before_id': _next_before_id,
-        })
+        }
+        if _page_mode:
+            _payload.update({
+                'page': _page,
+                'per_page': _per_page,
+                'total': _total_interactions or 0,
+                'total_pages': _total_pages or 1,
+                'has_prev': (_page or 1) > 1,
+                'has_next': (_page or 1) < (_total_pages or 1),
+            })
+            _payload['has_more'] = (_page or 1) < (_total_pages or 1)
+        return web.json_response(_payload)
     except Exception as e:
         logger.error(f"Error fetching interactions: {e}")
         return web.json_response({'error': 'Internal server error'}, status=500)

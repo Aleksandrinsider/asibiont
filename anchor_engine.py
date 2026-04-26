@@ -25233,7 +25233,7 @@ class AnchorEngine:
                 _rules += [
                     "ПРАВИЛА ДЛЯ ИНТЕГРАЦИЙ:",
                     "— integration_alert: прочитай snippet, реши ценность. CRITICAL/HIGH=пиши, MEDIUM=пиши если конкретное событие, LOW=SKIP если рутина.",
-                    "— agent_office_update: отчёт агента о назначенной задаче. Пиши от ПЕРВОГО ЛИЦА агента: 'Я взялась за...' / 'Сейчас работаю над...'. НИКОГДА не пиши '{имя} получила/получил' — это третье лицо. Описывай КОНКРЕТНОЕ действие (какой tool, какой результат), а не общие слова типа 'погружаюсь в поиск'.",
+                    "— agent_office_update: НЕ пересылай диалог агентов. Пиши как КРАТКИЙ ИТОГ от ASI Biont: 2-4 предложения, в каждом — кто что сделал и результат. Формат: 'ASI Biont\nИмя сделал ... . Имя сделал ...'.",
                     "— agent_inbox_reply: КРИТИЧНО — агент нашёл новые письма. Покажи preview, спроси про ответ.",
                     "— agent_task_blocked: КРИТИЧНО — агент застрял. Объясни причину, задай конкретный вопрос.",
                     "— agent_delegation: отчёт от имени агента (от первого лица): что именно сделано (tool-вызовы), каков конкретный итог.",
@@ -25542,12 +25542,10 @@ class AnchorEngine:
             if _anchor_types_set <= _agent_office_types:
                 _ai_mode = 'reminder'
                 _ai_instruction = (
-                    "Напиши ИНФОРМАТИВНЫЙ статус от первого лица (3-5 предложений, 300-600 символов). "
-                    "Пиши от ПЕРВОГО ЛИЦА — 'Я начала...', 'Сейчас работаю...', 'Взялась за...'. "
-                    "Включай КОНКРЕТНЫЕ ФАКТЫ: какой инструмент использовала, кого нашла (имена, компании), "
-                    "какие результаты получила (числа, ссылки), что конкретно сделала и каков следующий шаг. "
-                    "Стиль: как живой коллега кидает содержательный апдейт в рабочий чат — с деталями и результатами. "
-                    "Сплошной текст без маркеров и списков."
+                    "Напиши КОРОТКИЙ ИТОГ от лица ASI Biont, без пересказа диалога агентов. "
+                    "Формат строго: 'ASI Biont' + 2-4 коротких предложения по шаблону 'Имя агента + действие + результат'. "
+                    "Без приветствий, без цитат, без ролеплея от первого лица агента, без markdown и списков. "
+                    "Только факты: кто что сделал и чем это полезно пользователю."
                 )
                 _ai_max_iter = 1
             elif _anchor_types_set <= _reminder_only_types:
@@ -25800,6 +25798,32 @@ class AnchorEngine:
 
             # Определяем anchor_type для метаданных — первый непустой тип из якорей
             _deliver_anchor_type = anchor_types[0] if anchor_types else ''
+
+            # Для офисных апдейтов: отправляем только краткий итог, без полного диалога агентов.
+            _OFFICE_SUMMARY_TYPES = {'agent_office_update', 'agent_inbox_reply', 'agent_task_blocked'}
+            if _deliver_anchor_type in _OFFICE_SUMMARY_TYPES and message:
+                try:
+                    import re as _re_sum
+                    _txt = str(message).strip()
+                    _lines = []
+                    for _ln in _txt.splitlines():
+                        _l = _ln.strip()
+                        if not _l:
+                            continue
+                        # Отбрасываем диалоговые/технические префиксы
+                        if _re_sum.match(r'^(агент|agent|диалог|dialog|system|assistant|user)\s*[:\-]', _l, _re_sum.IGNORECASE):
+                            continue
+                        _lines.append(_l)
+                    _flat = ' '.join(_lines) if _lines else _txt
+                    _flat = _re_sum.sub(r'\s+', ' ', _flat).strip()
+                    _sentences = [s.strip() for s in _re_sum.split(r'(?<=[.!?])\s+', _flat) if s.strip()]
+                    _short = ' '.join(_sentences[:4]).strip()
+                    if _short and len(_short) > 20:
+                        if not _short.lower().startswith('asi biont'):
+                            _short = f"ASI Biont\n{_short}"
+                        message = _short[:900]
+                except Exception as _summary_err:
+                    logger.debug("[ANCHOR] office summary compact failed: %s", _summary_err)
 
             # Жёсткий антиспам по агентам-персонам: не более N сообщений/день от каждого.
             if _agent_name and self._agent_persona_daily_cap_reached(session, user, _agent_name):

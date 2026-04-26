@@ -1120,7 +1120,12 @@
                         <!-- Чат с ИИ -->
                         <div id="chat-view" class="view-panel">
                             <div id="chat-messages" class="chat-messages" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 20px;">
-                        </div>
+                            </div>
+                            <div id="chat-history-controls" style="display:none;align-items:center;justify-content:center;gap:10px;padding:8px 12px;border-top:1px solid #E5E7EB;background:#FAFBFC;">
+                                <button id="chat-history-prev" onclick="goToPrevChatPage()" class="chat-action-btn" title="Предыдущая страница" style="min-width:34px;">←</button>
+                                <span id="chat-history-page-indicator" style="font-size:12px;color:#6B7280;">1 / 1</span>
+                                <button id="chat-history-next" onclick="goToNextChatPage()" class="chat-action-btn" title="Следующая страница" style="min-width:34px;">→</button>
+                            </div>
                         {% if logged_in %}
                         <!-- Бар активных агентов -->
                         <div id="active-agents-bar" style="display:none;padding:6px 12px 4px;border-top:1px solid #F0F2F5;background:#FAFBFC;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"></div>
@@ -13150,13 +13155,90 @@ except Exception as e:
         let chatHistoryHasMore = false;
         let chatHistoryNextBeforeId = null;
         let chatHistoryLoading = false;
+        let chatCurrentPage = 1;
+        let chatTotalPages = 1;
         let lastTasksUpdate = 0;
         let lastPeopleUpdate = 0;
         let lastProfileUpdate = 0;
         let lastSeenPostId = null; // Для отслеживания последнего просмотренного поста
 
         function updateChatHistoryControls() {
-            // removed — chat history pagination disabled
+            const controls = document.getElementById('chat-history-controls');
+            const prevBtn = document.getElementById('chat-history-prev');
+            const nextBtn = document.getElementById('chat-history-next');
+            const indicator = document.getElementById('chat-history-page-indicator');
+            if (!controls || !prevBtn || !nextBtn || !indicator) return;
+
+            const hasPages = (chatTotalPages || 1) > 1;
+            controls.style.display = hasPages ? 'flex' : 'none';
+            prevBtn.disabled = chatCurrentPage <= 1 || chatHistoryLoading;
+            nextBtn.disabled = chatCurrentPage >= chatTotalPages || chatHistoryLoading;
+            indicator.textContent = `${chatCurrentPage} / ${chatTotalPages}`;
+        }
+
+        async function loadChatHistoryPage(pageNum = 1) {
+            if (chatHistoryLoading) return;
+            chatHistoryLoading = true;
+            updateChatHistoryControls();
+            try {
+                const safePage = Math.max(1, Number(pageNum) || 1);
+                const response = await fetch(`/api/interactions?page=${safePage}&per_page=${CHAT_HISTORY_PAGE_SIZE}`, {
+                    credentials: 'include',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
+                });
+                if (!await checkAuth(response)) return;
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const pageInteractions = (data.interactions || []).sort((a, b) => a.id - b.id);
+                const chatEl = document.getElementById('chat-messages');
+                if (!chatEl) return;
+
+                chatEl.innerHTML = '';
+                displayedMessageIds.clear();
+
+                pageInteractions.forEach((interaction) => {
+                    const msgId = interaction.id;
+                    addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
+                    displayedMessageIds.add(msgId);
+                    if (msgId > _chatMaxSeenId) _chatMaxSeenId = msgId;
+                });
+
+                chatCurrentPage = data.page || safePage;
+                chatTotalPages = data.total_pages || 1;
+                chatHistoryHasMore = !!data.has_more;
+                chatHistoryNextBeforeId = data.next_before_id || null;
+                updateChatHistoryControls();
+
+                if (pageInteractions.length === 0) {
+                    if (!chatEl.querySelector('.chat-empty-state')) {
+                        chatEl.innerHTML = `<div class="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;"><p style="margin:0;font-size:13px;color:#9CA3AF;max-width:340px;">${t('start-dialog-desc')}</p></div>`;
+                    }
+                } else {
+                    setTimeout(() => {
+                        chatEl.scrollTop = (chatCurrentPage === 1) ? chatEl.scrollHeight : 0;
+                    }, 30);
+                }
+            } catch (error) {
+                console.error('Error loading chat history page:', error);
+            } finally {
+                chatHistoryLoading = false;
+                updateChatHistoryControls();
+            }
+        }
+
+        async function goToPrevChatPage() {
+            if (chatCurrentPage <= 1 || chatHistoryLoading) return;
+            await loadChatHistoryPage(chatCurrentPage - 1);
+        }
+
+        async function goToNextChatPage() {
+            if (chatCurrentPage >= chatTotalPages || chatHistoryLoading) return;
+            await loadChatHistoryPage(chatCurrentPage + 1);
         }
 
         // Устанавливаем аватар пользователя для использования в чате
@@ -13168,51 +13250,12 @@ except Exception as e:
 
         // Load previous interactions via API instead of template
         async function loadInitialMessages() {
-            try {
-                const response = await fetch(`/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}`, {
-                    credentials: 'include',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    },
-                    cache: 'no-store'
-                });
-                if (!await checkAuth(response)) return;
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.interactions) {
-                        // Sort interactions by database ID (guarantees insertion order)
-                        const sortedInteractions = data.interactions
-                            .sort((a, b) => a.id - b.id);
-                        
-                        sortedInteractions.forEach((interaction) => {
-                            const msgId = interaction.id;
-                            if (!displayedMessageIds.has(msgId)) {
-                                addMessage(interaction.content, interaction.message_type, interaction.created_at, interaction.id);
-                                displayedMessageIds.add(msgId);
-                            }
-                            if (msgId > _chatMaxSeenId) _chatMaxSeenId = msgId;
-                        });
-                        lastMessageCount = data.interactions.length;
-                        chatHistoryHasMore = !!data.has_more;
-                        chatHistoryNextBeforeId = data.next_before_id || null;
-                        updateChatHistoryControls();
-                    }
-                    // Show empty-state placeholder if no messages
-                    const chatEl = document.getElementById('chat-messages');
-                    if (displayedMessageIds.size === 0 && chatEl) {
-                        if (!chatEl.querySelector('.chat-empty-state')) {
-                            chatEl.innerHTML = `<div class="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;"><p style="margin:0;font-size:13px;color:#9CA3AF;max-width:340px;">${t('start-dialog-desc')}</p></div>`;
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading initial messages:', error);
-            }
+            await loadChatHistoryPage(1);
         }
 
         // Функция для проверки новых сообщений (ID-based, не count-based)
         async function checkForNewMessages() {
+            if (chatCurrentPage !== 1) return;
             try {
                 const response = await fetch(`/api/interactions?limit=${CHAT_HISTORY_PAGE_SIZE}`, {
                     credentials: 'include',
@@ -17152,6 +17195,9 @@ except Exception as e:
 
         async function updateChat() {
             try {
+                if (chatCurrentPage !== 1) {
+                    return;
+                }
                 // Не обновляем чат в течение 15 секунд после отправки сообщения
                 const timeSinceLastSend = Date.now() - (window.lastMessageSent || 0);
                 if (timeSinceLastSend < 15000) {
