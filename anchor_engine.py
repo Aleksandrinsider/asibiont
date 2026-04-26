@@ -8269,10 +8269,11 @@ class AnchorEngine:
                             f"ТОЛЬКО директива: зачем (1 факт из контекста), что сделать, каким инструментом, какой ожидаемый результат. "
                             f"Агент сам потом отчитается о выполнении. "
                             f"Перед отправкой сделай ТИХУЮ самопроверку (не выводи её в ответ): "
-                            f"(1) текст только во 2-м лице, без фраз типа 'У {_chosen_name} есть'; "
+                            f"(1) текст только во 2-м лице, без фраз типа 'У {_chosen_name} есть', 'у него есть', 'у неё есть' — только 'у тебя есть'; "
                             f"(2) нет обрывов вида '. отправляет/.публикует/.создаёт'; "
                             f"(3) каждое предложение завершено грамматически; "
-                            f"(4) если хоть пункт нарушен — перепиши и только потом отправляй финал."
+                            f"(4) имя агента встречается РОВНО ОДИН РАЗ — в самом начале, перед запятой; "
+                            f"(5) если хоть пункт нарушен — перепиши и только потом отправляй финал."
                         )
                         _gen = await _qar_coord([
                             {'role': 'system', 'content': _coord_system_msg},
@@ -8315,21 +8316,43 @@ class AnchorEngine:
                                     (r'\b' + _re_post.escape(_chosen_name) + r'\s+не\s+может\b', 'ты не можешь'),
                                     (r'\b' + _re_post.escape(_chosen_name) + r'\s+снова\b', 'ты снова'),
                                     (r'\b' + _re_post.escape(_chosen_name) + r'\s+уже\b', 'ты уже'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+имеет\b', 'у тебя'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+знает\b', 'ты знаешь'),
+                                    (r'\bу\s+' + _re_post.escape(_chosen_name) + r'\s+есть\b', 'у тебя есть'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+должен\b', 'тебе нужно'),
+                                    (r'\b' + _re_post.escape(_chosen_name) + r'\s+должна\b', 'тебе нужно'),
                                 ]
                                 for _pat, _repl in _3p_map:
                                     _gen = _re_post.sub(_pat, _repl, _gen, flags=_re_post.IGNORECASE)
+                            # Generic 3rd-person pronoun substitutions that don't need name matching
+                            # "у него/неё есть" → "у тебя есть" (safe: whole text is addressed to agent)
+                            _gen = _re_post.sub(r'\bу\s+него\s+есть\b', 'у тебя есть', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bу\s+неё\s+есть\b', 'у тебя есть', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bему\s+нужно\b', 'тебе нужно', _gen, flags=_re_post.IGNORECASE)
+                            _gen = _re_post.sub(r'\bей\s+нужно\b', 'тебе нужно', _gen, flags=_re_post.IGNORECASE)
                             # Убираем дубли имени в начале: "Hugo, Hugo ..." / "Hugo Hugo ..."
                             if _chosen_name:
                                 _name_esc = _re_post.escape(_chosen_name)
                                 _gen = _re_post.sub(rf'^(?:{_name_esc}\s*,\s*){{2,}}', f'{_chosen_name}, ', _gen, flags=_re_post.IGNORECASE)
                                 _gen = _re_post.sub(rf'^{_name_esc}\s+{_name_esc}\b', _chosen_name, _gen, flags=_re_post.IGNORECASE)
+                                # "Name, Name verb" (второй Name без запятой) → "Name, verb"
+                                _gen = _re_post.sub(rf'^({_name_esc}),\s+{_name_esc}\b', r'\1,', _gen, flags=_re_post.IGNORECASE)
+                                # Убираем имя агента в конце текста: "...Ормузского пролива Name." → убираем "Name."
+                                _gen = _re_post.sub(rf'[\s,]+{_name_esc}[.,!?]*\s*$', '', _gen.strip())
+                                _gen = _gen.strip()
                             # Удаляем обрывки после 3rd→2nd преобразования: "ты зациклился на."
                             _gen = _re_post.sub(r'\bты\s+зациклил(?:ся|ась)\s+на\s*[.!?]', '', _gen, flags=_re_post.IGNORECASE)
                             _gen = _re_post.sub(r'\bзациклен(?:а)?\s+на\s*[.!?]', '', _gen, flags=_re_post.IGNORECASE)
                             # Если есть оборванные предложения, удаляем только их, сохраняя остальные
                             _parts = [p.strip() for p in _re_post.split(r'(?<=[.!?])\s+', _gen) if p.strip()]
                             _bad_tail = re.compile(r'\b(?:на|в|к|о|об|по|для|через|с|у|от|и|или|что|как)\s*[.!?]$', re.IGNORECASE)
-                            _parts = [p for p in _parts if not _bad_tail.search(p)]
+                            # Также убираем фрагменты "Создаст." / "Делает." — глагол 3-го лица без подлежащего
+                            _lone_verb3 = re.compile(
+                                r'^(?:[А-Я][а-яё]+'  # слово с заглавной
+                                r'(?:ст|ет|ит|ает|яет|яет|жет|зет)\s*[.!?]?)$',  # окончание 3-го лица ед.ч.
+                                re.IGNORECASE
+                            )
+                            _parts = [p for p in _parts if not _bad_tail.search(p) and not _lone_verb3.match(p)]
                             if _parts:
                                 _gen = ' '.join(_parts)
                             # Guard: задачи про инсайдеров не должны уводиться в Discord-мониторинг
