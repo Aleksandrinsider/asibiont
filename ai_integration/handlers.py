@@ -8889,6 +8889,13 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         content = sanitize_token_hallucinations(content)
         content, _explicit_visual_prompt = _extract_post_visual_prompt(content)
 
+        # Стрипаем служебные префиксы, которые ИИ добавляет как «заголовки» черновика
+        import re as _re_pfx
+        content = _re_pfx.sub(
+            r'^(?:черновик\s+поста|draft\s+post|пост|post)\s*:\s*',
+            '', content.strip(), flags=_re_pfx.IGNORECASE
+        ).strip()
+
         # Очистка от markdown-звёздочек и эмодзи для публичного блога
         import re
         # Убираем **жирный текст** и *курсив*
