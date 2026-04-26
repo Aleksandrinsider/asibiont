@@ -8261,7 +8261,18 @@ class AnchorEngine:
                             "ФОРМУЛА: [Имя], [ФАКТ из контекста — не повторяй имя]. [Глагол+TOOL+что]. [Результат]."
                             + _lang_directive(user)
                         )
-                        _gen = await _qar_coord([{'role': 'user', 'content': _coord_prompt}], max_tokens=420)
+                        _coord_system_msg = (
+                            f"Ты — ASI, координатор команды. Твоя единственная задача прямо сейчас: "
+                            f"написать КРАТКОЕ ПОРУЧЕНИЕ агенту {_chosen_name} — 2-3 предложения. "
+                            f"Начни с имени: «{_chosen_name}, [факт]...». "
+                            f"НЕ пиши отчёт о ситуации. НЕ анализируй прошлое. НЕ перечисляй что уже сделано. "
+                            f"ТОЛЬКО директива: что сделать, каким инструментом, какой ожидаемый результат. "
+                            f"Агент сам потом отчитается о выполнении."
+                        )
+                        _gen = await _qar_coord([
+                            {'role': 'system', 'content': _coord_system_msg},
+                            {'role': 'user', 'content': _coord_prompt},
+                        ], max_tokens=420)
                         # ── Post-generation: strip lists, evaluation phrases, truncated endings ──
                         if _gen:
                             import re as _re_post
@@ -8455,6 +8466,7 @@ class AnchorEngine:
                                     )
                                     _retry_vague_gen = await asyncio.wait_for(
                                         _qar_coord([
+                                            {'role': 'system', 'content': _coord_system_msg},
                                             {'role': 'user', 'content': _coord_prompt},
                                             {'role': 'assistant', 'content': _gen_s},
                                             {'role': 'user', 'content': _vague_fix_msg},
@@ -8578,6 +8590,7 @@ class AnchorEngine:
                                             f"Тот же формат: 2-3 предложения, конкретный инструмент и результат."
                                         )
                                         _retry_gen = await _qar_coord([
+                                            {'role': 'system', 'content': _coord_system_msg},
                                             {'role': 'user', 'content': _coord_prompt},
                                             {'role': 'assistant', 'content': _coord_text},
                                             {'role': 'user', 'content': _retry_teach},
