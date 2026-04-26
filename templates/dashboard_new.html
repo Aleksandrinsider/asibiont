@@ -2774,6 +2774,8 @@
                     displayedMessageIds.clear();
                     chatHistoryHasMore = false;
                     chatHistoryNextBeforeId = null;
+                    chatCurrentPage = 1;
+                    chatNoMoreNext = false;
                     updateChatHistoryControls();
                     // Show notification instead of adding to chat
                     showNotification(t('ok-chat-clear'), 'success');
@@ -13170,6 +13172,11 @@ except Exception as e:
             const indicator = document.getElementById('chat-history-page-indicator');
             if (!controls || !prevBtn || !nextBtn || !indicator) return;
 
+            // Скрываем если на первой странице и больше нет (как в арене: hide when totalPages<=1)
+            if (chatCurrentPage === 1 && chatNoMoreNext) {
+                controls.style.display = 'none';
+                return;
+            }
             controls.style.display = 'flex';
             prevBtn.disabled = chatCurrentPage <= 1 || chatHistoryLoading;
             nextBtn.disabled = chatNoMoreNext || chatHistoryLoading;
