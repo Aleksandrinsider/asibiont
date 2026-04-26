@@ -1779,6 +1779,8 @@ class HybridAutonomousAgent:
                     weather_info, news_info = await self._get_weather_news_cached(profile.city)
             if user.telegram_channel:
                 profile_data['telegram_channel'] = user.telegram_channel
+            if getattr(user, 'discord_webhook', None):
+                profile_data['discord_webhook'] = user.discord_webhook
             # Email и телефон пользователя — нужны агенту для подписей и контактов
             if user.email:
                 profile_data['email'] = user.email
@@ -4255,9 +4257,21 @@ class HybridAutonomousAgent:
             if _agent_tools_allowed:
                 from .tools import get_available_tools as _gat
                 _all_tool_names = {t['function']['name'] for t in _gat()}
-                _forbidden = _all_tool_names - _agent_tools_allowed
+                # Публикационные инструменты: всегда доступны если у пользователя настроены каналы
+                _platform_publish = set()
+                if profile_data.get('telegram_channel') or getattr(
+                    self._active_agent_data.get(user_id, {}), 'telegram_channel', None
+                ):
+                    _platform_publish.update({'publish_to_telegram', 'create_post'})
+                if profile_data.get('discord_webhook'):
+                    _platform_publish.update({'publish_to_discord', 'create_post'})
+                # create_post всегда доступен (сохранение записи без канала)
+                _platform_publish.add('create_post')
+                _effective_allowed = _agent_tools_allowed | _platform_publish
+                _forbidden = _all_tool_names - _effective_allowed
                 tools_to_exclude = tools_to_exclude | _forbidden
-                logger.info(f"[AGENT] tools_allowed enforced: showing {len(_agent_tools_allowed)} tools, hiding {len(_forbidden)}")
+                logger.info(f"[AGENT] tools_allowed enforced: showing {len(_effective_allowed)} tools, hiding {len(_forbidden)}"
+                            + (f" (+platform: {_platform_publish})" if _platform_publish - _agent_tools_allowed else ""))
 
             # Прогресс — живые фразы
             if _cb:
