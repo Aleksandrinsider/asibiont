@@ -10412,7 +10412,7 @@ class AnchorEngine:
             _user_id = user.id
             _user_tg_id = user.telegram_id
 
-            # Guard: не создаём цепочку длиннее max_cont продолжений
+            # Guard: не создаём цепочку длиннее max_cont продолжений (по конкретному anchor.source)
             from models import AgentActivityLog as _AAL2
             _cont_count = (
                 session.query(_AAL2)
@@ -10425,6 +10425,24 @@ class AnchorEngine:
                 .count()
             )
             if _cont_count >= max_cont:
+                return
+
+            # Guard: глобальный анти-цикл — один агент не может быть выбран цепью
+            # более 2 раз за 30 минут независимо от anchor.source (кросс-цепочечный зацикл)
+            _global_chain_count = (
+                session.query(_AAL2)
+                .filter(
+                    _AAL2.user_id == _user_id,
+                    _AAL2.activity_type == 'agent_chain_continue',
+                    _AAL2.created_at >= datetime.now(timezone.utc) - timedelta(minutes=30),
+                )
+                .count()
+            )
+            if _global_chain_count >= 4:
+                logger.info(
+                    "[ANCHOR-CHAIN] global anti-loop: user %d had %d chain-continues in 30min — stopping",
+                    _user_id, _global_chain_count,
+                )
                 return
 
             # Guard: если агент заблокирован — не продолжаем
@@ -10711,7 +10729,25 @@ class AnchorEngine:
                 logger.info('[ANCHOR-CHAIN] skipping same agent %s', _next_ag.name)
                 return
 
-            # Логируем continuation
+            # Guard: агент не должен фигурировать в цепочке более 2 раз за 30 минут
+            _agent_chain_count = (
+                session.query(_AAL2)
+                .filter(
+                    _AAL2.user_id == _user_id,
+                    _AAL2.activity_type == 'agent_chain_continue',
+                    _AAL2.ref_id == _next_ag.id,
+                    _AAL2.created_at >= datetime.now(timezone.utc) - timedelta(minutes=30),
+                )
+                .count()
+            )
+            if _agent_chain_count >= 2:
+                logger.info(
+                    "[ANCHOR-CHAIN] agent anti-loop: %s already chained %d times in 30min — skipping",
+                    _next_ag.name, _agent_chain_count,
+                )
+                return
+
+
             from models import AgentActivityLog as _AAL3
             session.add(_AAL3(
                 user_id=_user_id,
