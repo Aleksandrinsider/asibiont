@@ -8823,7 +8823,26 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
                     _img_prompt_final = _style
                     _img_style_final = None
                 else:
-                    _img_prompt_final = content[:320].replace('\n', ' ').strip()
+                    # ── AI-конвертация текста поста в визуальный промпт ──
+                    # Берём не сырой текст (нарратив), а просим AI описать картинку
+                    try:
+                        from ai_integration.api_client import get_api_client as _get_api_cp
+                        _api_cp = _get_api_cp()
+                        _vis_msgs = [
+                            {"role": "system", "content": (
+                                "Переведи тему текста в короткое описание изображения для text-to-image модели. "
+                                "Ответь ТОЛЬКО визуальным описанием объектов/сцены на английском языке, "
+                                "1-2 предложения, без абстракций типа 'concept of' или 'idea of'. "
+                                "Примеры: 'stock market chart on screen, businessman analyzing data at desk' "
+                                "или 'ancient ruins in a forest clearing, stone columns covered in moss'."
+                            )},
+                            {"role": "user", "content": f"Текст поста:\n{content[:400]}"},
+                        ]
+                        _vis_resp = await _api_cp.chat(_vis_msgs, max_tokens=80, temperature=0.4)
+                        _img_prompt_final = (_vis_resp or '').strip().strip('"').strip("'") or content[:150]
+                    except Exception as _vis_err:
+                        logger.debug(f"[CREATE_POST] Visual prompt AI failed: {_vis_err}")
+                        _img_prompt_final = content[:150].replace('\n', ' ').strip()
                     _img_style_final = _style
                 _img_result = await generate_image(
                     prompt=_img_prompt_final,
