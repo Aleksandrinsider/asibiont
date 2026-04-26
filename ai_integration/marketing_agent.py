@@ -435,14 +435,12 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                     'chat_id': channel,
                     'photo': image_url,
                     'caption': caption_text,
-                    'parse_mode': 'Markdown'
                 }
             else:
                 tg_method = 'sendMessage'
                 tg_payload = {
                     'chat_id': channel,
                     'text': post_text[:4096],  # Telegram message limit
-                    'parse_mode': 'Markdown'
                 }
 
             async with http_session.post(
@@ -451,7 +449,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
             ) as response:
                 result = await response.json()
 
-                # Retry без parse_mode при ошибке парсинга Markdown
+                # Retry при типовых ошибках Telegram API
                 if not result.get('ok'):
                     err_desc = result.get('description', '')
                     if "can't parse entities" in err_desc.lower():
@@ -463,20 +461,47 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                         ) as retry_resp:
                             result = await retry_resp.json()
                     elif tg_method == 'sendPhoto' and 'failed to get http url content' in err_desc.lower():
-                        logger.warning("[PUBLISH] Telegram can't fetch image URL, retrying as text-only post")
-                        tg_method = 'sendMessage'
-                        tg_payload = {
-                            'chat_id': channel,
-                            'text': post_text[:4096],
-                            'parse_mode': 'Markdown'
-                        }
-                        async with http_session.post(
-                            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{tg_method}',
-                            json=tg_payload
-                        ) as retry_resp:
-                            result = await retry_resp.json()
-                        if not result.get('ok') and "can't parse entities" in (result.get('description', '') or '').lower():
-                            tg_payload.pop('parse_mode', None)
+                        logger.warning("[PUBLISH] Telegram can't fetch image URL, retrying with uploaded binary")
+                        try:
+                            async with http_session.get(
+                                image_url,
+                                timeout=aiohttp.ClientTimeout(total=30),
+                            ) as img_resp:
+                                if img_resp.status == 200:
+                                    _img_bytes = await img_resp.read()
+                                    _img_mime = img_resp.content_type or 'image/jpeg'
+                                    _form = aiohttp.FormData()
+                                    _form.add_field('chat_id', channel)
+                                    _form.add_field('caption', post_text[:1024])
+                                    _form.add_field(
+                                        'photo',
+                                        _img_bytes,
+                                        filename='post_image.jpg',
+                                        content_type=_img_mime,
+                                    )
+                                    async with http_session.post(
+                                        f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto',
+                                        data=_form,
+                                        timeout=aiohttp.ClientTimeout(total=60),
+                                    ) as retry_resp:
+                                        result = await retry_resp.json()
+                                else:
+                                    result = {
+                                        'ok': False,
+                                        'description': f'image download failed: HTTP {img_resp.status}',
+                                    }
+                        except Exception as _img_up_err:
+                            logger.warning(f"[PUBLISH] Binary image upload fallback failed: {_img_up_err}")
+                            result = {'ok': False, 'description': str(_img_up_err)}
+
+                        # Последний fallback — отправляем текст, чтобы не терять публикацию
+                        if not result.get('ok'):
+                            logger.warning("[PUBLISH] Image fallback failed, retrying as text-only post")
+                            tg_method = 'sendMessage'
+                            tg_payload = {
+                                'chat_id': channel,
+                                'text': post_text[:4096],
+                            }
                             async with http_session.post(
                                 f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/{tg_method}',
                                 json=tg_payload

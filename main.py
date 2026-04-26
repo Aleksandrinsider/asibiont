@@ -1213,7 +1213,10 @@ async def auth_handler(request):
             logger.info(f"Redirecting to {redirect_to} after auth")
             return response
         else:
-            logger.error(f"Authentication failed for data: {data}")
+            if not data:
+                logger.warning("Authentication failed: empty payload")
+            else:
+                logger.error(f"Authentication failed for data: {data}")
             return web.Response(text='Authentication failed', status=401)
     except Exception as e:
         logger.error(f"CRITICAL ERROR in auth_handler: {e}", exc_info=True)
