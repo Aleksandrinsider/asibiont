@@ -10370,6 +10370,8 @@ async def _exec_agent_for_director(agent: dict, task: str, user_id: int, dialog_
             r'Выполняю вызов',
             r'[Пп]ереключаюсь на',
             r'[Сс]разу запускаю',
+            r'[Цц]епочка завершена',
+            r'[Рр]асскажу результат(?: пользователю)?',
         )
         _narr_kw = '|'.join(_NARRATION_KEYWORDS)
         # Вариант 1: начало строки / после newline
