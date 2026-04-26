@@ -109,31 +109,45 @@ async def _generate_text_with_ai(prompt: str) -> str:
                 raise Exception(f"AI API error: {response.status} {error_text[:200]}")
 
 
-async def _generate_image_for_post(post_text: str, style: str = "") -> str:
+async def _generate_image_for_post(post_text: str, style: str = "", user_rules: list | None = None) -> str:
     """Generate an illustration for a post via Replicate Flux.
     Returns image URL or empty string on failure.
     """
     if not REPLICATE_API_TOKEN:
         return ""
 
-    # Ask AI to build a concise English visual prompt from the post
-    _style_instruction = f" The image MUST be rendered in this style: {style}." if style else ""
+    # Формируем блок правил пользователя для AI
+    _rules_block = ""
+    if user_rules:
+        _rules_block = (
+            "\n\nUser visual preferences (MUST be respected in the image):\n"
+            + "\n".join(f"- {r}" for r in user_rules[:15])
+        )
+    elif style:
+        _rules_block = f"\n\nRequired image style: {style}."
+
     try:
         image_prompt = await _generate_text_with_ai(
-            f"""You are a visual prompt engineer. Based on this social media post, write one short English image-generation prompt (max 35 words, NO style words). """
-            f"""Describe only concrete visual elements: objects, place, action, mood. Keep the topic faithful. """
-            f"""Do not substitute the main subject with decorative nature motifs unless explicitly mentioned in the post. """
-            f"""No text overlays, no meta-phrases like 'concept of', no style descriptors (style will be appended separately).{_style_instruction}"""
-            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the scene description (no style words):"""
+            f"""You are a visual prompt engineer. Based on this social media post and user preferences, """
+            f"""write one short English image-generation prompt (max 45 words). """
+            f"""Include: concrete visual elements (objects, place, action, mood) AND any style/aesthetic from user preferences. """
+            f"""Do not substitute the main subject with unrelated nature motifs. """
+            f"""No text overlays, no meta-phrases like 'concept of'."""
+            f"""{_rules_block}"""
+            f"""\n\nPost text: {post_text[:300]}\n\nWrite ONLY the image prompt:"""
         )
         if not image_prompt or len(image_prompt) < 5:
             image_prompt = "person working at a desk, focused, modern office"
+            if style:
+                image_prompt += f", {style}"
     except Exception as _img_prompt_err:
         logger.debug("Image prompt generation failed, using fallback: %s", _img_prompt_err)
         image_prompt = "person working at a desk, focused, modern office"
+        if style:
+            image_prompt += f", {style}"
 
-    # Гарантированно добавляем стиль пользователя в финальный промпт для Replicate
-    if style:
+    # Если есть явный стиль — гарантированно дописываем в финальный промпт для Replicate
+    if style and style.lower() not in image_prompt.lower():
         image_prompt = f"{image_prompt.rstrip(', ')} | style: {style}"
 
     try:
@@ -572,10 +586,9 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         logger.info(f"Auto-post created for user {user_id}")
 
         # === Генерация картинки для поста (отображается в дашборде и каналах) ===
-        # Извлекаем стиль изображения из правил пользователя
-        _img_style = ""
+        # Передаём ВСЕ правила пользователя в AI — он сам разберётся что применить к картинке
+        _user_rules_for_img: list = []
         try:
-            import re as _re_aps
             _raw_mem_aps = getattr(user, 'memory', None) or ''
             if _raw_mem_aps:
                 try:
@@ -586,36 +599,14 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                 if _raw_mem_aps and _raw_mem_aps.strip().startswith('{'):
                     import json as _json_aps
                     _m_aps = _json_aps.loads(_raw_mem_aps.strip())
-                    _collected_styles: list = []
-                    _IMAGE_KW = r'рисун|изображен|иллюстрац|картин|визуал|арт\b|drawing|image|sketch|visual|art\b|иконк|минимал|реалист|акварел|стиль\s+фото|фотостил'
-                    for _rule_aps in _m_aps.get('rules', []):
-                        if _re_aps.search(_IMAGE_KW, _rule_aps, _re_aps.IGNORECASE):
-                            # Пробуем извлечь стиль несколькими паттернами
-                            _style_val = None
-                            # "в стиле X" / "стиле X"
-                            _sm = _re_aps.search(r'в\s+стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
-                            if _sm:
-                                _style_val = _sm.group(1).strip()
-                            else:
-                                # "X стиль" / "X-стиль"
-                                _sm2 = _re_aps.search(r'([A-Za-zА-Яа-яЁё][^,\.\n]{2,50})\s+стил[еёьяи]', _rule_aps, _re_aps.IGNORECASE)
-                                if _sm2:
-                                    _style_val = _sm2.group(1).strip()
-                                else:
-                                    # "стиле X" (без предлога)
-                                    _sm3 = _re_aps.search(r'стил[еёи]\s+([^,\.\n]{3,60})', _rule_aps, _re_aps.IGNORECASE)
-                                    if _sm3:
-                                        _style_val = _sm3.group(1).strip()
-                            _collected_styles.append(_style_val if _style_val else _rule_aps[:80])
-                    if _collected_styles:
-                        _img_style = '; '.join(_collected_styles)
-                    logger.info("[AUTO_POST] img_style extracted: %r", _img_style)
+                    _user_rules_for_img = [r for r in _m_aps.get('rules', []) if r and len(r.strip()) > 3]
+            logger.info("[AUTO_POST] user rules for image: %d rules", len(_user_rules_for_img))
         except Exception as _e_aps:
-            logger.debug("[AUTO_POST] Could not extract image style from rules: %s", _e_aps)
+            logger.debug("[AUTO_POST] Could not load user rules for image: %s", _e_aps)
 
         image_url = ""
         try:
-            image_url = await _generate_image_for_post(content, style=_img_style)
+            image_url = await _generate_image_for_post(content, user_rules=_user_rules_for_img)
             if image_url:
                 post.image_url = image_url
                 # Скачиваем байты для постоянного хранения
