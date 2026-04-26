@@ -4492,6 +4492,10 @@ class HybridAutonomousAgent:
                                 "content": json.dumps({"status": f"skipped: {name} already called"}, ensure_ascii=False)})
                             continue
                         used_once_only.add(name)
+                        # create_post already cross-posts to TG/Discord — block them too
+                        if name == 'create_post':
+                            used_once_only.add('publish_to_telegram')
+                            used_once_only.add('publish_to_discord')
 
                     # Multi-limit
                     if name in multi_limit_tools:

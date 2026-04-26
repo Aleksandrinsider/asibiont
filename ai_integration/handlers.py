@@ -712,22 +712,34 @@ async def add_task(title, description="", reminder_time=None, due_date=None, use
             session.close()
         return _t(user_id, 'task_duplicate', title=existing.title)
 
-    # Защита от повторного создания отменённых задач (агентский цикл)
+    # Защита от повторного создания отменённых/завершённых задач (агентский цикл)
     if created_by_agent_id:
         import datetime as _dt_dup
         _cutoff_cancelled = _dt_dup.datetime.utcnow() - _dt_dup.timedelta(hours=48)
-        _cancelled_tasks = session.query(Task).filter(
+        _recent_agent_tasks = session.query(Task).filter(
             Task.user_id == user.id,
-            Task.status == 'cancelled',
+            Task.status.in_(['cancelled', 'completed']),
             Task.source == 'agent',
             Task.created_at >= _cutoff_cancelled,
         ).all()
-        _cancelled_dup = next((t for t in _cancelled_tasks if _task_is_dup(t)), None)
+        _cancelled_dup = next((t for t in _recent_agent_tasks if t.status == 'cancelled' and _task_is_dup(t)), None)
         if _cancelled_dup:
             logger.warning(f"[ADD_TASK] Blocked: similar task was cancelled recently: '{_cancelled_dup.title}' (id={_cancelled_dup.id})")
             if close_session:
                 session.close()
             return f"⛔ Задача '{_cancelled_dup.title}' уже создавалась и была отменена. Выбери ДРУГОЙ подход."
+        # Защита от дублирования только что завершённых задач (в течение 24 часов)
+        _cutoff_completed = _dt_dup.datetime.utcnow() - _dt_dup.timedelta(hours=24)
+        _completed_dup = next(
+            (t for t in _recent_agent_tasks
+             if t.status == 'completed' and t.created_at >= _cutoff_completed and _task_is_dup(t)),
+            None
+        )
+        if _completed_dup:
+            logger.info(f"[ADD_TASK] Skipped: similar completed agent task exists: '{_completed_dup.title}' (id={_completed_dup.id})")
+            if close_session:
+                session.close()
+            return f"[INTERNAL] Задача '{_completed_dup.title}' уже выполнялась этим циклом. Перейди к следующему шагу."
 
         # Лимит: максимум 10 pending задач от агентов — не засоряем пользователю список
         _agent_pending_count = session.query(Task).filter(

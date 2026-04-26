@@ -13,6 +13,10 @@ from models import Session, User
 
 logger = logging.getLogger(__name__)
 
+# ── In-memory dedup: prevents publishing identical content twice within 5 min ──
+# key: (user_id, channel, content_hash_12) → datetime UTC
+_tg_recent_hashes: dict = {}
+
 
 async def generate_marketing_content(product_name, target_audience, platform, goal="привлечение", user_id=None, session=None, contact_email=None):
     """
@@ -424,6 +428,25 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         # Убедимся что ID канала начинается с @  если это username
         if not channel.startswith('-') and not channel.startswith('@'):
             channel = f"@{channel}"
+
+        # ── Content-hash dedup (asyncio-safe: no await between check and set) ──
+        import hashlib as _hl
+        _chash = _hl.md5(post_text[:150].encode('utf-8', errors='replace')).hexdigest()[:12]
+        _hash_key = (user_id, channel, _chash)
+        _now_utc_dd = datetime.now(timezone.utc)
+        # Prune expired entries (> 5 min old)
+        for _hk in list(_tg_recent_hashes):
+            if (_now_utc_dd - _tg_recent_hashes[_hk]).total_seconds() > 300:
+                del _tg_recent_hashes[_hk]
+        if _hash_key in _tg_recent_hashes:
+            logger.info("[PUBLISH] Dedup: identical content %.12s already sent to %s — skipped", _chash, channel)
+            return {
+                "success": True,
+                "channel": channel,
+                "message_id": 0,
+                "message": f"✅ Пост уже опубликован в {channel} (защита от дублей)",
+            }
+        _tg_recent_hashes[_hash_key] = _now_utc_dd
 
         async with _safe_http() as http_session:
             _can_send_photo = bool(image_url and str(image_url).strip().lower().startswith(('http://', 'https://')))
