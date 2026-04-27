@@ -16346,6 +16346,42 @@ class AnchorEngine:
                         # По запросу пользователя не отсекаем reason: используем как сгенерировал ИИ.
                         _step_reason_show = (_step_reason or '').strip()
 
+                        # ── Cleanup reason: remove agent name at start, fix 3rd-person, strip orphan prepositions ──
+                        if _step_reason_show:
+                            import re as _re_reason
+                            # 1. Strip duplicate agent name at start of reason (coordinator adds it redundantly)
+                            _reason_name_m = _re_reason.match(
+                                r'^' + _re_reason.escape(_ag_name) + r'[,\s]+',
+                                _step_reason_show, _re_reason.IGNORECASE,
+                            )
+                            if _reason_name_m:
+                                _rest_r = _step_reason_show[_reason_name_m.end():].strip()
+                                if _rest_r:
+                                    _step_reason_show = _rest_r
+                            # 2. 3rd-person pronoun substitutions in reason
+                            _is_fem_reason = _detect_agent_is_female(_ag_name)
+                            _3p_reason = [
+                                (r'\b' + _re_reason.escape(_ag_name) + r'\s+зациклил(?:ся|ась)\b', 'ты зациклил' + ('ась' if _is_fem_reason else 'ся')),
+                                (r'\b' + _re_reason.escape(_ag_name) + r'\s+зациклен(?:а?)\b', 'ты зациклил' + ('ась' if _is_fem_reason else 'ся')),
+                                (r'\b' + _re_reason.escape(_ag_name) + r'\s+застрял(?:а?)\b', 'ты застрял' + ('а' if _is_fem_reason else '')),
+                                (r'\bу\s+него\s+есть\b', 'у тебя есть'),
+                                (r'\bу\s+неё\s+есть\b', 'у тебя есть'),
+                                (r'\bему\s+нужно\b', 'тебе нужно'),
+                                (r'\bей\s+нужно\b', 'тебе нужно'),
+                                (r'\b' + _re_reason.escape(_ag_name) + r'\s+повторяет\b', 'ты повторяешь'),
+                                (r'\b' + _re_reason.escape(_ag_name) + r'\s+использует\b', 'ты используешь'),
+                                (r'\b' + _re_reason.escape(_ag_name) + r'\s+делает\b', 'ты делаешь'),
+                            ]
+                            for _rp, _rr in _3p_reason:
+                                _step_reason_show = _re_reason.sub(_rp, _rr, _step_reason_show, flags=_re_reason.IGNORECASE)
+                            # 3. Strip orphaned prepositions at end of sentences inside reason
+                            _step_reason_show = _re_reason.sub(
+                                r'\s+(?:в|на|по|за|к|о|во|до|от|из|для|при|без|под|над|об|у|с|со|ко|что|как|но|и|а)\s*[.!?]',
+                                '.', _step_reason_show, flags=_re_reason.IGNORECASE,
+                            ).rstrip()
+                            if _step_reason_show and _step_reason_show[-1] not in '.!?':
+                                _step_reason_show = _step_reason_show.rstrip(',;:—- ')
+
                         if _eff_goal_title and len(_eff_goal_title.strip()) > 5:
                             if _step_reason_show:
                                 _reason_part = _step_reason_show
