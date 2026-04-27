@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # ── In-memory dedup: prevents publishing identical content twice within 5 min ──
 # key: (user_id, channel, content_hash_12) → datetime UTC
 _tg_recent_hashes: dict = {}
+_tg_blocked_channels: dict = {}
 
 
 async def generate_marketing_content(product_name, target_audience, platform, goal="привлечение", user_id=None, session=None, contact_email=None):
@@ -428,6 +429,21 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         # Убедимся что ID канала начинается с @  если это username
         if not channel.startswith('-') and not channel.startswith('@'):
             channel = f"@{channel}"
+        _blocked_key = (user_id, channel)
+        _now_utc_dd = datetime.now(timezone.utc)
+        for _bk in list(_tg_blocked_channels):
+            if (_now_utc_dd - _tg_blocked_channels[_bk]['ts']).total_seconds() > 21600:
+                del _tg_blocked_channels[_bk]
+        _blocked_info = _tg_blocked_channels.get(_blocked_key)
+        if _blocked_info:
+            _blocked_reason = _blocked_info.get('reason') or 'Нет доступа к Telegram-каналу'
+            logger.warning("[PUBLISH] Skipping Telegram publish for blocked channel %s: %s", channel, _blocked_reason)
+            return {
+                "success": False,
+                "fatal": True,
+                "error": _blocked_reason,
+                "message": f"Не могу опубликовать в {channel}: {_blocked_reason}"
+            }
 
         # ── Content-hash dedup (asyncio-safe: no await between check and set) ──
         import hashlib as _hl
@@ -586,13 +602,21 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                 else:
                     error_desc = result.get('description', 'Unknown error')
                     logger.error(f"[PUBLISH] Telegram API error: {error_desc}")
+
+                    _err_lower = error_desc.lower()
+                    _is_channel_access_error = (
+                        'bot is not a member' in _err_lower or
+                        'chat not found' in _err_lower or
+                        'bot was kicked from the channel chat' in _err_lower
+                    )
                     
                     # Подсказки для частых ошибок
                     from config import TELEGRAM_BOT_USERNAME
                     bot_username = TELEGRAM_BOT_USERNAME.replace('@', '')
                     
-                    if 'bot is not a member' in error_desc or 'chat not found' in error_desc:
-                        error_desc = f"""Бот не добавлен в канал или не является админом.
+                    if _is_channel_access_error:
+                        if 'bot was kicked from the channel chat' in _err_lower:
+                            error_desc = f"""Бота удалили из канала или лишили доступа.
 
 📋 Сделай так:
 1. Открой канал {channel}
@@ -603,6 +627,22 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
 6. Сохрани
 
 После этого скажи «опубликуй в канал»"""
+                        else:
+                            error_desc = f"""Бот не добавлен в канал или не является админом.
+
+📋 Сделай так:
+1. Открой канал {channel}
+2. Название канала → Администраторы
+3. «Добавить администратора»
+4. Найди @{bot_username}
+5. Дай право «Публикация сообщений»
+6. Сохрани
+
+После этого скажи «опубликуй в канал»"""
+                        _tg_blocked_channels[_blocked_key] = {
+                            'ts': datetime.now(timezone.utc),
+                            'reason': error_desc,
+                        }
                     elif 'chat_id' in error_desc:
                         error_desc = f"""Неверный формат ID канала.
 
@@ -617,6 +657,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
                     
                     return {
                         "success": False,
+                        "fatal": _is_channel_access_error,
                         "error": error_desc,
                         "message": f"Не получилось опубликовать: {error_desc}"
                     }
