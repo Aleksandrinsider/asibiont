@@ -4263,11 +4263,12 @@ class HybridAutonomousAgent:
                 _all_tool_names = {t['function']['name'] for t in _gat()}
                 # Публикационные инструменты: всегда доступны если у пользователя настроены каналы
                 _platform_publish = set()
-                if profile_data.get('telegram_channel') or getattr(
-                    self._active_agent_data.get(user_id, {}), 'telegram_channel', None
-                ):
+                _active_profile = self._active_agent_data.get(user_id, {})
+                _active_tg = _active_profile.get('telegram_channel') if isinstance(_active_profile, dict) else None
+                _active_dc = _active_profile.get('discord_webhook') if isinstance(_active_profile, dict) else None
+                if profile_data.get('telegram_channel') or _active_tg:
                     _platform_publish.update({'publish_to_telegram', 'create_post'})
-                if profile_data.get('discord_webhook'):
+                if profile_data.get('discord_webhook') or _active_dc:
                     _platform_publish.update({'publish_to_discord', 'create_post'})
                 # create_post всегда доступен (сохранение записи без канала)
                 _platform_publish.add('create_post')

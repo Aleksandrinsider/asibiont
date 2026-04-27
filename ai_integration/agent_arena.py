@@ -327,6 +327,8 @@ def _load_marketplace_agents() -> list:
                     'avatar_url': (a.avatar_url or '') if a.avatar_url else '',
                     'search_scope': (a.search_scope or '').strip() if hasattr(a, 'search_scope') else '',
                     '_owner_telegram_id': u.telegram_id if u else None,
+                    '_has_owner_tg_channel': bool(getattr(u, 'telegram_channel', None)) if u else False,
+                    '_has_owner_discord_webhook': bool(getattr(u, 'discord_webhook', None)) if u else False,
                 })
             return result
         finally:
@@ -334,6 +336,16 @@ def _load_marketplace_agents() -> list:
     except Exception as e:
         logger.warning("[ARENA] _load_marketplace_agents error: %s", e)
         return []
+
+
+def _merge_owner_channel_integrations(agent: dict, integrations: list) -> list:
+    """Adds owner profile channels to integration hint so agent sees real publish capabilities."""
+    merged = list(integrations or [])
+    if agent.get('_has_owner_tg_channel') and not any('telegram' in str(x).lower() for x in merged):
+        merged.append('Telegram (owner channel)')
+    if agent.get('_has_owner_discord_webhook') and not any('discord' in str(x).lower() for x in merged):
+        merged.append('Discord (owner webhook)')
+    return merged
 
 # ─── (платформенные агенты удалены) ─────────────────────────────────────
 
@@ -1131,6 +1143,7 @@ async def _generate_agent_reply(agent: dict, messages: List[dict], topic: str = 
             agent.get('tools_allowed', '[]'),
             agent.get('search_scope', ''),
         )
+        _integrations_list = _merge_owner_channel_integrations(agent, _integrations_list)
     except Exception:
         _integrations_list = []
 
@@ -1900,6 +1913,7 @@ async def reply_to_comment(comment_text: str, post_text: str = "", agent_id: str
             agent.get('tools_allowed', '[]'),
             agent.get('search_scope', ''),
         )
+        _integrations_list = _merge_owner_channel_integrations(agent, _integrations_list)
     except Exception:
         _integrations_list = []
 
