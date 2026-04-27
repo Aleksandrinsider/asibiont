@@ -2122,40 +2122,40 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     # Если target >= 100 людей — email 1:1 математически не решит задачу.
     # Нужно учить агента думать о рычажных действиях (1 шаг → много людей).
     _scale_block = ''
-    if _goal_type in ('outreach', 'general', 'startup', 'hr'):
-        _large_targets = []
-        for _g in goals_summary:
-            _t = _g.get('metric_target') or 0
-            _cur = _g.get('metric_current') or 0
-            _remaining = _t - _cur
-            _g_lower = (_g.get('title', '') + ' ' + (_g.get('description', '') or '')).lower()
-            _is_people = any(w in _g_lower for w in ('пользовател', 'подписчик', 'клиент', 'участник', 'лид', 'регистрац', 'member', 'user', 'subscriber'))
-            if _is_people and _remaining >= 100:
-                _large_targets.append((_g.get('title', ''), _remaining, _t))
-        if _large_targets:
-            _lt_desc = '; '.join(f"«{t}»: осталось ~{r} из {total}" for t, r, total in _large_targets[:2])
-            _scale_block = (
-                f"\n\n📐 МАСШТАБ ЦЕЛИ: {_lt_desc}.\n"
-                "Осмысли математику: если нужно 100+ человек, то:\n"
-                "  • 1 email = 1 потенциальный человек (конверсия холодного email ~2-5%)\n"
-                "  • 1 статья или пост в нишевой платформе = 1 000–50 000 просмотров\n"
-                "  • 1 пост в тематическое сообщество = сотни целевых людей\n"
-                "  • 1 публичный релиз/анонс = тысячи за день\n"
-                "Для МАСШТАБА приоритет стратегии:\n"
-                "  1️⃣ Создай КОНТЕНТ (create_post → publish_to_telegram) — органический рост\n"
-                "     Конкретные платформы куда писать/публиковаться:\n"
-                "     • Hacker News «Show HN» — web_search('how to submit Show HN') → напиши пост, отправь пользователю\n"
-                "     • Product Hunt launch — web_search('product hunt makers community contact') → email основателю сообщества\n"
-                "     • Reddit: r/entrepreneur, r/SaaS, r/ChatGPT, r/artificial — web_search → найди email модератора или напиши в боте через add_email_leads\n"
-                "     • Indie Hackers (indiehackers.com) — web_search('indie hackers founder email contact') → email\n"
-                "     • Хабр/VC.ru — web_search('хабр опубликовать статью автор контакт') → email редакции\n"
-                "  2️⃣ Выйди в СООБЩЕСТВА через организаторов/администраторов (web_search → email к ЛПР сообщества)\n"
-                "     Пример: web_search('AI Tools weekly newsletter editor email') → send_outreach_email\n"
-                "  3️⃣ Email — для КЛЮЧЕВЫХ людей: лидеры мнений, инфлюенсеры, организаторы, журналисты.\n"
-                "     НЕ для массового 1:1 outreach на рядовых пользователей — это не масштабируется.\n"
-                "     Email ТОЛЬКО на личные адреса (name@domain), НЕ на info@, hr@, press@, team@ — они игнорируются.\n"
-                "Думай: 'Какой 1 шаг сейчас охватит максимум целевых людей?'\n"
-            )
+    # Применяем для ЛЮБОГО типа цели — scale thinking нужен всегда когда _remaining >= 100 людей
+    _large_targets = []
+    for _g in goals_summary:
+        _t = _g.get('metric_target') or 0
+        _cur = _g.get('metric_current') or 0
+        _remaining = _t - _cur
+        _g_lower = (_g.get('title', '') + ' ' + (_g.get('description', '') or '')).lower()
+        _is_people = any(w in _g_lower for w in ('пользовател', 'подписчик', 'клиент', 'участник', 'лид', 'регистрац', 'member', 'user', 'subscriber'))
+        if _is_people and _remaining >= 100:
+            _large_targets.append((_g.get('title', ''), _remaining, _t))
+    if _large_targets:
+        _lt_desc = '; '.join(f"«{t}»: осталось ~{r} из {total}" for t, r, total in _large_targets[:2])
+        _scale_block = (
+            f"\n\n📐 МАСШТАБ ЦЕЛИ: {_lt_desc}.\n"
+            "Осмысли математику: если нужно 100+ человек, то:\n"
+            "  • 1 email = 1 потенциальный человек (конверсия холодного email ~2-5%)\n"
+            "  • 1 статья или пост в нишевой платформе = 1 000–50 000 просмотров\n"
+            "  • 1 пост в тематическое сообщество = сотни целевых людей\n"
+            "  • 1 публичный релиз/анонс = тысячи за день\n"
+            "Для МАСШТАБА приоритет стратегии:\n"
+            "  1️⃣ Создай КОНТЕНТ (create_post → publish_to_telegram) — органический рост\n"
+            "     Конкретные платформы куда писать/публиковаться:\n"
+            "     • Hacker News «Show HN» — web_search('how to submit Show HN') → напиши пост, отправь пользователю\n"
+            "     • Product Hunt launch — web_search('product hunt makers community contact') → email основателю сообщества\n"
+            "     • Reddit: r/entrepreneur, r/SaaS, r/ChatGPT, r/artificial — web_search → найди email модератора или напиши в боте через add_email_leads\n"
+            "     • Indie Hackers (indiehackers.com) — web_search('indie hackers founder email contact') → email\n"
+            "     • Хабр/VC.ru — web_search('хабр опубликовать статью автор контакт') → email редакции\n"
+            "  2️⃣ Выйди в СООБЩЕСТВА через организаторов/администраторов (web_search → email к ЛПР сообщества)\n"
+            "     Пример: web_search('AI Tools weekly newsletter editor email') → send_outreach_email\n"
+            "  3️⃣ Email — для КЛЮЧЕВЫХ людей: лидеры мнений, инфлюенсеры, организаторы, журналисты.\n"
+            "     НЕ для массового 1:1 outreach на рядовых пользователей — это не масштабируется.\n"
+            "     Email ТОЛЬКО на личные адреса (name@domain), НЕ на info@, hr@, press@, team@ — они игнорируются.\n"
+            "Думай: 'Какой 1 шаг сейчас охватит максимум целевых людей?'\n"
+        )
 
     # ── Блок интеграций: универсально из _classify_agent_caps ──
     _intg_connected = []
@@ -2365,7 +2365,39 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 '— получи данные из RSS-ленты агента, затем извлеки суть.\n'
             )
         else:
-            _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
+            # Интеграционно-зависимый первый шаг для любого goal_type
+            if _has_crm:
+                _intg_block += (
+                    '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_pipelines") '
+                    '— узнай реальные pipeline_id и status_id, затем create_lead или get_contacts.\n'
+                )
+            elif _has_github:
+                _intg_block += (
+                    '⚡ ПЕРВЫЙ ШАГ: search_users(query="[язык/стек/тема]") '
+                    '— найди релевантных разработчиков, затем save_email_contact → send_outreach_email.\n'
+                )
+            elif _has_market:
+                _intg_block += (
+                    '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_orders") или run_agent_action(action="get_products") '
+                    '— получи данные маркетплейса, проанализируй спрос, выдай рекомендации.\n'
+                )
+            elif _has_alpha:
+                _intg_block += (
+                    '⚡ ПЕРВЫЙ ШАГ: run_agent_action(action="get_price", symbol="[тикер]") '
+                    '— получи реальные данные, затем обработай и опубликуй аналитику.\n'
+                )
+            elif _has_imap:
+                _intg_block += (
+                    '⚡ ПЕРВЫЙ ШАГ: find_relevant_contacts_for_task(task="[описание цели]") '
+                    '— найди контакты, затем send_outreach_email с персональным предложением.\n'
+                )
+            elif _has_content:
+                _intg_block += (
+                    '⚡ ПЕРВЫЙ ШАГ: create_post(topic="[тема цели]") '
+                    '— подготовь контент, затем publish_to_telegram или email подписчикам.\n'
+                )
+            else:
+                _intg_block += '→ Используй подключённые интеграции в ПЕРВУЮ очередь — они дают реальные данные.\n'
         _intg_block += (
             '→ Если инструмент вернул ошибку — попробуй альтернативу (web_search, research_topic). '
             'Если задачу НЕВОЗМОЖНО решить без этой интеграции — сообщи пользователю один раз: '
@@ -2997,7 +3029,18 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
         _tool_matrix = (
             "\n💡 КАК ВЫБРАТЬ ИНСТРУМЕНТ:\n"
             + '\n'.join(_tm_rows)
-            + "\n→ Мультиканал лучше монотонного. Нет явного фаворита? Начни с email-кампании.\n"
+            + "\n→ Мультиканал лучше монотонного. Нет явного фаворита? "
+            + (
+                "Начни с CRM: run_agent_action(action='get_pipelines') → create_lead.\n"
+                if _has_crm else
+                "Начни с GitHub: search_users → save_email_contact → send_outreach_email.\n"
+                if _has_github else
+                "Начни с email-кампании: find_relevant_contacts_for_task → send_outreach_email.\n"
+                if _has_imap else
+                "Начни с публикации: create_post → publish_to_telegram.\n"
+                if _has_content else
+                "Начни с research_topic — найди аудиторию или площадку, затем выбери канал.\n"
+            )
         )
 
     # ── Матрица делегирования команды ──
