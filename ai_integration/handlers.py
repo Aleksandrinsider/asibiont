@@ -1334,6 +1334,12 @@ async def save_note(content: str, title: str = None, user_id: int = None, sessio
         import datetime as _dt_sn
 
         _note_title = (title or content[:60]).strip()
+        # Стрипаем служебные префиксы, которые ИИ добавляет как «заголовок» заметки
+        import re as _re_note_pfx
+        _note_title = _re_note_pfx.sub(
+            r'^(?:черновик\s+поста|draft\s+post|blog\s+post|пост\s+для\s+блога|пост\s+в\s+блог|пост|post)\s*:\s*',
+            '', _note_title, flags=_re_note_pfx.IGNORECASE
+        ).strip()
 
         # --- Rate limit: автопилот не должен спамить заметками ---
         _since_1h = _dt_sn.datetime.utcnow() - _dt_sn.timedelta(hours=1)
@@ -8940,7 +8946,7 @@ async def create_post(content: str, user_id: int, session=None, force: bool = Fa
         # Стрипаем служебные префиксы, которые ИИ добавляет как «заголовки» черновика
         import re as _re_pfx
         content = _re_pfx.sub(
-            r'^(?:черновик\s+поста|draft\s+post|пост|post)\s*:\s*',
+            r'^(?:черновик\s+поста|draft\s+post|blog\s+post|пост\s+для\s+блога|пост\s+в\s+блог|пост|post)\s*:\s*',
             '', content.strip(), flags=_re_pfx.IGNORECASE
         ).strip()
 
