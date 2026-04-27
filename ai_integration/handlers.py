@@ -16337,12 +16337,15 @@ async def check_emails(
                         session.commit()
                         logger.info(f'[CHECK_EMAILS] Updated contact status to replied: {_rep_em}')
                     # Также обновляем EmailOutreach если есть — сохраняем reply_text и reply_at
+                    # 'failed' тоже включаем: контакт мог ответить даже если первое письмо прошло частично
                     _eo = session.query(_EO_ce2).filter_by(
                         user_id=user.id, recipient_email=_rep_em
-                    ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened'])).first()
+                    ).filter(_EO_ce2.status.in_(['sent', 'delivered', 'opened', 'failed'])).first()
                     if _eo:
                         _was_replied_ce = (_eo.status == 'replied')
                         _eo.status = 'replied'
+                        # Контакт ответил → отменяем все запланированные follow-up
+                        _eo.next_follow_up_at = None
                         # Обновляем reply_text если новый текст лучше старого (нет старого или старый короче)
                         if _rep_snippet and (not _eo.reply_text or len(_rep_snippet) > len(_eo.reply_text or '')):
                             _eo.reply_text = _rep_snippet
