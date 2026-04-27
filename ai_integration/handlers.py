@@ -13671,7 +13671,7 @@ async def send_outreach_email(
                 campaign_id=campaign.id,
                 recipient_email=recipient_email,
             ).first()
-        if existing and existing.status != 'draft':
+        if existing and existing.status not in ('draft', 'failed'):
             return f" Письмо на {recipient_email} уже отправлено в кампании #{campaign.id}. Для повторного контакта используй send_follow_up_email — не пытайся слать новое."
 
         # ── ANTI-SPAM: кросс-кампания + глобальный cooldown ──
@@ -14842,7 +14842,7 @@ async def add_email_leads(
         try:
             _bounced_rows = session.query(EmailOutreach.recipient_email).filter(
                 EmailOutreach.user_id == user.id,
-                EmailOutreach.status.in_(['bounced', 'failed']),
+                EmailOutreach.status == 'bounced',
             ).all()
             for _br in _bounced_rows:
                 if _br[0] and '@' in _br[0]:
@@ -14922,7 +14922,7 @@ async def add_email_leads(
             bad_history = session.query(EmailOutreach).filter(
                 EmailOutreach.user_id == user.id,
                 EmailOutreach.recipient_email == email,
-                EmailOutreach.status.in_(['bounced', 'failed']),
+                EmailOutreach.status == 'bounced',
             ).first()
             if bad_history:
                 skipped += 1
