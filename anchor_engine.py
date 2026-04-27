@@ -25270,7 +25270,7 @@ class AnchorEngine:
                     "ПРАВИЛА ДЛЯ ИНТЕГРАЦИЙ:",
                     "— integration_alert: прочитай snippet, реши ценность. CRITICAL/HIGH=пиши, MEDIUM=пиши если конкретное событие, LOW=SKIP если рутина.",
                     "— agent_office_update: НЕ пересылай диалог агентов. Пиши как КРАТКИЙ ИТОГ от ASI Biont: 2-4 предложения, в каждом — кто что сделал и результат. Формат: 'ASI Biont\nИмя сделал ... . Имя сделал ...'.",
-                    "— agent_inbox_reply: КРИТИЧНО — агент нашёл новые письма. Покажи preview, спроси про ответ.",
+                    "— agent_inbox_reply: КРИТИЧНО — агент нашёл новые письма. Данные писем уже переданы в якоре (inbox_content). НЕ вызывай check_emails снова — это вернёт 'нет новых'. Используй reply_to_outreach_email(outreach_id=...) или save_email_contact. Покажи пользователю краткий preview и спроси про ответ.",
                     "— agent_task_blocked: КРИТИЧНО — агент застрял. Объясни причину, задай конкретный вопрос.",
                     "— agent_delegation: отчёт от имени агента (от первого лица): что именно сделано (tool-вызовы), каков конкретный итог.",
                     "",
@@ -25422,9 +25422,14 @@ class AnchorEngine:
                     if ad['type'] == 'agent_inbox_reply':
                         _pv = d.get('preview', '')
                         _rc = d.get('reply_count', '')
-                        if _pv:
+                        _ic = d.get('inbox_content', '')
+                        if _pv or _ic:
                             prompt_parts.append(f"   Агент: {d.get('agent_name','')}, писем: {_rc}")
-                            prompt_parts.append(f"   Preview: {_pv[:200]}")
+                            if _pv:
+                                prompt_parts.append(f"   Preview: {_pv[:200]}")
+                            if _ic:
+                                prompt_parts.append(f"   Входящие письма (полный текст):\n{_ic[:2000]}")
+                            prompt_parts.append("   ⚠️ НЕ вызывай check_emails — письма уже в данных выше. Обработай их напрямую: используй reply_to_outreach_email или save_email_contact.")
                     elif ad['type'] == 'agent_task_blocked':
                         _reason = d.get('reason', '')
                         _ctx = d.get('full_context', '')
@@ -26611,6 +26616,7 @@ class AnchorEngine:
                         'reply_count': reply_count,
                         'preview': _preview,
                         'log_id': rec.id,
+                        'inbox_content': _stdout[:3000],
                     }, ensure_ascii=False),
                     triggered_at=now_utc,
                     expires_at=now_utc + timedelta(hours=6),
