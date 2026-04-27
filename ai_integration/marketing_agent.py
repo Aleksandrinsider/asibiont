@@ -432,7 +432,7 @@ async def publish_to_telegram(content, image_url=None, user_id=None, session=Non
         _blocked_key = (user_id, channel)
         _now_utc_dd = datetime.now(timezone.utc)
         for _bk in list(_tg_blocked_channels):
-            if (_now_utc_dd - _tg_blocked_channels[_bk]['ts']).total_seconds() > 21600:
+            if (_now_utc_dd - _tg_blocked_channels[_bk]['ts']).total_seconds() > 900:
                 del _tg_blocked_channels[_bk]
         _blocked_info = _tg_blocked_channels.get(_blocked_key)
         if _blocked_info:
