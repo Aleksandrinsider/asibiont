@@ -11426,6 +11426,19 @@ _GENERIC_PREFIXES = {
     'newsletter', 'notifications', 'alerts', 'unsubscribe', 'no_reply',
     # Юридические/compliance — не люди
     'dmca', 'tos', 'privacy', 'legal', 'copyright', 'gdpr',
+    # Роле-адреса — отдел, не человек (синхронизировано с anchor_engine _GENERIC_SKIP)
+    # Добавлять сюда только те prefix'ы, что anchor engine тоже блокирует,
+    # чтобы не создавать черновики которые всё равно упадут с status='failed'
+    'info', 'contact', 'contacts', 'hello', 'support', 'sales',
+    'admin', 'office', 'team', 'help', 'mail',
+    'hr', 'press', 'media', 'marketing', 'general',
+    'feedback', 'service',
+    'partners', 'partner', 'business', 'invest', 'investor',
+    'security', 'billing', 'jobs', 'careers', 'career', 'reports',
+    'awards', 'events', 'webinar',
+    'training', 'education', 'community', 'social', 'podcast',
+    'editor', 'editorial', 'submissions', 'apply', 'donate',
+    'news',
 }
 
 # Паттерны — только реально системные
