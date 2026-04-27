@@ -116,15 +116,18 @@ async def _generate_image_for_post(post_text: str, style: str = "", user_rules: 
     if not REPLICATE_API_TOKEN:
         return ""
 
+    # Приоритет пользовательского стиля: если есть style, считаем его главным
+    _priority_style = (style or '').strip()
+
     # Формируем блок правил пользователя для AI
     _rules_block = ""
     if user_rules:
         _rules_block = (
             "\n\nUser visual preferences (MUST be respected in the image):\n"
-            + "\n".join(f"- {r}" for r in user_rules[:15])
+            + "\n".join(f"- {r}" for r in user_rules if str(r).strip())
         )
-    elif style:
-        _rules_block = f"\n\nRequired image style: {style}."
+    if _priority_style:
+        _rules_block += f"\n\nPrimary mandatory style (highest priority): {_priority_style}."
 
     try:
         image_prompt = await _generate_text_with_ai(
@@ -138,17 +141,17 @@ async def _generate_image_for_post(post_text: str, style: str = "", user_rules: 
         )
         if not image_prompt or len(image_prompt) < 5:
             image_prompt = "person working at a desk, focused, modern office"
-            if style:
-                image_prompt += f", {style}"
+            if _priority_style:
+                image_prompt += f", {_priority_style}"
     except Exception as _img_prompt_err:
         logger.debug("Image prompt generation failed, using fallback: %s", _img_prompt_err)
         image_prompt = "person working at a desk, focused, modern office"
-        if style:
-            image_prompt += f", {style}"
+        if _priority_style:
+            image_prompt += f", {_priority_style}"
 
     # Если есть явный стиль — гарантированно дописываем в финальный промпт для Replicate
-    if style and style.lower() not in image_prompt.lower():
-        image_prompt = f"{image_prompt.rstrip(', ')} | style: {style}"
+    if _priority_style and _priority_style.lower() not in image_prompt.lower():
+        image_prompt = f"{image_prompt.rstrip(', ')} | style: {_priority_style}"
 
     try:
         model = "black-forest-labs/flux-schnell"
@@ -588,8 +591,16 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
         # === Генерация картинки для поста (отображается в дашборде и каналах) ===
         # Передаём ВСЕ правила пользователя в AI — он сам разберётся что применить к картинке
         _user_rules_for_img: list = []
+        _priority_img_style = ''
         try:
             _raw_mem_aps = getattr(user, 'memory', None) or ''
+            # Берём главный стиль тем же проверенным способом, что и основной generate_image
+            try:
+                from ai_integration.handlers import _extract_image_style_from_memory as _extract_style_aps
+                _priority_img_style = (_extract_style_aps(user) or '').strip()
+            except Exception as _st_err:
+                logger.debug("[AUTO_POST] Could not extract priority image style: %s", _st_err)
+
             if _raw_mem_aps:
                 try:
                     from ai_integration.memory import decrypt_data as _dec_aps
@@ -600,13 +611,21 @@ async def create_auto_post(user_id, content, session, notify=True, post_type='pr
                     import json as _json_aps
                     _m_aps = _json_aps.loads(_raw_mem_aps.strip())
                     _user_rules_for_img = [r for r in _m_aps.get('rules', []) if r and len(r.strip()) > 3]
-            logger.info("[AUTO_POST] user rules for image: %d rules", len(_user_rules_for_img))
+            logger.info(
+                "[AUTO_POST] user rules for image: %d rules, priority_style=%s",
+                len(_user_rules_for_img),
+                'yes' if _priority_img_style else 'no',
+            )
         except Exception as _e_aps:
             logger.debug("[AUTO_POST] Could not load user rules for image: %s", _e_aps)
 
         image_url = ""
         try:
-            image_url = await _generate_image_for_post(content, user_rules=_user_rules_for_img)
+            image_url = await _generate_image_for_post(
+                content,
+                style=_priority_img_style,
+                user_rules=_user_rules_for_img,
+            )
             if image_url:
                 post.image_url = image_url
                 # Скачиваем байты для постоянного хранения
