@@ -1975,6 +1975,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
     if _agent_has_discord or _user_discord_wh:
         _aic_can.append("📢 publish_to_discord: отправка webhook в Discord-сервер пользователя")
     _aic_can.append("🔍 web_search, research_topic — всегда доступны (но если есть API — используй API!)")
+    _aic_can.append("🎨 generate_image(prompt='...', style='watercolor') — всегда доступен, без внешних ключей")
     # ── Явный перечень НЕнастроенных интеграций ──
     # AI должен ЧЁТКО видеть что подключено и что НЕТ — без угадывания.
     _IMPORTANT_CATS = [
