@@ -11438,7 +11438,7 @@ _GENERIC_PREFIXES = {
     'awards', 'events', 'webinar',
     'training', 'education', 'community', 'social', 'podcast',
     'editor', 'editorial', 'submissions', 'apply', 'donate',
-    'news',
+    'news', 'founders', 'devops', 'it', 'dev',
 }
 
 # Паттерны — только реально системные

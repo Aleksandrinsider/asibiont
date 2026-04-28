@@ -3062,6 +3062,7 @@ def _build_autopilot_prompt(goals_summary: list, user=None, agent_caps=None, age
                 "\nКОМАНДА (делегируй если нужна их специализация):\n"
                 + '\n'.join(_delegate_lines)
                 + "\nФормат: DELEGATE[Имя]: подробное поручение с данными (email, имена, ссылки, цифры). Не 'поищи контакты' а 'отправь письма найденным контактам с персональным предложением'.\n"
+                + "⚠️ Если поручение включает текст (статья, пост, анонс) — СНАЧАЛА сохрани его через save_note, ЗАТЕМ делегируй. Иначе агент-получатель не найдёт данные.\n"
             )
 
     # ── Блок командного контекста: что сделали коллеги ──
@@ -23892,6 +23893,7 @@ class AnchorEngine:
                         'awards', 'events', 'newsletter', 'news', 'webinar',
                         'training', 'education', 'community', 'social', 'podcast',
                         'editor', 'editorial', 'submissions', 'apply', 'donate',
+                        'founders', 'devops', 'it', 'dev',
                     }
                     # Точное совпадение ИЛИ generic слово в составном префиксе (python-genai-team → 'team')
                     _prefix_parts_set = set(re.split(r'[._\-+]', _email_prefix))
