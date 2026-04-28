@@ -685,6 +685,16 @@
         // Глобальная переменная для отслеживания активного view: 'chat' или 'feed'
         // Инициализируем из sessionStorage или по умолчанию 'chat'
         let currentView = 'reports'; // Начальный вид - Активность
+
+        // Stub navigation functions — defined early to prevent "not defined" errors
+        // if user clicks nav tabs before main script block loads (slow connection).
+        // Real implementations are in the main <script> block below and replace these.
+        function switchToNotes() { document.addEventListener('_mainScriptReady', function() { switchToNotes(); }, { once: true }); }
+        function switchToChat() { document.addEventListener('_mainScriptReady', function() { switchToChat(); }, { once: true }); }
+        function switchToFeed() { document.addEventListener('_mainScriptReady', function() { switchToFeed(); }, { once: true }); }
+        function switchToReports() { document.addEventListener('_mainScriptReady', function() { switchToReports(); }, { once: true }); }
+        function switchToArena() { document.addEventListener('_mainScriptReady', function() { switchToArena(); }, { once: true }); }
+        function switchToMarketplace() { document.addEventListener('_mainScriptReady', function() { switchToMarketplace(); }, { once: true }); }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
     <link rel="stylesheet" href="/static/style.css">
@@ -17372,6 +17382,9 @@ except Exception as e:
                 showNotification(t('err-clear-notes-except-posts') || 'Ошибка удаления заметок', 'error');
             }
         }
+
+        // Signal that all navigation functions are now defined (stubs in early script can re-fire)
+        document.dispatchEvent(new Event('_mainScriptReady'));
     </script>
 
     <script>
