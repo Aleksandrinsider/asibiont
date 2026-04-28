@@ -922,6 +922,9 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
         r'Цепочку выполнил[аи]?\.\s*', r'Цепочку выполнила?\.\s*',
         r'Шаг завершён?\.\s*', r'Задача выполнена?\.\s*',
         r'Готово\.\s*',
+        # LLM artifact: English single-word abbreviation before Russian text
+        # e.g. "Com. Пойду через корп. контакты" → "Пойду через корп. контакты"
+        r'[A-Z][a-z]{1,6}\. (?=[А-ЯЁ])',
     )
     for _cop in _canned_openers:
         t = _re_san.sub(r'(?i)^' + _cop, '', t)
