@@ -7736,7 +7736,7 @@ class AnchorEngine:
                                     or 'опубликовал' in _all_recent_text_c
                                     or 'создал пост' in _all_recent_text_c
                                 )
-                                if _rss_count_c >= 6 and not _has_rss_output_c and not _loop_channel_hint_c:
+                                if _rss_count_c >= 3 and not _has_rss_output_c and not _loop_channel_hint_c:
                                     _loop_channel_hint_c = (
                                         f'⚠️ {_chosen_name} читал RSS/Хабр {_rss_count_c} раз подряд без публикации — это петля! '
                                         f'Дай задачу с конкретным выходным артефактом: '
@@ -8022,7 +8022,7 @@ class AnchorEngine:
 
                             # ── 1. Детектор: метрика не движется, но контент льётся ──
                             # Если цель имеет numeric target, текущее значение < 20% от target,
-                            # и за последние 6ч было ≥3 create_post/publish без прямых outreach-действий
+                            # и за последние 6ч конкретный агент делал ≥3 create_post/publish без прямых outreach-действий
                             try:
                                 from models import Goal as _Goal_uh
                                 _uh_goals = session.query(_Goal_uh).filter(
@@ -8038,7 +8038,7 @@ class AnchorEngine:
                                     _ug_pct = _ug_current / _ug_target
                                     if _ug_pct >= 0.3:
                                         continue  # прогресс нормальный
-                                    # Считаем: сколько контент-действий vs прямых конверсионных
+                                    # FIX: считаем ТОЛЬКО логи текущего агента (_chosen_name), а не всех
                                     import datetime as _dt_uh
                                     _uh_cutoff = _dt_uh.datetime.now(_dt_uh.timezone.utc) - _dt_uh.timedelta(hours=6)
                                     from models import AgentActivityLog as _AAL_uh
@@ -8046,6 +8046,7 @@ class AnchorEngine:
                                         _AAL_uh.user_id == user.id,
                                         _AAL_uh.activity_type == 'agent_task',
                                         _AAL_uh.created_at >= _uh_cutoff,
+                                        _AAL_uh.title.ilike(f'%{_chosen_name}%'),
                                     ).all()
                                     _uh_content_acts = 0
                                     _uh_direct_acts = 0
@@ -8053,21 +8054,23 @@ class AnchorEngine:
                                         _uhc = (_uhl.content or '').lower() + ' ' + (_uhl.result or '').lower()
                                         _uh_content_acts += sum(1 for kw in (
                                             'create_post', 'publish_to_telegram', 'опубликовал', 'статья вышла',
-                                            'пост вышел', 'blog', 'блог',
+                                            'пост вышел', 'blog', 'блог', 'fetch_rss', 'read_rss',
                                         ) if kw in _uhc)
                                         _uh_direct_acts += sum(1 for kw in (
                                             'send_outreach_email', 'add_email_leads', 'save_email_contact',
-                                            'create_lead', 'create_contact', 'add_task',
-                                            'зарегистрировал', 'привлёк', 'подписался',
+                                            'create_lead', 'create_contact', 'reply_to_outreach',
+                                            'зарегистрировал', 'привлёк', 'подписался', 'find_relevant_contacts',
                                         ) if kw in _uhc)
                                     if _uh_content_acts >= 3 and _uh_direct_acts == 0:
+                                        _gap = int(_ug_target - _ug_current)
                                         _uh_parts.append(
-                                            f'⚡ ДИСБАЛАНС СТРАТЕГИИ: цель «{_ug.title[:50]}» на {int(_ug_pct*100)}% '
-                                            f'(нужно {int(_ug_target)}, есть {int(_ug_current)}). '
-                                            f'За 6ч: {_uh_content_acts} контент-публикаций, 0 прямых конверсионных действий. '
-                                            f'Публикации создают охват, но НЕ добавляют единицы к метрике. '
-                                            f'Для продвижения метрики нужен прямой контакт: outreach, регистрация, приглашение, лид. '
-                                            f'Следующий шаг {_chosen_name} — НЕ очередная статья, а прямое действие на привлечение.'
+                                            f'⚡ ДИСБАЛАНС У {_chosen_name.upper()}: цель «{_ug.title[:50]}» на {int(_ug_pct*100)}% '
+                                            f'(нужно {int(_ug_target)}, есть {int(_ug_current)}, осталось {_gap}). '
+                                            f'За 6ч {_chosen_name} сделал(а) {_uh_content_acts} контент/RSS-действий и 0 прямых конверсионных. '
+                                            f'Контент не добавляет единицы к метрике. '
+                                            f'ОБЯЗАТЕЛЬНО: дай {_chosen_name} прямое действие на привлечение — '
+                                            f'web_search → save_email_contact → send_outreach_email (новые люди, не те что уже в базе). '
+                                            f'Конкретная задача: найди {min(15, max(5, _gap // 5))} новых потенциальных пользователей через web_search.'
                                         )
                                         break  # достаточно одного предупреждения
                             except Exception:
@@ -12398,6 +12401,14 @@ class AnchorEngine:
                     _AAL_rss.activity_type.in_(['post_newsfeed', 'post_telegram', 'email', 'post_discord']),
                     _AAL_rss.created_at >= _rss_cutoff,
                 ).count()
+                # Также считаем agent_task с признаками публикации (блог, create_post)
+                _rss_blog_pub = session.query(_AAL_rss).filter(
+                    _AAL_rss.user_id == user.id,
+                    _AAL_rss.activity_type == 'agent_task',
+                    _AAL_rss.created_at >= _rss_cutoff,
+                    _AAL_rss.result.ilike('%опублик%') | _AAL_rss.result.ilike('%create_post%') | _AAL_rss.result.ilike('%blog%'),
+                ).count()
+                _rss_action_aal += _rss_blog_pub
                 for _re in _rss_aal:
                     _rt = (str(_re.result or '')).lower()
                     _is_rss = any(kw in _rt for kw in ['rss', 'habr', 'статья', 'http', 'article', '==='])
@@ -13337,6 +13348,42 @@ class AnchorEngine:
                         for _ag, _act in _npg['actions']:
                             _eff_lines.append(f"       • {_ag}: {_act}")
                         _eff_lines.append(f"     → СМЕНИТЬ ТАКТИКУ: попробуй ДРУГОЙ инструмент или подход к этой цели!")
+
+                # Zero-progress goals: цели на 0% вне зависимости от активности агентов
+                _zero_progress_goals = [
+                    g for g in _goals[:8]
+                    if (g.get('metric_current', 0) or 0) == 0 and (g.get('progress', 0) or 0) <= 2
+                    and (g.get('metric_target') or 0) > 0
+                ]
+                if _zero_progress_goals:
+                    if not _eff_lines:
+                        _eff_lines.append("📊 АНАЛИЗ ЭФФЕКТИВНОСТИ:")
+                    _eff_lines.append("\n  🚨 НУЛЕВОЙ ПРОГРЕСС — ОБЯЗАТЕЛЬНОЕ ПРЯМОЕ ДЕЙСТВИЕ:")
+                    for _zpg in _zero_progress_goals[:3]:
+                        _zpg_title = _zpg['title'][:60]
+                        _zpg_target = _zpg.get('metric_target', '?')
+                        _zpg_unit = _zpg.get('metric_unit', 'единиц')
+                        _eff_lines.append(
+                            f"     ❌ «{_zpg_title}» = 0/{_zpg_target} {_zpg_unit} — МЕТРИКА НЕ ДВИГАЛАСЬ!"
+                        )
+                        _eff_lines.append(
+                            f"     → В ЭТОМ ЦИКЛЕ ОБЯЗАТЕЛЬНО дай одному агенту прямое действие:"
+                        )
+                        _eff_lines.append(
+                            f"       1) web_search('[ниша] OR [продукт] site:linkedin.com OR community OR forum — найди 10+ конкретных потенциальных {_zpg_unit}'"
+                        )
+                        _eff_lines.append(
+                            f"       2) save_email_contact(name=..., email=...) для каждого найденного"
+                        )
+                        _eff_lines.append(
+                            f"       3) Если есть email-агент → назначь send_outreach_email к найденным"
+                        )
+                        _eff_lines.append(
+                            f"       4) Если нет email → update_goal_progress с комментарием о найденных лидах"
+                        )
+                        _eff_lines.append(
+                            f"     ⚡ КОНТЕНТ НЕ СЧИТАЕТСЯ: публикации RSS/blog не двигают эту метрику — нужен ПРЯМОЙ контакт или регистрация!"
+                        )
                 
                 if not _eff_lines and len(_recent) >= 3:
                     # Если нет явного прогресса но есть активность
