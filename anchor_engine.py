@@ -5161,7 +5161,7 @@ class AnchorEngine:
 
         async with lock:
             try:
-                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '600'))
                 await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
@@ -5242,11 +5242,11 @@ class AnchorEngine:
     async def _process_user_inner(self, user_id: int, session):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
         # ── DEADLINE TRACKING ──
-        # Внешний _process_user_safe имеет timeout=ANCHOR_PROCESS_USER_TIMEOUT_SEC (default 300s).
+        # Внешний _process_user_safe имеет timeout=ANCHOR_PROCESS_USER_TIMEOUT_SEC (default 600s).
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
         # чтобы НЕ допускать CancelledError от asyncio.wait_for.
         import time as _time_inner
-        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '600'))
         _inner_budget_sec = max(30, _outer_timeout_sec - 30)
         _deadline = _time_inner.monotonic() + _inner_budget_sec
 
@@ -6709,9 +6709,10 @@ class AnchorEngine:
                                 len(_coord_real), [a.name for a in _coord_real])
                     if len(_coord_real) >= 1:
                         try:
-                            # timeout = max 480s — coordinator plan (~60s) + 4 agents × 90-120s
-                            # Должен быть МЕНЬШЕ _process_user wrapper (600s)
-                            _coord_timeout = 480
+                            # timeout = coordinator plan (~60s) + N agents × 90-120s
+                            # Должен быть МЕНЬШЕ _process_user wrapper (default 600s)
+                            _outer_wrap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '600'))
+                            _coord_timeout = max(180, _outer_wrap - 120)
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
