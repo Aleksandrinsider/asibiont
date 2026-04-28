@@ -3980,6 +3980,51 @@ class HybridAutonomousAgent:
                             f"[AGENT] process_request: injected personality '{_agent_data['name']}' "
                             f"(id={_active_agent_id}, tools={_allowed or 'all'})"
                         )
+                        # ── Инжектируем собственные последние сообщения агента как контекст ──
+                        # Критично для случая: пользователь отвечает на вопрос агента (напр. "Beatrice запускай письма")
+                        # Без этого агент не помнит что сам предложил и интерпретирует ответ как новую задачу.
+                        try:
+                            from models import Interaction as _IntrSelf, User as _USelf, Session as _SSelf
+                            import json as _jSelf
+                            from datetime import datetime as _dtSelf, timezone as _tzSelf, timedelta as _tdSelf
+                            _ssf = _SSelf()
+                            try:
+                                _usf = _ssf.query(_USelf).filter_by(telegram_id=user_id).first()
+                                if _usf:
+                                    _since_sf = _dtSelf.now(_tzSelf.utc) - _tdSelf(hours=4)
+                                    _self_msgs_raw = (
+                                        _ssf.query(_IntrSelf)
+                                        .filter(
+                                            _IntrSelf.user_id == _usf.id,
+                                            _IntrSelf.message_type.in_(['agent_msg', 'proactive']),
+                                            _IntrSelf.created_at >= _since_sf,
+                                        )
+                                        .order_by(_IntrSelf.created_at.desc())
+                                        .limit(5)
+                                        .all()
+                                    )
+                                    _my_own: list[str] = []
+                                    _ag_lower_sf = (_agent_data.get('name') or '').lower()
+                                    for _sm in _self_msgs_raw:
+                                        try:
+                                            _smj = _jSelf.loads(_sm.content or '{}')
+                                            _sm_who = ((_smj.get('__agent') or {}).get('name') or '').lower()
+                                            _sm_txt = (_smj.get('text') or '')[:500].strip()
+                                        except Exception:
+                                            _sm_who, _sm_txt = '', str(_sm.content or '')[:500].strip()
+                                        if _sm_who == _ag_lower_sf and _sm_txt:
+                                            _my_own.append(_sm_txt)
+                                    if _my_own:
+                                        _my_own.reverse()
+                                        dynamic_context += (
+                                            f"\n\n[МОИ НЕДАВНИЕ СООБЩЕНИЯ — ЭТО ТЫ ПИСАЛ(А) РАНЕЕ]\n"
+                                            + '\n'.join(f"  • {t}" for t in _my_own)
+                                            + "\n→ Если пользователь подтверждает или отвечает на одно из этих сообщений — выполни то что предлагал(а), не спрашивай заново."
+                                        )
+                            finally:
+                                _ssf.close()
+                        except Exception as _esf:
+                            logger.debug("[AGENT_SELF_CTX] %s", _esf)
                     else:
                         # Агент удалён/деактивирован — убираем только его из списка
                         try:
@@ -5712,6 +5757,7 @@ def _has_explicit_mention(message: str) -> bool:
     - @agent
     - "Имя, ..."
     - "Name ты ..." / "Name как ..." (без запятой)
+    - "Name запускай/отправляй/..." — ответ-команда на предложение агента
     """
     m = (message or '').strip()
     if not m:
@@ -5724,6 +5770,13 @@ def _has_explicit_mention(message: str) -> bool:
     # "Beatrice ты ..." / "Беатрис как ..." — живой формат без запятой
     if re.match(
         r'(?i)^[a-zа-яё]{3,}\s+(?:ты|как|что|когда|почему|где|сколько|видишь|можешь|знаешь|проверь|сделай|расскажи)\b',
+        m,
+    ):
+        return True
+    # "Beatrice запускай письма" / "Кристина отправляй" — ответ-команда (повелительное наклонение)
+    # Императив: глаголы на -ай/-яй/-ей/-ой/-уй/-и/-ь (второе лицо ед. числа)
+    if re.match(
+        r'(?i)^[a-zа-яё]{3,}\s+(?:[а-яё]+(?:ай|яй|ей|ой|уй|ши|жи|чи|ни|ри|ти|ви|ли|ми|пи|ки|ги|хи|зи|си|фи|би|ди|йся|йтесь|йте))\b',
         m,
     ):
         return True
@@ -11818,6 +11871,19 @@ async def chat_with_ai(message, context=None, user_id=None, file_content=None,
                     response_text = _cleaned
             except Exception as _e:
                 logger.debug("suppressed: %s", _e)
+            # ── Гендерная коррекция для прямых ответов агента ──
+            # process_request не проходит через _sanitize_proactive_text (только autopilot/coordinator),
+            # поэтому LLM иногда использует неверный род даже с gender-block в промпте.
+            _answered_agent_early = agent._active_agent_data.get(user_id)
+            if _answered_agent_early:
+                try:
+                    from anchor_engine import _sanitize_proactive_text as _spt_direct, _detect_agent_is_female as _daf_direct
+                    _is_fem_direct = _daf_direct(_answered_agent_early.get('name', ''))
+                    _corrected = _spt_direct(response_text, is_fem=_is_fem_direct)
+                    if _corrected and _corrected.strip():
+                        response_text = _corrected
+                except Exception as _e_spt:
+                    logger.debug("suppressed gender correction: %s", _e_spt)
             import re as _re
             # Удаляем оставшиеся snake_case tool names (word_word pattern) из текста
             response_text = _re.sub(
