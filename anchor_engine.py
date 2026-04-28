@@ -915,6 +915,24 @@ def _sanitize_proactive_text(text: str, is_fem: bool = False, fem_names: set | N
     # Restore missing space between sentences if text was glued like "...аналитиков.Дальше"
     # Apply only when punctuation is immediately followed by an uppercase letter.
     t = _re_san.sub(r'([.!?])([A-ZА-ЯЁ])', r'\1 \2', t)
+    # Strip canned opener phrases that sound like templates, not live speech
+    # e.g. "Цепочку завершил. Вот загрузил свежие новости..." → "Загрузил свежие новости..."
+    _canned_openers = (
+        r'Цепочку завершил[аи]?\.\s*', r'Цепочку завершила?\.\s*',
+        r'Цепочку выполнил[аи]?\.\s*', r'Цепочку выполнила?\.\s*',
+        r'Шаг завершён?\.\s*', r'Задача выполнена?\.\s*',
+        r'Готово\.\s*',
+    )
+    for _cop in _canned_openers:
+        t = _re_san.sub(r'(?i)^' + _cop, '', t)
+        t = _re_san.sub(r'(?i)\n' + _cop, '\n', t)
+    # Strip "Вот" at sentence start (sounds like a filler, not natural speech)
+    # "Вот загрузил" → "Загрузил"; "вот что нашёл" stays (it's meaningful)
+    t = _re_san.sub(
+        r'(?im)(^|\.\s+|\n)Вот\s+(?=[А-ЯЁA-Z\w])',
+        lambda m: m.group(1),
+        t,
+    )
     # Sanitize hallucinated token amounts ("1000+500", "бесплатных токенов" etc.)
     try:
         from ai_integration.conversation_history import sanitize_token_hallucinations
@@ -17284,10 +17302,12 @@ class AnchorEngine:
                     + f"\n→ Честный факт из tool-ответа > красивая общая фраза.\n"
                     + f"→ Поиск → сразу ACTION (send/save/post). Поиск без действия = 0.\n"
                     + f"→ 0 результатов → другой источник/подход прямо сейчас.\n"
-                    + f"→ СТИЛЬ ОТЧЁТА: пиши как живой коллега директору — «Сделала это, вот результат». Примеры:\n"
+                    + f"→ СТИЛЬ ОТЧЁТА: пиши как живой коллега директору. Примеры:\n"
                     + f"   ✅ «Нашла 5 разработчиков на GitHub по теме LangChain, отправила 3 письма — один уже ответил.»\n"
                     + f"   ✅ «Проверила почту — пришёл ответ от Дмитрия. Он заинтересован, ответила ему про интеграцию.»\n"
                     + f"   ❌ «Была выполнена задача по поиску. Использованы инструменты.» — это не отчёт, это шаблон.\n"
+                    + f"   ❌ НЕ начинай предложение со слова «Вот» — это звучит как шаблон.\n"
+                    + f"   ❌ НЕ пиши «Цепочку завершил», «Шаг завершён», «Готово.» в начале — сразу переходи к сути.\n"
                     + f"→ Говори от первого лица, без пересказа задания. Цифры, имена, факты.\n"
                     + f"→ asibiont.com — НАША платформа, не лид.\n"
                     + (f"→ Сверь с блоком '🚫 НЕЛЬЗЯ повторять' — ответ обязан содержать новый факт.\n" if _no_repeat_block else '')
