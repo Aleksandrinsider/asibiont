@@ -1193,9 +1193,9 @@ if db_url and db_url.startswith('postgresql'):
 
 engine = create_engine(
     db_url,
-    pool_size=10,  # 10 permanent connections
-    max_overflow=20,  # 20 overflow (max 30 total) — headroom for 15 batch + bg tasks
-    pool_timeout=30,  # 30s timeout — tolerate bursts before failing
+    pool_size=15,  # 15 permanent connections
+    max_overflow=25,  # 25 overflow (max 40 total) — headroom for coordinator sessions + web requests
+    pool_timeout=10,  # 10s timeout — fail fast so dashboard doesn't hang
     pool_recycle=300,  # Recycle every 5 minutes
     pool_pre_ping=True,
     connect_args=connect_args,
