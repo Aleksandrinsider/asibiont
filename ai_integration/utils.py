@@ -887,6 +887,15 @@ def sanitize_live_team_chat_text(
                 if _is_frag and _prev_p >= 30:
                     cleaned = cleaned[:_prev_p + 1].strip()
 
+        # Strip trailing 3rd-person present-tense fragments leaked from coordinator's internal reasoning
+        # e.g. "... нам нужна статья. пишет статью в блог про сальдо."
+        cleaned = re.sub(
+            r'(?i)[.\s]+((?:пишет|создаёт|создает|делает|готовит|публикует|анализирует|'
+            r'ищет|проверяет|отправляет|обновляет|формирует)\s+[^.!?]{5,60})[.!?]?\s*$',
+            '',
+            cleaned,
+        ).strip()
+
     # Runtime-guard без потери содержания: если после очистки остались явные
     # префиксы брифа, мягко убираем их, но НЕ заменяем весь текст шаблоном.
     _lower = cleaned.lower()
