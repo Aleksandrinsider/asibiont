@@ -695,6 +695,24 @@
         function switchToReports() { document.addEventListener('_mainScriptReady', function() { switchToReports(); }, { once: true }); }
         function switchToArena() { document.addEventListener('_mainScriptReady', function() { switchToArena(); }, { once: true }); }
         function switchToMarketplace() { document.addEventListener('_mainScriptReady', function() { switchToMarketplace(); }, { once: true }); }
+
+        // Global fetch wrapper with retry on network errors (e.g. server restart during deploy)
+        async function apiFetch(url, options, retries) {
+            retries = retries === undefined ? 2 : retries;
+            for (var attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    var resp = await fetch(url, options);
+                    return resp;
+                } catch (e) {
+                    if (attempt < retries && (e instanceof TypeError)) {
+                        // Network error — wait and retry (server may be restarting)
+                        await new Promise(function(r) { setTimeout(r, 1500 * (attempt + 1)); });
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+        }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js" defer></script>
     <link rel="stylesheet" href="/static/style.css">
@@ -9277,7 +9295,7 @@ except Exception as e:
 
         async function loadReports() {
             try {
-                const resp = await fetch('/api/reports?t=' + Date.now(), { credentials: 'include' });
+                const resp = await apiFetch('/api/reports?t=' + Date.now(), { credentials: 'include' });
                 if (!resp.ok) return;
                 const data = await resp.json();
                 const list = document.getElementById('reports-list');
@@ -12444,7 +12462,7 @@ except Exception as e:
             }
             
             try {
-                const response = await fetch('/api/favorite_contacts', {
+                const response = await apiFetch('/api/favorite_contacts', {
                     credentials: 'include'
                 });
                 if (response.status === 401) {
@@ -13215,7 +13233,7 @@ except Exception as e:
             chatHistoryLoading = true;
             try {
                 const safePage = Math.max(1, Number(pageNum) || 1);
-                const response = await fetch(`/api/interactions?page=${safePage}&per_page=${CHAT_HISTORY_PAGE_SIZE}`, {
+                const response = await apiFetch(`/api/interactions?page=${safePage}&per_page=${CHAT_HISTORY_PAGE_SIZE}`, {
                     credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
@@ -14315,7 +14333,7 @@ except Exception as e:
         let goalsLoadedOnce = false;
         async function loadGoalsProgress() {
             try {
-                const response = await fetch('/api/goals', { credentials: 'include', cache: 'no-store' });
+                const response = await apiFetch('/api/goals', { credentials: 'include', cache: 'no-store' });
                 if (!response.ok) return;
                 const data = await response.json();
                 const section = document.getElementById('goals-progress-section');
@@ -14924,7 +14942,7 @@ except Exception as e:
                     return; // Не показываем модальное окно, если пользователь пропустил его
                 }
 
-                const response = await fetch('/api/profile', {
+                const response = await apiFetch('/api/profile', {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -15927,7 +15945,7 @@ except Exception as e:
             lastTasksUpdate = now;
             
             try {
-                const response = await fetch('/api/tasks?t=' + Date.now(), {
+                const response = await apiFetch('/api/tasks?t=' + Date.now(), {
                     credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
@@ -16939,7 +16957,7 @@ except Exception as e:
             
             try {
                 const _profileLang = (typeof _currentLang !== 'undefined' && _currentLang) ? _currentLang : (localStorage.getItem('asibiont_lang') || 'ru');
-                const response = await fetch('/api/profile?lang=' + _profileLang, {
+                const response = await apiFetch('/api/profile?lang=' + _profileLang, {
                     credentials: 'include',
                     headers: {
                         'Cache-Control': 'no-cache',
