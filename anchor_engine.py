@@ -8008,6 +8008,153 @@ class AnchorEngine:
                                     _dynamic_examples.append(_ue.format(name=_chosen_name))
                         _dynamic_examples_str = '\n'.join(f'  {e}' for e in _dynamic_examples)
 
+                        # ═══════════════════════════════════════════════════════════
+                        # ── Универсальные детекторы паттернов (не привязаны к целям)
+                        # ═══════════════════════════════════════════════════════════
+                        _universal_hints_c = ''
+                        _tool_blocked_notify = ''  # флаг: уведомить пользователя об ограничении инструмента
+                        try:
+                            import re as _re_uh
+                            _uh_parts: list[str] = []
+
+                            # ── 1. Детектор: метрика не движется, но контент льётся ──
+                            # Если цель имеет numeric target, текущее значение < 20% от target,
+                            # и за последние 6ч было ≥3 create_post/publish без прямых outreach-действий
+                            try:
+                                from models import Goal as _Goal_uh
+                                _uh_goals = session.query(_Goal_uh).filter(
+                                    _Goal_uh.user_id == user.id,
+                                    _Goal_uh.status.in_(['active', 'in_progress']),
+                                    _Goal_uh.metric_target.isnot(None),
+                                ).all()
+                                for _ug in _uh_goals:
+                                    _ug_target = float(_ug.metric_target or 0)
+                                    _ug_current = float(_ug.metric_current or 0)
+                                    if _ug_target <= 0:
+                                        continue
+                                    _ug_pct = _ug_current / _ug_target
+                                    if _ug_pct >= 0.3:
+                                        continue  # прогресс нормальный
+                                    # Считаем: сколько контент-действий vs прямых конверсионных
+                                    import datetime as _dt_uh
+                                    _uh_cutoff = _dt_uh.datetime.now(_dt_uh.timezone.utc) - _dt_uh.timedelta(hours=6)
+                                    from models import AgentActivityLog as _AAL_uh
+                                    _uh_logs = session.query(_AAL_uh).filter(
+                                        _AAL_uh.user_id == user.id,
+                                        _AAL_uh.activity_type == 'agent_task',
+                                        _AAL_uh.created_at >= _uh_cutoff,
+                                    ).all()
+                                    _uh_content_acts = 0
+                                    _uh_direct_acts = 0
+                                    for _uhl in _uh_logs:
+                                        _uhc = (_uhl.content or '').lower() + ' ' + (_uhl.result or '').lower()
+                                        _uh_content_acts += sum(1 for kw in (
+                                            'create_post', 'publish_to_telegram', 'опубликовал', 'статья вышла',
+                                            'пост вышел', 'blog', 'блог',
+                                        ) if kw in _uhc)
+                                        _uh_direct_acts += sum(1 for kw in (
+                                            'send_outreach_email', 'add_email_leads', 'save_email_contact',
+                                            'create_lead', 'create_contact', 'add_task',
+                                            'зарегистрировал', 'привлёк', 'подписался',
+                                        ) if kw in _uhc)
+                                    if _uh_content_acts >= 3 and _uh_direct_acts == 0:
+                                        _uh_parts.append(
+                                            f'⚡ ДИСБАЛАНС СТРАТЕГИИ: цель «{_ug.title[:50]}» на {int(_ug_pct*100)}% '
+                                            f'(нужно {int(_ug_target)}, есть {int(_ug_current)}). '
+                                            f'За 6ч: {_uh_content_acts} контент-публикаций, 0 прямых конверсионных действий. '
+                                            f'Публикации создают охват, но НЕ добавляют единицы к метрике. '
+                                            f'Для продвижения метрики нужен прямой контакт: outreach, регистрация, приглашение, лид. '
+                                            f'Следующий шаг {_chosen_name} — НЕ очередная статья, а прямое действие на привлечение.'
+                                        )
+                                        break  # достаточно одного предупреждения
+                            except Exception:
+                                pass
+
+                            # ── 2. Детектор: агент сообщил о недоступном инструменте ──
+                            # Если _last_agent_reply_c содержит "нет доступа / недоступен / не могу"
+                            # → координатор должен переназначить, а не давать инструкцию пользователю
+                            if _last_agent_reply_c:
+                                _uh_reply_l = _last_agent_reply_c.lower()
+                                _uh_tool_blocked = (
+                                    'нет доступа' in _uh_reply_l
+                                    or 'недоступен' in _uh_reply_l
+                                    or 'не входит в мой набор' in _uh_reply_l
+                                    or 'инструмент не подключён' in _uh_reply_l
+                                    or 'инструмент недоступен' in _uh_reply_l
+                                    or ('не могу' in _uh_reply_l and any(w in _uh_reply_l for w in ('опубликовать', 'отправить', 'создать', 'публиковать')))
+                                )
+                                if _uh_tool_blocked:
+                                    # Определяем какой инструмент заблокирован
+                                    _uh_blocked_tool = ''
+                                    if 'telegram' in _uh_reply_l:
+                                        _uh_blocked_tool = 'Telegram-публикацию'
+                                    elif 'email' in _uh_reply_l or 'письм' in _uh_reply_l:
+                                        _uh_blocked_tool = 'email-рассылку'
+                                    elif 'crm' in _uh_reply_l:
+                                        _uh_blocked_tool = 'CRM'
+                                    else:
+                                        _uh_blocked_tool = 'нужный инструмент'
+                                    _uh_parts.append(
+                                        f'🔄 ПЕРЕНАЗНАЧЕНИЕ: {_chosen_name} сообщил(а) что не может выполнить {_uh_blocked_tool}. '
+                                        f'НЕ давай инструкцию пользователю "зайди в настройки". '
+                                        f'Вместо этого: либо дай {_chosen_name} ДРУГУЮ задачу (без заблокированного инструмента), '
+                                        f'либо поручи ту же задачу другому агенту команды у которого есть нужный доступ.'
+                                    )
+                                    # Готовим уведомление пользователю
+                                    _tool_blocked_notify = (
+                                        f'⚠️ {_chosen_name} сообщает об ограничении — {_uh_blocked_tool} недоступен в этом цикле.\n'
+                                        f'ASI получил уведомление и переназначит задачу другому агенту.\n'
+                                        f'Вам ничего делать не нужно.'
+                                    )
+
+                            # ── 3. Детектор: цель требует N единиц, но ищем по одной ──
+                            # Если metric_target >= 10 И metric_current < 50% target
+                            # И последние 3 поручения агенту содержат паттерн "найди 1 / контакт / email" (единственное число)
+                            try:
+                                from models import Goal as _Goal_uh2
+                                _uh_goals2 = session.query(_Goal_uh2).filter(
+                                    _Goal_uh2.user_id == user.id,
+                                    _Goal_uh2.status.in_(['active', 'in_progress']),
+                                    _Goal_uh2.metric_target.isnot(None),
+                                ).all()
+                                for _ug2 in _uh_goals2:
+                                    _ug2_target = float(_ug2.metric_target or 0)
+                                    _ug2_current = float(_ug2.metric_current or 0)
+                                    if _ug2_target < 10 or _ug2_current >= _ug2_target * 0.5:
+                                        continue
+                                    # Проверяем last N поручений: ищут ли по 1 контакту за раз
+                                    _single_search_count = 0
+                                    _batch_hint_kws = ('список ', 'несколько', 'batch', '5-10', '10-15', 'несколько контактов', 'список контактов', 'список компаний')
+                                    for _assign_txt in (_my_assign_texts or [])[:5]:
+                                        _at_l = _assign_txt.lower()
+                                        _is_single = (
+                                            any(w in _at_l for w in ('найди контакт', 'найди email', 'найди один', 'один контакт', 'find contact', 'get contact'))
+                                            and not any(w in _at_l for w in _batch_hint_kws)
+                                        )
+                                        if _is_single:
+                                            _single_search_count += 1
+                                    if _single_search_count >= 2:
+                                        _gap = int(_ug2_target - _ug2_current)
+                                        _batch_size = min(15, max(5, _gap // 3))
+                                        _uh_parts.append(
+                                            f'📦 МАСШТАБИРОВАНИЕ: цель «{_ug2.title[:50]}» требует ещё {_gap} единиц, '
+                                            f'но последние {_single_search_count} поручения искали по 1 контакту/компании за раз. '
+                                            f'При таком темпе до цели идти ещё {_gap} циклов. '
+                                            f'Поручи {_chosen_name} собрать СПИСОК из {_batch_size}+ единиц за один шаг '
+                                            f'(например: add_email_leads со списком, web_search с выборкой 10 компаний, batch-поиск). '
+                                            f'Один результативный цикл лучше десяти мелких.'
+                                        )
+                                        break
+                            except Exception:
+                                pass
+
+                            if _uh_parts:
+                                _universal_hints_c = '\n🔬 СИСТЕМНАЯ ДИАГНОСТИКА (факты из базы, не домыслы):\n'
+                                _universal_hints_c += '\n'.join(f'  {p}' for p in _uh_parts)
+                                _universal_hints_c += '\n'
+                        except Exception:
+                            pass
+
                         # ── Compact effectiveness context for _coord_prompt ──
                         _coord_effectiveness_c = ''
                         if 'email' in _cats_c:
@@ -8249,6 +8396,7 @@ class AnchorEngine:
                             + (_other_assigns_ctx if _other_assigns_ctx else '')
                             + (f"{_loop_channel_hint_c}\n" if _loop_channel_hint_c else '')
                             + (f"{_bottleneck_hint_c}\n" if _bottleneck_hint_c else '')
+                            + (_universal_hints_c if _universal_hints_c else '')
                             + (_dnc_str_c if _dnc_str_c else '')
                             + (_failed_tasks_ctx if _failed_tasks_ctx else '')
                             + (_pending_tasks_ctx if _pending_tasks_ctx else '')
@@ -9022,6 +9170,13 @@ class AnchorEngine:
                                 _tg_assign = f"[ASI → {_chosen_name}]\n{_tg_body}"
                                 await _safe_send(self.bot, user.telegram_id, _tg_assign)
                                 logger.info("[ANCHOR-AUTOPILOT] coord-assign sent to TG for %s", _chosen_name)
+                            # Уведомляем пользователя если агент сообщил о недоступном инструменте
+                            if _tool_blocked_notify:
+                                try:
+                                    await _safe_send(self.bot, user.telegram_id, _tool_blocked_notify)
+                                    logger.info("[ANCHOR-AUTOPILOT] tool-blocked notify sent to user %d", user.id)
+                                except Exception as _tbn_err:
+                                    logger.debug("[ANCHOR-AUTOPILOT] tool-blocked notify failed: %s", _tbn_err)
                             except Exception as _tg_assign_err:
                                 logger.debug("[ANCHOR-AUTOPILOT] coord-assign TG send failed: %s", _tg_assign_err)
                     except Exception as _cas_err:
