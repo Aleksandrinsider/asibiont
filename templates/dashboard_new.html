@@ -4214,6 +4214,53 @@ try:
 except Exception as e:
     print('Ошибка Stripe: ' + str(e))`
             },
+            yookassa: {
+                name: 'ЮКасса',
+                fields: [
+                    {k:'YOOKASSA_SHOP_ID', label:'Shop ID', ph:'123456', t:'text'},
+                    {k:'YOOKASSA_SECRET_KEY', label:'Secret Key', ph:'test_xxxxxxxxxxxxxxxxxxxx', t:'text'}
+                ],
+                hint: 'yookassa.ru → Настройки → Ключи API. Используй ключи test_ для тестирования, live_ для боевого режима.',
+                code: `import urllib.request, urllib.parse, json, os, base64
+from datetime import datetime
+SHOP_ID = os.environ.get('YOOKASSA_SHOP_ID', '')
+SECRET = os.environ.get('YOOKASSA_SECRET_KEY', '')
+def yk(path, data=None, method='GET'):
+    url = 'https://api.yookassa.ru/v3/' + path
+    creds = base64.b64encode((SHOP_ID + ':' + SECRET).encode()).decode()
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header('Authorization', 'Basic ' + creds)
+    req.add_header('Content-Type', 'application/json')
+    req.add_header('Idempotence-Key', str(os.getpid()))
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode())
+try:
+    ACTION = os.environ.get('AGENT_ACTION', '')
+    if ACTION == 'create_payment':
+        amount = os.environ.get('AGENT_PARAM_AMOUNT', '100.00')
+        desc = os.environ.get('AGENT_PARAM_DESCRIPTION', 'Оплата')
+        ret_url = os.environ.get('AGENT_PARAM_RETURN_URL', 'https://asibiont.com')
+        body = json.dumps({'amount': {'value': str(amount), 'currency': 'RUB'}, 'confirmation': {'type': 'redirect', 'return_url': ret_url}, 'capture': True, 'description': desc}).encode()
+        pay = yk('payments', data=body, method='POST')
+        link = pay.get('confirmation', {}).get('confirmation_url', '')
+        print('OK: ссылка на оплату ' + str(amount) + ' RUB: ' + link)
+    else:
+        payments = yk('payments?limit=10')
+        items = payments.get('items', [])
+        succeeded = [p for p in items if p.get('status') == 'succeeded']
+        total = sum(float(p.get('amount', {}).get('value', 0)) for p in succeeded)
+        print('ЮКасса — последние ' + str(len(items)) + ' платежей:')
+        print('Успешно получено: ' + str(round(total, 2)) + ' RUB (' + str(len(succeeded)) + '/' + str(len(items)) + ')')
+        for p in items[:6]:
+            amt = p.get('amount', {}).get('value', '0')
+            status = p.get('status', '')
+            desc = (p.get('description') or '(без описания)')[:40]
+            dt = (p.get('created_at') or '')[:10]
+            flag = '✓' if status == 'succeeded' else '✗'
+            print(flag + ' ' + str(amt) + ' RUB — ' + desc + ' — ' + dt)
+except Exception as e:
+    print('Ошибка ЮКасса: ' + str(e))`
+            },
             shopify: {
                 name: 'Shopify',
                 fields: [
@@ -7924,6 +7971,7 @@ except Exception as e:
                             <option value="slack">Slack</option>
                             <option value="trello">Trello</option>
                             <option value="stripe">Stripe</option>
+                            <option value="yookassa">ЮКасса (платежи)</option>
                             <option value="shopify">Shopify</option>
                             <option value="youtube">YouTube</option>
                             <option value="coingecko">CoinGecko</option>
