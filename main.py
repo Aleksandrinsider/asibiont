@@ -12648,6 +12648,7 @@ async def api_marketplace_my_handler(request):
                              'job_title': a.job_title or '',
                              'description': a.description or '',
                              'personality': a.personality or '',
+                             'gender': a.gender or 'male',
                              'avatar_url': f'/api/arena/agent_avatar/mkt_{a.id}?v={int(a.updated_at.timestamp())}' if a.avatar_url and a.updated_at else (f'/api/arena/agent_avatar/mkt_{a.id}' if a.avatar_url else ''),
                              'is_private': bool(a.is_private),
                              'user_api_keys': (a.user_api_keys or '') if a.author_id == user_obj.id else '',
