@@ -2798,6 +2798,11 @@ class HybridAutonomousAgent:
         """
         from . import handlers
 
+        # Pending generated image URL: если generate_image вернул URL в одной итерации,
+        # а create_post будет вызван в следующей — подставляем URL автоматически
+        if not hasattr(self, '_pending_image_url'):
+            self._pending_image_url = {}  # user_id → url
+
         close_session = False
         if session is None:
             if self.active_sessions >= 50:
@@ -2841,9 +2846,15 @@ class HybridAutonomousAgent:
                             params['close_session'] = False
                         elif 'close_session' in params:
                             del params['close_session']  # ИИ передал, но функция не принимает
-                    # Web-контекст: не отправляем изображения в Telegram при запросе с дашборда
-                    if web_context and tool_name == 'generate_image' and 'send_to_telegram' in sig.parameters:
-                        params['send_to_telegram'] = False
+                    # Web-контекст или пост-контекст: не отправляем generate_image в TG отдельно
+                    # Случай 1: web → фото не отправляем вообще
+                    # Случай 2: generate_image вызывается в одном батче с create_post/publish_to_telegram →
+                    #   фото "утечёт" пустым сообщением до того как пост опубликуется
+                    if tool_name == 'generate_image' and 'send_to_telegram' in sig.parameters:
+                        _post_tools_in_batch = {'create_post', 'publish_to_telegram', 'publish_to_discord'}
+                        _other_tools_in_batch = {a.get('tool') for a in actions if a.get('tool') != tool_name}
+                        if web_context or (_other_tools_in_batch & _post_tools_in_batch):
+                            params['send_to_telegram'] = False
 
                     # === Parameter auto-fix для известных quirks ===
                     params = self._fix_tool_params(tool_name, params, user_message)
@@ -2946,6 +2957,17 @@ class HybridAutonomousAgent:
                         result = await handler_func(**params)
                     else:
                         result = handler_func(**params)
+
+                    # ── generate_image: сохраняем URL для следующего create_post ──
+                    if tool_name == 'generate_image' and result:
+                        import re as _re_gi
+                        _gi_url_m = _re_gi.search(r'!\[.*?\]\((https?://[^\)]+)\)', str(result))
+                        if _gi_url_m:
+                            self._pending_image_url[user_id] = _gi_url_m.group(1)
+                            logger.info('[EXEC] generate_image: saved pending URL for next create_post')
+                    # ── create_post/publish_to_telegram: очищаем pending URL после использования ──
+                    if tool_name in ('create_post', 'publish_to_telegram', 'publish_to_discord'):
+                        self._pending_image_url.pop(user_id, None)
 
                     self.tool_discovery.learn_from_success(
                         func_name=tool_name, user_id=user_id,
@@ -3214,6 +3236,12 @@ class HybridAutonomousAgent:
                     # Нет контента — возвращаем ошибку, чтобы AI сгенерировал контент сначала
                     params['__skip__'] = True
                     logger.warning(f"[FIX_PARAMS] {tool_name}: no content provided, blocking publish call")
+            # Подставляем pending image URL если агент вызвал generate_image в предыдущей итерации
+            if not params.get('__skip__') and not params.get('image_url'):
+                _pending_url = getattr(self, '_pending_image_url', {}).get(params.get('user_id') or user_message)
+                if _pending_url:
+                    params['image_url'] = _pending_url
+                    logger.info(f"[FIX_PARAMS] {tool_name}: injecting pending image_url from generate_image")
 
         elif tool_name == 'generate_image':
             if 'prompt' not in params or not params.get('prompt'):
