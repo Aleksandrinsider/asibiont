@@ -12402,14 +12402,17 @@ class AnchorEngine:
                     _AAL_rss.activity_type.in_(['post_newsfeed', 'post_telegram', 'email', 'post_discord']),
                     _AAL_rss.created_at >= _rss_cutoff,
                 ).count()
-                # Также считаем agent_task с признаками публикации (блог, create_post)
-                _rss_blog_pub = session.query(_AAL_rss).filter(
+                # Также считаем завершённые agent_task как реальное действие (блог, публикации)
+                # Не используем ilike на result (полный скан TEXT-колонки) — берём title (короткий)
+                _rss_blog_pub = session.query(_AAL_rss.id).filter(
                     _AAL_rss.user_id == user.id,
                     _AAL_rss.activity_type == 'agent_task',
+                    _AAL_rss.status == 'completed',
                     _AAL_rss.created_at >= _rss_cutoff,
-                    _AAL_rss.result.ilike('%опублик%') | _AAL_rss.result.ilike('%create_post%') | _AAL_rss.result.ilike('%blog%'),
-                ).count()
-                _rss_action_aal += _rss_blog_pub
+                    _AAL_rss.title.ilike('%блог%') | _AAL_rss.title.ilike('%статья%') | _AAL_rss.title.ilike('%пост%') | _AAL_rss.title.ilike('%публик%'),
+                ).limit(1).first()
+                if _rss_blog_pub:
+                    _rss_action_aal += 1
                 for _re in _rss_aal:
                     _rt = (str(_re.result or '')).lower()
                     _is_rss = any(kw in _rt for kw in ['rss', 'habr', 'статья', 'http', 'article', '==='])
