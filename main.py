@@ -9061,6 +9061,8 @@ _TIMELINE_VISIBLE_TYPES = {
     'integration',
     'daily_report',
     'coordinator_summary',
+    'goal_autopilot_dispatch',
+    'run_agent_action',
 }
 
 
