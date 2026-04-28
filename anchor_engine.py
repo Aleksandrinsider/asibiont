@@ -5161,7 +5161,7 @@ class AnchorEngine:
 
         async with lock:
             try:
-                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '600'))
+                _process_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
                 await asyncio.wait_for(self._process_user(user_id), timeout=_process_timeout_sec)
                 # Успешное завершение — сбрасываем счётчик
                 self._timeout_counts.pop(user_id, None)
@@ -5242,11 +5242,11 @@ class AnchorEngine:
     async def _process_user_inner(self, user_id: int, session):
         """Внутренняя логика обработки пользователя (под advisory lock)"""
         # ── DEADLINE TRACKING ──
-        # Внешний _process_user_safe имеет timeout=ANCHOR_PROCESS_USER_TIMEOUT_SEC (default 600s).
+        # Внешний _process_user_safe имеет timeout=ANCHOR_PROCESS_USER_TIMEOUT_SEC (default 300s).
         # Мы отслеживаем deadline изнутри и пропускаем поздние операции,
         # чтобы НЕ допускать CancelledError от asyncio.wait_for.
         import time as _time_inner
-        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '600'))
+        _outer_timeout_sec = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
         _inner_budget_sec = max(30, _outer_timeout_sec - 30)
         _deadline = _time_inner.monotonic() + _inner_budget_sec
 
@@ -6173,7 +6173,23 @@ class AnchorEngine:
         
         Используется для автопилота целей: агент получает задачу, выполняет действия
         (создаёт задачи, отправляет письма, исследует), результат сохраняется в activity log.
+        session может быть None — тогда открывается своя сессия (не блокирует основной пул).
         """
+        # Всегда используем собственную короткую сессию для guard/throttle/delivered_at
+        # чтобы не держать основную сессию открытой во время долгих AI-вызовов
+        _own_session = None
+        try:
+            from models import Session as _DispSession
+            _own_session = _DispSession()
+        except Exception as _ss_err:
+            logger.warning("[DISPATCH] failed to open own session: %s", _ss_err)
+            if session is None:
+                return
+            _own_session = session  # fallback to passed session
+
+        _close_own = (_own_session is not session)
+        # Use _own_session for all DB ops below
+        session = _own_session
         try:
             from ai_integration.autonomous_agent import _exec_agent_for_director
             from models import UserAgent as _UA_ap, AgentActivityLog as _AAL_ap
@@ -6710,9 +6726,9 @@ class AnchorEngine:
                     if len(_coord_real) >= 1:
                         try:
                             # timeout = coordinator plan (~60s) + N agents × 90-120s
-                            # Должен быть МЕНЬШЕ _process_user wrapper (default 600s)
-                            _outer_wrap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '600'))
-                            _coord_timeout = max(180, _outer_wrap - 120)
+                            # Должен быть МЕНЬШЕ _process_user wrapper (default 300s)
+                            _outer_wrap = int(os.getenv('ANCHOR_PROCESS_USER_TIMEOUT_SEC', '300'))
+                            _coord_timeout = max(120, _outer_wrap - 60)
                             _coord_ok = await asyncio.wait_for(
                                 self._run_coordinator_dispatch(
                                     user, data, _coord_real, task_text, anchor, session,
@@ -10436,6 +10452,12 @@ class AnchorEngine:
                 except Exception:
                     pass
             # delivered_at уже поставлен в начале функции через raw SQL
+        finally:
+            if _close_own:
+                try:
+                    session.close()
+                except Exception:
+                    pass
 
     async def _dispatch_agents_for_new_anchors(self, user_id_or_obj, user_tid_or_anchors, new_anchors: list = None):
         """
