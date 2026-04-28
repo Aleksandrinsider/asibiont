@@ -1708,7 +1708,7 @@ async def dashboard_handler(request):
             else:
                 interactions = []
 
-            subscription = session_db.query(Subscription).filter_by(user_id=user.id).first() if user else None
+            # subscription already queried above — no need to re-query
 
             # Get user token balance for display
             display_tier = 'Токены'  # Унифицированная модель
@@ -1795,28 +1795,36 @@ async def dashboard_handler(request):
                             'task_count': task_count
                         })
 
-                # Добаить избраые контакты, у которых се задачи отклоны,  контакт  избраом
-                for favorite_username in favorite_contacts:
-                    favorite_user = session_db.query(User).filter(
-                        User.username.ilike(favorite_username)
-                    ).first()
-                    
-                    if favorite_user and favorite_user.id != user.id and favorite_user.id not in delegator_ids:
-                        # Проерить, были ли у этого контакта задачи (ключая отклоые)
-                        all_tasks_from_favorite = session_db.query(Task).filter(
-                            Task.user_id == favorite_user.id,
+                # Добавить избранные контакты — батчевый запрос (вместо N+1)
+                if favorite_contacts:
+                    from sqlalchemy import func as _sqlfunc
+                    _fav_lower = [f.lower().replace('@', '') for f in favorite_contacts]
+                    _fav_users_batch = session_db.query(User).filter(
+                        _sqlfunc.lower(User.username).in_(_fav_lower)
+                    ).all()
+                    _fav_ids = [u.id for u in _fav_users_batch if u.id != user.id and u.id not in delegator_ids]
+                    if _fav_ids:
+                        _fav_tasks_batch = session_db.query(Task.user_id, Task.status).filter(
+                            Task.user_id.in_(_fav_ids),
                             Task.delegated_to_username.ilike((user.username or '').replace('@', ''))
                         ).all()
-                        
-                        if all_tasks_from_favorite:
-                            # Есть история делегирования - добавляем в список
-                            rejected_count = sum(1 for t in all_tasks_from_favorite if t.status == 'rejected')
+                        _fav_tasks_by_uid: dict = {}
+                        for _ft in _fav_tasks_batch:
+                            _fav_tasks_by_uid.setdefault(_ft.user_id, []).append(_ft.status)
+                    else:
+                        _fav_tasks_by_uid = {}
+                    for _fu in _fav_users_batch:
+                        if _fu.id == user.id or _fu.id in delegator_ids:
+                            continue
+                        _fav_task_statuses = _fav_tasks_by_uid.get(_fu.id, [])
+                        if _fav_task_statuses:
+                            rejected_count = sum(1 for s in _fav_task_statuses if s == 'rejected')
                             if rejected_count > 0:
                                 delegating_to_me.append({
-                                    'id': favorite_user.id,
-                                    'username': favorite_user.username,
-                                    'first_name': favorite_user.first_name,
-                                    'reason': ' избраом',
+                                    'id': _fu.id,
+                                    'username': _fu.username,
+                                    'first_name': _fu.first_name,
+                                    'reason': ' избраном',
                                     'tasks': [],
                                     'task_count': 0
                                 })
@@ -1828,29 +1836,36 @@ async def dashboard_handler(request):
                     Task.delegation_status.in_(['pending', 'accepted'])
                 ).all()
 
+                # Батчевый поиск делегатов (вместо N+1 запросов)
                 delegatee_usernames = set()
+                _delegatee_uname_list = []
                 for task in my_delegated_tasks:
                     if task.delegated_to_username and task.delegated_to_username not in delegatee_usernames:
                         delegatee_usernames.add(task.delegated_to_username)
-                        delegatee = session_db.query(User).filter(
-                            or_(
-                                User.username.ilike(task.delegated_to_username.replace('@', '')),
-                                User.username.ilike(f'@{task.delegated_to_username.replace("@", "")}')
-                            )
-                        ).first()
-                        if delegatee and delegatee.id != user.id:
-                            delegatee_tasks = [
-                                t for t in my_delegated_tasks if t.delegated_to_username == task.delegated_to_username]
-                            task_count = len(delegatee_tasks)
-                            task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegatee_tasks[:3]]
-                            delegating_by_me.append({
-                                'id': delegatee.id,
-                                'username': delegatee.username,
-                                'first_name': delegatee.first_name,
-                                'reason': f'я делегироал {task_count} задач',
-                                'tasks': task_titles,
-                                'task_count': task_count
-                            })
+                        _delegatee_uname_list.append(task.delegated_to_username.replace('@', '').lower())
+                if _delegatee_uname_list:
+                    from sqlalchemy import func as _sqlfunc2
+                    _delegatees_batch = session_db.query(User).filter(
+                        _sqlfunc2.lower(User.username).in_(_delegatee_uname_list)
+                    ).all()
+                    _delegatees_map = {u.username.lower().replace('@', ''): u for u in _delegatees_batch if u.username}
+                else:
+                    _delegatees_map = {}
+                for _duname in delegatee_usernames:
+                    _delegatee_key = _duname.replace('@', '').lower()
+                    delegatee = _delegatees_map.get(_delegatee_key)
+                    if delegatee and delegatee.id != user.id:
+                        delegatee_tasks = [t for t in my_delegated_tasks if t.delegated_to_username == _duname]
+                        task_count = len(delegatee_tasks)
+                        task_titles = [t.title[:30] + '...' if len(t.title) > 30 else t.title for t in delegatee_tasks[:3]]
+                        delegating_by_me.append({
+                            'id': delegatee.id,
+                            'username': delegatee.username,
+                            'first_name': delegatee.first_name,
+                            'reason': f'я делегировал {task_count} задач',
+                            'tasks': task_titles,
+                            'task_count': task_count
+                        })
 
                 # Задачи, делегированные агентам команды (agent:Name format)
                 try:
@@ -1901,21 +1916,26 @@ async def dashboard_handler(request):
                 delegating_to_me = []
                 delegating_by_me = []
 
-            # Получить заблокироаые контакты
+            # Получить заблокированные контакты — батчевый запрос (вместо N+1)
             blocked_contacts = []
             try:
                 if profile and profile.blocked_contacts:
                     blocked_usernames = json.loads(profile.blocked_contacts)
-                    for username in blocked_usernames:
-                        blocked_user = session_db.query(User).filter(User.username.ilike(username.replace('@', ''))).first()
-                        if blocked_user and blocked_user.id != user.id:
-                            blocked_contacts.append({
-                                'id': blocked_user.id,
-                                'username': blocked_user.username,
-                                'first_name': blocked_user.first_name,
-                                'photo_url': avatar_url_if_photo(blocked_user),
-                                'reason': 'заблокироаый контакт'
-                            })
+                    if blocked_usernames:
+                        from sqlalchemy import func as _sqlfunc3
+                        _bl_lower = [u.lower().replace('@', '') for u in blocked_usernames if u]
+                        _bl_users = session_db.query(User).filter(
+                            _sqlfunc3.lower(User.username).in_(_bl_lower)
+                        ).all()
+                        for blocked_user in _bl_users:
+                            if blocked_user.id != user.id:
+                                blocked_contacts.append({
+                                    'id': blocked_user.id,
+                                    'username': blocked_user.username,
+                                    'first_name': blocked_user.first_name,
+                                    'photo_url': avatar_url_if_photo(blocked_user),
+                                    'reason': 'заблокированный контакт'
+                                })
             except Exception as e:
                 logger.error(f"Error getting blocked contacts: {e}")
                 blocked_contacts = []
