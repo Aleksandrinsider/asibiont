@@ -1682,22 +1682,14 @@ async def dashboard_handler(request):
                     filtered_interactions = []
                     for i in all_interactions:
                         try:
-                            # Если created_at naive (без tzinfo), считаем его UTC и просто берем timestamp
-                            # Если с tzinfo, используем его timestamp
                             if i.created_at.tzinfo is None:
-                                # Naive datetime - интерпретируем как UTC прямую через replace
                                 interaction_ts = i.created_at.replace(tzinfo=dt_timezone.utc).timestamp()
                             else:
                                 interaction_ts = i.created_at.timestamp()
-
-                            logger.info(
-                                f"Interaction ID {i.id}: created_at={i.created_at}, timestamp={interaction_ts}, clear_timestamp={history_cleared_timestamp}, include={interaction_ts > history_cleared_timestamp}")
-
                             if interaction_ts > history_cleared_timestamp:
                                 filtered_interactions.append(i)
                         except Exception as e:
                             logger.error(f"Error processing interaction {i.id} timestamp: {e}")
-                            # В случае ошибки НЕ включаем сообщение (безопаснее скрыть)
 
                     interactions = filtered_interactions
                     logger.info(
