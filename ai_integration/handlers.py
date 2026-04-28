@@ -14423,9 +14423,13 @@ async def reply_to_outreach_email(
 
         campaign = session.query(EmailCampaign).filter_by(id=outreach.campaign_id).first()
         if not campaign:
-            return " Кампания не найдена."
+            # Кампания удалена или campaign_id=NULL, но ответ на входящий email всё равно валиден.
+            # Используем fallback: имя из sent_by_agent, адрес из user.email
+            logger.info(f"[EMAIL_REPLY] campaign #{outreach.campaign_id} not found for outreach #{outreach.id}, using fallback sender info")
 
-        _sender_addr_norm = (campaign.sender_email or '').strip().lower()
+        _campaign_sender_name = (campaign.sender_name if campaign else None) or outreach.sent_by_agent or 'ASI Biont'
+        _campaign_sender_addr = (campaign.sender_email if campaign else None) or getattr(user, 'email', '') or ''
+        _sender_addr_norm = _campaign_sender_addr.strip().lower()
         _user_email_norm = (getattr(user, 'email', '') or '').strip().lower()
         if _reply_rcpt and ((_sender_addr_norm and _reply_rcpt == _sender_addr_norm) or (_user_email_norm and _reply_rcpt == _user_email_norm)):
             return f"⛔ Self-reply detected: {_reply_rcpt} — автоответ самому себе заблокирован."
@@ -14489,8 +14493,8 @@ async def reply_to_outreach_email(
 
         subject = f"Re: {outreach.subject}" if outreach.subject else "Re: Your inquiry"
         to_clean = outreach.recipient_email.strip().lower()
-        sender_name = campaign.sender_name or ''
-        sender_addr = campaign.sender_email or ''
+        sender_name = _campaign_sender_name
+        sender_addr = _campaign_sender_addr
 
         # ── Выбор канала отправки ──────────────────────────────────────────────
         # Ищем интеграцию пользователя с адресом = sender_addr кампании.
